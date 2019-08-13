@@ -416,7 +416,7 @@ export class BrsFile {
     private findCallables(lines: string[]) {
         this.callables = [];
         for (let statement of this.ast as any) {
-            if (!(statement instanceof brs.parser.Stmt.Function)) {
+            if (!(statement instanceof brs.parser.Stmt.FunctionStatement)) {
                 continue;
             }
 

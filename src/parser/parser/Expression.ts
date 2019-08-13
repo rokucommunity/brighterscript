@@ -31,7 +31,7 @@ export interface Expression {
 }
 
 export class Binary implements Expression {
-    constructor(readonly left: Expression, readonly token: Token, readonly right: Expression) {}
+    constructor(readonly left: Expression, readonly token: Token, readonly right: Expression) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitBinary(this);
@@ -53,7 +53,7 @@ export class Call implements Expression {
         readonly callee: Expression,
         readonly closingParen: Token,
         readonly args: Expression[]
-    ) {}
+    ) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitCall(this);
@@ -75,7 +75,7 @@ export class Function implements Expression {
         readonly body: Block,
         readonly keyword: Token,
         readonly end: Token
-    ) {}
+    ) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitAnonymousFunction(this);
@@ -91,7 +91,7 @@ export class Function implements Expression {
 }
 
 export class DottedGet implements Expression {
-    constructor(readonly obj: Expression, readonly name: Identifier) {}
+    constructor(readonly obj: Expression, readonly name: Identifier) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitDottedGet(this);
@@ -111,7 +111,7 @@ export class IndexedGet implements Expression {
         readonly obj: Expression,
         readonly index: Expression,
         readonly closingSquare: Token
-    ) {}
+    ) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitIndexedGet(this);
@@ -133,7 +133,7 @@ export class Grouping implements Expression {
             right: Token;
         },
         readonly expression: Expression
-    ) {}
+    ) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitGrouping(this);
@@ -149,7 +149,7 @@ export class Grouping implements Expression {
 }
 
 export class Literal implements Expression {
-    constructor(readonly value: BrsType, readonly _location: Location | undefined) {}
+    constructor(readonly value: BrsType, readonly _location: Location | undefined) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitLiteral(this);
@@ -173,7 +173,7 @@ export class Literal implements Expression {
 }
 
 export class ArrayLiteral implements Expression {
-    constructor(readonly elements: Expression[], readonly open: Token, readonly close: Token) {}
+    constructor(readonly elements: Expression[], readonly open: Token, readonly close: Token) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitArrayLiteral(this);
@@ -197,7 +197,7 @@ export interface AAMember {
 }
 
 export class AALiteral implements Expression {
-    constructor(readonly elements: AAMember[], readonly open: Token, readonly close: Token) {}
+    constructor(readonly elements: AAMember[], readonly open: Token, readonly close: Token) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitAALiteral(this);
@@ -213,7 +213,7 @@ export class AALiteral implements Expression {
 }
 
 export class Unary implements Expression {
-    constructor(readonly operator: Token, readonly right: Expression) {}
+    constructor(readonly operator: Token, readonly right: Expression) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitUnary(this);
@@ -229,7 +229,7 @@ export class Unary implements Expression {
 }
 
 export class Variable implements Expression {
-    constructor(readonly name: Identifier) {}
+    constructor(readonly name: Identifier) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitVariable(this);

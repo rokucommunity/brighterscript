@@ -17,6 +17,7 @@ import {
     Argument,
     StdlibArgument,
 } from "../brsTypes";
+import { FunctionStatement, ClassStatement } from './Statement';
 
 /** Set of all keywords that end blocks. */
 type BlockTerminator =
@@ -155,11 +156,12 @@ export class Parser {
      * A convenience function, equivalent to `new Parser().parse(toParse)`, that parses an array of
      * `Token`s into an abstract syntax tree that can be executed with the `Interpreter`.
      * @param toParse the array of tokens to parse
+     * @param mode - the parse mode (brightscript or brighterscript)
      * @returns an array of `Statement` objects that together form the abstract syntax tree of the
      *          program
      */
-    static parse(toParse: ReadonlyArray<Token>) {
-        return new Parser().parse(toParse);
+    static parse(toParse: ReadonlyArray<Token>, mode: 'brightscript' | 'brighterscript' = 'brightscript') {
+        return new Parser().parse(toParse, mode);
     }
 
     /**
@@ -190,7 +192,7 @@ export class Parser {
      * @returns an array of `Statement` objects that together form the abstract syntax tree of the
      *          program
      */
-    parse(toParse: ReadonlyArray<Token>): ParseResults {
+    parse(toParse: ReadonlyArray<Token>, mode: 'brightscript' | 'brighterscript' = 'brightscript'): ParseResults {
         let current = 0;
         let tokens = toParse;
 
@@ -217,6 +219,15 @@ export class Parser {
             this.events.emit("err", err);
             return err;
         };
+
+        /**
+         * Throws an error if the input file type is not BrighterScript
+         */
+        const ensureBrighterScriptMode = (featureName: string) => {
+            if (mode !== 'brighterscript') {
+                throw new Error(`BrighterScript feature ${featureName} is not supported in BrightScript files`);
+            }
+        }
 
         /**
          * Add an error at the given location.
@@ -265,6 +276,10 @@ export class Parser {
                 // consume any leading newlines
                 while (match(Lexeme.Newline));
 
+                if (check(Lexeme.Class)) {
+                    return classDeclaration();
+                }
+
                 if (check(Lexeme.Sub, Lexeme.Function)) {
                     return functionDeclaration(false);
                 }
@@ -290,8 +305,43 @@ export class Parser {
             }
         }
 
+        /**
+         * A BrighterScript class declaration
+         */
+        function classDeclaration(): Stmt.ClassStatement {
+            ensureBrighterScriptMode('class declarations');
+            let keyword = consume(`Expected 'class' keyword`, Lexeme.Class);
+            //get the class name
+            let className = consumeContinue(`Expected identifier after class keyword`, Lexeme.Identifier) as Identifier;
+            //consume newlines (at least one)
+            while (match(Lexeme.Newline));
+
+            let members: Array<FunctionStatement> = [];
+            // let accessModifier: Token;
+            // //collect methods
+            // while (accessModifier = consume(Lexeme.Public, Lexeme.Private)) {
+            //     //TODOS
+            // }
+
+            //consume trailing newlines
+            while (match(Lexeme.Newline));
+
+            let endingKeyword = advance();
+            if (endingKeyword.kind !== Lexeme.EndClass) {
+                addError(
+                    endingKeyword,
+                    `Expected 'end class' to terminate class block`
+                );
+            }
+            //consume any trailing newlines
+            while (match(Lexeme.Newline));
+
+            const result = new ClassStatement(keyword, className, members, endingKeyword);
+            return result;
+        }
+
         function functionDeclaration(isAnonymous: true): Expr.Function;
-        function functionDeclaration(isAnonymous: false): Stmt.Function;
+        function functionDeclaration(isAnonymous: false): FunctionStatement;
         function functionDeclaration(isAnonymous: boolean) {
             try {
                 //certain statements need to know if they are contained within a function body
@@ -424,7 +474,7 @@ export class Parser {
                     // only consume trailing newlines in the statement context; expressions
                     // expect to handle their own trailing whitespace
                     while (match(Lexeme.Newline));
-                    return new Stmt.Function(name!, func);
+                    return new Stmt.FunctionStatement(name!, func);
                 }
             } finally {
                 functionDeclarationLevel--;
@@ -617,7 +667,7 @@ export class Parser {
         function exitWhile(): Stmt.ExitWhile {
             let keyword = advance();
             consume("Expected newline after 'exit while'", Lexeme.Newline);
-            while (match(Lexeme.Newline)) {}
+            while (match(Lexeme.Newline)) { }
             return new Stmt.ExitWhile({ exitWhile: keyword });
         }
 
@@ -701,7 +751,7 @@ export class Parser {
         function exitFor(): Stmt.ExitFor {
             let keyword = advance();
             consume("Expected newline after 'exit for'", Lexeme.Newline);
-            while (match(Lexeme.Newline)) {}
+            while (match(Lexeme.Newline)) { }
             return new Stmt.ExitFor({ exitFor: keyword });
         }
 
@@ -1418,7 +1468,7 @@ export class Parser {
                     let openingBrace = previous();
                     let members: Expr.AAMember[] = [];
 
-                     var key = () =>  {
+                    var key = () => {
                         let k;
                         if (check(Lexeme.Identifier, ...allowedProperties)) {
                             k = new BrsString(advance().text!);
@@ -1515,6 +1565,19 @@ export class Parser {
                 return advance();
             }
             throw addError(peek(), message);
+        }
+
+        /**
+         * Consume, or add a message if not found. But then continue and return undefined
+         * @param message 
+         * @param lexemes 
+         */
+        function consumeContinue(message: string, ...lexemes: Lexeme[]): Token {
+            try {
+                return consume(message, ...lexemes);
+            } catch (e) {
+                //do nothing;
+            }
         }
 
         function advance(): Token {

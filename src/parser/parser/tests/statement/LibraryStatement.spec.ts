@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { Lexer } from '../../../lexer';
-import { Assignment, Function as BrsFunction } from '../../Statement';
+import { Assignment, FunctionStatement as BrsFunction } from '../../Statement';
 
 describe('parser library statements', () => {
     let parser;

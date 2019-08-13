@@ -110,6 +110,10 @@ export enum Lexeme {
     True = "True",
     Type = "Type",
     While = "While",
+    Class = 'Class',
+    EndClass = 'EndClass',
+    Public = 'Public',
+    Private = 'Private',
 
     // structural
     Newline = "Newline",

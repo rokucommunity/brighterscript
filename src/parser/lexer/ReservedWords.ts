@@ -97,4 +97,9 @@ export const KeyWords: { [key: string]: L } = {
     to: L.To,
     true: L.True,
     while: L.While,
+    class: L.Class,
+    endclass: L.EndClass,
+    'end class': L.EndClass,
+    public: L.Public,
+    private: L.Private
 };

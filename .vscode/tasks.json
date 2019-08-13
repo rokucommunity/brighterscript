@@ -1,7 +1,6 @@
 {
     "version": "2.0.0",
     "tasks": [
-        //build
         {
             "label": "build",
             "type": "npm",
@@ -15,7 +14,6 @@
             "script": "build",
             "problemMatcher": []
         },
-        //test with coverage
         {
             "label": "test-coverage",
             "type": "shell",
@@ -36,7 +34,6 @@
             "options": {},
             "problemMatcher": []
         },
-        //test (without coverage, fast)
         {
             "label": "test",
             "group": {
@@ -58,14 +55,12 @@
                 "--silent"
             ]
         },
-        //watch tests (without coverage, fast)
         {
             "label": "test-watch",
             "type": "npm",
             "script": "test:watch",
             "problemMatcher": []
         },
-        //tslint checking
         {
             "label": "tslint",
             "type": "npm",
@@ -80,8 +75,13 @@
                     "line": 3,
                     "column": 4,
                     "message": 5
-                },
+                }
             }
         },
+        {
+            "type": "npm",
+            "script": "test:coverage",
+            "problemMatcher": []
+        }
     ]
 }
