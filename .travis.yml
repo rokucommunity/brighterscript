@@ -1,0 +1,17 @@
+language: node_js
+node_js:
+  - "11.4.0"
+script:
+  - npm run build
+  - npm run test:coverage
+  - npm run tslint
+after_success: 
+  - npm run coverage
+deploy:
+  provider: npm
+  email: "bronley@gmail.com"
+  api_key: $NPM_TOKEN
+  skip_cleanup: true
+  on:
+    branch: master
+    tags: true

@@ -1,0 +1,112 @@
+{
+    "rulesDirectory": [
+        "node_modules/tslint-eslint-rules/dist/rules",
+        "node_modules/tslint-origin-ordered-imports-rule/dist"
+    ],
+    "extends": [
+        "tslint:recommended",
+        "tslint-no-unused-expression-chai"
+    ],
+    "rules": {
+        "array-bracket-spacing": [
+            true,
+            "never"
+        ],
+        "arrow-parens": false,
+        "arrow-return-shorthand": false,
+        "no-duplicate-imports": true,
+        "no-floating-promises": true,
+        "class-name": true,
+        "comment-format": false,
+        "curly": true,
+        "forin": false,
+        "no-console": false,
+        "interface-name": false,
+        "max-classes-per-file": false,
+        "max-line-length": false,
+        "member-ordering": [
+            true,
+            {
+                "order": [
+                    "constructor",
+                    {
+                        "name": "static non-private",
+                        "kinds": [
+                            "public-static-field",
+                            "public-static-method",
+                            "protected-static-field",
+                            "protected-static-method",
+                            "private-static-field",
+                            "private-static-method",
+                            "public-instance-field",
+                            "protected-instance-field",
+                            "private-instance-field",
+                            "public-instance-method",
+                            "protected-instance-method",
+                            "private-instance-method"
+                        ]
+                    }
+                ]
+            }
+        ],
+        "no-angle-bracket-type-assertion": false,
+        "no-bitwise": true,
+        "no-conditional-assignment": false,
+        "no-duplicate-variable": true,
+        "no-empty": false,
+        "no-shadowed-variable": false,
+        "no-trailing-whitespace": true,
+        "no-unused-expression": false,
+        "no-unused-expression-chai": true,
+        "no-var-keyword": true,
+        "object-curly-spacing": true,
+        "object-literal-shorthand": [
+            true,
+            "never"
+        ],
+        "object-literal-sort-keys": false,
+        "only-arrow-functions": false,
+        "origin-ordered-imports": [
+            true,
+            "one-blank-line"
+        ],
+        "prefer-const": false,
+        "quotemark": [
+            true,
+            "single"
+        ],
+        "radix": false,
+        "semicolon": [
+            true,
+            "always"
+        ],
+        "ter-arrow-spacing": true,
+        "ter-indent": [
+            true,
+            4,
+            {
+                "SwitchCase": 1
+            }
+        ],
+        "ter-no-irregular-whitespace": true,
+        "ter-no-mixed-spaces-and-tabs": true,
+        "trailing-comma": [
+            true,
+            "never"
+        ],
+        "triple-equals": true,
+        "unified-signatures": false,
+        "whitespace": [
+            true,
+            "check-branch",
+            "check-decl",
+            "check-operator",
+            "check-module",
+            "check-separator",
+            "check-rest-spread",
+            "check-type",
+            "check-type-operator",
+            "check-preblock"
+        ]
+    }
+}

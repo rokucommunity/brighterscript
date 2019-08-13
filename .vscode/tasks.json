@@ -1,0 +1,87 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        //build
+        {
+            "label": "build",
+            "type": "npm",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "clear": true
+            },
+            "script": "build",
+            "problemMatcher": []
+        },
+        //test with coverage
+        {
+            "label": "test-coverage",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "test:coverage",
+                "--silent"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "options": {},
+            "problemMatcher": []
+        },
+        //test (without coverage, fast)
+        {
+            "label": "test",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "type": "shell",
+            "command": "npm",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "args": [
+                "test",
+                "--silent"
+            ]
+        },
+        //watch tests (without coverage, fast)
+        {
+            "label": "test-watch",
+            "type": "npm",
+            "script": "test:watch",
+            "problemMatcher": []
+        },
+        //tslint checking
+        {
+            "label": "tslint",
+            "type": "npm",
+            "script": "tslint",
+            "problemMatcher": {
+                "owner": "tslint",
+                "fileLocation": "absolute",
+                "pattern": {
+                    "regexp": "^(WARNING|ERROR):\\s+(.*\\.ts):(\\d+):(\\d+)\\s*-\\s*(.+)$",
+                    "severity": 1,
+                    "file": 2,
+                    "line": 3,
+                    "column": 4,
+                    "message": 5
+                },
+            }
+        },
+    ]
+}

@@ -1,0 +1,8 @@
+node_modules
+dist
+out
+.tmp
+.roku-deploy-staging
+coverage
+.nyc_output
+*.zip

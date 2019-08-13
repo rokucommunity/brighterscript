@@ -1,0 +1,24 @@
+{
+    "compilerOptions": {
+        "noImplicitAny": false,
+        "target": "es5",
+        "module": "commonjs",
+        "sourceMap": true,
+        "rootDir": "src",
+        "outDir": "dist",
+        "declaration": true,
+        "strict": true,
+        "strictNullChecks": false,
+        "preserveConstEnums": true,
+        "downlevelIteration": true,
+        "noUnusedLocals": true,
+        "allowSyntheticDefaultImports": true,
+        "lib": [
+            "es2015"
+        ]
+    },
+    "include": [
+        "src/**/*.ts",
+        "../vscode-brightscript-language/src/runner.ts"
+    ]
+}
