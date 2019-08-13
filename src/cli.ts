@@ -5,7 +5,7 @@ import * as commandLineUsage from 'command-line-usage';
 import { ProgramBuilder } from './ProgramBuilder';
 
 let args = [
-    { name: 'project', type: String, description: 'Path to a brsconfig.json project file.' },
+    { name: 'project', type: String, description: 'Path to a bsconfig.json project file.' },
     { name: 'cwd', type: String, description: 'Override the current working directory.' },
     { name: 'root-dir', type: String, description: 'Path to the root of your project files (where the manifest lives). Defaults to current directory.' },
     { name: 'files', type: String, multiple: true, defaultOption: true, description: 'The list of files (or globs) to include in your project. Be sure to wrap these in double quotes when using globs.' },
@@ -24,8 +24,8 @@ const options = commandLineArgs(args, { camelCase: true });
 if (options.help) {
     //wire up the help docs
     const usage = commandLineUsage([{
-        header: 'BrightScript',
-        content: 'A full suite of tools for the BrightScript language'
+        header: 'BrighterScript',
+        content: 'A superset of Roku\'s BrightScript language'
     }, {
         header: 'Options',
         optionList: args

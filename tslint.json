@@ -24,31 +24,7 @@
         "interface-name": false,
         "max-classes-per-file": false,
         "max-line-length": false,
-        "member-ordering": [
-            true,
-            {
-                "order": [
-                    "constructor",
-                    {
-                        "name": "static non-private",
-                        "kinds": [
-                            "public-static-field",
-                            "public-static-method",
-                            "protected-static-field",
-                            "protected-static-method",
-                            "private-static-field",
-                            "private-static-method",
-                            "public-instance-field",
-                            "protected-instance-field",
-                            "private-instance-field",
-                            "public-instance-method",
-                            "protected-instance-method",
-                            "private-instance-method"
-                        ]
-                    }
-                ]
-            }
-        ],
+        "member-ordering": false,
         "no-angle-bracket-type-assertion": false,
         "no-bitwise": true,
         "no-conditional-assignment": false,

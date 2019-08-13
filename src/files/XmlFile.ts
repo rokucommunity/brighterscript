@@ -309,7 +309,7 @@ export class XmlFile {
         for (let key in this.program.files) {
             let file = this.program.files[key];
             if (
-                //is a brightscript file
+                //is a BrightScript or BrighterScript file
                 (file.extension === '.bs' || file.extension === '.brs') &&
                 //not already referenced in this file
                 currentImports.indexOf(file.pkgPath) === -1

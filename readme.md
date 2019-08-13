@@ -1,6 +1,6 @@
-# BrightScript-Language
+# BrighterScript
 
-A compiler and language server for Roku's BrightScript language. 
+A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
 [![Build Status](https://travis-ci.org/TwitchBronBron/brightscript-language.svg?branch=master)](https://travis-ci.org/TwitchBronBron/brightscript-language)
 [![codecov](https://codecov.io/gh/TwitchBronBron/brightscript-language/branch/master/graph/badge.svg)](https://codecov.io/gh/TwitchBronBron/brightscript-language)
@@ -34,8 +34,8 @@ If you need to configure `brsc`, you can do so in two ways:
 
 1. Using command line arguments. 
     This tool can be fully configured using command line arguments. To see a full list, run `brsc --help` in your terminal.
-2. Using a `brsconfig.json` file. See [the available options](#brsconfig.json-options) below. 
-    By default, `brsc` looks for a `brsconfig.json` file at the same directory that `brsc` is executed. If you want to store your `brsconfig.json` file somewhere else, then you should provide the `--project` argument and specify the path to your `brsconfig.json` file. 
+2. Using a `bsconfig.json` file. See [the available options](#bsconfig.json-options) below. 
+    By default, `brsc` looks for a `bsconfig.json` file at the same directory that `brsc` is executed. If you want to store your `bsconfig.json` file somewhere else, then you should provide the `--project` argument and specify the path to your `bsconfig.json` file. 
 
 ### Examples
 
@@ -54,20 +54,20 @@ If you need to configure `brsc`, you can do so in two ways:
     ```bash
     brsc --watch --deploy --host 192.168.1.10 --password secret_password
     ```
-4. Use a brsconfig.json file not located at cwd
+4. Use a bsconfig.json file not located at cwd
     ```bash
-    brsc --project ./some_folder/brsconfig.json
+    brsc --project ./some_folder/bsconfig.json
     ```
-## brsconfig.json
+## bsconfig.json
 
 ### Overview
-The presence of a `brsconfig.json` file in a directory indicates that the directory is the root of a BrightScript project. The `brsconfig.json` file specifies the root files and the compiler options required to compile the project.
+The presence of a `bsconfig.json` file in a directory indicates that the directory is the root of a BrightScript project. The `bsconfig.json` file specifies the root files and the compiler options required to compile the project.
 
 ### Configuration inheritance with `extends`
 
-A `brsconfig.json` file can inherit configurations from another file using the `extends` property.
+A `bsconfig.json` file can inherit configurations from another file using the `extends` property.
 
-The extends is a top-level property in `brsconfig.json`. `extends`’ value is a string containing a path to another configuration file to inherit from.
+The extends is a top-level property in `bsconfig.json`. `extends`’ value is a string containing a path to another configuration file to inherit from.
 
 The configuration from the base file are loaded first, then overridden by those in the inheriting config file. If a circularity is encountered, we report an error.
 
@@ -76,13 +76,13 @@ The `files` property from the inheriting config file overwrite those from the ba
 All relative paths found in the configuration file will be resolved relative to the configuration file they originated in.
 
 
-### brsconfig.json options
+### bsconfig.json options
 
-These are the options available in the `brsconfig.json` file. 
+These are the options available in the `bsconfig.json` file. 
 
- - **project**: `string` - A path to a project file. This is really only passed in from the command line, and should not be present in `brsconfig.json` files
+ - **project**: `string` - A path to a project file. This is really only passed in from the command line, and should not be present in `bsconfig.json` files
 
- - **extends**: `string` - Relative or absolute path to another `brsconfig.json` file that this `brsconfig.json` file should import and then override
+ - **extends**: `string` - Relative or absolute path to another `bsconfig.json` file that this `bsconfig.json` file should import and then override
 
  - **cwd**: `string` - Override the current working directory
 
@@ -110,7 +110,7 @@ These are the options available in the `brsconfig.json` file.
 
 
 ## Ignore errors and warnings on a per-line basis
-In addition to disabling an entire class of errors in `brsconfig.json`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
+In addition to disabling an entire class of errors in `bsconfig.json`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
  - `brs:disable-next-line`
  - `brs:disable-next-line: code1 code2 code3`
  - `brs:disable-line`

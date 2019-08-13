@@ -1,13 +1,13 @@
 import * as chokidar from 'chokidar';
 
-import { BrsConfig } from './BrsConfig';
+import { BsConfig } from './BsConfig';
 
 /**
  * There are some bugs with chokidar, so this attempts to mitigate them
  */
 export class Watcher {
     constructor(
-        private options: BrsConfig
+        private options: BsConfig
     ) {
 
     }

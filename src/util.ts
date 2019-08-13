@@ -8,7 +8,7 @@ import { DiagnosticSeverity, Position, Range } from 'vscode-languageserver';
 import Uri from 'vscode-uri';
 import * as xml2js from 'xml2js';
 
-import { BrsConfig } from './BrsConfig';
+import { BsConfig } from './BsConfig';
 import { BrsFile } from './files/BrsFile';
 import { CallableContainer, Diagnostic, ValueKind } from './interfaces';
 import { BooleanType } from './types/BooleanType';
@@ -74,14 +74,14 @@ export class Util {
      */
     public async  getConfigFilePath(cwd?: string) {
         cwd = cwd ? cwd : process.cwd();
-        let configPath = path.join(cwd, 'brsconfig.json');
+        let configPath = path.join(cwd, 'bsconfig.json');
         //find the nearest config file path
         for (let i = 0; i < 100; i++) {
             if (await this.fileExists(configPath)) {
                 return configPath;
             } else {
                 let parentDirPath = path.dirname(path.dirname(configPath));
-                configPath = path.join(parentDirPath, 'brsconfig.json');
+                configPath = path.join(parentDirPath, 'bsconfig.json');
             }
         }
     }
@@ -106,12 +106,12 @@ export class Util {
             }
             //load the project file
             let projectFileContents = await this.getFileContents(configFilePath);
-            let projectConfig = JSON.parse(projectFileContents) as BrsConfig;
+            let projectConfig = JSON.parse(projectFileContents) as BsConfig;
 
             //set working directory to the location of the project file
             process.chdir(path.dirname(configFilePath));
 
-            let result: BrsConfig;
+            let result: BsConfig;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
                 let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath]);
@@ -142,14 +142,14 @@ export class Util {
     }
 
     /**
-     * Given a BrsConfig object, start with defaults,
-     * merge with brsconfig.json and the provided options.
+     * Given a BsConfig object, start with defaults,
+     * merge with bsconfig.json and the provided options.
      * @param config
      */
-    public async normalizeAndResolveConfig(config: BrsConfig) {
+    public async normalizeAndResolveConfig(config: BsConfig) {
         let result = this.normalizeConfig({});
 
-        //if no options were provided, try to find a brsconfig.json file
+        //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
             result.project = await this.getConfigFilePath();
         } else {
@@ -171,8 +171,8 @@ export class Util {
      * Set defaults for any missing items
      * @param config
      */
-    public normalizeConfig(config: BrsConfig) {
-        config = config ? config : {} as BrsConfig;
+    public normalizeConfig(config: BsConfig) {
+        config = config ? config : {} as BsConfig;
         config.deploy = config.deploy === true ? true : false;
         //use default options from rokuDeploy
         config.files = config.files ? config.files : rokuDeploy.getOptions().files;
@@ -192,7 +192,7 @@ export class Util {
      * Falls back to process.cwd
      * @param options
      */
-    public getRootDir(options: BrsConfig) {
+    public getRootDir(options: BsConfig) {
         let cwd = options.cwd;
         cwd = cwd ? cwd : process.cwd();
         let rootDir = options.rootDir ? options.rootDir : cwd;
@@ -512,7 +512,7 @@ export class Util {
      * Get the outDir from options, taking into account cwd and absolute outFile paths
      * @param options
      */
-    public getOutDir(options: BrsConfig) {
+    public getOutDir(options: BsConfig) {
         options = this.normalizeConfig(options);
         let cwd = path.normalize(options.cwd ? options.cwd : process.cwd());
         if (path.isAbsolute(options.outFile)) {
@@ -525,7 +525,7 @@ export class Util {
     /**
      * Get paths to all files on disc that match this project's source list
      */
-    public async getFilePaths(options: BrsConfig) {
+    public async getFilePaths(options: BsConfig) {
         let rootDir = this.getRootDir(options);
 
         let files = await rokuDeploy.getFilePaths(options.files, path.dirname(options.outFile), rootDir);

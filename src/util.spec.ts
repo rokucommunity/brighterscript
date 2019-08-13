@@ -6,7 +6,7 @@ import util from './util';
 
 let sinon = sinonImport.createSandbox();
 let cwd = process.cwd();
-let rootConfigPath = path.join(process.cwd(), 'brsconfig.json');
+let rootConfigPath = path.join(process.cwd(), 'bsconfig.json');
 let rootConfigDir = path.dirname(rootConfigPath);
 let vfs = {};
 //shorthand for normalizing a path
@@ -63,12 +63,12 @@ describe('util', () => {
         it('returns path to file when found', async () => {
             let rootDir = path.join(cwd, 'testProjects', 'project2');
             let configFilePath = await util.getConfigFilePath(rootDir);
-            expect(configFilePath).to.equal(path.join(rootDir, 'brsconfig.json'));
+            expect(configFilePath).to.equal(path.join(rootDir, 'bsconfig.json'));
         });
 
         it('finds config file in parent directory', async () => {
             let configFilePath = await util.getConfigFilePath(path.join(cwd, 'testProjects', 'project2', 'source'));
-            expect(configFilePath).to.equal(path.join(cwd, 'testProjects', 'project2', 'brsconfig.json'));
+            expect(configFilePath).to.equal(path.join(cwd, 'testProjects', 'project2', 'bsconfig.json'));
         });
 
         it('uses cwd when not provided', async () => {
@@ -79,7 +79,7 @@ describe('util', () => {
             let rootDir = path.join(cwd, 'testProjects', 'project2');
             process.chdir(rootDir);
             configFilePath = await util.getConfigFilePath();
-            expect(configFilePath).to.equal(path.join(rootDir, 'brsconfig.json'));
+            expect(configFilePath).to.equal(path.join(rootDir, 'bsconfig.json'));
         });
     });
 
@@ -92,7 +92,7 @@ describe('util', () => {
 
         it('loads project from disc and extends it', async () => {
             //the extends file
-            let extendsConfigPath = path.join(rootConfigDir, 'testProjects', 'base_brsconfig.json');
+            let extendsConfigPath = path.join(rootConfigDir, 'testProjects', 'base_bsconfig.json');
             vfs[extendsConfigPath] = `{
                 "outFile": "customOutDir/pkg1.zip",
                 "rootDir": "core"
@@ -100,7 +100,7 @@ describe('util', () => {
 
             //the project file
             vfs[rootConfigPath] = `{
-                "extends": "testProjects/base_brsconfig.json",
+                "extends": "testProjects/base_bsconfig.json",
                 "watch": true
             }`;
 
@@ -113,10 +113,10 @@ describe('util', () => {
 
         it('catches circular dependencies', async () => {
             vfs[rootConfigPath] = `{
-                "extends": "brsconfig2.json"
+                "extends": "bsconfig2.json"
             }`;
-            vfs[path.join(rootConfigDir, 'brsconfig2.json')] = `{
-                "extends": "brsconfig.json"
+            vfs[path.join(rootConfigDir, 'bsconfig2.json')] = `{
+                "extends": "bsconfig.json"
             }`;
 
             let threw = false;

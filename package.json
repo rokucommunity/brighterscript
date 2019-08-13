@@ -1,7 +1,7 @@
 {
-  "name": "brightscript-language",
-  "version": "0.2.15",
-  "description": "Suite of language tools for Roku's BrightScript language.",
+  "name": "brighterscript",
+  "version": "0.1.0",
+  "description": "A superset of Roku's BrightScript language.",
   "scripts": {
     "preversion": "npm run build && npm run tslint && npm run test",
     "prepare": "npm run build",
@@ -16,16 +16,16 @@
   },
   "files": [
     "dist/**/!(*.spec.*)*",
-    "brsconfig.schema.json"
+    "bsconfig.schema.json"
   ],
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "bin": {
-    "brsc": "dist/cli.js"
+    "bsc": "dist/cli.js"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/TwitchBronBron/brightscript-language.git"
+    "url": "https://github.com/TwitchBronBron/brighterscript.git"
   },
   "author": "",
   "license": "MIT",

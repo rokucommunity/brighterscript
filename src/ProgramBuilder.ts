@@ -5,7 +5,7 @@ import * as rokuDeploy from 'roku-deploy';
 import { FileChangeType, FileEvent } from 'vscode-languageserver';
 import Uri from 'vscode-uri';
 
-import { BrsConfig } from './BrsConfig';
+import { BsConfig } from './BsConfig';
 import { Diagnostic } from './interfaces';
 import { FileResolver, Program } from './Program';
 import util from './util';
@@ -24,7 +24,7 @@ export class ProgramBuilder {
      */
     public allowConsoleClearing = true;
 
-    private options: BrsConfig;
+    private options: BsConfig;
     private isRunning = false;
     private watcher: Watcher;
     public program: Program;
@@ -44,7 +44,7 @@ export class ProgramBuilder {
         return this.program.getDiagnostics();
     }
 
-    public async run(options: BrsConfig) {
+    public async run(options: BsConfig) {
         if (this.isRunning) {
             throw new Error('Server is already running');
         }

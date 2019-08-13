@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import * as path from 'path';
 import { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 
-import { BrsConfig } from './BrsConfig';
+import { BsConfig } from './BsConfig';
 import { Context } from './Context';
 import { diagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
@@ -17,7 +17,7 @@ export class Program {
         /**
          * The root directory for this program
          */
-        public options: BrsConfig
+        public options: BsConfig
     ) {
         //allow unlimited listeners
         this.emitter.setMaxListeners(0);
@@ -85,7 +85,7 @@ export class Program {
     public platformContext: Context;
 
     /**
-     * The full path to the root of the brightscript project (where the manifest file lives)
+     * The full path to the root of the project (where the manifest file lives)
      */
     public rootDir: string;
 

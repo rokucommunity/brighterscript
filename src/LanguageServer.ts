@@ -189,7 +189,7 @@ export class LanguageServer {
                 //the first run failed...that won't change unless we reload the workspace, so replace with resolved promise
                 //so we don't show this error again
                 workspace.firstRunPromise = Promise.resolve();
-                this.sendCriticalFailure(`BrightScript language server failed to start: \n${e.message}`);
+                this.sendCriticalFailure(`BrighterScript language server failed to start: \n${e.message}`);
             }
         }
         this.connection.sendNotification('build-status', status ? status : 'success');
@@ -237,16 +237,16 @@ export class LanguageServer {
         //load config from client for this workspace
         let config = await this.connection.workspace.getConfiguration({
             scopeUri: Uri.parse(workspacePath).toString(),
-            section: 'brightscript'
+            section: 'brighterscript'
         });
         let cwd = workspacePath;
-        let configFilePath = config.configFile ? path.resolve(workspacePath, config.configFile) : 'brsconfig.json';
+        let configFilePath = config.configFile ? path.resolve(workspacePath, config.configFile) : 'bsconfig.json';
 
         //if the config file exists, use it and its folder as cwd
         if (await util.fileExists(configFilePath)) {
             cwd = path.dirname(configFilePath);
         } else {
-            //config file doesn't exist...let `brightscript-language` resolve the default way
+            //config file doesn't exist...let `brighterscript` resolve the default way
             configFilePath = undefined;
         }
 
@@ -373,8 +373,8 @@ export class LanguageServer {
 
     /**
      * Called when watched files changed (add/change/delete).
-     * The client is in charge of what files to watch, so all client
-     * implementations should ensure that all valid brightscript project
+     * The CLIENT is in charge of what files to watch, so all client
+     * implementations should ensure that all valid project
      * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
      * @param params
      */
@@ -384,7 +384,7 @@ export class LanguageServer {
 
         this.connection.sendNotification('build-status', 'building');
 
-        //reload any workspace whose brsconfig.json file has changed
+        //reload any workspace whose bsconfig.json file has changed
         {
             let workspacesToReload = [] as Workspace[];
             let filePaths = params.changes.map((x) => util.uriToPath(x.uri));
@@ -426,6 +426,7 @@ export class LanguageServer {
         if (hover && hover.contents) {
             //create fenced code block to get colorization
             hover.contents = {
+                //TODO - make the program.getHover call figure out what language this is for
                 language: 'brightscript',
                 value: hover.contents as string
             };
@@ -467,7 +468,7 @@ export class LanguageServer {
         //WARNING: This only works for a few small xml cases because the vscode-brightscript-language extension
         //already implemented this feature, and I haven't had time to port all of that functionality over to
         //this codebase
-        //TODO implement for brightscript also
+        //TODO implement for brs/bs also
         await this.waitAllProgramFirstRuns();
         let results = [] as Location[];
 
