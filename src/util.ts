@@ -1,4 +1,3 @@
-import * as brs from 'brs';
 import chalk from 'chalk';
 import * as fsExtra from 'fs-extra';
 import * as moment from 'moment';
@@ -11,6 +10,8 @@ import * as xml2js from 'xml2js';
 import { BsConfig } from './BsConfig';
 import { BrsFile } from './files/BrsFile';
 import { CallableContainer, Diagnostic, ValueKind } from './interfaces';
+import { Location } from './parser/lexer';
+import { Function as ExpressionFunction } from './parser/parser/Expression';
 import { BooleanType } from './types/BooleanType';
 import { BrsType } from './types/BrsType';
 import { DoubleType } from './types/DoubleType';
@@ -235,7 +236,7 @@ export class Util {
      * Convert a 1-indexed brs Location to a 0-indexed vscode range
      * @param location
      */
-    public locationToRange(location: brs.lexer.Location) {
+    public locationToRange(location: Location) {
         return Range.create(
             //brs error lines are 1-indexed
             location.start.line - 1,
@@ -250,7 +251,7 @@ export class Util {
      * Compute the range of a function's body
      * @param func
      */
-    public getBodyRangeForFunc(func: brs.parser.Expr.Function) {
+    public getBodyRangeForFunc(func: ExpressionFunction) {
         return Range.create(
             //func body begins at start of line after its declaration
             func.location.start.line,

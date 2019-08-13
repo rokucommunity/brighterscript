@@ -1,5 +1,3 @@
-import * as brs from 'brs';
-const Lexeme = brs.lexer.Lexeme;
 import * as path from 'path';
 import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
 
@@ -7,6 +5,10 @@ import { Context } from '../Context';
 import { diagnosticCodes, diagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import { Callable, CallableArg, CallableParam, CommentFlag, Diagnostic, FunctionCall } from '../interfaces';
+import * as brs from '../parser';
+const Lexeme = brs.lexer.Lexeme;
+import { Lexer } from '../parser/lexer';
+import { Parser } from '../parser/parser';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -86,7 +88,7 @@ export class BrsFile {
 
         this.getIgnores(lines);
 
-        let lexResult = brs.lexer.Lexer.scan(fileContents);
+        let lexResult = Lexer.scan(fileContents);
 
         let tokens = lexResult.tokens;
 
@@ -120,7 +122,7 @@ export class BrsFile {
         //TODO have brs change the type of `processedTokens` to not be readonly array
         this.tokens = preprocessorWasSuccessful ? (preprocessorResults.processedTokens as any) : lexResult.tokens;
 
-        let parser = new brs.parser.Parser();
+        let parser = new Parser();
         let parseResult = parser.parse(this.tokens);
 
         let errors = [...lexResult.errors, ...<any>parseResult.errors, ...<any>preprocessorResults.errors];
