@@ -2,9 +2,9 @@
 
 A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
-[![Build Status](https://travis-ci.org/TwitchBronBron/brightscript-language.svg?branch=master)](https://travis-ci.org/TwitchBronBron/brightscript-language)
-[![codecov](https://codecov.io/gh/TwitchBronBron/brightscript-language/branch/master/graph/badge.svg)](https://codecov.io/gh/TwitchBronBron/brightscript-language)
-[![NPM Version](https://badge.fury.io/js/brightscript-language.svg?style=flat)](https://npmjs.org/package/brightscript-language)
+[![Build Status](https://travis-ci.org/rokucommunity/brighterscript.svg?branch=master)](https://travis-ci.org/rokucommunity/brighterscript)
+[![codecov](https://codecov.io/gh/rokucommunity/brighterscript/branch/master/graph/badge.svg)](https://codecov.io/gh/rokucommunity/brighterscript)
+[![NPM Version](https://badge.fury.io/js/brighterscript.svg?style=flat)](https://npmjs.org/package/@rokucommunity/brighterscript)
 
  **Disclaimer:** This is currently a **work in progress**. Use at your own risk, but feel free to raise any issues you may find. 
 
