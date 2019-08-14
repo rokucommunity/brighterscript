@@ -3,7 +3,7 @@ import { BrsType, ValueKind } from "./brsTypes";
 import { Location } from "./lexer";
 
 export class BrsError extends Error {
-    constructor(message: string, readonly location: Location) {
+    constructor(message: string, readonly location: Location, readonly code: number = 100) {
         super(message);
         Object.setPrototypeOf(this, BrsError.prototype);
     }

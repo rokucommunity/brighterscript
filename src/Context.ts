@@ -34,7 +34,7 @@ export class Context {
      * Attach the context to a program. This allows the context to monitor file adds, changes, and removals, and respond accordingly
      * @param program
      */
-    public attachProgram(program: Program) {
+     attachProgram(program: Program) {
         this.program = program;
         this.programHandles = [
             program.on('file-added', (file) => {

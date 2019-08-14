@@ -493,10 +493,13 @@ describe('lexer', () => {
     });
 
     it('recognizes class-related keywords', () => {
-        let { tokens } = Lexer.scan('class public private end class');
-        expect(tokens[0].kind).to.equal(Lexeme.Class);
-        expect(tokens[1].kind).to.equal(Lexeme.Public);
-        expect(tokens[2].kind).to.equal(Lexeme.Private);
-        expect(tokens[3].kind).to.equal(Lexeme.EndClass);
+        let i = 0;
+        let { tokens } = Lexer.scan('class public protected private end class endclass');
+        expect(tokens[i++].kind).to.equal(Lexeme.Class);
+        expect(tokens[i++].kind).to.equal(Lexeme.Public);
+        expect(tokens[i++].kind).to.equal(Lexeme.Protected);
+        expect(tokens[i++].kind).to.equal(Lexeme.Private);
+        expect(tokens[i++].kind).to.equal(Lexeme.EndClass);
+        expect(tokens[i++].kind).to.equal(Lexeme.EndClass);
     });
 }); // lexer

@@ -143,6 +143,50 @@ export class FunctionStatement implements Statement {
     }
 }
 
+export class ClassMethodStatement implements Statement {
+    constructor(
+        readonly accessModifier: Token,
+        readonly name: Identifier,
+        readonly func: Expr.Function
+    ) { }
+
+    accept<R>(visitor: Visitor<R>): BrsType {
+        return visitor.visitNamedFunction(this);
+    }
+
+    get location() {
+        return {
+            file: this.name.location.file,
+            start: this.accessModifier ? this.accessModifier.location.start : this.func.location.start,
+            end: this.func.location.end,
+        };
+    }
+}
+
+export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;
+
+export class ClassFieldStatement implements Statement {
+
+    constructor(
+        readonly accessModifier: Token,
+        readonly name: Identifier,
+        readonly as: Token,
+        readonly type: Token
+    ) { }
+
+    accept<R>(visitor: Visitor<R>): BrsType {
+        throw new Error('Method not implemented.');
+    }
+
+    get location() {
+        return {
+            file: this.name.location.file,
+            start: this.accessModifier ? this.accessModifier.location.start : this.name.location.start,
+            end: this.type.location.end,
+        };
+    }
+}
+
 export interface ElseIf {
     condition: Expr.Expression;
     thenBranch: Block;
@@ -501,7 +545,7 @@ export class ClassStatement implements Statement {
     constructor(
         readonly keyword: Token,
         readonly name: Identifier,
-        readonly members: Array<FunctionStatement>,
+        readonly members: ClassMemberStatement[],
         readonly end: Token
     ) { }
 

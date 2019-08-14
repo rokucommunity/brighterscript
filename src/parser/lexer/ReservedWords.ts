@@ -101,5 +101,6 @@ export const KeyWords: { [key: string]: L } = {
     endclass: L.EndClass,
     'end class': L.EndClass,
     public: L.Public,
+    protected: L.Protected,
     private: L.Private
 };

@@ -1,8 +1,12 @@
-import { expect } from 'chai';
+import * as chai from 'chai';
+const expect = chai.expect;
+import * as chaiSubset from 'chai-subset';
+chai.use(chaiSubset);
 
-import { Lexer } from '../lexer';
+import { diagnosticMessages } from '../../DiagnosticMessages';
+import { Lexeme, Lexer } from '../lexer';
 import { Parser } from './Parser';
-import { ClassStatement } from './Statement';
+import { ClassFieldStatement, ClassStatement } from './Statement';
 
 describe('parser', () => {
     describe('class', () => {
@@ -33,6 +37,46 @@ describe('parser', () => {
             let { statements, errors } = Parser.parse(tokens, 'brighterscript');
             expect(errors).length.to.be.greaterThan(0);
             expect(statements[0]).instanceof(ClassStatement);
+        });
+
+        describe('fields', () => {
+            it('identifies perfect syntax', () => {
+                let { tokens } = Lexer.scan(`
+                    class Person
+                        public firstName as string
+                    end class
+                `);
+                let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+                expect(errors).to.be.empty;
+                expect(statements[0]).instanceof(ClassStatement);
+                let field = (statements[0] as ClassStatement).members[0] as ClassFieldStatement;
+                expect(field.accessModifier.kind).to.equal(Lexeme.Public);
+                expect(field.name.text).to.equal('firstName');
+                expect(field.as.text).to.equal('as');
+                expect(field.type.text).to.equal('string');
+            });
+
+            it('detects missing access modifier', () => {
+                let { tokens } = Lexer.scan(`
+                    class Person
+                        firstName as string
+                    end class
+                `);
+                let { errors } = Parser.parse(tokens, 'brighterscript');
+                expect(errors).to.have.lengthOf(1);
+                expect(errors[0].code).to.equal(diagnosticMessages.Missing_field_access_modifier_1016('').code);
+            });
+
+            it('detects missing trailing type', () => {
+                let { tokens } = Lexer.scan(`
+                    class Person
+                        public firstName
+                    end class
+                `);
+                let { errors } = Parser.parse(tokens, 'brighterscript');
+                expect(errors).to.have.lengthOf(1);
+                expect(errors[0].code).to.equal(diagnosticMessages.Missing_class_field_type_1019().code);
+            });
         });
     });
 });

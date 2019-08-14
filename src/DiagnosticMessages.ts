@@ -68,6 +68,25 @@ export let diagnosticMessages = {
     Script_src_cannot_be_empty_1015: () => ({
         message: `Script import cannot be empty or whitespace`,
         code: 1015
+    }),
+    Missing_field_access_modifier_1016: (fieldName: string) => ({
+        message: `Class field '${fieldName}' must be marked 'public', 'protected', or 'private'`,
+        code: 1016
+    }),
+    Missing_method_access_modifier_1017: (methodName?: string) => {
+        let methodText = methodName ? methodName + ' ' : '';
+        return {
+            message: `Class method '${methodText}'must be marked 'public', 'protected', or 'private'`,
+            code: 1017
+        };
+    },
+    Missing_identifier_after_class_keyword_1018: () => ({
+        message: `Expected identifier after 'class' keyword`,
+        code: 1018
+    }),
+    Missing_class_field_type_1019: () => ({
+        message: `Expected type after class field name`,
+        code: 1019
     })
 };
 
@@ -77,3 +96,8 @@ for (let key in diagnosticMessages) {
 }
 
 export let diagnosticCodes = allCodes;
+
+export interface DiagnosticMessage {
+    message: string;
+    code: number;
+}

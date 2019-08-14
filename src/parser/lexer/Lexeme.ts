@@ -113,6 +113,7 @@ export enum Lexeme {
     Class = 'Class',
     EndClass = 'EndClass',
     Public = 'Public',
+    Protected = 'Protected',
     Private = 'Private',
 
     // structural

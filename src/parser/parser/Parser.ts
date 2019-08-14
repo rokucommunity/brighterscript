@@ -17,7 +17,8 @@ import {
     Argument,
     StdlibArgument,
 } from "../brsTypes";
-import { FunctionStatement, ClassStatement } from './Statement';
+import { FunctionStatement, ClassStatement, ClassFieldStatement, ClassMemberStatement, ClassMethodStatement } from './Statement';
+import { diagnosticMessages, DiagnosticMessage } from '../../DiagnosticMessages';
 
 /** Set of all keywords that end blocks. */
 type BlockTerminator =
@@ -211,14 +212,24 @@ export class Parser {
          * Add an error to the parse results.
          * @param token - the token where the error occurred
          * @param message - the message for this error
+         * @param code - an error code used to uniquely identify this type of error.  Defaults to 1000
          * @returns an error object that can be thrown if the calling code needs to abort parsing
          */
-        const addError = (token: Token, message: string) => {
-            let err = new ParseError(token, message);
+        const addError = (token: Token, message: string, code = 1000) => {
+            let err = new ParseError(token, message, code);
             errors.push(err);
             this.events.emit("err", err);
             return err;
         };
+
+        /**
+         * Wrapper around addError that extracts the properties from a diagnostic object
+         * @param token 
+         * @param diagnostic 
+         */
+        const addDiagnostic = (token: Token, diagnostic: DiagnosticMessage) => {
+            return addError(token, diagnostic.message, diagnostic.code);
+        }
 
         /**
          * Throws an error if the input file type is not BrighterScript
@@ -271,6 +282,15 @@ export class Parser {
             return check(Lexeme.Identifier) && peek().text.toLowerCase() === "end";
         }
 
+        /**
+         * Check if the next token is an `as` token
+         * 'as' can be used as variable and property names, but is sometimes used like a keyword (function parameters, return values, etc...)
+         * so the lexer handles it as an identifier
+         */
+        function checkAs() {
+            return check(Lexeme.Identifier) && peek().text.toLowerCase() === "as";
+        }
+
         function declaration(...additionalTerminators: BlockTerminator[]): Statement | undefined {
             try {
                 // consume any leading newlines
@@ -312,16 +332,51 @@ export class Parser {
             ensureBrighterScriptMode('class declarations');
             let keyword = consume(`Expected 'class' keyword`, Lexeme.Class);
             //get the class name
-            let className = consumeContinue(`Expected identifier after class keyword`, Lexeme.Identifier) as Identifier;
+            let className = consumeContinue(diagnosticMessages.Missing_identifier_after_class_keyword_1018(), Lexeme.Identifier) as Identifier;
             //consume newlines (at least one)
             while (match(Lexeme.Newline));
 
-            let members: Array<FunctionStatement> = [];
-            // let accessModifier: Token;
-            // //collect methods
-            // while (accessModifier = consume(Lexeme.Public, Lexeme.Private)) {
-            //     //TODOS
-            // }
+            let members = [] as ClassMemberStatement[];
+            //gather up all class members (Fields, Methods)
+            while (check(Lexeme.Public, Lexeme.Protected, Lexeme.Private, Lexeme.Function, Lexeme.Sub, Lexeme.Identifier)) {
+                try {
+                    let accessModifier: Token;
+                    //error on missing accessModifier for fields
+                    if (check(Lexeme.Identifier)) {
+                        addDiagnostic(peek(), diagnosticMessages.Missing_field_access_modifier_1016(peek().text));
+
+                        //error on missing access modifier for callables
+                    } else if (check(Lexeme.Sub, Lexeme.Function)) {
+                        let methodName = checkNext(Lexeme.Identifier) ? peekNext().text : null;
+                        addDiagnostic(peek(), diagnosticMessages.Missing_method_access_modifier_1017(methodName));
+
+                        //get the access modifier
+                    } else {
+                        accessModifier = advance();
+                    }
+
+                    //fields
+                    if (check(Lexeme.Identifier)) {
+                        members.push(
+                            classFieldDeclaration(accessModifier)
+                        );
+                        //methods
+                    } else if (check(Lexeme.Function, Lexeme.Sub)) {
+                        let declaration = functionDeclaration(false);
+
+                        members.push(
+                            new ClassMethodStatement(
+                                accessModifier,
+                                declaration.name,
+                                declaration.func
+                            )
+                        );
+                    }
+                } catch (e) {
+                    //throw out any failed members and move on to the next line
+                    while (match(Lexeme.Newline));
+                }
+            }
 
             //consume trailing newlines
             while (match(Lexeme.Newline));
@@ -336,8 +391,44 @@ export class Parser {
             //consume any trailing newlines
             while (match(Lexeme.Newline));
 
-            const result = new ClassStatement(keyword, className, members, endingKeyword);
+            const result = new ClassStatement(
+                keyword,
+                className,
+                members,
+                endingKeyword
+            );
             return result;
+        }
+
+        function classFieldDeclaration(accessModifier: Token) {
+            let name = consume(`Expected identifier`, Lexeme.Identifier) as Identifier;
+            let asToken: Token;
+            let fieldType: Token;
+            //look for `as SOME_TYPE`
+            if (checkAs()) {
+                asToken = advance();
+                fieldType = advance();
+
+                //no field type specified
+                if (!ValueKind.fromString(`${fieldType.text}`) && !check(Lexeme.Identifier)) {
+                    addError(peek(), `Expected valid type to follow 'as' keyword`);
+                }
+            }
+
+            //TODO - support class field assignments on construct
+            var assignment: any;
+
+            //if there is no type specified, hard-fail this property
+            if (!fieldType) {
+                addDiagnostic(name, diagnosticMessages.Missing_class_field_type_1019());
+            }
+
+            return new ClassFieldStatement(
+                accessModifier,
+                name,
+                asToken,
+                fieldType
+            );
         }
 
         function functionDeclaration(isAnonymous: true): Expr.Function;
@@ -1531,6 +1622,10 @@ export class Parser {
             }
         }
 
+        /**
+         * Pop tokens until we encounter a token not in the specified list
+         * @param lexemes 
+         */
         function match(...lexemes: Lexeme[]) {
             for (let lexeme of lexemes) {
                 if (check(lexeme)) {
@@ -1556,7 +1651,8 @@ export class Parser {
             return result;
         }
 
-        function consume(message: string, ...lexemes: Lexeme[]): Token {
+        function consume(errorMessage: string | DiagnosticMessage, ...lexemes: Lexeme[]): Token {
+            let diagnostic = typeof errorMessage === 'string' ? { message: errorMessage, code: 1000 } : errorMessage;
             let foundLexeme = lexemes
                 .map(lexeme => peek().kind === lexeme)
                 .reduce((foundAny, foundCurrent) => foundAny || foundCurrent, false);
@@ -1564,7 +1660,7 @@ export class Parser {
             if (foundLexeme) {
                 return advance();
             }
-            throw addError(peek(), message);
+            throw addError(peek(), diagnostic.message, diagnostic.code);
         }
 
         /**
@@ -1572,9 +1668,9 @@ export class Parser {
          * @param message 
          * @param lexemes 
          */
-        function consumeContinue(message: string, ...lexemes: Lexeme[]): Token {
+        function consumeContinue(diagnostic: DiagnosticMessage, ...lexemes: Lexeme[]): Token {
             try {
-                return consume(message, ...lexemes);
+                return consume(diagnostic, ...lexemes);
             } catch (e) {
                 //do nothing;
             }
