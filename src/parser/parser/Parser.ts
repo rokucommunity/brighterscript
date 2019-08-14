@@ -296,9 +296,10 @@ export class Parser {
                 // consume any leading newlines
                 while (match(Lexeme.Newline));
 
-                if (check(Lexeme.Class)) {
-                    return classDeclaration();
-                }
+                //TODO implement this in a future commit
+                // if (check(Lexeme.Class)) {
+                //     return classDeclaration();
+                // }
 
                 if (check(Lexeme.Sub, Lexeme.Function)) {
                     return functionDeclaration(false);
