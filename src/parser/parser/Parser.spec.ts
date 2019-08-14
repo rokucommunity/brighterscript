@@ -1,7 +1,4 @@
-import * as chai from 'chai';
-const expect = chai.expect;
-import * as chaiSubset from 'chai-subset';
-chai.use(chaiSubset);
+import { expect } from 'chai';
 
 import { diagnosticMessages } from '../../DiagnosticMessages';
 import { Lexeme, Lexer } from '../lexer';

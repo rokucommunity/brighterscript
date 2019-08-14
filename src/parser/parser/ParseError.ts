@@ -3,7 +3,7 @@ import { Token, Lexeme } from "../lexer";
 import { BrsError } from "../Error";
 
 export class ParseError extends BrsError {
-    constructor(token: Token, message: string, code: number) {
+    constructor(token: Token, message: string, code: number = 1000) {
         let m = message;
         if (token.kind === Lexeme.Eof) {
             m = "(At end of file) " + message;

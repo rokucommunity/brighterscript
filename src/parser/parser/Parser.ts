@@ -297,9 +297,9 @@ export class Parser {
                 while (match(Lexeme.Newline));
 
                 //TODO implement this in a future commit
-                // if (check(Lexeme.Class)) {
-                //     return classDeclaration();
-                // }
+                if (check(Lexeme.Class)) {
+                    return classDeclaration();
+                }
 
                 if (check(Lexeme.Sub, Lexeme.Function)) {
                     return functionDeclaration(false);
@@ -417,7 +417,7 @@ export class Parser {
             }
 
             //TODO - support class field assignments on construct
-            var assignment: any;
+            // var assignment: any;
 
             //if there is no type specified, hard-fail this property
             if (!fieldType) {
