@@ -5,13 +5,21 @@ script:
   - npm run build
   - npm run test:coverage
   - npm run tslint
+  - npm pack
 after_success: 
   - npm run coverage
 deploy:
-  provider: npm
-  email: "bronley@gmail.com"
-  api_key: $NPM_TOKEN
-  skip_cleanup: true
-  on:
-    branch: master
-    tags: true
+  - provider: releases
+    api_key: $GITHUB_OAUTH_TOKEN
+    file_glob: true
+    file: brighterscript-*\.tgz
+    skip_cleanup: true
+    on:
+      tags: true
+  - provider: npm
+    email: "bronley@gmail.com"
+    api_key: $NPM_TOKEN
+    skip_cleanup: true
+    on:
+      branch: master
+      tags: true
