@@ -356,21 +356,21 @@ export class Parser {
                         accessModifier = advance();
                     }
 
-                    //fields
-                    if (check(Lexeme.Identifier)) {
-                        members.push(
-                            classFieldDeclaration(accessModifier)
-                        );
-                        //methods
-                    } else if (check(Lexeme.Function, Lexeme.Sub)) {
+                    //methods (function/sub keyword OR identifier followed by opening paren)
+                    if (check(Lexeme.Function, Lexeme.Sub) || (check(Lexeme.Identifier) && checkNext(Lexeme.LeftParen))) {
                         let declaration = functionDeclaration(false);
-
                         members.push(
                             new ClassMethodStatement(
                                 accessModifier,
                                 declaration.name,
                                 declaration.func
                             )
+                        );
+
+                        //fields
+                    } else if (check(Lexeme.Identifier)) {
+                        members.push(
+                            classFieldDeclaration(accessModifier)
                         );
                     }
                 } catch (e) {
@@ -436,12 +436,27 @@ export class Parser {
         function functionDeclaration(isAnonymous: false): FunctionStatement;
         function functionDeclaration(isAnonymous: boolean) {
             try {
-                //certain statements need to know if they are contained within a function body
-                //so track the depth here
+                //track depth to help certain statements need to know if they are contained within a function body
                 functionDeclarationLevel++;
-                let startingKeyword = peek();
-                let isSub = check(Lexeme.Sub);
-                let functionType = advance();
+                let functionType: Token;
+                if (check(Lexeme.Sub, Lexeme.Function) === false) {
+                    addDiagnostic(peek(), diagnosticMessages.Missing_function_sub_keyword_1020(peek().text));
+                    //create a dummy function type to help the rest of this method
+                    functionType = {
+                        isReserved: true,
+                        kind: Lexeme.Function,
+                        //zero-width location at the start of the NEXT token.
+                        location: {
+                            start: Object.assign({}, peek().location.start),
+                            end: Object.assign({}, peek().location.start),
+                            file: peek().location.file
+                        },
+                        text: 'function'
+                    };
+                } else {
+                    functionType = advance();
+                }
+                let isSub = functionType.kind === Lexeme.Sub;
                 let name: Identifier;
                 let returnType: ValueKind;
 
@@ -556,7 +571,7 @@ export class Parser {
                     args,
                     returnType,
                     body,
-                    startingKeyword,
+                    functionType,
                     endingKeyword
                 );
 

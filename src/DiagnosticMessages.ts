@@ -87,6 +87,10 @@ export let diagnosticMessages = {
     Missing_class_field_type_1019: () => ({
         message: `Expected type after class field name`,
         code: 1019
+    }),
+    Missing_function_sub_keyword_1020: (text: string) => ({
+        message: `Expected 'function' or 'sub' to preceed '${text}'`,
+        code: 1020
     })
 };
 

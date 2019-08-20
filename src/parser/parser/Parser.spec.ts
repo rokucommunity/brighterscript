@@ -75,5 +75,51 @@ describe('parser', () => {
                 expect(errors[0].code).to.equal(diagnosticMessages.Missing_class_field_type_1019().code);
             });
         });
+
+        describe('methods', () => {
+            it('recognizes perfect syntax', () => {
+                let { tokens } = Lexer.scan(`
+                    class Person
+                        public function getName() as string
+                            return "name"
+                        end function
+                    end class
+                `);
+                let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+                expect(errors).to.be.lengthOf(0);
+                let theClass = statements[0] as ClassStatement;
+                expect(theClass).to.be.instanceof(ClassStatement);
+                let method = theClass.methods[0];
+                expect(method.name.text).to.equal('getName');
+                expect(method.accessModifier.text).to.equal('public');
+                expect(method.func).to.exist;
+            });
+
+            it('detects missing access modifier', () => {
+                let { tokens } = Lexer.scan(`
+                    class Person
+                        function getName() as string
+                            return "name"
+                        end function
+                    end class
+                    `);
+                let { errors } = Parser.parse(tokens, 'brighterscript');
+                expect(errors).to.have.lengthOf(1);
+                expect(errors[0].code).to.equal(diagnosticMessages.Missing_method_access_modifier_1017().code);
+            });
+
+            it('detects missing function keyword', () => {
+                let { tokens } = Lexer.scan(`
+                    class Person
+                        public getName() as string
+                            return "name"
+                        end function
+                    end class
+                    `);
+                let { errors } = Parser.parse(tokens, 'brighterscript');
+                expect(errors).to.have.lengthOf(1);
+                expect(errors[0].code).to.equal(diagnosticMessages.Missing_function_sub_keyword_1020('').code);
+            });
+        });
     });
 });

@@ -547,7 +547,20 @@ export class ClassStatement implements Statement {
         readonly name: Identifier,
         readonly members: ClassMemberStatement[],
         readonly end: Token
-    ) { }
+    ) {
+        for (let member of this.members) {
+            if (member instanceof ClassMethodStatement) {
+                this.methods.push(member);
+            } else if (member instanceof ClassFieldStatement) {
+                this.fields.push(member);
+            } else {
+                throw new Error(`Critical error: unknown member type added to class definition ${this.name}`);
+            }
+        }
+    }
+
+    public methods = [] as ClassMethodStatement[];
+    public fields = [] as ClassFieldStatement[];
 
     accept<R>(visitor: Visitor<R>): BrsType {
         throw new Error('Method not implemented.');
