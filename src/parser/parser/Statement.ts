@@ -181,8 +181,8 @@ export class ClassFieldStatement implements Statement {
     get location() {
         return {
             file: this.name.location.file,
-            start: this.accessModifier ? this.accessModifier.location.start : this.name.location.start,
-            end: this.type.location.end,
+            start: this.accessModifier.location.start,
+            end: this.type.location.end
         };
     }
 }

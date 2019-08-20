@@ -59,7 +59,7 @@ export class BrsFile {
     /**
      * The AST for this file
      */
-    private ast: brs.parser.Stmt.Statement[];
+    private ast = [] as brs.parser.Stmt.Statement[];
     private tokens = [] as brs.lexer.Token[];
 
     /**
@@ -96,7 +96,7 @@ export class BrsFile {
         let manifest = await brs.preprocessor.getManifest(this.program.rootDir);
         let preprocessor = new brs.preprocessor.Preprocessor();
         let preprocessorResults = {
-            errors: [],
+            errors: [] as Error[],
             processedTokens: []
         };
         let preprocessorWasSuccessful: boolean;
@@ -294,8 +294,8 @@ export class BrsFile {
             //compute the range of this func
             scope.bodyRange = util.getBodyRangeForFunc(func);
             scope.range = Range.create(
-                func.keyword.location.start.line - 1,
-                func.keyword.location.start.column,
+                func.functionType.location.start.line - 1,
+                func.functionType.location.start.column,
                 func.end.location.end.line - 1,
                 func.end.location.end.column
             );
@@ -363,7 +363,7 @@ export class BrsFile {
             //function
             if (assignment.value instanceof brs.parser.Expr.Function) {
                 let functionType = new FunctionType(util.valueKindToBrsType(assignment.value.returns));
-                functionType.isSub = assignment.value.keyword.text === 'sub';
+                functionType.isSub = assignment.value.functionType.text === 'sub';
                 if (functionType.isSub) {
                     functionType.returnType = new VoidType();
                 }
@@ -422,7 +422,7 @@ export class BrsFile {
 
             let functionType = new FunctionType(util.valueKindToBrsType(statement.func.returns));
             functionType.setName(statement.name.text);
-            functionType.isSub = statement.func.keyword.text.toLowerCase() === 'sub';
+            functionType.isSub = statement.func.functionType.text.toLowerCase() === 'sub';
             if (functionType.isSub) {
                 functionType.returnType = new VoidType();
             }
@@ -442,7 +442,7 @@ export class BrsFile {
             }
 
             this.callables.push({
-                isSub: statement.func.keyword.text.toLowerCase() === 'sub',
+                isSub: statement.func.functionType.text.toLowerCase() === 'sub',
                 name: statement.name.text,
                 nameRange: util.locationToRange(statement.name.location),
                 file: this,

@@ -69,28 +69,17 @@ export let diagnosticMessages = {
         message: `Script import cannot be empty or whitespace`,
         code: 1015
     }),
-    Missing_field_access_modifier_1016: (fieldName: string) => ({
-        message: `Class field '${fieldName}' must be marked 'public', 'protected', or 'private'`,
+    Missing_identifier_after_class_keyword_1016: () => ({
+        message: `Expected identifier after 'class' keyword`,
         code: 1016
     }),
-    Missing_method_access_modifier_1017: (methodName?: string) => {
-        let methodText = methodName ? methodName + ' ' : '';
-        return {
-            message: `Class method '${methodText}'must be marked 'public', 'protected', or 'private'`,
-            code: 1017
-        };
-    },
-    Missing_identifier_after_class_keyword_1018: () => ({
-        message: `Expected identifier after 'class' keyword`,
-        code: 1018
-    }),
-    Missing_class_field_type_1019: () => ({
-        message: `Expected type after class field name`,
-        code: 1019
-    }),
-    Missing_function_sub_keyword_1020: (text: string) => ({
+    Missing_function_sub_keyword_1017: (text: string) => ({
         message: `Expected 'function' or 'sub' to preceed '${text}'`,
-        code: 1020
+        code: 1017
+    }),
+    Expected_valid_type_to_follow_as_keyword_1018: () => ({
+        message: `Expected valid type to follow 'as' keyword`,
+        code: 1018
     })
 };
 

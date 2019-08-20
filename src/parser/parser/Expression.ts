@@ -73,8 +73,9 @@ export class Function implements Expression {
         readonly parameters: ReadonlyArray<Argument>,
         readonly returns: ValueKind,
         readonly body: Block,
-        readonly keyword: Token,
-        readonly end: Token
+        readonly functionType: Token | null,
+        readonly end: Token,
+        readonly leftParen: Token
     ) { }
 
     accept<R>(visitor: Visitor<R>): R {
@@ -83,8 +84,8 @@ export class Function implements Expression {
 
     get location() {
         return {
-            file: this.keyword.location.file,
-            start: this.keyword.location.start,
+            file: this.leftParen.location.file,
+            start: this.functionType ? this.functionType.location.start : this.leftParen.location.start,
             end: this.end.location.end,
         };
     }

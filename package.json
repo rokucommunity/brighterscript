@@ -12,7 +12,7 @@
     "test": "ts-mocha \"src/**/*.spec.ts\" --full-trace",
     "test:coverage": "nyc mocha \"src/**/*.spec.ts\" --full-trace",
     "test:watch": "ts-mocha \"src/**/*.spec.ts\" --full-trace --watch --watch-extensions ts",
-    "coverage": "nyc report --reporter=text-lcov > coverage.lcov && codecov"
+    "report-coverage": "nyc report --reporter=text-lcov > coverage.lcov && codecov"
   },
   "files": [
     "dist/**/!(*.spec.*)*",

@@ -53,26 +53,55 @@ describe('parser', () => {
                 expect(field.type.text).to.equal('string');
             });
 
-            it('detects missing access modifier', () => {
+            it('can be solely an identifier', () => {
+                let { tokens } = Lexer.scan(`
+                    class Person
+                        firstName
+                    end class
+                `);
+                let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+                expect(errors).to.be.lengthOf(0);
+                let cls = statements[0] as ClassStatement;
+                expect(cls.fields[0].name.text).to.equal('firstName');
+            });
+
+            it('malformed field does not impact leading and trailing fields', () => {
+                let { tokens } = Lexer.scan(`
+                    class Person
+                        firstName as string
+                        middleName &&&#1
+                        lastName as string
+                    end class
+                `);
+                let { statements } = Parser.parse(tokens, 'brighterscript');
+                let cls = statements[0] as ClassStatement;
+                expect(cls.fields[0].name.text).to.equal('firstName');
+                expect(cls.fields[cls.fields.length - 1].name.text).to.equal('lastName');
+            });
+
+            it(`detects missing type after 'as' keyword`, () => {
+                let { tokens } = Lexer.scan(`
+                    class Person
+                        middleName as
+                    end class
+                `);
+                let { errors, statements } = Parser.parse(tokens, 'brighterscript');
+                expect(errors.length).to.be.greaterThan(0);
+                let cls = statements[0] as ClassStatement;
+                expect(cls.fields[0].name.text).to.equal('middleName');
+                expect(errors[0].code).to.equal(diagnosticMessages.Expected_valid_type_to_follow_as_keyword_1018().code);
+            });
+
+            it('field access modifier defaults to public when omitted', () => {
                 let { tokens } = Lexer.scan(`
                     class Person
                         firstName as string
                     end class
                 `);
-                let { errors } = Parser.parse(tokens, 'brighterscript');
-                expect(errors).to.have.lengthOf(1);
-                expect(errors[0].code).to.equal(diagnosticMessages.Missing_field_access_modifier_1016('').code);
-            });
-
-            it('detects missing trailing type', () => {
-                let { tokens } = Lexer.scan(`
-                    class Person
-                        public firstName
-                    end class
-                `);
-                let { errors } = Parser.parse(tokens, 'brighterscript');
-                expect(errors).to.have.lengthOf(1);
-                expect(errors[0].code).to.equal(diagnosticMessages.Missing_class_field_type_1019().code);
+                let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+                expect(errors).to.be.lengthOf(0);
+                let cls = statements[0] as ClassStatement;
+                expect(cls.fields[0].accessModifier.kind).to.equal(Lexeme.Public);
             });
         });
 
@@ -95,7 +124,23 @@ describe('parser', () => {
                 expect(method.func).to.exist;
             });
 
-            it('detects missing access modifier', () => {
+            it('supports omitting method return type', () => {
+                let { tokens } = Lexer.scan(`
+                    class Person
+                        public function getName()
+                            return "name"
+                        end function
+                    end class
+                `);
+                let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+                expect(errors).to.be.lengthOf(0);
+                let theClass = statements[0] as ClassStatement;
+                let method = theClass.methods[0];
+                expect(method.accessModifier.text).to.equal('public');
+                expect(method.func).to.exist;
+            });
+
+            it('method access modifier defaults to public when omitted', () => {
                 let { tokens } = Lexer.scan(`
                     class Person
                         function getName() as string
@@ -103,9 +148,10 @@ describe('parser', () => {
                         end function
                     end class
                     `);
-                let { errors } = Parser.parse(tokens, 'brighterscript');
-                expect(errors).to.have.lengthOf(1);
-                expect(errors[0].code).to.equal(diagnosticMessages.Missing_method_access_modifier_1017().code);
+                let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+                expect(errors).to.be.lengthOf(0);
+                let cls = statements[0] as ClassStatement;
+                expect(cls.methods[0].accessModifier.kind).to.equal(Lexeme.Public);
             });
 
             it('detects missing function keyword', () => {
@@ -118,7 +164,7 @@ describe('parser', () => {
                     `);
                 let { errors } = Parser.parse(tokens, 'brighterscript');
                 expect(errors).to.have.lengthOf(1);
-                expect(errors[0].code).to.equal(diagnosticMessages.Missing_function_sub_keyword_1020('').code);
+                expect(errors[0].code).to.equal(diagnosticMessages.Missing_function_sub_keyword_1017('').code);
             });
         });
     });

@@ -333,7 +333,7 @@ export class Parser {
             ensureBrighterScriptMode('class declarations');
             let keyword = consume(`Expected 'class' keyword`, Lexeme.Class);
             //get the class name
-            let className = consumeContinue(diagnosticMessages.Missing_identifier_after_class_keyword_1018(), Lexeme.Identifier) as Identifier;
+            let className = consumeContinue(diagnosticMessages.Missing_identifier_after_class_keyword_1016(), Lexeme.Identifier) as Identifier;
             //consume newlines (at least one)
             while (match(Lexeme.Newline));
 
@@ -342,18 +342,21 @@ export class Parser {
             while (check(Lexeme.Public, Lexeme.Protected, Lexeme.Private, Lexeme.Function, Lexeme.Sub, Lexeme.Identifier)) {
                 try {
                     let accessModifier: Token;
-                    //error on missing accessModifier for fields
-                    if (check(Lexeme.Identifier)) {
-                        addDiagnostic(peek(), diagnosticMessages.Missing_field_access_modifier_1016(peek().text));
-
-                        //error on missing access modifier for callables
-                    } else if (check(Lexeme.Sub, Lexeme.Function)) {
-                        let methodName = checkNext(Lexeme.Identifier) ? peekNext().text : null;
-                        addDiagnostic(peek(), diagnosticMessages.Missing_method_access_modifier_1017(methodName));
-
-                        //get the access modifier
-                    } else {
+                    if (check(Lexeme.Public, Lexeme.Protected, Lexeme.Private)) {
+                        //use actual access modifier
                         accessModifier = advance();
+                    } else {
+                        accessModifier = {
+                            isReserved: false,
+                            kind: Lexeme.Public,
+                            text: 'public',
+                            //zero-length token which indicates derived
+                            location: {
+                                start: peek().location.start,
+                                end: peek().location.start,
+                                file: peek().location.file
+                            }
+                        };
                     }
 
                     //methods (function/sub keyword OR identifier followed by opening paren)
@@ -375,8 +378,11 @@ export class Parser {
                     }
                 } catch (e) {
                     //throw out any failed members and move on to the next line
-                    while (match(Lexeme.Newline));
+                    consumeUntil(Lexeme.Newline, Lexeme.Eof);
                 }
+
+                //consume trailing newlines
+                while (match(Lexeme.Newline));
             }
 
             //consume trailing newlines
@@ -401,7 +407,7 @@ export class Parser {
             return result;
         }
 
-        function classFieldDeclaration(accessModifier: Token) {
+        function classFieldDeclaration(accessModifier: Token | null) {
             let name = consume(`Expected identifier`, Lexeme.Identifier) as Identifier;
             let asToken: Token;
             let fieldType: Token;
@@ -412,17 +418,12 @@ export class Parser {
 
                 //no field type specified
                 if (!ValueKind.fromString(`${fieldType.text}`) && !check(Lexeme.Identifier)) {
-                    addError(peek(), `Expected valid type to follow 'as' keyword`);
+                    addDiagnostic(peek(), diagnosticMessages.Expected_valid_type_to_follow_as_keyword_1018());
                 }
             }
 
             //TODO - support class field assignments on construct
             // var assignment: any;
-
-            //if there is no type specified, hard-fail this property
-            if (!fieldType) {
-                addDiagnostic(name, diagnosticMessages.Missing_class_field_type_1019());
-            }
 
             return new ClassFieldStatement(
                 accessModifier,
@@ -439,26 +440,27 @@ export class Parser {
                 //track depth to help certain statements need to know if they are contained within a function body
                 functionDeclarationLevel++;
                 let functionType: Token;
-                if (check(Lexeme.Sub, Lexeme.Function) === false) {
-                    addDiagnostic(peek(), diagnosticMessages.Missing_function_sub_keyword_1020(peek().text));
-                    //create a dummy function type to help the rest of this method
+                if (check(Lexeme.Sub, Lexeme.Function)) {
+                    functionType = advance();
+                } else {
+                    addDiagnostic(peek(), diagnosticMessages.Missing_function_sub_keyword_1017(peek().text));
                     functionType = {
                         isReserved: true,
                         kind: Lexeme.Function,
-                        //zero-width location at the start of the NEXT token.
+                        text: 'function',
+                        //zero-length location means derived
                         location: {
-                            start: Object.assign({}, peek().location.start),
-                            end: Object.assign({}, peek().location.start),
+                            start: peek().location.start,
+                            end: peek().location.start,
                             file: peek().location.file
-                        },
-                        text: 'function'
+                        }
                     };
-                } else {
-                    functionType = advance();
                 }
-                let isSub = functionType.kind === Lexeme.Sub;
+                let isSub = functionType && functionType.kind === Lexeme.Sub;
+                let functionTypeText = isSub ? 'sub' : 'function';
                 let name: Identifier;
                 let returnType: ValueKind;
+                let leftParen: Token;
 
                 if (isSub) {
                     returnType = ValueKind.Void;
@@ -467,17 +469,17 @@ export class Parser {
                 }
 
                 if (isAnonymous) {
-                    consume(
-                        `Expected '(' after ${functionType.text}`,
+                    leftParen = consume(
+                        `Expected '(' after ${functionTypeText}`,
                         Lexeme.LeftParen
                     );
                 } else {
                     name = consume(
-                        `Expected ${functionType.text} name after '${functionType.text}'`,
+                        `Expected ${functionTypeText} name after '${functionTypeText}'`,
                         Lexeme.Identifier
                     ) as Identifier;
-                    consume(
-                        `Expected '(' after ${functionType.text} name`,
+                    leftParen = consume(
+                        `Expected '(' after ${functionTypeText} name`,
                         Lexeme.LeftParen
                     );
 
@@ -542,7 +544,7 @@ export class Parser {
                 }, false);
 
                 consume(
-                    `Expected newline or ':' after ${functionType.text} signature`,
+                    `Expected newline or ':' after ${functionTypeText} signature`,
                     Lexeme.Newline,
                     Lexeme.Colon
                 );
@@ -551,7 +553,7 @@ export class Parser {
                 if (!body) {
                     throw addError(
                         peek(),
-                        `Expected 'end ${functionType.text}' to terminate ${functionType.text} block`
+                        `Expected 'end ${functionTypeText}' to terminate ${functionTypeText} block`
                     );
                 }
                 // consume 'end sub' or 'end function'
@@ -563,7 +565,7 @@ export class Parser {
                 if (endingKeyword.kind !== expectedEndKind) {
                     addError(
                         endingKeyword,
-                        `Expected 'end ${functionType.text}' to terminate ${functionType.text} block`
+                        `Expected 'end ${functionTypeText}' to terminate ${functionTypeText} block`
                     );
                 }
 
@@ -572,7 +574,8 @@ export class Parser {
                     returnType,
                     body,
                     functionType,
-                    endingKeyword
+                    endingKeyword,
+                    leftParen
                 );
 
                 if (isAnonymous) {
@@ -1490,7 +1493,7 @@ export class Parser {
         }
 
         function finishCall(callee: Expression): Expression {
-            let args = [];
+            let args = [] as Expression[];
             while (match(Lexeme.Newline));
 
             if (!check(Lexeme.RightParen)) {
@@ -1684,7 +1687,7 @@ export class Parser {
          * @param message 
          * @param lexemes 
          */
-        function consumeContinue(diagnostic: DiagnosticMessage, ...lexemes: Lexeme[]): Token {
+        function consumeContinue(diagnostic: DiagnosticMessage, ...lexemes: Lexeme[]): Token | undefined {
             try {
                 return consume(diagnostic, ...lexemes);
             } catch (e) {

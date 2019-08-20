@@ -38,7 +38,7 @@ export interface Location {
 }
 
 /** A line-column pair. */
-type LineAndColumn = {
+export interface LineAndColumn {
     /** A *one-indexed* line number. */
     line: number;
     /** A *zero-indexed* column number. */

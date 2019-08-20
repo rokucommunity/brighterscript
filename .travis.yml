@@ -7,7 +7,7 @@ script:
   - npm run tslint
   - npm pack
 after_success: 
-  - npm run coverage
+  - npm run report-coverage
 deploy:
   - provider: releases
     api_key: $GITHUB_OAUTH_TOKEN
