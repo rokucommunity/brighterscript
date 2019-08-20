@@ -15,6 +15,7 @@ deploy:
     file: brighterscript-*\.tgz
     skip_cleanup: true
     on:
+      branch: master
       tags: true
   - provider: npm
     email: "bronley@gmail.com"
