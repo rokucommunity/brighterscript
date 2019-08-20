@@ -6,7 +6,50 @@ import { Parser } from './Parser';
 import { ClassFieldStatement, ClassStatement } from './Statement';
 
 describe('parser', () => {
+    it('emits empty object when empty token list is provided', () => {
+        expect(Parser.parse([])).to.deep.include({
+            statements: [],
+            errors: []
+        });
+    });
+    describe('events', () => {
+        it('emits events', () => {
+            let parser = new Parser();
+            let count = 0;
+            let handler = parser.onError(() => {
+                count++;
+            });
+            parser.parse(Lexer.scan('function').tokens);
+            parser.parse(Lexer.scan('function').tokens);
+            expect(count).to.equal(2);
+            //disposing the listener stops new counts
+            handler.dispose();
+            parser.parse(Lexer.scan('function').tokens);
+            expect(count).to.equal(2);
+        });
+        describe('onErrorOnce', () => {
+            it('stops emitting after first error', () => {
+                let parser = new Parser();
+                let count = 0;
+                parser.onErrorOnce(() => {
+                    count++;
+                });
+                parser.parse(Lexer.scan('function').tokens);
+                parser.parse(Lexer.scan('function').tokens);
+                expect(count).to.equal(1);
+            });
+        });
+    });
     describe('class', () => {
+        it('throws exception when used in brightscript context', () => {
+            let { tokens } = Lexer.scan(`
+                class Person
+                end class
+            `);
+            let { errors } = Parser.parse(tokens, 'brightscript');
+            expect(errors[0].code).to.equal(diagnosticMessages.Bs_feature_not_supported_in_brs_files_1019('').code);
+
+        });
         it('parses empty class', () => {
             let { tokens } = Lexer.scan(`
                 class Person
@@ -69,7 +112,7 @@ describe('parser', () => {
                 let { tokens } = Lexer.scan(`
                     class Person
                         firstName as string
-                        middleName &&&#1
+                        middleName asdf asdf asdf
                         lastName as string
                     end class
                 `);

@@ -236,7 +236,7 @@ export class Parser {
          */
         const ensureBrighterScriptMode = (featureName: string) => {
             if (mode !== 'brighterscript') {
-                throw new Error(`BrighterScript feature ${featureName} is not supported in BrightScript files`);
+                throw addDiagnostic(peek(), diagnosticMessages.Bs_feature_not_supported_in_brs_files_1019(featureName));
             }
         }
 
