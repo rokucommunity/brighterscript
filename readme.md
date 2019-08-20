@@ -1,10 +1,12 @@
 # BrighterScript
 
-A superset of Roku's BrightScript language. Compiles to standard BrightScript.
+A superset of Roku's BrightScript language. Compiles to standard BrightScript. 
 
 [![Build Status](https://travis-ci.org/rokucommunity/brighterscript.svg?branch=master)](https://travis-ci.org/rokucommunity/brighterscript)
 [![codecov](https://codecov.io/gh/rokucommunity/brighterscript/branch/master/graph/badge.svg)](https://codecov.io/gh/rokucommunity/brighterscript)
 [![NPM Version](https://badge.fury.io/js/brighterscript.svg?style=flat)](https://npmjs.org/package/@rokucommunity/brighterscript)
+
+The goal of this project is to bring new features and syntax enhancements to Roku's BrightScript language. It also supports parsing and validating standard BrightScript, so you don't even need to write a single line of `BrighterScript` code to benefit from this project. 
 
  **Disclaimer:** This is currently a **work in progress**. Use at your own risk, but feel free to raise any issues you may find. 
 
@@ -23,40 +25,40 @@ npm install brightscript-language -g
 If your project structure exactly matches Roku's, and you run the command from the root of your project, then you can do the following: 
 
 ```bash
-brsc 
+bsc 
 ```
 
 That's it! It will find all files in your brightscript project, check for syntax and static analysis errors, and if there were no errors, it will produce a zip at `./out/project.zip`
 
 ### Advanced Usage
 
-If you need to configure `brsc`, you can do so in two ways: 
+If you need to configure `bsc`, you can do so in two ways: 
 
 1. Using command line arguments. 
-    This tool can be fully configured using command line arguments. To see a full list, run `brsc --help` in your terminal.
+    This tool can be fully configured using command line arguments. To see a full list, run `bsc --help` in your terminal.
 2. Using a `bsconfig.json` file. See [the available options](#bsconfig.json-options) below. 
-    By default, `brsc` looks for a `bsconfig.json` file at the same directory that `brsc` is executed. If you want to store your `bsconfig.json` file somewhere else, then you should provide the `--project` argument and specify the path to your `bsconfig.json` file. 
+    By default, `bsc` looks for a `bsconfig.json` file at the same directory that `bsc` is executed. If you want to store your `bsconfig.json` file somewhere else, then you should provide the `--project` argument and specify the path to your `bsconfig.json` file. 
 
 ### Examples
 
 1. Your project resides in a subdirectory of your workspace folder. 
 
     ```bash
-    brsc --root-dir ./rokuSourceFiles
+    bsc --root-dir ./rokuSourceFiles
     ```
 2. Run the compiler in watch mode
 
     ```bash
-    brsc --watch
+    bsc --watch
     ```
 
 3. Run the compiler in watch mode, and redeploy to the roku on every change
     ```bash
-    brsc --watch --deploy --host 192.168.1.10 --password secret_password
+    bsc --watch --deploy --host 192.168.1.10 --password secret_password
     ```
 4. Use a bsconfig.json file not located at cwd
     ```bash
-    brsc --project ./some_folder/bsconfig.json
+    bsc --project ./some_folder/bsconfig.json
     ```
 ## bsconfig.json
 
@@ -142,6 +144,8 @@ The primary motivation for implementing this feature was to provide a stopgap me
 
 This project also contributes a class that aligns with Microsoft's [Language Server Protocol](https://microsoft.github.io/language-server-protocol/), which makes it easy to integrate `brightscript` with any IDE that supports the protocol. We won't go into more detail here, but you can use the `LanguageServer` class from this project to integrate into your IDE. The [vscode-brightscript-language](https://github.com/twitchbronbron/vscode-brightscript-language) extension uses this LanguageServer class for Visual Studio Code support. 
 
-
 ## Changelog
 [Click here](CHANGELOG.md) to view the changelog.
+
+## Special Thanks
+Special thanks to the [brs](https://github.com/sjbarag/brs) project for its fantastic work on its blazing fast BrightScript parser. It was used as the foundation for the BrighterScript parser. 
