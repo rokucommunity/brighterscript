@@ -3,7 +3,8 @@ declare type Interpreter = any;
 import * as Brs from ".";
 import * as Expr from "../parser/Expression";
 declare var Scope: any;
-import { Location } from "../lexer";
+import { Location, Identifier, Token } from "../lexer";
+import { SourceNode } from 'source-map';
 
 /** An argument to a BrightScript `function` or `sub`. */
 export interface Argument {
@@ -58,6 +59,46 @@ export class StdlibArgument implements Argument {
         start: { line: -1, column: -1 },
         end: { line: -1, column: -1 },
     };
+}
+
+export class FunctionParameter {
+    constructor(
+        public name: Identifier,
+        public type: {
+            kind: Brs.ValueKind;
+            location: Location;
+        },
+        public typeToken?: Token,
+        public defaultValue?: Expr.Expression,
+        public asToken?: Token,
+
+    ) { }
+    public get location(): Location {
+        return {
+            file: this.name.location.file,
+            start: this.name.location.start,
+            end: this.typeToken ? this.typeToken.location.end : this.name.location.end,
+        };
+    }
+
+    public transpile(pkgPath: string): SourceNode {
+        let result = [
+            //name
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, pkgPath, this.name.text)
+        ] as any[];
+        if (this.asToken) {
+            result.push(' ');
+            result.push(new SourceNode(this.asToken.location.start.line, this.asToken.location.start.column, pkgPath, 'as'));
+            result.push(' ');
+            result.push(new SourceNode(this.typeToken.location.start.line, this.typeToken.location.start.column, pkgPath, this.typeToken.text));
+        }
+        if (this.defaultValue) {
+            result.push('=');
+            result.push((this.defaultValue as any).transpile(pkgPath));
+        }
+        return new SourceNode(null, null, pkgPath, result);
+
+    }
 }
 
 /** A BrightScript `function` or `sub`'s signature. */
@@ -151,7 +192,7 @@ export class Callable implements Brs.BrsValue {
         if (satisfiedSignature == null) {
             throw new Error(
                 "BrightScript function called without first checking for satisfied signatures. " +
-                    "Ensure `Callable#getAllSignatureMismatches` is called before `Callable#call`."
+                "Ensure `Callable#getAllSignatureMismatches` is called before `Callable#call`."
             );
         }
 

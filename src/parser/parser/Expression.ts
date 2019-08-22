@@ -1,7 +1,8 @@
 //tslint:disable
 import { Token, Identifier, Location } from "../lexer";
-import { BrsType, Argument, ValueKind, BrsString } from "../brsTypes";
+import { BrsType, ValueKind, BrsString, FunctionParameter } from "../brsTypes";
 import { Block } from "./Statement";
+import { SourceNode } from 'source-map';
 
 export interface Visitor<T> {
     visitBinary(expression: Binary): T;
@@ -28,6 +29,8 @@ export interface Expression {
 
     /** The starting and ending location of the expression. */
     location: Location;
+
+    // transpile(pkgPath: string): SourceNode;
 }
 
 export class Binary implements Expression {
@@ -70,12 +73,13 @@ export class Call implements Expression {
 
 export class Function implements Expression {
     constructor(
-        readonly parameters: ReadonlyArray<Argument>,
+        readonly parameters: FunctionParameter[],
         readonly returns: ValueKind,
         readonly body: Block,
         readonly functionType: Token | null,
         readonly end: Token,
-        readonly leftParen: Token
+        readonly leftParen: Token,
+        readonly rightParen: Token
     ) { }
 
     accept<R>(visitor: Visitor<R>): R {
@@ -88,6 +92,38 @@ export class Function implements Expression {
             start: this.functionType ? this.functionType.location.start : this.leftParen.location.start,
             end: this.end.location.end,
         };
+    }
+
+    transpile(pkgPath: string, name?: Identifier) {
+        let params = [] as SourceNode[];
+        for (let param of this.parameters) {
+            //add commas
+            if (params.length > 0) {
+                params.push(new SourceNode(null, null, pkgPath, ','));
+            }
+            //add parameter
+            params.push(param.transpile(pkgPath));
+        }
+
+
+        return new SourceNode(null, null, pkgPath, [
+            //'function'|'sub'
+            new SourceNode(this.functionType.location.start.line, this.functionType.location.start.column, pkgPath, this.functionType.text),
+            ' ',
+            //function name (optional)
+            name ? new SourceNode(name.location.start.line, name.location.start.column, pkgPath, name.text) : '',
+            //leftParen
+            new SourceNode(this.leftParen.location.start.line, this.leftParen.location.start.column, pkgPath, '('),
+            //parameters
+            ...params,
+            //right paren
+            new SourceNode(this.rightParen.location.start.line, this.rightParen.location.start.column, pkgPath, ')'),
+            '\n',
+            //TODO include function body
+
+            //'end sub'|'end function'
+            new SourceNode(this.end.location.start.line, this.end.location.start.column, pkgPath, this.end.text)
+        ]);
     }
 }
 

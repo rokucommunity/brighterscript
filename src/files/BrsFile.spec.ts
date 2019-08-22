@@ -1,4 +1,6 @@
+import { BrightScriptFormatter } from 'brightscript-formatter';
 import { assert, expect } from 'chai';
+import * as fsExtra from 'fs-extra';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
 
@@ -1210,5 +1212,53 @@ describe('BrsFile', () => {
             `);
             expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
         });
+    });
+
+    describe.only('transpile', () => {
+        let formatter = new BrightScriptFormatter();
+
+        it('works for functions', async () => {
+            await testTranspile(`
+                function DoSomething()
+                    'lots of empty white space
+                    'that will be removed during transpile
+                end function
+            `, `
+                function DoSomething()
+                end function
+            `);
+        });
+
+        it('works for function parameters', async () => {
+            await testTranspile(`
+                function DoSomething(name, age as integer, text as string)
+                    'lots of empty white space
+                    'that will be removed during transpile
+                end function
+            `, `
+                function DoSomething(name, age as integer, text as string)
+                end function
+            `);
+        });
+
+        async function testTranspile(source: string, expected: string) {
+            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, source) as BrsFile;
+            let transpiled = file.transpile();
+
+            fsExtra.writeFileSync('C:/temp/transpile/source.bs', source);
+            fsExtra.writeFileSync('C:/temp/transpile/generated.brs', file.transpile().code);
+            fsExtra.writeFileSync('C:/temp/transpile/generated.brs.map', file.transpile().map);
+
+            expect(
+                formatter.format(
+                    transpiled.code.trim()
+                )
+            ).to.equal(
+                formatter.format(
+                    expected.trim()
+                )
+            );
+            return transpiled;
+        }
     });
 });

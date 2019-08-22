@@ -16,6 +16,7 @@ import {
     ValueKind,
     Argument,
     StdlibArgument,
+    FunctionParameter,
 } from "../brsTypes";
 import { FunctionStatement, ClassStatement, ClassFieldStatement, ClassMemberStatement, ClassMethodStatement } from './Statement';
 import { diagnosticMessages, DiagnosticMessage } from '../../DiagnosticMessages';
@@ -494,20 +495,20 @@ export class Parser {
                     }
                 }
 
-                let args: Argument[] = [];
+                let args: FunctionParameter[] = [];
                 if (!check(Lexeme.RightParen)) {
                     do {
                         if (args.length >= Expr.Call.MaximumArguments) {
                             throw addError(
                                 peek(),
-                                `Cannot have more than ${Expr.Call.MaximumArguments} arguments`
+                                `Cannot have more than ${Expr.Call.MaximumArguments} parameters`
                             );
                         }
 
-                        args.push(signatureArgument());
+                        args.push(functionParameter());
                     } while (match(Lexeme.Comma));
                 }
-                advance();
+                let rightParen = advance();
 
                 let maybeAs = peek();
                 if (check(Lexeme.Identifier) && maybeAs.text.toLowerCase() === "as") {
@@ -575,7 +576,8 @@ export class Parser {
                     body,
                     functionType,
                     endingKeyword,
-                    leftParen
+                    leftParen,
+                    rightParen
                 );
 
                 if (isAnonymous) {
@@ -591,15 +593,15 @@ export class Parser {
             }
         }
 
-        function signatureArgument(): Argument {
+        function functionParameter(): FunctionParameter {
             if (!check(Lexeme.Identifier)) {
                 throw addError(
                     peek(),
-                    `Expected argument name, but received '${peek().text || ""}'`
+                    `Expected parameter name, but received '${peek().text || ""}'`
                 );
             }
 
-            let name = advance();
+            let name = advance() as Identifier;
             let type: ValueKind = ValueKind.Dynamic;
             let typeToken: Token | undefined;
             let defaultValue;
@@ -610,12 +612,13 @@ export class Parser {
                 defaultValue = expression();
             }
 
+            let asToken = null;
             let next = peek();
             if (check(Lexeme.Identifier) && next.text && next.text.toLowerCase() === "as") {
                 // 'as' isn't a reserved word, so it can't be lexed into an As token without the lexer
                 // understanding language context.  That's less than ideal, so we'll have to do some
                 // more intelligent comparisons to detect the 'as' sometimes-keyword here.
-                advance();
+                asToken = advance();
 
                 typeToken = advance();
                 let typeValueKind = ValueKind.fromString(typeToken.text);
@@ -630,19 +633,16 @@ export class Parser {
                 type = typeValueKind;
             }
 
-            return {
-                name: name,
-                type: {
+            return new FunctionParameter(
+                name,
+                {
                     kind: type,
                     location: typeToken ? typeToken.location : StdlibArgument.InternalLocation,
                 },
-                defaultValue: defaultValue,
-                location: {
-                    file: name.location.file,
-                    start: name.location.start,
-                    end: typeToken ? typeToken.location.end : name.location.end,
-                },
-            };
+                typeToken,
+                defaultValue,
+                asToken
+            );
         }
 
         function assignment(...additionalterminators: Lexeme[]): Stmt.Assignment {

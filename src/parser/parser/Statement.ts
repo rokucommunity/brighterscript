@@ -36,6 +36,8 @@ export interface Statement {
 
     /** The starting and ending location of the expression. */
     location: Location;
+
+    // transpile(pkgPath:string): SourceNode;
 }
 
 export class Assignment implements Statement {
@@ -141,6 +143,10 @@ export class FunctionStatement implements Statement {
             end: this.func.location.end,
         };
     }
+
+    transpile(pkgPath: string) {
+        return this.func.transpile(pkgPath, this.name);
+    }
 }
 
 export class ClassMethodStatement implements Statement {
@@ -151,7 +157,7 @@ export class ClassMethodStatement implements Statement {
     ) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitNamedFunction(this);
+        return visitor.visitNamedFunction(this as any);
     }
 
     get location() {

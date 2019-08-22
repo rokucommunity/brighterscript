@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { SourceNode } from 'source-map';
 import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
 
 import { Context } from '../Context';
@@ -9,6 +10,7 @@ import * as brs from '../parser';
 const Lexeme = brs.lexer.Lexeme;
 import { Lexer } from '../parser/lexer';
 import { Parser } from '../parser/parser';
+import { FunctionStatement } from '../parser/parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -638,6 +640,23 @@ export class BrsFile {
                 }
             }
         }
+    }
+
+    /**
+     * Convert the brightscript/brighterscript source code into valid brightscript
+     */
+    public transpile() {
+        let chunks = [] as SourceNode[];
+        for (let statement of this.ast) {
+            if (statement instanceof FunctionStatement) {
+                chunks.push(statement.transpile(this.pkgPath));
+            }
+        }
+
+        let programNode = new SourceNode(null, null, this.pkgPath, chunks);
+        return programNode.toStringWithSourceMap({
+            file: this.pkgPath
+        });
     }
 
     public dispose() {
