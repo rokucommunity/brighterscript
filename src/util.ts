@@ -598,6 +598,15 @@ export class Util {
             end.column
         );
     }
+
+    /**
+     * Given an array, map and then flatten
+     * @param arr
+     * @param cb
+     */
+    public flatMap<T, R>(array: T[], cb: (arg: T) => R) {
+        return Array.prototype.concat.apply([], array.map(cb)) as never as R;
+    }
 }
 
 export let util = new Util();

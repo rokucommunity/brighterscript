@@ -2,6 +2,8 @@
 import * as Expr from "./Expression";
 import { Token, Identifier, Location, Lexeme } from "../lexer";
 import { BrsType, BrsInvalid } from "../brsTypes";
+import { SourceNode } from 'source-map';
+import { Stmt } from '.';
 
 /** A set of reasons why a `Block` stopped executing. */
 export * from "./BlockEndReason";
@@ -12,7 +14,7 @@ export interface Visitor<T> {
     visitExitFor(statement: ExitFor): never;
     visitExitWhile(statement: ExitWhile): never;
     visitPrint(statement: Print): BrsType;
-    visitIf(statement: If): BrsType;
+    visitIf(statement: IfStatement): BrsType;
     visitBlock(block: Block): BrsType;
     visitFor(statement: For): BrsType;
     visitForEach(statement: ForEach): BrsType;
@@ -37,7 +39,7 @@ export interface Statement {
     /** The starting and ending location of the expression. */
     location: Location;
 
-    // transpile(pkgPath:string): SourceNode;
+    transpile(pkgPath: string): Array<SourceNode | string>;
 }
 
 export class Assignment implements Statement {
@@ -60,11 +62,22 @@ export class Assignment implements Statement {
             end: this.value.location.end,
         };
     }
+
+    transpile(pkgPath: string) {
+        return [
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, pkgPath, this.name.text),
+            ' ',
+            new SourceNode(this.tokens.equals.location.start.line, this.tokens.equals.location.start.column, pkgPath, '='),
+            ' ',
+            //TODO remove any cast
+            ...(this.value as any).transpile(pkgPath)
+        ];
+    }
 }
 
 export class Block implements Statement {
     constructor(
-        readonly statements: ReadonlyArray<Statement>,
+        readonly statements: Statement[],
         readonly startingLocation: Location
     ) { }
 
@@ -83,6 +96,28 @@ export class Block implements Statement {
             end: end,
         };
     }
+
+    transpile(pkgPath: string) {
+        let results = [] as Array<SourceNode | string>;
+        for (let i = 0; i < this.statements.length; i++) {
+            let previousStatement = this.statements[i - 1];
+            let statement = this.statements[i];
+            //if current statement occurs on the same line as the previous and is single-line itself,
+            //separate them with a colon instead of newline
+            if (
+                previousStatement &&
+                previousStatement.location.start.line === statement.location.start.line &&
+                statement.location.start.line === statement.location.end.line
+            ) {
+                results.push(' : ')
+            } else if (previousStatement) {
+                results.push('\n');
+            }
+            let statementNodes = statement.transpile(pkgPath);
+            results.push(...statementNodes);
+        }
+        return results
+    }
 }
 
 export class Expression implements Statement {
@@ -94,6 +129,10 @@ export class Expression implements Statement {
 
     get location() {
         return this.expression.location;
+    }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
     }
 }
 
@@ -111,6 +150,10 @@ export class ExitFor implements Statement {
     get location() {
         return this.tokens.exitFor.location;
     }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    }
 }
 
 export class ExitWhile implements Statement {
@@ -126,6 +169,10 @@ export class ExitWhile implements Statement {
 
     get location() {
         return this.tokens.exitWhile.location;
+    }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
     }
 }
 
@@ -167,6 +214,10 @@ export class ClassMethodStatement implements Statement {
             end: this.func.location.end,
         };
     }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    }
 }
 
 export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;
@@ -191,14 +242,20 @@ export class ClassFieldStatement implements Statement {
             end: this.type.location.end
         };
     }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    }
 }
 
 export interface ElseIf {
+    elseIfToken: Token;
+    thenToken?: Token;
     condition: Expr.Expression;
     thenBranch: Block;
 }
 
-export class If implements Statement {
+export class IfStatement implements Statement {
     constructor(
         readonly tokens: {
             if: Token;
@@ -238,6 +295,84 @@ export class If implements Statement {
             end: this.getEndLocation().end,
         };
     }
+
+    transpile(pkgPath: string) {
+        let results = [];
+        //if
+        results.push(new SourceNode(this.tokens.if.location.start.line, this.tokens.if.location.start.column, pkgPath, 'if'));
+        results.push(' ');
+        //conditions
+        results.push(...this.condition.transpile(pkgPath));
+        results.push(' ');
+        //then
+        if (this.tokens.then) {
+            results.push(
+                new SourceNode(this.tokens.then.location.start.line, this.tokens.then.location.start.column, pkgPath, 'then')
+            );
+        } else {
+            results.push('then')
+        }
+        //render all if statements as multi-line
+        results.push('\n');
+        //if statement body
+        let thenNodes = this.thenBranch.transpile(pkgPath);
+        if (thenNodes.length > 0) {
+            results.push(thenNodes);
+            results.push('\n')
+        }
+
+        //else if blocks
+        for (let i = 0; i < this.elseIfs.length; i++) {
+            let elseif = this.elseIfs[i];
+            //elseif
+            results.push(
+                new SourceNode(elseif.elseIfToken.location.start.line, elseif.elseIfToken.location.start.column, pkgPath, 'else if'),
+                ' '
+            );
+            //condition
+            results.push(...elseif.condition.transpile(pkgPath));
+            //then
+            if (elseif.thenToken) {
+                results.push(
+                    ' ',
+                    new SourceNode(elseif.thenToken.location.start.line, elseif.thenToken.location.start.column, pkgPath, 'then')
+                );
+            }
+            results.push('\n');
+            //then body
+            let body = elseif.thenBranch.transpile(pkgPath);
+            if (body.length > 0) {
+                results.push(...body);
+                results.push('\n');
+            }
+        }
+
+        //else branch
+        if (this.tokens.else) {
+            //else
+            results.push(
+                new SourceNode(this.tokens.else.location.start.line, this.tokens.else.location.start.column, pkgPath, 'else')
+            );
+            results.push('\n');
+            //then body
+            let body = this.elseBranch.transpile(pkgPath);
+            if (body.length > 0) {
+                results.push(...body);
+                results.push('\n');
+            }
+        }
+
+        //end if
+        if (this.tokens.endIf) {
+            results.push(
+                new SourceNode(this.tokens.endIf.location.start.line, this.tokens.endIf.location.start.column, pkgPath, 'end if')
+            );
+        } else {
+            results.push('end if');
+        }
+
+        return results;
+    }
 }
 
 export class Increment implements Statement {
@@ -253,6 +388,10 @@ export class Increment implements Statement {
             start: this.value.location.start,
             end: this.token.location.end,
         };
+    }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
     }
 }
 
@@ -282,7 +421,7 @@ export class Print implements Statement {
         readonly tokens: {
             print: Token;
         },
-        readonly expressions: (Expr.Expression | Token)[]
+        readonly expressions: Array<Expr.Expression | Stmt.PrintSeparator.Tab | Stmt.PrintSeparator.Space>
     ) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
@@ -299,6 +438,22 @@ export class Print implements Statement {
             start: this.tokens.print.location.start,
             end: end,
         };
+    }
+
+    transpile(pkgPath: string) {
+        let result = [
+            new SourceNode(this.tokens.print.location.start.line, this.tokens.print.location.start.column, pkgPath, 'print'),
+            ' '
+        ];
+        for (let i = 0; i < this.expressions.length; i++) {
+            let expression: any = this.expressions[i];
+            if (expression.transpile) {
+                result.push(...(expression as Expression).transpile(pkgPath));
+            } else {
+                //skip these because I think they are bogus items only added for use in the runtime
+            }
+        }
+        return result;
     }
 }
 
@@ -322,6 +477,10 @@ export class Goto implements Statement {
             end: this.tokens.label.location.end,
         };
     }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    }
 }
 
 export class Label implements Statement {
@@ -342,6 +501,10 @@ export class Label implements Statement {
             start: this.tokens.identifier.location.start,
             end: this.tokens.colon.location.end,
         };
+    }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
     }
 }
 
@@ -364,6 +527,18 @@ export class Return implements Statement {
             end: (this.value && this.value.location.end) || this.tokens.return.location.end,
         };
     }
+
+    transpile(pkgPath: string) {
+        let result = [];
+        result.push(
+            new SourceNode(this.tokens.return.location.start.line, this.tokens.return.location.start.column, pkgPath, 'return')
+        );
+        if (this.value) {
+            result.push(' ');
+            result.push(...this.value.transpile(pkgPath));
+        }
+        return result;
+    }
 }
 
 export class End implements Statement {
@@ -385,6 +560,10 @@ export class End implements Statement {
             end: this.tokens.end.location.end,
         };
     }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    }
 }
 
 export class Stop implements Statement {
@@ -405,6 +584,10 @@ export class Stop implements Statement {
             start: this.tokens.stop.location.start,
             end: this.tokens.stop.location.end,
         };
+    }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
     }
 }
 
@@ -433,6 +616,10 @@ export class For implements Statement {
             end: this.tokens.endFor.location.end,
         };
     }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    }
 }
 
 export class ForEach implements Statement {
@@ -458,6 +645,10 @@ export class ForEach implements Statement {
             end: this.tokens.endFor.location.end,
         };
     }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    }
 }
 
 export class While implements Statement {
@@ -481,6 +672,10 @@ export class While implements Statement {
             end: this.tokens.endWhile.location.end,
         };
     }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    }
 }
 
 export class DottedSet implements Statement {
@@ -500,6 +695,10 @@ export class DottedSet implements Statement {
             start: this.obj.location.start,
             end: this.value.location.end,
         };
+    }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
     }
 }
 
@@ -522,6 +721,10 @@ export class IndexedSet implements Statement {
             end: this.value.location.end,
         };
     }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    }
 }
 
 export class Library implements Statement {
@@ -543,6 +746,10 @@ export class Library implements Statement {
                 ? this.tokens.filePath.location.end
                 : this.tokens.library.location.end,
         };
+    }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
     }
 }
 
@@ -578,5 +785,9 @@ export class ClassStatement implements Statement {
             start: this.keyword.location.start,
             end: this.end.location.end,
         };
+    }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
     }
 }

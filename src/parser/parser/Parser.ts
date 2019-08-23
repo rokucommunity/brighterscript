@@ -921,7 +921,7 @@ export class Parser {
             return libraryStatement;
         }
 
-        function ifStatement(): Stmt.If {
+        function ifStatement(): Stmt.IfStatement {
             const ifToken = advance();
             const startingLine = ifToken.location;
 
@@ -933,6 +933,7 @@ export class Parser {
             let thenToken: Token | undefined;
             let elseIfTokens: Token[] = [];
             let endIfToken: Token | undefined;
+            let elseToken: Token | undefined;
 
             /**
              * A simple wrapper around `check`, to make tests for a `then` identifier.
@@ -992,11 +993,13 @@ export class Parser {
 
                 // attempt to read a bunch of "else if" clauses
                 while (check(Lexeme.ElseIf)) {
-                    elseIfTokens.push(advance());
+                    let elseIfToken = advance();
+                    elseIfTokens.push(elseIfToken);
                     let elseIfCondition = expression();
+                    let thenToken: Token;
                     if (checkThen()) {
                         // `then` is optional after `else if ...condition...`, so only advance to the next token if `then` is present
-                        advance();
+                        thenToken = advance();
                     }
 
                     //consume any trailing colons
@@ -1021,10 +1024,13 @@ export class Parser {
                     elseIfBranches.push({
                         condition: elseIfCondition,
                         thenBranch: elseIfThen,
+                        thenToken: thenToken,
+                        elseIfToken: elseIfToken
                     });
                 }
 
                 if (match(Lexeme.Else)) {
+                    elseToken = previous();
                     //consume any trailing colons
                     while (check(Lexeme.Colon)) {
                         advance();
@@ -1073,9 +1079,10 @@ export class Parser {
                 while (match(Lexeme.ElseIf)) {
                     let elseIf = previous();
                     let elseIfCondition = expression();
+                    let thenToken: Token;
                     if (checkThen()) {
                         // `then` is optional after `else if ...condition...`, so only advance to the next token if `then` is present
-                        advance();
+                        thenToken = advance();
                     }
 
                     let elseIfThen = declaration(Lexeme.ElseIf, Lexeme.Else);
@@ -1089,10 +1096,12 @@ export class Parser {
                     elseIfBranches.push({
                         condition: elseIfCondition,
                         thenBranch: new Stmt.Block([elseIfThen], peek().location),
+                        thenToken: thenToken,
+                        elseIfToken: elseIf
                     });
                 }
-
                 if (match(Lexeme.Else)) {
+                    elseToken = previous();
                     let elseStatement = declaration();
                     if (!elseStatement) {
                         throw addError(peek(), `Expected a statement to follow 'else'`);
@@ -1101,12 +1110,13 @@ export class Parser {
                 }
             }
 
-            return new Stmt.If(
+            return new Stmt.IfStatement(
                 {
                     if: ifToken,
                     then: thenToken,
                     elseIfs: elseIfTokens,
                     endIf: endIfToken,
+                    else: elseToken
                 },
                 condition,
                 thenBranch,

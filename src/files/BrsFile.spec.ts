@@ -1232,8 +1232,6 @@ describe('BrsFile', () => {
         it('works for function parameters', async () => {
             await testTranspile(`
                 function DoSomething(name, age as integer, text as string)
-                    'lots of empty white space
-                    'that will be removed during transpile
                 end function
             `, `
                 function DoSomething(name, age as integer, text as string)
@@ -1241,8 +1239,38 @@ describe('BrsFile', () => {
             `);
         });
 
-        async function testTranspile(source: string, expected: string) {
+        it('works for dotted get', async () => {
+            await testTranspile(`
+                name = person.name
+            `);
+        });
+
+        it.only('works for a complex function', async () => {
+            await testTranspile(`
+                function doSomething(age as integer, name = "bob")
+                    age = 12 + 2
+                    name = "tim"
+                    age = 12 : age = 14
+                    if true or 1 = 1 or name = "tim" then
+                        print false
+                    else if false or "cat" = "dog" or true then
+                        print "true"
+                    else
+                        print "else"
+                    end if
+                    callback = function(name, age as integer)
+                        return 12
+                    end function
+                end function
+            `);
+        });
+
+        async function testTranspile(source: string, expected?: string) {
+            expected = expected ? expected : source;
             let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, source) as BrsFile;
+            if (file.getDiagnostics().length > 0) {
+                console.log(file.getDiagnostics());
+            }
             let transpiled = file.transpile();
 
             fsExtra.writeFileSync('C:/temp/transpile/source.bs', source);

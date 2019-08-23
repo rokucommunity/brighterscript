@@ -3,6 +3,7 @@ import { Token, Identifier, Location } from "../lexer";
 import { BrsType, ValueKind, BrsString, FunctionParameter } from "../brsTypes";
 import { Block } from "./Statement";
 import { SourceNode } from 'source-map';
+import util from '../../util';
 
 export interface Visitor<T> {
     visitBinary(expression: Binary): T;
@@ -30,11 +31,15 @@ export interface Expression {
     /** The starting and ending location of the expression. */
     location: Location;
 
-    // transpile(pkgPath: string): SourceNode;
+    transpile(pkgPath: string): Array<SourceNode | string>;
 }
 
 export class Binary implements Expression {
-    constructor(readonly left: Expression, readonly token: Token, readonly right: Expression) { }
+    constructor(
+        readonly left: Expression,
+        readonly operator: Token,
+        readonly right: Expression
+    ) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitBinary(this);
@@ -42,10 +47,22 @@ export class Binary implements Expression {
 
     get location() {
         return {
-            file: this.token.location.file,
+            file: this.operator.location.file,
             start: this.left.location.start,
             end: this.right.location.end,
         };
+    }
+
+    transpile(pkgPath: string) {
+        return [
+            //TODO remove any cast
+            new SourceNode(this.left.location.start.line, this.left.location.start.column, pkgPath, (this.left as any).transpile(pkgPath)),
+            ' ',
+            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, pkgPath, this.operator.text),
+            ' ',
+            //TODO remove any cast
+            new SourceNode(this.right.location.start.line, this.right.location.start.column, pkgPath, (this.right as any).transpile(pkgPath))
+        ];
     }
 }
 
@@ -68,6 +85,18 @@ export class Call implements Expression {
             start: this.callee.location.start,
             end: this.closingParen.location.end,
         };
+    }
+
+    transpile(pkgPath: string) {
+        return [
+            //TODO remove any cast
+            ...(this.callee as any).transpile(pkgPath),
+            '(',
+            //TODO does this work the way it should?
+            //TODO remove any cast
+            ...util.flatMap(this.args, x => (x as any).transpile(pkgPath)),
+            ')'
+        ];
     }
 }
 
@@ -105,8 +134,8 @@ export class Function implements Expression {
             params.push(param.transpile(pkgPath));
         }
 
-
-        return new SourceNode(null, null, pkgPath, [
+        let body = this.body.transpile(pkgPath);
+        let results = [
             //'function'|'sub'
             new SourceNode(this.functionType.location.start.line, this.functionType.location.start.column, pkgPath, this.functionType.text),
             ' ',
@@ -120,10 +149,12 @@ export class Function implements Expression {
             new SourceNode(this.rightParen.location.start.line, this.rightParen.location.start.column, pkgPath, ')'),
             '\n',
             //TODO include function body
-
+            ...body,
+            body.length > 0 ? '\n' : '',
             //'end sub'|'end function'
             new SourceNode(this.end.location.start.line, this.end.location.start.column, pkgPath, this.end.text)
-        ]);
+        ];
+        return results;
     }
 }
 
@@ -140,6 +171,16 @@ export class DottedGet implements Expression {
             start: this.obj.location.start,
             end: this.name.location.end,
         };
+    }
+
+    transpile(pkgPath: string) {
+        return [
+            //TODO remove any cast
+            //TODO - is this correct?
+            ...(this.obj as any).transpile(pkgPath),
+            '.',
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, pkgPath, this.name.text)
+        ];
     }
 }
 
@@ -160,6 +201,10 @@ export class IndexedGet implements Expression {
             start: this.obj.location.start,
             end: this.closingSquare.location.end,
         };
+    }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
     }
 }
 
@@ -183,10 +228,17 @@ export class Grouping implements Expression {
             end: this.tokens.right.location.end,
         };
     }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    }
 }
 
 export class Literal implements Expression {
-    constructor(readonly value: BrsType, readonly _location: Location | undefined) { }
+    constructor(
+        readonly value: BrsType,
+        readonly _location: Location
+    ) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitLiteral(this);
@@ -207,6 +259,17 @@ export class Literal implements Expression {
             }
         );
     }
+
+    transpile(pkgPath: string) {
+        return [
+            new SourceNode(
+                this._location.start.line,
+                this._location.start.column,
+                pkgPath,
+                this.value.kind === ValueKind.String ? `"${this.value.toString()}"` : this.value.toString()
+            )
+        ]
+    }
 }
 
 export class ArrayLiteral implements Expression {
@@ -223,6 +286,10 @@ export class ArrayLiteral implements Expression {
             end: this.close.location.end,
         };
     }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    }
 }
 
 /** A member of an associative array literal. */
@@ -234,7 +301,11 @@ export interface AAMember {
 }
 
 export class AALiteral implements Expression {
-    constructor(readonly elements: AAMember[], readonly open: Token, readonly close: Token) { }
+    constructor(
+        readonly elements: AAMember[],
+        readonly open: Token,
+        readonly close: Token
+    ) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitAALiteral(this);
@@ -246,6 +317,10 @@ export class AALiteral implements Expression {
             start: this.open.location.start,
             end: this.close.location.end,
         };
+    }
+
+    transpile(pkgPath: string): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
     }
 }
 
@@ -263,6 +338,14 @@ export class Unary implements Expression {
             end: this.right.location.end,
         };
     }
+
+    transpile(pkgPath: string) {
+        return [
+            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, pkgPath, this.operator.text),
+            //TODO remove any cast
+            ...(this.right as any).transpile()
+        ];
+    }
 }
 
 export class Variable implements Expression {
@@ -274,5 +357,11 @@ export class Variable implements Expression {
 
     get location() {
         return this.name.location;
+    }
+
+    transpile(pkgPath: string) {
+        return [
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, pkgPath, this.name.text)
+        ];
     }
 }

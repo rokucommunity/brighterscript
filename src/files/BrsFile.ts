@@ -10,7 +10,6 @@ import * as brs from '../parser';
 const Lexeme = brs.lexer.Lexeme;
 import { Lexer } from '../parser/lexer';
 import { Parser } from '../parser/parser';
-import { FunctionStatement } from '../parser/parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -646,11 +645,9 @@ export class BrsFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile() {
-        let chunks = [] as SourceNode[];
+        let chunks = [] as Array<string | SourceNode>;
         for (let statement of this.ast) {
-            if (statement instanceof FunctionStatement) {
-                chunks.push(statement.transpile(this.pkgPath));
-            }
+            chunks.push(...statement.transpile(this.pkgPath));
         }
 
         let programNode = new SourceNode(null, null, this.pkgPath, chunks);
