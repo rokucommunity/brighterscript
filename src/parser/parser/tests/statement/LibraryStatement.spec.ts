@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { Lexer } from '../../../lexer';
-import { Assignment, FunctionStatement as BrsFunction } from '../../Statement';
+import { AssignmentStatement, FunctionStatement as BrsFunction } from '../../Statement';
 
 describe('parser library statements', () => {
     let parser;
@@ -76,7 +76,7 @@ describe('parser library statements', () => {
         //make sure the assignment is present in the function body
         let assignment = statements[0].func.body.statements[0];
         expect(errors).to.be.lengthOf(0);
-        expect(assignment).to.be.instanceOf(Assignment);
+        expect(assignment).to.be.instanceOf(AssignmentStatement);
         expect(assignment.name.text).to.equal('library');
         //expect({ errors: errors, statements: statements }).toMatchSnapshot();
     });
@@ -91,7 +91,7 @@ describe('parser library statements', () => {
         `);
         const { statements, errors } = parser.parse(tokens);
         //make sure the assignment is present in the function body
-        expect(statements[0].func.body.statements[0].value.elements[0].name.value).to.equal(
+        expect(statements[0].func.body.statements[0].value.elements[0].key.value).to.equal(
             'library'
         );
         expect(errors).to.be.lengthOf(0);

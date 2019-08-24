@@ -9,7 +9,7 @@ import { Stmt } from '.';
 export * from "./BlockEndReason";
 
 export interface Visitor<T> {
-    visitAssignment(statement: Assignment): BrsType;
+    visitAssignment(statement: AssignmentStatement): BrsType;
     visitExpression(statement: Expression): BrsType;
     visitExitFor(statement: ExitFor): never;
     visitExitWhile(statement: ExitWhile): never;
@@ -21,9 +21,9 @@ export interface Visitor<T> {
     visitWhile(statement: While): BrsType;
     visitNamedFunction(statement: FunctionStatement): BrsType;
     visitReturn(statement: Return): never;
-    visitDottedSet(statement: DottedSet): BrsType;
-    visitIndexedSet(statement: IndexedSet): BrsType;
-    visitIncrement(expression: Increment): BrsInvalid;
+    visitDottedSet(statement: DottedSetStatement): BrsType;
+    visitIndexedSet(statement: IndexedSetStatement): BrsType;
+    visitIncrement(expression: IncrementStatement): BrsInvalid;
 }
 
 /** A BrightScript statement */
@@ -42,7 +42,7 @@ export interface Statement {
     transpile(pkgPath: string): Array<SourceNode | string>;
 }
 
-export class Assignment implements Statement {
+export class AssignmentStatement implements Statement {
     constructor(
         readonly tokens: {
             equals: Token;
@@ -70,7 +70,7 @@ export class Assignment implements Statement {
             new SourceNode(this.tokens.equals.location.start.line, this.tokens.equals.location.start.column, pkgPath, '='),
             ' ',
             //TODO remove any cast
-            ...(this.value as any).transpile(pkgPath)
+            ...this.value.transpile(pkgPath)
         ];
     }
 }
@@ -375,8 +375,8 @@ export class IfStatement implements Statement {
     }
 }
 
-export class Increment implements Statement {
-    constructor(readonly value: Expr.Expression, readonly token: Token) { }
+export class IncrementStatement implements Statement {
+    constructor(readonly value: Expr.Expression, readonly operator: Token) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
         return visitor.visitIncrement(this);
@@ -386,12 +386,15 @@ export class Increment implements Statement {
         return {
             file: this.value.location.file,
             start: this.value.location.start,
-            end: this.token.location.end,
+            end: this.operator.location.end,
         };
     }
 
     transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+        return [
+            ...this.value.transpile(pkgPath),
+            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, pkgPath, this.operator.text)
+        ];
     }
 }
 
@@ -479,7 +482,11 @@ export class Goto implements Statement {
     }
 
     transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+        return [
+            new SourceNode(this.tokens.goto.location.start.line, this.tokens.goto.location.start.column, pkgPath, 'goto'),
+            ' ',
+            new SourceNode(this.tokens.label.location.start.line, this.tokens.label.location.start.column, pkgPath, this.tokens.label.text),
+        ];
     }
 }
 
@@ -504,7 +511,11 @@ export class Label implements Statement {
     }
 
     transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+        return [
+            new SourceNode(this.tokens.identifier.location.start.line, this.tokens.identifier.location.start.column, pkgPath, this.tokens.identifier.text),
+            new SourceNode(this.tokens.colon.location.start.line, this.tokens.colon.location.start.column, pkgPath, ':'),
+
+        ];
     }
 }
 
@@ -561,8 +572,10 @@ export class End implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    transpile(pkgPath: string) {
+        return [
+            new SourceNode(this.tokens.end.location.start.line, this.tokens.end.location.start.column, pkgPath, 'end')
+        ];
     }
 }
 
@@ -586,8 +599,10 @@ export class Stop implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    transpile(pkgPath: string) {
+        return [
+            new SourceNode(this.tokens.stop.location.start.line, this.tokens.stop.location.start.column, pkgPath, 'stop')
+        ];
     }
 }
 
@@ -599,7 +614,7 @@ export class For implements Statement {
             step?: Token;
             endFor: Token;
         },
-        readonly counterDeclaration: Assignment,
+        readonly counterDeclaration: AssignmentStatement,
         readonly finalValue: Expr.Expression,
         readonly increment: Expr.Expression,
         readonly body: Block
@@ -678,7 +693,7 @@ export class While implements Statement {
     }
 }
 
-export class DottedSet implements Statement {
+export class DottedSetStatement implements Statement {
     constructor(
         readonly obj: Expr.Expression,
         readonly name: Identifier,
@@ -697,12 +712,21 @@ export class DottedSet implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    transpile(pkgPath: string) {
+        return [
+            //object
+            ...this.obj.transpile(pkgPath),
+            '.',
+            //name
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, pkgPath, this.name.text),
+            ' = ',
+            //right-hand-side of assignment
+            ...this.value.transpile(pkgPath)
+        ];
     }
 }
 
-export class IndexedSet implements Statement {
+export class IndexedSetStatement implements Statement {
     constructor(
         readonly obj: Expr.Expression,
         readonly index: Expr.Expression,

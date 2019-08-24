@@ -14,7 +14,7 @@ export interface Visitor<T> {
     visitGrouping(expression: Grouping): T;
     visitLiteral(expression: Literal): T;
     visitArrayLiteral(expression: ArrayLiteral): T;
-    visitAALiteral(expression: AALiteral): T;
+    visitAALiteral(expression: AALiteralExpression): T;
     visitUnary(expression: Unary): T;
     visitVariable(expression: Variable): T;
 }
@@ -108,7 +108,9 @@ export class Function implements Expression {
         readonly functionType: Token | null,
         readonly end: Token,
         readonly leftParen: Token,
-        readonly rightParen: Token
+        readonly rightParen: Token,
+        readonly asToken?: Token,
+        readonly returnTypeToken?: Token
     ) { }
 
     accept<R>(visitor: Visitor<R>): R {
@@ -124,36 +126,54 @@ export class Function implements Expression {
     }
 
     transpile(pkgPath: string, name?: Identifier) {
-        let params = [] as SourceNode[];
-        for (let param of this.parameters) {
+        let body = this.body.transpile(pkgPath);
+        let results = [];
+        //'function'|'sub'
+        results.push(
+            new SourceNode(this.functionType.location.start.line, this.functionType.location.start.column, pkgPath, this.functionType.text.toLowerCase()),
+            ' ',
+        );
+        //functionName?
+        if (name) {
+            results.push(
+                new SourceNode(name.location.start.line, name.location.start.column, pkgPath, name.text)
+            );
+        }
+        //leftParen
+        results.push(
+            new SourceNode(this.leftParen.location.start.line, this.leftParen.location.start.column, pkgPath, '(')
+        );
+        //parameters
+        for (let i = 0; i < this.parameters.length; i++) {
+            let param = this.parameters[i];
             //add commas
-            if (params.length > 0) {
-                params.push(new SourceNode(null, null, pkgPath, ','));
+            if (i > 0) {
+                results.push(new SourceNode(null, null, pkgPath, ','));
             }
             //add parameter
-            params.push(param.transpile(pkgPath));
+            results.push(param.transpile(pkgPath));
         }
-
-        let body = this.body.transpile(pkgPath);
-        let results = [
-            //'function'|'sub'
-            new SourceNode(this.functionType.location.start.line, this.functionType.location.start.column, pkgPath, this.functionType.text),
-            ' ',
-            //function name (optional)
-            name ? new SourceNode(name.location.start.line, name.location.start.column, pkgPath, name.text) : '',
-            //leftParen
-            new SourceNode(this.leftParen.location.start.line, this.leftParen.location.start.column, pkgPath, '('),
-            //parameters
-            ...params,
-            //right paren
-            new SourceNode(this.rightParen.location.start.line, this.rightParen.location.start.column, pkgPath, ')'),
+        //right paren
+        results.push(
+            new SourceNode(this.rightParen.location.start.line, this.rightParen.location.start.column, pkgPath, ')')
+        );
+        if (this.asToken) {
+            results.push(
+                ' ',
+                //as
+                new SourceNode(this.asToken.location.start.line, this.asToken.location.start.column, pkgPath, 'as'),
+                ' ',
+                //return type
+                new SourceNode(this.returnTypeToken.location.start.line, this.returnTypeToken.location.start.column, pkgPath, this.returnTypeToken.text.toLowerCase())
+            );
+        }
+        results.push(
             '\n',
-            //TODO include function body
             ...body,
             body.length > 0 ? '\n' : '',
             //'end sub'|'end function'
             new SourceNode(this.end.location.start.line, this.end.location.start.column, pkgPath, this.end.text)
-        ];
+        );
         return results;
     }
 }
@@ -295,12 +315,14 @@ export class ArrayLiteral implements Expression {
 /** A member of an associative array literal. */
 export interface AAMember {
     /** The name of the member. */
-    name: BrsString;
+    key: BrsString;
+    keyToken: Token;
+    colonToken: Token;
     /** The expression evaluated to determine the member's initial value. */
     value: Expression;
 }
 
-export class AALiteral implements Expression {
+export class AALiteralExpression implements Expression {
     constructor(
         readonly elements: AAMember[],
         readonly open: Token,
@@ -320,7 +342,36 @@ export class AALiteral implements Expression {
     }
 
     transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+        let result = [];
+        //open curly
+        result.push(
+            new SourceNode(this.open.location.start.line, this.open.location.start.column, pkgPath, this.open.text),
+            '\n'
+        );
+        for (let i = 0; i < this.elements.length; i++) {
+            let element = this.elements[i];
+            //key
+            result.push(
+                new SourceNode(element.keyToken.location.start.line, element.keyToken.location.start.column, pkgPath, element.keyToken.text)
+            );
+            //colon
+            result.push(
+                new SourceNode(element.colonToken.location.start.line, element.colonToken.location.start.column, pkgPath, ':')
+            );
+            //value
+            result.push(...element.value.transpile(pkgPath))
+            //if not final element, add trailing comma 
+            if (i !== this.elements.length - 1) {
+                result.push(',');
+            }
+            result.push('\n');
+        }
+
+        //close curly
+        result.push(
+            new SourceNode(this.close.location.start.line, this.close.location.start.column, pkgPath, this.close.text)
+        );
+        return result;
     }
 }
 

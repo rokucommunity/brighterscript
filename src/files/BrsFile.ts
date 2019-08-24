@@ -318,7 +318,7 @@ export class BrsFile {
         }
 
         //find every variable assignment in the whole file
-        let assignmentStatements = util.findAllDeep<brs.parser.Stmt.Assignment>(this.ast, (x) => x instanceof brs.parser.Stmt.Assignment);
+        let assignmentStatements = util.findAllDeep<brs.parser.Stmt.AssignmentStatement>(this.ast, (x) => x instanceof brs.parser.Stmt.AssignmentStatement);
 
         for (let kvp of assignmentStatements) {
             let statement = kvp.value;
@@ -359,7 +359,7 @@ export class BrsFile {
         return ancestors;
     }
 
-    private getBRSTypeFromAssignment(assignment: brs.parser.Stmt.Assignment, scope: FunctionScope): BrsType {
+    private getBRSTypeFromAssignment(assignment: brs.parser.Stmt.AssignmentStatement, scope: FunctionScope): BrsType {
         try {
             //function
             if (assignment.value instanceof brs.parser.Expr.Function) {

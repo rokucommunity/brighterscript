@@ -714,7 +714,6 @@ describe('BrsFile', () => {
                     next
                 end sub
             `);
-            console.error(file.getDiagnostics());
             expect(file.getDiagnostics()).to.be.empty;
         });
 
@@ -1214,7 +1213,7 @@ describe('BrsFile', () => {
         });
     });
 
-    describe.only('transpile', () => {
+    describe('transpile', () => {
         let formatter = new BrightScriptFormatter();
 
         it('works for functions', async () => {
@@ -1239,15 +1238,18 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('works for dotted get', async () => {
-            await testTranspile(`
-                name = person.name
-            `);
-        });
-
-        it.only('works for a complex function', async () => {
+        it('works for a complex function', async () => {
             await testTranspile(`
                 function doSomething(age as integer, name = "bob")
+                    person = {
+                        name: "parent",
+                        "age": 12,
+                        child: {
+                            name: "child"
+                        }
+                    }
+                    person.name = "john"
+                    person.child.name = "baby"
                     age = 12 + 2
                     name = "tim"
                     age = 12 : age = 14
@@ -1258,7 +1260,13 @@ describe('BrsFile', () => {
                     else
                         print "else"
                     end if
-                    callback = function(name, age as integer)
+                    mylabel:
+                    goto mylabel
+                    age++
+                    age--
+                    end
+                    stop
+                    callback = function(name, age as integer, cb as Function) as integer
                         return 12
                     end function
                 end function

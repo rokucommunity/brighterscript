@@ -496,6 +496,8 @@ export class Parser {
                 }
 
                 let args: FunctionParameter[] = [];
+                let asToken: Token;
+                let typeToken: Token;
                 if (!check(Lexeme.RightParen)) {
                     do {
                         if (args.length >= Expr.Call.MaximumArguments) {
@@ -512,9 +514,9 @@ export class Parser {
 
                 let maybeAs = peek();
                 if (check(Lexeme.Identifier) && maybeAs.text.toLowerCase() === "as") {
-                    advance();
+                    asToken = advance();
 
-                    let typeToken = advance();
+                    typeToken = advance();
                     let typeString = typeToken.text || "";
                     let maybeReturnType = ValueKind.fromString(typeString);
 
@@ -577,7 +579,9 @@ export class Parser {
                     functionType,
                     endingKeyword,
                     leftParen,
-                    rightParen
+                    rightParen,
+                    asToken,
+                    typeToken
                 );
 
                 if (isAnonymous) {
@@ -645,7 +649,7 @@ export class Parser {
             );
         }
 
-        function assignment(...additionalterminators: Lexeme[]): Stmt.Assignment {
+        function assignment(...additionalterminators: Lexeme[]): Stmt.AssignmentStatement {
             let name = advance() as Identifier;
             //add error if name is a reserved word that cannot be used as an identifier
             if (disallowedIdentifiers.has(name.text.toLowerCase())) {
@@ -669,9 +673,9 @@ export class Parser {
             }
 
             if (operator.kind === Lexeme.Equal) {
-                return new Stmt.Assignment({ equals: operator }, name, value);
+                return new Stmt.AssignmentStatement({ equals: operator }, name, value);
             } else {
-                return new Stmt.Assignment(
+                return new Stmt.AssignmentStatement(
                     { equals: operator },
                     name,
                     new Expr.Binary(new Expr.Variable(name), operator, value)
@@ -1127,14 +1131,14 @@ export class Parser {
 
         function setStatement(
             ...additionalTerminators: BlockTerminator[]
-        ): Stmt.DottedSet | Stmt.IndexedSet | Stmt.Expression | Stmt.Increment {
+        ): Stmt.DottedSetStatement | Stmt.IndexedSetStatement | Stmt.Expression | Stmt.IncrementStatement {
             /**
              * Attempts to find an expression-statement or an increment statement.
              * While calls are valid expressions _and_ statements, increment (e.g. `foo++`)
              * statements aren't valid expressions. They _do_ however fall under the same parsing
-             * priority as standalone function calls though, so we cann parse them in the same way.
+             * priority as standalone function calls though, so we can parse them in the same way.
              */
-            function _expressionStatement(): Stmt.Expression | Stmt.Increment {
+            function _expressionStatement(): Stmt.Expression | Stmt.IncrementStatement {
                 let expressionStart = peek();
 
                 if (check(Lexeme.PlusPlus, Lexeme.MinusMinus)) {
@@ -1154,7 +1158,7 @@ export class Parser {
 
                     while (match(Lexeme.Newline, Lexeme.Colon));
 
-                    return new Stmt.Increment(expr, operator);
+                    return new Stmt.IncrementStatement(expr, operator);
                 }
 
                 if (!check(...additionalTerminators)) {
@@ -1191,7 +1195,7 @@ export class Parser {
                         Lexeme.Eof
                     );
 
-                    return new Stmt.IndexedSet(
+                    return new Stmt.IndexedSetStatement(
                         left.obj,
                         left.index,
                         operator.kind === Lexeme.Equal
@@ -1207,7 +1211,7 @@ export class Parser {
                         Lexeme.Eof
                     );
 
-                    return new Stmt.DottedSet(
+                    return new Stmt.DottedSetStatement(
                         left.obj,
                         left.name,
                         operator.kind === Lexeme.Equal
@@ -1589,11 +1593,17 @@ export class Parser {
                     let members: Expr.AAMember[] = [];
 
                     var key = () => {
-                        let k;
+                        let result = {
+                            colonToken: null as Token,
+                            keyToken: null as Token,
+                            key: null as BrsString
+                        };
                         if (check(Lexeme.Identifier, ...allowedProperties)) {
-                            k = new BrsString(advance().text!);
+                            result.keyToken = advance();
+                            result.key = new BrsString(result.keyToken.text!);
                         } else if (check(Lexeme.String)) {
-                            k = advance().literal! as BrsString;
+                            result.keyToken = advance();
+                            result.key = result.keyToken.literal! as BrsString;
                         } else {
                             throw addError(
                                 peek(),
@@ -1602,18 +1612,21 @@ export class Parser {
                             );
                         }
 
-                        consume(
+                        result.colonToken = consume(
                             "Expected ':' between associative array key and value",
                             Lexeme.Colon
                         );
-                        return k;
+                        return result;
                     }
 
                     while (match(Lexeme.Newline));
 
                     if (!match(Lexeme.RightBrace)) {
+                        let k = key();
                         members.push({
-                            name: key(),
+                            key: k.key,
+                            keyToken: k.keyToken,
+                            colonToken: k.colonToken,
                             value: expression(),
                         });
 
@@ -1623,9 +1636,11 @@ export class Parser {
                             if (check(Lexeme.RightBrace)) {
                                 break;
                             }
-
+                            k = key();
                             members.push({
-                                name: key(),
+                                key: k.key,
+                                keyToken: k.keyToken,
+                                colonToken: k.colonToken,
                                 value: expression(),
                             });
                         }
@@ -1638,7 +1653,7 @@ export class Parser {
 
                     let closingBrace = previous();
 
-                    return new Expr.AALiteral(members, openingBrace, closingBrace);
+                    return new Expr.AALiteralExpression(members, openingBrace, closingBrace);
                 case match(Lexeme.Pos, Lexeme.Tab):
                     let token = Object.assign(previous(), {
                         kind: Lexeme.Identifier,
