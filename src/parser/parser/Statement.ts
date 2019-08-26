@@ -458,6 +458,10 @@ export class PrintStatement implements Statement {
         for (let i = 0; i < this.expressions.length; i++) {
             let expression: any = this.expressions[i];
             if (expression.transpile) {
+                //separate print statements with a semi-colon
+                if (i > 0) {
+                    result.push(' ; ');
+                }
                 result.push(...(expression as ExpressionStatement).transpile(state));
             } else {
                 //skip these because I think they are bogus items only added for use in the runtime

@@ -1347,6 +1347,7 @@ describe('BrsFile', () => {
                         returnValue = 12
                         return returnValue
                     end function
+                    print "a" ; "b" ; 3
                     a(1, 2, 3)
                     person.functionCall(1, 2, 3)
                     if true then
