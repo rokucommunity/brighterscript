@@ -1226,6 +1226,9 @@ describe('BrsFile', () => {
                 function DoSomething()
                     'lots of empty white space
                     'that will be removed during transpile
+
+
+
                 end function
             `, `
                 function DoSomething()
@@ -1247,6 +1250,7 @@ describe('BrsFile', () => {
             await testTranspile(`
                 function a()
                 end function
+
                 function b()
                 end function
             `);
@@ -1255,6 +1259,7 @@ describe('BrsFile', () => {
         it('works for a complex function', async () => {
             await testTranspile(`
                 library "v30/bslCore.brs"
+
                 function doSomething(age as integer, name = "bob")
                     person = {
                         name: "parent",
@@ -1324,6 +1329,7 @@ describe('BrsFile', () => {
                         end if
                     end if
                 end function
+
                 function a(p1, p2, p3)
                 end function
             `, null, 'trim');

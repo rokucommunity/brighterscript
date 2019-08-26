@@ -658,9 +658,9 @@ export class BrsFile {
         let chunks = [] as Array<string | SourceNode>;
         for (let i = 0; i < this.ast.length; i++) {
             let statement = this.ast[i];
-            //separate statements with a newline
+            //separate statements with two newlines
             if (i > 0) {
-                chunks.push('\n');
+                chunks.push('\n\n');
             }
 
             chunks.push(...statement.transpile({
