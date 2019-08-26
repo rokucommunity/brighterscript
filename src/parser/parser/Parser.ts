@@ -869,8 +869,8 @@ export class Parser {
             return new Stmt.ExitFor({ exitFor: keyword });
         }
 
-        function libraryStatement(): Stmt.Library | undefined {
-            let libraryStatement = new Stmt.Library({
+        function libraryStatement(): Stmt.LibraryStatement | undefined {
+            let libraryStatement = new Stmt.LibraryStatement({
                 library: advance(),
                 //grab the next token only if it's a string
                 filePath: check(Lexeme.String) ? advance() : undefined,
@@ -908,7 +908,7 @@ export class Parser {
             let isAtTopOfFile = true;
             for (let statement of statements) {
                 //if we found a non-library statement, this statement is not at the top of the file
-                if (!(statement instanceof Stmt.Library)) {
+                if (!(statement instanceof Stmt.LibraryStatement)) {
                     isAtTopOfFile = false;
                 }
             }

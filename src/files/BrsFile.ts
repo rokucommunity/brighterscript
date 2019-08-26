@@ -646,7 +646,13 @@ export class BrsFile {
      */
     public transpile() {
         let chunks = [] as Array<string | SourceNode>;
-        for (let statement of this.ast) {
+        for (let i = 0; i < this.ast.length; i++) {
+            let statement = this.ast[i];
+            //separate statements with a newline
+            if (i > 0) {
+                chunks.push('\n');
+            }
+
             chunks.push(...statement.transpile(this.pkgPath));
         }
 

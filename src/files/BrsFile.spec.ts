@@ -1238,8 +1238,31 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('splits multple statements per line into one line per statement', async () => {
+            await testTranspile(`
+                function a()
+                    age = 12 : age = 14
+                end function
+            `, `
+                function a()
+                    age = 12
+                    age = 14
+                end function
+            `);
+        });
+
+        it('adds newlines between top-level statements', async () => {
+            await testTranspile(`
+                function a()
+                end function
+                function b()
+                end function
+            `);
+        });
+
         it('works for a complex function', async () => {
             await testTranspile(`
+                library "v30/bslCore.brs"
                 function doSomething(age as integer, name = "bob")
                     person = {
                         name: "parent",
@@ -1250,9 +1273,10 @@ describe('BrsFile', () => {
                     }
                     person.name = "john"
                     person.child.name = "baby"
+                    person["name"] = person.child["name"]
                     age = 12 + 2
                     name = "tim"
-                    age = 12 : age = 14
+                    age = 12
                     if true or 1 = 1 or name = "tim" then
                         print false
                     else if false or "cat" = "dog" or true then
@@ -1280,7 +1304,8 @@ describe('BrsFile', () => {
                         age = 12
                     end for
                     callback = function(name, age as integer, cb as Function) as integer
-                        return 12
+                        returnValue = 12
+                        return returnValue
                     end function
                 end function
             `);

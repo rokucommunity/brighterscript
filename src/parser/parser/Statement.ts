@@ -102,15 +102,7 @@ export class Block implements Statement {
         for (let i = 0; i < this.statements.length; i++) {
             let previousStatement = this.statements[i - 1];
             let statement = this.statements[i];
-            //if current statement occurs on the same line as the previous and is single-line itself,
-            //separate them with a colon instead of newline
-            if (
-                previousStatement &&
-                previousStatement.location.start.line === statement.location.start.line &&
-                statement.location.start.line === statement.location.end.line
-            ) {
-                results.push(' : ')
-            } else if (previousStatement) {
+            if (previousStatement) {
                 results.push('\n');
             }
             let statementNodes = statement.transpile(pkgPath);
@@ -830,7 +822,7 @@ export class IndexedSetStatement implements Statement {
     }
 }
 
-export class Library implements Statement {
+export class LibraryStatement implements Statement {
     constructor(
         readonly tokens: {
             library: Token;
@@ -851,8 +843,19 @@ export class Library implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    transpile(pkgPath: string) {
+        let result = [];
+        result.push(
+            new SourceNode(this.tokens.library.location.start.line, this.tokens.library.location.start.column, pkgPath, 'library'),
+        );
+        //there will be a parse error if file path is missing, but let's prevent a runtime error just in case
+        if (this.tokens.filePath) {
+            result.push(
+                ' ',
+                new SourceNode(this.tokens.filePath.location.start.line, this.tokens.filePath.location.start.column, pkgPath, this.tokens.filePath.text)
+            );
+        }
+        return result;
     }
 }
 

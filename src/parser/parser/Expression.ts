@@ -126,7 +126,6 @@ export class Function implements Expression {
     }
 
     transpile(pkgPath: string, name?: Identifier) {
-        let body = this.body.transpile(pkgPath);
         let results = [];
         //'function'|'sub'
         results.push(
@@ -167,11 +166,14 @@ export class Function implements Expression {
                 new SourceNode(this.returnTypeToken.location.start.line, this.returnTypeToken.location.start.column, pkgPath, this.returnTypeToken.text.toLowerCase())
             );
         }
+        results.push('\n');
+        let body = this.body.transpile(pkgPath);
+        results.push(...body);
+        if (body.length > 0) {
+            results.push('\n');
+        }
+        //'end sub'|'end function'
         results.push(
-            '\n',
-            ...body,
-            body.length > 0 ? '\n' : '',
-            //'end sub'|'end function'
             new SourceNode(this.end.location.start.line, this.end.location.start.column, pkgPath, this.end.text)
         );
         return results;
