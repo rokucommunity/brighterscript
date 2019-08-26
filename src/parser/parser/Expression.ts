@@ -13,7 +13,7 @@ export interface Visitor<T> {
     visitIndexedGet(expression: IndexedGet): T;
     visitGrouping(expression: Grouping): T;
     visitLiteral(expression: Literal): T;
-    visitArrayLiteral(expression: ArrayLiteral): T;
+    visitArrayLiteral(expression: ArrayLiteralExpression): T;
     visitAALiteral(expression: AALiteralExpression): T;
     visitUnary(expression: Unary): T;
     visitVariable(expression: Variable): T;
@@ -292,8 +292,12 @@ export class Literal implements Expression {
     }
 }
 
-export class ArrayLiteral implements Expression {
-    constructor(readonly elements: Expression[], readonly open: Token, readonly close: Token) { }
+export class ArrayLiteralExpression implements Expression {
+    constructor(
+        readonly elements: Expression[],
+        readonly open: Token,
+        readonly close: Token
+    ) { }
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitArrayLiteral(this);
@@ -307,8 +311,27 @@ export class ArrayLiteral implements Expression {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    transpile(pkgPath: string) {
+        let result = [];
+        result.push(
+            new SourceNode(this.open.location.start.line, this.open.location.start.column, pkgPath, '[')
+        );
+        for (let i = 0; i < this.elements.length; i++) {
+            if (i > 0) {
+                result.push(',');
+            }
+            let element = this.elements[i];
+            result.push('\n');
+            result.push(...element.transpile(pkgPath));
+        }
+        //add a newline between open and close if there are elements
+        if (this.elements.length > 0) {
+            result.push('\n');
+        }
+        result.push(
+            new SourceNode(this.close.location.start.line, this.close.location.start.column, pkgPath, ']')
+        );
+        return result;
     }
 }
 

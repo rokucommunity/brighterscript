@@ -785,7 +785,7 @@ export class Parser {
             return new Stmt.ExitWhile({ exitWhile: keyword });
         }
 
-        function forStatement(): Stmt.For {
+        function forStatement(): Stmt.ForStatement {
             const forKeyword = advance();
             const initializer = assignment(Lexeme.To);
             const to = advance();
@@ -811,7 +811,7 @@ export class Parser {
 
             // WARNING: BrightScript doesn't delete the loop initial value after a for/to loop! It just
             // stays around in scope with whatever value it was when the loop exited.
-            return new Stmt.For(
+            return new Stmt.ForStatement(
                 {
                     for: forKeyword,
                     to: to,
@@ -1587,7 +1587,7 @@ export class Parser {
                     let closingSquare = previous();
 
                     //consume("Expected newline or ':' after array literal", Lexeme.Newline, Lexeme.Colon, Lexeme.Eof);
-                    return new Expr.ArrayLiteral(elements, openingSquare, closingSquare);
+                    return new Expr.ArrayLiteralExpression(elements, openingSquare, closingSquare);
                 case match(Lexeme.LeftBrace):
                     let openingBrace = previous();
                     let members: Expr.AAMember[] = [];

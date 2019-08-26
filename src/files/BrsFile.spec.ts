@@ -1266,6 +1266,13 @@ describe('BrsFile', () => {
                     age--
                     end
                     stop
+                    indexes = [
+                        1,
+                        2,
+                        3
+                    ]
+                    for i = 0 to 10 step 1
+                    end for
                     callback = function(name, age as integer, cb as Function) as integer
                         return 12
                     end function

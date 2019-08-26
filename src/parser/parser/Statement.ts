@@ -16,7 +16,7 @@ export interface Visitor<T> {
     visitPrint(statement: Print): BrsType;
     visitIf(statement: IfStatement): BrsType;
     visitBlock(block: Block): BrsType;
-    visitFor(statement: For): BrsType;
+    visitFor(statement: ForStatement): BrsType;
     visitForEach(statement: ForEach): BrsType;
     visitWhile(statement: While): BrsType;
     visitNamedFunction(statement: FunctionStatement): BrsType;
@@ -606,7 +606,7 @@ export class Stop implements Statement {
     }
 }
 
-export class For implements Statement {
+export class ForStatement implements Statement {
     constructor(
         readonly tokens: {
             for: Token;
@@ -632,8 +632,46 @@ export class For implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    transpile(pkgPath: string) {
+        let result = [];
+        //for
+        result.push(
+            new SourceNode(this.tokens.for.location.start.line, this.tokens.for.location.start.column, pkgPath, 'for'),
+            ' '
+        );
+        //i=1
+        result.push(
+            ...this.counterDeclaration.transpile(pkgPath),
+            ' '
+        );
+        //to
+        result.push(
+            new SourceNode(this.tokens.to.location.start.line, this.tokens.to.location.start.column, pkgPath, 'to'),
+            ' '
+        );
+        //final value
+        result.push(this.finalValue.transpile(pkgPath));
+        //step
+        if (this.tokens.step) {
+            result.push(
+                ' ',
+                new SourceNode(this.tokens.step.location.start.line, this.tokens.step.location.start.column, pkgPath, 'step'),
+                ' ',
+                this.increment.transpile(pkgPath)
+            )
+        }
+        result.push('\n');
+        //loop body
+        result.push(...this.body.transpile(pkgPath));
+        if (this.body.statements.length > 0) {
+            result.push('\n');
+        }
+        //end for
+        result.push(
+            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, pkgPath, 'end for')
+        );
+
+        return result;
     }
 }
 
