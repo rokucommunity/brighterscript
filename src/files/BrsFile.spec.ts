@@ -1279,9 +1279,11 @@ describe('BrsFile', () => {
                     age = 12
                     while true
                         age = age + 1
+                        exit while
                     end while
                     while age < 12 or age < 15
                         age++
+                        exit while
                     end while
                     if true or 1 = 1 or name = "tim" then
                         print false
@@ -1308,6 +1310,7 @@ describe('BrsFile', () => {
                     for i = 0 to 10 step 1
                         name = "bob"
                         age = 12
+                        exit for
                     end for
                     callback = function(name, age as integer, cb as Function) as integer
                         returnValue = 12

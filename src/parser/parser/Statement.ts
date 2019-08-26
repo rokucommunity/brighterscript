@@ -146,7 +146,9 @@ export class ExitFor implements Statement {
     }
 
     transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+        return [
+            new SourceNode(this.tokens.exitFor.location.start.line, this.tokens.exitFor.location.start.column, pkgPath, 'exit for')
+       ];
     }
 }
 
@@ -166,7 +168,9 @@ export class ExitWhile implements Statement {
     }
 
     transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+        return [
+            new SourceNode(this.tokens.exitWhile.location.start.line, this.tokens.exitWhile.location.start.column, pkgPath, 'exit while')
+       ];
     }
 }
 
