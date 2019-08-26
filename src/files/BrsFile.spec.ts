@@ -179,7 +179,6 @@ describe('BrsFile', () => {
                     #endif
                 end sub
             `);
-            console.log(file.getDiagnostics());
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
@@ -321,7 +320,6 @@ describe('BrsFile', () => {
                     return
                 end sub
             `);
-            console.log(file.getDiagnostics());
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
@@ -479,10 +477,7 @@ describe('BrsFile', () => {
                     x++
                 end function
             `);
-            let diagnostics = file.getDiagnostics();
-            if (diagnostics.length > 0) {
-                console.log(diagnostics);
-            }
+            file.getDiagnostics();
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
@@ -493,10 +488,7 @@ describe('BrsFile', () => {
                     x--
                 end function
             `);
-            let diagnostics = file.getDiagnostics();
-            if (diagnostics.length > 0) {
-                console.log(diagnostics);
-            }
+            file.getDiagnostics();
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
@@ -1375,9 +1367,6 @@ describe('BrsFile', () => {
         async function testTranspile(source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'format') {
             expected = expected ? expected : source;
             let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, source) as BrsFile;
-            if (file.getDiagnostics().length > 0) {
-                console.log(file.getDiagnostics());
-            }
             let transpiled = file.transpile();
 
             fsExtra.writeFileSync('C:/temp/transpile/source.bs', source);

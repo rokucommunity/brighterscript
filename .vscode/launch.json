@@ -16,7 +16,7 @@
                 "ts-node/register",
                 "-r",
                 "source-map-support/register",
-                "./src/**/ProgramBuilder.spec.ts"
+                "./src/**/Parser.spec.ts"
             ],
             "cwd": "${workspaceRoot}",
             "protocol": "inspector",

@@ -320,6 +320,10 @@ export class Parser {
                     return assignment(...additionalTerminators);
                 }
 
+                if (check(Lexeme.SingleLineComment)) {
+                    return singleLineCommentStatement();
+                }
+
                 return statement(...additionalTerminators);
             } catch (error) {
                 synchronize();
@@ -545,6 +549,11 @@ export class Parser {
 
                     return haveFoundOptional || !!arg.defaultValue;
                 }, false);
+                let comment: Stmt.SingleLineCommentStatement;
+                //get a comment if available
+                if (check(Lexeme.SingleLineComment)) {
+                    comment = singleLineCommentStatement();
+                }
 
                 consume(
                     `Expected newline or ':' after ${functionTypeText} signature`,
@@ -558,6 +567,10 @@ export class Parser {
                         peek(),
                         `Expected 'end ${functionTypeText}' to terminate ${functionTypeText} block`
                     );
+                }
+                //prepend comment to body
+                if (comment) {
+                    body.statements.unshift(comment);
                 }
                 // consume 'end sub' or 'end function'
                 let endingKeyword = advance();
@@ -867,6 +880,13 @@ export class Parser {
             consume("Expected newline after 'exit for'", Lexeme.Newline);
             while (match(Lexeme.Newline)) { }
             return new Stmt.ExitFor({ exitFor: keyword });
+        }
+
+        function singleLineCommentStatement() {
+            let result = new Stmt.SingleLineCommentStatement(advance());
+            //consume trailing newlines
+            while (match(Lexeme.Newline));
+            return result;
         }
 
         function libraryStatement(): Stmt.LibraryStatement | undefined {
@@ -1362,6 +1382,7 @@ export class Parser {
 
                     //scrap the entire line
                     consumeUntil(Lexeme.Colon, Lexeme.Newline, Lexeme.Eof);
+
                     //trash the newline character so we start the next iteraion on the next line
                     advance();
                 }

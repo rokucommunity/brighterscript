@@ -288,10 +288,17 @@ export class Lexer {
                     }
                     break;
                 case "'":
+                    let comment = '';
                     // BrightScript doesn't have block comments; only line
                     while (peek() !== "\n" && !isAtEnd()) {
-                        advance();
+                        comment += advance();
                     }
+                    tokens.push({
+                        text: comment,
+                        isReserved: false,
+                        kind: Lexeme.SingleLineComment,
+                        location: locationOf(comment),
+                    });
                     break;
                 case " ":
                 case "\r":
@@ -643,11 +650,17 @@ export class Lexer {
             let tokenType = KeyWords[text.toLowerCase()] || Lexeme.Identifier;
             if (tokenType === KeyWords.rem) {
                 // The 'rem' keyword can be used to indicate comments as well, so
-                // consume the rest of the line, but don't add the token; it's not
-                // particularly useful.
+                // consume the rest of the line
+                let comment = '';
                 while (peek() !== "\n" && !isAtEnd()) {
-                    advance();
+                    comment += advance();
                 }
+                tokens.push({
+                    text: comment,
+                    isReserved: false,
+                    kind: Lexeme.SingleLineComment,
+                    location: locationOf(comment),
+                });
             } else {
                 addToken(tokenType);
             }

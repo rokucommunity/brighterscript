@@ -133,6 +133,28 @@ export class ExpressionStatement implements Statement {
     }
 }
 
+export class SingleLineCommentStatement implements Statement {
+    constructor(
+        public comment: Token
+    ) { }
+
+    accept<R>(visitor: Visitor<R>): BrsType {
+        throw new Error('comment statement visitor not implemented');
+    }
+
+    get location() {
+        return this.comment.location;
+    }
+
+    transpile(state: TranspileState): Array<SourceNode | string> {
+        return [
+            indent(state.blockDepth),
+            `'`,
+            new SourceNode(this.comment.location.start.line, this.comment.location.start.column, state.pkgPath, this.comment.text)
+        ];
+    }
+}
+
 export class ExitFor implements Statement {
     constructor(
         readonly tokens: {

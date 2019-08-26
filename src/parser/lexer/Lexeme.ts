@@ -115,6 +115,9 @@ export enum Lexeme {
     Protected = 'Protected',
     Private = 'Private',
 
+    //comments
+    SingleLineComment = 'SingleLineComment',
+
     // structural
     Newline = 'Newline',
     Eof = 'Eof'

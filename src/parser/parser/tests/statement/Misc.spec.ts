@@ -190,7 +190,6 @@ describe('parser', () => {
         `);
         let { statements, errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
-        console.log((statements[0] as any).func.body.statements[0]);
         expect((statements[0] as any).func.body.statements[0].elements[0].name.value).to.equal(
             'has-second-layer'
         );

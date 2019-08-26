@@ -3,14 +3,82 @@ import { expect } from 'chai';
 import { diagnosticMessages } from '../../DiagnosticMessages';
 import { Lexeme, Lexer } from '../lexer';
 import { Parser } from './Parser';
-import { ClassFieldStatement, ClassStatement } from './Statement';
+import { ClassFieldStatement, ClassStatement, FunctionStatement, SingleLineCommentStatement } from './Statement';
 
 describe('parser', () => {
+    let parser: Parser;
+    beforeEach(() => {
+        parser = new Parser();
+    });
     it('emits empty object when empty token list is provided', () => {
         expect(Parser.parse([])).to.deep.include({
             statements: [],
             errors: []
         });
+    });
+
+    describe('parse', () => {
+        it('parses declaration-level comments', () => {
+            let { tokens } = Lexer.scan(`
+                'a comment
+                function a()
+                end function
+            `);
+            let { errors, statements } = parser.parse(tokens);
+            expect((statements as any)[0].comment.text).to.equal('a comment');
+            expect(errors).to.be.lengthOf(0);
+        });
+
+        it('parses comment at end of function declaration first line', () => {
+            let { tokens } = Lexer.scan(`
+                function a() 'a comment
+                end function
+            `);
+            let { errors, statements } = parser.parse(tokens);
+            expect(errors).to.be.lengthOf(0);
+            let comment = (statements[0] as FunctionStatement).func.body.statements[0] as SingleLineCommentStatement;
+            expect(comment.comment.text).to.equal('a comment');
+        });
+
+        it('parses comment in function body', () => {
+            let { tokens } = Lexer.scan(`
+                function a()
+                    'comment 1
+                    num = 1
+                    'comment 2
+                end function
+            `);
+            let { errors, statements } = parser.parse(tokens);
+            expect(errors).to.be.lengthOf(0, 'Should have zero errors');
+            let comment = (statements[0] as FunctionStatement).func.body.statements[0] as SingleLineCommentStatement;
+            expect(comment.comment.text).to.equal('comment 1');
+            comment = (statements[0] as FunctionStatement).func.body.statements[2] as SingleLineCommentStatement;
+            expect(comment.comment.text).to.equal('comment 2');
+        });
+
+        it('parses comment at end of `end function`', () => {
+            let { tokens } = Lexer.scan(`
+                function a()
+                end function 'a comment
+            `);
+            let { errors, statements } = parser.parse(tokens);
+            expect(errors).to.be.lengthOf(0);
+            expect((statements as any)[1].comment.text).to.equal('a comment');
+        });
+
+        it.skip('parses comments at end of if statement declaration`', () => {
+            let { tokens } = Lexer.scan(`
+                function a()
+                    if true then 'a comment
+                    end if
+                end function
+            `);
+            let { errors, statements } = parser.parse(tokens);
+            expect(errors).to.be.lengthOf(0);
+            let comment = (statements as any)[0].func.body.statements[0].thenBranch.statements[0];
+            expect(comment.text).to.equal('a comment');
+        });
+
     });
     describe('events', () => {
         it('emits events', () => {
