@@ -1243,19 +1243,6 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('splits multple statements per line into one line per statement', async () => {
-            await testTranspile(`
-                function a()
-                    age = 12 : age = 14
-                end function
-            `, `
-                function a()
-                    age = 12
-                    age = 14
-                end function
-            `);
-        });
-
         it('adds newlines between top-level statements', async () => {
             await testTranspile(`
                 function a()
@@ -1324,13 +1311,25 @@ describe('BrsFile', () => {
                     end function
                     a(1, 2, 3)
                     person.functionCall(1, 2, 3)
+                    if true then
+                        level = 1
+                        if false then
+                            level = 2
+                            if true or false then
+                                level = 3
+                                if false and true then
+                                    level = 4
+                                end if
+                            end if
+                        end if
+                    end if
                 end function
                 function a(p1, p2, p3)
                 end function
-            `);
+            `, null, 'trim');
         });
 
-        async function testTranspile(source: string, expected?: string) {
+        async function testTranspile(source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'format') {
             expected = expected ? expected : source;
             let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, source) as BrsFile;
             if (file.getDiagnostics().length > 0) {
@@ -1342,15 +1341,36 @@ describe('BrsFile', () => {
             fsExtra.writeFileSync('C:/temp/transpile/generated.brs', file.transpile().code);
             fsExtra.writeFileSync('C:/temp/transpile/generated.brs.map', file.transpile().map);
 
-            expect(
-                formatter.format(
-                    transpiled.code.trim()
-                )
-            ).to.equal(
-                formatter.format(
-                    expected.trim()
-                )
-            );
+            let sources = [transpiled.code, expected];
+            for (let i = 0; i < sources.length; i++) {
+                if (formatType === 'trim') {
+                    let lines = sources[i].split('\n');
+                    //throw out leading newlines
+                    while (lines[0].length === 0) {
+                        lines.splice(0, 1);
+                    }
+                    let trimStartIndex = null;
+                    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+                        //if we don't have a starting trim count, compute it
+                        if (!trimStartIndex) {
+                            trimStartIndex = lines[lineIndex].length - lines[lineIndex].trim().length;
+                        }
+                        //only trim the expected file (since that's what we passed in from the test)
+                        if (lines[lineIndex].length > 0 && i === 1) {
+                            lines[lineIndex] = lines[lineIndex].substring(trimStartIndex);
+                        }
+                    }
+                    //trim trailing newlines
+                    while (lines[lines.length - 1].length === 0) {
+                        lines.splice(lines.length - 1);
+                    }
+                    sources[i] = lines.join('\n');
+
+                } else if (formatType === 'format') {
+                    sources[i] = formatter.format(sources[i].trim());
+                }
+            }
+            expect(sources[0]).to.equal(sources[1]);
             return transpiled;
         }
     });

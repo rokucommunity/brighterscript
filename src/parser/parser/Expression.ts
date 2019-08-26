@@ -141,11 +141,11 @@ export class Function implements Expression {
         //'function'|'sub'
         results.push(
             new SourceNode(this.functionType.location.start.line, this.functionType.location.start.column, state.pkgPath, this.functionType.text.toLowerCase()),
-            ' ',
         );
         //functionName?
         if (name) {
             results.push(
+                ' ',
                 new SourceNode(name.location.start.line, name.location.start.column, state.pkgPath, name.text)
             );
         }
@@ -158,7 +158,7 @@ export class Function implements Expression {
             let param = this.parameters[i];
             //add commas
             if (i > 0) {
-                results.push(new SourceNode(null, null, state.pkgPath, ','));
+                results.push(new SourceNode(null, null, state.pkgPath, ', '));
             }
             //add parameter
             results.push(param.transpile(state));
@@ -185,6 +185,7 @@ export class Function implements Expression {
         }
         //'end sub'|'end function'
         results.push(
+            indent(state.blockDepth),
             new SourceNode(this.end.location.start.line, this.end.location.start.column, state.pkgPath, this.end.text)
         );
         return results;
@@ -337,19 +338,26 @@ export class ArrayLiteralExpression implements Expression {
         result.push(
             new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pkgPath, '[')
         );
+        state.blockDepth++;
         for (let i = 0; i < this.elements.length; i++) {
             if (i > 0) {
                 result.push(',');
             }
             let element = this.elements[i];
             result.push('\n');
-            result.push(...element.transpile(state));
+
+            result.push(
+                indent(state.blockDepth),
+                ...element.transpile(state)
+            );
         }
+        state.blockDepth--;
         //add a newline between open and close if there are elements
         if (this.elements.length > 0) {
             result.push('\n');
         }
         result.push(
+            indent(state.blockDepth),
             new SourceNode(this.close.location.start.line, this.close.location.start.column, state.pkgPath, ']')
         );
         return result;
@@ -392,15 +400,22 @@ export class AALiteralExpression implements Expression {
             new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pkgPath, this.open.text),
             '\n'
         );
+        state.blockDepth++;
         for (let i = 0; i < this.elements.length; i++) {
             let element = this.elements[i];
+
+            //indent this line
+            if (i < 10) {
+                result.push(indent(state.blockDepth));
+            }
             //key
             result.push(
                 new SourceNode(element.keyToken.location.start.line, element.keyToken.location.start.column, state.pkgPath, element.keyToken.text)
             );
             //colon
             result.push(
-                new SourceNode(element.colonToken.location.start.line, element.colonToken.location.start.column, state.pkgPath, ':')
+                new SourceNode(element.colonToken.location.start.line, element.colonToken.location.start.column, state.pkgPath, ':'),
+                ' '
             );
             //value
             result.push(...element.value.transpile(state))
@@ -410,9 +425,11 @@ export class AALiteralExpression implements Expression {
             }
             result.push('\n');
         }
+        state.blockDepth--;
 
         //close curly
         result.push(
+            indent(state.blockDepth),
             new SourceNode(this.close.location.start.line, this.close.location.start.column, state.pkgPath, this.close.text)
         );
         return result;
@@ -458,4 +475,18 @@ export class Variable implements Expression {
             new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pkgPath, this.name.text)
         ];
     }
+}
+
+/**
+ * Create a newline (including leading spaces)
+ * @param state 
+ */
+export function indent(blockDepth: number) {
+    let result = '';
+    let totalSpaceCount = blockDepth * 4;
+    totalSpaceCount > -1 ? totalSpaceCount : 0;
+    for (let i = 0; i < totalSpaceCount; i++) {
+        result += ' ';
+    }
+    return result;
 }

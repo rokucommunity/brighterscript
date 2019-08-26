@@ -93,7 +93,7 @@ export class FunctionParameter {
             result.push(new SourceNode(this.typeToken.location.start.line, this.typeToken.location.start.column, state.pkgPath, this.typeToken.text));
         }
         if (this.defaultValue) {
-            result.push('=');
+            result.push(' = ');
             result.push(this.defaultValue.transpile(state));
         }
         return result;

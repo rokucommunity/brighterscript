@@ -4,7 +4,7 @@ import { Token, Identifier, Location, Lexeme } from "../lexer";
 import { BrsType, BrsInvalid } from "../brsTypes";
 import { SourceNode } from 'source-map';
 import { Stmt } from '.';
-import { TranspileState } from './Expression';
+import { TranspileState, indent } from './Expression';
 
 /** A set of reasons why a `Block` stopped executing. */
 export * from "./BlockEndReason";
@@ -98,16 +98,19 @@ export class Block implements Statement {
     }
 
     transpile(state: TranspileState) {
+        state.blockDepth++;
         let results = [] as Array<SourceNode | string>;
         for (let i = 0; i < this.statements.length; i++) {
-            let previousStatement = this.statements[i - 1];
-            let statement = this.statements[i];
-            if (previousStatement) {
+            //every statement gets a newline (assumes already had newline for first item)
+            if (this.statements[i - 1]) {
                 results.push('\n');
             }
-            let statementNodes = statement.transpile(state);
-            results.push(...statementNodes);
+            results.push(
+                indent(state.blockDepth),
+                ...this.statements[i].transpile(state)
+            );
         }
+        state.blockDepth--;
         return results
     }
 }
@@ -296,7 +299,7 @@ export class IfStatement implements Statement {
 
     transpile(state: TranspileState) {
         let results = [];
-        //if
+        //if   (already indented by block)
         results.push(new SourceNode(this.tokens.if.location.start.line, this.tokens.if.location.start.column, state.pkgPath, 'if'));
         results.push(' ');
         //conditions
@@ -324,6 +327,7 @@ export class IfStatement implements Statement {
             let elseif = this.elseIfs[i];
             //elseif
             results.push(
+                indent(state.blockDepth),
                 new SourceNode(elseif.elseIfToken.location.start.line, elseif.elseIfToken.location.start.column, state.pkgPath, 'else if'),
                 ' '
             );
@@ -349,6 +353,7 @@ export class IfStatement implements Statement {
         if (this.tokens.else) {
             //else
             results.push(
+                indent(state.blockDepth),
                 new SourceNode(this.tokens.else.location.start.line, this.tokens.else.location.start.column, state.pkgPath, 'else')
             );
             results.push('\n');
@@ -361,6 +366,7 @@ export class IfStatement implements Statement {
         }
 
         //end if
+        results.push(indent(state.blockDepth));
         if (this.tokens.endIf) {
             results.push(
                 new SourceNode(this.tokens.endIf.location.start.line, this.tokens.endIf.location.start.column, state.pkgPath, 'end if')
@@ -666,6 +672,7 @@ export class ForStatement implements Statement {
         }
         //end for
         result.push(
+            indent(state.blockDepth),
             new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pkgPath, 'end for')
         );
 
@@ -722,7 +729,9 @@ export class ForEachStatement implements Statement {
         if (this.body.statements.length > 0) {
             result.push('\n');
         }
+        //end for
         result.push(
+            indent(state.blockDepth),
             new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pkgPath, 'end for'),
         );
         return result;
@@ -773,8 +782,8 @@ export class WhileStatement implements Statement {
 
         //end while
         result.push(
-            new SourceNode(this.tokens.endWhile.location.start.line, this.tokens.endWhile.location.start.column, state.pkgPath, 'end while'),
-            ' '
+            indent(state.blockDepth),
+            new SourceNode(this.tokens.endWhile.location.start.line, this.tokens.endWhile.location.start.column, state.pkgPath, 'end while')
         );
 
         return result;
