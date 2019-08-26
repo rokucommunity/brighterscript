@@ -4,6 +4,7 @@ import { Token, Identifier, Location, Lexeme } from "../lexer";
 import { BrsType, BrsInvalid } from "../brsTypes";
 import { SourceNode } from 'source-map';
 import { Stmt } from '.';
+import { TranspileState } from './Expression';
 
 /** A set of reasons why a `Block` stopped executing. */
 export * from "./BlockEndReason";
@@ -39,7 +40,7 @@ export interface Statement {
     /** The starting and ending location of the expression. */
     location: Location;
 
-    transpile(pkgPath: string): Array<SourceNode | string>;
+    transpile(state: TranspileState): Array<SourceNode | string>;
 }
 
 export class AssignmentStatement implements Statement {
@@ -63,14 +64,13 @@ export class AssignmentStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         return [
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, pkgPath, this.name.text),
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pkgPath, this.name.text),
             ' ',
-            new SourceNode(this.tokens.equals.location.start.line, this.tokens.equals.location.start.column, pkgPath, '='),
+            new SourceNode(this.tokens.equals.location.start.line, this.tokens.equals.location.start.column, state.pkgPath, '='),
             ' ',
-            //TODO remove any cast
-            ...this.value.transpile(pkgPath)
+            ...this.value.transpile(state)
         ];
     }
 }
@@ -97,7 +97,7 @@ export class Block implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         let results = [] as Array<SourceNode | string>;
         for (let i = 0; i < this.statements.length; i++) {
             let previousStatement = this.statements[i - 1];
@@ -105,7 +105,7 @@ export class Block implements Statement {
             if (previousStatement) {
                 results.push('\n');
             }
-            let statementNodes = statement.transpile(pkgPath);
+            let statementNodes = statement.transpile(state);
             results.push(...statementNodes);
         }
         return results
@@ -125,8 +125,8 @@ export class ExpressionStatement implements Statement {
         return this.expression.location;
     }
 
-    transpile(pkgPath: string) {
-        return this.expression.transpile(pkgPath);
+    transpile(state: TranspileState) {
+        return this.expression.transpile(state);
     }
 }
 
@@ -145,10 +145,10 @@ export class ExitFor implements Statement {
         return this.tokens.exitFor.location;
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
+    transpile(state: TranspileState): Array<SourceNode | string> {
         return [
-            new SourceNode(this.tokens.exitFor.location.start.line, this.tokens.exitFor.location.start.column, pkgPath, 'exit for')
-       ];
+            new SourceNode(this.tokens.exitFor.location.start.line, this.tokens.exitFor.location.start.column, state.pkgPath, 'exit for')
+        ];
     }
 }
 
@@ -167,10 +167,10 @@ export class ExitWhile implements Statement {
         return this.tokens.exitWhile.location;
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
+    transpile(state: TranspileState): Array<SourceNode | string> {
         return [
-            new SourceNode(this.tokens.exitWhile.location.start.line, this.tokens.exitWhile.location.start.column, pkgPath, 'exit while')
-       ];
+            new SourceNode(this.tokens.exitWhile.location.start.line, this.tokens.exitWhile.location.start.column, state.pkgPath, 'exit while')
+        ];
     }
 }
 
@@ -189,8 +189,8 @@ export class FunctionStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
-        return this.func.transpile(pkgPath, this.name);
+    transpile(state: TranspileState) {
+        return this.func.transpile(state.pkgPath, this.name);
     }
 }
 
@@ -213,7 +213,7 @@ export class ClassMethodStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
+    transpile(state: TranspileState): Array<SourceNode | string> {
         throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
     }
 }
@@ -241,7 +241,7 @@ export class ClassFieldStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
+    transpile(state: TranspileState): Array<SourceNode | string> {
         throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
     }
 }
@@ -294,18 +294,18 @@ export class IfStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         let results = [];
         //if
-        results.push(new SourceNode(this.tokens.if.location.start.line, this.tokens.if.location.start.column, pkgPath, 'if'));
+        results.push(new SourceNode(this.tokens.if.location.start.line, this.tokens.if.location.start.column, state.pkgPath, 'if'));
         results.push(' ');
         //conditions
-        results.push(...this.condition.transpile(pkgPath));
+        results.push(...this.condition.transpile(state));
         results.push(' ');
         //then
         if (this.tokens.then) {
             results.push(
-                new SourceNode(this.tokens.then.location.start.line, this.tokens.then.location.start.column, pkgPath, 'then')
+                new SourceNode(this.tokens.then.location.start.line, this.tokens.then.location.start.column, state.pkgPath, 'then')
             );
         } else {
             results.push('then')
@@ -313,7 +313,7 @@ export class IfStatement implements Statement {
         //render all if statements as multi-line
         results.push('\n');
         //if statement body
-        let thenNodes = this.thenBranch.transpile(pkgPath);
+        let thenNodes = this.thenBranch.transpile(state);
         if (thenNodes.length > 0) {
             results.push(thenNodes);
             results.push('\n')
@@ -324,21 +324,21 @@ export class IfStatement implements Statement {
             let elseif = this.elseIfs[i];
             //elseif
             results.push(
-                new SourceNode(elseif.elseIfToken.location.start.line, elseif.elseIfToken.location.start.column, pkgPath, 'else if'),
+                new SourceNode(elseif.elseIfToken.location.start.line, elseif.elseIfToken.location.start.column, state.pkgPath, 'else if'),
                 ' '
             );
             //condition
-            results.push(...elseif.condition.transpile(pkgPath));
+            results.push(...elseif.condition.transpile(state));
             //then
             if (elseif.thenToken) {
                 results.push(
                     ' ',
-                    new SourceNode(elseif.thenToken.location.start.line, elseif.thenToken.location.start.column, pkgPath, 'then')
+                    new SourceNode(elseif.thenToken.location.start.line, elseif.thenToken.location.start.column, state.pkgPath, 'then')
                 );
             }
             results.push('\n');
             //then body
-            let body = elseif.thenBranch.transpile(pkgPath);
+            let body = elseif.thenBranch.transpile(state);
             if (body.length > 0) {
                 results.push(...body);
                 results.push('\n');
@@ -349,11 +349,11 @@ export class IfStatement implements Statement {
         if (this.tokens.else) {
             //else
             results.push(
-                new SourceNode(this.tokens.else.location.start.line, this.tokens.else.location.start.column, pkgPath, 'else')
+                new SourceNode(this.tokens.else.location.start.line, this.tokens.else.location.start.column, state.pkgPath, 'else')
             );
             results.push('\n');
             //then body
-            let body = this.elseBranch.transpile(pkgPath);
+            let body = this.elseBranch.transpile(state);
             if (body.length > 0) {
                 results.push(...body);
                 results.push('\n');
@@ -363,7 +363,7 @@ export class IfStatement implements Statement {
         //end if
         if (this.tokens.endIf) {
             results.push(
-                new SourceNode(this.tokens.endIf.location.start.line, this.tokens.endIf.location.start.column, pkgPath, 'end if')
+                new SourceNode(this.tokens.endIf.location.start.line, this.tokens.endIf.location.start.column, state.pkgPath, 'end if')
             );
         } else {
             results.push('end if');
@@ -388,10 +388,10 @@ export class IncrementStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
+    transpile(state: TranspileState): Array<SourceNode | string> {
         return [
-            ...this.value.transpile(pkgPath),
-            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, pkgPath, this.operator.text)
+            ...this.value.transpile(state),
+            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, state.pkgPath, this.operator.text)
         ];
     }
 }
@@ -441,15 +441,15 @@ export class Print implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         let result = [
-            new SourceNode(this.tokens.print.location.start.line, this.tokens.print.location.start.column, pkgPath, 'print'),
+            new SourceNode(this.tokens.print.location.start.line, this.tokens.print.location.start.column, state.pkgPath, 'print'),
             ' '
         ];
         for (let i = 0; i < this.expressions.length; i++) {
             let expression: any = this.expressions[i];
             if (expression.transpile) {
-                result.push(...(expression as ExpressionStatement).transpile(pkgPath));
+                result.push(...(expression as ExpressionStatement).transpile(state));
             } else {
                 //skip these because I think they are bogus items only added for use in the runtime
             }
@@ -479,11 +479,11 @@ export class Goto implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
+    transpile(state: TranspileState): Array<SourceNode | string> {
         return [
-            new SourceNode(this.tokens.goto.location.start.line, this.tokens.goto.location.start.column, pkgPath, 'goto'),
+            new SourceNode(this.tokens.goto.location.start.line, this.tokens.goto.location.start.column, state.pkgPath, 'goto'),
             ' ',
-            new SourceNode(this.tokens.label.location.start.line, this.tokens.label.location.start.column, pkgPath, this.tokens.label.text),
+            new SourceNode(this.tokens.label.location.start.line, this.tokens.label.location.start.column, state.pkgPath, this.tokens.label.text),
         ];
     }
 }
@@ -508,10 +508,10 @@ export class Label implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
+    transpile(state: TranspileState): Array<SourceNode | string> {
         return [
-            new SourceNode(this.tokens.identifier.location.start.line, this.tokens.identifier.location.start.column, pkgPath, this.tokens.identifier.text),
-            new SourceNode(this.tokens.colon.location.start.line, this.tokens.colon.location.start.column, pkgPath, ':'),
+            new SourceNode(this.tokens.identifier.location.start.line, this.tokens.identifier.location.start.column, state.pkgPath, this.tokens.identifier.text),
+            new SourceNode(this.tokens.colon.location.start.line, this.tokens.colon.location.start.column, state.pkgPath, ':'),
 
         ];
     }
@@ -537,14 +537,14 @@ export class Return implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.tokens.return.location.start.line, this.tokens.return.location.start.column, pkgPath, 'return')
+            new SourceNode(this.tokens.return.location.start.line, this.tokens.return.location.start.column, state.pkgPath, 'return')
         );
         if (this.value) {
             result.push(' ');
-            result.push(...this.value.transpile(pkgPath));
+            result.push(...this.value.transpile(state));
         }
         return result;
     }
@@ -570,9 +570,9 @@ export class End implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         return [
-            new SourceNode(this.tokens.end.location.start.line, this.tokens.end.location.start.column, pkgPath, 'end')
+            new SourceNode(this.tokens.end.location.start.line, this.tokens.end.location.start.column, state.pkgPath, 'end')
         ];
     }
 }
@@ -597,9 +597,9 @@ export class Stop implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         return [
-            new SourceNode(this.tokens.stop.location.start.line, this.tokens.stop.location.start.column, pkgPath, 'stop')
+            new SourceNode(this.tokens.stop.location.start.line, this.tokens.stop.location.start.column, state.pkgPath, 'stop')
         ];
     }
 }
@@ -630,43 +630,43 @@ export class ForStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         let result = [];
         //for
         result.push(
-            new SourceNode(this.tokens.for.location.start.line, this.tokens.for.location.start.column, pkgPath, 'for'),
+            new SourceNode(this.tokens.for.location.start.line, this.tokens.for.location.start.column, state.pkgPath, 'for'),
             ' '
         );
         //i=1
         result.push(
-            ...this.counterDeclaration.transpile(pkgPath),
+            ...this.counterDeclaration.transpile(state),
             ' '
         );
         //to
         result.push(
-            new SourceNode(this.tokens.to.location.start.line, this.tokens.to.location.start.column, pkgPath, 'to'),
+            new SourceNode(this.tokens.to.location.start.line, this.tokens.to.location.start.column, state.pkgPath, 'to'),
             ' '
         );
         //final value
-        result.push(this.finalValue.transpile(pkgPath));
+        result.push(this.finalValue.transpile(state));
         //step
         if (this.tokens.step) {
             result.push(
                 ' ',
-                new SourceNode(this.tokens.step.location.start.line, this.tokens.step.location.start.column, pkgPath, 'step'),
+                new SourceNode(this.tokens.step.location.start.line, this.tokens.step.location.start.column, state.pkgPath, 'step'),
                 ' ',
-                this.increment.transpile(pkgPath)
+                this.increment.transpile(state)
             )
         }
         result.push('\n');
         //loop body
-        result.push(...this.body.transpile(pkgPath));
+        result.push(...this.body.transpile(state));
         if (this.body.statements.length > 0) {
             result.push('\n');
         }
         //end for
         result.push(
-            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, pkgPath, 'end for')
+            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pkgPath, 'end for')
         );
 
         return result;
@@ -697,33 +697,33 @@ export class ForEachStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         let result = [];
         //for each
         result.push(
-            new SourceNode(this.tokens.forEach.location.start.line, this.tokens.forEach.location.start.column, pkgPath, 'for each'),
+            new SourceNode(this.tokens.forEach.location.start.line, this.tokens.forEach.location.start.column, state.pkgPath, 'for each'),
             ' '
         );
         //item
         result.push(
-            new SourceNode(this.tokens.forEach.location.start.line, this.tokens.forEach.location.start.column, pkgPath, this.item.text),
+            new SourceNode(this.tokens.forEach.location.start.line, this.tokens.forEach.location.start.column, state.pkgPath, this.item.text),
             ' '
         );
         //in
         result.push(
-            new SourceNode(this.tokens.in.location.start.line, this.tokens.in.location.start.column, pkgPath, 'in'),
+            new SourceNode(this.tokens.in.location.start.line, this.tokens.in.location.start.column, state.pkgPath, 'in'),
             ' '
         );
         //target
-        result.push(...this.target.transpile(pkgPath));
+        result.push(...this.target.transpile(state));
         result.push('\n');
         //body
-        result.push(...this.body.transpile(pkgPath));
+        result.push(...this.body.transpile(state));
         if (this.body.statements.length > 0) {
             result.push('\n');
         }
         result.push(
-            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, pkgPath, 'end for'),
+            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pkgPath, 'end for'),
         );
         return result;
     }
@@ -751,20 +751,20 @@ export class WhileStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         let result = [];
         //while
         result.push(
-            new SourceNode(this.tokens.while.location.start.line, this.tokens.while.location.start.column, pkgPath, 'while'),
+            new SourceNode(this.tokens.while.location.start.line, this.tokens.while.location.start.column, state.pkgPath, 'while'),
             ' '
         );
         //condition
         result.push(
-            ...this.condition.transpile(pkgPath),
+            ...this.condition.transpile(state),
         );
         result.push('\n');
         //body
-        result.push(...this.body.transpile(pkgPath));
+        result.push(...this.body.transpile(state));
 
         //trailing newline only if we have body statements
         if (this.body.statements.length > 0) {
@@ -773,7 +773,7 @@ export class WhileStatement implements Statement {
 
         //end while
         result.push(
-            new SourceNode(this.tokens.endWhile.location.start.line, this.tokens.endWhile.location.start.column, pkgPath, 'end while'),
+            new SourceNode(this.tokens.endWhile.location.start.line, this.tokens.endWhile.location.start.column, state.pkgPath, 'end while'),
             ' '
         );
 
@@ -800,16 +800,16 @@ export class DottedSetStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         return [
             //object
-            ...this.obj.transpile(pkgPath),
+            ...this.obj.transpile(state),
             '.',
             //name
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, pkgPath, this.name.text),
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pkgPath, this.name.text),
             ' = ',
             //right-hand-side of assignment
-            ...this.value.transpile(pkgPath)
+            ...this.value.transpile(state)
         ];
     }
 }
@@ -835,20 +835,20 @@ export class IndexedSetStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         return [
             //obj
-            ...this.obj.transpile(pkgPath),
+            ...this.obj.transpile(state),
             //   [
-            new SourceNode(this.openingSquare.location.start.line, this.openingSquare.location.start.column, pkgPath, '['),
+            new SourceNode(this.openingSquare.location.start.line, this.openingSquare.location.start.column, state.pkgPath, '['),
             //    index
-            ...this.index.transpile(pkgPath),
+            ...this.index.transpile(state),
             //         ]
-            new SourceNode(this.closingSquare.location.start.line, this.closingSquare.location.start.column, pkgPath, ']'),
+            new SourceNode(this.closingSquare.location.start.line, this.closingSquare.location.start.column, state.pkgPath, ']'),
             //           =
             ' = ',
             //             value
-            ...this.value.transpile(pkgPath)
+            ...this.value.transpile(state)
         ];
     }
 }
@@ -874,16 +874,16 @@ export class LibraryStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.tokens.library.location.start.line, this.tokens.library.location.start.column, pkgPath, 'library'),
+            new SourceNode(this.tokens.library.location.start.line, this.tokens.library.location.start.column, state.pkgPath, 'library'),
         );
         //there will be a parse error if file path is missing, but let's prevent a runtime error just in case
         if (this.tokens.filePath) {
             result.push(
                 ' ',
-                new SourceNode(this.tokens.filePath.location.start.line, this.tokens.filePath.location.start.column, pkgPath, this.tokens.filePath.text)
+                new SourceNode(this.tokens.filePath.location.start.line, this.tokens.filePath.location.start.column, state.pkgPath, this.tokens.filePath.text)
             );
         }
         return result;
@@ -924,7 +924,7 @@ export class ClassStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
+    transpile(state: TranspileState): Array<SourceNode | string> {
         throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
     }
 }

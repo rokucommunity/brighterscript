@@ -81,23 +81,22 @@ export class FunctionParameter {
         };
     }
 
-    public transpile(pkgPath: string): SourceNode {
+    public transpile(state: Expr.TranspileState) {
         let result = [
             //name
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, pkgPath, this.name.text)
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pkgPath, this.name.text)
         ] as any[];
         if (this.asToken) {
             result.push(' ');
-            result.push(new SourceNode(this.asToken.location.start.line, this.asToken.location.start.column, pkgPath, 'as'));
+            result.push(new SourceNode(this.asToken.location.start.line, this.asToken.location.start.column, state.pkgPath, 'as'));
             result.push(' ');
-            result.push(new SourceNode(this.typeToken.location.start.line, this.typeToken.location.start.column, pkgPath, this.typeToken.text));
+            result.push(new SourceNode(this.typeToken.location.start.line, this.typeToken.location.start.column, state.pkgPath, this.typeToken.text));
         }
         if (this.defaultValue) {
             result.push('=');
-            result.push((this.defaultValue as any).transpile(pkgPath));
+            result.push(this.defaultValue.transpile(state));
         }
-        return new SourceNode(null, null, pkgPath, result);
-
+        return result;
     }
 }
 

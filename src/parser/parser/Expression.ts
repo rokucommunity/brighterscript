@@ -18,6 +18,11 @@ export interface Visitor<T> {
     visitVariable(expression: Variable): T;
 }
 
+export interface TranspileState {
+    pkgPath: string;
+    blockDepth: number;
+}
+
 /** A BrightScript expression */
 export interface Expression {
     /**
@@ -30,7 +35,7 @@ export interface Expression {
     /** The starting and ending location of the expression. */
     location: Location;
 
-    transpile(pkgPath: string): Array<SourceNode | string>;
+    transpile(state: TranspileState): Array<SourceNode | string>;
 }
 
 export class Binary implements Expression {
@@ -52,15 +57,13 @@ export class Binary implements Expression {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         return [
-            //TODO remove any cast
-            new SourceNode(this.left.location.start.line, this.left.location.start.column, pkgPath, (this.left as any).transpile(pkgPath)),
+            new SourceNode(this.left.location.start.line, this.left.location.start.column, state.pkgPath, this.left.transpile(state)),
             ' ',
-            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, pkgPath, this.operator.text),
+            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, state.pkgPath, this.operator.text),
             ' ',
-            //TODO remove any cast
-            new SourceNode(this.right.location.start.line, this.right.location.start.column, pkgPath, (this.right as any).transpile(pkgPath))
+            new SourceNode(this.right.location.start.line, this.right.location.start.column, state.pkgPath, this.right.transpile(state))
         ];
     }
 }
@@ -87,11 +90,11 @@ export class Call implements Expression {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         let result = [];
-        result.push(...this.callee.transpile(pkgPath));
+        result.push(...this.callee.transpile(state));
         result.push(
-            new SourceNode(this.openingParen.location.start.line, this.openingParen.location.start.column, pkgPath, '(')
+            new SourceNode(this.openingParen.location.start.line, this.openingParen.location.start.column, state.pkgPath, '(')
         );
         for (let i = 0; i < this.args.length; i++) {
             //add comma between args
@@ -99,10 +102,10 @@ export class Call implements Expression {
                 result.push(', ');
             }
             let arg = this.args[i];
-            result.push(...arg.transpile(pkgPath));
+            result.push(...arg.transpile(state));
         }
         result.push(
-            new SourceNode(this.closingParen.location.start.line, this.closingParen.location.start.column, pkgPath, ')')
+            new SourceNode(this.closingParen.location.start.line, this.closingParen.location.start.column, state.pkgPath, ')')
         );
         return result;
     }
@@ -133,56 +136,56 @@ export class Function implements Expression {
         };
     }
 
-    transpile(pkgPath: string, name?: Identifier) {
+    transpile(state: TranspileState, name?: Identifier) {
         let results = [];
         //'function'|'sub'
         results.push(
-            new SourceNode(this.functionType.location.start.line, this.functionType.location.start.column, pkgPath, this.functionType.text.toLowerCase()),
+            new SourceNode(this.functionType.location.start.line, this.functionType.location.start.column, state.pkgPath, this.functionType.text.toLowerCase()),
             ' ',
         );
         //functionName?
         if (name) {
             results.push(
-                new SourceNode(name.location.start.line, name.location.start.column, pkgPath, name.text)
+                new SourceNode(name.location.start.line, name.location.start.column, state.pkgPath, name.text)
             );
         }
         //leftParen
         results.push(
-            new SourceNode(this.leftParen.location.start.line, this.leftParen.location.start.column, pkgPath, '(')
+            new SourceNode(this.leftParen.location.start.line, this.leftParen.location.start.column, state.pkgPath, '(')
         );
         //parameters
         for (let i = 0; i < this.parameters.length; i++) {
             let param = this.parameters[i];
             //add commas
             if (i > 0) {
-                results.push(new SourceNode(null, null, pkgPath, ','));
+                results.push(new SourceNode(null, null, state.pkgPath, ','));
             }
             //add parameter
-            results.push(param.transpile(pkgPath));
+            results.push(param.transpile(state));
         }
         //right paren
         results.push(
-            new SourceNode(this.rightParen.location.start.line, this.rightParen.location.start.column, pkgPath, ')')
+            new SourceNode(this.rightParen.location.start.line, this.rightParen.location.start.column, state.pkgPath, ')')
         );
         if (this.asToken) {
             results.push(
                 ' ',
                 //as
-                new SourceNode(this.asToken.location.start.line, this.asToken.location.start.column, pkgPath, 'as'),
+                new SourceNode(this.asToken.location.start.line, this.asToken.location.start.column, state.pkgPath, 'as'),
                 ' ',
                 //return type
-                new SourceNode(this.returnTypeToken.location.start.line, this.returnTypeToken.location.start.column, pkgPath, this.returnTypeToken.text.toLowerCase())
+                new SourceNode(this.returnTypeToken.location.start.line, this.returnTypeToken.location.start.column, state.pkgPath, this.returnTypeToken.text.toLowerCase())
             );
         }
         results.push('\n');
-        let body = this.body.transpile(pkgPath);
+        let body = this.body.transpile(state);
         results.push(...body);
         if (body.length > 0) {
             results.push('\n');
         }
         //'end sub'|'end function'
         results.push(
-            new SourceNode(this.end.location.start.line, this.end.location.start.column, pkgPath, this.end.text)
+            new SourceNode(this.end.location.start.line, this.end.location.start.column, state.pkgPath, this.end.text)
         );
         return results;
     }
@@ -203,13 +206,11 @@ export class DottedGet implements Expression {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         return [
-            //TODO remove any cast
-            //TODO - is this correct?
-            ...(this.obj as any).transpile(pkgPath),
+            ...this.obj.transpile(state),
             '.',
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, pkgPath, this.name.text)
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pkgPath, this.name.text)
         ];
     }
 }
@@ -234,12 +235,12 @@ export class IndexedGetExpression implements Expression {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         return [
-            ...this.obj.transpile(pkgPath),
-            new SourceNode(this.openingSquare.location.start.line, this.openingSquare.location.start.column, pkgPath, '['),
-            ...this.index.transpile(pkgPath),
-            new SourceNode(this.closingSquare.location.start.line, this.closingSquare.location.start.column, pkgPath, ']')
+            ...this.obj.transpile(state),
+            new SourceNode(this.openingSquare.location.start.line, this.openingSquare.location.start.column, state.pkgPath, '['),
+            ...this.index.transpile(state),
+            new SourceNode(this.closingSquare.location.start.line, this.closingSquare.location.start.column, state.pkgPath, ']')
         ];
     }
 }
@@ -265,12 +266,12 @@ export class Grouping implements Expression {
         };
     }
 
-    transpile(pkgPath: string){
+    transpile(state: TranspileState) {
         return [
-            new SourceNode(this.tokens.left.location.start.line, this.tokens.left.location.start.column, pkgPath, '('),
-            ...this.expression.transpile(pkgPath),
-            new SourceNode(this.tokens.right.location.start.line, this.tokens.right.location.start.column, pkgPath, ')'),
-        ];        
+            new SourceNode(this.tokens.left.location.start.line, this.tokens.left.location.start.column, state.pkgPath, '('),
+            ...this.expression.transpile(state),
+            new SourceNode(this.tokens.right.location.start.line, this.tokens.right.location.start.column, state.pkgPath, ')'),
+        ];
     }
 }
 
@@ -300,12 +301,12 @@ export class Literal implements Expression {
         );
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         return [
             new SourceNode(
                 this._location.start.line,
                 this._location.start.column,
-                pkgPath,
+                state.pkgPath,
                 this.value.kind === ValueKind.String ? `"${this.value.toString()}"` : this.value.toString()
             )
         ]
@@ -331,10 +332,10 @@ export class ArrayLiteralExpression implements Expression {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.open.location.start.line, this.open.location.start.column, pkgPath, '[')
+            new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pkgPath, '[')
         );
         for (let i = 0; i < this.elements.length; i++) {
             if (i > 0) {
@@ -342,14 +343,14 @@ export class ArrayLiteralExpression implements Expression {
             }
             let element = this.elements[i];
             result.push('\n');
-            result.push(...element.transpile(pkgPath));
+            result.push(...element.transpile(state));
         }
         //add a newline between open and close if there are elements
         if (this.elements.length > 0) {
             result.push('\n');
         }
         result.push(
-            new SourceNode(this.close.location.start.line, this.close.location.start.column, pkgPath, ']')
+            new SourceNode(this.close.location.start.line, this.close.location.start.column, state.pkgPath, ']')
         );
         return result;
     }
@@ -384,25 +385,25 @@ export class AALiteralExpression implements Expression {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
+    transpile(state: TranspileState): Array<SourceNode | string> {
         let result = [];
         //open curly
         result.push(
-            new SourceNode(this.open.location.start.line, this.open.location.start.column, pkgPath, this.open.text),
+            new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pkgPath, this.open.text),
             '\n'
         );
         for (let i = 0; i < this.elements.length; i++) {
             let element = this.elements[i];
             //key
             result.push(
-                new SourceNode(element.keyToken.location.start.line, element.keyToken.location.start.column, pkgPath, element.keyToken.text)
+                new SourceNode(element.keyToken.location.start.line, element.keyToken.location.start.column, state.pkgPath, element.keyToken.text)
             );
             //colon
             result.push(
-                new SourceNode(element.colonToken.location.start.line, element.colonToken.location.start.column, pkgPath, ':')
+                new SourceNode(element.colonToken.location.start.line, element.colonToken.location.start.column, state.pkgPath, ':')
             );
             //value
-            result.push(...element.value.transpile(pkgPath))
+            result.push(...element.value.transpile(state))
             //if not final element, add trailing comma 
             if (i !== this.elements.length - 1) {
                 result.push(',');
@@ -412,7 +413,7 @@ export class AALiteralExpression implements Expression {
 
         //close curly
         result.push(
-            new SourceNode(this.close.location.start.line, this.close.location.start.column, pkgPath, this.close.text)
+            new SourceNode(this.close.location.start.line, this.close.location.start.column, state.pkgPath, this.close.text)
         );
         return result;
     }
@@ -433,11 +434,10 @@ export class Unary implements Expression {
         };
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         return [
-            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, pkgPath, this.operator.text),
-            //TODO remove any cast
-            ...(this.right as any).transpile()
+            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, state.pkgPath, this.operator.text),
+            ...this.right.transpile(state)
         ];
     }
 }
@@ -453,9 +453,9 @@ export class Variable implements Expression {
         return this.name.location;
     }
 
-    transpile(pkgPath: string) {
+    transpile(state: TranspileState) {
         return [
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, pkgPath, this.name.text)
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pkgPath, this.name.text)
         ];
     }
 }
