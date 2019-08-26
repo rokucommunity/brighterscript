@@ -190,7 +190,7 @@ export class FunctionStatement implements Statement {
     }
 
     transpile(state: TranspileState) {
-        return this.func.transpile(state.pkgPath, this.name);
+        return this.func.transpile(state, this.name);
     }
 }
 

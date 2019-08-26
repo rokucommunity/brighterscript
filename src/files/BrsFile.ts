@@ -663,7 +663,10 @@ export class BrsFile {
                 chunks.push('\n');
             }
 
-            chunks.push(...statement.transpile(this.pkgPath));
+            chunks.push(...statement.transpile({
+                pkgPath: this.pkgPath,
+                blockDepth: 0
+            }));
         }
 
         let programNode = new SourceNode(null, null, this.pkgPath, chunks);
