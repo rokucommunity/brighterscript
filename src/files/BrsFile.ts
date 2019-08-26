@@ -31,6 +31,11 @@ export class BrsFile {
         public program: Program
     ) {
         this.extension = path.extname(pathAbsolute).toLowerCase();
+
+        //all BrighterScript files need to be transpiled
+        if (this.extension === '.bs') {
+            this.needsTranspiled = true;
+        }
     }
 
     /**
@@ -56,6 +61,11 @@ export class BrsFile {
     public functionCalls = [] as FunctionCall[];
 
     public functionScopes = [] as FunctionScope[];
+
+    /**
+     * Does this file need to be transpiled?
+     */
+    public needsTranspiled = false;
 
     /**
      * The AST for this file
@@ -124,7 +134,7 @@ export class BrsFile {
         this.tokens = preprocessorWasSuccessful ? (preprocessorResults.processedTokens as any) : lexResult.tokens;
 
         let parser = new Parser();
-        let parseResult = parser.parse(this.tokens);
+        let parseResult = parser.parse(this.tokens, this.extension === 'brs' ? 'brightscript' : 'brighterscript');
 
         let errors = [...lexResult.errors, ...<any>parseResult.errors, ...<any>preprocessorResults.errors];
 

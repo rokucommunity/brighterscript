@@ -18,6 +18,7 @@ let args = [
     { name: 'password', type: String, description: 'The password for deploying to a Roku.' },
     { name: 'ignore-error-codes', type: Number, multiple: true, description: ' A list of error codes that the compiler should NOT emit, even if encountered.' },
     { name: 'emit-full-paths', type: Boolean, description: 'Emit full paths to files when encountering diagnostics. Defaults to false' },
+    { name: 'retain-staging-folder', type: Boolean, description: 'Prevent the staging folder from being deleted after creating the package. Defaults to false' },
     { name: 'help', type: Boolean, description: 'View help information about this tool.' }
 ];
 const options = commandLineArgs(args, { camelCase: true });

@@ -265,8 +265,12 @@ export class Grouping implements Expression {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    transpile(pkgPath: string){
+        return [
+            new SourceNode(this.tokens.left.location.start.line, this.tokens.left.location.start.column, pkgPath, '('),
+            ...this.expression.transpile(pkgPath),
+            new SourceNode(this.tokens.right.location.start.line, this.tokens.right.location.start.column, pkgPath, ')'),
+        ];        
     }
 }
 

@@ -143,6 +143,37 @@ export class Util {
     }
 
     /**
+     * Do work within the context of a changed current working directory
+     * @param targetCwd
+     * @param callback
+     */
+    public cwdWork<T>(targetCwd: string | null | undefined, callback: () => T) {
+        let originalCwd = process.cwd();
+        if (targetCwd) {
+            process.chdir(targetCwd);
+        }
+
+        let result;
+        let err;
+
+        try {
+            result = callback();
+        } catch (e) {
+            err = e;
+        }
+
+        if (targetCwd) {
+            process.chdir(originalCwd);
+        }
+
+        if (err) {
+            throw err;
+        } else {
+            return result;
+        }
+    }
+
+    /**
      * Given a BsConfig object, start with defaults,
      * merge with bsconfig.json and the provided options.
      * @param config
@@ -184,6 +215,7 @@ export class Util {
         config.watch = config.watch === true ? true : false;
         config.ignoreErrorCodes = config.ignoreErrorCodes ? config.ignoreErrorCodes : [];
         config.emitFullPaths = config.emitFullPaths === true ? true : false;
+        config.retainStagingFolder = config.retainStagingFolder === true ? true : false;
         return config;
     }
 

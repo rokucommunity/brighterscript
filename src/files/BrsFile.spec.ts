@@ -26,6 +26,13 @@ describe('BrsFile', () => {
         sinon.restore();
     });
 
+    it('sets needsTranspiled to true for .bs files', () => {
+        //BrightScript
+        expect(new BrsFile(`${rootDir}/source/main.brs`, 'source/main.brs', program).needsTranspiled).to.be.false;
+        //BrighterScript
+        expect(new BrsFile(`${rootDir}/source/main.bs`, 'source/main.bs', program).needsTranspiled).to.be.true;
+    });
+
     describe('comment flags', () => {
         describe('brs:disable-next-line', () => {
             it('works for all', async () => {
@@ -187,7 +194,6 @@ describe('BrsFile', () => {
                     #end if
                 end sub
             `);
-            console.log(file.getDiagnostics());
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
@@ -199,7 +205,6 @@ describe('BrsFile', () => {
                     #end if
                 end sub
             `);
-            console.log(file.getDiagnostics());
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
@@ -1292,6 +1297,7 @@ describe('BrsFile', () => {
                     else
                         print "else"
                     end if
+                    someBool = (true or false) or ((true) or (false))
                     mylabel:
                     goto mylabel
                     age++

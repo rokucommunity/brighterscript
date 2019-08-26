@@ -194,7 +194,7 @@ export class ProgramBuilder {
                     ' - ' +
                     typeColor[diagnostic.severity](diagnostic.severity) +
                     ' ' +
-                    chalk.grey('BRS' + diagnostic.code) +
+                    chalk.grey('BS' + diagnostic.code) +
                     ': ' +
                     chalk.white(diagnostic.message)
                 );
@@ -209,8 +209,9 @@ export class ProgramBuilder {
                     squigglyLength = diagnosticLine.length - diagnostic.location.end.character;
                 }
                 let lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.location.start.line + 1).toString()) + ' ') + ' ';
+                let blankLineNumberText = chalk.bgWhite(' ' + chalk.bgWhite((diagnostic.location.start.line + 1).toString()) + ' ') + ' ';
                 console.log(lineNumberText + diagnosticLine);
-                console.log(lineNumberText +
+                console.log(blankLineNumberText +
                     typeColor[diagnostic.severity](
                         util.padLeft('', diagnostic.location.start.character, ' ') +
                         //print squigglies
@@ -243,7 +244,7 @@ export class ProgramBuilder {
             return errorCount;
         }
 
-        //create the deployment package
+        //create the deployment package (and transpile as well)
         await this.createPackageIfEnabled();
 
         //maybe cancel?
@@ -258,8 +259,29 @@ export class ProgramBuilder {
     private async createPackageIfEnabled() {
         //create the zip file if configured to do so
         if (this.options.skipPackage === false || this.options.deploy) {
+            let options = util.cwdWork(this.options.cwd, () => {
+                return rokuDeploy.getOptions({
+                    ...this.options,
+                    outDir: util.getOutDir(this.options),
+                    outFile: path.basename(this.options.outFile)
+                });
+            });
+            let stagingDir = rokuDeploy.getStagingFolderPath(options);
+
+            let fileMap = await rokuDeploy.getFilePaths(options.files, stagingDir, options.rootDir);
+
+            //exclude all BrighterScript files from publishing, because we will transpile them instead
+            options.files.push('!**/*.bs');
+
+            util.log('Copying to staging directory');
+            await rokuDeploy.prepublishToStaging(options);
+
+            util.log('Transpiling');
+            //transpile any brighterscript files
+            await this.program.transpile(fileMap);
+
             util.log(`Creating package at ${this.options.outFile}`);
-            await rokuDeploy.createPackage({
+            await rokuDeploy.zipPackage({
                 ...this.options,
                 outDir: util.getOutDir(this.options),
                 outFile: path.basename(this.options.outFile)

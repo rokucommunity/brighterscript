@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 
@@ -388,6 +389,31 @@ export class Program {
         }
 
         return file.getHover(position);
+    }
+
+    public async transpile(fileMaps: Array<{ src: string; dest: string; }>) {
+        let promises = Object.keys(this.files).map(async (filePath) => {
+            let file = this.files[filePath];
+            if (file.needsTranspiled) {
+                let result = file.transpile();
+                let filePathObj = fileMaps.find(x => x.src === file.pathAbsolute);
+
+                let outputCodePath = filePathObj.dest.replace(new RegExp('\.bs$'), '.brs');
+                let outputCodeMapPath = outputCodePath + '.map';
+
+                //make sure the full dir path exists
+                await fsExtra.ensureDir(path.dirname(outputCodePath));
+
+                if (await fsExtra.pathExists(outputCodePath)) {
+                    throw new Error(`Error while transpiling "${filePath}". A file already exists at "${outputCodePath}" and will not be overwritten.`);
+                }
+                await Promise.all([
+                    fsExtra.writeFile(outputCodePath, result.code),
+                    fsExtra.writeFile(outputCodeMapPath, result.map)
+                ]);
+            }
+        });
+        await Promise.all(promises);
     }
 
     public dispose() {

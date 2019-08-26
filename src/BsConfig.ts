@@ -68,4 +68,9 @@ export interface BsConfig {
      * Emit full paths to files when printing diagnostics to the console. Defaults to false
      */
     emitFullPaths?: boolean;
+    /**
+     * Prevent the staging folder from being deleted after creating the package
+     * @default false
+     */
+    retainStagingFolder?: boolean;
 }

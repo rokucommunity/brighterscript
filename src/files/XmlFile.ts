@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import * as path from 'path';
 import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
 
+import { CodeWithSourceMap } from 'source-map';
 import { diagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import { Callable, Diagnostic, File, FileReference, FunctionCall } from '../interfaces';
@@ -65,6 +66,11 @@ export class XmlFile {
      * Indicates if this file was processed by the program yet.
      */
     public wasProcessed = false;
+
+    /**
+     * Does this file need to be transpiled?
+     */
+    public needsTranspiled = false;
 
     public async parse(fileContents: string) {
         if (this.wasProcessed) {
@@ -427,6 +433,13 @@ export class XmlFile {
     public getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]): FunctionScope {
         //TODO implement
         return null;
+    }
+
+    /**
+     * Convert the brightscript/brighterscript source code into valid brightscript
+     */
+    public transpile(): CodeWithSourceMap {
+        throw new Error('Transpile is not implemented for XML files');
     }
 
     public dispose() {
