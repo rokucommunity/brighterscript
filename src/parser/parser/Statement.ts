@@ -334,12 +334,15 @@ export class IfStatement implements Statement {
             //condition
             results.push(...elseif.condition.transpile(state));
             //then
+            results.push(' ');
             if (elseif.thenToken) {
                 results.push(
-                    ' ',
                     new SourceNode(elseif.thenToken.location.start.line, elseif.thenToken.location.start.column, state.pkgPath, 'then')
                 );
+            } else {
+                results.push('then');
             }
+
             results.push('\n');
             //then body
             let body = elseif.thenBranch.transpile(state);

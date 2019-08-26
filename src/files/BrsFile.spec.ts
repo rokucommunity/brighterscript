@@ -1245,6 +1245,30 @@ describe('BrsFile', () => {
         `, null, 'trim');
         });
 
+        it('adds `then` when missing', async () => {
+            await testTranspile(`
+                sub a()
+                    if true
+                        print "true"
+                    else if true
+                        print "true"
+                    else
+                        print "true"
+                    end if
+                end sub
+            `, `
+                sub a()
+                    if true then
+                        print "true"
+                    else if true then
+                        print "true"
+                    else
+                        print "true"
+                    end if
+                end sub
+            `, 'trim');
+        });
+
         it('works for function parameters', async () => {
             await testTranspile(`
                 function DoSomething(name, age as integer, text as string)
