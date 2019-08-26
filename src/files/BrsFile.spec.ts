@@ -1277,6 +1277,12 @@ describe('BrsFile', () => {
                     age = 12 + 2
                     name = "tim"
                     age = 12
+                    while true
+                        age = age + 1
+                    end while
+                    while age < 12 or age < 15
+                        age++
+                    end while
                     if true or 1 = 1 or name = "tim" then
                         print false
                     else if false or "cat" = "dog" or true then

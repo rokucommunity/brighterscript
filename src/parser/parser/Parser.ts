@@ -759,7 +759,7 @@ export class Parser {
             return setStatement(...additionalterminators);
         }
 
-        function whileStatement(): Stmt.While {
+        function whileStatement(): Stmt.WhileStatement {
             const whileKeyword = advance();
             const condition = expression();
 
@@ -771,7 +771,7 @@ export class Parser {
             const endWhile = advance();
             while (match(Lexeme.Newline));
 
-            return new Stmt.While(
+            return new Stmt.WhileStatement(
                 { while: whileKeyword, endWhile: endWhile },
                 condition,
                 whileBlock

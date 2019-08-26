@@ -18,7 +18,7 @@ export interface Visitor<T> {
     visitBlock(block: Block): BrsType;
     visitFor(statement: ForStatement): BrsType;
     visitForEach(statement: ForEachStatement): BrsType;
-    visitWhile(statement: While): BrsType;
+    visitWhile(statement: WhileStatement): BrsType;
     visitNamedFunction(statement: FunctionStatement): BrsType;
     visitReturn(statement: Return): never;
     visitDottedSet(statement: DottedSetStatement): BrsType;
@@ -723,7 +723,7 @@ export class ForEachStatement implements Statement {
     }
 }
 
-export class While implements Statement {
+export class WhileStatement implements Statement {
     constructor(
         readonly tokens: {
             while: Token;
@@ -745,8 +745,33 @@ export class While implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    transpile(pkgPath: string) {
+        let result = [];
+        //while
+        result.push(
+            new SourceNode(this.tokens.while.location.start.line, this.tokens.while.location.start.column, pkgPath, 'while'),
+            ' '
+        );
+        //condition
+        result.push(
+            ...this.condition.transpile(pkgPath),
+        );
+        result.push('\n');
+        //body
+        result.push(...this.body.transpile(pkgPath));
+
+        //trailing newline only if we have body statements
+        if (this.body.statements.length > 0) {
+            result.push('\n');
+        }
+
+        //end while
+        result.push(
+            new SourceNode(this.tokens.endWhile.location.start.line, this.tokens.endWhile.location.start.column, pkgPath, 'end while'),
+            ' '
+        );
+
+        return result;
     }
 }
 
