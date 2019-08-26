@@ -1,7 +1,7 @@
 import { Range } from 'vscode-languageserver';
 
 import { VariableDeclaration } from './interfaces';
-import { Function as ExpressionFunction } from './parser/parser/Expression';
+import { FunctionExpression as ExpressionFunction } from './parser/parser/Expression';
 
 export class FunctionScope {
     constructor(

@@ -7,7 +7,7 @@ import { SourceNode } from 'source-map';
 export interface Visitor<T> {
     visitBinary(expression: Binary): T;
     visitCall(expression: Call): T;
-    visitAnonymousFunction(func: Function): T;
+    visitAnonymousFunction(func: FunctionExpression): T;
     visitDottedGet(expression: DottedGet): T;
     visitIndexedGet(expression: IndexedGetExpression): T;
     visitGrouping(expression: Grouping): T;
@@ -111,7 +111,7 @@ export class Call implements Expression {
     }
 }
 
-export class Function implements Expression {
+export class FunctionExpression implements Expression {
     constructor(
         readonly parameters: FunctionParameter[],
         readonly returns: ValueKind,

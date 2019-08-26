@@ -434,7 +434,7 @@ export class Parser {
             );
         }
 
-        function functionDeclaration(isAnonymous: true): Expr.Function;
+        function functionDeclaration(isAnonymous: true): Expr.FunctionExpression;
         function functionDeclaration(isAnonymous: false): FunctionStatement;
         function functionDeclaration(isAnonymous: boolean) {
             try {
@@ -572,7 +572,7 @@ export class Parser {
                     );
                 }
 
-                let func = new Expr.Function(
+                let func = new Expr.FunctionExpression(
                     args,
                     returnType,
                     body,

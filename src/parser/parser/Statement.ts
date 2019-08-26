@@ -178,7 +178,7 @@ export class ExitWhile implements Statement {
 }
 
 export class FunctionStatement implements Statement {
-    constructor(readonly name: Identifier, readonly func: Expr.Function) { }
+    constructor(readonly name: Identifier, readonly func: Expr.FunctionExpression) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
         return visitor.visitNamedFunction(this);
@@ -201,7 +201,7 @@ export class ClassMethodStatement implements Statement {
     constructor(
         readonly accessModifier: Token,
         readonly name: Identifier,
-        readonly func: Expr.Function
+        readonly func: Expr.FunctionExpression
     ) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {

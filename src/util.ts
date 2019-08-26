@@ -11,7 +11,7 @@ import { BsConfig } from './BsConfig';
 import { BrsFile } from './files/BrsFile';
 import { CallableContainer, Diagnostic, ValueKind } from './interfaces';
 import { Location } from './parser/lexer';
-import { Function as ExpressionFunction } from './parser/parser/Expression';
+import { FunctionExpression as ExpressionFunction } from './parser/parser/Expression';
 import { BooleanType } from './types/BooleanType';
 import { BrsType } from './types/BrsType';
 import { DoubleType } from './types/DoubleType';

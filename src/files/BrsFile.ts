@@ -267,14 +267,14 @@ export class BrsFile {
         }
     }
 
-    public scopesByFunc = new Map<brs.parser.Expr.Function, FunctionScope>();
+    public scopesByFunc = new Map<brs.parser.Expr.FunctionExpression, FunctionScope>();
 
     /**
      * Create a scope for every function in this file
      */
     private createFunctionScopes(lines: string[], statements: any, parent?: FunctionScope) {
         //find every function
-        let functions = util.findAllDeep<brs.parser.Expr.Function>(this.ast, (x) => x instanceof brs.parser.Expr.Function);
+        let functions = util.findAllDeep<brs.parser.Expr.FunctionExpression>(this.ast, (x) => x instanceof brs.parser.Expr.FunctionExpression);
 
         //create a functionScope for every function
         for (let kvp of functions) {
@@ -283,11 +283,11 @@ export class BrsFile {
 
             let ancestors = this.getAncestors(statements, kvp.key);
 
-            let parentFunc: brs.parser.Expr.Function;
+            let parentFunc: brs.parser.Expr.FunctionExpression;
             //find parent function, and add this scope to it if found
             {
                 for (let i = ancestors.length - 1; i >= 0; i--) {
-                    if (ancestors[i] instanceof brs.parser.Expr.Function) {
+                    if (ancestors[i] instanceof brs.parser.Expr.FunctionExpression) {
                         parentFunc = ancestors[i];
                         break;
                     }
@@ -372,7 +372,7 @@ export class BrsFile {
     private getBRSTypeFromAssignment(assignment: brs.parser.Stmt.AssignmentStatement, scope: FunctionScope): BrsType {
         try {
             //function
-            if (assignment.value instanceof brs.parser.Expr.Function) {
+            if (assignment.value instanceof brs.parser.Expr.FunctionExpression) {
                 let functionType = new FunctionType(util.valueKindToBrsType(assignment.value.returns));
                 functionType.isSub = assignment.value.functionType.text === 'sub';
                 if (functionType.isSub) {
