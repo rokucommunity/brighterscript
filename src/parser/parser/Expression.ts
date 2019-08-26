@@ -10,7 +10,7 @@ export interface Visitor<T> {
     visitCall(expression: Call): T;
     visitAnonymousFunction(func: Function): T;
     visitDottedGet(expression: DottedGet): T;
-    visitIndexedGet(expression: IndexedGet): T;
+    visitIndexedGet(expression: IndexedGetExpression): T;
     visitGrouping(expression: Grouping): T;
     visitLiteral(expression: Literal): T;
     visitArrayLiteral(expression: ArrayLiteralExpression): T;
@@ -204,10 +204,11 @@ export class DottedGet implements Expression {
     }
 }
 
-export class IndexedGet implements Expression {
+export class IndexedGetExpression implements Expression {
     constructor(
         readonly obj: Expression,
         readonly index: Expression,
+        readonly openingSquare: Token,
         readonly closingSquare: Token
     ) { }
 
@@ -223,8 +224,13 @@ export class IndexedGet implements Expression {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    transpile(pkgPath: string) {
+        return [
+            ...this.obj.transpile(pkgPath),
+            new SourceNode(this.openingSquare.location.start.line, this.openingSquare.location.start.column, pkgPath, '['),
+            ...this.index.transpile(pkgPath),
+            new SourceNode(this.closingSquare.location.start.line, this.closingSquare.location.start.column, pkgPath, ']')
+        ];
     }
 }
 

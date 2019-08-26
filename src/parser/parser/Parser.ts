@@ -825,7 +825,7 @@ export class Parser {
             );
         }
 
-        function forEachStatement(): Stmt.ForEach {
+        function forEachStatement(): Stmt.ForEachStatement {
             let forEach = advance();
             let name = advance();
 
@@ -850,7 +850,7 @@ export class Parser {
             let endFor = advance();
             while (match(Lexeme.Newline));
 
-            return new Stmt.ForEach(
+            return new Stmt.ForEachStatement(
                 {
                     forEach: forEach,
                     in: maybeIn,
@@ -1187,7 +1187,7 @@ export class Parser {
                 let right = expression();
 
                 // Create a dotted or indexed "set" based on the left-hand side's type
-                if (left instanceof Expr.IndexedGet) {
+                if (left instanceof Expr.IndexedGetExpression) {
                     consume(
                         "Expected newline or ':' after indexed 'set' statement",
                         Lexeme.Newline,
@@ -1201,6 +1201,7 @@ export class Parser {
                         operator.kind === Lexeme.Equal
                             ? right
                             : new Expr.Binary(left, operator, right),
+                        left.openingSquare,
                         left.closingSquare
                     );
                 } else if (left instanceof Expr.DottedGet) {
@@ -1474,6 +1475,7 @@ export class Parser {
                 if (match(Lexeme.LeftParen)) {
                     expr = finishCall(expr);
                 } else if (match(Lexeme.LeftSquare)) {
+                    let openingSquare = previous();
                     while (match(Lexeme.Newline));
 
                     let index = expression();
@@ -1484,7 +1486,7 @@ export class Parser {
                         Lexeme.RightSquare
                     );
 
-                    expr = new Expr.IndexedGet(expr, index, closingSquare);
+                    expr = new Expr.IndexedGetExpression(expr, index, openingSquare, closingSquare);
                 } else if (match(Lexeme.Dot)) {
                     while (match(Lexeme.Newline));
 

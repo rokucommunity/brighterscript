@@ -1271,7 +1271,13 @@ describe('BrsFile', () => {
                         2,
                         3
                     ]
+                    firstIndex = indexes[0]
+                    for each idx in indxes
+                        indexes[idx] = idx + 1
+                    end for
                     for i = 0 to 10 step 1
+                        name = "bob"
+                        age = 12
                     end for
                     callback = function(name, age as integer, cb as Function) as integer
                         return 12

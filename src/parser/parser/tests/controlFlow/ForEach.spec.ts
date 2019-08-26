@@ -29,7 +29,7 @@ describe('parser foreach loops', () => {
         expect(statements).to.exist;
 
         let forEach = statements[0];
-        expect(forEach).to.be.instanceof(Stmt.ForEach);
+        expect(forEach).to.be.instanceof(Stmt.ForEachStatement);
 
         expect(forEach.item).to.deep.include(identifier('word'));
         expect(forEach.target).to.be.instanceof(Expr.Variable);

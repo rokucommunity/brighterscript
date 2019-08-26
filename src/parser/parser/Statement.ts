@@ -17,7 +17,7 @@ export interface Visitor<T> {
     visitIf(statement: IfStatement): BrsType;
     visitBlock(block: Block): BrsType;
     visitFor(statement: ForStatement): BrsType;
-    visitForEach(statement: ForEach): BrsType;
+    visitForEach(statement: ForEachStatement): BrsType;
     visitWhile(statement: While): BrsType;
     visitNamedFunction(statement: FunctionStatement): BrsType;
     visitReturn(statement: Return): never;
@@ -675,7 +675,7 @@ export class ForStatement implements Statement {
     }
 }
 
-export class ForEach implements Statement {
+export class ForEachStatement implements Statement {
     constructor(
         readonly tokens: {
             forEach: Token;
@@ -699,8 +699,35 @@ export class ForEach implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    transpile(pkgPath: string) {
+        let result = [];
+        //for each
+        result.push(
+            new SourceNode(this.tokens.forEach.location.start.line, this.tokens.forEach.location.start.column, pkgPath, 'for each'),
+            ' '
+        );
+        //item
+        result.push(
+            new SourceNode(this.tokens.forEach.location.start.line, this.tokens.forEach.location.start.column, pkgPath, this.item.text),
+            ' '
+        );
+        //in
+        result.push(
+            new SourceNode(this.tokens.in.location.start.line, this.tokens.in.location.start.column, pkgPath, 'in'),
+            ' '
+        );
+        //target
+        result.push(...this.target.transpile(pkgPath));
+        result.push('\n');
+        //body
+        result.push(...this.body.transpile(pkgPath));
+        if (this.body.statements.length > 0) {
+            result.push('\n');
+        }
+        result.push(
+            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, pkgPath, 'end for'),
+        );
+        return result;
     }
 }
 
@@ -769,6 +796,7 @@ export class IndexedSetStatement implements Statement {
         readonly obj: Expr.Expression,
         readonly index: Expr.Expression,
         readonly value: Expr.Expression,
+        readonly openingSquare: Token,
         readonly closingSquare: Token
     ) { }
 
@@ -784,8 +812,21 @@ export class IndexedSetStatement implements Statement {
         };
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    transpile(pkgPath: string) {
+        return [
+            //obj
+            ...this.obj.transpile(pkgPath),
+            //   [
+            new SourceNode(this.openingSquare.location.start.line, this.openingSquare.location.start.column, pkgPath, '['),
+            //    index
+            ...this.index.transpile(pkgPath),
+            //         ]
+            new SourceNode(this.closingSquare.location.start.line, this.closingSquare.location.start.column, pkgPath, ']'),
+            //           =
+            ' = ',
+            //             value
+            ...this.value.transpile(pkgPath)
+        ];
     }
 }
 
