@@ -1227,7 +1227,7 @@ export class Parser {
             }
         }
 
-        function printStatement(...additionalterminators: BlockTerminator[]): Stmt.Print {
+        function printStatement(...additionalterminators: BlockTerminator[]): Stmt.PrintStatement {
             let printKeyword = advance();
 
             let values: (
@@ -1266,7 +1266,7 @@ export class Parser {
                 );
             }
 
-            return new Stmt.Print({ print: printKeyword }, values);
+            return new Stmt.PrintStatement({ print: printKeyword }, values);
         }
 
         /**

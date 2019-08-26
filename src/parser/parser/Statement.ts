@@ -14,7 +14,7 @@ export interface Visitor<T> {
     visitExpression(statement: ExpressionStatement): BrsType;
     visitExitFor(statement: ExitFor): never;
     visitExitWhile(statement: ExitWhile): never;
-    visitPrint(statement: Print): BrsType;
+    visitPrint(statement: PrintStatement): BrsType;
     visitIf(statement: IfStatement): BrsType;
     visitBlock(block: Block): BrsType;
     visitFor(statement: ForStatement): BrsType;
@@ -421,7 +421,7 @@ export namespace PrintSeparator {
 /**
  * Represents a `print` statement within BrightScript.
  */
-export class Print implements Statement {
+export class PrintStatement implements Statement {
     /**
      * Creates a new internal representation of a BrightScript `print` statement.
      * @param expressions an array of expressions or `PrintSeparator`s to be
