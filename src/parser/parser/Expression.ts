@@ -338,6 +338,7 @@ export class ArrayLiteralExpression implements Expression {
         result.push(
             new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pkgPath, '[')
         );
+        let hasChildren = this.elements.length > 0;
         state.blockDepth++;
         for (let i = 0; i < this.elements.length; i++) {
             if (i > 0) {
@@ -353,11 +354,12 @@ export class ArrayLiteralExpression implements Expression {
         }
         state.blockDepth--;
         //add a newline between open and close if there are elements
-        if (this.elements.length > 0) {
+        if (hasChildren) {
             result.push('\n');
+            result.push(indent(state.blockDepth));
         }
+
         result.push(
-            indent(state.blockDepth),
             new SourceNode(this.close.location.start.line, this.close.location.start.column, state.pkgPath, ']')
         );
         return result;
@@ -398,8 +400,12 @@ export class AALiteralExpression implements Expression {
         //open curly
         result.push(
             new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pkgPath, this.open.text),
-            '\n'
         );
+        let hasChildren = this.elements.length > 0;
+        //add newline if the object has children
+        if (hasChildren) {
+            result.push('\n');
+        }
         state.blockDepth++;
         for (let i = 0; i < this.elements.length; i++) {
             let element = this.elements[i];
@@ -427,9 +433,12 @@ export class AALiteralExpression implements Expression {
         }
         state.blockDepth--;
 
+        //only indent the closing curly if we have children
+        if (hasChildren) {
+            result.push(indent(state.blockDepth));
+        }
         //close curly
         result.push(
-            indent(state.blockDepth),
             new SourceNode(this.close.location.start.line, this.close.location.start.column, state.pkgPath, this.close.text)
         );
         return result;

@@ -1236,6 +1236,15 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('keeps empty AAs and arrays on same line', async () => {
+            await testTranspile(`
+                sub a()
+                    person = {}
+                    stuff = []
+                end sub
+        `, null, 'trim');
+        });
+
         it('works for function parameters', async () => {
             await testTranspile(`
                 function DoSomething(name, age as integer, text as string)
