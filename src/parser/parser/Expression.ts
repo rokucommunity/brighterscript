@@ -3,7 +3,6 @@ import { Token, Identifier, Location } from "../lexer";
 import { BrsType, ValueKind, BrsString, FunctionParameter } from "../brsTypes";
 import { Block } from "./Statement";
 import { SourceNode } from 'source-map';
-import util from '../../util';
 
 export interface Visitor<T> {
     visitBinary(expression: Binary): T;
@@ -71,6 +70,7 @@ export class Call implements Expression {
 
     constructor(
         readonly callee: Expression,
+        readonly openingParen: Token,
         readonly closingParen: Token,
         readonly args: Expression[]
     ) { }
@@ -88,15 +88,23 @@ export class Call implements Expression {
     }
 
     transpile(pkgPath: string) {
-        return [
-            //TODO remove any cast
-            ...(this.callee as any).transpile(pkgPath),
-            '(',
-            //TODO does this work the way it should?
-            //TODO remove any cast
-            ...util.flatMap(this.args, x => (x as any).transpile(pkgPath)),
-            ')'
-        ];
+        let result = [];
+        result.push(...this.callee.transpile(pkgPath));
+        result.push(
+            new SourceNode(this.openingParen.location.start.line, this.openingParen.location.start.column, pkgPath, '(')
+        );
+        for (let i = 0; i < this.args.length; i++) {
+            //add comma between args
+            if (i > 0) {
+                result.push(', ');
+            }
+            let arg = this.args[i];
+            result.push(...arg.transpile(pkgPath));
+        }
+        result.push(
+            new SourceNode(this.closingParen.location.start.line, this.closingParen.location.start.column, pkgPath, ')')
+        );
+        return result;
     }
 }
 

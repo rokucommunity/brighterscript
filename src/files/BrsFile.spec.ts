@@ -1313,6 +1313,10 @@ describe('BrsFile', () => {
                         returnValue = 12
                         return returnValue
                     end function
+                    a(1, 2, 3)
+                    person.functionCall(1, 2, 3)
+                end function
+                function a(p1, p2, p3)
                 end function
             `);
         });

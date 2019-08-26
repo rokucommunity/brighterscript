@@ -1131,14 +1131,14 @@ export class Parser {
 
         function setStatement(
             ...additionalTerminators: BlockTerminator[]
-        ): Stmt.DottedSetStatement | Stmt.IndexedSetStatement | Stmt.Expression | Stmt.IncrementStatement {
+        ): Stmt.DottedSetStatement | Stmt.IndexedSetStatement | Stmt.ExpressionStatement | Stmt.IncrementStatement {
             /**
              * Attempts to find an expression-statement or an increment statement.
              * While calls are valid expressions _and_ statements, increment (e.g. `foo++`)
              * statements aren't valid expressions. They _do_ however fall under the same parsing
              * priority as standalone function calls though, so we can parse them in the same way.
              */
-            function _expressionStatement(): Stmt.Expression | Stmt.IncrementStatement {
+            function _expressionStatement(): Stmt.ExpressionStatement | Stmt.IncrementStatement {
                 let expressionStart = peek();
 
                 if (check(Lexeme.PlusPlus, Lexeme.MinusMinus)) {
@@ -1171,7 +1171,7 @@ export class Parser {
                 }
 
                 if (expr instanceof Expr.Call) {
-                    return new Stmt.Expression(expr);
+                    return new Stmt.ExpressionStatement(expr);
                 }
 
                 throw addError(
@@ -1473,7 +1473,7 @@ export class Parser {
 
             while (true) {
                 if (match(Lexeme.LeftParen)) {
-                    expr = finishCall(expr);
+                    expr = finishCall(previous(), expr);
                 } else if (match(Lexeme.LeftSquare)) {
                     let openingSquare = previous();
                     while (match(Lexeme.Newline));
@@ -1508,7 +1508,7 @@ export class Parser {
             return expr;
         }
 
-        function finishCall(callee: Expression): Expression {
+        function finishCall(openingParen: Token, callee: Expression): Expression {
             let args = [] as Expression[];
             while (match(Lexeme.Newline));
 
@@ -1532,7 +1532,7 @@ export class Parser {
                 Lexeme.RightParen
             );
 
-            return new Expr.Call(callee, closingParen, args);
+            return new Expr.Call(callee, openingParen, closingParen, args);
         }
 
         function primary(): Expression {

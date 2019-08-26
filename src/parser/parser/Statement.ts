@@ -10,7 +10,7 @@ export * from "./BlockEndReason";
 
 export interface Visitor<T> {
     visitAssignment(statement: AssignmentStatement): BrsType;
-    visitExpression(statement: Expression): BrsType;
+    visitExpression(statement: ExpressionStatement): BrsType;
     visitExitFor(statement: ExitFor): never;
     visitExitWhile(statement: ExitWhile): never;
     visitPrint(statement: Print): BrsType;
@@ -112,8 +112,10 @@ export class Block implements Statement {
     }
 }
 
-export class Expression implements Statement {
-    constructor(readonly expression: Expr.Expression) { }
+export class ExpressionStatement implements Statement {
+    constructor(
+        readonly expression: Expr.Expression
+    ) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
         return visitor.visitExpression(this);
@@ -123,8 +125,8 @@ export class Expression implements Statement {
         return this.expression.location;
     }
 
-    transpile(pkgPath: string): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+    transpile(pkgPath: string) {
+        return this.expression.transpile(pkgPath);
     }
 }
 
@@ -443,7 +445,7 @@ export class Print implements Statement {
         for (let i = 0; i < this.expressions.length; i++) {
             let expression: any = this.expressions[i];
             if (expression.transpile) {
-                result.push(...(expression as Expression).transpile(pkgPath));
+                result.push(...(expression as ExpressionStatement).transpile(pkgPath));
             } else {
                 //skip these because I think they are bogus items only added for use in the runtime
             }
