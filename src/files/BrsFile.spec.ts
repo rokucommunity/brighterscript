@@ -1338,6 +1338,9 @@ describe('BrsFile', () => {
                     for each idx in indxes
                         indexes[idx] = idx + 1
                     end for
+                    if not true then
+                        print "false"
+                    end if
                     for i = 0 to 10 step 1
                         name = "bob"
                         age = 12

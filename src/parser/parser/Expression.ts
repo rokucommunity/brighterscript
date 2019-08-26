@@ -463,6 +463,7 @@ export class Unary implements Expression {
     transpile(state: TranspileState) {
         return [
             new SourceNode(this.operator.location.start.line, this.operator.location.start.column, state.pkgPath, this.operator.text),
+            ' ',
             ...this.right.transpile(state)
         ];
     }
