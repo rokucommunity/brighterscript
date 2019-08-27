@@ -321,8 +321,13 @@ export class Parser {
                 }
 
                 if (check(Lexeme.SingleLineComment)) {
-                    return singleLineCommentStatement();
+                    let stmt = singleLineCommentStatement();
+                    //scrap consecutive newlines
+                    while (match(Lexeme.Newline));
+                    return stmt;
                 }
+                let nextThing = peek();
+                nextThing = nextThing;
 
                 return statement(...additionalTerminators);
             } catch (error) {
@@ -884,8 +889,6 @@ export class Parser {
 
         function singleLineCommentStatement() {
             let result = new Stmt.SingleLineCommentStatement(advance());
-            //consume trailing newlines
-            while (match(Lexeme.Newline));
             return result;
         }
 
@@ -975,6 +978,11 @@ export class Parser {
                 thenToken = advance();
             }
 
+            let comment: Stmt.SingleLineCommentStatement;
+            if (check(Lexeme.SingleLineComment)) {
+                comment = singleLineCommentStatement();
+            }
+
             if (match(Lexeme.Newline) || match(Lexeme.Colon)) {
                 //consume until no more colons
                 while (check(Lexeme.Colon)) {
@@ -1006,7 +1014,10 @@ export class Parser {
                         "Expected 'end if', 'else if', or 'else' to terminate 'then' block"
                     );
                 }
-
+                //add any comment from the same line as the if statement
+                if (comment) {
+                    maybeThenBranch.statements.unshift(comment);
+                }
                 let blockEnd = previous();
                 if (blockEnd.kind === Lexeme.EndIf) {
                     endIfToken = blockEnd;
@@ -1099,6 +1110,11 @@ export class Parser {
                     );
                 }
                 thenBranch = new Stmt.Block([thenStatement], peek().location);
+
+                //add any comment from the same line as the if statement
+                if (comment) {
+                    thenBranch.statements.unshift(comment);
+                }
 
                 while (match(Lexeme.ElseIf)) {
                     let elseIf = previous();
