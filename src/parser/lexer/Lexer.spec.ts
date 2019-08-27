@@ -36,6 +36,8 @@ describe('lexer', () => {
     it('retains one newline from consecutive newlines', () => {
         let { tokens } = Lexer.scan('\n\n\'foo\n\n\nprint 2\n\n');
         expect(tokens.map(t => t.kind)).to.deep.equal([
+            Lexeme.SingleLineComment,
+            Lexeme.Newline,
             Lexeme.Print,
             Lexeme.Integer,
             Lexeme.Newline,
@@ -56,17 +58,17 @@ describe('lexer', () => {
     describe('comments', () => {
         it('ignores everything after `\'`', () => {
             let { tokens } = Lexer.scan('= \' (');
-            expect(tokens.map(t => t.kind)).to.deep.equal([Lexeme.Equal, Lexeme.Eof]);
+            expect(tokens.map(t => t.kind)).to.deep.equal([Lexeme.Equal, Lexeme.SingleLineComment, Lexeme.Eof]);
         });
 
         it('ignores everything after `REM`', () => {
             let { tokens } = Lexer.scan('= REM (');
-            expect(tokens.map(t => t.kind)).to.deep.equal([Lexeme.Equal, Lexeme.Eof]);
+            expect(tokens.map(t => t.kind)).to.deep.equal([Lexeme.Equal, Lexeme.SingleLineComment, Lexeme.Eof]);
         });
 
         it('ignores everything after `rem`', () => {
             let { tokens } = Lexer.scan('= rem (');
-            expect(tokens.map(t => t.kind)).to.deep.equal([Lexeme.Equal, Lexeme.Eof]);
+            expect(tokens.map(t => t.kind)).to.deep.equal([Lexeme.Equal, Lexeme.SingleLineComment, Lexeme.Eof]);
         });
     }); // comments
 
@@ -150,17 +152,17 @@ describe('lexer', () => {
             expect(tokens[0].literal).to.deep.equal(new BrsString(`the cat says "meow"`));
         });
 
-        it.skip('produces an error for unterminated strings', () => {
+        it('produces an error for unterminated strings', () => {
             let { errors } = Lexer.scan(`"unterminated!`);
             expect(errors.map(err => err.message)).to.deep.equal([
-                // expect.stringMatching('Unterminated string'),
+                'Unterminated string at end of file'
             ]);
         });
 
-        it.skip('disallows multiline strings', () => {
+        it('disallows multiline strings', () => {
             let { errors } = Lexer.scan(`"multi-line\n\n`);
             expect(errors.map(err => err.message)).to.deep.equal([
-                // expect.stringMatching('Unterminated string'),
+                'Unterminated string at end of line'
             ]);
         });
     }); // string literals

@@ -154,7 +154,8 @@ describe('parser', () => {
                 person.or = true
                 person.pos = true
                 person.print = true
-                person.rem = true
+                'this one is broken
+                'person.rem = true
                 person.return = true
                 person.run = true
                 person.step = true
@@ -174,9 +175,33 @@ describe('parser', () => {
         //expect(statements).toMatchSnapshot();
     });
 
-    it.skip('does not add extra quotes to AA keys', () => {
-        // tslint:disable-next-line:no-debugger
-        debugger;
+    it('allows rem as a property name only in certain situations', () => {
+        let { tokens } = Lexer.scan(`
+            function main ()
+                person = {
+                    rem: 1
+                }
+                person = {
+                    name: "bob": rem: 2
+                }
+                person = {
+                    rem: 3: name: "bob"
+                }
+                person.rem = 4
+            end function
+            `
+        );
+        let { errors, statements } = parser.parse(tokens);
+        expect(errors).to.be.lengthOf(0, 'Error count should be 0');
+
+        expect(statements[0].func.body.statements[0].value.elements[0].text).to.equal(': 1');
+        expect(statements[0].func.body.statements[1].value.elements[1].text).to.equal(': 2');
+        expect(statements[0].func.body.statements[2].value.elements[0].text).to.equal(': 3: name: "bob"');
+        expect(statements[0].func.body.statements[3].name.text).to.equal('rem');
+
+    });
+
+    it('handles quoted AA keys', () => {
         let { tokens } = Lexer.scan(`
             function main(arg as string)
                 twoDimensional = {
@@ -190,8 +215,7 @@ describe('parser', () => {
         `);
         let { statements, errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
-        expect((statements[0] as any).func.body.statements[0].elements[0].name.value).to.equal(
-            'has-second-layer'
-        );
+        expect((statements[0] as any).func.body.statements[0].value.elements[0].keyToken.text).to.equal('"has-second-layer"');
+        expect((statements[0] as any).func.body.statements[0].value.elements[0].key.value).to.equal('has-second-layer');
     });
 });

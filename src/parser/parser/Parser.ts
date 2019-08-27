@@ -1217,7 +1217,7 @@ export class Parser {
                     return new Stmt.IncrementStatement(expr, operator);
                 }
 
-                if (!check(...additionalTerminators)) {
+                if (!check(...additionalTerminators, Lexeme.SingleLineComment)) {
                     consume(
                         "Expected newline or ':' after expression statement",
                         Lexeme.Newline,
@@ -1299,7 +1299,7 @@ export class Parser {
                 values.push(expression());
             }
 
-            while (!check(Lexeme.Newline, Lexeme.Colon, ...additionalterminators) && !isAtEnd()) {
+            while (!check(Lexeme.Newline, Lexeme.Colon, ...additionalterminators, Lexeme.SingleLineComment) && !isAtEnd()) {
                 if (check(Lexeme.Semicolon)) {
                     values.push(advance() as Stmt.PrintSeparator.Space);
                 }
@@ -1313,7 +1313,7 @@ export class Parser {
                 }
             }
 
-            if (!check(...additionalterminators)) {
+            if (!check(...additionalterminators, Lexeme.SingleLineComment)) {
                 consume(
                     "Expected newline or ':' after printed values",
                     Lexeme.Newline,
@@ -1649,7 +1649,7 @@ export class Parser {
                     return new Expr.ArrayLiteralExpression(elements, openingSquare, closingSquare);
                 case match(Lexeme.LeftBrace):
                     let openingBrace = previous();
-                    let members: Expr.AAMember[] = [];
+                    let members: Array<Expr.AAMember | Stmt.SingleLineCommentStatement> = [];
 
                     var key = () => {
                         let result = {
@@ -1681,27 +1681,35 @@ export class Parser {
                     while (match(Lexeme.Newline));
 
                     if (!match(Lexeme.RightBrace)) {
-                        let k = key();
-                        members.push({
-                            key: k.key,
-                            keyToken: k.keyToken,
-                            colonToken: k.colonToken,
-                            value: expression(),
-                        });
-
-                        while (match(Lexeme.Comma, Lexeme.Newline, Lexeme.Colon)) {
-                            while (match(Lexeme.Newline, Lexeme.Colon));
-
-                            if (check(Lexeme.RightBrace)) {
-                                break;
-                            }
-                            k = key();
+                        if (check(Lexeme.SingleLineComment)) {
+                            members.push(advance() as any);
+                        } else {
+                            let k = key();
                             members.push({
                                 key: k.key,
                                 keyToken: k.keyToken,
                                 colonToken: k.colonToken,
                                 value: expression(),
                             });
+                        }
+
+                        while (match(Lexeme.Comma, Lexeme.Newline, Lexeme.Colon)) {
+                            if (check(Lexeme.SingleLineComment)) {
+                                members.push(advance() as any);
+                            } else {
+                                while (match(Lexeme.Newline, Lexeme.Colon));
+
+                                if (check(Lexeme.RightBrace)) {
+                                    break;
+                                }
+                                let k = key();
+                                members.push({
+                                    key: k.key,
+                                    keyToken: k.keyToken,
+                                    colonToken: k.colonToken,
+                                    value: expression(),
+                                });
+                            }
                         }
 
                         consume(

@@ -19,6 +19,18 @@ describe('parser', () => {
 
     describe('parse', () => {
         describe('comments', () => {
+            it('works after print statement', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        print "hi" 'comment 1
+                    end sub
+                `);
+                let { errors, statements } = parser.parse(tokens);
+                expect(errors).to.be.lengthOf(0, 'Error count should be 0');
+
+                expect((statements as any)[0].func.body.statements[1].comment.text).to.equal('comment 1');
+            });
+
             it('declaration-level', () => {
                 let { tokens } = Lexer.scan(`
                     'comment 1
@@ -30,6 +42,19 @@ describe('parser', () => {
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
                 expect((statements as any)[0].comment.text).to.equal('comment 1');
                 expect((statements as any)[2].comment.text).to.equal('comment 2');
+            });
+
+            it('parses after function call', () => {
+                let { tokens } = Lexer.scan(`
+                    sub Main()
+                        name = "Hello"
+                        DoSomething(name) 'comment 1
+                    end sub
+                `);
+                let { errors, statements } = parser.parse(tokens) as any;
+                expect(errors).to.be.lengthOf(0, 'Should have zero errors');
+
+                expect(statements[0].func.body.statements[2].comment.text).to.equal('comment 1');
             });
 
             it('function', () => {

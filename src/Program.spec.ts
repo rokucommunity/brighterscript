@@ -368,10 +368,11 @@ describe('Program', () => {
         });
 
         it('identifies invocation of unknown function', async () => {
+            //call a function that doesn't exist
             await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
                 sub Main()
                     name = "Hello"
-                    DoSomething(name) ' call a function that doesn't exist
+                    DoSomething(name)
                 end sub
             `);
 

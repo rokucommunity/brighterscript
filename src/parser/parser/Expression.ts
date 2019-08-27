@@ -1,7 +1,7 @@
 //tslint:disable
 import { Token, Identifier, Location } from "../lexer";
 import { BrsType, ValueKind, BrsString, FunctionParameter } from "../brsTypes";
-import { Block } from "./Statement";
+import { Block, SingleLineCommentStatement } from "./Statement";
 import { SourceNode } from 'source-map';
 
 export interface Visitor<T> {
@@ -378,7 +378,7 @@ export interface AAMember {
 
 export class AALiteralExpression implements Expression {
     constructor(
-        readonly elements: AAMember[],
+        readonly elements: Array<AAMember | SingleLineCommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) { }
@@ -414,20 +414,26 @@ export class AALiteralExpression implements Expression {
             if (i < 10) {
                 result.push(indent(state.blockDepth));
             }
-            //key
-            result.push(
-                new SourceNode(element.keyToken.location.start.line, element.keyToken.location.start.column, state.pkgPath, element.keyToken.text)
-            );
-            //colon
-            result.push(
-                new SourceNode(element.colonToken.location.start.line, element.colonToken.location.start.column, state.pkgPath, ':'),
-                ' '
-            );
-            //value
-            result.push(...element.value.transpile(state))
-            //if not final element, add trailing comma 
-            if (i !== this.elements.length - 1) {
-                result.push(',');
+
+            //render comments
+            if (element instanceof SingleLineCommentStatement) {
+                result.push(...element.transpile(state));
+            } else {
+                //key
+                result.push(
+                    new SourceNode(element.keyToken.location.start.line, element.keyToken.location.start.column, state.pkgPath, element.keyToken.text)
+                );
+                //colon
+                result.push(
+                    new SourceNode(element.colonToken.location.start.line, element.colonToken.location.start.column, state.pkgPath, ':'),
+                    ' '
+                );
+                //value
+                result.push(...element.value.transpile(state))
+                //if not final element, add trailing comma 
+                if (i !== this.elements.length - 1) {
+                    result.push(',');
+                }
             }
             result.push('\n');
         }

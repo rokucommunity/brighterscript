@@ -1224,6 +1224,8 @@ describe('BrsFile', () => {
                 end function
             `, `
                 function DoSomething()
+                    'lots of empty white space
+                    'that will be removed during transpile
                 end function
             `);
         });

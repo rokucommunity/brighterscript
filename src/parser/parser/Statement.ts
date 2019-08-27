@@ -6,9 +6,6 @@ import { SourceNode } from 'source-map';
 import { Stmt } from '.';
 import { TranspileState, indent } from './Expression';
 
-/** A set of reasons why a `Block` stopped executing. */
-export * from "./BlockEndReason";
-
 export interface Visitor<T> {
     visitAssignment(statement: AssignmentStatement): BrsType;
     visitExpression(statement: ExpressionStatement): BrsType;

@@ -649,18 +649,23 @@ export class Lexer {
 
             let tokenType = KeyWords[text.toLowerCase()] || Lexeme.Identifier;
             if (tokenType === KeyWords.rem) {
-                // The 'rem' keyword can be used to indicate comments as well, so
-                // consume the rest of the line
-                let comment = '';
-                while (peek() !== "\n" && !isAtEnd()) {
-                    comment += advance();
+                //if this comes after a period, treat it like an object property
+                if (tokens[tokens.length - 1].kind === Lexeme.Dot) {
+                    addToken(Lexeme.Identifier);
+                } else {
+                    // The 'rem' keyword can be used to indicate comments as well, so
+                    // consume the rest of the line
+                    let comment = '';
+                    while (peek() !== "\n" && !isAtEnd()) {
+                        comment += advance();
+                    }
+                    tokens.push({
+                        text: comment,
+                        isReserved: false,
+                        kind: Lexeme.SingleLineComment,
+                        location: locationOf(comment),
+                    });
                 }
-                tokens.push({
-                    text: comment,
-                    isReserved: false,
-                    kind: Lexeme.SingleLineComment,
-                    location: locationOf(comment),
-                });
             } else {
                 addToken(tokenType);
             }
