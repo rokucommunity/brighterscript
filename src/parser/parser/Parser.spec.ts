@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import { diagnosticMessages } from '../../DiagnosticMessages';
 import { Lexeme, Lexer } from '../lexer';
 import { Parser } from './Parser';
-import { ClassFieldStatement, ClassStatement, FunctionStatement, SingleLineCommentStatement } from './Statement';
+import { ClassFieldStatement, ClassStatement } from './Statement';
 
 describe('parser', () => {
     let parser: Parser;
@@ -18,82 +18,138 @@ describe('parser', () => {
     });
 
     describe('parse', () => {
-        describe.only('comments', () => {
-            it('parses declaration-level comments', () => {
+        describe('comments', () => {
+            it('declaration-level', () => {
                 let { tokens } = Lexer.scan(`
-                    'a comment
+                    'comment 1
                     function a()
                     end function
+                    'comment 2
                 `);
                 let { errors, statements } = parser.parse(tokens);
-                expect((statements as any)[0].comment.text).to.equal('a comment');
-                expect(errors).to.be.lengthOf(0);
+                expect(errors).to.be.lengthOf(0, 'Error count should be 0');
+                expect((statements as any)[0].comment.text).to.equal('comment 1');
+                expect((statements as any)[2].comment.text).to.equal('comment 2');
             });
 
-            it('parses comment at end of function declaration first line', () => {
+            it('function', () => {
                 let { tokens } = Lexer.scan(`
-                    function a() 'a comment
-                    end function
-                `);
-                let { errors, statements } = parser.parse(tokens);
-                expect(errors).to.be.lengthOf(0);
-                let comment = (statements[0] as FunctionStatement).func.body.statements[0] as SingleLineCommentStatement;
-                expect(comment.comment.text).to.equal('a comment');
-            });
-
-            it('parses comment in function body', () => {
-                let { tokens } = Lexer.scan(`
-                    function a()
-                        'comment 1
-                        num = 1
+                    function a() 'comment 1
                         'comment 2
-                    end function
+                        num = 1
+                        'comment 3
+                    end function 'comment 4
                 `);
-                let { errors, statements } = parser.parse(tokens);
+                let { errors, statements } = parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Should have zero errors');
-                let comment = (statements[0] as FunctionStatement).func.body.statements[0] as SingleLineCommentStatement;
-                expect(comment.comment.text).to.equal('comment 1');
-                comment = (statements[0] as FunctionStatement).func.body.statements[2] as SingleLineCommentStatement;
-                expect(comment.comment.text).to.equal('comment 2');
+
+                expect(statements[0].func.body.statements[0].comment.text).to.equal('comment 1');
+                expect(statements[0].func.body.statements[1].comment.text).to.equal('comment 2');
+                expect(statements[0].func.body.statements[3].comment.text).to.equal('comment 3');
+                expect(statements[1].comment.text).to.equal('comment 4');
             });
 
-            it('parses comment at end of `end function`', () => {
+            it('if statement`', () => {
                 let { tokens } = Lexer.scan(`
                     function a()
-                    end function 'a comment
-                `);
-                let { errors, statements } = parser.parse(tokens);
-                expect(errors).to.be.lengthOf(0, 'Error count should be zero');
-                expect((statements as any)[1].comment.text).to.equal('a comment');
-            });
-
-            it('parses comments at end of if statement declaration`', () => {
-                let { tokens } = Lexer.scan(`
-                    function a()
-                        if true then 'a comment
+                        if true then 'comment 1
+                            'comment 2
                             print "hello"
-                        end if
+                            'comment 3
+                        else if true then 'comment 4
+                            'comment 5
+                            print "hello"
+                            'comment 6
+                        else 'comment 7
+                            'comment 8
+                            print "hello"
+                            'comment 9
+                        end if 'comment 10
                     end function
                 `);
-                let { errors, statements } = parser.parse(tokens);
-                expect(errors).to.be.lengthOf(0, 'Error count should be zero');
-                let stmt = (statements as any)[0].func.body.statements[0].thenBranch.statements[0] as SingleLineCommentStatement;
-                expect(stmt.comment.text).to.equal('a comment');
+                let { errors, statements } = parser.parse(tokens) as any;
+                expect(errors).to.be.lengthOf(0, 'Should have zero errors');
+                let ifStmt = statements[0].func.body.statements[0] as any;
+
+                expect(ifStmt.thenBranch.statements[0].comment.text).to.equal('comment 1');
+                expect(ifStmt.thenBranch.statements[1].comment.text).to.equal('comment 2');
+                expect(ifStmt.thenBranch.statements[3].comment.text).to.equal('comment 3');
+
+                expect(ifStmt.elseIfs[0].thenBranch.statements[0].comment.text).to.equal('comment 4');
+                expect(ifStmt.elseIfs[0].thenBranch.statements[1].comment.text).to.equal('comment 5');
+                expect(ifStmt.elseIfs[0].thenBranch.statements[3].comment.text).to.equal('comment 6');
+
+                expect(ifStmt.elseBranch.statements[0].comment.text).to.equal('comment 7');
+                expect(ifStmt.elseBranch.statements[1].comment.text).to.equal('comment 8');
+                expect(ifStmt.elseBranch.statements[3].comment.text).to.equal('comment 9');
+
+                expect(statements[0].func.body.statements[1].comment.text).to.equal('comment 10');
+
             });
 
-            it('parses comments at end of `end if keyword`', () => {
+            it('while', () => {
                 let { tokens } = Lexer.scan(`
                     function a()
-                        if true then
-                            print "hello"
-                        end if 'a comment
+                        while true 'comment 1
+                            'comment 2
+                            print "true"
+                            'comment 3
+                        end while 'comment 4
                     end function
                 `);
-                let { errors, statements } = parser.parse(tokens);
+                let { errors, statements } = parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be zero');
-                let stmt = (statements as any)[0].func.body.statements[1] as SingleLineCommentStatement;
-                expect(stmt.comment.text).to.equal('a comment');
+                let stmt = statements[0].func.body.statements[0] as any;
+
+                expect(stmt.body.statements[0].comment.text).to.equal('comment 1');
+                expect(stmt.body.statements[1].comment.text).to.equal('comment 2');
+                expect(stmt.body.statements[3].comment.text).to.equal('comment 3');
+
+                expect(statements[0].func.body.statements[1].comment.text).to.equal('comment 4');
             });
+
+            it('for', () => {
+                let { tokens } = Lexer.scan(`
+                    function a()
+                        for i = 0 to 10 step 1 'comment 1
+                            'comment 2
+                            print 1
+                            'comment 3
+                        end for 'comment 4
+                    end function
+                `);
+                let { errors, statements } = parser.parse(tokens) as any;
+                expect(errors).to.be.lengthOf(0, 'Error count should be zero');
+                let stmt = statements[0].func.body.statements[0] as any;
+
+                expect(stmt.body.statements[0].comment.text).to.equal('comment 1');
+                expect(stmt.body.statements[1].comment.text).to.equal('comment 2');
+                expect(stmt.body.statements[3].comment.text).to.equal('comment 3');
+
+                expect(statements[0].func.body.statements[1].comment.text).to.equal('comment 4');
+            });
+
+            it('for each', () => {
+                let { tokens } = Lexer.scan(`
+                    function a()
+                        for each val in [1,2,3] 'comment 1
+                            'comment 2
+                            print 1
+                            'comment 3
+                        end for 'comment 4
+                    end function
+                `);
+                let { errors, statements } = parser.parse(tokens) as any;
+                expect(errors).to.be.lengthOf(0, 'Error count should be zero');
+                let stmt = statements[0].func.body.statements[0] as any;
+
+                expect(stmt.body.statements[0].comment.text).to.equal('comment 1');
+                expect(stmt.body.statements[1].comment.text).to.equal('comment 2');
+                expect(stmt.body.statements[3].comment.text).to.equal('comment 3');
+
+                expect(statements[0].func.body.statements[1].comment.text).to.equal('comment 4');
+            });
+
         });
     });
 

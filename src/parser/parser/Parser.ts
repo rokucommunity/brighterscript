@@ -781,11 +781,22 @@ export class Parser {
             const whileKeyword = advance();
             const condition = expression();
 
+            let comment: Stmt.SingleLineCommentStatement;
+            if (check(Lexeme.SingleLineComment)) {
+                comment = singleLineCommentStatement();
+            }
+
             consume("Expected newline after 'while ...condition...'", Lexeme.Newline);
             const whileBlock = block(Lexeme.EndWhile);
             if (!whileBlock) {
                 throw addError(peek(), "Expected 'end while' to terminate while-loop block");
             }
+
+            //set comment as first statement in block
+            if (comment) {
+                whileBlock.statements.unshift(comment);
+            }
+
             const endWhile = advance();
             while (match(Lexeme.Newline));
 
@@ -858,12 +869,21 @@ export class Parser {
             if (!target) {
                 throw addError(peek(), "Expected target object to iterate over");
             }
+            let comment: Stmt.SingleLineCommentStatement;
+            if (check(Lexeme.SingleLineComment)) {
+                comment = singleLineCommentStatement();
+            }
             advance();
             while (match(Lexeme.Newline));
 
             let body = block(Lexeme.EndFor, Lexeme.Next);
             if (!body) {
                 throw addError(peek(), "Expected 'end for' or 'next' to terminate for-loop block");
+            }
+
+            //add comment to beginning of block of avaiable
+            if (comment) {
+                body.statements.unshift(comment);
             }
             let endFor = advance();
             while (match(Lexeme.Newline));
