@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events';
 import * as path from 'path';
+import { CodeWithSourceMap } from 'source-map';
 import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
 
-import { CodeWithSourceMap } from 'source-map';
 import { diagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import { Callable, Diagnostic, File, FileReference, FunctionCall } from '../interfaces';
