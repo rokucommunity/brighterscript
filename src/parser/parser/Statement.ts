@@ -155,8 +155,10 @@ export class CommentStatement implements Statement {
         let result = [];
         for (let i = 0; i < this.comments.length; i++) {
             let comment = this.comments[i];
+            if (i > 0) {
+                result.push(indent(state.blockDepth));
+            }
             result.push(
-                indent(state.blockDepth),
                 `'`,
                 new SourceNode(comment.location.start.line, comment.location.start.column, state.pkgPath, comment.text),
             );

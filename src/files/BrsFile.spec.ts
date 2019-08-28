@@ -1365,7 +1365,8 @@ describe('BrsFile', () => {
             `, null, 'trim');
         });
 
-        async function testTranspile(source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'format') {
+        async function testTranspile(source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'trim') {
+            let formatter = new BrightScriptFormatter();
             expected = expected ? expected : source;
             let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, source) as BrsFile;
             let transpiled = file.transpile();
