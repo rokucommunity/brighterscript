@@ -320,8 +320,8 @@ export class Parser {
                     return assignment(...additionalTerminators);
                 }
 
-                if (check(Lexeme.SingleLineComment)) {
-                    let stmt = singleLineCommentStatement();
+                if (check(Lexeme.Comment)) {
+                    let stmt = commentStatement();
                     //scrap consecutive newlines
                     while (match(Lexeme.Newline));
                     return stmt;
@@ -554,10 +554,10 @@ export class Parser {
 
                     return haveFoundOptional || !!arg.defaultValue;
                 }, false);
-                let comment: Stmt.SingleLineCommentStatement;
+                let comment: Stmt.CommentStatement;
                 //get a comment if available
-                if (check(Lexeme.SingleLineComment)) {
-                    comment = singleLineCommentStatement();
+                if (check(Lexeme.Comment)) {
+                    comment = commentStatement();
                 }
 
                 consume(
@@ -781,9 +781,9 @@ export class Parser {
             const whileKeyword = advance();
             const condition = expression();
 
-            let comment: Stmt.SingleLineCommentStatement;
-            if (check(Lexeme.SingleLineComment)) {
-                comment = singleLineCommentStatement();
+            let comment: Stmt.CommentStatement;
+            if (check(Lexeme.Comment)) {
+                comment = commentStatement();
             }
 
             consume("Expected newline after 'while ...condition...'", Lexeme.Newline);
@@ -869,9 +869,9 @@ export class Parser {
             if (!target) {
                 throw addError(peek(), "Expected target object to iterate over");
             }
-            let comment: Stmt.SingleLineCommentStatement;
-            if (check(Lexeme.SingleLineComment)) {
-                comment = singleLineCommentStatement();
+            let comment: Stmt.CommentStatement;
+            if (check(Lexeme.Comment)) {
+                comment = commentStatement();
             }
             advance();
             while (match(Lexeme.Newline));
@@ -907,9 +907,27 @@ export class Parser {
             return new Stmt.ExitFor({ exitFor: keyword });
         }
 
-        function singleLineCommentStatement() {
-            let result = new Stmt.SingleLineCommentStatement(advance());
-            return result;
+        function commentStatement() {
+            //if this comment is on the same line as the previous statement,
+            //then this comment should be treated as a single-line comment
+            let prev = previous();
+            if (prev && prev.location.end.line === peek().location.start.line) {
+                return new Stmt.CommentStatement([advance()]);
+            } else {
+                let comments = [advance()];
+                while (check(Lexeme.Newline)) {
+                    //absorb newlines
+                    while (match(Lexeme.Newline));
+
+                    //if this is a comment, and it's the next line down from the previous comment
+                    if (check(Lexeme.Comment) && comments[comments.length - 1].location.end.line === peek().location.start.line - 1) {
+                        comments.push(advance());
+                    } else {
+                        break;
+                    }
+                }
+                return new Stmt.CommentStatement(comments);
+            }
         }
 
         function libraryStatement(): Stmt.LibraryStatement | undefined {
@@ -998,9 +1016,9 @@ export class Parser {
                 thenToken = advance();
             }
 
-            let comment: Stmt.SingleLineCommentStatement;
-            if (check(Lexeme.SingleLineComment)) {
-                comment = singleLineCommentStatement();
+            let comment: Stmt.CommentStatement;
+            if (check(Lexeme.Comment)) {
+                comment = commentStatement();
             }
 
             if (match(Lexeme.Newline) || match(Lexeme.Colon)) {
@@ -1217,7 +1235,7 @@ export class Parser {
                     return new Stmt.IncrementStatement(expr, operator);
                 }
 
-                if (!check(...additionalTerminators, Lexeme.SingleLineComment)) {
+                if (!check(...additionalTerminators, Lexeme.Comment)) {
                     consume(
                         "Expected newline or ':' after expression statement",
                         Lexeme.Newline,
@@ -1299,7 +1317,7 @@ export class Parser {
                 values.push(expression());
             }
 
-            while (!check(Lexeme.Newline, Lexeme.Colon, ...additionalterminators, Lexeme.SingleLineComment) && !isAtEnd()) {
+            while (!check(Lexeme.Newline, Lexeme.Colon, ...additionalterminators, Lexeme.Comment) && !isAtEnd()) {
                 if (check(Lexeme.Semicolon)) {
                     values.push(advance() as Stmt.PrintSeparator.Space);
                 }
@@ -1313,7 +1331,7 @@ export class Parser {
                 }
             }
 
-            if (!check(...additionalterminators, Lexeme.SingleLineComment)) {
+            if (!check(...additionalterminators, Lexeme.Comment)) {
                 consume(
                     "Expected newline or ':' after printed values",
                     Lexeme.Newline,
@@ -1649,7 +1667,7 @@ export class Parser {
                     return new Expr.ArrayLiteralExpression(elements, openingSquare, closingSquare);
                 case match(Lexeme.LeftBrace):
                     let openingBrace = previous();
-                    let members: Array<Expr.AAMember | Stmt.SingleLineCommentStatement> = [];
+                    let members: Array<Expr.AAMember | Stmt.CommentStatement> = [];
 
                     var key = () => {
                         let result = {
@@ -1681,7 +1699,7 @@ export class Parser {
                     while (match(Lexeme.Newline));
 
                     if (!match(Lexeme.RightBrace)) {
-                        if (check(Lexeme.SingleLineComment)) {
+                        if (check(Lexeme.Comment)) {
                             members.push(advance() as any);
                         } else {
                             let k = key();
@@ -1694,7 +1712,7 @@ export class Parser {
                         }
 
                         while (match(Lexeme.Comma, Lexeme.Newline, Lexeme.Colon)) {
-                            if (check(Lexeme.SingleLineComment)) {
+                            if (check(Lexeme.Comment)) {
                                 members.push(advance() as any);
                             } else {
                                 while (match(Lexeme.Newline, Lexeme.Colon));

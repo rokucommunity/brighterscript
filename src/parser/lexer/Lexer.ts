@@ -296,7 +296,7 @@ export class Lexer {
                     tokens.push({
                         text: comment,
                         isReserved: false,
-                        kind: Lexeme.SingleLineComment,
+                        kind: Lexeme.Comment,
                         location: locationOf(comment),
                     });
                     break;
@@ -663,7 +663,7 @@ export class Lexer {
                     tokens.push({
                         text: comment,
                         isReserved: false,
-                        kind: Lexeme.SingleLineComment,
+                        kind: Lexeme.Comment,
                         location: locationOf(comment),
                     });
                 }

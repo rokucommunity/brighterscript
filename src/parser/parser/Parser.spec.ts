@@ -19,6 +19,36 @@ describe('parser', () => {
 
     describe('parse', () => {
         describe('comments', () => {
+            it('combines multi-line comments', () => {
+                let { tokens } = Lexer.scan(`
+                    'line 1
+                    'line 2
+                    'line 3
+                `);
+                let { errors, statements } = parser.parse(tokens) as any;
+                expect(errors).to.be.lengthOf(0, 'Error count should be 0');
+
+                expect(statements[0].text).to.equal('line 1\nline 2\nline 3');
+            });
+
+            it('does not combile comments separated by newlines', () => {
+                let { tokens } = Lexer.scan(`
+                    'line 1
+
+                    'line 2
+
+                    'line 3
+                `);
+                let { errors, statements } = parser.parse(tokens) as any;
+                expect(errors).to.be.lengthOf(0, 'Error count should be 0');
+
+                expect(statements).to.be.lengthOf(3);
+
+                expect(statements[0].text).to.equal('line 1');
+                expect(statements[1].text).to.equal('line 2');
+                expect(statements[2].text).to.equal('line 3');
+            });
+
             it('works after print statement', () => {
                 let { tokens } = Lexer.scan(`
                     sub main()
@@ -28,7 +58,7 @@ describe('parser', () => {
                 let { errors, statements } = parser.parse(tokens);
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
 
-                expect((statements as any)[0].func.body.statements[1].comment.text).to.equal('comment 1');
+                expect((statements as any)[0].func.body.statements[1].text).to.equal('comment 1');
             });
 
             it('declaration-level', () => {
@@ -40,8 +70,8 @@ describe('parser', () => {
                 `);
                 let { errors, statements } = parser.parse(tokens);
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
-                expect((statements as any)[0].comment.text).to.equal('comment 1');
-                expect((statements as any)[2].comment.text).to.equal('comment 2');
+                expect((statements as any)[0].text).to.equal('comment 1');
+                expect((statements as any)[2].text).to.equal('comment 2');
             });
 
             it('parses after function call', () => {
@@ -54,7 +84,7 @@ describe('parser', () => {
                 let { errors, statements } = parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Should have zero errors');
 
-                expect(statements[0].func.body.statements[2].comment.text).to.equal('comment 1');
+                expect(statements[0].func.body.statements[2].text).to.equal('comment 1');
             });
 
             it('function', () => {
@@ -68,10 +98,10 @@ describe('parser', () => {
                 let { errors, statements } = parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Should have zero errors');
 
-                expect(statements[0].func.body.statements[0].comment.text).to.equal('comment 1');
-                expect(statements[0].func.body.statements[1].comment.text).to.equal('comment 2');
-                expect(statements[0].func.body.statements[3].comment.text).to.equal('comment 3');
-                expect(statements[1].comment.text).to.equal('comment 4');
+                expect(statements[0].func.body.statements[0].text).to.equal('comment 1');
+                expect(statements[0].func.body.statements[1].text).to.equal('comment 2');
+                expect(statements[0].func.body.statements[3].text).to.equal('comment 3');
+                expect(statements[1].text).to.equal('comment 4');
             });
 
             it('if statement`', () => {
@@ -96,19 +126,19 @@ describe('parser', () => {
                 expect(errors).to.be.lengthOf(0, 'Should have zero errors');
                 let ifStmt = statements[0].func.body.statements[0] as any;
 
-                expect(ifStmt.thenBranch.statements[0].comment.text).to.equal('comment 1');
-                expect(ifStmt.thenBranch.statements[1].comment.text).to.equal('comment 2');
-                expect(ifStmt.thenBranch.statements[3].comment.text).to.equal('comment 3');
+                expect(ifStmt.thenBranch.statements[0].text).to.equal('comment 1');
+                expect(ifStmt.thenBranch.statements[1].text).to.equal('comment 2');
+                expect(ifStmt.thenBranch.statements[3].text).to.equal('comment 3');
 
-                expect(ifStmt.elseIfs[0].thenBranch.statements[0].comment.text).to.equal('comment 4');
-                expect(ifStmt.elseIfs[0].thenBranch.statements[1].comment.text).to.equal('comment 5');
-                expect(ifStmt.elseIfs[0].thenBranch.statements[3].comment.text).to.equal('comment 6');
+                expect(ifStmt.elseIfs[0].thenBranch.statements[0].text).to.equal('comment 4');
+                expect(ifStmt.elseIfs[0].thenBranch.statements[1].text).to.equal('comment 5');
+                expect(ifStmt.elseIfs[0].thenBranch.statements[3].text).to.equal('comment 6');
 
-                expect(ifStmt.elseBranch.statements[0].comment.text).to.equal('comment 7');
-                expect(ifStmt.elseBranch.statements[1].comment.text).to.equal('comment 8');
-                expect(ifStmt.elseBranch.statements[3].comment.text).to.equal('comment 9');
+                expect(ifStmt.elseBranch.statements[0].text).to.equal('comment 7');
+                expect(ifStmt.elseBranch.statements[1].text).to.equal('comment 8');
+                expect(ifStmt.elseBranch.statements[3].text).to.equal('comment 9');
 
-                expect(statements[0].func.body.statements[1].comment.text).to.equal('comment 10');
+                expect(statements[0].func.body.statements[1].text).to.equal('comment 10');
 
             });
 
@@ -126,11 +156,11 @@ describe('parser', () => {
                 expect(errors).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0] as any;
 
-                expect(stmt.body.statements[0].comment.text).to.equal('comment 1');
-                expect(stmt.body.statements[1].comment.text).to.equal('comment 2');
-                expect(stmt.body.statements[3].comment.text).to.equal('comment 3');
+                expect(stmt.body.statements[0].text).to.equal('comment 1');
+                expect(stmt.body.statements[1].text).to.equal('comment 2');
+                expect(stmt.body.statements[3].text).to.equal('comment 3');
 
-                expect(statements[0].func.body.statements[1].comment.text).to.equal('comment 4');
+                expect(statements[0].func.body.statements[1].text).to.equal('comment 4');
             });
 
             it('for', () => {
@@ -147,11 +177,11 @@ describe('parser', () => {
                 expect(errors).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0] as any;
 
-                expect(stmt.body.statements[0].comment.text).to.equal('comment 1');
-                expect(stmt.body.statements[1].comment.text).to.equal('comment 2');
-                expect(stmt.body.statements[3].comment.text).to.equal('comment 3');
+                expect(stmt.body.statements[0].text).to.equal('comment 1');
+                expect(stmt.body.statements[1].text).to.equal('comment 2');
+                expect(stmt.body.statements[3].text).to.equal('comment 3');
 
-                expect(statements[0].func.body.statements[1].comment.text).to.equal('comment 4');
+                expect(statements[0].func.body.statements[1].text).to.equal('comment 4');
             });
 
             it('for each', () => {
@@ -168,11 +198,11 @@ describe('parser', () => {
                 expect(errors).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0] as any;
 
-                expect(stmt.body.statements[0].comment.text).to.equal('comment 1');
-                expect(stmt.body.statements[1].comment.text).to.equal('comment 2');
-                expect(stmt.body.statements[3].comment.text).to.equal('comment 3');
+                expect(stmt.body.statements[0].text).to.equal('comment 1');
+                expect(stmt.body.statements[1].text).to.equal('comment 2');
+                expect(stmt.body.statements[3].text).to.equal('comment 3');
 
-                expect(statements[0].func.body.statements[1].comment.text).to.equal('comment 4');
+                expect(statements[0].func.body.statements[1].text).to.equal('comment 4');
             });
 
         });

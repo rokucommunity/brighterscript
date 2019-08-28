@@ -1,7 +1,7 @@
 //tslint:disable
 import { Token, Identifier, Location } from "../lexer";
 import { BrsType, ValueKind, BrsString, FunctionParameter } from "../brsTypes";
-import { Block, SingleLineCommentStatement } from "./Statement";
+import { Block, CommentStatement } from "./Statement";
 import { SourceNode } from 'source-map';
 
 export interface Visitor<T> {
@@ -378,7 +378,7 @@ export interface AAMember {
 
 export class AALiteralExpression implements Expression {
     constructor(
-        readonly elements: Array<AAMember | SingleLineCommentStatement>,
+        readonly elements: Array<AAMember | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) { }
@@ -416,7 +416,7 @@ export class AALiteralExpression implements Expression {
             }
 
             //render comments
-            if (element instanceof SingleLineCommentStatement) {
+            if (element instanceof CommentStatement) {
                 result.push(...element.transpile(state));
             } else {
                 //key

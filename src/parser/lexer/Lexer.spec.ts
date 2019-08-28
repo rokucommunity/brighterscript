@@ -36,7 +36,7 @@ describe('lexer', () => {
     it('retains one newline from consecutive newlines', () => {
         let { tokens } = Lexer.scan('\n\n\'foo\n\n\nprint 2\n\n');
         expect(tokens.map(t => t.kind)).to.deep.equal([
-            Lexeme.SingleLineComment,
+            Lexeme.Comment,
             Lexeme.Newline,
             Lexeme.Print,
             Lexeme.Integer,
@@ -58,17 +58,17 @@ describe('lexer', () => {
     describe('comments', () => {
         it('ignores everything after `\'`', () => {
             let { tokens } = Lexer.scan('= \' (');
-            expect(tokens.map(t => t.kind)).to.deep.equal([Lexeme.Equal, Lexeme.SingleLineComment, Lexeme.Eof]);
+            expect(tokens.map(t => t.kind)).to.deep.equal([Lexeme.Equal, Lexeme.Comment, Lexeme.Eof]);
         });
 
         it('ignores everything after `REM`', () => {
             let { tokens } = Lexer.scan('= REM (');
-            expect(tokens.map(t => t.kind)).to.deep.equal([Lexeme.Equal, Lexeme.SingleLineComment, Lexeme.Eof]);
+            expect(tokens.map(t => t.kind)).to.deep.equal([Lexeme.Equal, Lexeme.Comment, Lexeme.Eof]);
         });
 
         it('ignores everything after `rem`', () => {
             let { tokens } = Lexer.scan('= rem (');
-            expect(tokens.map(t => t.kind)).to.deep.equal([Lexeme.Equal, Lexeme.SingleLineComment, Lexeme.Eof]);
+            expect(tokens.map(t => t.kind)).to.deep.equal([Lexeme.Equal, Lexeme.Comment, Lexeme.Eof]);
         });
     }); // comments
 

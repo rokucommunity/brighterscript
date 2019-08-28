@@ -36,7 +36,7 @@ If you need to configure `bsc`, you can do so in two ways:
 
 1. Using command line arguments. 
     This tool can be fully configured using command line arguments. To see a full list, run `bsc --help` in your terminal.
-2. Using a `bsconfig.json` file. See [the available options](#bsconfig.json-options) below. 
+2. Using a `bsconfig.json` file. See [the available options](#bsconfigjson-options) below. 
     By default, `bsc` looks for a `bsconfig.json` file at the same directory that `bsc` is executed. If you want to store your `bsconfig.json` file somewhere else, then you should provide the `--project` argument and specify the path to your `bsconfig.json` file. 
 
 ### Examples

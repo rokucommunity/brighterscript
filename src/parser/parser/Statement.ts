@@ -130,9 +130,9 @@ export class ExpressionStatement implements Statement {
     }
 }
 
-export class SingleLineCommentStatement implements Statement {
+export class CommentStatement implements Statement {
     constructor(
-        public comment: Token
+        public comments: Token[]
     ) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
@@ -140,15 +140,32 @@ export class SingleLineCommentStatement implements Statement {
     }
 
     get location() {
-        return this.comment.location;
+        return {
+            file: this.comments[0].location.file,
+            start: this.comments[0].location.start,
+            end: this.comments[this.comments.length - 1].location.end
+        };
+    }
+
+    get text() {
+        return this.comments.map(x => x.text).join('\n');
     }
 
     transpile(state: TranspileState): Array<SourceNode | string> {
-        return [
-            indent(state.blockDepth),
-            `'`,
-            new SourceNode(this.comment.location.start.line, this.comment.location.start.column, state.pkgPath, this.comment.text)
-        ];
+        let result = [];
+        for (let i = 0; i < this.comments.length; i++) {
+            let comment = this.comments[i];
+            result.push(
+                indent(state.blockDepth),
+                `'`,
+                new SourceNode(comment.location.start.line, comment.location.start.column, state.pkgPath, comment.text),
+            );
+            //add newline for all except final comment
+            if (i < this.comments.length - 1) {
+                result.push('\n');
+            }
+        }
+        return result;
     }
 }
 
