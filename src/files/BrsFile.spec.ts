@@ -1371,10 +1371,6 @@ describe('BrsFile', () => {
             let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, source) as BrsFile;
             let transpiled = file.transpile();
 
-            fsExtra.writeFileSync('C:/temp/transpile/source.bs', source);
-            fsExtra.writeFileSync('C:/temp/transpile/generated.brs', file.transpile().code);
-            fsExtra.writeFileSync('C:/temp/transpile/generated.brs.map', file.transpile().map);
-
             let sources = [transpiled.code, expected];
             for (let i = 0; i < sources.length; i++) {
                 if (formatType === 'trim') {
