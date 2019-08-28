@@ -445,6 +445,28 @@ describe('lexer', () => {
         });
     });
 
+    it('detects rem when used as keyword', () => {
+        let { tokens } = Lexer.scan('person.rem=true');
+        expect(tokens.map(t => t.kind)).to.eql([
+            Lexeme.Identifier,
+            Lexeme.Dot,
+            Lexeme.Identifier,
+            Lexeme.Equal,
+            Lexeme.True,
+            Lexeme.Eof,
+        ]);
+
+        //verify the location of `rem`
+        expect(tokens.map(t => [t.location.start.column, t.location.end.column])).to.eql([
+            [0, 6], // person
+            [6, 7], // .
+            [7, 10], // rem
+            [10, 11], // =
+            [11, 15], // true
+            [15, 16], // EOF
+        ]);
+    });
+
     describe('isToken', () => {
         it('works', () => {
             let location = {
