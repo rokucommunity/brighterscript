@@ -1,6 +1,5 @@
 import { BrightScriptFormatter } from 'brightscript-formatter';
 import { assert, expect } from 'chai';
-import * as fsExtra from 'fs-extra';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
 
