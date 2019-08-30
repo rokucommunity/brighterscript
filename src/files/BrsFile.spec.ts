@@ -1290,8 +1290,10 @@ describe('BrsFile', () => {
 
         it('works for a complex function with comments at the end of each line', async () => {
             await testTranspile(`
+                'import some library
                 library "v30/bslCore.brs" 'comment
 
+                'a function that does something
                 function doSomething(age as integer, name = "bob")
                     person = {
                         name: "parent",

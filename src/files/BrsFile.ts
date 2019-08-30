@@ -10,7 +10,7 @@ import * as brs from '../parser';
 const Lexeme = brs.lexer.Lexeme;
 import { Lexer } from '../parser/lexer';
 import { Parser } from '../parser/parser';
-import { CommentStatement } from '../parser/parser/Statement';
+import { CommentStatement, FunctionStatement } from '../parser/parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -663,24 +663,30 @@ export class BrsFile {
             parents: []
         };
         for (let i = 0; i < this.ast.length; i++) {
-            let previousStatement = this.ast[i - 1];
             let statement = this.ast[i];
+            let previousStatement = this.ast[i - 1];
+            let nextStatement = this.ast[i + 1];
 
-            //if this is a comment, and is on the same line as the end of its previous sibling, draw it on same line
+            //if comment is on same line as prior sibling
             if (statement instanceof CommentStatement && previousStatement && statement.location.start.line === previousStatement.location.end.line) {
                 chunks.push(
                     ' ',
-                    ...statement.transpile(state)
                 );
-            } else {
-                //separate statements with two newlines
-                if (i > 0) {
-                    chunks.push('\n\n');
-                }
-                chunks.push(...statement.transpile(state));
-            }
-        }
 
+                //add double newline if this is a comment, and next is a function
+            } else if (statement instanceof CommentStatement && nextStatement && nextStatement instanceof FunctionStatement) {
+                chunks.push('\n\n');
+
+                //add double newline if is function not preceeded by a comment
+            } else if (statement instanceof FunctionStatement && previousStatement && !(previousStatement instanceof CommentStatement)) {
+                chunks.push('\n\n');
+            } else {
+                //separate statements by a single newline
+                chunks.push('\n');
+            }
+
+            chunks.push(...statement.transpile(state));
+        }
         let programNode = new SourceNode(null, null, this.pkgPath, chunks);
         return programNode.toStringWithSourceMap({
             file: this.pkgPath
