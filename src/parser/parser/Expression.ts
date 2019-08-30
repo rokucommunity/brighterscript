@@ -4,6 +4,8 @@ import { BrsType, ValueKind, BrsString, FunctionParameter } from "../brsTypes";
 import { Block, CommentStatement } from "./Statement";
 import { SourceNode } from 'source-map';
 
+import { util } from '../../util';
+
 export interface Visitor<T> {
     visitBinary(expression: Binary): T;
     visitCall(expression: Call): T;
@@ -378,6 +380,7 @@ export interface AAMember {
     colonToken: Token;
     /** The expression evaluated to determine the member's initial value. */
     value: Expression;
+    location: Location;
 }
 
 export class AALiteralExpression implements Expression {
@@ -406,16 +409,22 @@ export class AALiteralExpression implements Expression {
             new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pkgPath, this.open.text),
         );
         let hasChildren = this.elements.length > 0;
-        //add newline if the object has children
-        if (hasChildren) {
+        //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
+        if (hasChildren && ((this.elements[0] instanceof CommentStatement) === false || this.elements[0].location.start.line != this.open.location.start.line)) {
             result.push('\n');
         }
         state.blockDepth++;
         for (let i = 0; i < this.elements.length; i++) {
             let element = this.elements[i];
+            let previousElement = this.elements[i - 1]
+            let nextElement = this.elements[i + 1];
 
-            //indent this line
-            if (i < 10) {
+            //don't indent if comment is same-line
+            if (element instanceof CommentStatement && (util.startOnSameLine(this.open, element) || util.startOnSameLine(previousElement, element))) {
+                result.push(' ');
+
+                //indent line
+            } else {
                 result.push(indent(state.blockDepth));
             }
 
@@ -432,14 +441,35 @@ export class AALiteralExpression implements Expression {
                     new SourceNode(element.colonToken.location.start.line, element.colonToken.location.start.column, state.pkgPath, ':'),
                     ' '
                 );
+
+                //determine if comments are the only members left in the array
+                let onlyCommentsRemaining = true;
+                inner: for (let j = i + 1; j < this.elements.length; j++) {
+                    if ((this.elements[j] instanceof CommentStatement) === false) {
+                        onlyCommentsRemaining = false;
+                        break inner;
+                    }
+                }
+
                 //value
                 result.push(...element.value.transpile(state))
-                //if not final element, add trailing comma 
-                if (i !== this.elements.length - 1) {
+                //add trailing comma if not final element (excluding comments)
+                if (i !== this.elements.length - 1 && onlyCommentsRemaining === false) {
                     result.push(',');
                 }
             }
-            result.push('\n');
+
+
+
+
+
+            //if next element is a same-line comment, skip the newline
+            if (nextElement && nextElement instanceof CommentStatement && nextElement.location.start.line === element.location.start.line) {
+
+                //add a newline between statements
+            } else {
+                result.push('\n');
+            }
         }
         state.blockDepth--;
 

@@ -1288,18 +1288,59 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('properly indents nested AA literals', async () => {
+            await testTranspile(`
+                sub doSomething()
+                    grandparent = {
+                        parent: {
+                            child: {
+                                grandchild: {
+                                    name: "baby"
+                                }
+                            }
+                        }
+                    }
+                end sub
+            `);
+        });
+
+        it('does not add comma after final object property even when comments are present', async () => {
+            await testTranspile(`
+                sub doSomething()
+                    person = {
+                        age: 12, 'comment
+                        name: "child"
+                    }
+                    person = {
+                        age: 12, 'comment
+                        name: "child" 'comment
+                    }
+                    person = {
+                        age: 12, 'comment
+                        name: "child"
+                        'comment
+                    }
+                    person = {
+                        age: 12, 'comment
+                        name: "child" 'comment
+                        'comment
+                    }
+                end sub
+            `);
+        });
+
         it('works for a complex function with comments at the end of each line', async () => {
             await testTranspile(`
                 'import some library
                 library "v30/bslCore.brs" 'comment
 
                 'a function that does something
-                function doSomething(age as integer, name = "bob")
-                    person = {
-                        name: "parent",
+                function doSomething(age as integer, name = "bob") 'comment
+                    person = { 'comment
+                        name: "parent", 'comment
                         "age": 12,
-                        child: {
-                            name: "child"
+                        child: { 'comment
+                            name: "child" 'comment
                         }
                     }
                     person.name = "john"
@@ -1370,7 +1411,7 @@ describe('BrsFile', () => {
 
                 function a(p1, p2, p3)
                 end function
-            `, null, 'trim');
+            `);
         });
 
         async function testTranspile(source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'trim') {

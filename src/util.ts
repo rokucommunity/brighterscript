@@ -639,6 +639,28 @@ export class Util {
     public flatMap<T, R>(array: T[], cb: (arg: T) => R) {
         return Array.prototype.concat.apply([], array.map(cb)) as never as R;
     }
+
+    /**
+     * Get a location object back by extracting location information from other objects that contain location
+     */
+    public getLocation(fileObj: { location: Location }, startObj: { location: Location }, endObj: { location: Location }): Location {
+        return {
+            file: fileObj.location.file,
+            start: startObj.location.start,
+            end: endObj.location.end
+        };
+    }
+
+    /**
+     * Do the two objects start on the same line
+     */
+    public startOnSameLine(first: { location: Location }, second: { location: Location }) {
+        if (first && second && first.location.start.line === second.location.start.line) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 }
 
 export let util = new Util();

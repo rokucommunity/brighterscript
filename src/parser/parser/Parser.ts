@@ -20,6 +20,7 @@ import {
 } from "../brsTypes";
 import { FunctionStatement, ClassStatement, ClassFieldStatement, ClassMemberStatement, ClassMethodStatement } from './Statement';
 import { diagnosticMessages, DiagnosticMessage } from '../../DiagnosticMessages';
+import { util } from '../../util';
 
 /** Set of all keywords that end blocks. */
 type BlockTerminator =
@@ -1673,7 +1674,8 @@ export class Parser {
                         let result = {
                             colonToken: null as Token,
                             keyToken: null as Token,
-                            key: null as BrsString
+                            key: null as BrsString,
+                            location: null as Location
                         };
                         if (check(Lexeme.Identifier, ...allowedProperties)) {
                             result.keyToken = advance();
@@ -1693,6 +1695,7 @@ export class Parser {
                             "Expected ':' between associative array key and value",
                             Lexeme.Colon
                         );
+                        result.location = util.getLocation(result.keyToken, result.keyToken, result.colonToken);
                         return result;
                     }
 
@@ -1700,20 +1703,23 @@ export class Parser {
 
                     if (!match(Lexeme.RightBrace)) {
                         if (check(Lexeme.Comment)) {
-                            members.push(advance() as any);
+                            members.push(new Stmt.CommentStatement([advance()]));
                         } else {
                             let k = key();
+                            let expr = expression();
                             members.push({
                                 key: k.key,
                                 keyToken: k.keyToken,
                                 colonToken: k.colonToken,
-                                value: expression(),
+                                value: expr,
+                                location: util.getLocation(k, k, expr)
                             });
                         }
 
-                        while (match(Lexeme.Comma, Lexeme.Newline, Lexeme.Colon)) {
-                            if (check(Lexeme.Comment)) {
-                                members.push(advance() as any);
+                        while (match(Lexeme.Comma, Lexeme.Newline, Lexeme.Colon, Lexeme.Comment)) {
+                            if (check(Lexeme.Comment) || checkPrevious(Lexeme.Comment)) {
+                                let token = checkPrevious(Lexeme.Comment) ? previous() : advance();
+                                members.push(new Stmt.CommentStatement([token]));
                             } else {
                                 while (match(Lexeme.Newline, Lexeme.Colon));
 
@@ -1721,11 +1727,13 @@ export class Parser {
                                     break;
                                 }
                                 let k = key();
+                                let expr = expression();
                                 members.push({
                                     key: k.key,
                                     keyToken: k.keyToken,
                                     colonToken: k.colonToken,
-                                    value: expression(),
+                                    value: expr,
+                                    location: util.getLocation(k, k, expr)
                                 });
                             }
                         }
@@ -1810,6 +1818,14 @@ export class Parser {
                 current++;
             }
             return previous();
+        }
+
+        function checkPrevious(...lexemes: Lexeme[]) {
+            if (isAtEnd()) {
+                return false;
+            }
+
+            return lexemes.some(lexeme => previous().kind === lexeme);
         }
 
         function check(...lexemes: Lexeme[]) {

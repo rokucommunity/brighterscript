@@ -116,7 +116,7 @@ export enum Lexeme {
     Private = 'Private',
 
     //comments
-    Comment = 'SingleLineComment',
+    Comment = 'Comment',
 
     // structural
     Newline = 'Newline',
