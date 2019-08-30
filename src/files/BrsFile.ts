@@ -8,6 +8,7 @@ import { FunctionScope } from '../FunctionScope';
 import { Callable, CallableArg, CallableParam, CommentFlag, Diagnostic, FunctionCall } from '../interfaces';
 import * as brs from '../parser';
 const Lexeme = brs.lexer.Lexeme;
+import { BrsError, ParseError } from '../parser/Error';
 import { Lexer } from '../parser/lexer';
 import { Parser } from '../parser/parser';
 import { CommentStatement, FunctionStatement } from '../parser/parser/Statement';
@@ -108,7 +109,7 @@ export class BrsFile {
         let manifest = await brs.preprocessor.getManifest(this.program.rootDir);
         let preprocessor = new brs.preprocessor.Preprocessor();
         let preprocessorResults = {
-            errors: [] as Error[],
+            errors: [] as Array<BrsError | ParseError>,
             processedTokens: []
         };
         let preprocessorWasSuccessful: boolean;
@@ -156,7 +157,7 @@ export class BrsFile {
         this.wasProcessed = true;
     }
 
-    public standardizeLexParseErrors(errors: brs.parser.ParseError[], lines: string[]) {
+    public standardizeLexParseErrors(errors: ParseError[], lines: string[]) {
         let standardizedDiagnostics = [] as Diagnostic[];
         for (let error of errors) {
             let diagnostic = <Diagnostic>{

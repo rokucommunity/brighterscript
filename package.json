@@ -13,7 +13,7 @@
     "test:coverage": "nyc mocha \"src/**/*.spec.ts\" --full-trace",
     "test:watch": "ts-mocha \"src/**/*.spec.ts\" --full-trace --watch --watch-extensions ts",
     "report-coverage": "nyc report --reporter=text-lcov > coverage.lcov && codecov",
-    "dep-graph": "madge --image graph.svg --extensions ts ./src/parser/lexer/Lexer.spec.ts --include-npm"
+    "dep-graph": "madge --image graph.svg --extensions ts ./src/parser"
   },
   "files": [
     "dist/**/!(*.spec.*)*",

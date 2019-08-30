@@ -1,8 +1,7 @@
 import { EventEmitter } from 'events';
 
-import { BrsError } from '../Error';
+import { BrsError, ParseError } from '../Error';
 import { Token } from '../lexer/Token';
-import { ParseError } from '../parser/ParseError';
 import * as Chunk from './Chunk';
 import { getBsConst, Manifest } from './Manifest';
 import { Parser } from './Parser';

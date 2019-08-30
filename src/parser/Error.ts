@@ -1,11 +1,8 @@
-//tslint:disable
-import { BrsType, ValueKind } from "./brsTypes";
-import { Location } from "./lexer";
+import { BrsType, ValueKind } from './brsTypes';
+import { Lexeme, Location , Token } from './lexer';
 
-export class BrsError extends Error {
-    constructor(message: string, readonly location: Location, readonly code: number = 100) {
-        super(message);
-        Object.setPrototypeOf(this, BrsError.prototype);
+export class BrsError {
+    constructor(readonly message: string, readonly location: Location, readonly code: number = 100) {
     }
 
     /**
@@ -15,7 +12,7 @@ export class BrsError extends Error {
      * `lorem.brs(1,1-3): Expected '(' after sub name`
      * ```
      */
-    format() {
+    public format() {
         let location = this.location;
 
         let formattedLocation: string;
@@ -47,12 +44,12 @@ export interface TypeMismatchMetadata {
     right?: TypeAndLocation;
 }
 
-export type TypeAndLocation = {
+export interface TypeAndLocation {
     /** The type of a value involved in a type mismatch. */
     type: BrsType | ValueKind;
     /** The location at which the offending value was resolved. */
     location: Location;
-};
+}
 
 /**
  * Creates a "type mismatch"-like error message, but with the appropriate types specified.
@@ -74,7 +71,7 @@ export class TypeMismatch extends BrsError {
             location.end = mismatchMetadata.right.location.end;
         }
 
-        super(messageLines.join("\n"), location);
+        super(messageLines.join('\n'), location);
     }
 }
 
@@ -84,9 +81,20 @@ export class TypeMismatch extends BrsError {
  * @returns the `ValueKind` for `maybeType`
  */
 export function getKind(maybeType: BrsType | ValueKind): ValueKind {
-    if (typeof maybeType === "number") {
+    if (typeof maybeType === 'number') {
         return maybeType;
     } else {
         return maybeType.kind;
+    }
+}
+
+export class ParseError extends BrsError {
+    constructor(token: Token, message: string, code: number = 1000) {
+        let m = message;
+        if (token.kind === Lexeme.Eof) {
+            m = '(At end of file) ' + message;
+        }
+
+        super(m, token.location, code);
     }
 }

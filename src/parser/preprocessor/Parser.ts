@@ -3,8 +3,8 @@ import { EventEmitter } from "events";
 
 import { Token } from "../lexer/Token";
 import { Lexeme } from "../lexer/Lexeme";
-import { ParseError } from "../parser/ParseError";
 import * as CC from "./Chunk";
+import { ParseError } from '../Error';
 
 /** The results of a chunk-parser's parsing pass. */
 export interface ChunkParserResult {

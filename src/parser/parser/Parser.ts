@@ -6,7 +6,6 @@ type Expression = Expr.Expression;
 import * as Stmt from "./Statement";
 type Statement = Stmt.Statement;
 import { Lexeme, Token, Identifier, Location, ReservedWords } from "../lexer";
-import { ParseError } from "./ParseError";
 
 import {
     BrsInvalid,
@@ -21,6 +20,7 @@ import {
 import { FunctionStatement, ClassStatement, ClassFieldStatement, ClassMemberStatement, ClassMethodStatement } from './Statement';
 import { diagnosticMessages, DiagnosticMessage } from '../../DiagnosticMessages';
 import { util } from '../../util';
+import { ParseError } from '../Error';
 
 /** Set of all keywords that end blocks. */
 type BlockTerminator =
