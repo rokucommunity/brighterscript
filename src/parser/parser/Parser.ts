@@ -702,8 +702,8 @@ export class Parser {
         }
 
         function checkLibrary() {
-            let isLibraryIdentifier =
-                check(Lexeme.Identifier) && peek().text.toLowerCase() === "library";
+            let isLibraryIdentifier = check(Lexeme.Identifier) && peek().text.toLowerCase() === "library";
+
             //if we are at the top level, any line that starts with "library" should be considered a library statement
             if (isAtRootLevel() && isLibraryIdentifier) {
                 return true;
@@ -938,14 +938,14 @@ export class Parser {
             });
 
             //no token following library keyword token
-            if (!libraryStatement.tokens.filePath && check(Lexeme.Newline, Lexeme.Colon)) {
+            if (!libraryStatement.tokens.filePath && check(Lexeme.Newline, Lexeme.Colon, Lexeme.Comment)) {
                 addErrorAtLocation(
                     libraryStatement.tokens.library.location,
                     `Missing string literal after ${libraryStatement.tokens.library.text} keyword`
                 );
             }
             //does not have a string literal as next token
-            else if (!libraryStatement.tokens.filePath && peek().kind === Lexeme.Newline) {
+            else if (!libraryStatement.tokens.filePath && check(Lexeme.Newline, Lexeme.Colon, Lexeme.Comment)) {
                 addErrorAtLocation(
                     peek().location,
                     `Expected string literal after ${libraryStatement.tokens.library.text} keyword`
@@ -953,7 +953,7 @@ export class Parser {
             }
 
             //consume all tokens until the end of the line
-            let invalidTokens = consumeUntil(Lexeme.Newline, Lexeme.Eof, Lexeme.Colon);
+            let invalidTokens = consumeUntil(Lexeme.Newline, Lexeme.Eof, Lexeme.Colon, Lexeme.Comment);
 
             if (invalidTokens.length > 0) {
                 //add an error for every invalid token

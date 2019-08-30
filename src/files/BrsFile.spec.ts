@@ -1288,9 +1288,9 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('works for a complex function', async () => {
+        it('works for a complex function with comments at the end of each line', async () => {
             await testTranspile(`
-                library "v30/bslCore.brs"
+                library "v30/bslCore.brs" 'comment
 
                 function doSomething(age as integer, name = "bob")
                     person = {
