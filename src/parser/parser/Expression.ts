@@ -21,6 +21,11 @@ export interface Visitor<T> {
 export interface TranspileState {
     pkgPath: string;
     blockDepth: number;
+    //the tree of parents, with the first index being direct parent, and the last index being the furthest removed ancestor. 
+    //Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
+    parents: Array<{
+        location: Location;
+    }>;
 }
 
 /** A BrightScript expression */
@@ -177,12 +182,11 @@ export class FunctionExpression implements Expression {
                 new SourceNode(this.returnTypeToken.location.start.line, this.returnTypeToken.location.start.column, state.pkgPath, this.returnTypeToken.text.toLowerCase())
             );
         }
-        results.push('\n');
+        state.parents.unshift(this);
         let body = this.body.transpile(state);
+        state.parents.shift();
         results.push(...body);
-        if (body.length > 0) {
-            results.push('\n');
-        }
+        results.push('\n');
         //'end sub'|'end function'
         results.push(
             indent(state.blockDepth),

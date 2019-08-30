@@ -98,14 +98,33 @@ export class Block implements Statement {
         state.blockDepth++;
         let results = [] as Array<SourceNode | string>;
         for (let i = 0; i < this.statements.length; i++) {
-            //every statement gets a newline (assumes already had newline for first item)
-            if (this.statements[i - 1]) {
+
+            //maybe add comment to same line as parent 
+            if (
+                //is first item
+                i === 0 &&
+                //is comment
+                this.statements[i] instanceof CommentStatement &&
+                //has parent
+                state.parents[0] &&
+                //is on same line as parent
+                this.statements[i].location.start.line === state.parents[0].location.start.line
+            ) {
+                results.push(' ');
+                //don't add a newline
+            } else {
+                //add a newline
                 results.push('\n');
+                //indent
+                results.push(indent(state.blockDepth));
             }
+
+            //push block onto parent list
+            state.parents.unshift(this);
             results.push(
-                indent(state.blockDepth),
                 ...this.statements[i].transpile(state)
             );
+            state.parents.shift();
         }
         state.blockDepth--;
         return results
@@ -351,8 +370,6 @@ export class IfStatement implements Statement {
         } else {
             results.push('then')
         }
-        //render all if statements as multi-line
-        results.push('\n');
         //if statement body
         let thenNodes = this.thenBranch.transpile(state);
         if (thenNodes.length > 0) {
@@ -381,7 +398,6 @@ export class IfStatement implements Statement {
                 results.push('then');
             }
 
-            results.push('\n');
             //then body
             let body = elseif.thenBranch.transpile(state);
             if (body.length > 0) {
@@ -397,7 +413,6 @@ export class IfStatement implements Statement {
                 indent(state.blockDepth),
                 new SourceNode(this.tokens.else.location.start.line, this.tokens.else.location.start.column, state.pkgPath, 'else')
             );
-            results.push('\n');
             //then body
             let body = this.elseBranch.transpile(state);
             if (body.length > 0) {
@@ -709,7 +724,6 @@ export class ForStatement implements Statement {
                 this.increment.transpile(state)
             )
         }
-        result.push('\n');
         //loop body
         result.push(...this.body.transpile(state));
         if (this.body.statements.length > 0) {
@@ -768,7 +782,6 @@ export class ForEachStatement implements Statement {
         );
         //target
         result.push(...this.target.transpile(state));
-        result.push('\n');
         //body
         result.push(...this.body.transpile(state));
         if (this.body.statements.length > 0) {
@@ -816,7 +829,6 @@ export class WhileStatement implements Statement {
         result.push(
             ...this.condition.transpile(state),
         );
-        result.push('\n');
         //body
         result.push(...this.body.transpile(state));
 

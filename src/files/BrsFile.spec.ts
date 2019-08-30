@@ -1210,7 +1210,13 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
-        let formatter = new BrightScriptFormatter();
+        it('keeps end-of-line comments with their line', async () => {
+            await testTranspile(`
+                function DoSomething() 'comment 1
+                    name = "bob"
+                end function 'comment 3
+            `);
+        });
 
         it('works for functions', async () => {
             await testTranspile(`

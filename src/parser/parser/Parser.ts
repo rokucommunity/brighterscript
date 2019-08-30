@@ -686,6 +686,7 @@ export class Parser {
                     Lexeme.Newline,
                     Lexeme.Colon,
                     Lexeme.Eof,
+                    Lexeme.Comment,
                     ...additionalterminators
                 );
             }
