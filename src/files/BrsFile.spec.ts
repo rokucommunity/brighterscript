@@ -1329,6 +1329,20 @@ describe('BrsFile', () => {
             `);
         });
 
+        it.skip('temp', async () => {
+            await testTranspile(`
+                sub a()
+                    if true then
+                        print false
+                    else if true then
+                        print "true"
+                    else
+                        print "else"
+                    end if 'comment
+                end sub
+            `);
+        });
+
         it('works for a complex function with comments at the end of each line', async () => {
             await testTranspile(`
                 'import some library
@@ -1343,27 +1357,27 @@ describe('BrsFile', () => {
                             name: "child" 'comment
                         }
                     }
-                    person.name = "john"
-                    person.child.name = "baby"
-                    person["name"] = person.child["name"]
-                    age = 12 + 2
-                    name = "tim"
-                    age = 12
-                    while true
-                        age = age + 1
-                        exit while
-                    end while
-                    while age < 12 or age < 15
-                        age++
-                        exit while
-                    end while
-                    if true or 1 = 1 or name = "tim" then
-                        print false
-                    else if false or "cat" = "dog" or true then
+                    person.name = "john" 'comment
+                    person.child.name = "baby" 'comment
+                    person["name"] = person.child["name"] 'comment
+                    age = 12 + 2 'comment
+                    name = "tim" 'comment
+                    age = 12 'comment
+                    while true 'comment
+                        age = age + 1 'comment
+                        exit while 'comment
+                    end while 'comment
+                    while age < 12 or age < 15 'comment
+                        age++ 'comment
+                        exit while 'comment
+                    end while 'comment
+                    if true or 1 = 1 or name = "tim" then 'comment
+                        print false 'comment
+                    else if false or "cat" = "dog" or true then 'comment
                         print "true"
-                    else
-                        print "else"
-                    end if
+                    else 'comment
+                        print "else" 'comment
+                    end if 'comment
                     someBool = (true or false) or ((true) or (false))
                     mylabel:
                     goto mylabel

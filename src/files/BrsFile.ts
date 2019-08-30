@@ -660,7 +660,7 @@ export class BrsFile {
         let state = {
             pkgPath: this.pkgPath,
             blockDepth: 0,
-            parents: []
+            lineage: []
         };
         for (let i = 0; i < this.ast.length; i++) {
             let statement = this.ast[i];

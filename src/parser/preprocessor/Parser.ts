@@ -1,8 +1,9 @@
 //tslint:disable
 import { EventEmitter } from "events";
 
-import { Token, Lexeme } from "../lexer";
-import { ParseError } from "../parser";
+import { Token } from "../lexer/Token";
+import { Lexeme } from "../lexer/Lexeme";
+import { ParseError } from "../parser/ParseError";
 import * as CC from "./Chunk";
 
 /** The results of a chunk-parser's parsing pass. */

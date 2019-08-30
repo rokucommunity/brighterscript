@@ -652,10 +652,28 @@ export class Util {
     }
 
     /**
-     * Do the two objects start on the same line
+     * If the two items both start on the same line
      */
-    public startOnSameLine(first: { location: Location }, second: { location: Location }) {
+    public sameStartLine(first: { location: Location }, second: { location: Location }) {
         if (first && second && first.location.start.line === second.location.start.line) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * If the two items have lines that touch
+     * @param first
+     * @param second
+     */
+    public linesTouch(first: { location: Location }, second: { location: Location }) {
+        if (first && second && (
+            first.location.start.line === second.location.start.line ||
+            first.location.start.line === second.location.end.line ||
+            first.location.end.line === second.location.start.line ||
+            first.location.end.line === second.location.end.line
+        )) {
             return true;
         } else {
             return false;

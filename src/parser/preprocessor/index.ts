@@ -1,17 +1,18 @@
-//tslint:disable
-import { EventEmitter } from "events";
+import { EventEmitter } from 'events';
 
-import { Token } from "../lexer";
-
-import { Parser } from "./Parser";
-import { Preprocessor as InternalPreprocessor, FilterResults } from "./Preprocessor";
-import { Manifest, getBsConst } from "./Manifest";
+import { BrsError } from '../Error';
+import { Token } from '../lexer/Token';
+import { ParseError } from '../parser/ParseError';
+import * as Chunk from './Chunk';
+import { getBsConst, Manifest } from './Manifest';
+import { Parser } from './Parser';
+import { FilterResults, Preprocessor as InternalPreprocessor } from './Preprocessor';
 
 export class Preprocessor {
     private parser = new Parser();
     private _preprocessor = new InternalPreprocessor();
 
-    readonly events = new EventEmitter();
+    public readonly events = new EventEmitter();
 
     /**
      * Convenience function to subscribe to the `err` events emitted by `preprocessor.events`.
@@ -19,10 +20,10 @@ export class Preprocessor {
      * @returns an object with a `dispose` function, used to unsubscribe from errors
      */
     public onError(errorHandler: (err: BrsError | ParseError) => void) {
-        this.events.on("err", errorHandler);
+        this.events.on('err', errorHandler);
         return {
             dispose: () => {
-                this.events.removeListener("err", errorHandler);
+                this.events.removeListener('err', errorHandler);
             },
         };
     }
@@ -32,13 +33,13 @@ export class Preprocessor {
      * @param errorHandler the function to call for the first preprocessing error emitted after subscribing
      */
     public onErrorOnce(errorHandler: (err: BrsError | ParseError) => void) {
-        this.events.once("err", errorHandler);
+        this.events.once('err', errorHandler);
     }
 
     constructor() {
         // plumb errors from the internal parser and preprocessor out to the public interface for convenience
-        this.parser.events.on("err", err => this.events.emit("err", err));
-        this._preprocessor.events.on("err", err => this.events.emit("err", err));
+        this.parser.events.on('err', err => this.events.emit('err', err));
+        this._preprocessor.events.on('err', err => this.events.emit('err', err));
     }
 
     /**
@@ -47,7 +48,7 @@ export class Preprocessor {
      * @param manifest the data stored in the found manifest file
      * @returns an array of processed tokens representing a subset of the provided ones
      */
-    preprocess(tokens: ReadonlyArray<Token>, manifest: Manifest): FilterResults {
+    public preprocess(tokens: ReadonlyArray<Token>, manifest: Manifest): FilterResults {
         let parserResults = this.parser.parse(tokens);
         if (parserResults.errors.length > 0) {
             return {
@@ -60,9 +61,6 @@ export class Preprocessor {
     }
 }
 
-import * as Chunk from "./Chunk";
-import { BrsError } from "../Error";
-import { ParseError } from "../parser";
 export { Chunk };
-export { Parser } from "./Parser";
-export { getManifest, getManifestSync, getBsConst, Manifest } from "./Manifest";
+export { Parser } from './Parser';
+export { getManifest, getManifestSync, getBsConst, Manifest } from './Manifest';

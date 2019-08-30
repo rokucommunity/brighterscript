@@ -810,7 +810,10 @@ export class Parser {
 
         function exitWhile(): Stmt.ExitWhile {
             let keyword = advance();
-            consume("Expected newline after 'exit while'", Lexeme.Newline);
+
+            if (check(Lexeme.Newline, Lexeme.Comment) === false) {
+                addError(peek(), `Expected newline or comment after 'exit while'`);
+            }
             while (match(Lexeme.Newline)) { }
             return new Stmt.ExitWhile({ exitWhile: keyword });
         }
@@ -1115,7 +1118,7 @@ export class Parser {
                     let endIfToken = advance(); // skip past "end if"
 
                     //ensure that single-line `if` statements have a colon right before 'end if'
-                    if (ifToken.location.start.line === endIfToken.location.start.line) {
+                    if (util.sameStartLine(ifToken, endIfToken)) {
                         let index = tokens.indexOf(endIfToken);
                         let previousToken = tokens[index - 1];
                         if (previousToken.kind !== Lexeme.Colon) {
@@ -1131,7 +1134,7 @@ export class Parser {
                     );
 
                     //ensure that single-line `if` statements have a colon right before 'end if'
-                    if (ifToken.location.start.line === endIfToken.location.start.line) {
+                    if (util.sameStartLine(ifToken, endIfToken)) {
                         let index = tokens.indexOf(endIfToken);
                         let previousToken = tokens[index - 1];
                         if (previousToken.kind !== Lexeme.Colon) {
@@ -1267,8 +1270,12 @@ export class Parser {
                         "Expected newline or ':' after indexed 'set' statement",
                         Lexeme.Newline,
                         Lexeme.Colon,
-                        Lexeme.Eof
+                        Lexeme.Eof, Lexeme.Comment
                     );
+                    //if we just consumed a comment, backtrack 1 token so it can be collected later
+                    if (checkPrevious(Lexeme.Comment)) {
+                        current--;
+                    }
 
                     return new Stmt.IndexedSetStatement(
                         left.obj,
@@ -1284,8 +1291,13 @@ export class Parser {
                         "Expected newline or ':' after dotted 'set' statement",
                         Lexeme.Newline,
                         Lexeme.Colon,
-                        Lexeme.Eof
+                        Lexeme.Eof,
+                        Lexeme.Comment
                     );
+                    //if we just consumed a comment, backtrack 1 token so it can be collected later
+                    if (checkPrevious(Lexeme.Comment)) {
+                        current--;
+                    }
 
                     return new Stmt.DottedSetStatement(
                         left.obj,

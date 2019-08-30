@@ -56,6 +56,32 @@ describe('lexer', () => {
     });
 
     describe('comments', () => {
+        it.skip('finds correct location for comment after if statement', () => {
+            let { tokens } = Lexer.scan(`
+                sub a()
+                    if true then
+                        print false
+                    else if true then
+                        print "true"
+                    else
+                        print "else"
+                    end if 'comment
+                end sub
+            `, 'testfile.brs');
+            let comments = tokens.filter(x => x.kind === Lexeme.Comment);
+            expect(comments).to.be.lengthOf(1);
+            expect(comments[1].location).to.eql({
+                file: 'testfile.brs',
+                start: {
+                    line: 8,
+                    column: 27
+                },
+                end: {
+                    line: 8,
+                    column: 35
+                }
+            });
+        });
         it('ignores everything after `\'`', () => {
             let { tokens } = Lexer.scan('= \' (');
             expect(tokens.map(t => t.kind)).to.deep.equal([Lexeme.Equal, Lexeme.Comment, Lexeme.Eof]);

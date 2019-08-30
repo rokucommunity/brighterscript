@@ -5,6 +5,7 @@ import { BrsType, BrsInvalid } from "../brsTypes";
 import { SourceNode } from 'source-map';
 import { Stmt } from '.';
 import { TranspileState, indent } from './Expression';
+import { util } from '../../util';
 
 export interface Visitor<T> {
     visitAssignment(statement: AssignmentStatement): BrsType;
@@ -101,11 +102,9 @@ export class Block implements Statement {
             let previousStatement = this.statements[i - 1];
             let statement = this.statements[i];
 
-            if (
-                //if comment is on same line as parent
-                (i === 0 && statement instanceof CommentStatement && state.parents[0] && statement.location.start.line === state.parents[0].location.start.line) ||
-                //if comment is on same line as previous sibling
-                (previousStatement && statement.location.start.line === previousStatement.location.start.line)
+            //if comment is on same line as parent
+            if (statement instanceof CommentStatement &&
+                (util.linesTouch(state.lineage[0], statement) || util.linesTouch(previousStatement, statement))
             ) {
                 results.push(' ');
 
@@ -118,11 +117,11 @@ export class Block implements Statement {
             }
 
             //push block onto parent list
-            state.parents.unshift(this);
+            state.lineage.unshift(this);
             results.push(
                 ...statement.transpile(state)
             );
-            state.parents.shift();
+            state.lineage.shift();
         }
         state.blockDepth--;
         return results
@@ -368,8 +367,10 @@ export class IfStatement implements Statement {
         } else {
             results.push('then')
         }
+        state.lineage.unshift(this);
         //if statement body
         let thenNodes = this.thenBranch.transpile(state);
+        state.lineage.shift();
         if (thenNodes.length > 0) {
             results.push(thenNodes);
             results.push('\n')
@@ -384,6 +385,7 @@ export class IfStatement implements Statement {
                 new SourceNode(elseif.elseIfToken.location.start.line, elseif.elseIfToken.location.start.column, state.pkgPath, 'else if'),
                 ' '
             );
+
             //condition
             results.push(...elseif.condition.transpile(state));
             //then
@@ -397,7 +399,10 @@ export class IfStatement implements Statement {
             }
 
             //then body
+            state.lineage.unshift(elseif.thenBranch);
             let body = elseif.thenBranch.transpile(state);
+            state.lineage.shift();
+
             if (body.length > 0) {
                 results.push(...body);
                 results.push('\n');
@@ -411,14 +416,17 @@ export class IfStatement implements Statement {
                 indent(state.blockDepth),
                 new SourceNode(this.tokens.else.location.start.line, this.tokens.else.location.start.column, state.pkgPath, 'else')
             );
+
             //then body
+            state.lineage.unshift(this.elseBranch);
             let body = this.elseBranch.transpile(state);
+            state.lineage.shift();
+
             if (body.length > 0) {
                 results.push(...body);
                 results.push('\n');
             }
         }
-
         //end if
         results.push(indent(state.blockDepth));
         if (this.tokens.endIf) {
@@ -827,13 +835,13 @@ export class WhileStatement implements Statement {
         result.push(
             ...this.condition.transpile(state),
         );
+        state.lineage.unshift(this);
         //body
         result.push(...this.body.transpile(state));
+        state.lineage.shift();
 
         //trailing newline only if we have body statements
-        if (this.body.statements.length > 0) {
-            result.push('\n');
-        }
+        result.push('\n');
 
         //end while
         result.push(

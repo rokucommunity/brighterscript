@@ -2,9 +2,9 @@
 import { EventEmitter } from "events";
 
 import * as CC from "./Chunk";
-import { ParseError } from "../parser";
 import { Token, Lexeme } from "../lexer";
 import { BrsError } from "../Error";
+import { ParseError } from '../parser/ParseError';
 
 /** The results of a Preprocessor's filtering pass. */
 export interface FilterResults {

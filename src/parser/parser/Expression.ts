@@ -25,7 +25,7 @@ export interface TranspileState {
     blockDepth: number;
     //the tree of parents, with the first index being direct parent, and the last index being the furthest removed ancestor. 
     //Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
-    parents: Array<{
+    lineage: Array<{
         location: Location;
     }>;
 }
@@ -174,6 +174,7 @@ export class FunctionExpression implements Expression {
         results.push(
             new SourceNode(this.rightParen.location.start.line, this.rightParen.location.start.column, state.pkgPath, ')')
         );
+        //as [Type]
         if (this.asToken) {
             results.push(
                 ' ',
@@ -184,9 +185,9 @@ export class FunctionExpression implements Expression {
                 new SourceNode(this.returnTypeToken.location.start.line, this.returnTypeToken.location.start.column, state.pkgPath, this.returnTypeToken.text.toLowerCase())
             );
         }
-        state.parents.unshift(this);
+        state.lineage.unshift(this);
         let body = this.body.transpile(state);
-        state.parents.shift();
+        state.lineage.shift();
         results.push(...body);
         results.push('\n');
         //'end sub'|'end function'
@@ -420,7 +421,9 @@ export class AALiteralExpression implements Expression {
             let nextElement = this.elements[i + 1];
 
             //don't indent if comment is same-line
-            if (element instanceof CommentStatement && (util.startOnSameLine(this.open, element) || util.startOnSameLine(previousElement, element))) {
+            if (element instanceof CommentStatement &&
+                (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element))
+            ) {
                 result.push(' ');
 
                 //indent line
