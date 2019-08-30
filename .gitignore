@@ -6,3 +6,4 @@ out
 coverage
 .nyc_output
 *.zip
+graph.svg
