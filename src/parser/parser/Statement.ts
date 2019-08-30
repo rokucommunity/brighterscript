@@ -98,20 +98,18 @@ export class Block implements Statement {
         state.blockDepth++;
         let results = [] as Array<SourceNode | string>;
         for (let i = 0; i < this.statements.length; i++) {
+            let previousStatement = this.statements[i - 1];
+            let statement = this.statements[i];
 
-            //maybe add comment to same line as parent 
             if (
-                //is first item
-                i === 0 &&
-                //is comment
-                this.statements[i] instanceof CommentStatement &&
-                //has parent
-                state.parents[0] &&
-                //is on same line as parent
-                this.statements[i].location.start.line === state.parents[0].location.start.line
+                //if comment is on same line as parent
+                (i === 0 && statement instanceof CommentStatement && state.parents[0] && statement.location.start.line === state.parents[0].location.start.line) ||
+                //if comment is on same line as previous sibling
+                (previousStatement && statement.location.start.line === previousStatement.location.start.line)
             ) {
                 results.push(' ');
-                //don't add a newline
+
+                //is not a comment
             } else {
                 //add a newline
                 results.push('\n');
@@ -122,7 +120,7 @@ export class Block implements Statement {
             //push block onto parent list
             state.parents.unshift(this);
             results.push(
-                ...this.statements[i].transpile(state)
+                ...statement.transpile(state)
             );
             state.parents.shift();
         }

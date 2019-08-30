@@ -680,13 +680,12 @@ export class Parser {
             );
 
             let value = expression();
-            if (!check(...additionalterminators)) {
+            if (!check(...additionalterminators, Lexeme.Comment)) {
                 consume(
                     "Expected newline or ':' after assignment",
                     Lexeme.Newline,
                     Lexeme.Colon,
                     Lexeme.Eof,
-                    Lexeme.Comment,
                     ...additionalterminators
                 );
             }

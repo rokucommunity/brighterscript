@@ -1213,7 +1213,7 @@ describe('BrsFile', () => {
         it('keeps end-of-line comments with their line', async () => {
             await testTranspile(`
                 function DoSomething() 'comment 1
-                    name = "bob"
+                    name = "bob" 'comment 2
                 end function 'comment 3
             `);
         });
