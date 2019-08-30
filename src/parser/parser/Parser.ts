@@ -973,7 +973,7 @@ export class Parser {
             let isAtTopOfFile = true;
             for (let statement of statements) {
                 //if we found a non-library statement, this statement is not at the top of the file
-                if (!(statement instanceof Stmt.LibraryStatement)) {
+                if (!(statement instanceof Stmt.LibraryStatement) && !(statement instanceof Stmt.CommentStatement)) {
                     isAtTopOfFile = false;
                 }
             }
@@ -1115,7 +1115,7 @@ export class Parser {
 
                     match(Lexeme.Newline);
                     elseBranch = block(Lexeme.EndIf);
-                    let endIfToken = advance(); // skip past "end if"
+                    endIfToken = advance(); // skip past "end if"
 
                     //ensure that single-line `if` statements have a colon right before 'end if'
                     if (util.sameStartLine(ifToken, endIfToken)) {

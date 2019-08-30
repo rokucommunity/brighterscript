@@ -186,6 +186,27 @@ describe('parser if statements', () => {
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
+
+        it('sets endif token properly', () => {
+            //this test requires token locations, so use the lexer
+            let { tokens } = Lexer.scan(`
+                sub a()
+                    if true then
+                        print false
+                    else if true then
+                        print "true"
+                    else
+                        print "else"
+                    end if 'comment
+                end sub
+            `);
+            let { statements, errors } = parser.parse(tokens);
+            expect(errors).to.be.lengthOf(0);
+            expect(statements).to.be.length.greaterThan(0);
+
+            //the endif token should be set
+            expect(statements[0].func.body.statements[0].tokens.endIf).to.exist;
+        });
     });
 
     it('supports trailing colons after conditional statements', () => {

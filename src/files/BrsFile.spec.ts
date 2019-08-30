@@ -1329,20 +1329,6 @@ describe('BrsFile', () => {
             `);
         });
 
-        it.skip('temp', async () => {
-            await testTranspile(`
-                sub a()
-                    if true then
-                        print false
-                    else if true then
-                        print "true"
-                    else
-                        print "else"
-                    end if 'comment
-                end sub
-            `);
-        });
-
         it('works for a complex function with comments at the end of each line', async () => {
             await testTranspile(`
                 'import some library
@@ -1432,6 +1418,8 @@ describe('BrsFile', () => {
             let formatter = new BrightScriptFormatter();
             expected = expected ? expected : source;
             let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, source) as BrsFile;
+            let firstDiagnosticMessage = file.getDiagnostics().length > 0 ? file.getDiagnostics()[0].message : '';
+            expect(file.getDiagnostics()).to.be.lengthOf(0, `Found parse errors: '${firstDiagnosticMessage}'`);
             let transpiled = file.transpile();
 
             let sources = [transpiled.code, expected];

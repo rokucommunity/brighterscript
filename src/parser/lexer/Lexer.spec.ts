@@ -56,7 +56,7 @@ describe('lexer', () => {
     });
 
     describe('comments', () => {
-        it.skip('finds correct location for comment after if statement', () => {
+        it('finds correct location for comment after if statement', () => {
             let { tokens } = Lexer.scan(`
                 sub a()
                     if true then
@@ -70,14 +70,14 @@ describe('lexer', () => {
             `, 'testfile.brs');
             let comments = tokens.filter(x => x.kind === Lexeme.Comment);
             expect(comments).to.be.lengthOf(1);
-            expect(comments[1].location).to.eql({
+            expect(comments[0].location).to.eql({
                 file: 'testfile.brs',
                 start: {
-                    line: 8,
-                    column: 27
+                    line: 9,
+                    column: 28
                 },
                 end: {
-                    line: 8,
+                    line: 9,
                     column: 35
                 }
             });
