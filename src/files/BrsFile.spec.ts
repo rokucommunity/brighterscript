@@ -1388,29 +1388,29 @@ describe('BrsFile', () => {
                         age = 12 'comment
                         exit for 'comment
                     end for 'comment
-                    callback = function(name, age as integer, cb as Function) as integer
-                        returnValue = 12
-                        return returnValue
-                    end function
-                    print "a" ; "b" ; 3
-                    a(1, 2, 3)
-                    person.functionCall(1, 2, 3)
-                    if true then
-                        level = 1
-                        if false then
-                            level = 2
-                            if true or false then
-                                level = 3
-                                if false and true then
-                                    level = 4
-                                end if
-                            end if
-                        end if
-                    end if
+                    callback = function(name, age as integer, cb as Function) as integer 'comment
+                        returnValue = 12 'comment
+                        return returnValue 'comment
+                    end function 'comment
+                    print "a" ; "b" ; 3 'comment
+                    a(1, 2, 3) 'comment
+                    person.functionCall(1, 2, 3) 'comment
+                    if true then 'comment
+                        level = 1 'comment
+                        if false then 'comment
+                            level = 2 'comment
+                            if true or false then 'comment
+                                level = 3 'comment
+                                if false and true then 'comment
+                                    level = 4 'comment
+                                end if 'comment
+                            end if 'comment
+                        end if 'comment
+                    end if 'comment
                 end function
 
-                function a(p1, p2, p3)
-                end function
+                function a(p1, p2, p3) 'comment
+                end function 'comment
             `);
         });
 
