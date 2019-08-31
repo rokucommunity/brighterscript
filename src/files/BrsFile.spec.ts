@@ -1375,19 +1375,19 @@ describe('BrsFile', () => {
                         1, 'comment
                         2, 'comment
                         3 'comment
-                    ]
-                    firstIndex = indexes[0]
-                    for each idx in indxes
-                        indexes[idx] = idx + 1
-                    end for
-                    if not true then
-                        print "false"
-                    end if
-                    for i = 0 to 10 step 1
-                        name = "bob"
-                        age = 12
+                    ] 'comment
+                    firstIndex = indexes[0] 'comment
+                    for each idx in indxes 'comment
+                        indexes[idx] = idx + 1 'comment
+                    end for 'comment
+                    if not true then 'comment
+                        print "false" 'comment
+                    end if 'comment 'comment
+                    for i = 0 to 10 step 1 'comment
+                        name = "bob" 'comment
+                        age = 12 'comment
                         exit for
-                    end for
+                    end for 'comment
                     callback = function(name, age as integer, cb as Function) as integer
                         returnValue = 12
                         return returnValue

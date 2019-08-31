@@ -731,7 +731,9 @@ export class ForStatement implements Statement {
             )
         }
         //loop body
+        state.lineage.unshift(this);
         result.push(...this.body.transpile(state));
+        state.lineage.shift();
         if (this.body.statements.length > 0) {
             result.push('\n');
         }
@@ -789,7 +791,9 @@ export class ForEachStatement implements Statement {
         //target
         result.push(...this.target.transpile(state));
         //body
+        state.lineage.unshift(this);
         result.push(...this.body.transpile(state));
+        state.lineage.shift();
         if (this.body.statements.length > 0) {
             result.push('\n');
         }
