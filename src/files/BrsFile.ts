@@ -184,16 +184,16 @@ export class BrsFile {
             let line = lines[lineIndex];
             let nextLineLength = lines[lineIndex + 1] ? lines[lineIndex + 1].length : Number.MAX_SAFE_INTEGER;
 
-            //brs:disable-next-line and brs:disable-line
+            //bs:disable-next-line and bs:disable-line
             {
                 let searches = [{
-                    text: `'brs:disable-next-line`,
+                    text: `'bs:disable-next-line`,
                     lineOffset: 1,
                     getAffectedRange: () => {
                         return Range.create(lineIndex + 1, 0, lineIndex + 1, nextLineLength);
                     }
                 }, {
-                    text: `'brs:disable-line`,
+                    text: `'bs:disable-line`,
                     lineOffset: 0,
                     getAffectedRange: (idx: number) => {
                         return Range.create(lineIndex, 0, lineIndex, idx);

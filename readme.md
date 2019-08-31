@@ -112,37 +112,37 @@ These are the options available in the `bsconfig.json` file.
 
 
 ## Ignore errors and warnings on a per-line basis
-In addition to disabling an entire class of errors in `bsconfig.json`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
- - `brs:disable-next-line`
- - `brs:disable-next-line: code1 code2 code3`
- - `brs:disable-line`
- - `brs:disable-line: code1 code2 code3`
+In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
+ - `bs:disable-next-line`
+ - `bs:disable-next-line: code1 code2 code3`
+ - `bs:disable-line`
+ - `bs:disable-line: code1 code2 code3`
 
 Here are some examples:
 
 ```brightscript
 sub Main()
     'disable errors about invalid syntax here
-    'brs:disable-next-line
+    'bs:disable-next-line
     DoSomething(
 
-    DoSomething( 'brs:disable-line
+    DoSomething( 'bs:disable-line
     
     'disable errors about wrong parameter count
-    DoSomething(1,2,3) 'brs:disable-next-line
+    DoSomething(1,2,3) 'bs:disable-next-line
 
-    DoSomething(1,2,3) 'brs:disable-next-line:1002
+    DoSomething(1,2,3) 'bs:disable-next-line:1002
 end sub
 
 sub DoSomething()
 end sub
 ```
 
-The primary motivation for implementing this feature was to provide a stopgap measure to hide errors on legitimate brightscript code. This is still a new project and it is likely to be missing support for certain BrightScript syntaxes. It is recommended that you only use these comments when absolutely necessary.
+The primary motivation for this feature was to provide a stopgap measure to hide incorrectly-thrown errors on legitimate brightscript code due to parser bugs. This is still a new project and it is likely to be missing support for certain BrightScript syntaxes. It is recommended that you only use these comments when absolutely necessary.
 
 ## Language Server Protocol
 
-This project also contributes a class that aligns with Microsoft's [Language Server Protocol](https://microsoft.github.io/language-server-protocol/), which makes it easy to integrate `brightscript` with any IDE that supports the protocol. We won't go into more detail here, but you can use the `LanguageServer` class from this project to integrate into your IDE. The [vscode-brightscript-language](https://github.com/twitchbronbron/vscode-brightscript-language) extension uses this LanguageServer class for Visual Studio Code support. 
+This project also contributes a class that aligns with Microsoft's [Language Server Protocol](https://microsoft.github.io/language-server-protocol/), which makes it easy to integrate `brightscript` and `brighterscript` with any IDE that supports the protocol. We won't go into more detail here, but you can use the `LanguageServer` class from this project to integrate into your IDE. The [vscode-brightscript-language](https://github.com/twitchbronbron/vscode-brightscript-language) extension uses this LanguageServer class to bring `BrightScript` and `BrighterScript` language support to Visual Studio Code.
 
 ## Changelog
 [Click here](CHANGELOG.md) to view the changelog.

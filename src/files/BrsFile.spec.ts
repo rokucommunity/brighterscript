@@ -33,18 +33,18 @@ describe('BrsFile', () => {
     });
 
     describe('comment flags', () => {
-        describe('brs:disable-next-line', () => {
+        describe('bs:disable-next-line', () => {
             it('works for all', async () => {
                 let file: BrsFile = (await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
                     sub Main()
-                        'brs:disable-next-line
+                        'bs:disable-next-line
                         name = "bob
                     end sub
                 `) as any);
                 expect(file.commentFlags[0]).to.exist;
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: null,
-                    range: Range.create(2, 24, 2, 46),
+                    range: Range.create(2, 24, 2, 45),
                     affectedRange: Range.create(3, 0, 3, 35)
                 } as CommentFlag);
                 await program.validate();
@@ -55,14 +55,14 @@ describe('BrsFile', () => {
             it('works for specific codes', async () => {
                 let file: BrsFile = (await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
                     sub Main()
-                        'brs:disable-next-line: 1000, 1001
+                        'bs:disable-next-line: 1000, 1001
                         name = "bob
                     end sub
                 `) as any);
                 expect(file.commentFlags[0]).to.exist;
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: [1000, 1001],
-                    range: Range.create(2, 24, 2, 58),
+                    range: Range.create(2, 24, 2, 57),
                     affectedRange: Range.create(3, 0, 3, 35)
                 } as CommentFlag);
                 //the "unterminated string" error should be filtered out
@@ -72,7 +72,7 @@ describe('BrsFile', () => {
             it('adds diagnostics for unknown diagnostic codes', async () => {
                 await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
                     sub main()
-                        print "hi" 'brs:disable-line: 123456 999999   aaaab
+                        print "hi" 'bs:disable-line: 123456 999999   aaaab
                     end sub
                 `);
 
@@ -80,29 +80,29 @@ describe('BrsFile', () => {
 
                 expect(program.getDiagnostics()).to.be.lengthOf(3);
                 expect(program.getDiagnostics()[0]).to.deep.include({
-                    location: Range.create(2, 54, 2, 60)
+                    location: Range.create(2, 53, 2, 59)
                 } as Diagnostic);
                 expect(program.getDiagnostics()[1]).to.deep.include({
-                    location: Range.create(2, 61, 2, 67)
+                    location: Range.create(2, 60, 2, 66)
                 } as Diagnostic);
                 expect(program.getDiagnostics()[2]).to.deep.include({
-                    location: Range.create(2, 70, 2, 75)
+                    location: Range.create(2, 69, 2, 74)
                 } as Diagnostic);
             });
 
         });
 
-        describe('brs:disable-line', () => {
+        describe('bs:disable-line', () => {
             it('works for all', async () => {
                 let file: BrsFile = (await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
                     sub Main()
-                        name = "bob 'brs:disable-line
+                        name = "bob 'bs:disable-line
                     end sub
                 `) as any);
                 expect(file.commentFlags[0]).to.exist;
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: null,
-                    range: Range.create(2, 36, 2, 53),
+                    range: Range.create(2, 36, 2, 52),
                     affectedRange: Range.create(2, 0, 2, 36)
                 } as CommentFlag);
                 await program.validate();
@@ -114,9 +114,9 @@ describe('BrsFile', () => {
                 await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
                     sub main()
                         'should not have any errors
-                        DoSomething(1) 'brs:disable-line:1002
+                        DoSomething(1) 'bs:disable-line:1002
                         'should have an error because the param-count error is not being suppressed
-                        DoSomething(1) 'brs:disable-line:1000
+                        DoSomething(1) 'bs:disable-line:1000
                     end sub
                     sub DoSomething()
                     end sub
@@ -136,7 +136,7 @@ describe('BrsFile', () => {
                 //for the diagnostics about using unknown error codes
                 await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
                     sub main()
-                        stop 'brs:disable-line
+                        stop 'bs:disable-line
                         print "need a valid line to fix stop error"
                     end sub
                 `);
