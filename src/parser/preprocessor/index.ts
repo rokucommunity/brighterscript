@@ -9,7 +9,7 @@ import { FilterResults, Preprocessor as InternalPreprocessor } from './Preproces
 
 export class Preprocessor {
     private parser = new Parser();
-    private _preprocessor = new InternalPreprocessor();
+    private preprocessor = new InternalPreprocessor();
 
     public readonly events = new EventEmitter();
 
@@ -38,7 +38,7 @@ export class Preprocessor {
     constructor() {
         // plumb errors from the internal parser and preprocessor out to the public interface for convenience
         this.parser.events.on('err', err => this.events.emit('err', err));
-        this._preprocessor.events.on('err', err => this.events.emit('err', err));
+        this.preprocessor.events.on('err', err => this.events.emit('err', err));
     }
 
     /**
@@ -56,7 +56,7 @@ export class Preprocessor {
             };
         }
 
-        return this._preprocessor.filter(parserResults.chunks, getBsConst(manifest));
+        return this.preprocessor.filter(parserResults.chunks, getBsConst(manifest));
     }
 }
 
