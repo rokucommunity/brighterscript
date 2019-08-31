@@ -1664,7 +1664,11 @@ export class Parser {
                     if (!match(Lexeme.RightSquare)) {
                         elements.push(expression());
 
-                        while (match(Lexeme.Comma, Lexeme.Newline)) {
+                        while (match(Lexeme.Comma, Lexeme.Newline, Lexeme.Comment)) {
+                            if (checkPrevious(Lexeme.Comment) || check(Lexeme.Comment)) {
+                                let comment = check(Lexeme.Comment) ? advance() : previous();
+                                elements.push(new Stmt.CommentStatement([comment]));
+                            }
                             while (match(Lexeme.Newline));
 
                             if (check(Lexeme.RightSquare)) {

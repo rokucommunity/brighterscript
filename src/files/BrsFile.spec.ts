@@ -1372,9 +1372,9 @@ describe('BrsFile', () => {
                     end 'comment
                     stop 'comment
                     indexes = [ 'comment
-                        1,
-                        2,
-                        3
+                        1, 'comment
+                        2, 'comment
+                        3 'comment
                     ]
                     firstIndex = indexes[0]
                     for each idx in indxes

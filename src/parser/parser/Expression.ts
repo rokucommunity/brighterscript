@@ -347,10 +347,12 @@ export class ArrayLiteralExpression implements Expression {
         );
         let hasChildren = this.elements.length > 0;
         state.blockDepth++;
-        let nonCommentCount = 0;
+
         for (let i = 0; i < this.elements.length; i++) {
             let previousElement = this.elements[i - 1];
             let element = this.elements[i];
+            let nextElement = this.elements[i + 1];
+            let nextNextElement = this.elements[i + 2];
             if (element instanceof CommentStatement) {
                 //if the comment is on the same line as opening square or previous statement, don't add newline
                 if (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element)) {
@@ -362,16 +364,21 @@ export class ArrayLiteralExpression implements Expression {
                 result.push(element.transpile(state));
                 state.lineage.shift();
             } else {
-                if (nonCommentCount > 0) {
-                    result.push(',');
-                }
-                nonCommentCount++;
                 result.push('\n');
 
                 result.push(
                     indent(state.blockDepth),
                     ...element.transpile(state)
                 );
+                //add a comma if we know there will be another non-comment statement after this
+                inner: for (var j = i + 1; j < this.elements.length; j++) {
+                    let el = this.elements[j];
+                    //add a comma if there will be another element after this
+                    if (el instanceof CommentStatement === false) {
+                        result.push(',');
+                        break inner;
+                    }
+                }
             }
         }
         state.blockDepth--;
