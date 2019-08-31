@@ -1360,18 +1360,18 @@ describe('BrsFile', () => {
                     if true or 1 = 1 or name = "tim" then 'comment
                         print false 'comment
                     else if false or "cat" = "dog" or true then 'comment
-                        print "true"
+                        print "true" 'comment
                     else 'comment
                         print "else" 'comment
                     end if 'comment
-                    someBool = (true or false) or ((true) or (false))
-                    mylabel:
-                    goto mylabel
-                    age++
-                    age--
-                    end
-                    stop
-                    indexes = [
+                    someBool = (true or false) or ((true) or (false)) 'comment
+                    mylabel: 'comment
+                    goto mylabel 'comment
+                    age++ 'comment
+                    age-- 'comment
+                    end 'comment
+                    stop 'comment
+                    indexes = [ 'comment
                         1,
                         2,
                         3

@@ -17,7 +17,7 @@ import {
     StdlibArgument,
     FunctionParameter,
 } from "../brsTypes";
-import { FunctionStatement, ClassStatement, ClassFieldStatement, ClassMemberStatement, ClassMethodStatement } from './Statement';
+import { FunctionStatement, ClassStatement, ClassFieldStatement, ClassMemberStatement, ClassMethodStatement, CommentStatement } from './Statement';
 import { diagnosticMessages, DiagnosticMessage } from '../../DiagnosticMessages';
 import { util } from '../../util';
 import { ParseError } from '../Error';
@@ -1384,7 +1384,9 @@ export class Parser {
                 colon: advance(),
             };
 
-            consume("Labels must be declared on their own line", Lexeme.Newline, Lexeme.Eof);
+            if (!check(Lexeme.Comment)) {
+                consume("Labels must be declared on their own line", Lexeme.Newline, Lexeme.Eof);
+            }
 
             return new Stmt.Label(tokens);
         }
@@ -1650,8 +1652,12 @@ export class Parser {
                     );
                     return new Expr.Grouping({ left, right }, expr);
                 case match(Lexeme.LeftSquare):
-                    let elements: Expression[] = [];
+                    let elements: Array<Expression | CommentStatement> = [];
                     let openingSquare = previous();
+
+                    if (check(Lexeme.Comment)) {
+                        elements.push(new CommentStatement([advance()]));
+                    }
 
                     while (match(Lexeme.Newline));
 

@@ -323,7 +323,7 @@ export class Literal implements Expression {
 
 export class ArrayLiteralExpression implements Expression {
     constructor(
-        readonly elements: Expression[],
+        readonly elements: Array<Expression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) { }
@@ -347,17 +347,32 @@ export class ArrayLiteralExpression implements Expression {
         );
         let hasChildren = this.elements.length > 0;
         state.blockDepth++;
+        let nonCommentCount = 0;
         for (let i = 0; i < this.elements.length; i++) {
-            if (i > 0) {
-                result.push(',');
-            }
+            let previousElement = this.elements[i - 1];
             let element = this.elements[i];
-            result.push('\n');
+            if (element instanceof CommentStatement) {
+                //if the comment is on the same line as opening square or previous statement, don't add newline
+                if (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element)) {
+                    result.push(' ');
+                } else {
+                    result.push(indent(state.blockDepth));
+                }
+                state.lineage.unshift(this);
+                result.push(element.transpile(state));
+                state.lineage.shift();
+            } else {
+                if (nonCommentCount > 0) {
+                    result.push(',');
+                }
+                nonCommentCount++;
+                result.push('\n');
 
-            result.push(
-                indent(state.blockDepth),
-                ...element.transpile(state)
-            );
+                result.push(
+                    indent(state.blockDepth),
+                    ...element.transpile(state)
+                );
+            }
         }
         state.blockDepth--;
         //add a newline between open and close if there are elements
@@ -411,7 +426,7 @@ export class AALiteralExpression implements Expression {
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
-        if (hasChildren && ((this.elements[0] instanceof CommentStatement) === false || this.elements[0].location.start.line != this.open.location.start.line)) {
+        if (hasChildren && ((this.elements[0] instanceof CommentStatement) === false || !util.linesTouch(this.elements[0], this.open))) {
             result.push('\n');
         }
         state.blockDepth++;

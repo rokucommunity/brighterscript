@@ -63,7 +63,7 @@
     "@types/node": "^11.9.0",
     "@types/request": "^2.47.0",
     "@types/sinon": "^7.0.4",
-    "brightscript-formatter": "^1.7.0",
+    "brightscript-formatter": "^1.7.1",
     "chai": "^4.2.0",
     "chai-files": "^1.4.0",
     "codecov": "^3.1.0",
