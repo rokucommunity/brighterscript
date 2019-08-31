@@ -1,9 +1,8 @@
-//tslint:disable
-import { EventEmitter } from "events";
+import { EventEmitter } from 'events';
 
-import * as CC from "./Chunk";
-import { Token, Lexeme } from "../lexer";
-import { BrsError, ParseError } from "../Error";
+import { BrsError, ParseError } from '../Error';
+import { Lexeme, Token } from '../lexer';
+import * as CC from './Chunk';
 
 /** The results of a Preprocessor's filtering pass. */
 export interface FilterResults {
@@ -21,10 +20,10 @@ export class Preprocessor implements CC.Visitor {
     private constants = new Map<string, boolean>();
 
     /** Allows consumers to observe errors as they're detected. */
-    readonly events = new EventEmitter();
+    public readonly events = new EventEmitter();
 
     /** The set of errors encountered when pre-processing conditional compilation directives. */
-    errors: ParseError[] = [];
+    public errors: ParseError[] = [];
 
     /**
      * Emits an error via this processor's `events` property, then throws it.
@@ -32,7 +31,7 @@ export class Preprocessor implements CC.Visitor {
      */
     private addError(err: BrsError): never {
         this.errors.push(err);
-        this.events.emit("err", err);
+        this.events.emit('err', err);
         throw err;
     }
 
@@ -43,7 +42,7 @@ export class Preprocessor implements CC.Visitor {
      * @returns an object containing an array of `errors` and an array of `processedTokens` filtered by conditional
      *          compilation directives included within
      */
-    filter(chunks: ReadonlyArray<CC.Chunk>, bsConst: Map<string, boolean>): FilterResults {
+    public filter(chunks: ReadonlyArray<CC.Chunk>, bsConst: Map<string, boolean>): FilterResults {
         this.constants = new Map(bsConst);
         return {
             processedTokens: chunks
@@ -61,7 +60,7 @@ export class Preprocessor implements CC.Visitor {
      * @param chunk the chunk to extract tokens from
      * @returns the array of tokens contained within `chunk`
      */
-    visitBrightScript(chunk: CC.BrightScript) {
+    public visitBrightScript(chunk: CC.BrightScript) {
         return chunk.tokens;
     }
 
@@ -71,7 +70,7 @@ export class Preprocessor implements CC.Visitor {
      * @param chunk the `#const` directive, including the name and variable to use for the constant
      * @returns an empty array, since `#const` directives are always removed from the evaluated script.
      */
-    visitDeclaration(chunk: CC.Declaration) {
+    public visitDeclaration(chunk: CC.Declaration) {
         if (this.constants.has(chunk.name.text)) {
             return this.addError(
                 new BrsError(
@@ -104,7 +103,7 @@ export class Preprocessor implements CC.Visitor {
             default:
                 return this.addError(
                     new BrsError(
-                        "#const declarations can only have values of `true`, `false`, or other #const names",
+                        '#const declarations can only have values of `true`, `false`, or other #const names',
                         chunk.value.location
                     )
                 );
@@ -120,7 +119,7 @@ export class Preprocessor implements CC.Visitor {
      * @param chunk the error to report to users
      * @throws a JavaScript error with the provided message
      */
-    visitError(chunk: CC.Error): never {
+    public visitError(chunk: CC.Error): never {
         return this.addError(new ParseError(chunk.hashError, chunk.message));
     }
 
@@ -129,7 +128,7 @@ export class Preprocessor implements CC.Visitor {
      * @param chunk the `#if` directive, any `#else if` or `#else` directives, and their associated BrightScript chunks.
      * @returns an array of tokens to include in the final executed script.
      */
-    visitIf(chunk: CC.If): Token[] {
+    public visitIf(chunk: CC.If): Token[] {
         if (this.evaluateCondition(chunk.condition)) {
             return chunk.thenChunks
                 .map(chunk => chunk.accept(this))
@@ -161,7 +160,7 @@ export class Preprocessor implements CC.Visitor {
      * @param token the token to resolve to either `true`, `false`, or an error
      * @throws if attempting to reference an undefined `#const` or if `token` is neither `true`, `false`, nor an identifier.
      */
-    evaluateCondition(token: Token): boolean {
+    public evaluateCondition(token: Token): boolean {
         switch (token.kind) {
             case Lexeme.True:
                 return true;
@@ -181,7 +180,7 @@ export class Preprocessor implements CC.Visitor {
             default:
                 return this.addError(
                     new BrsError(
-                        "#if conditionals can only be `true`, `false`, or other #const names",
+                        '#if conditionals can only be `true`, `false`, or other #const names',
                         token.location
                     )
                 );
