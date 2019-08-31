@@ -351,8 +351,7 @@ export class ArrayLiteralExpression implements Expression {
         for (let i = 0; i < this.elements.length; i++) {
             let previousElement = this.elements[i - 1];
             let element = this.elements[i];
-            let nextElement = this.elements[i + 1];
-            let nextNextElement = this.elements[i + 2];
+
             if (element instanceof CommentStatement) {
                 //if the comment is on the same line as opening square or previous statement, don't add newline
                 if (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element)) {

@@ -906,8 +906,10 @@ export class Parser {
 
         function exitFor(): Stmt.ExitFor {
             let keyword = advance();
-            consume("Expected newline after 'exit for'", Lexeme.Newline);
-            while (match(Lexeme.Newline)) { }
+            if (!check(Lexeme.Comment)) {
+                consume("Expected newline after 'exit for'", Lexeme.Newline);
+                while (match(Lexeme.Newline));
+            }
             return new Stmt.ExitFor({ exitFor: keyword });
         }
 

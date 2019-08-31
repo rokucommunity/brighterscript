@@ -1386,7 +1386,7 @@ describe('BrsFile', () => {
                     for i = 0 to 10 step 1 'comment
                         name = "bob" 'comment
                         age = 12 'comment
-                        exit for
+                        exit for 'comment
                     end for 'comment
                     callback = function(name, age as integer, cb as Function) as integer
                         returnValue = 12
