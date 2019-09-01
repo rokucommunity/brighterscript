@@ -1372,6 +1372,7 @@ describe('BrsFile', () => {
                     end 'comment
                     stop 'comment
                     indexes = [ 'comment
+                        'comment on its own line
                         1, 'comment
                         2, 'comment
                         3 'comment

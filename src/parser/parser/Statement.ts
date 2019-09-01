@@ -4,7 +4,7 @@ import { Token, Identifier, Location, Lexeme } from "../lexer";
 import { BrsType, BrsInvalid } from "../brsTypes";
 import { SourceNode } from 'source-map';
 import { Stmt } from '.';
-import { TranspileState, indent } from './Expression';
+import { TranspileState, indent, Expression } from './Expression';
 import { util } from '../../util';
 
 export interface Visitor<T> {
@@ -146,12 +146,12 @@ export class ExpressionStatement implements Statement {
     }
 }
 
-export class CommentStatement implements Statement {
+export class CommentStatement implements Statement, Expression {
     constructor(
         public comments: Token[]
     ) { }
 
-    accept<R>(visitor: Visitor<R>): BrsType {
+    accept(...args: any): any {
         throw new Error('comment statement visitor not implemented');
     }
 

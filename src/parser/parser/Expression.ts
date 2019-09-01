@@ -357,7 +357,10 @@ export class ArrayLiteralExpression implements Expression {
                 if (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element)) {
                     result.push(' ');
                 } else {
-                    result.push(indent(state.blockDepth));
+                    result.push(
+                        '\n',
+                        indent(state.blockDepth)
+                    );
                 }
                 state.lineage.unshift(this);
                 result.push(element.transpile(state));

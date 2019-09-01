@@ -1654,9 +1654,12 @@ export class Parser {
                     );
                     return new Expr.Grouping({ left, right }, expr);
                 case match(Lexeme.LeftSquare):
+                    var r = errors;
+                    r = r;
                     let elements: Array<Expression | CommentStatement> = [];
                     let openingSquare = previous();
 
+                    //add any comment found right after the opening square
                     if (check(Lexeme.Comment)) {
                         elements.push(new CommentStatement([advance()]));
                     }
@@ -1778,6 +1781,8 @@ export class Parser {
                     return new Expr.Variable(token);
                 case check(Lexeme.Function, Lexeme.Sub):
                     return anonymousFunction();
+                case check(Lexeme.Comment):
+                    return new Stmt.CommentStatement([advance()]);
                 default:
                     throw addError(peek(), `Found unexpected token '${peek().text}'`);
             }
