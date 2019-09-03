@@ -10,6 +10,7 @@ import {
     InitializeParams,
     Location,
     ProposedFeatures,
+    Range,
     ServerCapabilities,
     TextDocument,
     TextDocumentPositionParams,
@@ -17,6 +18,7 @@ import {
 } from 'vscode-languageserver';
 import Uri from 'vscode-uri';
 
+import { diagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import util from './util';
 
@@ -145,8 +147,6 @@ export class LanguageServer {
                 );
             }
 
-            //tslint:disable
-            debugger;
             //ask the client for all workspace folders
             let workspaceFolders = await this.connection.workspace.getWorkspaceFolders();
             let workspacePaths = workspaceFolders.map((x) => {
@@ -172,9 +172,9 @@ export class LanguageServer {
             this.sendDiagnostics();
         } catch (e) {
             this.sendCriticalFailure(
-                `Critical failure during BrighterScript language server startup. 
+                `Critical failure during BrighterScript language server startup.
                 Please file a github issue and include the contents of the 'BrighterScript Language Server' output channel.
-                
+
                 Error message: ${e.message}`
             );
             throw e;
@@ -230,12 +230,48 @@ export class LanguageServer {
         }
     }
 
+    private async getConfigFilePath(workspacePath: string) {
+        //look for config group called "brightscript"
+        let config = await this.connection.workspace.getConfiguration({
+            scopeUri: Uri.parse(workspacePath).toString(),
+            section: 'brightscript'
+        });
+        let configFilePath: string;
+
+        //if there's a setting, we need to find the file or show error if it can't be found
+        if (config && config.configFile) {
+            configFilePath = path.resolve(workspacePath, config.configFile);
+            if (await util.fileExists(configFilePath)) {
+                return configFilePath;
+            } else {
+                this.sendCriticalFailure(`Cannot find config file specified in user/workspace settings at '${configFilePath}'`);
+            }
+        }
+
+        //default to config file path found in the root of the workspace
+        configFilePath = path.resolve(workspacePath, 'bsconfig.json');
+        if (await util.fileExists(configFilePath)) {
+            return configFilePath;
+        }
+
+        //look for the depricated `brsconfig.json` file
+        configFilePath = path.resolve(workspacePath, 'brsconfig.json');
+        if (await util.fileExists(configFilePath)) {
+            return configFilePath;
+        }
+
+        //no config file could be found
+        return null;
+    }
+
     private async createWorkspace(workspacePath: string) {
         let workspace = this.workspaces.find((x) => x.workspacePath === workspacePath);
         //skip this workspace if we already have it
         if (workspace) {
             return;
         }
+
+        //if a file called `brsconfig.json` exists, add a diagnostic (because that's the old name...everyone should move to the new name)
         let builder = new ProgramBuilder();
 
         //prevent clearing the console on run...this isn't the CLI so we want to keep a full log of everything
@@ -246,13 +282,9 @@ export class LanguageServer {
             return this.documentFileResolver(pathAbsolute);
         });
 
-        //load config from client for this workspace
-        let config = await this.connection.workspace.getConfiguration({
-            scopeUri: Uri.parse(workspacePath).toString(),
-            section: 'brighterscript'
-        });
+        let configFilePath = await this.getConfigFilePath(workspacePath);
+
         let cwd = workspacePath;
-        let configFilePath = config.configFile ? path.resolve(workspacePath, config.configFile) : 'bsconfig.json';
 
         //if the config file exists, use it and its folder as cwd
         if (await util.fileExists(configFilePath)) {
@@ -283,12 +315,22 @@ export class LanguageServer {
 
         this.workspaces.push(newWorkspace);
 
-        firstRunPromise.then(() => {
+        await firstRunPromise.then(() => {
             newWorkspace.isFirstRunComplete = true;
             newWorkspace.isFirstRunSuccessful = true;
         }).catch(() => {
             newWorkspace.isFirstRunComplete = true;
             newWorkspace.isFirstRunSuccessful = false;
+        }).finally(() => {
+            //if we found a depricated brsconfig.json, add a diagnostic warning the user
+            if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
+                builder.addDiagnostic(configFilePath, {
+                    location: Range.create(0, 0, 0, 0),
+                    severity: 'warning',
+                    ...diagnosticMessages.BrsConfigJson_is_depricated_1020(),
+                });
+                this.sendDiagnostics();
+            }
         });
     }
 
@@ -511,10 +553,14 @@ export class LanguageServer {
         }
 
         let diagnostics = Array.prototype.concat.apply([],
-            this.workspaces.map((x) => x.builder.program.getDiagnostics())
+            this.workspaces.map((x) => x.builder.getDiagnostics())
         );
 
         for (let diagnostic of diagnostics) {
+            //certain diagnostics are attached to non-tracked files, so create those buckets dynamically
+            if (!issuesByFile[diagnostic.file.pathAbsolute]) {
+                issuesByFile[diagnostic.file.pathAbsolute] = [];
+            }
             issuesByFile[diagnostic.file.pathAbsolute].push({
                 severity: util.severityToDiagnostic(diagnostic.severity),
                 range: diagnostic.location,

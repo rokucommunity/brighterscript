@@ -159,6 +159,14 @@ export class Program {
     }
 
     /**
+     * Get the pkgPath for an absolute file path
+     * @param pathAbsolute
+     */
+    public getPkgPath(pathAbsolute: string) {
+        return pathAbsolute.replace(this.rootDir + path.sep, '');
+    }
+
+    /**
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
      * @param pathAbsolute
@@ -176,7 +184,7 @@ export class Program {
         if (this.hasFile(pathAbsolute)) {
             this.removeFile(pathAbsolute);
         }
-        let pkgPath = pathAbsolute.replace(this.rootDir + path.sep, '');
+        let pkgPath = this.getPkgPath(pathAbsolute);
         let fileExtension = path.extname(pathAbsolute).toLowerCase();
         let file: BrsFile | XmlFile;
 
@@ -232,6 +240,20 @@ export class Program {
     protected emit(name: 'file-removed', file: BrsFile | XmlFile);
     protected emit(name: string, data?: any) {
         this.emitter.emit(name, data);
+    }
+
+    /**
+     * Find the file by its absolute path. This is case INSENSITIVE, since
+     * Roku is a case insensitive file system. It is an error to have multiple files
+     * with the same path with only case being different.
+     * @param pathAbsolute
+     */
+    public getFileByPathAbsolute(pathAbsolute: string) {
+        for (let filePath in this.files) {
+            if (filePath.toLowerCase() === pathAbsolute.toLowerCase()) {
+                return this.files[filePath];
+            }
+        }
     }
 
     /**

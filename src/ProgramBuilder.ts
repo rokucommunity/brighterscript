@@ -6,7 +6,7 @@ import { FileChangeType, FileEvent } from 'vscode-languageserver';
 import Uri from 'vscode-uri';
 
 import { BsConfig } from './BsConfig';
-import { Diagnostic } from './interfaces';
+import { Diagnostic, File } from './interfaces';
 import { FileResolver, Program } from './Program';
 import util from './util';
 import { Watcher } from './Watcher';
@@ -38,10 +38,30 @@ export class ProgramBuilder {
     }
 
     /**
-     * The list of errors found in the program.
+     * A list of diagnostics that are always added to the `getDiagnostics()` call.
      */
-    private getDiagnostics() {
-        return this.program.getDiagnostics();
+    private staticDiagnostics = [] as Diagnostic[];
+
+    public addDiagnostic(filePathAbsolute: string, diagnostic: Partial<Diagnostic>) {
+        let file: File = this.program.getFileByPathAbsolute(filePathAbsolute);
+        if (!file) {
+            file = {
+                pkgPath: this.program.getPkgPath(filePathAbsolute),
+                pathAbsolute: filePathAbsolute,
+                getDiagnostics: () => {
+                    return [<any>diagnostic];
+                }
+            };
+        }
+        diagnostic.file = file;
+        this.staticDiagnostics.push(<any>diagnostic);
+    }
+
+    public getDiagnostics() {
+        return [
+            ...this.staticDiagnostics,
+            ...this.program.getDiagnostics()
+        ];
     }
 
     public async run(options: BsConfig) {

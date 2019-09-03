@@ -1,4 +1,4 @@
-import { BrightScriptFormatter } from 'brightscript-formatter';
+// import { BrightScriptFormatter } from 'brightscript-formatter';
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
@@ -1416,7 +1416,7 @@ describe('BrsFile', () => {
         });
 
         async function testTranspile(source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'trim') {
-            let formatter = new BrightScriptFormatter();
+            let formatter = null; //new BrightScriptFormatter();
             expected = expected ? expected : source;
             let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, source) as BrsFile;
             let firstDiagnosticMessage = file.getDiagnostics().length > 0 ? file.getDiagnostics()[0].message : '';
