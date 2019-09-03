@@ -136,37 +136,49 @@ export class LanguageServer {
      * @param params
      */
     private async onInitialized() {
-        if (this.hasConfigurationCapability) {
-            // Register for all configuration changes.
-            await this.connection.client.register(
-                DidChangeConfigurationNotification.type,
-                undefined
-            );
-        }
+        try {
+            if (this.hasConfigurationCapability) {
+                // Register for all configuration changes.
+                await this.connection.client.register(
+                    DidChangeConfigurationNotification.type,
+                    undefined
+                );
+            }
 
-        //ask the client for all workspace folders
-        let workspaceFolders = await this.connection.workspace.getWorkspaceFolders();
-        let workspacePaths = workspaceFolders.map((x) => {
-            return util.uriToPath(x.uri);
-        });
-        await this.createWorkspaces(workspacePaths);
-        if (this.clientHasWorkspaceFolderCapability) {
-            this.connection.workspace.onDidChangeWorkspaceFolders(async (evt) => {
-                //remove programs for removed workspace folders
-                for (let removed of evt.removed) {
-                    let workspacePath = util.uriToPath(removed.uri);
-                    let workspace = this.workspaces.find((x) => x.workspacePath === workspacePath);
-                    if (workspace) {
-                        workspace.builder.dispose();
-                        this.workspaces.splice(this.workspaces.indexOf(workspace), 1);
-                    }
-                }
-                //create programs for new workspace folders
-                await this.createWorkspaces(evt.added.map((x) => util.uriToPath(x.uri)));
+            //tslint:disable
+            debugger;
+            //ask the client for all workspace folders
+            let workspaceFolders = await this.connection.workspace.getWorkspaceFolders();
+            let workspacePaths = workspaceFolders.map((x) => {
+                return util.uriToPath(x.uri);
             });
+            await this.createWorkspaces(workspacePaths);
+            if (this.clientHasWorkspaceFolderCapability) {
+                this.connection.workspace.onDidChangeWorkspaceFolders(async (evt) => {
+                    //remove programs for removed workspace folders
+                    for (let removed of evt.removed) {
+                        let workspacePath = util.uriToPath(removed.uri);
+                        let workspace = this.workspaces.find((x) => x.workspacePath === workspacePath);
+                        if (workspace) {
+                            workspace.builder.dispose();
+                            this.workspaces.splice(this.workspaces.indexOf(workspace), 1);
+                        }
+                    }
+                    //create programs for new workspace folders
+                    await this.createWorkspaces(evt.added.map((x) => util.uriToPath(x.uri)));
+                });
+            }
+            await this.waitAllProgramFirstRuns();
+            this.sendDiagnostics();
+        } catch (e) {
+            this.sendCriticalFailure(
+                `Critical failure during BrighterScript language server startup. 
+                Please file a github issue and include the contents of the 'BrighterScript Language Server' output channel.
+                
+                Error message: ${e.message}`
+            );
+            throw e;
         }
-        await this.waitAllProgramFirstRuns();
-        this.sendDiagnostics();
     }
 
     /**
