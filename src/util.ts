@@ -131,7 +131,6 @@ export class Util {
             let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
-                console.log(err);
                 let diagnostic = {
                     severity: 'error',
                     code: diagnosticMessages.BsConfigJson_has_syntax_errors_1021().code,

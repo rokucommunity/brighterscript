@@ -16,9 +16,8 @@ import { Watcher } from './Watcher';
  * A runner class that handles
  */
 export class ProgramBuilder {
-    constructor(
-    ) {
-    }
+
+    constructor() { }
 
     /**
      * Determines whether the console should be cleared after a run (true for cli, false for languageserver)

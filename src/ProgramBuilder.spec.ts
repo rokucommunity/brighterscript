@@ -1,10 +1,15 @@
 import { expect } from 'chai';
+import * as path from 'path';
 import * as sinonImport from 'sinon';
+import { FileChangeType } from 'vscode-languageserver';
 
+import { Program } from './Program';
 import { ProgramBuilder } from './ProgramBuilder';
 import util from './util';
 
 let sinon = sinonImport.createSandbox();
+let rootDir = process.cwd();
+let n = path.normalize;
 
 describe('ProgramBuilder', () => {
     beforeEach(() => {
@@ -48,6 +53,47 @@ describe('ProgramBuilder', () => {
             let stub = sinon.stub(b.program, 'addOrReplaceFile');
             await b.loadAllFilesAST();
             expect(stub.getCalls()).to.be.lengthOf(3);
+        });
+    });
+
+    describe('handleFileChanges', () => {
+        beforeEach(() => {
+            sinon.stub(util, 'getFilePaths').returns(Promise.resolve([{
+                src: n(`${rootDir}/source/promise.brs`),
+                dest: 'source/promise.brs'
+            }, {
+                src: n(`${rootDir}/source/main.brs`),
+                dest: 'source/source.brs'
+            }]));
+        });
+        it.only('only adds files that match the files array', async () => {
+            builder.program = new Program({});
+
+            let mainPath = n(`${rootDir}/source/main.brs`);
+            vfs[mainPath] = 'sub main()\nend sub';
+
+            let libPath = n(`${rootDir}/source/lib.brs`);
+            vfs[libPath] = 'sub libFunc1()\nend sub';
+
+            expect(builder.program.files[mainPath]).to.be.undefined;
+            expect(builder.program.files[libPath]).to.be.undefined;
+
+            await builder.handleFileChanges([{
+                type: <FileChangeType>FileChangeType.Created,
+                uri: 'file:///' + mainPath
+            }]);
+
+            expect(builder.program.files[mainPath]).to.exist;
+            expect(builder.program.files[libPath]).to.be.undefined;
+
+            await builder.handleFileChanges([{
+                type: <FileChangeType>FileChangeType.Created,
+                uri: 'file:///' + libPath
+            }]);
+
+            expect(builder.program.files[mainPath]).to.exist;
+            //this is the real test...did the program correctly IGNORE the lib path
+            expect(builder.program.files[libPath]).to.be.undefined;
         });
     });
 });
