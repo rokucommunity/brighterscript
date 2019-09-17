@@ -88,6 +88,10 @@ export let diagnosticMessages = {
     BrsConfigJson_is_depricated_1020: () => ({
         message: `brsconfig.json is depricated. Please rename to 'bsconfig.json'`,
         code: 1020
+    }),    
+    BsConfigJson_has_syntax_errors_1021: () => ({
+        message: `Encountered syntax errors in bsconfig.json`,
+        code: 1021
     }),
 };
 

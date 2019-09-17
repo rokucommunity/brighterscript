@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import * as fsExtra from 'fs-extra';
+import { parse as parseJsonc, ParseError, printParseErrorCode } from 'jsonc-parser';
 import * as moment from 'moment';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
@@ -8,6 +9,7 @@ import Uri from 'vscode-uri';
 import * as xml2js from 'xml2js';
 
 import { BsConfig } from './BsConfig';
+import { diagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { CallableContainer, Diagnostic, ValueKind } from './interfaces';
 import { Location } from './parser/lexer';
@@ -107,7 +109,17 @@ export class Util {
             }
             //load the project file
             let projectFileContents = await this.getFileContents(configFilePath);
-            let projectConfig = JSON.parse(projectFileContents) as BsConfig;
+            let parseErrors = [] as ParseError[];
+            let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
+            if (parseErrors.length > 0) {
+                let diagnostic = {
+                    severity: 'error',
+                    code: diagnosticMessages.BsConfigJson_has_syntax_errors_1021().code,
+                    message: printParseErrorCode(parseErrors[0].error)
+
+                } as Diagnostic;
+                throw diagnostic;
+            }
 
             //set working directory to the location of the project file
             process.chdir(path.dirname(configFilePath));

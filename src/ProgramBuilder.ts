@@ -68,7 +68,12 @@ export class ProgramBuilder {
         if (this.isRunning) {
             throw new Error('Server is already running');
         }
+        try {
         this.options = await util.normalizeAndResolveConfig(options);
+        } catch (e) {
+            let err = e as Diagnostic;
+            this.addDiagnostic(err.file.pathAbsolute, err);
+        }
 
         this.program = new Program(this.options);
         //add the initial FileResolvers
