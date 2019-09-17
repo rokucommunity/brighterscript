@@ -70,7 +70,7 @@ export class ProgramBuilder {
             throw new Error('Server is already running');
         }
         try {
-        this.options = await util.normalizeAndResolveConfig(options);
+            this.options = await util.normalizeAndResolveConfig(options);
         } catch (e) {
             let err = e as Diagnostic;
             this.staticDiagnostics.push(err);
@@ -389,7 +389,7 @@ export class ProgramBuilder {
                 await this.loadMissingFilesFromFolder(pathAbsolute);
                 let filePaths = await getMatchingFilePaths();
                 //if our program wants this file, then load it
-                if (filePaths.indexOf(pathAbsolute)) {
+                if (filePaths.indexOf(pathAbsolute) > -1) {
                     await this.program.addOrReplaceFile(pathAbsolute);
                 }
             } else /*changed*/ {
