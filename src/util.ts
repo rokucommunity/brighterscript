@@ -34,12 +34,10 @@ export class Util {
         console.log('');
         let timestamp = '[' + chalk.grey(moment().format('hh:mm:ss A')) + ']';
         console.log.apply(console.log, [timestamp, ...args]);
-        //print an empty line
-        console.log('');
     }
 
     public clearConsole() {
-        process.stdout.write('\x1Bc');
+        // process.stdout.write('\x1Bc');
     }
 
     /**
@@ -75,7 +73,7 @@ export class Util {
      * If the config file path doesn't exist
      * @param configFilePath
      */
-    public async  getConfigFilePath(cwd?: string) {
+    public async getConfigFilePath(cwd?: string) {
         cwd = cwd ? cwd : process.cwd();
         let configPath = path.join(cwd, 'bsconfig.json');
         //find the nearest config file path
@@ -87,6 +85,26 @@ export class Util {
                 configPath = path.join(parentDirPath, 'bsconfig.json');
             }
         }
+    }
+
+    public getLocationFromOffsetLength(text: string, offset: number, length: number) {
+        let lineIndex = 0;
+        let colIndex = 0;
+        for (let i = 0; i < text.length; i++) {
+            if (offset === i) {
+                break;
+            }
+            let char = text[i];
+            if (char === '\n' || (char === '\r' && text[i + 1] === '\n')) {
+                lineIndex++;
+                colIndex = 0;
+                i++;
+                continue;
+            } else {
+                colIndex++;
+            }
+        }
+        return Range.create(lineIndex, colIndex, lineIndex, colIndex + length);
     }
 
     /**
@@ -112,11 +130,16 @@ export class Util {
             let parseErrors = [] as ParseError[];
             let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
             if (parseErrors.length > 0) {
+                let err = parseErrors[0];
+                console.log(err);
                 let diagnostic = {
                     severity: 'error',
                     code: diagnosticMessages.BsConfigJson_has_syntax_errors_1021().code,
-                    message: printParseErrorCode(parseErrors[0].error)
-
+                    message: printParseErrorCode(parseErrors[0].error),
+                    file: {
+                        pathAbsolute: configFilePath
+                    },
+                    location: this.getLocationFromOffsetLength(projectFileContents, err.offset, err.length)
                 } as Diagnostic;
                 throw diagnostic;
             }

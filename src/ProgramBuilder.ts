@@ -6,6 +6,7 @@ import { FileChangeType, FileEvent } from 'vscode-languageserver';
 import Uri from 'vscode-uri';
 
 import { BsConfig } from './BsConfig';
+import { diagnosticMessages } from './DiagnosticMessages';
 import { Diagnostic, File } from './interfaces';
 import { FileResolver, Program } from './Program';
 import util from './util';
@@ -60,7 +61,7 @@ export class ProgramBuilder {
     public getDiagnostics() {
         return [
             ...this.staticDiagnostics,
-            ...this.program.getDiagnostics()
+            ...this.program ? this.program.getDiagnostics() : []
         ];
     }
 
@@ -72,7 +73,9 @@ export class ProgramBuilder {
         this.options = await util.normalizeAndResolveConfig(options);
         } catch (e) {
             let err = e as Diagnostic;
-            this.addDiagnostic(err.file.pathAbsolute, err);
+            this.staticDiagnostics.push(err);
+            await this.printDiagnostics();
+            throw new Error(diagnosticMessages.BsConfigJson_has_syntax_errors_1021().message);
         }
 
         this.program = new Program(this.options);
@@ -179,7 +182,7 @@ export class ProgramBuilder {
             diagnosticsByFile[diagnostic.file.pathAbsolute].push(diagnostic);
         }
 
-        let cwd = this.options.cwd ? this.options.cwd : process.cwd();
+        let cwd = this.options && this.options.cwd ? this.options.cwd : process.cwd();
 
         let pathsAbsolute = Object.keys(diagnosticsByFile).sort();
         for (let pathAbsolute of pathsAbsolute) {
@@ -199,7 +202,7 @@ export class ProgramBuilder {
                 error: chalk.red,
 
             };
-            if (this.options.emitFullPaths !== true) {
+            if (this.options && this.options.emitFullPaths !== true) {
                 filePath = path.relative(cwd, filePath);
             }
             //load the file text
