@@ -219,8 +219,12 @@ export class Program {
             // file = <any>genericFile;
         }
 
-        //notify all listeners about this file change
-        this.emit('file-added', file);
+        //notify listeners about this file change
+        if (file) {
+            this.emit('file-added', file);
+        } else {
+            //skip event when file is undefined
+        }
 
         return file;
     }
