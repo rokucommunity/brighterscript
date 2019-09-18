@@ -531,20 +531,6 @@ export class Util {
         return count;
     }
 
-    public defer<T>() {
-        let resolve: (value?: T | PromiseLike<T>) => void;
-        let reject: (reason?: any) => void;
-        let promise = new Promise<T>((resolveValue, rejectValue) => {
-            resolve = resolveValue;
-            reject = rejectValue;
-        });
-        return {
-            promise: promise,
-            resolve: resolve,
-            reject: reject
-        };
-    }
-
     public padLeft(subject: string, totalLength: number, char: string) {
         totalLength = totalLength > 1000 ? 1000 : totalLength;
         while (subject.length < totalLength) { subject = char + subject; }

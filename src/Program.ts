@@ -150,11 +150,9 @@ export class Program {
      * contents from the file system.
      * @param filePaths
      */
-    public async addOrReplaceFiles(filePaths: string[]) {
-        await Promise.all(
-            filePaths.map(async (filePath) => {
-                await this.addOrReplaceFile(filePath);
-            })
+    public addOrReplaceFiles(filePaths: string[]) {
+        return Promise.all(
+            filePaths.map((filePath) => this.addOrReplaceFile(filePath))
         );
     }
 
@@ -175,11 +173,6 @@ export class Program {
     public async addOrReplaceFile(pathAbsolute: string, fileContents?: string) {
         pathAbsolute = util.normalizeFilePath(pathAbsolute);
 
-        //load the file contents by file path if not provided
-        if (fileContents === undefined) {
-            fileContents = await this.getFileContents(pathAbsolute);
-        }
-
         //if the file is already loaded, remove it
         if (this.hasFile(pathAbsolute)) {
             this.removeFile(pathAbsolute);
@@ -188,14 +181,28 @@ export class Program {
         let fileExtension = path.extname(pathAbsolute).toLowerCase();
         let file: BrsFile | XmlFile;
 
+        //load the file contents by file path if not provided
+        let getFileContents = async () => {
+            if (fileContents === undefined) {
+                return await this.getFileContents(pathAbsolute);
+            } else {
+                return fileContents;
+            }
+        };
+
         //get the extension of the file
         if (fileExtension === '.brs' || fileExtension === '.bs') {
-            let brsFile = this.files[pathAbsolute] = new BrsFile(pathAbsolute, pkgPath, this);
-            await brsFile.parse(fileContents);
+            let brsFile = new BrsFile(pathAbsolute, pkgPath, this);
+
+            //add the file to the program
+            this.files[pathAbsolute] = brsFile;
+            await brsFile.parse(await getFileContents());
             file = brsFile;
         } else if (fileExtension === '.xml') {
-            let xmlFile = this.files[pathAbsolute] = new XmlFile(pathAbsolute, pkgPath, this);
-            await xmlFile.parse(fileContents);
+            let xmlFile = new XmlFile(pathAbsolute, pkgPath, this);
+            //add the file to the program
+            this.files[pathAbsolute] = xmlFile;
+            await xmlFile.parse(await getFileContents());
             file = xmlFile;
 
             //create a new context for this xml file
@@ -222,6 +229,7 @@ export class Program {
         //notify listeners about this file change
         if (file) {
             this.emit('file-added', file);
+            file.setFinishedLoading();
         } else {
             //skip event when file is undefined
         }
@@ -367,7 +375,7 @@ export class Program {
      * @param lineIndex
      * @param columnIndex
      */
-    public getCompletions(pathAbsolute: string, position: Position) {
+    public async getCompletions(pathAbsolute: string, position: Position) {
         let completions = [] as CompletionItem[];
 
         let file = this.getFile(pathAbsolute);
@@ -375,18 +383,25 @@ export class Program {
             return [];
         }
 
+        //wait for the file to finish loading
+        await file.isReady();
+
         //find the contexts for this file (hopefully there's only one)
         let contexts = this.getContextsForFile(file);
         if (contexts.length > 1) {
             //TODO - make the user choose which context to use.
         }
         let context = contexts[0];
-
-        let fileResult = file.getCompletions(position, context);
-        completions.push(...fileResult.completions);
-        if (fileResult.includeContextCallables) {
-            completions.push(...context.getCallablesAsCompletions());
+        if (context) {
+            let fileResult = await file.getCompletions(position, context);
+            completions.push(...fileResult.completions);
+            if (fileResult.includeContextCallables) {
+                completions.push(...context.getCallablesAsCompletions());
+            }
+        } else {
+            console.error(`Cannot find context for ${file.pkgPath}`);
         }
+
         return completions;
     }
 

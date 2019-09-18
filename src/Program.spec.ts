@@ -604,7 +604,7 @@ describe('Program', () => {
             `);
             let brsPath = path.normalize(`${rootDir}/components/component1.brs`);
             await program.addOrReplaceFile(brsPath, '');
-            let completions = program.getCompletions(xmlPath, Position.create(3, 58));
+            let completions = await program.getCompletions(xmlPath, Position.create(3, 58));
             expect(completions[0]).to.include({
                 kind: CompletionItemKind.File,
                 label: 'component1.brs'
@@ -823,9 +823,9 @@ describe('Program', () => {
 
             await program.validate();
 
-            let completions = program
+            let completions = (await program
                 //get completions
-                .getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10))
+                .getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10)))
                 //only keep the label property for this test
                 .map(x => pick(x, 'label'));
 
@@ -851,7 +851,7 @@ describe('Program', () => {
 
             await program.validate();
 
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
             let labels = completions.map(x => pick(x, 'label'));
 
             expect(labels).to.deep.include({ label: 'Main' });
@@ -875,7 +875,7 @@ describe('Program', () => {
                     shoeSize = 10
                 end sub
             `);
-            let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
             let labels = completions.map(x => pick(x, 'label'));
 
             expect(labels).to.deep.include({ label: 'count' });

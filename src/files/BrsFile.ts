@@ -8,6 +8,7 @@ import { FunctionScope } from '../FunctionScope';
 import { Callable, CallableArg, CallableParam, CommentFlag, Diagnostic, FunctionCall } from '../interfaces';
 import * as brs from '../parser';
 const Lexeme = brs.lexer.Lexeme;
+import { Deferred } from '../deferred';
 import { BrsError, ParseError } from '../parser/Error';
 import { Lexer } from '../parser/lexer';
 import { Parser } from '../parser/parser';
@@ -46,9 +47,22 @@ export class BrsFile {
     public extension: string;
 
     /**
-     * Indicates if this file was processed by the program yet.
+     * The file needs to know when the program has settled (i.e. the `file-added` event has finished).
+     * After calling this, the file is ready to be interacted with
      */
-    public wasProcessed = false;
+    public setFinishedLoading() {
+        this.finishedLoadingDeferred.resolve();
+    }
+    private finishedLoadingDeferred = new Deferred();
+
+    private parseDeferred = new Deferred();
+
+    /**
+     * Indicates that the file is completely ready for interaction
+     */
+    public isReady() {
+        return Promise.all([this.finishedLoadingDeferred.promise, this.parseDeferred.promise]);
+    }
 
     private diagnostics = [] as Diagnostic[];
 
@@ -87,12 +101,15 @@ export class BrsFile {
         }
     }
 
+    private static idCounter = 1;
+    private id = BrsFile.idCounter++;
+
     /**
      * Calculate the AST for this file
      * @param fileContents
      */
     public async parse(fileContents: string) {
-        if (this.wasProcessed) {
+        if (this.parseDeferred.isCompleted) {
             throw new Error(`File was already processed. Create a new file instead. ${this.pathAbsolute}`);
         }
 
@@ -154,7 +171,7 @@ export class BrsFile {
         //find all places where a sub/function is being called
         this.findFunctionCalls(lines);
 
-        this.wasProcessed = true;
+        this.parseDeferred.resolve();
     }
 
     public standardizeLexParseErrors(errors: ParseError[], lines: string[]) {
@@ -568,11 +585,16 @@ export class BrsFile {
 
     }
 
-    public getCompletions(position: Position, context?: Context) {
+    public async getCompletions(position: Position, context?: Context) {
         let result = {
             completions: [] as CompletionItem[],
             includeContextCallables: true,
         };
+
+        let id = this.id;
+        id = id;
+        //wait for the file to finish processing
+        await this.parseDeferred.promise;
 
         //determine if cursor is inside a function
         let functionScope = this.getFunctionScopeAtPosition(position);

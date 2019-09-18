@@ -206,12 +206,12 @@ describe('XmlFile', () => {
                 sourceFile: xmlFile
             });
 
-            expect(xmlFile.getCompletions(Position.create(1, 1)).completions[0]).to.include({
+            expect((await xmlFile.getCompletions(Position.create(1, 1))).completions[0]).to.include({
                 label: 'components/component1/component1.brs',
                 kind: CompletionItemKind.File
             });
 
-            expect(xmlFile.getCompletions(Position.create(1, 1)).completions[1]).to.include(<CompletionItem>{
+            expect((await xmlFile.getCompletions(Position.create(1, 1))).completions[1]).to.include(<CompletionItem>{
                 label: 'pkg:/components/component1/component1.brs',
                 kind: CompletionItemKind.File
             });
@@ -220,7 +220,7 @@ describe('XmlFile', () => {
         it('returns empty set when out of range', async () => {
             let file = new XmlFile('abs', 'rel', null);
             await file.parse('');
-            expect(file.getCompletions(Position.create(99, 99)).completions).to.be.empty;
+            expect((await file.getCompletions(Position.create(99, 99))).completions).to.be.empty;
         });
 
         //TODO - refine this test once cdata scripts are supported

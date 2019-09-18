@@ -3,6 +3,7 @@ import * as path from 'path';
 import { CodeWithSourceMap } from 'source-map';
 import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
 
+import { Deferred } from '../deferred';
 import { diagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import { Callable, Diagnostic, File, FileReference, FunctionCall } from '../interfaces';
@@ -63,17 +64,12 @@ export class XmlFile {
     public componentName: string;
 
     /**
-     * Indicates if this file was processed by the program yet.
-     */
-    public wasProcessed = false;
-
-    /**
      * Does this file need to be transpiled?
      */
     public needsTranspiled = false;
 
     public async parse(fileContents: string) {
-        if (this.wasProcessed) {
+        if (this.parseDeferred.isCompleted) {
             throw new Error(`File was already processed. Create a new file instead. ${this.pathAbsolute}`);
         }
 
@@ -232,7 +228,25 @@ export class XmlFile {
             this.ownScriptImports = scriptImports;
         }
 
-        this.wasProcessed = true;
+        this.parseDeferred.resolve();
+    }
+
+    /**
+     * The file needs to know when the program has settled (i.e. the `file-added` event has finished).
+     * After calling this, the file is ready to be interacted with
+     */
+    public setFinishedLoading() {
+        this.finishedLoadingDeferred.resolve();
+    }
+    private finishedLoadingDeferred = new Deferred();
+
+    private parseDeferred = new Deferred();
+
+    /**
+     * Indicates that the file is completely ready for interaction
+     */
+    public isReady() {
+        return Promise.all([this.finishedLoadingDeferred.promise, this.parseDeferred.promise]);
     }
 
     /**
@@ -284,7 +298,7 @@ export class XmlFile {
      * @param lineIndex
      * @param columnIndex
      */
-    public getCompletions(position: Position) {
+    public async getCompletions(position: Position) {
         let result = {
             completions: [] as CompletionItem[],
             includeContextCallables: false,

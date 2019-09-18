@@ -344,17 +344,25 @@ export class LanguageServer {
 
         let filePath = util.uriToPath(textDocumentPosition.textDocument.uri);
 
-        let completions = Array.prototype.concat.apply([],
-            this.workspaces.map((x) => {
-                if (x.builder.program.hasFile(filePath)) {
-                    return x.builder.program.getCompletions(filePath, textDocumentPosition.position);
-                }
-            })
-        ) as CompletionItem[];
+        let workspaceCompletionPromises = [] as Array<Promise<CompletionItem[]>>;
+        //get completions from every workspace
+        for (let workspace of this.workspaces) {
+            //if this workspace has the file in question, get its completions
+            if (workspace.builder.program.hasFile(filePath)) {
+                workspaceCompletionPromises.push(
+                    workspace.builder.program.getCompletions(filePath, textDocumentPosition.position)
+                );
+            }
+        }
+
+        //wait for all promises to resolve, and then flatten them into a single array
+        let completions = [].concat(...await Promise.all(workspaceCompletionPromises));
 
         let result = [] as CompletionItem[];
         for (let completion of completions) {
-            result.push(completion);
+            if (completion) {
+                result.push(completion);
+            }
         }
         return result;
     }

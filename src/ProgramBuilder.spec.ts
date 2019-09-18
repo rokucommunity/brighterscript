@@ -66,7 +66,7 @@ describe('ProgramBuilder', () => {
                 dest: 'source/source.brs'
             }]));
         });
-        it.only('only adds files that match the files array', async () => {
+        it('only adds files that match the files array', async () => {
             builder.program = new Program({});
 
             let mainPath = n(`${rootDir}/source/main.brs`);

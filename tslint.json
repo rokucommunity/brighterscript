@@ -12,10 +12,16 @@
             true,
             "never"
         ],
+        "no-debugger": false,
         "arrow-parens": false,
         "arrow-return-shorthand": false,
         "no-duplicate-imports": true,
         "no-floating-promises": true,
+        "variable-name": [
+            true,
+            "check-format",
+            "allow-leading-underscore"
+        ],
         "class-name": true,
         "comment-format": false,
         "curly": true,

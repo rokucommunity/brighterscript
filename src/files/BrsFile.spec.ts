@@ -32,6 +32,25 @@ describe('BrsFile', () => {
         expect(new BrsFile(`${rootDir}/source/main.bs`, 'source/main.bs', program).needsTranspiled).to.be.true;
     });
 
+    describe('getCompletions', () => {
+        it('waits for the file to be processed before collecting completions', async () => {
+            (program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                sub Main()
+                    print "hello"
+                    Say
+                end sub
+
+                sub SayHello()
+                end sub
+            `));
+
+            let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 23));
+            let names = result.map(x => x.label);
+            expect(names).to.contain('Main');
+            expect(names).to.contain('SayHello');
+        });
+    });
+
     describe('comment flags', () => {
         describe('bs:disable-next-line', () => {
             it('works for all', async () => {
