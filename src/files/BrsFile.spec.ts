@@ -1,4 +1,3 @@
-// import { BrightScriptFormatter } from 'brightscript-formatter';
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
@@ -48,6 +47,21 @@ describe('BrsFile', () => {
             let names = result.map(x => x.label);
             expect(names).to.contain('Main');
             expect(names).to.contain('SayHello');
+        });
+
+        it('does not provide duplicate entries for variables', async () => {
+            (program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                sub Main()
+                    name = "bob"
+                    age = 12
+                    name = "john"
+                end sub
+            `));
+
+            let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 23));
+
+            let count = result.reduce((total, x) => x.label === 'name' ? total + 1 : total, 0);
+            expect(count).to.equal(1);
         });
     });
 

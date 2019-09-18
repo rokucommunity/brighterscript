@@ -607,7 +607,13 @@ export class BrsFile {
         //TODO: if cursor is within a comment, disable completions
 
         let variables = functionScope.variableDeclarations;
+        let names = {};
         for (let variable of variables) {
+            //skip duplicate variable names
+            if (names[variable.name]) {
+                continue;
+            }
+            names[variable.name] = true;
             result.completions.push({
                 label: variable.name,
                 kind: variable.type instanceof FunctionType ? CompletionItemKind.Function : CompletionItemKind.Variable
