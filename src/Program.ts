@@ -402,6 +402,20 @@ export class Program {
             console.error(`Cannot find context for ${file.pkgPath}`);
         }
 
+        //until our language server gets smart enough, we need to support a "poor man's intellisense" (return all words that look like variables)
+        let names = {};
+        for (let context of contexts) {
+            let results = context.getSimpleIntellisenseCompletions();
+            for (let completion of results) {
+                //skip duplicates
+                if (names[completion.label]) {
+                    continue;
+                }
+                names[completion.label] = true;
+                completions.push(completion);
+            }
+        }
+
         return completions;
     }
 

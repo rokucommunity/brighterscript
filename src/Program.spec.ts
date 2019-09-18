@@ -594,6 +594,114 @@ describe('Program', () => {
     });
 
     describe('getCompletions', () => {
+        it('filters out text results for top-level function statements', async () => {
+            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                function Main()
+                    age = 1
+                end function
+            `);
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            expect(completions.filter(x => x.label === 'Main')).to.be.lengthOf(1);
+        });
+
+        it('does not filter text results for object properties used in conditional statements', async () => {
+            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                sub Main()
+
+                end sub
+                sub SayHello()
+                    person = {}
+                    if person.isAlive then
+                        print "Hello"
+                    end if
+                end sub
+            `);
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            expect(completions.filter(x => x.label === 'isAlive')).to.be.lengthOf(1);
+        });
+
+        it('does not filter text results for object properties used in assignments', async () => {
+            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                sub Main()
+
+                end sub
+                sub SayHello()
+                   person = {}
+                   localVar = person.name
+                end sub
+            `);
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            expect(completions.filter(x => x.label === 'name')).to.be.lengthOf(1);
+        });
+
+        it('does not filter text results for object properties', async () => {
+            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                sub Main()
+
+                end sub
+                sub SayHello()
+                   person = {}
+                   person.name = "bob"
+                end sub
+            `);
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            expect(completions.filter(x => x.label === 'name')).to.be.lengthOf(1);
+        });
+
+        it('filters out text results for local vars used in conditional statements', async () => {
+            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                sub Main()
+
+                end sub
+                sub SayHello()
+                    isTrue = true
+                    if isTrue then
+                        print "is true"
+                    end if
+                end sub
+            `);
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            expect(completions.filter(x => x.label === 'isTrue')).to.be.lengthOf(0);
+        });
+
+        it('filters out text results for local variable assignments', async () => {
+            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                sub Main()
+
+                end sub
+                sub SayHello()
+                    message = "Hello"
+                end sub
+            `);
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            expect(completions.filter(x => x.label === 'message')).to.be.lengthOf(0);
+        });
+
+        it('filters out text results for local variables used in assignments', async () => {
+            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                sub Main()
+
+                end sub
+                sub SayHello()
+                    message = "Hello"
+                    otherVar = message
+                end sub
+            `);
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            expect(completions.filter(x => x.label === 'message')).to.be.lengthOf(0);
+        });
+
+        it('does not suggest local variables when initiated to the right of a period', async () => {
+            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                function Main()
+                    helloMessage = "jack"
+                    person.hello
+                end function
+            `);
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            expect(completions.filter(x => x.kind === CompletionItemKind.Variable).map(x => x.label)).not.to.contain('helloMessage');
+
+        });
         it('finds all file paths when initiated on xml uri', async () => {
             let xmlPath = path.normalize(`${rootDir}/components/component1.xml`);
             await program.addOrReplaceFile(xmlPath, `

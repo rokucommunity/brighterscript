@@ -12,7 +12,8 @@ import { Deferred } from '../deferred';
 import { BrsError, ParseError } from '../parser/Error';
 import { Lexer } from '../parser/lexer';
 import { Parser } from '../parser/parser';
-import { CommentStatement, FunctionStatement } from '../parser/parser/Statement';
+import { DottedGet } from '../parser/parser/Expression';
+import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement } from '../parser/parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -171,8 +172,57 @@ export class BrsFile {
         //find all places where a sub/function is being called
         this.findFunctionCalls(lines);
 
+        //scan the full text for any word that looks like a variable
+        this.findSimpleIntellisenseCompletions(fileContents);
+
         this.parseDeferred.resolve();
     }
+
+    public findSimpleIntellisenseCompletions(fileContents: string) {
+        //Find every identifier in the whole file
+        let identifiers = util.findAllDeep<brs.lexer.Identifier>(this.ast, (x) => {
+            return x && x.kind === Lexeme.Identifier;
+        });
+
+        this.simpleIntellisenseCompletions = [];
+        let names = {};
+        for (let identifier of identifiers) {
+            let ancestors = this.getAncestors(this.ast, identifier.key);
+            let parent = ancestors[ancestors.length - 1];
+
+            let isObjectProperty = !!ancestors.find(x => x instanceof DottedGet);
+
+            //filter out certain text items
+            if (
+                //don't filter out any object properties
+                isObjectProperty === false && (
+                    //top-level functions (they are handled elsewhere)
+                    parent instanceof FunctionStatement ||
+                    //local variables created or used by assignments
+                    ancestors.find(x => x instanceof AssignmentStatement) ||
+                    //local variables used in conditional statements
+                    ancestors.find(x => x instanceof IfStatement)
+                )
+            ) {
+                continue;
+            }
+
+            let name = identifier.value.text;
+
+            //filter duplicate names
+            if (names[name]) {
+                continue;
+            }
+
+            names[name] = true;
+            this.simpleIntellisenseCompletions.push({
+                label: name,
+                kind: CompletionItemKind.Text
+            });
+        }
+    }
+
+    public simpleIntellisenseCompletions = [] as CompletionItem[];
 
     public standardizeLexParseErrors(errors: ParseError[], lines: string[]) {
         let standardizedDiagnostics = [] as Diagnostic[];
@@ -369,14 +419,13 @@ export class BrsFile {
     }
 
     /**
-     * Given a set of statements and top-level ast,
-     * find the closest function ancestor for the given key
+     * Get all ancenstors of an object with the given key
      * @param statements
      * @param key
      */
     private getAncestors(statements: any[], key: string) {
         let parts = key.split('.');
-        //throw out the last part, because that is already a func (it's the "child")
+        //throw out the last part (because that's the "child")
         parts.pop();
 
         let current = statements;
@@ -595,6 +644,7 @@ export class BrsFile {
         id = id;
         //wait for the file to finish processing
         await this.parseDeferred.promise;
+        let names = {};
 
         //determine if cursor is inside a function
         let functionScope = this.getFunctionScopeAtPosition(position);
@@ -607,7 +657,6 @@ export class BrsFile {
         //TODO: if cursor is within a comment, disable completions
 
         let variables = functionScope.variableDeclarations;
-        let names = {};
         for (let variable of variables) {
             //skip duplicate variable names
             if (names[variable.name]) {
@@ -619,6 +668,7 @@ export class BrsFile {
                 kind: variable.type instanceof FunctionType ? CompletionItemKind.Function : CompletionItemKind.Variable
             });
         }
+
         return result;
     }
 

@@ -511,6 +511,15 @@ export class Context {
         //TODO implement for brs files
         return [];
     }
+
+    public getSimpleIntellisenseCompletions() {
+        let results = [];
+        for (let key in this.files) {
+            let file = this.files[key];
+            results.push(...file.file.simpleIntellisenseCompletions);
+        }
+        return results;
+    }
 }
 
 class ContextFile {

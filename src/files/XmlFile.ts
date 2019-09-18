@@ -68,6 +68,11 @@ export class XmlFile {
      */
     public needsTranspiled = false;
 
+    /**
+     * TODO: do we need this for xml files?
+     */
+    public simpleIntellisenseCompletions = [] as CompletionItem[];
+
     public async parse(fileContents: string) {
         if (this.parseDeferred.isCompleted) {
             throw new Error(`File was already processed. Create a new file instead. ${this.pathAbsolute}`);
