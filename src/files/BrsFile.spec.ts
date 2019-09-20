@@ -76,7 +76,7 @@ describe('BrsFile', () => {
             expect(result.filter(x => x.kind === CompletionItemKind.Text)).not.to.contain('string');
         });
 
-        it('does not provide intellisens results when inside a comment', async () => {
+        it('does not provide intellisense results when inside a comment', async () => {
             (program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
                 sub Main(name as string)
                     'this is a comment
