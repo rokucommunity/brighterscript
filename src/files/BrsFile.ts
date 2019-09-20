@@ -656,7 +656,11 @@ export class BrsFile {
             return result;
         }
 
-        //TODO: if cursor is within a comment, disable completions
+        //if cursor is within a comment, disable completions
+        let currentToken = this.getTokenAt(position);
+        if (currentToken && currentToken.kind === Lexeme.Comment) {
+            return [];
+        }
 
         //is next to a period (or an identifier that is next to a period). include the property names
         if (this.isPositionNextToDot(position)) {

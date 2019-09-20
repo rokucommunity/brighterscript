@@ -76,6 +76,17 @@ describe('BrsFile', () => {
             expect(result.filter(x => x.kind === CompletionItemKind.Text)).not.to.contain('string');
         });
 
+        it('does not provide intellisens results when inside a comment', async () => {
+            (program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                sub Main(name as string)
+                    'this is a comment
+                end sub
+            `));
+
+            let results = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 30));
+            expect(results).to.be.empty;
+        });
+
     });
 
     describe('comment flags', () => {
