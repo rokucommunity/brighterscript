@@ -87,7 +87,6 @@
     "vscode-jsonrpc": "^4.0.0"
   },
   "dependencies": {
-    "@types/source-map": "^0.5.7",
     "chalk": "^2.4.2",
     "chokidar": "^3.0.2",
     "clear": "^0.1.0",
