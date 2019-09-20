@@ -77,18 +77,22 @@ describe('ProgramBuilder', () => {
 
             expect(builder.program.files[mainPath]).to.be.undefined;
             expect(builder.program.files[libPath]).to.be.undefined;
+            let mainUri = 'file:///' + mainPath;
+            console.log('mainUrl: ', mainUri);
 
             await builder.handleFileChanges([{
                 type: <FileChangeType>FileChangeType.Created,
-                uri: 'file:///' + mainPath
+                uri: mainUri
             }]);
 
             expect(builder.program.files[mainPath]).to.exist;
             expect(builder.program.files[libPath]).to.be.undefined;
 
+            let libUri = 'file:///' + libPath;
+            console.log('libUri', libUri);
             await builder.handleFileChanges([{
                 type: <FileChangeType>FileChangeType.Created,
-                uri: 'file:///' + libPath
+                uri: libUri
             }]);
 
             expect(builder.program.files[mainPath]).to.exist;
