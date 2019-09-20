@@ -9,10 +9,11 @@ import { Callable, CallableArg, CallableParam, CommentFlag, Diagnostic, Function
 import * as brs from '../parser';
 const Lexeme = brs.lexer.Lexeme;
 import { Deferred } from '../deferred';
+import { FunctionParameter } from '../parser/brsTypes';
 import { BrsError, ParseError } from '../parser/Error';
-import { Lexer } from '../parser/lexer';
+import { Lexer, Location as BrsLocation, Token } from '../parser/lexer';
 import { Parser } from '../parser/parser';
-import { DottedGet } from '../parser/parser/Expression';
+import { AALiteralExpression, DottedGet } from '../parser/parser/Expression';
 import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement } from '../parser/parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
@@ -88,14 +89,13 @@ export class BrsFile {
      * The AST for this file
      */
     private ast = [] as brs.parser.Stmt.Statement[];
-    private tokens = [] as brs.lexer.Token[];
 
     /**
      * Get the token at the specified position
      * @param position
      */
     private getTokenAt(position: Position) {
-        for (let token of this.tokens) {
+        for (let token of this.parser.tokens) {
             if (util.rangeContains(util.locationToRange(token.location), position)) {
                 return token;
             }
@@ -104,6 +104,8 @@ export class BrsFile {
 
     private static idCounter = 1;
     private id = BrsFile.idCounter++;
+
+    private parser: Parser;
 
     /**
      * Calculate the AST for this file
@@ -151,10 +153,10 @@ export class BrsFile {
             handle.dispose();
         }
         //TODO have brs change the type of `processedTokens` to not be readonly array
-        this.tokens = preprocessorWasSuccessful ? (preprocessorResults.processedTokens as any) : lexResult.tokens;
+        tokens = preprocessorWasSuccessful ? (preprocessorResults.processedTokens as any) : lexResult.tokens;
 
-        let parser = new Parser();
-        let parseResult = parser.parse(this.tokens, this.extension === 'brs' ? 'brightscript' : 'brighterscript');
+        this.parser = new Parser();
+        let parseResult = this.parser.parse(tokens, this.extension === 'brs' ? 'brightscript' : 'brighterscript');
 
         let errors = [...lexResult.errors, ...<any>parseResult.errors, ...<any>preprocessorResults.errors];
 
@@ -173,24 +175,24 @@ export class BrsFile {
         this.findFunctionCalls(lines);
 
         //scan the full text for any word that looks like a variable
-        this.findSimpleIntellisenseCompletions(fileContents);
+        this.findPropertyNameCompletions();
 
         this.parseDeferred.resolve();
     }
 
-    public findSimpleIntellisenseCompletions(fileContents: string) {
+    public findPropertyNameCompletions() {
         //Find every identifier in the whole file
         let identifiers = util.findAllDeep<brs.lexer.Identifier>(this.ast, (x) => {
             return x && x.kind === Lexeme.Identifier;
         });
 
-        this.simpleIntellisenseCompletions = [];
+        this.propertyNameCompletions = [];
         let names = {};
         for (let identifier of identifiers) {
             let ancestors = this.getAncestors(this.ast, identifier.key);
             let parent = ancestors[ancestors.length - 1];
 
-            let isObjectProperty = !!ancestors.find(x => x instanceof DottedGet);
+            let isObjectProperty = !!ancestors.find(x => (x instanceof DottedGet) || (x instanceof AALiteralExpression));
 
             //filter out certain text items
             if (
@@ -201,7 +203,9 @@ export class BrsFile {
                     //local variables created or used by assignments
                     ancestors.find(x => x instanceof AssignmentStatement) ||
                     //local variables used in conditional statements
-                    ancestors.find(x => x instanceof IfStatement)
+                    ancestors.find(x => x instanceof IfStatement) ||
+                    //the 'as' keyword (and parameter types) when used in a type statement
+                    ancestors.find(x => x instanceof FunctionParameter)
                 )
             ) {
                 continue;
@@ -215,14 +219,14 @@ export class BrsFile {
             }
 
             names[name] = true;
-            this.simpleIntellisenseCompletions.push({
+            this.propertyNameCompletions.push({
                 label: name,
                 kind: CompletionItemKind.Text
             });
         }
     }
 
-    public simpleIntellisenseCompletions = [] as CompletionItem[];
+    public propertyNameCompletions = [] as CompletionItem[];
 
     public standardizeLexParseErrors(errors: ParseError[], lines: string[]) {
         let standardizedDiagnostics = [] as Diagnostic[];
@@ -631,14 +635,13 @@ export class BrsFile {
                 }
             }
         }
-
     }
 
-    public async getCompletions(position: Position, context?: Context) {
-        let result = {
-            completions: [] as CompletionItem[],
-            includeContextCallables: true,
-        };
+    /**
+     * Get completions available at the given cursor. This aggregates all values from this file and the current context.
+     */
+    public async getCompletions(position: Position, context?: Context): Promise<CompletionItem[]> {
+        let result = [] as CompletionItem[];
 
         let id = this.id;
         id = id;
@@ -649,27 +652,81 @@ export class BrsFile {
         //determine if cursor is inside a function
         let functionScope = this.getFunctionScopeAtPosition(position);
         if (!functionScope) {
-            result.includeContextCallables = false;
             //we aren't in any function scope, so just return an empty list
             return result;
         }
 
         //TODO: if cursor is within a comment, disable completions
 
-        let variables = functionScope.variableDeclarations;
-        for (let variable of variables) {
-            //skip duplicate variable names
-            if (names[variable.name]) {
-                continue;
+        //is next to a period (or an identifier that is next to a period). include the property names
+        if (this.isPositionNextToDot(position)) {
+            result.push(...context.getPropertyNameCompletions());
+
+            //is NOT next to period
+        } else {
+            //include the global callables
+            result.push(...context.getCallablesAsCompletions());
+
+            //include local variables
+            let variables = functionScope.variableDeclarations;
+            for (let variable of variables) {
+                //skip duplicate variable names
+                if (names[variable.name]) {
+                    continue;
+                }
+                names[variable.name] = true;
+                result.push({
+                    label: variable.name,
+                    kind: variable.type instanceof FunctionType ? CompletionItemKind.Function : CompletionItemKind.Variable
+                });
             }
-            names[variable.name] = true;
-            result.completions.push({
-                label: variable.name,
-                kind: variable.type instanceof FunctionType ? CompletionItemKind.Function : CompletionItemKind.Variable
-            });
         }
 
         return result;
+    }
+    private isPositionNextToDot(position: Position) {
+        let closestToken = this.getClosestToken(position);
+        let previousToken = this.getPreviousToken(closestToken);
+        //next to a dot
+        if (closestToken.kind === Lexeme.Dot) {
+            return true;
+        } else if (closestToken.kind === Lexeme.Newline || previousToken.kind === Lexeme.Newline) {
+            return false;
+            //next to an identifier, which is next to a dot
+        } else if (closestToken.kind === Lexeme.Identifier && previousToken.kind === Lexeme.Dot) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public getPreviousToken(token: Token) {
+        let idx = this.parser.tokens.indexOf(token);
+        return this.parser.tokens[idx - 1];
+    }
+
+    /**
+     * Get the token closest to the position. if no token is found, the previous token is returned
+     * @param position
+     * @param tokens
+     */
+    public getClosestToken(position: Position) {
+        let tokens = this.parser.tokens;
+        for (let i = 0; i < tokens.length; i++) {
+            let token = tokens[i];
+            let range = util.locationToRange(token.location);
+            if (util.rangeContains(range, position)) {
+                return token;
+            }
+            //if the position less than this token range, then this position touches no token,
+            if (util.positionIsGreaterThanRange(position, range) === false) {
+                let token = tokens[i - 1];
+                //return the token or the first token
+                return token ? token : tokens[0];
+            }
+        }
+        //return the last token
+        return tokens[tokens.length - 1];
     }
 
     public getHover(position: Position): Hover {

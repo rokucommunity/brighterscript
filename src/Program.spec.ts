@@ -607,7 +607,7 @@ describe('Program', () => {
         it('does not filter text results for object properties used in conditional statements', async () => {
             await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
                 sub Main()
-
+                    p.
                 end sub
                 sub SayHello()
                     person = {}
@@ -616,35 +616,35 @@ describe('Program', () => {
                     end if
                 end sub
             `);
-            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 22));
             expect(completions.filter(x => x.label === 'isAlive')).to.be.lengthOf(1);
         });
 
         it('does not filter text results for object properties used in assignments', async () => {
             await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
                 sub Main()
-
+                    p.
                 end sub
                 sub SayHello()
                    person = {}
                    localVar = person.name
                 end sub
             `);
-            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 22));
             expect(completions.filter(x => x.label === 'name')).to.be.lengthOf(1);
         });
 
         it('does not filter text results for object properties', async () => {
             await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
                 sub Main()
-
+                    p.
                 end sub
                 sub SayHello()
                    person = {}
                    person.name = "bob"
                 end sub
             `);
-            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 22));
             expect(completions.filter(x => x.label === 'name')).to.be.lengthOf(1);
         });
 
@@ -698,10 +698,10 @@ describe('Program', () => {
                     person.hello
                 end function
             `);
-            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 32));
             expect(completions.filter(x => x.kind === CompletionItemKind.Variable).map(x => x.label)).not.to.contain('helloMessage');
-
         });
+
         it('finds all file paths when initiated on xml uri', async () => {
             let xmlPath = path.normalize(`${rootDir}/components/component1.xml`);
             await program.addOrReplaceFile(xmlPath, `

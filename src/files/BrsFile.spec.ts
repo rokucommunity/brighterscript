@@ -1,6 +1,6 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
-import { Position, Range } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 
 import { Callable, CallableArg, CommentFlag, Diagnostic, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
@@ -63,6 +63,19 @@ describe('BrsFile', () => {
             let count = result.reduce((total, x) => x.label === 'name' ? total + 1 : total, 0);
             expect(count).to.equal(1);
         });
+
+        it('does not include `as` and `string` text options when used in function params', async () => {
+            (program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                sub Main(name as string)
+
+                end sub
+            `));
+
+            let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 23));
+            expect(result.filter(x => x.kind === CompletionItemKind.Text)).not.to.contain('as');
+            expect(result.filter(x => x.kind === CompletionItemKind.Text)).not.to.contain('string');
+        });
+
     });
 
     describe('comment flags', () => {

@@ -12,7 +12,7 @@ import { BsConfig } from './BsConfig';
 import { diagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { CallableContainer, Diagnostic, ValueKind } from './interfaces';
-import { Location } from './parser/lexer';
+import { Location, Token } from './parser/lexer';
 import { FunctionExpression as ExpressionFunction } from './parser/parser/Expression';
 import { BooleanType } from './types/BooleanType';
 import { BrsType } from './types/BrsType';
@@ -658,6 +658,30 @@ export class Util {
      */
     public flatMap<T, R>(array: T[], cb: (arg: T) => R) {
         return Array.prototype.concat.apply([], array.map(cb)) as never as R;
+    }
+
+    /**
+     * Determines if the position is greater than the range. This means
+     * the position does not touch the range, and has a position greater than the end
+     * of the range. A position that touches the last line/char of a range is considered greater
+     * than the range, because the `range.end` is EXclusive
+     */
+    public positionIsGreaterThanRange(position: Position, range: Range) {
+
+        //if the position is a higher line than the range
+        if (position.line > range.end.line) {
+            return true;
+        } else if (position.line < range.end.line) {
+            return false;
+        }
+        //they are on the same line
+
+        //if the position's char is greater than or equal to the range's
+        if (position.character >= range.end.character) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**

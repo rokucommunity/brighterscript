@@ -512,11 +512,14 @@ export class Context {
         return [];
     }
 
-    public getSimpleIntellisenseCompletions() {
+    /**
+     * Scan all files for property names, and return them as completions
+     */
+    public getPropertyNameCompletions() {
         let results = [];
         for (let key in this.files) {
             let file = this.files[key];
-            results.push(...file.file.simpleIntellisenseCompletions);
+            results.push(...file.file.propertyNameCompletions);
         }
         return results;
     }

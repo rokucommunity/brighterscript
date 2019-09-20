@@ -71,7 +71,7 @@ export class XmlFile {
     /**
      * TODO: do we need this for xml files?
      */
-    public simpleIntellisenseCompletions = [] as CompletionItem[];
+    public propertyNameCompletions = [] as CompletionItem[];
 
     public async parse(fileContents: string) {
         if (this.parseDeferred.isCompleted) {
@@ -303,16 +303,13 @@ export class XmlFile {
      * @param lineIndex
      * @param columnIndex
      */
-    public async getCompletions(position: Position) {
-        let result = {
-            completions: [] as CompletionItem[],
-            includeContextCallables: false,
-        };
+    public async getCompletions(position: Position): Promise<CompletionItem[]> {
         let scriptImport = this.getScriptImportAtPosition(position);
         if (scriptImport) {
-            result.completions = [...this.getScriptImportCompletions(scriptImport)];
+            return this.getScriptImportCompletions(scriptImport);
+        } else {
+            return [];
         }
-        return result;
     }
 
     private getScriptImportAtPosition(position: Position) {

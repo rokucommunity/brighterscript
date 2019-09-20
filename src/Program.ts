@@ -386,37 +386,30 @@ export class Program {
         //wait for the file to finish loading
         await file.isReady();
 
-        //find the contexts for this file (hopefully there's only one)
+        //find the contexts for this file
         let contexts = this.getContextsForFile(file);
-        if (contexts.length > 1) {
-            //TODO - make the user choose which context to use.
-        }
-        let context = contexts[0];
-        if (context) {
-            let fileResult = await file.getCompletions(position, context);
-            completions.push(...fileResult.completions);
-            if (fileResult.includeContextCallables) {
-                completions.push(...context.getCallablesAsCompletions());
-            }
-        } else {
-            console.error(`Cannot find context for ${file.pkgPath}`);
-        }
+        //get the completions for this file for every context
 
-        //until our language server gets smart enough, we need to support a "poor man's intellisense" (return all words that look like variables)
-        let names = {};
-        for (let context of contexts) {
-            let results = context.getSimpleIntellisenseCompletions();
-            for (let completion of results) {
-                //skip duplicates
-                if (names[completion.label]) {
-                    continue;
-                }
-                names[completion.label] = true;
-                completions.push(completion);
+        //get the completions from all contexts for this file
+        let allCompletions = util.flatMap(
+            await Promise.all(
+                contexts.map(ctx => file.getCompletions(position, ctx))
+            ),
+            c => c
+        );
+
+        let result = [] as CompletionItem[];
+
+        //only keep completions common to every completion
+        let keyCounts = {};
+        for (let completion of allCompletions) {
+            let key = `${completion.label}-${completion.kind}`;
+            keyCounts[key] = keyCounts[key] ? keyCounts[key]++ : 1;
+            if (keyCounts[key] === contexts.length) {
+                result.push(completion);
             }
         }
-
-        return completions;
+        return result;
     }
 
     /**
