@@ -7,7 +7,7 @@ import * as CC from './Chunk';
 /** The results of a Preprocessor's filtering pass. */
 export interface FilterResults {
     /** The tokens remaining after preprocessing. */
-    processedTokens: ReadonlyArray<Token>;
+    processedTokens: Token[];
     /** The encountered during preprocessing. */
     errors: ReadonlyArray<BrsError>;
 }

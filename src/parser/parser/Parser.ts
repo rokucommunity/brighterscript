@@ -163,7 +163,7 @@ export class Parser {
      * @returns an array of `Statement` objects that together form the abstract syntax tree of the
      *          program
      */
-    static parse(toParse: ReadonlyArray<Token>, mode: 'brightscript' | 'brighterscript' = 'brightscript') {
+    static parse(toParse: Token[], mode: 'brightscript' | 'brighterscript' = 'brightscript') {
         return new Parser().parse(toParse, mode);
     }
 
@@ -190,14 +190,20 @@ export class Parser {
     }
 
     /**
+     * The array of tokens passed to `parse()`
+     */
+    public tokens: Token[];
+
+    /**
      * Parses an array of `Token`s into an abstract syntax tree that can be executed with the `Interpreter`.
      * @param toParse the array of tokens to parse
      * @returns an array of `Statement` objects that together form the abstract syntax tree of the
      *          program
      */
-    parse(toParse: ReadonlyArray<Token>, mode: 'brightscript' | 'brighterscript' = 'brightscript'): ParseResults {
+    parse(toParse: Token[], mode: 'brightscript' | 'brighterscript' = 'brightscript'): ParseResults {
         let current = 0;
         let tokens = toParse;
+        this.tokens = toParse;
 
         //the depth of the calls to function declarations. Helps some checks know if they are at the root or not.
         let functionDeclarationLevel = 0;
@@ -1254,6 +1260,7 @@ export class Parser {
                     return new Stmt.ExpressionStatement(expr);
                 }
 
+                //at this point, it's probably an error. However, we recover a little more gracefully by creating an assignment
                 throw addError(
                     expressionStart,
                     "Expected statement or function call, but received an expression"
@@ -1580,8 +1587,6 @@ export class Parser {
 
                     expr = new Expr.IndexedGetExpression(expr, index, openingSquare, closingSquare);
                 } else if (match(Lexeme.Dot)) {
-                    while (match(Lexeme.Newline));
-
                     let name = consume(
                         "Expected property name after '.'",
                         Lexeme.Identifier,

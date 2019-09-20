@@ -2,8 +2,9 @@ import { expect } from 'chai';
 
 import { diagnosticMessages } from '../../DiagnosticMessages';
 import { Lexeme, Lexer } from '../lexer';
+import { DottedGet } from './Expression';
 import { Parser } from './Parser';
-import { ClassFieldStatement, ClassStatement } from './Statement';
+import { ClassFieldStatement, ClassStatement, PrintStatement } from './Statement';
 
 describe('parser', () => {
     let parser: Parser;
@@ -18,6 +19,26 @@ describe('parser', () => {
     });
 
     describe('parse', () => {
+        it('does not invalidate entire file when line ends with a period', () => {
+            let { tokens } = Lexer.scan(`
+                sub main()
+                    person.a
+                end sub
+
+            `);
+            let { errors, statements } = parser.parse(tokens) as any;
+            expect(errors).to.be.lengthOf(1, 'Error count should be 0');
+        });
+
+        it.skip('allows printing object with trailing period', () => {
+            let { tokens } = Lexer.scan(`print a.`);
+            let { statements, errors } = parser.parse(tokens);
+            let printStatement = statements[0] as PrintStatement;
+            expect(errors).to.be.empty;
+            expect(printStatement).to.be.instanceof(PrintStatement);
+            expect(printStatement.expressions[0]).to.be.instanceof(DottedGet);
+        });
+
         describe('comments', () => {
             it('combines multi-line comments', () => {
                 let { tokens } = Lexer.scan(`
