@@ -66,6 +66,18 @@ describe('ProgramBuilder', () => {
                 dest: 'source/source.brs'
             }]));
         });
+        /**
+         * Linux/windows issues...standardize the file protocol so we avoid this error:
+         * Error: [UriError]: If a URI does not contain an authority component, then the path cannot begin with two slash characters ("//")
+         * @param fullPath
+         */
+        function getFileProtocolPath(fullPath: string) {
+            if (fullPath.indexOf('/') === 0 || fullPath.indexOf('\\') === 0) {
+                return `file://${fullPath}`;
+            } else {
+                return `file:///${fullPath}`;
+            }
+        }
         it('only adds files that match the files array', async () => {
             builder.program = new Program({});
 
@@ -77,22 +89,18 @@ describe('ProgramBuilder', () => {
 
             expect(builder.program.files[mainPath]).to.be.undefined;
             expect(builder.program.files[libPath]).to.be.undefined;
-            let mainUri = 'file:///' + mainPath;
-            console.log('mainUrl: ', mainUri);
 
             await builder.handleFileChanges([{
                 type: <FileChangeType>FileChangeType.Created,
-                uri: mainUri
+                uri: getFileProtocolPath(mainPath)
             }]);
 
             expect(builder.program.files[mainPath]).to.exist;
             expect(builder.program.files[libPath]).to.be.undefined;
 
-            let libUri = 'file:///' + libPath;
-            console.log('libUri', libUri);
             await builder.handleFileChanges([{
                 type: <FileChangeType>FileChangeType.Created,
-                uri: libUri
+                uri: getFileProtocolPath(libPath)
             }]);
 
             expect(builder.program.files[mainPath]).to.exist;
