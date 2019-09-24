@@ -6,10 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.2.1] - 2019-09-24
+### Fixed
+ - crash when parsing the workspace path to read the config on startup.
+ - auto complete options not always returning results when it should.
+
+
 ## [0.2.0] - 2019-09-20
 ### Added
  - bsconfig.json validation
- - slightly smarter intellisense that knows when you're trying to complete an object property. 
+ - slightly smarter intellisense that knows when you're trying to complete an object property.
  - diagnostic for depricated brsconfig.json
  - basic transpile support including sourcemaps. Most lines also support transpiling including comments, but there may still be bugs
  - parser now includes all comments as tokens in the AST.
@@ -27,5 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.2.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.2.0...v0.2.1
 [0.2.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.2.0
 [0.1.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.1.0
