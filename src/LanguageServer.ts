@@ -233,7 +233,7 @@ export class LanguageServer {
     private async getConfigFilePath(workspacePath: string) {
         //look for config group called "brightscript"
         let config = await this.connection.workspace.getConfiguration({
-            scopeUri: Uri.parse(workspacePath).toString(),
+            scopeUri: Uri.file(workspacePath).toString(),
             section: 'brightscript'
         });
         let configFilePath: string;
