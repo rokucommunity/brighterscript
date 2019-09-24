@@ -404,7 +404,7 @@ export class Program {
         let keyCounts = {};
         for (let completion of allCompletions) {
             let key = `${completion.label}-${completion.kind}`;
-            keyCounts[key] = keyCounts[key] ? keyCounts[key]++ : 1;
+            keyCounts[key] = keyCounts[key] ? keyCounts[key] + 1 : 1;
             if (keyCounts[key] === contexts.length) {
                 result.push(completion);
             }
