@@ -419,7 +419,7 @@ export class Context {
                     }
                     let shadowedCallable = ancestorNonPlatformCallables[ancestorNonPlatformCallables.length - 1];
                     this.diagnostics.push({
-                        ...diagnosticMessages.Shadows_ancestor_function_1010(
+                        ...diagnosticMessages.Overrides_ancestor_function_1010(
                             container.callable.name,
                             container.context.name,
                             shadowedCallable.callable.file.pkgPath,

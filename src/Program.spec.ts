@@ -267,7 +267,7 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(diagnosticMessages.Shadows_ancestor_function_1010('', '', '', '').code);
+            expect(diagnostics[0].code).to.equal(diagnosticMessages.Overrides_ancestor_function_1010('', '', '', '').code);
         });
 
         it('does not add info diagnostic on shadowed "init" functions', async () => {
@@ -832,7 +832,7 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
 
-            let shadowedDiagnositcs = diagnostics.filter((x) => x.code === diagnosticMessages.Shadows_ancestor_function_1010('', '', '', '').code);
+            let shadowedDiagnositcs = diagnostics.filter((x) => x.code === diagnosticMessages.Overrides_ancestor_function_1010('', '', '', '').code);
 
             //the children should all have diagnostics about shadowing their parent lib.brs file.
             //If not, then the parent-child attachment was severed somehow
