@@ -83,6 +83,15 @@ describe('util', () => {
         });
     });
 
+    describe('normalizeFilePath', () => {
+        it('forces drive letters to lower case', () => {
+            //unix slashes
+            expect(util.normalizeFilePath('C:/projects')).to.equal(n('c:/projects'));
+            //windows slashes
+            expect(util.normalizeFilePath('C:\\projects')).to.equal(n('c:/projects'));
+        });
+    });
+
     describe('normalizeConfig', () => {
         it('loads project from disc', async () => {
             vfs[rootConfigPath] = `{"outFile": "customOutDir/pkg.zip"}`;

@@ -54,18 +54,25 @@ export class Util {
      * Load a file from disc into a string
      * @param filePath
      */
-    public async  getFileContents(filePath: string) {
+    public async getFileContents(filePath: string) {
         let file = await fsExtra.readFile(filePath);
         let fileContents = file.toString();
         return fileContents;
     }
 
     /**
-     * Make the path absolute, and replace all separators with the current OS's separators
+     * Make the path absolute, force drive letter to lower case, and replace all separators with the current OS's separators.
+     *
      * @param filePath
      */
     public normalizeFilePath(filePath: string) {
-        return path.normalize(path.resolve(filePath));
+        return path.normalize(
+            path.resolve(
+                this.lowerDrivePath(
+                    filePath
+                )
+            )
+        );
     }
 
     /**
@@ -238,7 +245,7 @@ export class Util {
      * @param config
      */
     public normalizeConfig(config: BsConfig) {
-        config = config ? config : {} as BsConfig;
+        config = config || {} as BsConfig;
         config.deploy = config.deploy === true ? true : false;
         //use default options from rokuDeploy
         config.files = config.files ? config.files : rokuDeploy.getOptions().files;
@@ -260,6 +267,9 @@ export class Util {
      * @param options
      */
     public getRootDir(options: BsConfig) {
+        if (!options) {
+            throw new Error('Options is required');
+        }
         let cwd = options.cwd;
         cwd = cwd ? cwd : process.cwd();
         let rootDir = options.rootDir ? options.rootDir : cwd;
@@ -552,6 +562,19 @@ export class Util {
         }
         const normalizedPath = path.normalize(parsedPath);
         return normalizedPath;
+    }
+
+    /**
+     * Force the drive letter
+     * @param fullPath
+     */
+    public lowerDrivePath(fullPath: string) {
+        let match = /([a-z]:[\\\/])/i.exec(fullPath);
+        if (match) {
+            let driveText = match[1];
+            fullPath = driveText.toLowerCase() + fullPath.substring(2);
+        }
+        return fullPath;
     }
 
     /**

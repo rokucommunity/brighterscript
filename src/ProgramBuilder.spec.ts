@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as sinonImport from 'sinon';
 import { FileChangeType } from 'vscode-languageserver';
 
+import { BsConfig } from './BsConfig';
 import { Program } from './Program';
 import { ProgramBuilder } from './ProgramBuilder';
 import util from './util';
@@ -21,9 +22,10 @@ describe('ProgramBuilder', () => {
     let builder: ProgramBuilder;
     let b: any;
     let vfs = {};
-    beforeEach(() => {
+    beforeEach(async () => {
         builder = new ProgramBuilder();
         b = builder;
+        b.options = await util.normalizeAndResolveConfig(undefined);
         vfs = {};
         sinon.stub(util, 'getFileContents').callsFake((filePath) => {
             if (vfs[filePath]) {
@@ -58,13 +60,14 @@ describe('ProgramBuilder', () => {
 
     describe('handleFileChanges', () => {
         beforeEach(() => {
-            sinon.stub(util, 'getFilePaths').returns(Promise.resolve([{
-                src: n(`${rootDir}/source/promise.brs`),
+            vfs[n(`${rootDir}/source/promise.brs`).toLowerCase()] = {
+                src: n(`${rootDir}/source/promise.brs`).toLowerCase(),
                 dest: 'source/promise.brs'
-            }, {
-                src: n(`${rootDir}/source/main.brs`),
+            };
+            vfs[n(`${rootDir}/source/main.brs`).toLowerCase()] = {
+                src: n(`${rootDir}/source/main.brs`).toLowerCase(),
                 dest: 'source/source.brs'
-            }]));
+            };
         });
         /**
          * Linux/windows issues...standardize the file protocol so we avoid this error:
@@ -72,14 +75,25 @@ describe('ProgramBuilder', () => {
          * @param fullPath
          */
         function getFileProtocolPath(fullPath: string) {
+            let result: string;
             if (fullPath.indexOf('/') === 0 || fullPath.indexOf('\\') === 0) {
-                return `file://${fullPath}`;
+                result = `file://${fullPath}`;
             } else {
-                return `file:///${fullPath}`;
+                result = `file:///${fullPath}`;
             }
+            return result;
         }
+
         it('only adds files that match the files array', async () => {
-            builder.program = new Program({});
+            sinon.stub(util, 'getFilePaths').returns(Promise.resolve([{
+                src: n(`${rootDir}/source/main.brs`),
+                dest: 'source/main.brs'
+            }]));
+            let options = {
+                rootDir: rootDir
+            } as BsConfig;
+            builder.program = new Program(options);
+            b.options = builder.program.options;
 
             let mainPath = n(`${rootDir}/source/main.brs`);
             vfs[mainPath] = 'sub main()\nend sub';

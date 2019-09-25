@@ -26,7 +26,7 @@ export class Program {
         this.options = util.normalizeConfig(options);
 
         //normalize the root dir path
-        this.rootDir = util.getRootDir(options);
+        this.rootDir = util.getRootDir(this.options);
 
         //create the 'platform' context
         this.platformContext = new Context('platform', (file) => false);
@@ -161,7 +161,9 @@ export class Program {
      * @param pathAbsolute
      */
     public getPkgPath(pathAbsolute: string) {
-        return pathAbsolute.replace(this.rootDir + path.sep, '');
+        pathAbsolute = util.normalizeFilePath(pathAbsolute);
+        let rootDir = util.normalizeFilePath(this.rootDir);
+        return pathAbsolute.replace(`${rootDir}${path.sep}`, '');
     }
 
     /**

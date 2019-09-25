@@ -32,6 +32,14 @@ describe('Program', () => {
             expect(program.platformContext.getAllCallables().length).to.be.greaterThan(0);
         });
     });
+
+    describe('getPkgPath', () => {
+        it('is unaffected by different drive letter cases', () => {
+            program.rootDir = n('C:/projects/app1');
+            expect(program.getPkgPath(n('c:/projects/app1/source/main.brs'))).to.equal(`source${path.sep}main.brs`);
+        });
+    });
+
     describe('addFile', () => {
         describe('fileResolvers', () => {
             it('loads brs file contents from disk when necessary', async () => {

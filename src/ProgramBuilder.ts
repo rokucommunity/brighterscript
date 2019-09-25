@@ -124,7 +124,6 @@ export class ProgramBuilder {
         }, 50);
         //on any file watcher event
         this.watcher.on('all', async (event: string, path: string) => {
-            // console.log(event, path);
             if (event === 'add' || event === 'change') {
                 await this.program.addOrReplaceFile(path);
             } else if (event === 'unlink') {
@@ -374,7 +373,7 @@ export class ProgramBuilder {
         //Which eliminates the need to detect. All functions below can handle being given
         //a file path AND a folder path, and will only operate on the one they are looking for
         for (let change of changes) {
-            let pathAbsolute = path.normalize(Uri.parse(change.uri).fsPath);
+            let pathAbsolute = util.normalizeFilePath(Uri.parse(change.uri).fsPath);
             //remove all files from any removed folder
             if (change.type === FileChangeType.Deleted) {
                 //try to act on this path as a directory
@@ -384,11 +383,11 @@ export class ProgramBuilder {
                     this.program.removeFile(pathAbsolute);
                 }
             } else if (change.type === FileChangeType.Created) {
-                //load all matching missing files from this path (if it's a directory)
+                //IF this path is a directory, load all matching missing files
                 await this.loadMissingFilesFromFolder(pathAbsolute);
                 let filePaths = await getMatchingFilePaths();
                 //if our program wants this file, then load it
-                if (filePaths.indexOf(pathAbsolute) > -1) {
+                if (filePaths.map(x => util.normalizeFilePath(x)).indexOf(util.normalizeFilePath(pathAbsolute)) > -1) {
                     await this.program.addOrReplaceFile(pathAbsolute);
                 }
             } else /*changed*/ {
@@ -425,19 +424,21 @@ export class ProgramBuilder {
      * @param folderPathAbsolute
      */
     public async loadMissingFilesFromFolder(folderPathAbsolute: string) {
-        folderPathAbsolute = path.normalize(folderPathAbsolute);
+        folderPathAbsolute = util.normalizeFilePath(folderPathAbsolute);
         let allFilesObjects = await util.getFilePaths(this.options);
 
         let promises = [] as Array<Promise<any>>;
         //for every matching file
         for (let fileObj of allFilesObjects) {
+            let src = util.normalizeFilePath(fileObj.src);
             if (
                 //file path starts with folder path
-                fileObj.src.indexOf(folderPathAbsolute) === 0 &&
+                src.indexOf(folderPathAbsolute) === 0 &&
                 //paths are not identical (solves problem when passing file path into this method instead of folder path)
-                fileObj.src !== folderPathAbsolute &&
-                this.program.hasFile(fileObj.src) === false) {
-                promises.push(this.program.addOrReplaceFile(fileObj.src));
+                src !== folderPathAbsolute &&
+                this.program.hasFile(src) === false
+            ) {
+                promises.push(this.program.addOrReplaceFile(src));
             }
         }
         await Promise.all(promises);
