@@ -231,9 +231,15 @@ export class LanguageServer {
     }
 
     private async getConfigFilePath(workspacePath: string) {
+        let scopeUri: string;
+        if (workspacePath.indexOf('file:') === 0) {
+            scopeUri = Uri.parse(workspacePath).toString();
+        } else {
+            scopeUri = Uri.file(workspacePath).toString();
+        }
         //look for config group called "brightscript"
         let config = await this.connection.workspace.getConfiguration({
-            scopeUri: Uri.file(workspacePath).toString(),
+            scopeUri: scopeUri,
             section: 'brightscript'
         });
         let configFilePath: string;
