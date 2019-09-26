@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.1] - 2019-09-24
 ### Changed
  - the text for diagnostic 1010 to say "override" instead of "shadows"
-
 ### Fixed
  - crash when parsing the workspace path to read the config on startup.
  - auto complete options not always returning results when it should.
+ - windows bug relating to the drive letter being different, and so then not matching the file list. 
+ - many bugs related to mismatched file path comparisons.
 
 
 
