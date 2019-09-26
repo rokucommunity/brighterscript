@@ -10,24 +10,26 @@ import util from './util';
 
 let sinon = sinonImport.createSandbox();
 let rootDir = process.cwd();
-let n = path.normalize;
+let n = util.normalizeFilePath.bind(util);
 
 describe('ProgramBuilder', () => {
-    beforeEach(() => {
-    });
     afterEach(() => {
         sinon.restore();
     });
 
     let builder: ProgramBuilder;
     let b: any;
-    let vfs = {};
+    let setVfsFile: (filePath: string, contents: string) => void;
     beforeEach(async () => {
         builder = new ProgramBuilder();
         b = builder;
         b.options = await util.normalizeAndResolveConfig(undefined);
-        vfs = {};
-        sinon.stub(util, 'getFileContents').callsFake((filePath) => {
+        b.program = new Program(b.options);
+        let vfs = {};
+        setVfsFile = (filePath, contents) => {
+            vfs[filePath] = contents;
+        };
+        sinon.stub(b.program.util, 'getFileContents').callsFake((filePath) => {
             if (vfs[filePath]) {
                 return vfs[filePath];
             } else {
@@ -60,14 +62,8 @@ describe('ProgramBuilder', () => {
 
     describe('handleFileChanges', () => {
         beforeEach(() => {
-            vfs[n(`${rootDir}/source/promise.brs`).toLowerCase()] = {
-                src: n(`${rootDir}/source/promise.brs`).toLowerCase(),
-                dest: 'source/promise.brs'
-            };
-            vfs[n(`${rootDir}/source/main.brs`).toLowerCase()] = {
-                src: n(`${rootDir}/source/main.brs`).toLowerCase(),
-                dest: 'source/source.brs'
-            };
+            setVfsFile(n(`${rootDir}/source/promise.brs`), 'sub promise()\nend sub');
+            setVfsFile(n(`${rootDir}/source/main.brs`), 'sub main()\nend sub');
         });
         /**
          * Linux/windows issues...standardize the file protocol so we avoid this error:
@@ -85,10 +81,12 @@ describe('ProgramBuilder', () => {
         }
 
         it('only adds files that match the files array', async () => {
-            sinon.stub(util, 'getFilePaths').returns(Promise.resolve([{
-                src: n(`${rootDir}/source/main.brs`),
-                dest: 'source/main.brs'
-            }]));
+            sinon.stub(util, 'getFilePaths').returns(
+                Promise.resolve([{
+                    src: n(`${rootDir}/source/main.brs`),
+                    dest: 'source/main.brs'
+                }])
+            );
             let options = {
                 rootDir: rootDir
             } as BsConfig;
@@ -96,10 +94,10 @@ describe('ProgramBuilder', () => {
             b.options = builder.program.options;
 
             let mainPath = n(`${rootDir}/source/main.brs`);
-            vfs[mainPath] = 'sub main()\nend sub';
+            setVfsFile(mainPath, 'sub main()\nend sub');
 
             let libPath = n(`${rootDir}/source/lib.brs`);
-            vfs[libPath] = 'sub libFunc1()\nend sub';
+            setVfsFile(libPath, 'sub libFunc1()\nend sub');
 
             expect(builder.program.files[mainPath]).to.be.undefined;
             expect(builder.program.files[libPath]).to.be.undefined;

@@ -106,7 +106,16 @@ export class Context {
         return this.matcher(file) === true ? true : false;
     }
 
-    public files = {} as { [filePath: string]: ContextFile };
+    private files = {} as { [filePath: string]: ContextFile };
+
+    public get fileCount() {
+        return Object.keys(this.files).length;
+    }
+    public getFile(filePath: string) {
+        return this.files[
+            util.normalizeFilePath(filePath)
+        ];
+    }
 
     /**
      * Get the list of errors for this context. It's calculated on the fly, so

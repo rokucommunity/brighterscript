@@ -16,5 +16,5 @@
         "**/dist": true
     },
     "tslint.autoFixOnSave": true,
-    "tslint.exclude": "**/source-map.d.ts"
+    "tslint.exclude": "**/*.d.ts"
 }

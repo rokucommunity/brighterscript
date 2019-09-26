@@ -48,7 +48,7 @@ describe('Program', () => {
 
                 //resolve lib.brs from memory instead of going to disk
                 program.fileResolvers.push((pathAbsolute) => {
-                    if (pathAbsolute === n(`${rootDir}/source/lib.brs`)) {
+                    if (pathAbsolute === util.normalizeFilePath(`${rootDir}/source/lib.brs`)) {
                         return `'comment`;
                     }
                 });
@@ -66,7 +66,7 @@ describe('Program', () => {
                 expect(stub.called).to.be.false;
 
                 program.fileResolvers.push((pathAbsolute) => {
-                    if (pathAbsolute === n(`${rootDir}/components/A.xml`)) {
+                    if (pathAbsolute === util.normalizeFilePath(`${rootDir}/components/A.xml`)) {
                         return `<?xml version="1.0" encoding="utf-8" ?>`;
                     }
                 });
@@ -115,27 +115,27 @@ describe('Program', () => {
         it('adds files in the source folder to the global context', async () => {
             expect(program.contexts.global).to.exist;
             //no files in global context
-            expect(Object.keys(program.contexts.global.files).length).to.equal(0);
+            expect(program.contexts.global.fileCount).to.equal(0);
 
             let mainPath = path.normalize(`${rootDir}/source/main.brs`);
             //add a new source file
             await program.addOrReplaceFile(mainPath, '');
             //file should be in global context now
-            expect(program.contexts.global.files[mainPath]).to.exist;
+            expect(program.contexts.global.getFile(mainPath)).to.exist;
 
             //add an unreferenced file from the components folder
             await program.addOrReplaceFile(`${rootDir}/components/component1/component1.brs`, '');
 
             //global context should have the same number of files
-            expect(program.contexts.global.files[mainPath]).to.exist;
-            expect(program.contexts.global.files[`${rootDir}/components/component1/component1.brs`]).not.to.exist;
+            expect(program.contexts.global.getFile(mainPath)).to.exist;
+            expect(program.contexts.global.getFile(`${rootDir}/components/component1/component1.brs`)).not.to.exist;
         });
 
         it('normalizes file paths', async () => {
             let filePath = n(`${rootDir}/source\\main.brs`);
             await program.addOrReplaceFile(filePath, '');
 
-            expect(program.contexts.global.files[n(filePath)]);
+            expect(program.contexts.global.getFile(filePath)).to.exist;
 
             //shouldn't throw an exception because it will find the correct path after normalizing the above path and remove it
             try {
@@ -475,18 +475,18 @@ describe('Program', () => {
             await program.addOrReplaceFile(brsPath, '');
 
             let context = program.contexts[`components${path.sep}component1.xml`];
-            expect(context.files[xmlPath].file.pkgPath).to.equal(`components${path.sep}component1.xml`);
-            expect(context.files[brsPath].file.pkgPath).to.equal(`components${path.sep}component1.brs`);
+            expect(context.getFile(xmlPath).file.pkgPath).to.equal(`components${path.sep}component1.xml`);
+            expect(context.getFile(brsPath).file.pkgPath).to.equal(`components${path.sep}component1.brs`);
         });
 
         it('adds xml file to files map', async () => {
-            let xmlPath = path.normalize(`${rootDir}/components/component1.xml`);
+            let xmlPath = `${rootDir}/components/component1.xml`;
             await program.addOrReplaceFile(xmlPath, '');
-            expect(program.files[xmlPath]).to.exist;
+            expect(program.getFileByPathAbsolute(xmlPath)).to.exist;
         });
 
         it('detects missing script reference', async () => {
-            let xmlPath = path.normalize(`${rootDir}/components/component1.xml`);
+            let xmlPath = `${rootDir}/components/component1.xml`;
             await program.addOrReplaceFile(xmlPath, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
@@ -496,7 +496,7 @@ describe('Program', () => {
             await program.validate();
             expect(program.getDiagnostics().length).to.equal(1);
             expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
-                file: program.files[xmlPath],
+                file: program.getFileByPathAbsolute(xmlPath),
                 location: Range.create(3, 58, 3, 88),
                 ...diagnosticMessages.Referenced_file_does_not_exist_1004(),
                 severity: 'error'
@@ -569,12 +569,12 @@ describe('Program', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics()).to.be.empty;
-            expect(program.contexts[xmlFile.pkgPath].files[brsPath]).to.exist;
+            expect(program.contexts[xmlFile.pkgPath].getFile(brsPath)).to.exist;
         });
 
         it('reloads referenced fles when xml file changes', async () => {
             program.options.ignoreErrorCodes.push(1013);
-            let brsPath = path.normalize(`${rootDir}/components/component1.brs`);
+            let brsPath = util.normalizeFilePath(`${rootDir}/components/component1.brs`);
             await program.addOrReplaceFile(brsPath, '');
 
             let xmlPath = path.normalize(`${rootDir}/components/component1.xml`);
@@ -586,7 +586,7 @@ describe('Program', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics()).to.be.empty;
-            expect(program.contexts[xmlFile.pkgPath].files[brsPath]).not.to.exist;
+            expect(program.contexts[xmlFile.pkgPath].getFile(brsPath)).not.to.exist;
 
             //reload the xml file contents, adding a new script reference.
             xmlFile = await program.addOrReplaceFile(xmlPath, `
@@ -596,7 +596,7 @@ describe('Program', () => {
                 </component>
             `);
 
-            expect(program.contexts[xmlFile.pkgPath].files[brsPath]).to.exist;
+            expect(program.contexts[xmlFile.pkgPath].getFile(brsPath)).to.exist;
 
         });
     });
@@ -856,7 +856,7 @@ describe('Program', () => {
             `);
 
             //the component context should only have the xml file
-            expect(util.propertyCount(program.contexts[xmlFile.pkgPath].files)).to.equal(1);
+            expect(program.contexts[xmlFile.pkgPath].fileCount).to.equal(1);
 
             //create the lib file
             let libFile = await program.addOrReplaceFile(`${rootDir}/source/lib.brs`, `'comment`);
@@ -868,11 +868,11 @@ describe('Program', () => {
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                 </component>
             `);
-
+            let ctx = program.contexts[xmlFile.pkgPath];
             //the component context should have the xml file AND the lib file
-            expect(util.propertyCount(program.contexts[xmlFile.pkgPath].files)).to.equal(2);
-            expect(program.contexts[xmlFile.pkgPath].files[xmlFile.pathAbsolute]).to.exist;
-            expect(program.contexts[xmlFile.pkgPath].files[libFile.pathAbsolute]).to.exist;
+            expect(ctx.fileCount).to.equal(2);
+            expect(ctx.getFile(xmlFile.pathAbsolute)).to.exist;
+            expect(ctx.getFile(libFile.pathAbsolute)).to.exist;
 
             //reload the xml file again, removing the script import.
             xmlFile = await program.addOrReplaceFile(`${rootDir}/components/component.xml`, `
@@ -882,9 +882,8 @@ describe('Program', () => {
             `);
 
             //the context should again only have the xml file loaded
-            expect(util.propertyCount(program.contexts[xmlFile.pkgPath].files)).to.equal(1);
+            expect(program.contexts[xmlFile.pkgPath].fileCount).to.equal(1);
             expect(program.contexts[xmlFile.pkgPath]).to.exist;
-
         });
     });
 

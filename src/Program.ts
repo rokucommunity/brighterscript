@@ -10,7 +10,7 @@ import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { Diagnostic } from './interfaces';
 import { platformFile } from './platformCallables';
-import util from './util';
+import { util } from './util';
 import { XmlContext } from './XmlContext';
 
 export class Program {
@@ -50,10 +50,13 @@ export class Program {
         this.contexts[globalContext.name] = globalContext;
 
         //add the default file resolver
-        this.fileResolvers.push((pathAbsolute) => {
-            return util.getFileContents(pathAbsolute);
+        this.fileResolvers.push(async (pathAbsolute) => {
+            let contents = await this.util.getFileContents(pathAbsolute);
+            return contents;
         });
     }
+
+    private util = util;
 
     /**
      * A list of functions that will be used to load file contents.
@@ -263,6 +266,7 @@ export class Program {
      * @param pathAbsolute
      */
     public getFileByPathAbsolute(pathAbsolute: string) {
+        pathAbsolute = util.normalizeFilePath(pathAbsolute);
         for (let filePath in this.files) {
             if (filePath.toLowerCase() === pathAbsolute.toLowerCase()) {
                 return this.files[filePath];
@@ -298,7 +302,7 @@ export class Program {
      * @param filePath
      */
     public removeFile(filePath: string) {
-        filePath = path.normalize(filePath);
+        filePath = util.normalizeFilePath(filePath);
         let file = this.files[filePath];
 
         //notify every context of this file removal
@@ -351,7 +355,7 @@ export class Program {
      * @param pathAbsolute
      */
     private getFile(pathAbsolute: string) {
-        pathAbsolute = path.resolve(pathAbsolute);
+        pathAbsolute = util.normalizeFilePath(pathAbsolute);
         return this.files[pathAbsolute];
     }
 
