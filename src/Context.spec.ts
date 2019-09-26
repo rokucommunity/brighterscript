@@ -28,7 +28,7 @@ describe('Context', () => {
     });
 
     describe('attachProgram', () => {
-        it('correctly listens to program events', async () => {
+        it.only('correctly listens to program events', async () => {
             let context = new Context('some context', (file) => true);
 
             let file = new BrsFile(util.normalizeFilePath(`${rootDir}/source/file.brs`), n('source/file.brs'), program);
