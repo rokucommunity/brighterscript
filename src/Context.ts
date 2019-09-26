@@ -234,7 +234,7 @@ export class Context {
     public removeFile(file: File) {
         this.isValidated = false;
 
-        let ctxFile = this.files[file.pathAbsolute];
+        let ctxFile = this.getFile(file.pathAbsolute);
         if (!ctxFile) {
             return;
         }

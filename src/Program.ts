@@ -72,6 +72,7 @@ export class Program {
      * This allow the language server to provide file contents directly from memory.
      */
     public async getFileContents(pathAbsolute: string) {
+        pathAbsolute = util.normalizeFilePath(pathAbsolute);
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
             let result = await fileResolver(pathAbsolute);
@@ -303,7 +304,7 @@ export class Program {
      */
     public removeFile(filePath: string) {
         filePath = util.normalizeFilePath(filePath);
-        let file = this.files[filePath];
+        let file = this.getFile(filePath);
 
         //notify every context of this file removal
         for (let contextName in this.contexts) {

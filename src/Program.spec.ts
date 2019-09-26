@@ -132,7 +132,7 @@ describe('Program', () => {
         });
 
         it('normalizes file paths', async () => {
-            let filePath = n(`${rootDir}/source\\main.brs`);
+            let filePath = `${rootDir}/source\\main.brs`;
             await program.addOrReplaceFile(filePath, '');
 
             expect(program.contexts.global.getFile(filePath)).to.exist;

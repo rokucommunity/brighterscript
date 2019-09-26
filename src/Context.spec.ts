@@ -8,6 +8,7 @@ import { Context as Context } from './Context';
 import { diagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { Program } from './Program';
+import util from './util';
 let n = path.normalize;
 
 describe('Context', () => {
@@ -30,7 +31,7 @@ describe('Context', () => {
         it('correctly listens to program events', async () => {
             let context = new Context('some context', (file) => true);
 
-            let file = new BrsFile(n('abs/file.brs'), n('rel/file.brs'), program);
+            let file = new BrsFile(util.normalizeFilePath(`${rootDir}/source/file.brs`), n('source/file.brs'), program);
 
             //we're only testing events, so make this emitter look like a program
             let fakeProgram = new EventEmitter();
@@ -120,7 +121,7 @@ describe('Context', () => {
         it('removes callables from list', async () => {
             let initCallableCount = context.getAllCallables().length;
             //add the file
-            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            let file = new BrsFile(util.normalizeFilePath(`${rootDir}/source/file.brs`), n('source/file.brs'), program);
             await file.parse(`
                 function DoA()
                     print "A"
