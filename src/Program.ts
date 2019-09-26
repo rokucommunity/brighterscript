@@ -145,8 +145,6 @@ export class Program {
      */
     public hasFile(filePath: string) {
         filePath = util.normalizeFilePath(filePath);
-        console.log('hasFile', filePath);
-        console.log('hasFile: all files', Object.keys(this.files));
         return this.files[filePath] !== undefined;
     }
 
@@ -179,13 +177,10 @@ export class Program {
      * @param fileContents
      */
     public async addOrReplaceFile(pathAbsolute: string, fileContents?: string) {
-        console.log('addOrReplaceFile start', pathAbsolute);
         pathAbsolute = util.normalizeFilePath(pathAbsolute);
-        console.log('addOrReplaceFile path normalized', pathAbsolute);
 
         //if the file is already loaded, remove it
         if (this.hasFile(pathAbsolute)) {
-            console.log('removeFile');
             this.removeFile(pathAbsolute);
         }
         let pkgPath = this.getPkgPath(pathAbsolute);
@@ -310,7 +305,6 @@ export class Program {
     public removeFile(filePath: string) {
         filePath = util.normalizeFilePath(filePath);
         let file = this.getFile(filePath);
-        console.log('removeFile found file: ', !!file);
 
         //notify every context of this file removal
         for (let contextName in this.contexts) {

@@ -112,10 +112,7 @@ export class Context {
         return Object.keys(this.files).length;
     }
     public getFile(filePath: string) {
-        console.log('context getFile', filePath);
         filePath = util.normalizeFilePath(filePath);
-        console.log('context getFile normalizedFilePath', filePath);
-        console.log('context getFile all files', Object.keys(this.files));
         return this.files[filePath];
     }
 
@@ -241,8 +238,6 @@ export class Context {
             return;
         }
 
-        console.log('remove file from context', file.pathAbsolute);
-        console.log('remove file from context all files: ', Object.keys(this.files));
         //remove the reference to this file
         delete this.files[file.pathAbsolute];
         this.emit('invalidated');
