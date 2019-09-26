@@ -1,3 +1,7 @@
+os:
+ - linux
+ - osx
+ - windows
 language: node_js
 node_js:
   - "11.4.0"
@@ -17,6 +21,8 @@ deploy:
     on:
       branch: master
       tags: true
+      # only deploy from the linux build
+      condition: $TRAVIS_OS_NAME = linux
   - provider: npm
     email: "bronley@gmail.com"
     api_key: $NPM_TOKEN
@@ -24,3 +30,5 @@ deploy:
     on:
       branch: master
       tags: true
+      # only deploy from the linux build
+      condition: $TRAVIS_OS_NAME = linux
