@@ -13,7 +13,7 @@ let n = path.normalize;
 
 describe('Context', () => {
     let sinon = sinonImport.createSandbox();
-    let rootDir = 'C:/projects/RokuApp';
+    let rootDir = process.cwd();
     let program: Program;
     let context: Context;
     beforeEach(() => {
@@ -28,7 +28,7 @@ describe('Context', () => {
     });
 
     describe('attachProgram', () => {
-        it.only('correctly listens to program events', async () => {
+        it('correctly listens to program events', async () => {
             let context = new Context('some context', (file) => true);
 
             let file = new BrsFile(util.normalizeFilePath(`${rootDir}/source/file.brs`), n('source/file.brs'), program);
