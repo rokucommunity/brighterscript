@@ -83,12 +83,12 @@ describe('util', () => {
         });
     });
 
-    describe('normalizeFilePath', () => {
+    describe('lowerDrivePath', () => {
         it('forces drive letters to lower case', () => {
             //unix slashes
-            expect(util.normalizeFilePath('C:/projects')).to.equal(n('c:/projects'));
+            expect(util.lowerDrivePath('C:/projects')).to.equal('c:/projects');
             //windows slashes
-            expect(util.normalizeFilePath('C:\\projects')).to.equal(n('c:/projects'));
+            expect(util.lowerDrivePath('C:\\projects')).to.equal(('c:\\projects'));
         });
     });
 

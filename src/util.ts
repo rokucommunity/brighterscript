@@ -569,10 +569,10 @@ export class Util {
      * @param fullPath
      */
     public lowerDrivePath(fullPath: string) {
-        let match = /([a-z]:[\\\/])/i.exec(fullPath);
+        let match = /([a-z]):[\\\/]/i.exec(fullPath);
         if (match) {
             let driveText = match[1];
-            fullPath = driveText.toLowerCase() + fullPath.substring(2);
+            fullPath = driveText.toLowerCase() + fullPath.substring(1);
         }
         return fullPath;
     }

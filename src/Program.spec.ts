@@ -48,9 +48,7 @@ describe('Program', () => {
 
                 //resolve lib.brs from memory instead of going to disk
                 program.fileResolvers.push((pathAbsolute) => {
-                    //if (pathAbsolute === util.normalizeFilePath(`${rootDir}/source/lib.brs`)) {
-                    //TODO remove the line below and reinstate the line above once the travis builds are tested and validated
-                    if (pathAbsolute === n(`${rootDir}/source/lib.brs`)) {
+                    if (pathAbsolute === util.normalizeFilePath(`${rootDir}/source/lib.brs`)) {
                         return `'comment`;
                     }
                 });
