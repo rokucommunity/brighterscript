@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import * as fsExtra from 'fs-extra';
-import { parse as parseJsonc, ParseError, printParseErrorCode } from 'jsonc-parser';
+import { parse as parseJsonc, ParseError, parseTree, printParseErrorCode } from 'jsonc-parser';
 import * as moment from 'moment';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
@@ -66,13 +66,25 @@ export class Util {
      * @param filePath
      */
     public normalizeFilePath(filePath: string) {
-        return path.normalize(
+        return this.pathSepNormalize(
             path.resolve(
-                this.lowerDrivePath(
-                    filePath
+                path.normalize(
+                    this.lowerDrivePath(
+                        filePath
+                    )
                 )
             )
         );
+        //for some weird reason, sometimes linux/mac doesn't replace windows slashes with 'nix ones, so do that manually
+    }
+
+    /**
+     * Given a path to a file/directory, replace all path separators with the current system's version.
+     * @param filePath
+     */
+    public pathSepNormalize(filePath: string, separator?: string) {
+        separator = separator ? separator : path.sep;
+        return filePath.replace(/[\\\/]+/g, separator);
     }
 
     /**

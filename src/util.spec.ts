@@ -83,6 +83,13 @@ describe('util', () => {
         });
     });
 
+    describe('pathSepNormalize', () => {
+        it('works for both types of separators', () => {
+            expect(util.pathSepNormalize('c:/some\\path', '\\')).to.equal('c:\\some\\path');
+            expect(util.pathSepNormalize('c:/some\\path', '/')).to.equal('c:/some/path');
+        });
+    });
+
     describe('lowerDrivePath', () => {
         it('forces drive letters to lower case', () => {
             //unix slashes

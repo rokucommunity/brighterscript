@@ -131,7 +131,7 @@ describe('Program', () => {
             expect(program.contexts.global.getFile(`${rootDir}/components/component1/component1.brs`)).not.to.exist;
         });
 
-        it.only('normalizes file paths', async () => {
+        it('normalizes file paths', async () => {
             let filePath = `${rootDir}/source\\main.brs`;
             console.log('filePath', filePath);
             await program.addOrReplaceFile(filePath, '');
