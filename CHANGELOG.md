@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.2.2] - 2019-09-27
+### Fixed
+ - bug in language server where the server would crash when sending a diagnostic too early. Now the server waits for the program to load before sending diagnostics.
+
+
+
 ## [0.2.1] - 2019-09-24
 ### Changed
  - the text for diagnostic 1010 to say "override" instead of "shadows"
@@ -38,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.2.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.2.1...v0.2.2
 [0.2.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.2.0...v0.2.1
 [0.2.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.2.0
 [0.1.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.1.0

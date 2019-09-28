@@ -93,7 +93,7 @@ describe('LanguageServer', () => {
     }
 
     describe('sendDiagnostics', () => {
-        it.only('waits for program to finish loading before sending diagnostics', async () => {
+        it('waits for program to finish loading before sending diagnostics', async () => {
             s.onInitialize({
                 capabilities: {
                     workspace: {
