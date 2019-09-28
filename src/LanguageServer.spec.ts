@@ -12,11 +12,14 @@ afterEach(() => {
     sinon.restore();
 });
 
+import { Deferred } from './deferred';
 import { LanguageServer } from './LanguageServer';
+import { getFileProtocolPath } from './ProgramBuilder.spec';
+import util from './util';
 let rootDir = process.cwd();
 let n = path.normalize;
 
-describe.skip('LanguageServer', () => {
+describe('LanguageServer', () => {
     let server: LanguageServer;
     //an any version of the server for easier private testing
     let s: any;
@@ -90,13 +93,48 @@ describe.skip('LanguageServer', () => {
         fsExtra.writeFileSync(pathAbsolute, contents);
     }
 
+    describe('sendDiagnostics', () => {
+        it('waits for program to finish loading before sending diagnostics', async () => {
+            s.onInitialize({
+                capabilities: {
+                    workspace: {
+                        workspaceFolders: true
+                    }
+                }
+            });
+            expect(s.clientHasWorkspaceFolderCapability).to.be.true;
+            await server.run();
+            let deferred = new Deferred();
+            let workspace: any = {
+                builder: {
+                    getDiagnostics: () => []
+                },
+                firstRunPromise: deferred.promise
+            };
+            //make a new not-completed workspace
+            server.workspaces.push(workspace);
+
+            //this call should wait for the builder to finish
+            let p = s.sendDiagnostics();
+            // await s.createWorkspaces(
+            await util.sleep(50);
+            //simulate the program being created
+            workspace.builder.program = {
+                files: {}
+            };
+            deferred.resolve();
+            await p;
+            //test passed because no exceptions were thrown
+        });
+    });
+
     describe('onDidChangeWatchedFiles', () => {
         let workspacePath = n(`${rootDir}/TestRokuApp`);
         let mainPath = n(`${workspacePath}/source/main.brs`);
 
         it('picks up new files', async () => {
             workspaceFolders = [{
-                uri: `file:///${workspacePath}`,
+                uri: getFileProtocolPath(workspacePath),
                 name: 'TestProject'
             }];
 
@@ -105,7 +143,7 @@ describe.skip('LanguageServer', () => {
                 capabilities: {
                 }
             });
-            writeToFs(mainPath, `sub main(): return : end sub`);
+            writeToFs(mainPath, `sub main(): return: end sub`);
             await s.onInitialized();
             expect(server.workspaces[0].builder.program.hasFile(mainPath)).to.be.true;
             //move a file into the directory...the program should detect it
@@ -114,11 +152,11 @@ describe.skip('LanguageServer', () => {
 
             await s.onDidChangeWatchedFiles({
                 changes: [{
-                    uri: `file:///${libPath}`,
+                    uri: getFileProtocolPath(libPath),
                     type: 1 //created
                 },
                 {
-                    uri: `file:///${n(workspacePath + '/source')}`,
+                    uri: getFileProtocolPath(path.join(workspacePath, 'source')),
                     type: 2 //changed
                 }
                     // ,{
