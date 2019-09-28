@@ -14,6 +14,7 @@ afterEach(() => {
 
 import { Deferred } from './deferred';
 import { LanguageServer } from './LanguageServer';
+import { getFileProtocolPath } from './ProgramBuilder.spec';
 import util from './util';
 let rootDir = process.cwd();
 let n = path.normalize;
@@ -133,7 +134,7 @@ describe('LanguageServer', () => {
 
         it('picks up new files', async () => {
             workspaceFolders = [{
-                uri: `file:///${workspacePath}`,
+                uri: getFileProtocolPath(workspacePath),
                 name: 'TestProject'
             }];
 
@@ -142,7 +143,7 @@ describe('LanguageServer', () => {
                 capabilities: {
                 }
             });
-            writeToFs(mainPath, `sub main(): return : end sub`);
+            writeToFs(mainPath, `sub main(): return: end sub`);
             await s.onInitialized();
             expect(server.workspaces[0].builder.program.hasFile(mainPath)).to.be.true;
             //move a file into the directory...the program should detect it
@@ -151,11 +152,11 @@ describe('LanguageServer', () => {
 
             await s.onDidChangeWatchedFiles({
                 changes: [{
-                    uri: `file:///${libPath}`,
+                    uri: getFileProtocolPath(libPath),
                     type: 1 //created
                 },
                 {
-                    uri: `file:///${n(workspacePath + '/source')}`,
+                    uri: getFileProtocolPath(path.join(workspacePath, 'source')),
                     type: 2 //changed
                 }
                     // ,{

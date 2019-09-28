@@ -70,15 +70,6 @@ describe('ProgramBuilder', () => {
          * Error: [UriError]: If a URI does not contain an authority component, then the path cannot begin with two slash characters ("//")
          * @param fullPath
          */
-        function getFileProtocolPath(fullPath: string) {
-            let result: string;
-            if (fullPath.indexOf('/') === 0 || fullPath.indexOf('\\') === 0) {
-                result = `file://${fullPath}`;
-            } else {
-                result = `file:///${fullPath}`;
-            }
-            return result;
-        }
 
         it('only adds files that match the files array', async () => {
             sinon.stub(util, 'getFilePaths').returns(
@@ -121,3 +112,13 @@ describe('ProgramBuilder', () => {
         });
     });
 });
+
+export function getFileProtocolPath(fullPath: string) {
+    let result: string;
+    if (fullPath.indexOf('/') === 0 || fullPath.indexOf('\\') === 0) {
+        result = `file://${fullPath}`;
+    } else {
+        result = `file:///${fullPath}`;
+    }
+    return result;
+}
