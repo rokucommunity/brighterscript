@@ -4,7 +4,7 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
 [![Build Status](https://travis-ci.org/rokucommunity/brighterscript.svg?branch=master)](https://travis-ci.org/rokucommunity/brighterscript)
 [![codecov](https://codecov.io/gh/rokucommunity/brighterscript/branch/master/graph/badge.svg)](https://codecov.io/gh/rokucommunity/brighterscript)
-[![NPM Version](https://badge.fury.io/js/brighterscript.svg?style=flat)](https://npmjs.org/package/@rokucommunity/brighterscript)
+[![NPM Version](https://badge.fury.io/js/brighterscript.svg?style=flat)](https://npmjs.org/package/brighterscript)
 
 The goal of this project is to bring new features and syntax enhancements to Roku's BrightScript language. It also supports parsing and validating standard BrightScript, so you don't even need to write a single line of `BrighterScript` code to benefit from this project. 
 
