@@ -671,6 +671,16 @@ export class Util {
         }
         return tokens;
     }
+
+    /**
+     * Set a timeout for the specified milliseconds, and resolve the promise once the timeout is finished.
+     * @param milliseconds
+     */
+    public sleep(milliseconds: number) {
+        return new Promise((resolve) => {
+            setTimeout(resolve, milliseconds);
+        });
+    }
     /**
      * The BRS library uses 1-based line indexes, and 0 based column indexes.
      * However, vscode expects zero-based for everything.

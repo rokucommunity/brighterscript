@@ -169,7 +169,7 @@ export class LanguageServer {
                 });
             }
             await this.waitAllProgramFirstRuns();
-            this.sendDiagnostics();
+            await this.sendDiagnostics();
         } catch (e) {
             this.sendCriticalFailure(
                 `Critical failure during BrighterScript language server startup.
@@ -335,7 +335,7 @@ export class LanguageServer {
                     severity: 'warning',
                     ...diagnosticMessages.BrsConfigJson_is_depricated_1020(),
                 });
-                this.sendDiagnostics();
+                return this.sendDiagnostics();
             }
         });
     }
@@ -425,7 +425,7 @@ export class LanguageServer {
         );
 
         //send all diagnostics
-        this.sendDiagnostics();
+        await this.sendDiagnostics();
     }
 
     private async onDidChangeConfiguration() {
@@ -474,7 +474,7 @@ export class LanguageServer {
         );
 
         //send all diagnostics to the client
-        this.sendDiagnostics();
+        await this.sendDiagnostics();
         this.connection.sendNotification('build-status', 'success');
     }
 
@@ -528,7 +528,7 @@ export class LanguageServer {
         } catch (e) {
             this.sendCriticalFailure(`Critical error parsing/validating ${filePath}: ${e.message}`);
         }
-        this.sendDiagnostics();
+        await this.sendDiagnostics();
         this.connection.sendNotification('build-status', 'success');
     }
 
@@ -554,13 +554,14 @@ export class LanguageServer {
      * diagnostics to send and which to skip because nothing has changed
      */
     private latestDiagnosticsByFile = {} as { [key: string]: Diagnostic[] };
-    private sendDiagnostics() {
+    private async sendDiagnostics() {
         //compute the new list of diagnostics for whole project
         let issuesByFile = {} as { [key: string]: Diagnostic[] };
-        // let uri = Uri.parse(textDocument.uri);
 
         //make a bucket for every file in every project
         for (let workspace of this.workspaces) {
+            //Ensure the program was constructued. This prevents race conditions where certain diagnostics are being sent before the program was created.
+            await workspace.firstRunPromise;
             for (let filePath in workspace.builder.program.files) {
                 issuesByFile[filePath] = [];
             }
