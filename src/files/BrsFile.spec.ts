@@ -1386,7 +1386,7 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('works for a complex function with comments at the end of each line', async () => {
+        it('works for a complex function with comments all over the place', async () => {
             await testTranspile(`
                 'import some library
                 library "v30/bslCore.brs" 'comment
@@ -1396,6 +1396,7 @@ describe('BrsFile', () => {
                     person = { 'comment
                         name: "parent", 'comment
                         "age": 12,
+                        'comment as whole line
                         child: { 'comment
                             name: "child" 'comment
                         }

@@ -1749,11 +1749,18 @@ export class Parser {
                         }
 
                         while (match(Lexeme.Comma, Lexeme.Newline, Lexeme.Colon, Lexeme.Comment)) {
+                            //check for comment at the end of the current line
                             if (check(Lexeme.Comment) || checkPrevious(Lexeme.Comment)) {
                                 let token = checkPrevious(Lexeme.Comment) ? previous() : advance();
                                 members.push(new Stmt.CommentStatement([token]));
                             } else {
                                 while (match(Lexeme.Newline, Lexeme.Colon));
+                                //check for a comment on its own line
+                                if (check(Lexeme.Comment) || checkPrevious(Lexeme.Comment)) {
+                                    let token = checkPrevious(Lexeme.Comment) ? previous() : advance();
+                                    members.push(new Stmt.CommentStatement([token]));
+                                    continue;
+                                }
 
                                 if (check(Lexeme.RightBrace)) {
                                     break;

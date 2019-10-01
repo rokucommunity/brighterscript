@@ -95,6 +95,17 @@ describe('parser', () => {
                 expect((statements as any)[2].text).to.equal('comment 2');
             });
 
+            it('works in aa literal as its own statement', () => {
+                let { tokens } = Lexer.scan(`
+                    obj = {
+                        "name": true,
+                        'comment
+                    }
+                `);
+                let { errors, statements } = parser.parse(tokens);
+                expect(errors).to.be.lengthOf(0, 'Error count should be 0');
+            });
+
             it('parses after function call', () => {
                 let { tokens } = Lexer.scan(`
                     sub Main()
