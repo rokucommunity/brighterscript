@@ -689,9 +689,9 @@ export class Util {
 
             let bsPath = path.join(currentPath, 'bsconfig.json');
             let brsPath = path.join(currentPath, 'brsconfig.json');
-            if (await fsExtra.pathExists(bsPath)) {
+            if (await this.fileExists(bsPath)) {
                 return bsPath;
-            } else if (await fsExtra.pathExists(brsPath)) {
+            } else if (await this.fileExists(brsPath)) {
                 return brsPath;
             } else {
                 //walk upwards one directory
