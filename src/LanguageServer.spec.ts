@@ -72,8 +72,10 @@ describe('LanguageServer', () => {
 
         s.documents = {
             onDidChangeContent: () => null,
+            onDidClose: () => null,
             listen: () => null,
             get: () => { },
+            all: () => [],
             syncKind: TextDocumentSyncKind.Full
         };
     });

@@ -18,6 +18,7 @@ import {
 } from 'vscode-languageserver';
 import Uri from 'vscode-uri';
 
+import { BsConfig } from './BsConfig';
 import { diagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import util from './util';
@@ -29,6 +30,14 @@ export class LanguageServer {
     private connection: Connection;
 
     public workspaces = [] as Workspace[];
+
+    /**
+     * These workspaces are created on the fly whenever a file is opened that is not included
+     * in any of the workspace projects.
+     * Basically these are single-file workspaces to at least get parsing for standalone files.
+     * Also, they should only be created when the file is opened, and destroyed when the file is closed.
+     */
+    public standaloneFileWorkspaces = {} as { [filePathAbsolute: string]: Workspace };
 
     private hasConfigurationCapability = false;
 
@@ -67,6 +76,10 @@ export class LanguageServer {
         //
         this.documents.onDidChangeContent(async (change) => {
             await this.validateTextDocument(change.document);
+        });
+        //whenever a document gets opened
+        this.documents.onDidClose(async (change) => {
+            await this.onDocumentClose(change.document);
         });
 
         // This handler provides the initial list of the completion items.
@@ -193,7 +206,8 @@ export class LanguageServer {
      */
     private async waitAllProgramFirstRuns() {
         let status;
-        for (let workspace of this.workspaces) {
+        let workspaces = this.getWorkspaces();
+        for (let workspace of workspaces) {
             try {
                 await workspace.firstRunPromise;
             } catch (e) {
@@ -277,7 +291,6 @@ export class LanguageServer {
             return;
         }
 
-        //if a file called `brsconfig.json` exists, add a diagnostic (because that's the old name...everyone should move to the new name)
         let builder = new ProgramBuilder();
 
         //prevent clearing the console on run...this isn't the CLI so we want to keep a full log of everything
@@ -306,18 +319,20 @@ export class LanguageServer {
             watch: false,
             skipPackage: true,
             deploy: false
-        }).catch((err) => {
+        });
+        firstRunPromise.catch((err) => {
             console.error(err);
         });
 
-        let newWorkspace = {
+        let newWorkspace: Workspace = {
             builder: builder,
             firstRunPromise: firstRunPromise,
             workspacePath: workspacePath,
             isFirstRunComplete: false,
             isFirstRunSuccessful: false,
-            configFilePath: configFilePath
-        } as Workspace;
+            configFilePath: configFilePath,
+            isStandaloneFileWorkspace: false
+        };
 
         this.workspaces.push(newWorkspace);
 
@@ -340,6 +355,79 @@ export class LanguageServer {
         });
     }
 
+    private async createStandaloneFileWorkspace(filePathAbsolute: string) {
+        //skip this workspace if we already have it
+        if (this.standaloneFileWorkspaces[filePathAbsolute]) {
+            return;
+        }
+
+        //if a file called `brsconfig.json` exists, add a diagnostic (because that's the old name...everyone should move to the new name)
+        let builder = new ProgramBuilder();
+
+        //prevent clearing the console on run...this isn't the CLI so we want to keep a full log of everything
+        builder.allowConsoleClearing = false;
+
+        //look for files in our in-memory cache before going to the file system
+        builder.addFileResolver((pathAbsolute) => {
+            return this.documentFileResolver(pathAbsolute);
+        });
+
+        //get the path to the directory where this file resides
+        let cwd = path.dirname(filePathAbsolute);
+
+        //get the closest config file and use most of the settings from that
+        let configFilePath = await util.findClosestConfigFile(filePathAbsolute);
+        let project: BsConfig;
+        if (configFilePath) {
+            project = await util.normalizeAndResolveConfig({ project: configFilePath });
+            //override the rootDir and files array
+            project.rootDir = cwd;
+            project.files = [
+                filePathAbsolute
+            ];
+        }
+
+        let firstRunPromise = builder.run({
+            ...project,
+            cwd: cwd,
+            project: configFilePath,
+            watch: false,
+            skipPackage: true,
+            deploy: false
+        }).catch((err) => {
+            console.error(err);
+        });
+
+        let newWorkspace: Workspace = {
+            builder: builder,
+            firstRunPromise: firstRunPromise,
+            workspacePath: filePathAbsolute,
+            isFirstRunComplete: false,
+            isFirstRunSuccessful: false,
+            configFilePath: configFilePath,
+            isStandaloneFileWorkspace: true
+        };
+
+        this.standaloneFileWorkspaces[filePathAbsolute] = newWorkspace;
+
+        await firstRunPromise.then(() => {
+            newWorkspace.isFirstRunComplete = true;
+            newWorkspace.isFirstRunSuccessful = true;
+        }).catch(() => {
+            newWorkspace.isFirstRunComplete = true;
+            newWorkspace.isFirstRunSuccessful = false;
+        });
+        return newWorkspace;
+    }
+
+    private getWorkspaces() {
+        let workspaces = this.workspaces.slice();
+        for (let key in this.standaloneFileWorkspaces) {
+            workspaces.push(this.standaloneFileWorkspaces[key]);
+        }
+        return workspaces;
+    }
+
     /**
      * Provide a list of completion items based on the current cursor position
      * @param textDocumentPosition
@@ -351,8 +439,9 @@ export class LanguageServer {
         let filePath = util.uriToPath(textDocumentPosition.textDocument.uri);
 
         let workspaceCompletionPromises = [] as Array<Promise<CompletionItem[]>>;
+        let workspaces = this.getWorkspaces();
         //get completions from every workspace
-        for (let workspace of this.workspaces) {
+        for (let workspace of workspaces) {
             //if this workspace has the file in question, get its completions
             if (workspace.builder.program.hasFile(filePath)) {
                 workspaceCompletionPromises.push(
@@ -392,7 +481,7 @@ export class LanguageServer {
      * Reload all specified workspaces, or all workspaces if no workspaces are specified
      */
     private async reloadWorkspaces(workspaces?: Workspace[]) {
-        workspaces = workspaces ? workspaces : [...this.workspaces];
+        workspaces = workspaces ? workspaces : this.getWorkspaces();
         await Promise.all(
             workspaces.map(async (workspace) => {
                 //ensure the workspace has finished starting up
@@ -400,19 +489,32 @@ export class LanguageServer {
                     await workspace.firstRunPromise;
                 } catch (e) { }
 
-                let idx = this.workspaces.indexOf(workspace);
-                if (idx > -1) {
-                    //remove this workspace
-                    this.workspaces.splice(idx, 1);
-                    //dispose this workspace's resources
+                //handle standard workspace
+                if (workspace.isStandaloneFileWorkspace === false) {
+                    let idx = this.workspaces.indexOf(workspace);
+                    if (idx > -1) {
+                        //remove this workspace
+                        this.workspaces.splice(idx, 1);
+                        //dispose this workspace's resources
+                        workspace.builder.dispose();
+                    }
+
+                    //create a new workspace/brs program
+                    await this.createWorkspace(workspace.workspacePath);
+
+                    //handle temp workspace
+                } else {
                     workspace.builder.dispose();
+                    delete this.standaloneFileWorkspaces[workspace.workspacePath];
+                    await this.createStandaloneFileWorkspace(workspace.workspacePath);
                 }
-                //create a new workspace/brs program
-                await this.createWorkspace(workspace.workspacePath);
             })
         );
         //wait for all of the programs to finish starting up
         await this.waitAllProgramFirstRuns();
+
+        //remove any standalone file workspaces in case they have now been included in an actual project
+        await this.synchronizeStandaloneWorkspaces();
 
         //validate each workspace
         await Promise.all(
@@ -428,6 +530,44 @@ export class LanguageServer {
         await this.sendDiagnostics();
     }
 
+    /**
+     * Sometimes users will alter their bsconfig files array, and will include standalone files.
+     * If this is the case, those standalone workspaces should be removed because the file was
+     * included in an actual program now.
+     *
+     * Sometimes files that used to be included are now excluded, so those open files need to be re-processed as standalone
+     */
+    private async synchronizeStandaloneWorkspaces() {
+
+        //remove standalone workspaces that are now included in projects
+        for (let standaloneFilePath in this.standaloneFileWorkspaces) {
+            let standaloneWorkspace = this.standaloneFileWorkspaces[standaloneFilePath];
+            for (let workspace of this.workspaces) {
+                await standaloneWorkspace.firstRunPromise;
+
+                //destroy this standalone workspace because the file has now been included in an actual workspace
+                if (workspace.builder && workspace.builder.program && workspace.builder.program.hasFile(standaloneFilePath)) {
+                    standaloneWorkspace.builder.dispose();
+                    delete this.standaloneFileWorkspaces[standaloneFilePath];
+                }
+            }
+        }
+
+        //create standalone workspaces for open files that no longer have a project
+        let textDocuments = this.documents.all();
+        outer: for (let textDocument of textDocuments) {
+            let filePath = Uri.parse(textDocument.uri).fsPath;
+            let workspaces = this.getWorkspaces();
+            for (let workspace of workspaces) {
+                if (workspace.builder && workspace.builder.program && workspace.builder.program.hasFile(filePath)) {
+                    continue outer;
+                }
+            }
+            //if we got here, no workspace has this file, so make a standalone file workspace
+            let workspace = await this.createStandaloneFileWorkspace(filePath);
+            await workspace.firstRunPromise;
+        }
+    }
     private async onDidChangeConfiguration() {
         if (this.hasConfigurationCapability) {
             await this.reloadWorkspaces();
@@ -452,11 +592,13 @@ export class LanguageServer {
 
         this.connection.sendNotification('build-status', 'building');
 
+        let workspaces = this.getWorkspaces();
+
         //reload any workspace whose bsconfig.json file has changed
         {
             let workspacesToReload = [] as Workspace[];
             let filePaths = params.changes.map((x) => util.uriToPath(x.uri));
-            for (let workspace of this.workspaces) {
+            for (let workspace of workspaces) {
                 if (filePaths.indexOf(workspace.configFilePath) > -1) {
                     workspacesToReload.push(workspace);
                 }
@@ -464,13 +606,14 @@ export class LanguageServer {
             await this.reloadWorkspaces(workspacesToReload);
         }
 
+        //give every workspace the chance to handle file changes
         await Promise.all(
-            this.workspaces.map((x) => x.builder.handleFileChanges(params.changes))
+            workspaces.map((x) => x.builder.handleFileChanges(params.changes))
         );
 
-        //revalidate the program
+        //revalidate every program
         await Promise.all(
-            this.workspaces.map((x) => x.builder.program.validate())
+            workspaces.map((x) => x.builder.program.validate())
         );
 
         //send all diagnostics to the client
@@ -483,8 +626,9 @@ export class LanguageServer {
         await this.waitAllProgramFirstRuns();
 
         let pathAbsolute = util.uriToPath(params.textDocument.uri);
+        let workspaces = this.getWorkspaces();
         let hovers = Array.prototype.concat.call([],
-            this.workspaces.map((x) => x.builder.program.getHover(pathAbsolute, params.position))
+            workspaces.map((x) => x.builder.program.getHover(pathAbsolute, params.position))
         ) as Hover[];
 
         //return the first non-falsey hover. TODO is there a way to handle multiple hover results?
@@ -502,6 +646,18 @@ export class LanguageServer {
         return hover;
     }
 
+    private async onDocumentClose(textDocument: TextDocument): Promise<void> {
+        let filePath = Uri.parse(textDocument.uri).fsPath;
+        let standaloneFileWorkspace = this.standaloneFileWorkspaces[filePath];
+        //if this was a temp file, close it
+        if (standaloneFileWorkspace) {
+            await standaloneFileWorkspace.firstRunPromise;
+            standaloneFileWorkspace.builder.dispose();
+            delete this.standaloneFileWorkspaces[filePath];
+            await this.sendDiagnostics();
+        }
+    }
+
     private async validateTextDocument(textDocument: TextDocument): Promise<void> {
         this.connection.sendNotification('build-status', 'building');
 
@@ -510,10 +666,10 @@ export class LanguageServer {
 
         let filePath = Uri.parse(textDocument.uri).fsPath;
         let documentText = textDocument.getText();
-
+        let workspaces = this.getWorkspaces();
         try {
             await Promise.all(
-                this.workspaces.map((x) => {
+                workspaces.map((x) => {
                     //only add or replace existing files. All of the files in the project should
                     //have already been loaded by other means
                     if (x.builder.program.hasFile(filePath)) {
@@ -522,8 +678,12 @@ export class LanguageServer {
                 })
             );
 
+            //synchronze parsing for open files that were included/excluded from projects
+            await this.synchronizeStandaloneWorkspaces();
+
+            //validate all programs
             await Promise.all(
-                this.workspaces.map((x) => x.builder.program.validate())
+                workspaces.map((x) => x.builder.program.validate())
             );
         } catch (e) {
             this.sendCriticalFailure(`Critical error parsing/validating ${filePath}: ${e.message}`);
@@ -541,7 +701,8 @@ export class LanguageServer {
         let results = [] as Location[];
 
         let pathAbsolute = util.uriToPath(params.textDocument.uri);
-        for (let workspace of this.workspaces) {
+        let workspaces = this.getWorkspaces();
+        for (let workspace of workspaces) {
             results = results.concat(
                 ...workspace.builder.program.getDefinition(pathAbsolute, params.position)
             );
@@ -557,18 +718,22 @@ export class LanguageServer {
     private async sendDiagnostics() {
         //compute the new list of diagnostics for whole project
         let issuesByFile = {} as { [key: string]: Diagnostic[] };
+        let workspaces = this.getWorkspaces();
 
         //make a bucket for every file in every project
-        for (let workspace of this.workspaces) {
+        for (let workspace of workspaces) {
             //Ensure the program was constructued. This prevents race conditions where certain diagnostics are being sent before the program was created.
             await workspace.firstRunPromise;
-            for (let filePath in workspace.builder.program.files) {
-                issuesByFile[filePath] = [];
+            //if there is no program, skip this workspace (hopefully diagnostics were added to the builder itself
+            if (workspace.builder && workspace.builder.program) {
+                for (let filePath in workspace.builder.program.files) {
+                    issuesByFile[filePath] = [];
+                }
             }
         }
 
         let diagnostics = Array.prototype.concat.apply([],
-            this.workspaces.map((x) => x.builder.getDiagnostics())
+            workspaces.map((x) => x.builder.getDiagnostics())
         );
 
         for (let diagnostic of diagnostics) {
@@ -617,4 +782,5 @@ interface Workspace {
     isFirstRunComplete: boolean;
     isFirstRunSuccessful: boolean;
     configFilePath?: string;
+    isStandaloneFileWorkspace: boolean;
 }

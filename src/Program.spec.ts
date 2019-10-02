@@ -888,6 +888,21 @@ describe('Program', () => {
     });
 
     describe('getDiagnostics', () => {
+        it('includes diagnostics from files not included in any context', async () => {
+            let pathAbsolute = util.normalizeFilePath(`${rootDir}/components/a/b/c/main.brs`);
+            await program.addOrReplaceFile(pathAbsolute, `
+                sub A()
+                    "this string is not terminated
+                end sub
+            `);
+            //the file should be included in the program
+            expect(program.getFileByPathAbsolute(pathAbsolute)).to.exist;
+            let diagnostics = program.getDiagnostics();
+            expect(diagnostics.length).to.be.greaterThan(0);
+            let parseError = diagnostics.filter(x => x.message === 'Unterminated string at end of line')[0];
+            expect(parseError).to.exist;
+        });
+
         it('it excludes specified error codes', async () => {
             //declare file with two different syntax errors
             await program.addOrReplaceFile(n(`${rootDir}/source/main.brs`), `

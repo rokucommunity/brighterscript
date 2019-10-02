@@ -74,7 +74,10 @@ export class ProgramBuilder {
             let err = e as Diagnostic;
             this.staticDiagnostics.push(err);
             await this.printDiagnostics();
-            throw new Error(diagnosticMessages.BsConfigJson_has_syntax_errors_1021().message);
+
+            //we added diagnostics, so hopefully that draws attention to the underlying issues.
+            //For now, just use a default options object so we have a functioning program
+            this.options = await util.normalizeConfig({});
         }
 
         this.program = new Program(this.options);
