@@ -60,6 +60,28 @@ describe('ProgramBuilder', () => {
         });
     });
 
+    describe('run', () => {
+        it('uses default options when the config file fails to parse', async () => {
+            //supress the console log statements for the bsconfig parse errors
+            sinon.stub(console, 'log').returns(undefined);
+            //totally bogus config file
+            setVfsFile(n(`${rootDir}/bsconfig.json`), '{');
+            await builder.run({
+                project: n(`${rootDir}/bsconfig.json`),
+                username: 'john'
+            });
+            expect(builder.program.options.username).to.equal('rokudev');
+        });
+
+        it('throws an exception when run is called twice', async () => {
+            await builder.run({});
+            try {
+                await builder.run({});
+                expect(true).to.be.false('Should have thrown exception');
+            } catch (e) { }
+        });
+    });
+
     describe('handleFileChanges', () => {
         beforeEach(() => {
             setVfsFile(n(`${rootDir}/source/promise.brs`), 'sub promise()\nend sub');

@@ -31,6 +31,9 @@ describe('Program', () => {
         it('returns all callables when asked', () => {
             expect(program.platformContext.getAllCallables().length).to.be.greaterThan(0);
         });
+        it('validate gets called and does nothing', () => {
+            expect(program.platformContext.validate()).to.eql([]);
+        });
     });
 
     describe('getPkgPath', () => {
@@ -884,6 +887,46 @@ describe('Program', () => {
             //the context should again only have the xml file loaded
             expect(program.contexts[xmlFile.pkgPath].fileCount).to.equal(1);
             expect(program.contexts[xmlFile.pkgPath]).to.exist;
+        });
+    });
+
+    describe('getFileByPkgPath', () => {
+        it('finds file in source folder', async () => {
+            expect(program.getFileByPkgPath('source/main.brs')).not.to.exist;
+            expect(program.getFileByPkgPath('source/main2.brs')).not.to.exist;
+            await program.addOrReplaceFile(`${rootDir}/source/main2.brs`, '');
+            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, '');
+            expect(program.getFileByPkgPath(n('source/main.brs'))).to.exist;
+            expect(program.getFileByPkgPath(n('source/main2.brs'))).to.exist;
+        });
+    });
+
+    describe('removeFiles', () => {
+        it('removes files by absolute paths', async () => {
+            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, '');
+            expect(program.getFileByPkgPath(n('source/main.brs'))).to.exist;
+            program.removeFiles([`${rootDir}/source/main.brs`]);
+            expect(program.getFileByPkgPath('source/main.brs')).not.to.exist;
+        });
+    });
+
+    describe('addOrReplaceFiles', () => {
+        it('adds multiple files', async () => {
+            expect(Object.keys(program.files).length).to.equal(0);
+            let brsFile = n(`${rootDir}/components/comp1.brs`.toLowerCase());
+            let xmlFile = n(`${rootDir}/components/comp1.xml`.toLowerCase());
+            program.fileResolvers.push(async (filePath) => {
+                if (filePath.toLowerCase() === brsFile) {
+                    return `'${filePath}`;
+                } else if (filePath.toLowerCase() === xmlFile) {
+                    return `<!--${filePath}`;
+                }
+            });
+            await program.addOrReplaceFiles([
+                brsFile,
+                xmlFile
+            ]);
+            expect(Object.keys(program.files).length).to.equal(2);
         });
     });
 

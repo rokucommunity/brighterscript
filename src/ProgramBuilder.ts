@@ -68,11 +68,17 @@ export class ProgramBuilder {
         if (this.isRunning) {
             throw new Error('Server is already running');
         }
+        this.isRunning = true;
         try {
             this.options = await util.normalizeAndResolveConfig(options);
         } catch (e) {
-            let err = e as Diagnostic;
-            this.staticDiagnostics.push(err);
+            if (e && e.file && e.message && e.code) {
+                let err = e as Diagnostic;
+                this.staticDiagnostics.push(err);
+            } else {
+                //if this is not a diagnostic, something else is wrong...
+                throw e;
+            }
             await this.printDiagnostics();
 
             //we added diagnostics, so hopefully that draws attention to the underlying issues.

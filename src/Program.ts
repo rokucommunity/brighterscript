@@ -324,21 +324,21 @@ export class Program {
 
     /**
      * Remove a set of files from the program
-     * @param filePaths
+     * @param absolutePaths
      */
-    public removeFiles(filePaths: string[]) {
-        for (let filePath of filePaths) {
-            this.removeFile(filePath);
+    public removeFiles(absolutePaths: string[]) {
+        for (let pathAbsolute of absolutePaths) {
+            this.removeFile(pathAbsolute);
         }
     }
 
     /**
      * Remove a file from the program
-     * @param filePath
+     * @param pathAbsolute
      */
-    public removeFile(filePath: string) {
-        filePath = util.normalizeFilePath(filePath);
-        let file = this.getFile(filePath);
+    public removeFile(pathAbsolute: string) {
+        pathAbsolute = util.normalizeFilePath(pathAbsolute);
+        let file = this.getFile(pathAbsolute);
 
         //notify every context of this file removal
         for (let contextName in this.contexts) {
@@ -353,7 +353,7 @@ export class Program {
             delete this.contexts[file.pkgPath];
         }
         //remove the file from the program
-        delete this.files[filePath];
+        delete this.files[pathAbsolute];
         this.emit('file-removed', file);
     }
 
