@@ -31,6 +31,9 @@ describe('Program', () => {
         it('returns all callables when asked', () => {
             expect(program.platformContext.getAllCallables().length).to.be.greaterThan(0);
         });
+        it('validate gets called and does nothing', () => {
+            expect(program.platformContext.validate()).to.eql([]);
+        });
     });
 
     describe('getPkgPath', () => {
@@ -887,7 +890,62 @@ describe('Program', () => {
         });
     });
 
+    describe('getFileByPkgPath', () => {
+        it('finds file in source folder', async () => {
+            expect(program.getFileByPkgPath('source/main.brs')).not.to.exist;
+            expect(program.getFileByPkgPath('source/main2.brs')).not.to.exist;
+            await program.addOrReplaceFile(`${rootDir}/source/main2.brs`, '');
+            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, '');
+            expect(program.getFileByPkgPath(n('source/main.brs'))).to.exist;
+            expect(program.getFileByPkgPath(n('source/main2.brs'))).to.exist;
+        });
+    });
+
+    describe('removeFiles', () => {
+        it('removes files by absolute paths', async () => {
+            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, '');
+            expect(program.getFileByPkgPath(n('source/main.brs'))).to.exist;
+            program.removeFiles([`${rootDir}/source/main.brs`]);
+            expect(program.getFileByPkgPath('source/main.brs')).not.to.exist;
+        });
+    });
+
+    describe('addOrReplaceFiles', () => {
+        it('adds multiple files', async () => {
+            expect(Object.keys(program.files).length).to.equal(0);
+            let brsFile = n(`${rootDir}/components/comp1.brs`.toLowerCase());
+            let xmlFile = n(`${rootDir}/components/comp1.xml`.toLowerCase());
+            program.fileResolvers.push(async (filePath) => {
+                if (filePath.toLowerCase() === brsFile) {
+                    return `'${filePath}`;
+                } else if (filePath.toLowerCase() === xmlFile) {
+                    return `<!--${filePath}`;
+                }
+            });
+            await program.addOrReplaceFiles([
+                brsFile,
+                xmlFile
+            ]);
+            expect(Object.keys(program.files).length).to.equal(2);
+        });
+    });
+
     describe('getDiagnostics', () => {
+        it('includes diagnostics from files not included in any context', async () => {
+            let pathAbsolute = util.normalizeFilePath(`${rootDir}/components/a/b/c/main.brs`);
+            await program.addOrReplaceFile(pathAbsolute, `
+                sub A()
+                    "this string is not terminated
+                end sub
+            `);
+            //the file should be included in the program
+            expect(program.getFileByPathAbsolute(pathAbsolute)).to.exist;
+            let diagnostics = program.getDiagnostics();
+            expect(diagnostics.length).to.be.greaterThan(0);
+            let parseError = diagnostics.filter(x => x.message === 'Unterminated string at end of line')[0];
+            expect(parseError).to.exist;
+        });
+
         it('it excludes specified error codes', async () => {
             //declare file with two different syntax errors
             await program.addOrReplaceFile(n(`${rootDir}/source/main.brs`), `

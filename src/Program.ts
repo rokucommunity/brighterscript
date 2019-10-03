@@ -8,7 +8,7 @@ import { Context } from './Context';
 import { diagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import { Diagnostic } from './interfaces';
+import { Diagnostic, File } from './interfaces';
 import { platformFile } from './platformCallables';
 import { util } from './util';
 import { XmlContext } from './XmlContext';
@@ -101,20 +101,54 @@ export class Program {
     private diagnostics = [] as Diagnostic[];
 
     /**
+     * Get a list of all files that are inlcuded in the project but are not referenced
+     * by any context in the program.
+     */
+    public getUnreferencedFiles() {
+        let result = [] as File[];
+        outer: for (let filePath in this.files) {
+            let file = this.files[filePath];
+            for (let key in this.contexts) {
+                let context = this.contexts[key];
+                //if any context has this file, then it is not unreferenced. skip to the next file
+                if (context.hasFile(filePath)) {
+                    continue outer;
+                }
+            }
+            //no contexts reference this file. add it to the list
+            result.push(file);
+        }
+        return result;
+    }
+
+    /**
      * Get the list of errors for the entire program. It's calculated on the fly
      * by walking through every file, so call this sparingly.
      */
     public getDiagnostics() {
-        let errorLists = [this.diagnostics];
+        let diagnostics = [...this.diagnostics];
+
+        //get the diagnostics from all contexts
         for (let contextName in this.contexts) {
             let context = this.contexts[contextName];
-            errorLists.push(context.getDiagnostics());
+            diagnostics = [
+                ...diagnostics,
+                ...context.getDiagnostics()
+            ];
         }
-        let allDiagnistics = Array.prototype.concat.apply([], errorLists) as Diagnostic[];
+
+        //get the diagnostics from all unreferenced files
+        let unreferencedFiles = this.getUnreferencedFiles();
+        for (let file of unreferencedFiles) {
+            diagnostics = [
+                ...diagnostics,
+                ...file.getDiagnostics()
+            ];
+        }
 
         let finalDiagnostics = [] as Diagnostic[];
 
-        for (let diagnostic of allDiagnistics) {
+        for (let diagnostic of diagnostics) {
             //skip duplicate diagnostics (by reference). This skips file parse diagnostics when multiple contexts include same file
             if (finalDiagnostics.indexOf(diagnostic) > -1) {
                 continue;
@@ -290,21 +324,21 @@ export class Program {
 
     /**
      * Remove a set of files from the program
-     * @param filePaths
+     * @param absolutePaths
      */
-    public removeFiles(filePaths: string[]) {
-        for (let filePath of filePaths) {
-            this.removeFile(filePath);
+    public removeFiles(absolutePaths: string[]) {
+        for (let pathAbsolute of absolutePaths) {
+            this.removeFile(pathAbsolute);
         }
     }
 
     /**
      * Remove a file from the program
-     * @param filePath
+     * @param pathAbsolute
      */
-    public removeFile(filePath: string) {
-        filePath = util.normalizeFilePath(filePath);
-        let file = this.getFile(filePath);
+    public removeFile(pathAbsolute: string) {
+        pathAbsolute = util.normalizeFilePath(pathAbsolute);
+        let file = this.getFile(pathAbsolute);
 
         //notify every context of this file removal
         for (let contextName in this.contexts) {
@@ -319,7 +353,7 @@ export class Program {
             delete this.contexts[file.pkgPath];
         }
         //remove the file from the program
-        delete this.files[filePath];
+        delete this.files[pathAbsolute];
         this.emit('file-removed', file);
     }
 

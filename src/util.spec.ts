@@ -9,6 +9,11 @@ let cwd = process.cwd();
 let rootConfigPath = path.join(process.cwd(), 'bsconfig.json');
 let rootConfigDir = path.dirname(rootConfigPath);
 let vfs = {};
+function addFile(relativeFilePath: string, fileContents?: string) {
+    let absFilePath = n(`${cwd}/${relativeFilePath}`);
+    vfs[absFilePath] = fileContents || '';
+    return absFilePath;
+}
 //shorthand for normalizing a path
 let n = path.normalize;
 
@@ -73,13 +78,13 @@ describe('util', () => {
 
         it('uses cwd when not provided', async () => {
             //sanity check
-            let configFilePath = await util.getConfigFilePath();
-            expect(configFilePath).not.to.exist;
+            expect(await util.getConfigFilePath()).not.to.exist;
+
+            let actualConfigPath = addFile('testProjects/project2/bsconfig.json');
 
             let rootDir = path.join(cwd, 'testProjects', 'project2');
             process.chdir(rootDir);
-            configFilePath = await util.getConfigFilePath();
-            expect(configFilePath).to.equal(path.join(rootDir, 'bsconfig.json'));
+            expect(await util.getConfigFilePath()).to.equal(path.join(rootDir, 'bsconfig.json'));
         });
     });
 
@@ -96,6 +101,30 @@ describe('util', () => {
             expect(util.lowerDrivePath('C:/projects')).to.equal('c:/projects');
             //windows slashes
             expect(util.lowerDrivePath('C:\\projects')).to.equal(('c:\\projects'));
+        });
+    });
+
+    describe('findClosestConfigFile', () => {
+        beforeEach(() => {
+            sinon.stub(util, 'fileExists').callsFake(async (filePath) => {
+                return Object.keys(vfs).indexOf(filePath) > -1;
+            });
+        });
+
+        it('finds config up the chain', async () => {
+            let brsFilePath = addFile('src/app.brs');
+            let currentDirBsConfigPath = addFile('src/bsconfig.json');
+            let currentDirBrsConfigPath = addFile('src/brsconfig.json');
+            let parentDirBsConfigPath = addFile('bsconfig.json');
+            let parentDirBrsConfigPath = addFile('brsconfig.json');
+
+            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(currentDirBsConfigPath);
+            delete vfs[currentDirBsConfigPath];
+            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(currentDirBrsConfigPath);
+            delete vfs[currentDirBrsConfigPath];
+            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(parentDirBsConfigPath);
+            delete vfs[parentDirBsConfigPath];
+            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(parentDirBrsConfigPath);
         });
     });
 

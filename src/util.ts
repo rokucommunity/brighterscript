@@ -45,9 +45,7 @@ export class Util {
      * @param filePath
      */
     public fileExists(filePath: string) {
-        return new Promise((resolve, reject) => {
-            fsExtra.exists(filePath, resolve);
-        });
+        return fsExtra.pathExists(filePath);
     }
 
     /**
@@ -670,6 +668,37 @@ export class Util {
             tokens.push(currentToken);
         }
         return tokens;
+    }
+
+    /**
+     * Walks up the chain
+     * @param currentPath
+     */
+    public async findClosestConfigFile(currentPath: string) {
+        //make the path absolute
+        currentPath = path.resolve(
+            path.normalize(
+                currentPath
+            )
+        );
+
+        let previousPath: string;
+        //using ../ on the root of the drive results in the same file path, so that's how we know we reached the top
+        while (previousPath !== currentPath) {
+            previousPath = currentPath;
+
+            let bsPath = path.join(currentPath, 'bsconfig.json');
+            let brsPath = path.join(currentPath, 'brsconfig.json');
+            if (await this.fileExists(bsPath)) {
+                return bsPath;
+            } else if (await this.fileExists(brsPath)) {
+                return brsPath;
+            } else {
+                //walk upwards one directory
+                currentPath = path.resolve(path.join(currentPath, '../'));
+            }
+        }
+        //got to the root path, no config file exists
     }
 
     /**
