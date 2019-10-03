@@ -113,12 +113,18 @@ describe('util', () => {
 
         it('finds config up the chain', async () => {
             let brsFilePath = addFile('src/app.brs');
-            let currentDirConfigPath = addFile('src/bsconfig.json');
-            let parentDirConfigPath = addFile('bsconfig.json');
+            let currentDirBsConfigPath = addFile('src/bsconfig.json');
+            let currentDirBrsConfigPath = addFile('src/brsconfig.json');
+            let parentDirBsConfigPath = addFile('bsconfig.json');
+            let parentDirBrsConfigPath = addFile('brsconfig.json');
 
-            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(currentDirConfigPath);
-            delete vfs[currentDirConfigPath];
-            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(parentDirConfigPath);
+            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(currentDirBsConfigPath);
+            delete vfs[currentDirBsConfigPath];
+            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(currentDirBrsConfigPath);
+            delete vfs[currentDirBrsConfigPath];
+            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(parentDirBsConfigPath);
+            delete vfs[parentDirBsConfigPath];
+            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(parentDirBrsConfigPath);
         });
     });
 
