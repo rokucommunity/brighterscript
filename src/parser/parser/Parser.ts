@@ -1166,7 +1166,7 @@ export class Parser {
                     thenBranch.statements.unshift(comment);
                 }
 
-                while (match(Lexeme.ElseIf)) {
+                while (previous().kind !== Lexeme.Newline && match(Lexeme.ElseIf)) {
                     let elseIf = previous();
                     let elseIfCondition = expression();
                     let thenToken: Token;
@@ -1190,7 +1190,7 @@ export class Parser {
                         elseIfToken: elseIf
                     });
                 }
-                if (match(Lexeme.Else)) {
+                if (previous().kind !== Lexeme.Newline && match(Lexeme.Else)) {
                     elseToken = previous();
                     let elseStatement = declaration();
                     if (!elseStatement) {
@@ -1278,6 +1278,8 @@ export class Parser {
                     consume(
                         "Expected newline or ':' after indexed 'set' statement",
                         Lexeme.Newline,
+                        Lexeme.Else,
+                        Lexeme.ElseIf,
                         Lexeme.Colon,
                         Lexeme.Eof, Lexeme.Comment
                     );
@@ -1299,6 +1301,8 @@ export class Parser {
                     consume(
                         "Expected newline or ':' after dotted 'set' statement",
                         Lexeme.Newline,
+                        Lexeme.Else,
+                        Lexeme.ElseIf,
                         Lexeme.Colon,
                         Lexeme.Eof,
                         Lexeme.Comment
