@@ -12,6 +12,52 @@ describe('parser if statements', () => {
         parser = new Parser();
     });
 
+    it('single-line if next to else or endif', () => {
+        let { tokens } = Lexer.scan(`
+            if type(component.TextAttrs.font) = "roString"
+                font = m.fonts.Lookup(component.TextAttrs.font)
+                if font = invalid then font = m.fonts.medium
+            else if type(component.TextAttrs.font) = "roFont"
+                font = component.TextAttrs.font
+            else
+                font = m.fonts.reg.GetDefaultFont()
+            end if
+        `);
+        let { statements, errors } = parser.parse(tokens);
+
+        expect(errors).to.be.lengthOf(0);
+        expect(statements).to.be.length.greaterThan(0);
+    });
+
+    it('single-line if inside multi-line if', () => {
+        let { tokens } = Lexer.scan(`
+            if true
+                if true then t = 1
+            else
+                ' empty line or line with just a comment causes crash
+            end if
+        `);
+        let { statements, errors } = parser.parse(tokens);
+
+        expect(errors).to.be.lengthOf(0);
+        expect(statements).to.be.length.greaterThan(0);
+    });
+
+    it('dotted set in else block', () => {
+        let { tokens } = Lexer.scan(`
+            if true then m.top.visible = true else m.top.visible = false
+        `);
+        let { statements, errors } = parser.parse(tokens);
+
+        if (errors.length > 0) {
+            console.log(errors);
+        }
+
+        expect(errors).to.be.lengthOf(0);
+
+        expect(statements).to.be.length.greaterThan(0);
+    });
+
     describe('single-line if', () => {
         it('parses if only', () => {
             let { statements, errors } = parser.parse([
