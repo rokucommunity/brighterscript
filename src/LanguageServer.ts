@@ -380,12 +380,13 @@ export class LanguageServer {
         let project: BsConfig = {};
         if (configFilePath) {
             project = await util.normalizeAndResolveConfig({ project: configFilePath });
-            //override the rootDir and files array
-            project.rootDir = cwd;
-            project.files = [
-                filePathAbsolute
-            ];
         }
+        //override the rootDir and files array
+        project.rootDir = cwd;
+        project.files = [{
+            src: filePathAbsolute,
+            dest: `source/${path.basename(filePathAbsolute)}`
+        }];
 
         let firstRunPromise = builder.run({
             ...project,
