@@ -27,7 +27,8 @@ export class LanguageServer {
     constructor() {
 
     }
-    private connection: Connection;
+
+    private connection: Connection = <any>undefined; //cast undefined as any to get around strictNullChecks...it's ok in this case
 
     public workspaces = [] as Workspace[];
 
@@ -161,7 +162,7 @@ export class LanguageServer {
             }
 
             //ask the client for all workspace folders
-            let workspaceFolders = await this.connection.workspace.getWorkspaceFolders();
+            let workspaceFolders = (await this.connection.workspace.getWorkspaceFolders()) || [];
             let workspacePaths = workspaceFolders.map((x) => {
                 return util.uriToPath(x.uri);
             });
@@ -281,7 +282,7 @@ export class LanguageServer {
         }
 
         //no config file could be found
-        return null;
+        return undefined;
     }
 
     private async createWorkspace(workspacePath: string) {
@@ -306,7 +307,7 @@ export class LanguageServer {
         let cwd = workspacePath;
 
         //if the config file exists, use it and its folder as cwd
-        if (await util.fileExists(configFilePath)) {
+        if (configFilePath && await util.fileExists(configFilePath)) {
             cwd = path.dirname(configFilePath);
         } else {
             //config file doesn't exist...let `brighterscript` resolve the default way
@@ -449,16 +450,13 @@ export class LanguageServer {
             }
         }
 
-        //wait for all promises to resolve, and then flatten them into a single array
-        let completions = [].concat(...await Promise.all(workspaceCompletionPromises));
+        let completions = ([] as CompletionItem[])
+            //wait for all promises to resolve, and then flatten them into a single array
+            .concat(...await Promise.all(workspaceCompletionPromises))
+            //throw out falsey values
+            .filter(x => !!x);
 
-        let result = [] as CompletionItem[];
-        for (let completion of completions) {
-            if (completion) {
-                result.push(completion);
-            }
-        }
-        return result;
+        return completions;
     }
 
     /**
@@ -598,7 +596,7 @@ export class LanguageServer {
             let workspacesToReload = [] as Workspace[];
             let filePaths = params.changes.map((x) => util.uriToPath(x.uri));
             for (let workspace of workspaces) {
-                if (filePaths.indexOf(workspace.configFilePath) > -1) {
+                if (workspace.configFilePath && filePaths.indexOf(workspace.configFilePath) > -1) {
                     workspacesToReload.push(workspace);
                 }
             }
@@ -668,11 +666,11 @@ export class LanguageServer {
         let workspaces = this.getWorkspaces();
         try {
             await Promise.all(
-                workspaces.map((x) => {
+                workspaces.map(async (x) => {
                     //only add or replace existing files. All of the files in the project should
                     //have already been loaded by other means
                     if (x.builder.program.hasFile(filePath)) {
-                        return x.builder.program.addOrReplaceFile(filePath, documentText);
+                        await x.builder.program.addOrReplaceFile(filePath, documentText);
                     }
                 })
             );
