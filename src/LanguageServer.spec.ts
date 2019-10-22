@@ -95,6 +95,16 @@ describe('LanguageServer', () => {
         fsExtra.writeFileSync(pathAbsolute, contents);
     }
 
+    describe('createStandaloneFileWorkspace', () => {
+        it('never returns undefined', async () => {
+            let filePath = `${rootDir}/.tmp/main.brs`;
+            writeToFs(filePath, `sub main(): return: end sub`);
+            let firstWorkspace = await s.createStandaloneFileWorkspace(filePath);
+            let secondWorkspace = await s.createStandaloneFileWorkspace(filePath);
+            expect(firstWorkspace).to.equal(secondWorkspace);
+        });
+    });
+
     describe('sendDiagnostics', () => {
         it('waits for program to finish loading before sending diagnostics', async () => {
             s.onInitialize({

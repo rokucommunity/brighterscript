@@ -358,10 +358,9 @@ export class LanguageServer {
     private async createStandaloneFileWorkspace(filePathAbsolute: string) {
         //skip this workspace if we already have it
         if (this.standaloneFileWorkspaces[filePathAbsolute]) {
-            return;
+            return this.standaloneFileWorkspaces[filePathAbsolute];
         }
 
-        //if a file called `brsconfig.json` exists, add a diagnostic (because that's the old name...everyone should move to the new name)
         let builder = new ProgramBuilder();
 
         //prevent clearing the console on run...this isn't the CLI so we want to keep a full log of everything
