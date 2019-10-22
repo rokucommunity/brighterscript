@@ -94,7 +94,7 @@ These are the options available in the `bsconfig.json` file.
 
  - **outFile**: `string` -  The path (including filename) where the output file should be placed (defaults to `"./out/[WORKSPACE_FOLDER_NAME].zip"`).
  
- - **skipPackage**: `boolean` - Prevents the zip file from being created. This has no effect if deploy is true. 
+ - **createPackage**: `boolean` - Creates a zip package. Defaults to true. This setting is ignored when `deploy` is enabled.
 
  - **watch**: `boolean` -  If true, the server will keep running and will watch and recompile on every file change.
 

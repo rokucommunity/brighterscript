@@ -64,9 +64,9 @@ export class AssignmentStatement implements Statement {
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pkgPath, this.name.text),
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pathAbsolute, this.name.text),
             ' ',
-            new SourceNode(this.tokens.equals.location.start.line, this.tokens.equals.location.start.column, state.pkgPath, '='),
+            new SourceNode(this.tokens.equals.location.start.line, this.tokens.equals.location.start.column, state.pathAbsolute, '='),
             ' ',
             ...this.value.transpile(state)
         ];
@@ -176,7 +176,7 @@ export class CommentStatement implements Statement, Expression {
             }
             result.push(
                 `'`,
-                new SourceNode(comment.location.start.line, comment.location.start.column, state.pkgPath, comment.text),
+                new SourceNode(comment.location.start.line, comment.location.start.column, state.pathAbsolute, comment.text),
             );
             //add newline for all except final comment
             if (i < this.comments.length - 1) {
@@ -204,7 +204,7 @@ export class ExitFor implements Statement {
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         return [
-            new SourceNode(this.tokens.exitFor.location.start.line, this.tokens.exitFor.location.start.column, state.pkgPath, 'exit for')
+            new SourceNode(this.tokens.exitFor.location.start.line, this.tokens.exitFor.location.start.column, state.pathAbsolute, 'exit for')
         ];
     }
 }
@@ -226,7 +226,7 @@ export class ExitWhile implements Statement {
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         return [
-            new SourceNode(this.tokens.exitWhile.location.start.line, this.tokens.exitWhile.location.start.column, state.pkgPath, 'exit while')
+            new SourceNode(this.tokens.exitWhile.location.start.line, this.tokens.exitWhile.location.start.column, state.pathAbsolute, 'exit while')
         ];
     }
 }
@@ -354,7 +354,7 @@ export class IfStatement implements Statement {
     transpile(state: TranspileState) {
         let results = [];
         //if   (already indented by block)
-        results.push(new SourceNode(this.tokens.if.location.start.line, this.tokens.if.location.start.column, state.pkgPath, 'if'));
+        results.push(new SourceNode(this.tokens.if.location.start.line, this.tokens.if.location.start.column, state.pathAbsolute, 'if'));
         results.push(' ');
         //conditions
         results.push(...this.condition.transpile(state));
@@ -362,7 +362,7 @@ export class IfStatement implements Statement {
         //then
         if (this.tokens.then) {
             results.push(
-                new SourceNode(this.tokens.then.location.start.line, this.tokens.then.location.start.column, state.pkgPath, 'then')
+                new SourceNode(this.tokens.then.location.start.line, this.tokens.then.location.start.column, state.pathAbsolute, 'then')
             );
         } else {
             results.push('then')
@@ -382,7 +382,7 @@ export class IfStatement implements Statement {
             //elseif
             results.push(
                 indent(state.blockDepth),
-                new SourceNode(elseif.elseIfToken.location.start.line, elseif.elseIfToken.location.start.column, state.pkgPath, 'else if'),
+                new SourceNode(elseif.elseIfToken.location.start.line, elseif.elseIfToken.location.start.column, state.pathAbsolute, 'else if'),
                 ' '
             );
 
@@ -392,7 +392,7 @@ export class IfStatement implements Statement {
             results.push(' ');
             if (elseif.thenToken) {
                 results.push(
-                    new SourceNode(elseif.thenToken.location.start.line, elseif.thenToken.location.start.column, state.pkgPath, 'then')
+                    new SourceNode(elseif.thenToken.location.start.line, elseif.thenToken.location.start.column, state.pathAbsolute, 'then')
                 );
             } else {
                 results.push('then');
@@ -414,7 +414,7 @@ export class IfStatement implements Statement {
             //else
             results.push(
                 indent(state.blockDepth),
-                new SourceNode(this.tokens.else.location.start.line, this.tokens.else.location.start.column, state.pkgPath, 'else')
+                new SourceNode(this.tokens.else.location.start.line, this.tokens.else.location.start.column, state.pathAbsolute, 'else')
             );
 
             //then body
@@ -431,7 +431,7 @@ export class IfStatement implements Statement {
         results.push(indent(state.blockDepth));
         if (this.tokens.endIf) {
             results.push(
-                new SourceNode(this.tokens.endIf.location.start.line, this.tokens.endIf.location.start.column, state.pkgPath, 'end if')
+                new SourceNode(this.tokens.endIf.location.start.line, this.tokens.endIf.location.start.column, state.pathAbsolute, 'end if')
             );
         } else {
             results.push('end if');
@@ -459,7 +459,7 @@ export class IncrementStatement implements Statement {
     transpile(state: TranspileState): Array<SourceNode | string> {
         return [
             ...this.value.transpile(state),
-            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, state.pkgPath, this.operator.text)
+            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, state.pathAbsolute, this.operator.text)
         ];
     }
 }
@@ -511,7 +511,7 @@ export class PrintStatement implements Statement {
 
     transpile(state: TranspileState) {
         let result = [
-            new SourceNode(this.tokens.print.location.start.line, this.tokens.print.location.start.column, state.pkgPath, 'print'),
+            new SourceNode(this.tokens.print.location.start.line, this.tokens.print.location.start.column, state.pathAbsolute, 'print'),
             ' '
         ];
         for (let i = 0; i < this.expressions.length; i++) {
@@ -553,9 +553,9 @@ export class Goto implements Statement {
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         return [
-            new SourceNode(this.tokens.goto.location.start.line, this.tokens.goto.location.start.column, state.pkgPath, 'goto'),
+            new SourceNode(this.tokens.goto.location.start.line, this.tokens.goto.location.start.column, state.pathAbsolute, 'goto'),
             ' ',
-            new SourceNode(this.tokens.label.location.start.line, this.tokens.label.location.start.column, state.pkgPath, this.tokens.label.text),
+            new SourceNode(this.tokens.label.location.start.line, this.tokens.label.location.start.column, state.pathAbsolute, this.tokens.label.text),
         ];
     }
 }
@@ -582,8 +582,8 @@ export class Label implements Statement {
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         return [
-            new SourceNode(this.tokens.identifier.location.start.line, this.tokens.identifier.location.start.column, state.pkgPath, this.tokens.identifier.text),
-            new SourceNode(this.tokens.colon.location.start.line, this.tokens.colon.location.start.column, state.pkgPath, ':'),
+            new SourceNode(this.tokens.identifier.location.start.line, this.tokens.identifier.location.start.column, state.pathAbsolute, this.tokens.identifier.text),
+            new SourceNode(this.tokens.colon.location.start.line, this.tokens.colon.location.start.column, state.pathAbsolute, ':'),
 
         ];
     }
@@ -612,7 +612,7 @@ export class Return implements Statement {
     transpile(state: TranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.tokens.return.location.start.line, this.tokens.return.location.start.column, state.pkgPath, 'return')
+            new SourceNode(this.tokens.return.location.start.line, this.tokens.return.location.start.column, state.pathAbsolute, 'return')
         );
         if (this.value) {
             result.push(' ');
@@ -644,7 +644,7 @@ export class End implements Statement {
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.tokens.end.location.start.line, this.tokens.end.location.start.column, state.pkgPath, 'end')
+            new SourceNode(this.tokens.end.location.start.line, this.tokens.end.location.start.column, state.pathAbsolute, 'end')
         ];
     }
 }
@@ -671,7 +671,7 @@ export class Stop implements Statement {
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.tokens.stop.location.start.line, this.tokens.stop.location.start.column, state.pkgPath, 'stop')
+            new SourceNode(this.tokens.stop.location.start.line, this.tokens.stop.location.start.column, state.pathAbsolute, 'stop')
         ];
     }
 }
@@ -706,7 +706,7 @@ export class ForStatement implements Statement {
         let result = [];
         //for
         result.push(
-            new SourceNode(this.tokens.for.location.start.line, this.tokens.for.location.start.column, state.pkgPath, 'for'),
+            new SourceNode(this.tokens.for.location.start.line, this.tokens.for.location.start.column, state.pathAbsolute, 'for'),
             ' '
         );
         //i=1
@@ -716,7 +716,7 @@ export class ForStatement implements Statement {
         );
         //to
         result.push(
-            new SourceNode(this.tokens.to.location.start.line, this.tokens.to.location.start.column, state.pkgPath, 'to'),
+            new SourceNode(this.tokens.to.location.start.line, this.tokens.to.location.start.column, state.pathAbsolute, 'to'),
             ' '
         );
         //final value
@@ -725,7 +725,7 @@ export class ForStatement implements Statement {
         if (this.tokens.step) {
             result.push(
                 ' ',
-                new SourceNode(this.tokens.step.location.start.line, this.tokens.step.location.start.column, state.pkgPath, 'step'),
+                new SourceNode(this.tokens.step.location.start.line, this.tokens.step.location.start.column, state.pathAbsolute, 'step'),
                 ' ',
                 this.increment.transpile(state)
             )
@@ -740,7 +740,7 @@ export class ForStatement implements Statement {
         //end for
         result.push(
             indent(state.blockDepth),
-            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pkgPath, 'end for')
+            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pathAbsolute, 'end for')
         );
 
         return result;
@@ -775,17 +775,17 @@ export class ForEachStatement implements Statement {
         let result = [];
         //for each
         result.push(
-            new SourceNode(this.tokens.forEach.location.start.line, this.tokens.forEach.location.start.column, state.pkgPath, 'for each'),
+            new SourceNode(this.tokens.forEach.location.start.line, this.tokens.forEach.location.start.column, state.pathAbsolute, 'for each'),
             ' '
         );
         //item
         result.push(
-            new SourceNode(this.tokens.forEach.location.start.line, this.tokens.forEach.location.start.column, state.pkgPath, this.item.text),
+            new SourceNode(this.tokens.forEach.location.start.line, this.tokens.forEach.location.start.column, state.pathAbsolute, this.item.text),
             ' '
         );
         //in
         result.push(
-            new SourceNode(this.tokens.in.location.start.line, this.tokens.in.location.start.column, state.pkgPath, 'in'),
+            new SourceNode(this.tokens.in.location.start.line, this.tokens.in.location.start.column, state.pathAbsolute, 'in'),
             ' '
         );
         //target
@@ -800,7 +800,7 @@ export class ForEachStatement implements Statement {
         //end for
         result.push(
             indent(state.blockDepth),
-            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pkgPath, 'end for'),
+            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pathAbsolute, 'end for'),
         );
         return result;
     }
@@ -832,7 +832,7 @@ export class WhileStatement implements Statement {
         let result = [];
         //while
         result.push(
-            new SourceNode(this.tokens.while.location.start.line, this.tokens.while.location.start.column, state.pkgPath, 'while'),
+            new SourceNode(this.tokens.while.location.start.line, this.tokens.while.location.start.column, state.pathAbsolute, 'while'),
             ' '
         );
         //condition
@@ -850,7 +850,7 @@ export class WhileStatement implements Statement {
         //end while
         result.push(
             indent(state.blockDepth),
-            new SourceNode(this.tokens.endWhile.location.start.line, this.tokens.endWhile.location.start.column, state.pkgPath, 'end while')
+            new SourceNode(this.tokens.endWhile.location.start.line, this.tokens.endWhile.location.start.column, state.pathAbsolute, 'end while')
         );
 
         return result;
@@ -882,7 +882,7 @@ export class DottedSetStatement implements Statement {
             ...this.obj.transpile(state),
             '.',
             //name
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pkgPath, this.name.text),
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pathAbsolute, this.name.text),
             ' = ',
             //right-hand-side of assignment
             ...this.value.transpile(state)
@@ -916,11 +916,11 @@ export class IndexedSetStatement implements Statement {
             //obj
             ...this.obj.transpile(state),
             //   [
-            new SourceNode(this.openingSquare.location.start.line, this.openingSquare.location.start.column, state.pkgPath, '['),
+            new SourceNode(this.openingSquare.location.start.line, this.openingSquare.location.start.column, state.pathAbsolute, '['),
             //    index
             ...this.index.transpile(state),
             //         ]
-            new SourceNode(this.closingSquare.location.start.line, this.closingSquare.location.start.column, state.pkgPath, ']'),
+            new SourceNode(this.closingSquare.location.start.line, this.closingSquare.location.start.column, state.pathAbsolute, ']'),
             //           =
             ' = ',
             //             value
@@ -953,13 +953,13 @@ export class LibraryStatement implements Statement {
     transpile(state: TranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.tokens.library.location.start.line, this.tokens.library.location.start.column, state.pkgPath, 'library'),
+            new SourceNode(this.tokens.library.location.start.line, this.tokens.library.location.start.column, state.pathAbsolute, 'library'),
         );
         //there will be a parse error if file path is missing, but let's prevent a runtime error just in case
         if (this.tokens.filePath) {
             result.push(
                 ' ',
-                new SourceNode(this.tokens.filePath.location.start.line, this.tokens.filePath.location.start.column, state.pkgPath, this.tokens.filePath.text)
+                new SourceNode(this.tokens.filePath.location.start.line, this.tokens.filePath.location.start.column, state.pathAbsolute, this.tokens.filePath.text)
             );
         }
         return result;

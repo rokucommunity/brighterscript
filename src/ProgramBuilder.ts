@@ -120,7 +120,8 @@ export class ProgramBuilder {
 
         //add each set of files to the file watcher
         for (let fileObject of fileObjects) {
-            this.watcher.watch(fileObject.src);
+            let src = (typeof fileObject === 'string') ? fileObject : fileObject.src;
+            this.watcher.watch(src);
         }
 
         util.log('Watching for file changes...');
@@ -292,29 +293,28 @@ export class ProgramBuilder {
     }
 
     private async createPackageIfEnabled() {
-        //create the zip file if configured to do so
-        if (this.options.skipPackage === false || this.options.deploy) {
-            let options = util.cwdWork(this.options.cwd, () => {
-                return rokuDeploy.getOptions({
-                    ...this.options,
-                    outDir: util.getOutDir(this.options),
-                    outFile: path.basename(this.options.outFile)
-                });
+
+        let options = util.cwdWork(this.options.cwd, () => {
+            return rokuDeploy.getOptions({
+                ...this.options,
+                outDir: util.getOutDir(this.options),
+                outFile: path.basename(this.options.outFile)
             });
-            let stagingDir = rokuDeploy.getStagingFolderPath(options);
+        });
+        let fileMap = await rokuDeploy.getFilePaths(options.files, options.stagingFolderPath, options.rootDir);
 
-            let fileMap = await rokuDeploy.getFilePaths(options.files, stagingDir, options.rootDir);
+        //exclude all BrighterScript files from publishing, because we will transpile them instead
+        options.files.push('!**/*.bs');
 
-            //exclude all BrighterScript files from publishing, because we will transpile them instead
-            options.files.push('!**/*.bs');
+        util.log('Copying to staging directory');
+        await rokuDeploy.prepublishToStaging(options);
 
-            util.log('Copying to staging directory');
-            await rokuDeploy.prepublishToStaging(options);
+        util.log('Transpiling');
+        //transpile any brighterscript files
+        await this.program.transpile(fileMap);
 
-            util.log('Transpiling');
-            //transpile any brighterscript files
-            await this.program.transpile(fileMap);
-
+        //create the zip file if configured to do so
+        if (this.options.createPackage !== false || this.options.deploy) {
             util.log(`Creating package at ${this.options.outFile}`);
             await rokuDeploy.zipPackage({
                 ...this.options,

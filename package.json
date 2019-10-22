@@ -4,7 +4,6 @@
   "description": "A superset of Roku's BrightScript language.",
   "scripts": {
     "preversion": "npm run build && npm run tslint && npm run test",
-    "prepare": "npm run build",
     "build": "rimraf out && tsc",
     "watch": "rimraf out && tsc --watch",
     "prepublishOnly": "npm run build",

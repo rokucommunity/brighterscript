@@ -32,9 +32,9 @@ export interface BsConfig {
      */
     outFile?: string;
     /**
-     * Prevents the zip file from being created. This has no effect if deploy is true.
+     * Creates a zip package. Defaults to true. This setting is ignored when deploy is enabled.
      */
-    skipPackage?: boolean;
+    createPackage?: boolean;
     /**
      * If true, the server will keep running and will watch and recompile on every file change
      * @default false
@@ -73,4 +73,8 @@ export interface BsConfig {
      * @default false
      */
     retainStagingFolder?: boolean;
+    /**
+     * The path to the staging folder (where all files are copied to right before creating the zip package)
+     */
+    stagingFolderPath?: string;
 }

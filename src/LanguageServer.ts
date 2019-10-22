@@ -317,7 +317,7 @@ export class LanguageServer {
             cwd: cwd,
             project: configFilePath,
             watch: false,
-            skipPackage: true,
+            createPackage: false,
             deploy: false
         });
         firstRunPromise.catch((err) => {
@@ -377,7 +377,7 @@ export class LanguageServer {
 
         //get the closest config file and use most of the settings from that
         let configFilePath = await util.findClosestConfigFile(filePathAbsolute);
-        let project: BsConfig;
+        let project: BsConfig = {};
         if (configFilePath) {
             project = await util.normalizeAndResolveConfig({ project: configFilePath });
             //override the rootDir and files array
@@ -392,7 +392,7 @@ export class LanguageServer {
             cwd: cwd,
             project: configFilePath,
             watch: false,
-            skipPackage: true,
+            createPackage: false,
             deploy: false
         }).catch((err) => {
             console.error(err);

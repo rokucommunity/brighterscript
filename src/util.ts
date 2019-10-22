@@ -44,8 +44,12 @@ export class Util {
      * Determine if the file exists
      * @param filePath
      */
-    public fileExists(filePath: string) {
-        return fsExtra.pathExists(filePath);
+    public async fileExists(filePath: string | undefined) {
+        if (!filePath) {
+            return false;
+        } else {
+            return await fsExtra.pathExists(filePath);
+        }
     }
 
     /**
@@ -204,7 +208,7 @@ export class Util {
             process.chdir(targetCwd);
         }
 
-        let result;
+        let result: T;
         let err;
 
         try {
@@ -259,7 +263,7 @@ export class Util {
         config.deploy = config.deploy === true ? true : false;
         //use default options from rokuDeploy
         config.files = config.files ? config.files : rokuDeploy.getOptions().files;
-        config.skipPackage = config.skipPackage === true ? true : false;
+        config.createPackage = config.createPackage === false ? false : true;
         let rootFolderName = path.basename(process.cwd());
         config.outFile = config.outFile ? config.outFile : `./out/${rootFolderName}.zip`;
         config.username = config.username ? config.username : 'rokudev';
@@ -267,6 +271,7 @@ export class Util {
         config.ignoreErrorCodes = config.ignoreErrorCodes ? config.ignoreErrorCodes : [];
         config.emitFullPaths = config.emitFullPaths === true ? true : false;
         config.retainStagingFolder = config.retainStagingFolder === true ? true : false;
+        config.stagingFolderPath = config.stagingFolderPath ? config.stagingFolderPath : '.brighterscript-staging';
         return config;
     }
 
@@ -613,8 +618,9 @@ export class Util {
      */
     public async getFilePaths(options: BsConfig) {
         let rootDir = this.getRootDir(options);
+        let stagingFolderPath = rokuDeploy.getOptions(options).stagingFolderPath;
 
-        let files = await rokuDeploy.getFilePaths(options.files, path.dirname(options.outFile), rootDir);
+        let files = await rokuDeploy.getFilePaths(options.files, stagingFolderPath, rootDir);
         return files;
     }
 

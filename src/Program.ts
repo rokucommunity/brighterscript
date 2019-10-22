@@ -155,7 +155,7 @@ export class Program {
             }
 
             //skip any specified error codes
-            if (this.options.ignoreErrorCodes.indexOf(diagnostic.code) > -1) {
+            if (this.options.ignoreErrorCodes && this.options.ignoreErrorCodes.indexOf(diagnostic.code) > -1) {
                 continue;
             }
 
@@ -219,7 +219,7 @@ export class Program {
         }
         let pkgPath = this.getPkgPath(pathAbsolute);
         let fileExtension = path.extname(pathAbsolute).toLowerCase();
-        let file: BrsFile | XmlFile;
+        let file: BrsFile | XmlFile | undefined;
 
         //load the file contents by file path if not provided
         let getFileContents = async () => {
@@ -485,7 +485,10 @@ export class Program {
             let file = this.files[filePath];
             if (file.needsTranspiled) {
                 let result = file.transpile();
-                let filePathObj = fileMaps.find(x => x.src === file.pathAbsolute);
+                let filePathObj = fileMaps.find(x => util.normalizeFilePath(x.src) === util.normalizeFilePath(file.pathAbsolute));
+                if (!filePathObj) {
+                    throw new Error(`Cannot find fileMap record in fileMaps for '${file.pathAbsolute}'`);
+                }
 
                 let outputCodePath = filePathObj.dest.replace(new RegExp('\.bs$'), '.brs');
                 let outputCodeMapPath = outputCodePath + '.map';

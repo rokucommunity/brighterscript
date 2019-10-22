@@ -21,7 +21,10 @@ export interface Visitor<T> {
 }
 
 export interface TranspileState {
+    //the path for this file relative to the root of the output package
     pkgPath: string;
+    //the absolute path to the source location of this file
+    pathAbsolute: string;
     blockDepth: number;
     //the tree of parents, with the first index being direct parent, and the last index being the furthest removed ancestor. 
     //Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
@@ -66,11 +69,11 @@ export class Binary implements Expression {
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.left.location.start.line, this.left.location.start.column, state.pkgPath, this.left.transpile(state)),
+            new SourceNode(this.left.location.start.line, this.left.location.start.column, state.pathAbsolute, this.left.transpile(state)),
             ' ',
-            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, state.pkgPath, this.operator.text),
+            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, state.pathAbsolute, this.operator.text),
             ' ',
-            new SourceNode(this.right.location.start.line, this.right.location.start.column, state.pkgPath, this.right.transpile(state))
+            new SourceNode(this.right.location.start.line, this.right.location.start.column, state.pathAbsolute, this.right.transpile(state))
         ];
     }
 }
@@ -101,7 +104,7 @@ export class Call implements Expression {
         let result = [];
         result.push(...this.callee.transpile(state));
         result.push(
-            new SourceNode(this.openingParen.location.start.line, this.openingParen.location.start.column, state.pkgPath, '(')
+            new SourceNode(this.openingParen.location.start.line, this.openingParen.location.start.column, state.pathAbsolute, '(')
         );
         for (let i = 0; i < this.args.length; i++) {
             //add comma between args
@@ -112,7 +115,7 @@ export class Call implements Expression {
             result.push(...arg.transpile(state));
         }
         result.push(
-            new SourceNode(this.closingParen.location.start.line, this.closingParen.location.start.column, state.pkgPath, ')')
+            new SourceNode(this.closingParen.location.start.line, this.closingParen.location.start.column, state.pathAbsolute, ')')
         );
         return result;
     }
@@ -147,42 +150,42 @@ export class FunctionExpression implements Expression {
         let results = [];
         //'function'|'sub'
         results.push(
-            new SourceNode(this.functionType.location.start.line, this.functionType.location.start.column, state.pkgPath, this.functionType.text.toLowerCase()),
+            new SourceNode(this.functionType.location.start.line, this.functionType.location.start.column, state.pathAbsolute, this.functionType.text.toLowerCase()),
         );
         //functionName?
         if (name) {
             results.push(
                 ' ',
-                new SourceNode(name.location.start.line, name.location.start.column, state.pkgPath, name.text)
+                new SourceNode(name.location.start.line, name.location.start.column, state.pathAbsolute, name.text)
             );
         }
         //leftParen
         results.push(
-            new SourceNode(this.leftParen.location.start.line, this.leftParen.location.start.column, state.pkgPath, '(')
+            new SourceNode(this.leftParen.location.start.line, this.leftParen.location.start.column, state.pathAbsolute, '(')
         );
         //parameters
         for (let i = 0; i < this.parameters.length; i++) {
             let param = this.parameters[i];
             //add commas
             if (i > 0) {
-                results.push(new SourceNode(null, null, state.pkgPath, ', '));
+                results.push(new SourceNode(null, null, state.pathAbsolute, ', '));
             }
             //add parameter
             results.push(param.transpile(state));
         }
         //right paren
         results.push(
-            new SourceNode(this.rightParen.location.start.line, this.rightParen.location.start.column, state.pkgPath, ')')
+            new SourceNode(this.rightParen.location.start.line, this.rightParen.location.start.column, state.pathAbsolute, ')')
         );
         //as [Type]
         if (this.asToken) {
             results.push(
                 ' ',
                 //as
-                new SourceNode(this.asToken.location.start.line, this.asToken.location.start.column, state.pkgPath, 'as'),
+                new SourceNode(this.asToken.location.start.line, this.asToken.location.start.column, state.pathAbsolute, 'as'),
                 ' ',
                 //return type
-                new SourceNode(this.returnTypeToken.location.start.line, this.returnTypeToken.location.start.column, state.pkgPath, this.returnTypeToken.text.toLowerCase())
+                new SourceNode(this.returnTypeToken.location.start.line, this.returnTypeToken.location.start.column, state.pathAbsolute, this.returnTypeToken.text.toLowerCase())
             );
         }
         state.lineage.unshift(this);
@@ -193,7 +196,7 @@ export class FunctionExpression implements Expression {
         //'end sub'|'end function'
         results.push(
             indent(state.blockDepth),
-            new SourceNode(this.end.location.start.line, this.end.location.start.column, state.pkgPath, this.end.text)
+            new SourceNode(this.end.location.start.line, this.end.location.start.column, state.pathAbsolute, this.end.text)
         );
         return results;
     }
@@ -218,7 +221,7 @@ export class DottedGet implements Expression {
         return [
             ...this.obj.transpile(state),
             '.',
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pkgPath, this.name.text)
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pathAbsolute, this.name.text)
         ];
     }
 }
@@ -246,9 +249,9 @@ export class IndexedGetExpression implements Expression {
     transpile(state: TranspileState) {
         return [
             ...this.obj.transpile(state),
-            new SourceNode(this.openingSquare.location.start.line, this.openingSquare.location.start.column, state.pkgPath, '['),
+            new SourceNode(this.openingSquare.location.start.line, this.openingSquare.location.start.column, state.pathAbsolute, '['),
             ...this.index.transpile(state),
-            new SourceNode(this.closingSquare.location.start.line, this.closingSquare.location.start.column, state.pkgPath, ']')
+            new SourceNode(this.closingSquare.location.start.line, this.closingSquare.location.start.column, state.pathAbsolute, ']')
         ];
     }
 }
@@ -276,9 +279,9 @@ export class Grouping implements Expression {
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.tokens.left.location.start.line, this.tokens.left.location.start.column, state.pkgPath, '('),
+            new SourceNode(this.tokens.left.location.start.line, this.tokens.left.location.start.column, state.pathAbsolute, '('),
             ...this.expression.transpile(state),
-            new SourceNode(this.tokens.right.location.start.line, this.tokens.right.location.start.column, state.pkgPath, ')'),
+            new SourceNode(this.tokens.right.location.start.line, this.tokens.right.location.start.column, state.pathAbsolute, ')'),
         ];
     }
 }
@@ -314,7 +317,7 @@ export class Literal implements Expression {
             new SourceNode(
                 this._location.start.line,
                 this._location.start.column,
-                state.pkgPath,
+                state.pathAbsolute,
                 this.value.kind === ValueKind.String ? `"${this.value.toString()}"` : this.value.toString()
             )
         ]
@@ -343,7 +346,7 @@ export class ArrayLiteralExpression implements Expression {
     transpile(state: TranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pkgPath, '[')
+            new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pathAbsolute, '[')
         );
         let hasChildren = this.elements.length > 0;
         state.blockDepth++;
@@ -391,7 +394,7 @@ export class ArrayLiteralExpression implements Expression {
         }
 
         result.push(
-            new SourceNode(this.close.location.start.line, this.close.location.start.column, state.pkgPath, ']')
+            new SourceNode(this.close.location.start.line, this.close.location.start.column, state.pathAbsolute, ']')
         );
         return result;
     }
@@ -431,7 +434,7 @@ export class AALiteralExpression implements Expression {
         let result = [];
         //open curly
         result.push(
-            new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pkgPath, this.open.text),
+            new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pathAbsolute, this.open.text),
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
@@ -461,11 +464,11 @@ export class AALiteralExpression implements Expression {
             } else {
                 //key
                 result.push(
-                    new SourceNode(element.keyToken.location.start.line, element.keyToken.location.start.column, state.pkgPath, element.keyToken.text)
+                    new SourceNode(element.keyToken.location.start.line, element.keyToken.location.start.column, state.pathAbsolute, element.keyToken.text)
                 );
                 //colon
                 result.push(
-                    new SourceNode(element.colonToken.location.start.line, element.colonToken.location.start.column, state.pkgPath, ':'),
+                    new SourceNode(element.colonToken.location.start.line, element.colonToken.location.start.column, state.pathAbsolute, ':'),
                     ' '
                 );
 
@@ -506,7 +509,7 @@ export class AALiteralExpression implements Expression {
         }
         //close curly
         result.push(
-            new SourceNode(this.close.location.start.line, this.close.location.start.column, state.pkgPath, this.close.text)
+            new SourceNode(this.close.location.start.line, this.close.location.start.column, state.pathAbsolute, this.close.text)
         );
         return result;
     }
@@ -529,7 +532,7 @@ export class Unary implements Expression {
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, state.pkgPath, this.operator.text),
+            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, state.pathAbsolute, this.operator.text),
             ' ',
             ...this.right.transpile(state)
         ];
@@ -549,7 +552,7 @@ export class Variable implements Expression {
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pkgPath, this.name.text)
+            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pathAbsolute, this.name.text)
         ];
     }
 }

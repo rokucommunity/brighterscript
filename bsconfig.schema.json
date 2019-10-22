@@ -71,8 +71,8 @@
             "description": "The path where the output zip or package should be placed. This includes the filename. Defaults to \"./out/package\"",
             "type": "string"
         },
-        "skipPackage": {
-            "description": " Prevents the zip file from being created. This has no effect if deploy is true",
+        "createPackage": {
+            "description": "Creates a zip package. Defaults to true. This setting is ignored when deploy is enabled.",
             "type": "boolean"
         },
         "watch": {
@@ -100,6 +100,10 @@
             "type": "boolean",
             "description": "Prevent the staging folder from being deleted after the deployment package is created.  This is helpful for troubleshooting why your package isn't being created the way you expected.",
             "default": false
+        },
+        "stagingFolderPath": {
+            "type": "string",
+            "description": "The path to the staging folder (where all files are copied before creating the zip package)"
         },
         "ignoreErrorCodes": {
             "description": "A list of error codes the compiler should NOT emit, even if encountered.",

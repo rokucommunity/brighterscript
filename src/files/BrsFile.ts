@@ -799,6 +799,7 @@ export class BrsFile {
         let chunks = [] as Array<string | SourceNode>;
         let state = {
             pkgPath: this.pkgPath,
+            pathAbsolute: this.pathAbsolute,
             blockDepth: 0,
             lineage: []
         };
@@ -827,9 +828,9 @@ export class BrsFile {
 
             chunks.push(...statement.transpile(state));
         }
-        let programNode = new SourceNode(null, null, this.pkgPath, chunks);
+        let programNode = new SourceNode(null, null, this.pathAbsolute, chunks);
         return programNode.toStringWithSourceMap({
-            file: this.pkgPath
+            file: this.pathAbsolute
         });
     }
 
