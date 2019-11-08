@@ -646,7 +646,7 @@ export class BrsFile {
         let id = this.id;
         id = id;
         //wait for the file to finish processing
-        await this.parseDeferred.promise;
+        await this.isReady();
         let names = {};
 
         //determine if cursor is inside a function
@@ -733,7 +733,8 @@ export class BrsFile {
         return tokens[tokens.length - 1];
     }
 
-    public getHover(position: Position): Hover {
+    public async getHover(position: Position): Promise<Hover> {
+        await this.isReady();
         //get the token at the position
         let token = this.getTokenAt(position);
 
