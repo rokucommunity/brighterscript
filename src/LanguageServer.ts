@@ -19,6 +19,7 @@ import {
 import Uri from 'vscode-uri';
 
 import { BsConfig } from './BsConfig';
+import { Deferred } from './deferred';
 import { diagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import util from './util';
@@ -146,11 +147,16 @@ export class LanguageServer {
         };
     }
 
+    private initialWorkspacesCreated: Promise<any>;
+
     /**
      * Called when the client has finished initializing
      * @param params
      */
     private async onInitialized() {
+        let workspaceCreatedDeferred = new Deferred();
+        this.initialWorkspacesCreated = workspaceCreatedDeferred.promise;
+
         try {
             if (this.hasConfigurationCapability) {
                 // Register for all configuration changes.
@@ -181,7 +187,8 @@ export class LanguageServer {
                     await this.createWorkspaces(evt.added.map((x) => util.uriToPath(x.uri)));
                 });
             }
-            await this.waitAllProgramFirstRuns();
+            await this.waitAllProgramFirstRuns(false);
+            workspaceCreatedDeferred.resolve();
             await this.sendDiagnostics();
         } catch (e) {
             this.sendCriticalFailure(
@@ -204,7 +211,11 @@ export class LanguageServer {
     /**
      * Wait for all programs' first run to complete
      */
-    private async waitAllProgramFirstRuns() {
+    private async waitAllProgramFirstRuns(waitForFirstWorkSpace = true) {
+        if (waitForFirstWorkSpace) {
+            await this.initialWorkspacesCreated;
+        }
+
         let status;
         let workspaces = this.getWorkspaces();
         for (let workspace of workspaces) {
@@ -358,7 +369,7 @@ export class LanguageServer {
     private async createStandaloneFileWorkspace(filePathAbsolute: string) {
         //skip this workspace if we already have it
         if (this.standaloneFileWorkspaces[filePathAbsolute]) {
-            return;
+            return this.standaloneFileWorkspaces[filePathAbsolute];
         }
 
         //if a file called `brsconfig.json` exists, add a diagnostic (because that's the old name...everyone should move to the new name)
@@ -627,8 +638,10 @@ export class LanguageServer {
 
         let pathAbsolute = util.uriToPath(params.textDocument.uri);
         let workspaces = this.getWorkspaces();
-        let hovers = Array.prototype.concat.call([],
+        let hovers = await Promise.all(
+          Array.prototype.concat.call([],
             workspaces.map((x) => x.builder.program.getHover(pathAbsolute, params.position))
+          )
         ) as Hover[];
 
         //return the first non-falsey hover. TODO is there a way to handle multiple hover results?
