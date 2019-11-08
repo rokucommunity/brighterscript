@@ -12,6 +12,7 @@
             true,
             "never"
         ],
+        "array-type": false,
         "no-debugger": false,
         "arrow-parens": false,
         "arrow-return-shorthand": false,

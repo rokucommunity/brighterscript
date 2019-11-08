@@ -169,7 +169,8 @@ describe('LanguageServer', () => {
                 },
                 {
                     uri: getFileProtocolPath(path.join(workspacePath, 'source')),
-                    type: 2 //changed
+                    type: 2 //changedasdf
+
                 }
                     // ,{
                     //     uri: 'file:///c%3A/projects/PlumMediaCenter/Roku/appconfig.brs',

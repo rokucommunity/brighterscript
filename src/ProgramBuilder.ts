@@ -301,7 +301,7 @@ export class ProgramBuilder {
                 outFile: path.basename(this.options.outFile)
             });
         });
-        let fileMap = await rokuDeploy.getFilePaths(options.files, options.stagingFolderPath, options.rootDir);
+        let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
 
         //exclude all BrighterScript files from publishing, because we will transpile them instead
         options.files.push('!**/*.bs');
@@ -311,7 +311,7 @@ export class ProgramBuilder {
 
         util.log('Transpiling');
         //transpile any brighterscript files
-        await this.program.transpile(fileMap);
+        await this.program.transpile(fileMap, options.stagingFolderPath);
 
         //create the zip file if configured to do so
         if (this.options.createPackage !== false || this.options.deploy) {
@@ -348,9 +348,9 @@ export class ProgramBuilder {
                 try {
                     let fileExtension = path.extname(file.src).toLowerCase();
 
-                    //only process brightscript files
+                    //only process certain file types
                     if (['.bs', '.brs', '.xml'].indexOf(fileExtension) > -1) {
-                        await this.program.addOrReplaceFile(file.src);
+                        await this.program.addOrReplaceFile(file);
                     }
                 } catch (e) {
                     //log the error, but don't fail this process because the file might be fixable later
@@ -382,7 +382,7 @@ export class ProgramBuilder {
         //Which eliminates the need to detect. All functions below can handle being given
         //a file path AND a folder path, and will only operate on the one they are looking for
         for (let change of changes) {
-            let pathAbsolute = util.normalizeFilePath(Uri.parse(change.uri).fsPath);
+            let pathAbsolute = util.standardizePath(Uri.parse(change.uri).fsPath);
             //remove all files from any removed folder
             if (change.type === FileChangeType.Deleted) {
                 //try to act on this path as a directory
@@ -396,7 +396,7 @@ export class ProgramBuilder {
                 await this.loadMissingFilesFromFolder(pathAbsolute);
                 let filePaths = await getMatchingFilePaths();
                 //if our program wants this file, then load it
-                if (filePaths.map(x => util.normalizeFilePath(x)).indexOf(util.normalizeFilePath(pathAbsolute)) > -1) {
+                if (filePaths.map(x => util.standardizePath(x)).indexOf(util.standardizePath(pathAbsolute)) > -1) {
                     await this.program.addOrReplaceFile(pathAbsolute);
                 }
             } else /*changed*/ {
@@ -433,13 +433,13 @@ export class ProgramBuilder {
      * @param folderPathAbsolute
      */
     public async loadMissingFilesFromFolder(folderPathAbsolute: string) {
-        folderPathAbsolute = util.normalizeFilePath(folderPathAbsolute);
+        folderPathAbsolute = util.standardizePath(folderPathAbsolute);
         let allFilesObjects = await util.getFilePaths(this.options);
 
         let promises = [] as Array<Promise<any>>;
         //for every matching file
         for (let fileObj of allFilesObjects) {
-            let src = util.normalizeFilePath(fileObj.src);
+            let src = util.standardizePath(fileObj.src);
             if (
                 //file path starts with folder path
                 src.indexOf(folderPathAbsolute) === 0 &&

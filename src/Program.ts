@@ -1,6 +1,8 @@
+import * as assert from 'assert';
 import { EventEmitter } from 'events';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
+import { StandardizedFileEntry } from 'roku-deploy';
 import { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 
 import { BsConfig } from './BsConfig';
@@ -72,7 +74,7 @@ export class Program {
      * This allow the language server to provide file contents directly from memory.
      */
     public async getFileContents(pathAbsolute: string) {
-        pathAbsolute = util.normalizeFilePath(pathAbsolute);
+        pathAbsolute = util.standardizePath(pathAbsolute);
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
             let result = await fileResolver(pathAbsolute);
@@ -171,14 +173,14 @@ export class Program {
      */
     public files = {} as { [filePath: string]: BrsFile | XmlFile };
 
-    public contexts = {} as { [name: string]: Context };
+    private contexts = {} as { [name: string]: Context };
 
     /**
      * Determine if the specified file is loaded in this program right now.
      * @param filePath
      */
     public hasFile(filePath: string) {
-        filePath = util.normalizeFilePath(filePath);
+        filePath = util.standardizePath(filePath);
         return this.files[filePath] !== undefined;
     }
 
@@ -188,20 +190,26 @@ export class Program {
      * contents from the file system.
      * @param filePaths
      */
-    public addOrReplaceFiles(filePaths: string[]) {
+    public addOrReplaceFiles(fileObjects: Array<StandardizedFileEntry>) {
         return Promise.all(
-            filePaths.map((filePath) => this.addOrReplaceFile(filePath))
+            fileObjects.map((fileObject) => this.addOrReplaceFile(fileObject))
         );
     }
 
+    public getPkgPath(...args: any[]): any {
+
+    }
+
     /**
-     * Get the pkgPath for an absolute file path
-     * @param pathAbsolute
+     * roku filesystem is case INsensitive, so find the context by key case insensitive
+     * @param contextName
      */
-    public getPkgPath(pathAbsolute: string) {
-        pathAbsolute = util.normalizeFilePath(pathAbsolute);
-        let rootDir = util.normalizeFilePath(this.rootDir);
-        return pathAbsolute.replace(`${rootDir}${path.sep}`, '');
+    public getContextByName(contextName: string) {
+        //most contexts are xml file pkg paths. however, the ones that are not are single names like "platform" and "global",
+        //so it's safe to run the standardizePkgPath method
+        contextName = util.standardizePkgPath(contextName);
+        let key = Object.keys(this.contexts).find(x => x.toLowerCase() === contextName.toLowerCase());
+        return this.contexts[key];
     }
 
     /**
@@ -210,14 +218,18 @@ export class Program {
      * @param pathAbsolute
      * @param fileContents
      */
-    public async addOrReplaceFile(pathAbsolute: string, fileContents?: string) {
-        pathAbsolute = util.normalizeFilePath(pathAbsolute);
+    public async addOrReplaceFile(fileEntry: StandardizedFileEntry, fileContents?: string) {
+        assert.ok(fileEntry, 'fileEntry is required');
+        assert.ok(fileEntry.src, 'fileEntry.src is required');
+        assert.ok(fileEntry.dest, 'fileEntry.dest is required');
+
+        let pathAbsolute = util.standardizePath(fileEntry.src);
+        let pkgPath = util.standardizePkgPath(fileEntry.dest);
 
         //if the file is already loaded, remove it
         if (this.hasFile(pathAbsolute)) {
             this.removeFile(pathAbsolute);
         }
-        let pkgPath = this.getPkgPath(pathAbsolute);
         let fileExtension = path.extname(pathAbsolute).toLowerCase();
         let file: BrsFile | XmlFile | undefined;
 
@@ -301,7 +313,7 @@ export class Program {
      * @param pathAbsolute
      */
     public getFileByPathAbsolute(pathAbsolute: string) {
-        pathAbsolute = util.normalizeFilePath(pathAbsolute);
+        pathAbsolute = util.standardizePath(pathAbsolute);
         for (let filePath in this.files) {
             if (filePath.toLowerCase() === pathAbsolute.toLowerCase()) {
                 return this.files[filePath];
@@ -316,7 +328,7 @@ export class Program {
     public getFileByPkgPath(pkgPath: string) {
         for (let filePath in this.files) {
             let file = this.files[filePath];
-            if (file.pkgPath === pkgPath) {
+            if (util.standardizePath(file.pkgPath) === util.standardizePath(pkgPath)) {
                 return file;
             }
         }
@@ -337,7 +349,7 @@ export class Program {
      * @param pathAbsolute
      */
     public removeFile(pathAbsolute: string) {
-        pathAbsolute = util.normalizeFilePath(pathAbsolute);
+        pathAbsolute = util.standardizePath(pathAbsolute);
         let file = this.getFile(pathAbsolute);
 
         //notify every context of this file removal
@@ -390,7 +402,7 @@ export class Program {
      * @param pathAbsolute
      */
     private getFile(pathAbsolute: string) {
-        pathAbsolute = util.normalizeFilePath(pathAbsolute);
+        pathAbsolute = util.standardizePath(pathAbsolute);
         return this.files[pathAbsolute];
     }
 
@@ -480,17 +492,20 @@ export class Program {
         return file.getHover(position);
     }
 
-    public async transpile(fileMaps: Array<{ src: string; dest: string; }>) {
+    public async transpile(fileEntries: StandardizedFileEntry[], stagingFolderPath: string) {
         let promises = Object.keys(this.files).map(async (filePath) => {
             let file = this.files[filePath];
             if (file.needsTranspiled) {
                 let result = file.transpile();
-                let filePathObj = fileMaps.find(x => util.normalizeFilePath(x.src) === util.normalizeFilePath(file.pathAbsolute));
+                let filePathObj = fileEntries.find(x => util.standardizePath(x.src) === util.standardizePath(file.pathAbsolute));
                 if (!filePathObj) {
                     throw new Error(`Cannot find fileMap record in fileMaps for '${file.pathAbsolute}'`);
                 }
 
+                //replace the file extension
                 let outputCodePath = filePathObj.dest.replace(new RegExp('\.bs$'), '.brs');
+                //prepend the staging folder path
+                outputCodePath = util.standardizePath(`${stagingFolderPath}/${outputCodePath}`);
                 let outputCodeMapPath = outputCodePath + '.map';
 
                 //make sure the full dir path exists
@@ -521,3 +536,11 @@ export class Program {
 }
 
 export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined>;
+
+async function asdf() {
+    let program = new Program({});
+    let file = await program.addOrReplaceFile('C:/projects/DemoApp/source/main.brs');
+    await file.isReady;
+    //file.ast is a private property.
+    let ast = (file as any).ast;
+}

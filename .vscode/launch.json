@@ -8,15 +8,16 @@
             "name": "Debug Tests",
             "type": "node",
             "request": "launch",
-            "preLaunchTask": "build",
+            // "preLaunchTask": "build",
             "smartStep": false,
             "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
             "args": [
                 "-r",
                 "ts-node/register",
+                // "--log-error",
                 "-r",
                 "source-map-support/register",
-                "./src/**/Util.spec.ts"
+                "./src/**/Program.spec.ts"
             ],
             "cwd": "${workspaceRoot}",
             "protocol": "inspector",

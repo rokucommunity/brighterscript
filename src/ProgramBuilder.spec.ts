@@ -10,7 +10,7 @@ import util from './util';
 
 let sinon = sinonImport.createSandbox();
 let rootDir = process.cwd();
-let n = util.normalizeFilePath.bind(util);
+let n = util.standardizePath.bind(util);
 
 describe('ProgramBuilder', () => {
     afterEach(() => {
@@ -97,7 +97,7 @@ describe('ProgramBuilder', () => {
             sinon.stub(util, 'getFilePaths').returns(
                 Promise.resolve([{
                     src: n(`${rootDir}/source/main.brs`),
-                    dest: 'source/main.brs'
+                    dest: util.standardizePkgPath('source/main.brs')
                 }])
             );
             let options = {

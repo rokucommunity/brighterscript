@@ -225,9 +225,9 @@ describe('XmlFile', () => {
 
         //TODO - refine this test once cdata scripts are supported
         it('prevents context completions entirely', async () => {
-            await program.addOrReplaceFile(`${rootDir}/components/Component1.brs`, ``);
+            await program.addOrReplaceFile({ src: `${rootDir}/components/Component1.brs`, dest: 'components/component1.brs' }, ``);
 
-            let file = await program.addOrReplaceFile(`${rootDir}/components/Component1.xml`, `
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/components/Component1.xml`, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="GrandparentScene">
                     <script type="text/brightscript" uri="./Component1.brs" />

@@ -30,7 +30,7 @@ export class BrsFile {
     constructor(
         public pathAbsolute: string,
         /**
-         * The absolute path to the file, relative to the pkg
+         * The full pkg path to this file
          */
         public pkgPath: string,
         public program: Program

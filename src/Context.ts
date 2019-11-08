@@ -112,7 +112,7 @@ export class Context {
         return Object.keys(this.files).length;
     }
     public getFile(filePath: string) {
-        filePath = util.normalizeFilePath(filePath);
+        filePath = util.standardizePath(filePath);
         return this.files[filePath];
     }
 

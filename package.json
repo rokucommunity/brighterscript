@@ -82,7 +82,7 @@
     "tslint-eslint-rules": "^5.4.0",
     "tslint-no-unused-expression-chai": "^0.1.4",
     "tslint-origin-ordered-imports-rule": "^1.1.2",
-    "typescript": "^3.5.3",
+    "typescript": "^3.6.4",
     "vscode-jsonrpc": "^4.0.0"
   },
   "dependencies": {
@@ -99,7 +99,7 @@
     "luxon": "^1.8.3",
     "moment": "^2.23.0",
     "p-settle": "^2.1.0",
-    "roku-deploy": "^2.3.0",
+    "roku-deploy": "file:../roku-deploy",
     "source-map": "^0.7.3",
     "vscode-languageserver": "^5.2.1",
     "vscode-uri": "^1.0.6",

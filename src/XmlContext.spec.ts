@@ -28,7 +28,7 @@ describe('XmlContext', () => {
         it('handles file-removed event when file does not have component name', async () => {
             xmlFile.parentName = 'Scene';
             xmlFile.componentName = 'ParentComponent';
-            let namelessComponent = await program.addOrReplaceFile(`${rootDir}/components/child.xml`, `
+            let namelessComponent = await program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component extends="ParentComponent">
                 </component>
@@ -45,7 +45,7 @@ describe('XmlContext', () => {
         it('listens for attach/detach parent events', () => {
             let parentXmlFile = new XmlFile(n(`${rootDir}/components/parent.xml`), n('components/parent.xml'), program);
             let parentContext = new XmlContext(parentXmlFile);
-            program.contexts[parentContext.name] = parentContext;
+            (program as any).contexts[parentContext.name] = parentContext;
 
             //should default to platform context
             expect(context.parentContext).to.equal(program.platformContext);
@@ -61,12 +61,12 @@ describe('XmlContext', () => {
 
     describe('getDefinition', () => {
         it('finds parent file', async () => {
-            let parentXmlFile = await program.addOrReplaceFile(`${rootDir}/components/parent.xml`, `
+            let parentXmlFile = await program.addOrReplaceFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentComponent">
                 </component>
             `);
-            let childXmlFile = await program.addOrReplaceFile(`${rootDir}/components/child.xml`, `
+            let childXmlFile = await program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildComponent" extends="ParentComponent">
                 </component>

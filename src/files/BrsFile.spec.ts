@@ -12,6 +12,7 @@ import { StringType } from '../types/StringType';
 import { BrsFile } from './BrsFile';
 
 let sinon = sinonImport.createSandbox();
+
 describe('BrsFile', () => {
     let rootDir = process.cwd();
     let program: Program;
@@ -33,7 +34,7 @@ describe('BrsFile', () => {
 
     describe('getCompletions', () => {
         it('waits for the file to be processed before collecting completions', async () => {
-            (program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            (program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     print "hello"
                     Say
@@ -50,7 +51,7 @@ describe('BrsFile', () => {
         });
 
         it('does not provide duplicate entries for variables', async () => {
-            (program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            (program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     name = "bob"
                     age = 12
@@ -65,7 +66,7 @@ describe('BrsFile', () => {
         });
 
         it('does not include `as` and `string` text options when used in function params', async () => {
-            (program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            (program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
 
                 end sub
@@ -77,7 +78,7 @@ describe('BrsFile', () => {
         });
 
         it('does not provide intellisense results when inside a comment', async () => {
-            (program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            (program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                     'this is a comment
                 end sub
@@ -92,7 +93,7 @@ describe('BrsFile', () => {
     describe('comment flags', () => {
         describe('bs:disable-next-line', () => {
             it('works for all', async () => {
-                let file: BrsFile = (await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                let file: BrsFile = (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line
                         name = "bob
@@ -110,7 +111,7 @@ describe('BrsFile', () => {
             });
 
             it('works for specific codes', async () => {
-                let file: BrsFile = (await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                let file: BrsFile = (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line: 1000, 1001
                         name = "bob
@@ -127,7 +128,7 @@ describe('BrsFile', () => {
             });
 
             it('adds diagnostics for unknown diagnostic codes', async () => {
-                await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         print "hi" 'bs:disable-line: 123456 999999   aaaab
                     end sub
@@ -151,7 +152,7 @@ describe('BrsFile', () => {
 
         describe('bs:disable-line', () => {
             it('works for all', async () => {
-                let file: BrsFile = (await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                let file: BrsFile = (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         name = "bob 'bs:disable-line
                     end sub
@@ -168,7 +169,7 @@ describe('BrsFile', () => {
             });
 
             it('works for specific codes', async () => {
-                await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         'should not have any errors
                         DoSomething(1) 'bs:disable-line:1002
@@ -191,7 +192,7 @@ describe('BrsFile', () => {
                 //the current version of BRS causes parse errors after the `parse` keyword, showing error in comments
                 //the program should ignore all diagnostics found in brs:* comment lines EXCEPT
                 //for the diagnostics about using unknown error codes
-                await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+                await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         stop 'bs:disable-line
                         print "need a valid line to fix stop error"
@@ -205,7 +206,7 @@ describe('BrsFile', () => {
 
     describe('parse', () => {
         it('supports labels and goto statements', async () => {
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     'multiple goto statements on one line
                     goto myLabel : goto myLabel
@@ -216,7 +217,7 @@ describe('BrsFile', () => {
         });
 
         it('supports empty print statements', async () => {
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                    print
                 end sub
@@ -225,7 +226,7 @@ describe('BrsFile', () => {
         });
 
         it('supports single-word #elseif and #endif', async () => {
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     #const someFlag = true
                     #if someFlag
@@ -239,7 +240,7 @@ describe('BrsFile', () => {
         });
 
         it('supports multi-word #else if and #end if', async () => {
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     #const someFlag = true
                     #if someFlag
@@ -253,7 +254,7 @@ describe('BrsFile', () => {
         });
 
         it('does not choke on invalid code inside a false conditional compile', async () => {
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     #if false
                         non-commented code here should not cause parse errors
@@ -264,7 +265,7 @@ describe('BrsFile', () => {
         });
 
         it('supports stop statement', async () => {
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                    stop
                 end sub
@@ -273,7 +274,7 @@ describe('BrsFile', () => {
         });
 
         it('supports single-line if statements', async () => {
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     if 1 < 2: return true: end if
                     if 1 < 2: return true
@@ -1129,7 +1130,7 @@ describe('BrsFile', () => {
 
     describe('getHover', () => {
         it('works for param types', async () => {
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething(name as string)
                     name = 1
                     sayMyName = function(name as string)
@@ -1150,7 +1151,7 @@ describe('BrsFile', () => {
 
         //ignore this for now...it's not a huge deal
         it.skip('does not match on keywords or data types', async () => {
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                 end sub
                 sub as()
@@ -1163,7 +1164,7 @@ describe('BrsFile', () => {
         });
 
         it('finds declared function', async () => {
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 function Main(count = 1)
                     firstName = "bob"
                     age = 21
@@ -1179,7 +1180,7 @@ describe('BrsFile', () => {
         });
 
         it('finds variable function hover in same scope', async () => {
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     sayMyName = sub(name as string)
                     end sub
@@ -1195,7 +1196,7 @@ describe('BrsFile', () => {
         });
 
         it('finds function hover in file scope', async () => {
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     sayMyName()
                 end sub
@@ -1217,13 +1218,13 @@ describe('BrsFile', () => {
                 rootDir: rootDir
             });
 
-            let mainFile = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let mainFile = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     sayMyName()
                 end sub
             `);
 
-            await program.addOrReplaceFile(`${rootDir}/source/lib.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub sayMyName(name as string)
 
                 end sub
@@ -1237,7 +1238,7 @@ describe('BrsFile', () => {
         });
 
         it('handles mixed case `then` partions of conditionals', async () => {
-            let mainFile = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let mainFile = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     if true then
                         print "works"
@@ -1246,7 +1247,7 @@ describe('BrsFile', () => {
             `);
 
             expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
-            mainFile = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            mainFile = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     if true Then
                         print "works"
@@ -1255,7 +1256,7 @@ describe('BrsFile', () => {
             `);
             expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
 
-            mainFile = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            mainFile = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     if true THEN
                         print "works"
@@ -1476,7 +1477,7 @@ describe('BrsFile', () => {
         async function testTranspile(source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'trim') {
             let formatter = null; //new BrightScriptFormatter();
             expected = expected ? expected : source;
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, source) as BrsFile;
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, source) as BrsFile;
             let firstDiagnosticMessage = file.getDiagnostics().length > 0 ? file.getDiagnostics()[0].message : '';
             expect(file.getDiagnostics()).to.be.lengthOf(0, `Found parse errors: '${firstDiagnosticMessage}'`);
             let transpiled = file.transpile();

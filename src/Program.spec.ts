@@ -1,6 +1,5 @@
 import { assert, expect } from 'chai';
 import * as pick from 'object.pick';
-import * as path from 'path';
 import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 
@@ -11,9 +10,10 @@ import { XmlFile } from './files/XmlFile';
 import { Diagnostic } from './interfaces';
 import { Program } from './Program';
 import util from './util';
-let n = path.normalize;
+let n = util.standardizePath.bind(util);
+let npkg = util.standardizePkgPath.bind(util);
 
-let testProjectsPath = path.join(__dirname, '..', 'testProjects');
+let testProjectsPath = n(`${__dirname}/../testProjects`);
 
 let sinon = sinonImport.createSandbox();
 let rootDir = process.cwd();
@@ -36,13 +36,6 @@ describe('Program', () => {
         });
     });
 
-    describe('getPkgPath', () => {
-        it('is unaffected by different drive letter cases', () => {
-            program.rootDir = n('C:/projects/app1');
-            expect(program.getPkgPath(n('c:/projects/app1/source/main.brs'))).to.equal(`source${path.sep}main.brs`);
-        });
-    });
-
     describe('addFile', () => {
         describe('fileResolvers', () => {
             it('loads brs file contents from disk when necessary', async () => {
@@ -51,16 +44,16 @@ describe('Program', () => {
 
                 //resolve lib.brs from memory instead of going to disk
                 program.fileResolvers.push((pathAbsolute) => {
-                    if (pathAbsolute === util.normalizeFilePath(`${rootDir}/source/lib.brs`)) {
+                    if (pathAbsolute === util.standardizePath(`${rootDir}/source/lib.brs`)) {
                         return `'comment`;
                     }
                 });
-                await program.addOrReplaceFile(`${rootDir}/source/lib.brs`);
+                await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' });
 
                 expect(stub.called).to.be.false;
 
                 //load main.brs from disk
-                await program.addOrReplaceFile(`${rootDir}/source/main.brs`);
+                await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' });
                 expect(stub.called).to.be.true;
             });
 
@@ -69,14 +62,14 @@ describe('Program', () => {
                 expect(stub.called).to.be.false;
 
                 program.fileResolvers.push((pathAbsolute) => {
-                    if (pathAbsolute === util.normalizeFilePath(`${rootDir}/components/A.xml`)) {
+                    if (pathAbsolute === util.standardizePath(`${rootDir}/components/A.xml`)) {
                         return `<?xml version="1.0" encoding="utf-8" ?>`;
                     }
                 });
-                await program.addOrReplaceFile(`${rootDir}/components/A.xml`);
+                await program.addOrReplaceFile({ src: `${rootDir}/components/A.xml`, dest: 'components/A.xml' });
                 expect(stub.called).to.be.false;
 
-                await program.addOrReplaceFile(`${rootDir}/components/B.brs`);
+                await program.addOrReplaceFile({ src: `${rootDir}/components/B.brs`, dest: 'components/B.brs' });
                 expect(stub.called).to.be.true;
 
             });
@@ -98,7 +91,7 @@ describe('Program', () => {
             it('still adds the file even when it errors', async () => {
                 try {
                     //add a file, which will immediately error during parse (because of the beforeEach above)
-                    await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `'comment`);
+                    await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `'comment`);
                     assert.fail(null, null, 'Should have thrown exception');
                 } catch (e) {
                     //the file should still be in the files list
@@ -108,37 +101,37 @@ describe('Program', () => {
         });
 
         it('works with different cwd', async () => {
-            let projectDir = path.join(testProjectsPath, 'project2');
+            let projectDir = n(`${testProjectsPath}/project2`);
             let program = new Program({ cwd: projectDir });
-            await program.addOrReplaceFile('source/lib.brs', 'function main()\n    print "hello world"\nend function');
+            await program.addOrReplaceFile({ src: 'source/lib.brs', dest: 'source/lib.brs' }, 'function main()\n    print "hello world"\nend function');
             // await program.reloadFile('source/lib.brs', `'this is a comment`);
             //if we made it to here, nothing exploded, so the test passes
         });
 
         it('adds files in the source folder to the global context', async () => {
-            expect(program.contexts.global).to.exist;
+            expect(program.getContextByName('global')).to.exist;
             //no files in global context
-            expect(program.contexts.global.fileCount).to.equal(0);
+            expect(program.getContextByName('global').fileCount).to.equal(0);
 
-            let mainPath = path.normalize(`${rootDir}/source/main.brs`);
+            let mainPath = n(`${rootDir}/source/main.brs`);
             //add a new source file
-            await program.addOrReplaceFile(mainPath, '');
+            await program.addOrReplaceFile({ src: mainPath, dest: 'source/main.brs' }, '');
             //file should be in global context now
-            expect(program.contexts.global.getFile(mainPath)).to.exist;
+            expect(program.getContextByName('global').getFile(mainPath)).to.exist;
 
             //add an unreferenced file from the components folder
-            await program.addOrReplaceFile(`${rootDir}/components/component1/component1.brs`, '');
+            await program.addOrReplaceFile({ src: `${rootDir}/components/component1/component1.brs`, dest: 'components/component1/component1.brs' }, '');
 
             //global context should have the same number of files
-            expect(program.contexts.global.getFile(mainPath)).to.exist;
-            expect(program.contexts.global.getFile(`${rootDir}/components/component1/component1.brs`)).not.to.exist;
+            expect(program.getContextByName('global').getFile(mainPath)).to.exist;
+            expect(program.getContextByName('global').getFile(`${rootDir}/components/component1/component1.brs`)).not.to.exist;
         });
 
         it('normalizes file paths', async () => {
             let filePath = `${rootDir}/source\\main.brs`;
-            await program.addOrReplaceFile(filePath, '');
+            await program.addOrReplaceFile({ src: filePath, dest: 'source/main.brs' }, '');
 
-            expect(program.contexts.global.getFile(filePath)).to.exist;
+            expect(program.getContextByName('global').getFile(filePath)).to.exist;
 
             //shouldn't throw an exception because it will find the correct path after normalizing the above path and remove it
             try {
@@ -157,7 +150,7 @@ describe('Program', () => {
     describe('validate', () => {
         it('does not produce duplicate parse errors for different component scopes', async () => {
             //add a file with a parse error
-            await program.addOrReplaceFile(`${rootDir}/components/lib.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, `
                 sub DoSomething()
                     'random out-of-place open paren, definitely causes parse error
                     (
@@ -165,13 +158,13 @@ describe('Program', () => {
             `);
 
             //add 2 components which both reference the same errored file
-            await program.addOrReplaceFile(`${rootDir}/components/component1.xml`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/lib.brs" />
                 </component>
             `);
-            await program.addOrReplaceFile(`${rootDir}/components/component2.xml`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/component2.xml`, dest: 'components/component2.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component2" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/lib.brs" />
@@ -186,32 +179,32 @@ describe('Program', () => {
 
         it('detects scripts not loaded by any file', async () => {
             //add a main file for sanity check
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, '');
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
             await program.validate();
             expect(program.getDiagnostics()).to.be.lengthOf(0);
 
             //add the orphaned file
-            await program.addOrReplaceFile(`${rootDir}/components/lib.brs`, '');
+            await program.addOrReplaceFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, '');
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
             expect(diagnostics[0].code).to.equal(diagnosticMessages.File_not_referenced_by_any_file_1013().code);
         });
         it('does not throw errors on shadowed init functions in components', async () => {
-            await program.addOrReplaceFile(`${rootDir}/lib.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `
                 function DoSomething()
                     return true
                 end function
             `);
 
-            await program.addOrReplaceFile(`${rootDir}/components/Parent.xml`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/Parent.xml`, dest: 'components/Parent.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Parent" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/lib.brs" />
                 </component>
             `);
 
-            await program.addOrReplaceFile(`${rootDir}/components/Child.xml`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/Child.xml`, dest: 'components/Child.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Child" extends="Parent">
                 </component>
@@ -223,7 +216,7 @@ describe('Program', () => {
 
         it('recognizes platform function calls', async () => {
             expect(program.getDiagnostics().length).to.equal(0);
-            await program.addOrReplaceFile(`${rootDir}/source/file.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/file.brs`, dest: 'source/file.brs' }, `
                 function DoB()
                     sleep(100)
                 end function
@@ -236,21 +229,21 @@ describe('Program', () => {
         });
 
         it('shows warning when a child component imports the same script as its parent', async () => {
-            await program.addOrReplaceFile(`${rootDir}/components/parent.xml`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/lib.brs" />
                 </component>
             `);
 
-            await program.addOrReplaceFile(`${rootDir}/components/child.xml`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="pkg:/lib.brs" />
                 </component>
             `);
 
-            await program.addOrReplaceFile(`${rootDir}/lib.brs`, `'comment`);
+            await program.addOrReplaceFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `'comment`);
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
@@ -259,22 +252,22 @@ describe('Program', () => {
         });
 
         it('adds info diag when child component method shadows parent component method', async () => {
-            await program.addOrReplaceFile(`${rootDir}/components/parent.xml`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/parent.brs" />
                 </component>
             `);
 
-            await program.addOrReplaceFile(`${rootDir}/components/child.xml`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="pkg:/child.brs" />
                 </component>
             `);
 
-            await program.addOrReplaceFile(`${rootDir}/parent.brs`, `sub DoSomething()\nend sub`);
-            await program.addOrReplaceFile(`${rootDir}/child.brs`, `sub DoSomething()\nend sub`);
+            await program.addOrReplaceFile({ src: `${rootDir}/parent.brs`, dest: 'parent.brs' }, `sub DoSomething()\nend sub`);
+            await program.addOrReplaceFile({ src: `${rootDir}/child.brs`, dest: 'child.brs' }, `sub DoSomething()\nend sub`);
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
@@ -282,29 +275,29 @@ describe('Program', () => {
         });
 
         it('does not add info diagnostic on shadowed "init" functions', async () => {
-            await program.addOrReplaceFile(`${rootDir}/components/parent.xml`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/parent.brs" />
                 </component>
             `);
 
-            await program.addOrReplaceFile(`${rootDir}/components/child.xml`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="pkg:/child.brs" />
                 </component>
             `);
 
-            await program.addOrReplaceFile(`${rootDir}/parent.brs`, `sub Init()\nend sub`);
-            await program.addOrReplaceFile(`${rootDir}/child.brs`, `sub Init()\nend sub`);
+            await program.addOrReplaceFile({ src: `${rootDir}/parent.brs`, dest: 'parent.brs' }, `sub Init()\nend sub`);
+            await program.addOrReplaceFile({ src: `${rootDir}/child.brs`, dest: 'child.brs' }, `sub Init()\nend sub`);
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(0);
         });
 
         it('catches duplicate methods in single file', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
                 sub DoSomething()
@@ -316,11 +309,11 @@ describe('Program', () => {
         });
 
         it('catches duplicate methods across multiple files', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
             `);
-            await program.addOrReplaceFile(`${rootDir}/source/lib.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub DoSomething()
                 end sub
             `);
@@ -330,28 +323,28 @@ describe('Program', () => {
         });
 
         it('maintains correct callables list', async () => {
-            let initialCallableCount = program.contexts.global.getAllCallables().length;
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            let initialCallableCount = program.getContextByName('global').getAllCallables().length;
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
                 sub DoSomething()
                 end sub
             `);
-            expect(program.contexts.global.getAllCallables().length).equals(initialCallableCount + 2);
+            expect(program.getContextByName('global').getAllCallables().length).equals(initialCallableCount + 2);
             //set the file contents again (resetting the wasProcessed flag)
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
                 sub DoSomething()
                 end sub
                 `);
-            expect(program.contexts.global.getAllCallables().length).equals(initialCallableCount + 2);
+            expect(program.getContextByName('global').getAllCallables().length).equals(initialCallableCount + 2);
             program.removeFile(`${rootDir}/source/main.brs`);
-            expect(program.contexts.global.getAllCallables().length).equals(initialCallableCount);
+            expect(program.getContextByName('global').getAllCallables().length).equals(initialCallableCount);
         });
 
         it('resets errors on revalidate', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
                 sub DoSomething()
@@ -360,7 +353,7 @@ describe('Program', () => {
             await program.validate();
             expect(program.getDiagnostics().length).to.equal(2);
             //set the file contents again (resetting the wasProcessed flag)
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
                 sub DoSomething()
@@ -370,7 +363,7 @@ describe('Program', () => {
             expect(program.getDiagnostics().length).to.equal(2);
 
             //load in a valid file, the errors should go to zero
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
             `);
@@ -380,7 +373,7 @@ describe('Program', () => {
 
         it('identifies invocation of unknown function', async () => {
             //call a function that doesn't exist
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     name = "Hello"
                     DoSomething(name)
@@ -393,12 +386,12 @@ describe('Program', () => {
         });
 
         it('detects methods from another file in a subdirectory', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     DoSomething()
                 end sub
             `);
-            await program.addOrReplaceFile(`${rootDir}/source/ui/lib.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/ui/lib.brs`, dest: 'source/ui/lib.brs' }, `
                 function DoSomething()
                     print "hello world"
                 end function
@@ -411,7 +404,7 @@ describe('Program', () => {
     describe('hasFile', () => {
         it('recognizes when it has a file loaded', async () => {
             expect(program.hasFile('file1.brs')).to.be.false;
-            await program.addOrReplaceFile('file1.brs', `'comment`);
+            await program.addOrReplaceFile({ src: 'file1.brs', dest: 'file1.brs' }, `'comment`);
             expect(program.hasFile('file1.brs')).to.be.true;
         });
     });
@@ -422,75 +415,76 @@ describe('Program', () => {
             program.on('file-removed', () => {
                 callCount++;
             });
-            await program.addOrReplaceFile(`${rootDir}/lib.brs`, `'comment`);
+            await program.addOrReplaceFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `'comment`);
             expect(callCount).to.equal(0);
-            await program.addOrReplaceFile(`${rootDir}/lib.brs`, `'comment`);
+            await program.addOrReplaceFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `'comment`);
             expect(callCount).to.equal(1);
         });
 
         it('links xml contexts based on xml parent-child relationships', async () => {
-            await program.addOrReplaceFile(n(`${rootDir}/components/ParentScene.xml`), `
+            await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                 </component>
             `);
 
             //create child component
-            await program.addOrReplaceFile(n(`${rootDir}/components/ChildScene.xml`), `
+            await program.addOrReplaceFile({ src: n(`${rootDir}/components/ChildScene.xml`), dest: 'components/ChildScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                 </component>
             `);
 
-            expect(program.contexts[n('components/ChildScene.xml')].parentContext.name).to.equal(n('components/ParentScene.xml'));
+            expect(program.getContextByName('components/ChildScene.xml').parentContext.name).to.equal(npkg('components/ParentScene.xml'));
 
             //change the parent's name.
-            await program.addOrReplaceFile(n(`${rootDir}/components/ParentScene.xml`), `
+            await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="NotParentScene" extends="Scene">
                 </component>
             `);
 
             //The child context should no longer have the link to the parent context, and should instead point back to platform
-            expect(program.contexts[n('components/ChildScene.xml')].parentContext.name).to.equal('platform');
+            expect(program.getContextByName('components/ChildScene.xml').parentContext.name).to.equal('platform');
         });
 
         it('creates a new context for every added component xml', async () => {
             //we have global callables, so get that initial number
-            await program.addOrReplaceFile(`${rootDir}/components/component1.xml`, '');
-            expect(program.contexts).to.have.property(`components${path.sep}component1.xml`);
+            await program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, '');
+            expect(program.getContextByName(`components/component1.xml`)).to.exist;
 
-            await program.addOrReplaceFile(`${rootDir}/components/component1.xml`, '');
-            await program.addOrReplaceFile(`${rootDir}/components/component2.xml`, '');
-            expect(program.contexts).to.have.property(`components${path.sep}component1.xml`);
-            expect(program.contexts).to.have.property(`components${path.sep}component2.xml`);
+            await program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, '');
+            await program.addOrReplaceFile({ src: `${rootDir}/components/component2.xml`, dest: 'components/component2.xml' }, '');
+            expect(program.getContextByName(`components/component1.xml`)).to.exist;
+            expect(program.getContextByName(`components/component2.xml`)).to.exist;
         });
 
         it('includes referenced files in xml contexts', async () => {
-            let xmlPath = path.resolve(`${rootDir}/components/component1.xml`);
-            await program.addOrReplaceFile(xmlPath, `
+            let xmlPath = n(`${rootDir}/components/component1.xml`);
+            await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);
-            let brsPath = path.resolve(`${rootDir}/components/component1.brs`);
-            await program.addOrReplaceFile(brsPath, '');
+            let brsPath = n(`${rootDir}/components/component1.brs`);
+            await program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
 
-            let context = program.contexts[`components${path.sep}component1.xml`];
-            expect(context.getFile(xmlPath).file.pkgPath).to.equal(`components${path.sep}component1.xml`);
-            expect(context.getFile(brsPath).file.pkgPath).to.equal(`components${path.sep}component1.brs`);
+            let context = program.getContextByName(`components/component1.xml`);
+            let normalizedPkgPath = n(`components/component1.xml`);
+            expect(context.getFile(xmlPath).file.pkgPath).to.equal(util.standardizePkgPath(`components/component1.xml`));
+            expect(context.getFile(brsPath).file.pkgPath).to.equal(util.standardizePkgPath(`components/component1.brs`));
         });
 
         it('adds xml file to files map', async () => {
             let xmlPath = `${rootDir}/components/component1.xml`;
-            await program.addOrReplaceFile(xmlPath, '');
+            await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, '');
             expect(program.getFileByPathAbsolute(xmlPath)).to.exist;
         });
 
         it('detects missing script reference', async () => {
             let xmlPath = `${rootDir}/components/component1.xml`;
-            await program.addOrReplaceFile(xmlPath, `
+            await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
@@ -507,15 +501,15 @@ describe('Program', () => {
         });
 
         it('adds warning instead of error on mismatched upper/lower case script import', async () => {
-            let xmlPath = path.resolve(`${rootDir}/components/component1.xml`);
-            await program.addOrReplaceFile(xmlPath, `
+            let xmlPath = n(`${rootDir}/components/component1.xml`);
+            await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);
-            let brsPath = path.resolve(`${rootDir}/components/COMPONENT1.brs`);
-            await program.addOrReplaceFile(brsPath, '');
+            let brsPath = n(`${rootDir}/components/COMPONENT1.brs`);
+            await program.addOrReplaceFile({ src: brsPath, dest: 'components/COMPONENT1.brs' }, '');
 
             //validate
             await program.validate();
@@ -528,8 +522,8 @@ describe('Program', () => {
     describe('reloadFile', () => {
         it('picks up new files in a context when an xml file is loaded', async () => {
             program.options.ignoreErrorCodes.push(1013);
-            let xmlPath = path.normalize(`${rootDir}/components/component1.xml`);
-            await program.addOrReplaceFile(xmlPath, `
+            let xmlPath = n(`${rootDir}/components/component1.xml`);
+            await program.addOrReplaceFile({ src: xmlPath, dest: 'components/comonent1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
@@ -541,13 +535,13 @@ describe('Program', () => {
             });
 
             //add the file, the error should go away
-            let brsPath = path.normalize(`${rootDir}/components/component1.brs`);
-            await program.addOrReplaceFile(brsPath, '');
+            let brsPath = n(`${rootDir}/components/component1.brs`);
+            await program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
             await program.validate();
             expect(program.getDiagnostics()).to.be.empty;
 
             //add the xml file back in, but change the component brs file name. Should have an error again
-            await program.addOrReplaceFile(xmlPath, `
+            await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
                     <script type="text/brightscript" uri="pkg:/components/component2.brs" />
@@ -560,11 +554,11 @@ describe('Program', () => {
         });
 
         it('handles when the brs file is added before the component', async () => {
-            let brsPath = path.normalize(`${rootDir}/components/component1.brs`);
-            await program.addOrReplaceFile(brsPath, '');
+            let brsPath = n(`${rootDir}/components/component1.brs`);
+            await program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
 
-            let xmlPath = path.normalize(`${rootDir}/components/component1.xml`);
-            let xmlFile = await program.addOrReplaceFile(xmlPath, `
+            let xmlPath = n(`${rootDir}/components/component1.xml`);
+            let xmlFile = await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
@@ -572,16 +566,16 @@ describe('Program', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics()).to.be.empty;
-            expect(program.contexts[xmlFile.pkgPath].getFile(brsPath)).to.exist;
+            expect(program.getContextByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
         });
 
         it('reloads referenced fles when xml file changes', async () => {
             program.options.ignoreErrorCodes.push(1013);
-            let brsPath = util.normalizeFilePath(`${rootDir}/components/component1.brs`);
-            await program.addOrReplaceFile(brsPath, '');
+            let brsPath = util.standardizePath(`${rootDir}/components/component1.brs`);
+            await program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
 
-            let xmlPath = path.normalize(`${rootDir}/components/component1.xml`);
-            let xmlFile = await program.addOrReplaceFile(xmlPath, `
+            let xmlPath = n(`${rootDir}/components/component1.xml`);
+            let xmlFile = await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
 
@@ -589,24 +583,24 @@ describe('Program', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics()).to.be.empty;
-            expect(program.contexts[xmlFile.pkgPath].getFile(brsPath)).not.to.exist;
+            expect(program.getContextByName(xmlFile.pkgPath).getFile(brsPath)).not.to.exist;
 
             //reload the xml file contents, adding a new script reference.
-            xmlFile = await program.addOrReplaceFile(xmlPath, `
+            xmlFile = await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);
 
-            expect(program.contexts[xmlFile.pkgPath].getFile(brsPath)).to.exist;
+            expect(program.getContextByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
 
         });
     });
 
     describe('getCompletions', () => {
         it('filters out text results for top-level function statements', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 function Main()
                     age = 1
                 end function
@@ -616,7 +610,7 @@ describe('Program', () => {
         });
 
         it('does not filter text results for object properties used in conditional statements', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     p.
                 end sub
@@ -632,7 +626,7 @@ describe('Program', () => {
         });
 
         it('does not filter text results for object properties used in assignments', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     p.
                 end sub
@@ -646,7 +640,7 @@ describe('Program', () => {
         });
 
         it('does not filter text results for object properties', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     p.
                 end sub
@@ -660,7 +654,7 @@ describe('Program', () => {
         });
 
         it('filters out text results for local vars used in conditional statements', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -676,7 +670,7 @@ describe('Program', () => {
         });
 
         it('filters out text results for local variable assignments', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -689,7 +683,7 @@ describe('Program', () => {
         });
 
         it('filters out text results for local variables used in assignments', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -703,7 +697,7 @@ describe('Program', () => {
         });
 
         it('does not suggest local variables when initiated to the right of a period', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 function Main()
                     helloMessage = "jack"
                     person.hello
@@ -714,15 +708,15 @@ describe('Program', () => {
         });
 
         it('finds all file paths when initiated on xml uri', async () => {
-            let xmlPath = path.normalize(`${rootDir}/components/component1.xml`);
-            await program.addOrReplaceFile(xmlPath, `
+            let xmlPath = n(`${rootDir}/components/component1.xml`);
+            await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="" />
                 </component>
             `);
-            let brsPath = path.normalize(`${rootDir}/components/component1.brs`);
-            await program.addOrReplaceFile(brsPath, '');
+            let brsPath = n(`${rootDir}/components/component1.brs`);
+            await program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
             let completions = await program.getCompletions(xmlPath, Position.create(3, 58));
             expect(completions[0]).to.include({
                 kind: CompletionItemKind.File,
@@ -740,14 +734,14 @@ describe('Program', () => {
     describe('xml inheritance', () => {
         it('handles parent-child attach and detach', async () => {
             //create parent component
-            let parentFile = await program.addOrReplaceFile(n(`${rootDir}/components/ParentScene.xml`), `
+            let parentFile = await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                 </component>
             `);
 
             //create child component
-            let childFile = await program.addOrReplaceFile(n(`${rootDir}/components/ChildScene.xml`), `
+            let childFile = await program.addOrReplaceFile({ src: n(`${rootDir}/components/ChildScene.xml`), dest: 'components/ChildScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                 </component>
@@ -757,7 +751,7 @@ describe('Program', () => {
             expect((childFile as XmlFile).parent).to.equal(parentFile);
 
             //change the name of the parent
-            parentFile = await program.addOrReplaceFile(n(`${rootDir}/components/ParentScene.xml`), `
+            parentFile = await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="NotParentScene" extends="Scene">
                 </component>
@@ -769,20 +763,20 @@ describe('Program', () => {
 
         it('provides child components with parent functions', async () => {
             //create parent component
-            await program.addOrReplaceFile(n(`${rootDir}/components/ParentScene.xml`), `
+            await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                 </component>
             `);
 
             //create child component
-            await program.addOrReplaceFile(n(`${rootDir}/components/ChildScene.xml`), `
+            await program.addOrReplaceFile({ src: n(`${rootDir}/components/ChildScene.xml`), dest: 'components/ChildScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="ChildScene.brs" />
                 </component>
             `);
-            await program.addOrReplaceFile(`${rootDir}/components/ChildScene.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/ChildScene.brs`, dest: 'components/ChildScene.brs' }, `
                 sub Init()
                     DoParentThing()
                 end sub
@@ -797,14 +791,14 @@ describe('Program', () => {
             });
 
             //add the script into the parent
-            await program.addOrReplaceFile(n(`${rootDir}/components/ParentScene.xml`), `
+            await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                     <script type="text/brightscript" uri="ParentScene.brs" />
                 </component>
             `);
 
-            await program.addOrReplaceFile(`${rootDir}/components/ParentScene.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/ParentScene.brs`, dest: 'components/ParentScene.brs' }, `
                 sub DoParentThing()
 
                 end sub
@@ -818,13 +812,13 @@ describe('Program', () => {
 
     describe('xml context', () => {
         it.skip('does not fail on base components with many children', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/lib.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub DoSomething()
                 end sub
             `);
 
             //add a brs file with invalid syntax
-            await program.addOrReplaceFile(`${rootDir}/components/base.xml`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/components/base.xml`, dest: 'components/base.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="BaseScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
@@ -833,7 +827,7 @@ describe('Program', () => {
             let childCount = 20;
             //add many children, we should never encounter an error
             for (let i = 0; i < childCount; i++) {
-                await program.addOrReplaceFile(`${rootDir}/components/child${i}.xml`, `
+                await program.addOrReplaceFile({ src: `${rootDir}/components/child${i}.xml`, dest: 'components/child${i}.xml' }, `
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="Child${i}" extends="BaseScene">
                         <script type="text/brightscript" uri="pkg:/source/lib.brs" />
@@ -852,41 +846,41 @@ describe('Program', () => {
 
         it('detects script import changes', async () => {
             //create the xml file without script imports
-            let xmlFile = await program.addOrReplaceFile(`${rootDir}/components/component.xml`, `
+            let xmlFile = await program.addOrReplaceFile({ src: `${rootDir}/components/component.xml`, dest: 'components/component.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MyScene" extends="Scene">
                 </component>
             `);
 
             //the component context should only have the xml file
-            expect(program.contexts[xmlFile.pkgPath].fileCount).to.equal(1);
+            expect(program.getContextByName(xmlFile.pkgPath).fileCount).to.equal(1);
 
             //create the lib file
-            let libFile = await program.addOrReplaceFile(`${rootDir}/source/lib.brs`, `'comment`);
+            let libFile = await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `'comment`);
 
             //change the xml file to have a script import
-            xmlFile = await program.addOrReplaceFile(`${rootDir}/components/component.xml`, `
+            xmlFile = await program.addOrReplaceFile({ src: `${rootDir}/components/component.xml`, dest: 'components/component.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MyScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                 </component>
             `);
-            let ctx = program.contexts[xmlFile.pkgPath];
+            let ctx = program.getContextByName(xmlFile.pkgPath);
             //the component context should have the xml file AND the lib file
             expect(ctx.fileCount).to.equal(2);
             expect(ctx.getFile(xmlFile.pathAbsolute)).to.exist;
             expect(ctx.getFile(libFile.pathAbsolute)).to.exist;
 
             //reload the xml file again, removing the script import.
-            xmlFile = await program.addOrReplaceFile(`${rootDir}/components/component.xml`, `
+            xmlFile = await program.addOrReplaceFile({ src: `${rootDir}/components/component.xml`, dest: 'components/component.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MyScene" extends="Scene">
                 </component>
             `);
 
             //the context should again only have the xml file loaded
-            expect(program.contexts[xmlFile.pkgPath].fileCount).to.equal(1);
-            expect(program.contexts[xmlFile.pkgPath]).to.exist;
+            expect(program.getContextByName(xmlFile.pkgPath).fileCount).to.equal(1);
+            expect(program.getContextByName(xmlFile.pkgPath)).to.exist;
         });
     });
 
@@ -894,8 +888,8 @@ describe('Program', () => {
         it('finds file in source folder', async () => {
             expect(program.getFileByPkgPath('source/main.brs')).not.to.exist;
             expect(program.getFileByPkgPath('source/main2.brs')).not.to.exist;
-            await program.addOrReplaceFile(`${rootDir}/source/main2.brs`, '');
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, '');
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main2.brs`, dest: 'source/main2.brs' }, '');
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
             expect(program.getFileByPkgPath(n('source/main.brs'))).to.exist;
             expect(program.getFileByPkgPath(n('source/main2.brs'))).to.exist;
         });
@@ -903,7 +897,7 @@ describe('Program', () => {
 
     describe('removeFiles', () => {
         it('removes files by absolute paths', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, '');
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
             expect(program.getFileByPkgPath(n('source/main.brs'))).to.exist;
             program.removeFiles([`${rootDir}/source/main.brs`]);
             expect(program.getFileByPkgPath('source/main.brs')).not.to.exist;
@@ -913,18 +907,18 @@ describe('Program', () => {
     describe('addOrReplaceFiles', () => {
         it('adds multiple files', async () => {
             expect(Object.keys(program.files).length).to.equal(0);
-            let brsFile = n(`${rootDir}/components/comp1.brs`.toLowerCase());
-            let xmlFile = n(`${rootDir}/components/comp1.xml`.toLowerCase());
+            let brsFilePath = n(`${rootDir}/components/comp1.brs`.toLowerCase());
+            let xmlFilePath = n(`${rootDir}/components/comp1.xml`.toLowerCase());
             program.fileResolvers.push(async (filePath) => {
-                if (filePath.toLowerCase() === brsFile) {
+                if (filePath.toLowerCase() === n(brsFilePath)) {
                     return `'${filePath}`;
-                } else if (filePath.toLowerCase() === xmlFile) {
+                } else if (filePath.toLowerCase() === n(xmlFilePath)) {
                     return `<!--${filePath}`;
                 }
             });
             await program.addOrReplaceFiles([
-                brsFile,
-                xmlFile
+                { src: brsFilePath, dest: 'components/comp1.brs' },
+                { src: xmlFilePath, dest: 'components/comp1.xml' }
             ]);
             expect(Object.keys(program.files).length).to.equal(2);
         });
@@ -932,8 +926,8 @@ describe('Program', () => {
 
     describe('getDiagnostics', () => {
         it('includes diagnostics from files not included in any context', async () => {
-            let pathAbsolute = util.normalizeFilePath(`${rootDir}/components/a/b/c/main.brs`);
-            await program.addOrReplaceFile(pathAbsolute, `
+            let pathAbsolute = util.standardizePath(`${rootDir}/components/a/b/c/main.brs`);
+            await program.addOrReplaceFile({ src: pathAbsolute, dest: 'components/a/b/c/main.brs' }, `
                 sub A()
                     "this string is not terminated
                 end sub
@@ -948,7 +942,7 @@ describe('Program', () => {
 
         it('it excludes specified error codes', async () => {
             //declare file with two different syntax errors
-            await program.addOrReplaceFile(n(`${rootDir}/source/main.brs`), `
+            await program.addOrReplaceFile({ src: n(`${rootDir}/source/main.brs`), dest: 'source/main.brs' }, `
                 sub A()
                     'call with wrong param count
                     B(1,2,3)
@@ -977,11 +971,11 @@ describe('Program', () => {
         beforeEach(() => {
             //remove the platform stuff to simplify the tests
             program.platformContext = new Context('platform', () => false);
-            program.contexts.global.attachParentContext(program.platformContext);
+            program.getContextByName('global').attachParentContext(program.platformContext);
         });
 
         it('returns all functions in scope', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -989,7 +983,7 @@ describe('Program', () => {
                 sub ActionA()
                 end sub
             `);
-            await program.addOrReplaceFile(`${rootDir}/source/lib.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub ActionB()
                 end sub
             `);
@@ -1008,7 +1002,7 @@ describe('Program', () => {
         });
 
         it('returns all variables in scope', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     name = "bob"
                     age = 20
@@ -1017,7 +1011,7 @@ describe('Program', () => {
                 sub ActionA()
                 end sub
             `);
-            await program.addOrReplaceFile(`${rootDir}/source/lib.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub ActionB()
                 end sub
             `);
@@ -1036,12 +1030,12 @@ describe('Program', () => {
         });
 
         it('returns empty set when out of range', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, '');
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
             expect(program.getCompletions(`${rootDir}/source/main.brs`, Position.create(99, 99))).to.be.empty;
         });
 
         it('finds parameters', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(count = 1)
                     firstName = "bob"
                     age = 21

@@ -31,7 +31,7 @@ describe('Context', () => {
         it('correctly listens to program events', async () => {
             let context = new Context('some context', (file) => true);
 
-            let file = new BrsFile(util.normalizeFilePath(`${rootDir}/source/file.brs`), n('source/file.brs'), program);
+            let file = new BrsFile(util.standardizePath(`${rootDir}/source/file.brs`), n('source/file.brs'), program);
 
             //we're only testing events, so make this emitter look like a program
             let fakeProgram = new EventEmitter();
@@ -77,7 +77,7 @@ describe('Context', () => {
             program.platformContext = new Context('platform', () => false);
             program.contexts.global.attachParentContext(program.platformContext);
 
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: '/source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -85,7 +85,7 @@ describe('Context', () => {
                 sub ActionA()
                 end sub
             `);
-            await program.addOrReplaceFile(`${rootDir}/source/lib.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: '/source/lib.brs' }, `
                 sub ActionB()
                 end sub
             `);
@@ -121,7 +121,7 @@ describe('Context', () => {
         it('removes callables from list', async () => {
             let initCallableCount = context.getAllCallables().length;
             //add the file
-            let file = new BrsFile(util.normalizeFilePath(`${rootDir}/source/file.brs`), n('source/file.brs'), program);
+            let file = new BrsFile(util.standardizePath(`${rootDir}/source/file.brs`), n('source/file.brs'), program);
             await file.parse(`
                 function DoA()
                     print "A"
@@ -138,7 +138,7 @@ describe('Context', () => {
 
     describe('validate', () => {
         it('resolves local-variable function calls', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: '/source/main.brs' }, `
                 sub DoSomething()
                     sayMyName = function(name as string)
                     end function
@@ -151,7 +151,7 @@ describe('Context', () => {
         });
 
         it('detects local functions with same name as global', async () => {
-            await program.addOrReplaceFile(`${rootDir}/source/main.brs`, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: '/source/main.brs' }, `
                 sub Main()
                     SayHi = sub()
                         print "Hi from inner"
@@ -408,7 +408,7 @@ describe('Context', () => {
 
     describe('getDefinition', () => {
         it('returns empty list when there are no files', async () => {
-            let file = await program.addOrReplaceFile(`${rootDir}/source/main.brs`, '');
+            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
             let context = program.contexts.global;
             expect(context.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
         });

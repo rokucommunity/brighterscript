@@ -65,19 +65,35 @@ export class Util {
     /**
      * Make the path absolute, force drive letter to lower case, and replace all separators with the current OS's separators.
      *
-     * @param filePath
+     * @param thePath
      */
-    public normalizeFilePath(filePath: string) {
+    public standardizePath(thePath: string) {
+        if (!thePath) {
+            return thePath;
+        }
         return this.pathSepNormalize(
             path.resolve(
                 path.normalize(
                     this.lowerDrivePath(
-                        filePath
+                        thePath
                     )
                 )
             )
         );
         //for some weird reason, sometimes linux/mac doesn't replace windows slashes with 'nix ones, so do that manually
+    }
+
+    /**
+     * Remove common things from pkgPath
+     * @param pkgPath
+     */
+    public standardizePkgPath(pkgPath: string) {
+        pkgPath = this.pathSepNormalize(pkgPath);
+        //remove any leading file protocol
+        pkgPath = pkgPath.replace(/^\w+:/, '');
+        //remove any leading slash
+        pkgPath = pkgPath.replace(/^[\\\/]*/, '');
+        return pkgPath;
     }
 
     /**
@@ -618,9 +634,8 @@ export class Util {
      */
     public async getFilePaths(options: BsConfig) {
         let rootDir = this.getRootDir(options);
-        let stagingFolderPath = rokuDeploy.getOptions(options).stagingFolderPath;
 
-        let files = await rokuDeploy.getFilePaths(options.files, stagingFolderPath, rootDir);
+        let files = await rokuDeploy.getFilePaths(options.files, rootDir);
         return files;
     }
 
