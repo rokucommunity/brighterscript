@@ -29,11 +29,11 @@ export class Watcher {
         });
         this.watchers.push(watcher);
 
-        return () => {
+        return async () => {
             //unwatch all paths
             watcher.unwatch(paths);
             //close the watcher
-            watcher.close();
+            await watcher.close();
             //remove the watcher from our list
             this.watchers.splice(this.watchers.indexOf(watcher), 1);
         };
