@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as rokuDeploy from 'roku-deploy';
 import {
     CompletionItem,
     Connection,
@@ -671,7 +672,10 @@ export class LanguageServer {
                     //only add or replace existing files. All of the files in the project should
                     //have already been loaded by other means
                     if (x.builder.program.hasFile(filePath)) {
-                        await x.builder.program.addOrReplaceFile(filePath, documentText);
+                        await x.builder.program.addOrReplaceFile({
+                            src: filePath,
+                            dest: rokuDeploy.getDestPath(filePath, x.builder.program.options.files, x.builder.program.options.rootDir)
+                        }, documentText);
                     }
                 })
             );

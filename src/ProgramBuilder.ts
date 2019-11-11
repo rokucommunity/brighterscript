@@ -116,7 +116,7 @@ export class ProgramBuilder {
         //clear the console
         this.clearConsole();
 
-        let fileObjects = rokuDeploy.normalizeFilesOption(this.options.files ? this.options.files : []);
+        let fileObjects = rokuDeploy.normalizeFilesArray(this.options.files ? this.options.files : []);
 
         //add each set of files to the file watcher
         for (let fileObject of fileObjects) {
@@ -132,10 +132,14 @@ export class ProgramBuilder {
             let errorCount = this.getDiagnostics().length;
             util.log(`Found ${errorCount} errors. Watching for file changes.`);
         }, 50);
+
         //on any file watcher event
         this.watcher.on('all', async (event: string, path: string) => {
             if (event === 'add' || event === 'change') {
-                await this.program.addOrReplaceFile(path);
+                await this.program.addOrReplaceFile({
+                    src: util.standardizePath(path),
+                    dest: rokuDeploy.getDestPath(path, this.program.options.files, this.program.options.rootDir)
+                });
             } else if (event === 'unlink') {
                 this.program.removeFile(path);
             }
@@ -397,14 +401,20 @@ export class ProgramBuilder {
                 let filePaths = await getMatchingFilePaths();
                 //if our program wants this file, then load it
                 if (filePaths.map(x => util.standardizePath(x)).indexOf(util.standardizePath(pathAbsolute)) > -1) {
-                    await this.program.addOrReplaceFile(pathAbsolute);
+                    await this.program.addOrReplaceFile({
+                        src: pathAbsolute,
+                        dest: rokuDeploy.getDestPath(pathAbsolute, this.options.files, this.options.rootDir)
+                    });
                 }
             } else /*changed*/ {
                 if (this.program.hasFile(pathAbsolute)) {
                     //sometimes "changed" events are emitted on files that were actually deleted,
                     //so determine file existance and act accordingly
                     if (await util.fileExists(pathAbsolute)) {
-                        await this.program.addOrReplaceFile(pathAbsolute);
+                        await this.program.addOrReplaceFile({
+                            src: pathAbsolute,
+                            dest: rokuDeploy.getDestPath(pathAbsolute, this.program.options.files, this.program.options.rootDir)
+                        });
                     } else {
                         await this.program.removeFile(pathAbsolute);
                     }
@@ -447,7 +457,10 @@ export class ProgramBuilder {
                 src !== folderPathAbsolute &&
                 this.program.hasFile(src) === false
             ) {
-                promises.push(this.program.addOrReplaceFile(src));
+                promises.push(this.program.addOrReplaceFile({
+                    src: src,
+                    dest: rokuDeploy.getDestPath(src, this.program.options.files, this.program.options.rootDir)
+                }));
             }
         }
         await Promise.all(promises);

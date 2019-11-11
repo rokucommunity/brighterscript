@@ -536,11 +536,3 @@ export class Program {
 }
 
 export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined>;
-
-async function asdf() {
-    let program = new Program({});
-    let file = await program.addOrReplaceFile('C:/projects/DemoApp/source/main.brs');
-    await file.isReady;
-    //file.ast is a private property.
-    let ast = (file as any).ast;
-}

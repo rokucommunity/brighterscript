@@ -75,7 +75,8 @@ describe('Context', () => {
     describe('addFile', () => {
         it('detects callables from all loaded files', async () => {
             program.platformContext = new Context('platform', () => false);
-            program.contexts.global.attachParentContext(program.platformContext);
+            const globalContext = program.getContextByName('global');
+            globalContext.attachParentContext(program.platformContext);
 
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: '/source/main.brs' }, `
                 sub Main()
@@ -92,11 +93,11 @@ describe('Context', () => {
 
             await program.validate();
 
-            expect(program.contexts.global.hasFile(`${rootDir}/source/main.brs`));
-            expect(program.contexts.global.hasFile(`${rootDir}/source/lib.brs`));
+            expect(globalContext.hasFile(`${rootDir}/source/main.brs`));
+            expect(globalContext.hasFile(`${rootDir}/source/lib.brs`));
             expect(program.getDiagnostics()).to.be.lengthOf(0);
-            expect(program.contexts.global.getOwnCallables()).is.lengthOf(3);
-            expect(program.contexts.global.getAllCallables()).is.lengthOf(3);
+            expect(globalContext.getOwnCallables()).is.lengthOf(3);
+            expect(globalContext.getAllCallables()).is.lengthOf(3);
         });
 
         it('picks up new callables', async () => {
@@ -409,7 +410,7 @@ describe('Context', () => {
     describe('getDefinition', () => {
         it('returns empty list when there are no files', async () => {
             let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
-            let context = program.contexts.global;
+            let context = program.getContextByName('global');
             expect(context.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
         });
     });

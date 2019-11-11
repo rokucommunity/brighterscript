@@ -81,7 +81,7 @@ export class XmlContext extends Context {
     }
 
     private handleXmlFileParentAttach(file: XmlFile) {
-        let parentContext = this.program.contexts[file.pkgPath];
+        let parentContext = this.program.getContextByName(file.pkgPath);
         if (parentContext) {
             this.attachParentContext(parentContext);
         }

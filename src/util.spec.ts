@@ -129,6 +129,11 @@ describe('util', () => {
     });
 
     describe('normalizeConfig', () => {
+        it('uses cwd when no rootDir is specified', async () => {
+            let config = await util.normalizeAndResolveConfig({});
+            expect(config.rootDir).to.equal(process.cwd());
+        });
+
         it('loads project from disc', async () => {
             vfs[rootConfigPath] = `{"outFile": "customOutDir/pkg.zip"}`;
             let config = await util.normalizeAndResolveConfig({ project: rootConfigPath });

@@ -17,7 +17,7 @@
                 // "--log-error",
                 "-r",
                 "source-map-support/register",
-                "./src/**/Program.spec.ts"
+                "./src/**/LanguageServer.spec.ts"
             ],
             "cwd": "${workspaceRoot}",
             "protocol": "inspector",

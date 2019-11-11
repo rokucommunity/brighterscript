@@ -278,16 +278,17 @@ export class Util {
         config = config || {} as BsConfig;
         config.deploy = config.deploy === true ? true : false;
         //use default options from rokuDeploy
-        config.files = config.files ? config.files : rokuDeploy.getOptions().files;
+        config.files = config.files ?? rokuDeploy.getOptions().files;
         config.createPackage = config.createPackage === false ? false : true;
         let rootFolderName = path.basename(process.cwd());
-        config.outFile = config.outFile ? config.outFile : `./out/${rootFolderName}.zip`;
-        config.username = config.username ? config.username : 'rokudev';
+        config.outFile = config.outFile ?? `./out/${rootFolderName}.zip`;
+        config.username = config.username ?? 'rokudev';
         config.watch = config.watch === true ? true : false;
-        config.ignoreErrorCodes = config.ignoreErrorCodes ? config.ignoreErrorCodes : [];
+        config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
         config.emitFullPaths = config.emitFullPaths === true ? true : false;
         config.retainStagingFolder = config.retainStagingFolder === true ? true : false;
-        config.stagingFolderPath = config.stagingFolderPath ? config.stagingFolderPath : '.brighterscript-staging';
+        config.stagingFolderPath = config.stagingFolderPath ?? '.brighterscript-staging';
+        config.rootDir = config.rootDir ?? process.cwd();
         return config;
     }
 

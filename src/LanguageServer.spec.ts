@@ -144,7 +144,7 @@ describe('LanguageServer', () => {
         let workspacePath = n(`${rootDir}/TestRokuApp`);
         let mainPath = n(`${workspacePath}/source/main.brs`);
 
-        it('picks up new files', async () => {
+        it.only('picks up new files', async () => {
             workspaceFolders = [{
                 uri: getFileProtocolPath(workspacePath),
                 name: 'TestProject'
@@ -169,7 +169,7 @@ describe('LanguageServer', () => {
                 },
                 {
                     uri: getFileProtocolPath(path.join(workspacePath, 'source')),
-                    type: 2 //changedasdf
+                    type: 2 //changed
 
                 }
                     // ,{
