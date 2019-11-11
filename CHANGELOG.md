@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+
+## [0.3.1] - 2019-11-08
+### Fixed
+ - language server bug that was showing error messages in certain startup race conditions.
+ - error during hover caused by race condition during file re-parse.
+
+
+
 ## [0.3.0] - 2019-10-03
 ### Added
  - support for parsing opened files not included in any project. 

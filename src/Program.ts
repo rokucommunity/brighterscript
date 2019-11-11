@@ -482,14 +482,14 @@ export class Program {
         return results;
     }
 
-    public getHover(pathAbsolute: string, position: Position) {
+    public async getHover(pathAbsolute: string, position: Position) {
         //find the file
         let file = this.getFile(pathAbsolute);
         if (!file) {
             return null;
         }
 
-        return file.getHover(position);
+        return await file.getHover(position);
     }
 
     public async transpile(fileEntries: StandardizedFileEntry[], stagingFolderPath: string) {

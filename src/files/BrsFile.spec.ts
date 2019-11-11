@@ -1139,12 +1139,12 @@ describe('BrsFile', () => {
             `);
 
             //hover over the `name = 1` line
-            let hover = file.getHover(Position.create(2, 24));
+            let hover = await file.getHover(Position.create(2, 24));
             expect(hover).to.exist;
             expect(hover.range).to.eql(Range.create(2, 20, 2, 24));
 
             //hover over the `name` parameter declaration
-            hover = file.getHover(Position.create(1, 34));
+            hover = await file.getHover(Position.create(1, 34));
             expect(hover).to.exist;
             expect(hover.range).to.eql(Range.create(1, 32, 1, 36));
         });
@@ -1172,7 +1172,7 @@ describe('BrsFile', () => {
                 end function
             `);
 
-            let hover = file.getHover(Position.create(1, 28));
+            let hover = await file.getHover(Position.create(1, 28));
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(1, 25, 1, 29));
@@ -1189,7 +1189,7 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            let hover = file.getHover(Position.create(5, 24));
+            let hover = await file.getHover(Position.create(5, 24));
 
             expect(hover.range).to.eql(Range.create(5, 20, 5, 29));
             expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
@@ -1206,7 +1206,7 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            let hover = file.getHover(Position.create(2, 25));
+            let hover = await file.getHover(Position.create(2, 25));
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
             expect(hover.contents).to.equal('sub sayMyName() as void');
@@ -1230,7 +1230,7 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            let hover = mainFile.getHover(Position.create(2, 25));
+            let hover = await mainFile.getHover(Position.create(2, 25));
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
