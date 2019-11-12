@@ -900,8 +900,8 @@ describe('Program', () => {
             expect(program.getFileByPkgPath('source/main2.brs')).not.to.exist;
             await program.addOrReplaceFile({ src: `${rootDir}/source/main2.brs`, dest: 'source/main2.brs' }, '');
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
-            expect(program.getFileByPkgPath(n('source/main.brs'))).to.exist;
-            expect(program.getFileByPkgPath(n('source/main2.brs'))).to.exist;
+            expect(program.getFileByPkgPath('source/main.brs')).to.exist;
+            expect(program.getFileByPkgPath('source/main2.brs')).to.exist;
         });
     });
 

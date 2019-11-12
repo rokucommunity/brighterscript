@@ -326,6 +326,7 @@ export class Program {
      * If not found, return undefined
      */
     public getFileByPkgPath(pkgPath: string) {
+        pkgPath = util.pathSepNormalize(pkgPath);
         for (let filePath in this.files) {
             let file = this.files[filePath];
             if (util.standardizePath(file.pkgPath) === util.standardizePath(pkgPath)) {
