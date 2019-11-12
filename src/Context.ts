@@ -67,6 +67,7 @@ export class Context {
             disconnect();
         }
         this.detachParent();
+        (this as any)._isDisposed = true;
     }
 
     private parentContextHandles = [] as Array<() => void>;
@@ -90,7 +91,10 @@ export class Context {
         for (let disconnect of this.parentContextHandles) {
             disconnect();
         }
-        this.parentContext = this.program.platformContext;
+        //attach the platform context as the parent (except when this IS the platform context)
+        if (this.program.platformContext !== this) {
+            this.parentContext = this.program.platformContext;
+        }
     }
 
     /**

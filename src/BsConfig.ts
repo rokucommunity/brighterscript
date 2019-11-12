@@ -36,6 +36,10 @@ export interface BsConfig {
      */
     createPackage?: boolean;
     /**
+     * If true, the files are copied to staging. This setting is ignored when deploy is enabled or if createPackage is enabled
+     */
+    copyToStaging?: boolean;
+    /**
      * If true, the server will keep running and will watch and recompile on every file change
      * @default false
      */

@@ -14,6 +14,7 @@ afterEach(() => {
 
 import { Deferred } from './deferred';
 import { LanguageServer } from './LanguageServer';
+import { ProgramBuilder } from './ProgramBuilder';
 import { getFileProtocolPath } from './ProgramBuilder.spec';
 import util from './util';
 let rootDir = process.cwd();
@@ -137,6 +138,14 @@ describe('LanguageServer', () => {
             deferred.resolve();
             await p;
             //test passed because no exceptions were thrown
+        });
+    });
+
+    describe('createWorkspace', () => {
+        it('prevents creating package on first run', async () => {
+            s.connection = s.createConnection();
+            await s.createWorkspace(n(`${rootDir}/TestRokuApp`));
+            expect((s.workspaces[0].builder as ProgramBuilder).program.options.copyToStaging).to.be.false;
         });
     });
 

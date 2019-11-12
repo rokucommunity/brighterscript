@@ -331,7 +331,8 @@ export class LanguageServer {
             project: configFilePath,
             watch: false,
             createPackage: false,
-            deploy: false
+            deploy: false,
+            copyToStaging: false
         });
         firstRunPromise.catch((err) => {
             console.error(err);
@@ -397,7 +398,7 @@ export class LanguageServer {
         project.rootDir = cwd;
         project.files = [{
             src: filePathAbsolute,
-            dest: `source/${path.basename(filePathAbsolute)}`
+            dest: path.basename(filePathAbsolute)
         }];
 
         let firstRunPromise = builder.run({
@@ -406,7 +407,8 @@ export class LanguageServer {
             project: configFilePath,
             watch: false,
             createPackage: false,
-            deploy: false
+            deploy: false,
+            copyToStaging: false
         }).catch((err) => {
             console.error(err);
         });
@@ -540,6 +542,11 @@ export class LanguageServer {
         await this.sendDiagnostics();
     }
 
+    private getRootDir(workspace: Workspace) {
+        let options = workspace?.builder?.program?.options;
+        return options?.rootDir ?? options?.cwd;
+    }
+
     /**
      * Sometimes users will alter their bsconfig files array, and will include standalone files.
      * If this is the case, those standalone workspaces should be removed because the file was
@@ -555,8 +562,14 @@ export class LanguageServer {
             for (let workspace of this.workspaces) {
                 await standaloneWorkspace.firstRunPromise;
 
-                //destroy this standalone workspace because the file has now been included in an actual workspace
-                if (workspace.builder && workspace.builder.program && workspace.builder.program.hasFile(standaloneFilePath)) {
+                let dest = rokuDeploy.getDestPath(
+                    standaloneFilePath,
+                    workspace?.builder?.program?.options?.files ?? [],
+                    this.getRootDir(workspace)
+                );
+                //destroy this standalone workspace because the file has now been included in an actual workspace,
+                //or if the workspace wants the file
+                if (workspace?.builder?.program?.hasFile(standaloneFilePath) || dest) {
                     standaloneWorkspace.builder.dispose();
                     delete this.standaloneFileWorkspaces[standaloneFilePath];
                 }
@@ -569,7 +582,13 @@ export class LanguageServer {
             let filePath = Uri.parse(textDocument.uri).fsPath;
             let workspaces = this.getWorkspaces();
             for (let workspace of workspaces) {
-                if (workspace.builder && workspace.builder.program && workspace.builder.program.hasFile(filePath)) {
+                let dest = rokuDeploy.getDestPath(
+                    filePath,
+                    workspace?.builder?.program?.options?.files ?? [],
+                    this.getRootDir(workspace)
+                );
+                //if this workspace has the file, or it wants the file, do NOT make a standalone workspace for this file
+                if (workspace?.builder?.program?.hasFile(filePath) || dest) {
                     continue outer;
                 }
             }
@@ -613,6 +632,7 @@ export class LanguageServer {
                     workspacesToReload.push(workspace);
                 }
             }
+            //reload any workspaces that need to be reloaded
             await this.reloadWorkspaces(workspacesToReload);
         }
 
@@ -638,9 +658,9 @@ export class LanguageServer {
         let pathAbsolute = util.uriToPath(params.textDocument.uri);
         let workspaces = this.getWorkspaces();
         let hovers = await Promise.all(
-          Array.prototype.concat.call([],
-            workspaces.map((x) => x.builder.program.getHover(pathAbsolute, params.position))
-          )
+            Array.prototype.concat.call([],
+                workspaces.map((x) => x.builder.program.getHover(pathAbsolute, params.position))
+            )
         ) as Hover[];
 
         //return the first non-falsey hover. TODO is there a way to handle multiple hover results?
@@ -685,9 +705,11 @@ export class LanguageServer {
                     //only add or replace existing files. All of the files in the project should
                     //have already been loaded by other means
                     if (x.builder.program.hasFile(filePath)) {
+                        let rootDir = x.builder.program.options.rootDir ?? x.builder.program.options.cwd;
+                        let dest = rokuDeploy.getDestPath(filePath, x.builder.program.options.files, rootDir);
                         await x.builder.program.addOrReplaceFile({
                             src: filePath,
-                            dest: rokuDeploy.getDestPath(filePath, x.builder.program.options.files, x.builder.program.options.rootDir)
+                            dest: dest
                         }, documentText);
                     }
                 })
@@ -701,7 +723,7 @@ export class LanguageServer {
                 workspaces.map((x) => x.builder.program.validate())
             );
         } catch (e) {
-            this.sendCriticalFailure(`Critical error parsing/validating ${filePath}: ${e.message}`);
+            this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
         }
         await this.sendDiagnostics();
         this.connection.sendNotification('build-status', 'success');

@@ -304,34 +304,35 @@ export class ProgramBuilder {
     }
 
     private async createPackageIfEnabled() {
-
-        let options = util.cwdWork(this.options.cwd, () => {
-            return rokuDeploy.getOptions({
-                ...this.options,
-                outDir: util.getOutDir(this.options),
-                outFile: path.basename(this.options.outFile)
+        if (this.options.copyToStaging || this.options.createPackage || this.options.deploy) {
+            let options = util.cwdWork(this.options.cwd, () => {
+                return rokuDeploy.getOptions({
+                    ...this.options,
+                    outDir: util.getOutDir(this.options),
+                    outFile: path.basename(this.options.outFile)
+                });
             });
-        });
-        let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
+            let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
 
-        //exclude all BrighterScript files from publishing, because we will transpile them instead
-        options.files.push('!**/*.bs');
+            //exclude all BrighterScript files from publishing, because we will transpile them instead
+            options.files.push('!**/*.bs');
 
-        util.log('Copying to staging directory');
-        await rokuDeploy.prepublishToStaging(options);
+            util.log('Copying to staging directory');
+            await rokuDeploy.prepublishToStaging(options);
 
-        util.log('Transpiling');
-        //transpile any brighterscript files
-        await this.program.transpile(fileMap, options.stagingFolderPath);
+            util.log('Transpiling');
+            //transpile any brighterscript files
+            await this.program.transpile(fileMap, options.stagingFolderPath);
 
-        //create the zip file if configured to do so
-        if (this.options.createPackage !== false || this.options.deploy) {
-            util.log(`Creating package at ${this.options.outFile}`);
-            await rokuDeploy.zipPackage({
-                ...this.options,
-                outDir: util.getOutDir(this.options),
-                outFile: path.basename(this.options.outFile)
-            });
+            //create the zip file if configured to do so
+            if (this.options.createPackage !== false || this.options.deploy) {
+                util.log(`Creating package at ${this.options.outFile}`);
+                await rokuDeploy.zipPackage({
+                    ...this.options,
+                    outDir: util.getOutDir(this.options),
+                    outFile: path.basename(this.options.outFile)
+                });
+            }
         }
     }
 

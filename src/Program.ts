@@ -441,6 +441,10 @@ export class Program {
 
         //find the contexts for this file
         let contexts = this.getContextsForFile(file);
+
+        //if there are no contexts, include the platform context so we at least get the built-in functions
+        contexts = contexts.length > 0 ? contexts : [this.platformContext];
+
         //get the completions for this file for every context
 
         //get the completions from all contexts for this file

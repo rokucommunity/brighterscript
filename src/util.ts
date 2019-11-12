@@ -287,7 +287,7 @@ export class Util {
         config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
         config.emitFullPaths = config.emitFullPaths === true ? true : false;
         config.retainStagingFolder = config.retainStagingFolder === true ? true : false;
-        config.stagingFolderPath = config.stagingFolderPath ?? '.brighterscript-staging';
+        config.copyToStaging = config.copyToStaging === false ? false : true;
         return config;
     }
 

@@ -599,6 +599,16 @@ describe('Program', () => {
     });
 
     describe('getCompletions', () => {
+        it('inlcudes platform completions for file with no context', async () => {
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'main.brs' }, `
+                function Main()
+                    age = 1
+                end function
+            `);
+            let completions = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
+            expect(completions.filter(x => x.label.toLowerCase() === 'abs')).to.be.lengthOf(1);
+        });
+
         it('filters out text results for top-level function statements', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 function Main()

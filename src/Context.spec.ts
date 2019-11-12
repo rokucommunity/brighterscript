@@ -385,6 +385,14 @@ describe('Context', () => {
         });
     });
 
+    describe('detachParent', () => {
+        it('does not attach platform to itself', () => {
+            expect(program.platformContext.parentContext).to.be.undefined;
+            program.platformContext.detachParent();
+            expect(program.platformContext.parentContext).to.be.undefined;
+        });
+    });
+
     describe('shouldIncludeFile', () => {
         it('should detect whether to keep a file or not', () => {
             let context = new Context('testContext1', () => {
