@@ -138,7 +138,7 @@ export class ProgramBuilder {
             if (event === 'add' || event === 'change') {
                 await this.program.addOrReplaceFile({
                     src: util.standardizePath(path),
-                    dest: rokuDeploy.getDestPath(path, this.program.options.files, this.program.options.rootDir)
+                    dest: rokuDeploy.getDestPath(path, this.program.options.files, this.rootDir)
                 });
             } else if (event === 'unlink') {
                 this.program.removeFile(path);
@@ -146,6 +146,13 @@ export class ProgramBuilder {
             //wait for change events to settle, and then execute `run`
             debouncedRunOnce();
         });
+    }
+
+    /**
+     * Get the rootDir for this program
+     */
+    private get rootDir() {
+        return this.program.options.rootDir ? this.program.options.rootDir : this.program.options.cwd;
     }
 
     /**
@@ -403,7 +410,7 @@ export class ProgramBuilder {
                 if (filePaths.map(x => util.standardizePath(x)).indexOf(util.standardizePath(pathAbsolute)) > -1) {
                     await this.program.addOrReplaceFile({
                         src: pathAbsolute,
-                        dest: rokuDeploy.getDestPath(pathAbsolute, this.options.files, this.options.rootDir)
+                        dest: rokuDeploy.getDestPath(pathAbsolute, this.options.files, this.rootDir)
                     });
                 }
             } else /*changed*/ {
@@ -413,7 +420,7 @@ export class ProgramBuilder {
                     if (await util.fileExists(pathAbsolute)) {
                         await this.program.addOrReplaceFile({
                             src: pathAbsolute,
-                            dest: rokuDeploy.getDestPath(pathAbsolute, this.program.options.files, this.program.options.rootDir)
+                            dest: rokuDeploy.getDestPath(pathAbsolute, this.program.options.files, this.rootDir)
                         });
                     } else {
                         await this.program.removeFile(pathAbsolute);
@@ -459,7 +466,7 @@ export class ProgramBuilder {
             ) {
                 promises.push(this.program.addOrReplaceFile({
                     src: src,
-                    dest: rokuDeploy.getDestPath(src, this.program.options.files, this.program.options.rootDir)
+                    dest: rokuDeploy.getDestPath(src, this.program.options.files, this.rootDir)
                 }));
             }
         }

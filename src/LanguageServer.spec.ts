@@ -144,7 +144,7 @@ describe('LanguageServer', () => {
         let workspacePath = n(`${rootDir}/TestRokuApp`);
         let mainPath = n(`${workspacePath}/source/main.brs`);
 
-        it.only('picks up new files', async () => {
+        it('picks up new files', async () => {
             workspaceFolders = [{
                 uri: getFileProtocolPath(workspacePath),
                 name: 'TestProject'

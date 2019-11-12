@@ -288,7 +288,6 @@ export class Util {
         config.emitFullPaths = config.emitFullPaths === true ? true : false;
         config.retainStagingFolder = config.retainStagingFolder === true ? true : false;
         config.stagingFolderPath = config.stagingFolderPath ?? '.brighterscript-staging';
-        config.rootDir = config.rootDir ?? process.cwd();
         return config;
     }
 
