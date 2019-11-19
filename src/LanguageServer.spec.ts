@@ -18,7 +18,7 @@ import { Deferred } from './deferred';
 import { LanguageServer, Workspace } from './LanguageServer';
 import { ProgramBuilder } from './ProgramBuilder';
 import util from './util';
-let n = path.normalize;
+let n = util.standardizePath.bind(util);
 let rootDir = n(process.cwd());
 
 describe('LanguageServer', () => {

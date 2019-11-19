@@ -908,7 +908,7 @@ describe('Program', () => {
     describe('removeFiles', () => {
         it('removes files by absolute paths', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
-            expect(program.getFileByPkgPath(n('source/main.brs'))).to.exist;
+            expect(program.getFileByPkgPath('source/main.brs')).to.exist;
             program.removeFiles([`${rootDir}/source/main.brs`]);
             expect(program.getFileByPkgPath('source/main.brs')).not.to.exist;
         });
