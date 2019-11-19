@@ -1,3 +1,4 @@
+import * as glob from 'glob';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
 import {
@@ -7,6 +8,8 @@ import {
     Diagnostic,
     DidChangeConfigurationNotification,
     DidChangeWatchedFilesParams,
+    FileChangeType,
+    FileEvent,
     Hover,
     InitializeParams,
     Location,
@@ -623,10 +626,20 @@ export class LanguageServer {
 
         let workspaces = this.getWorkspaces();
 
+        //convert all file paths to absolute paths
+        let changes = params.changes.map(x => {
+            return {
+                type: x.type,
+                pathAbsolute: util.standardizePath(Uri.parse(x.uri).fsPath)
+            };
+        });
+
         //reload any workspace whose bsconfig.json file has changed
         {
             let workspacesToReload = [] as Workspace[];
-            let filePaths = params.changes.map((x) => util.uriToPath(x.uri));
+            //get the file paths as a string array
+            let filePaths = params.changes.map((x) => x.uri);
+
             for (let workspace of workspaces) {
                 if (workspace.configFilePath && filePaths.indexOf(workspace.configFilePath) > -1) {
                     workspacesToReload.push(workspace);
@@ -634,11 +647,48 @@ export class LanguageServer {
             }
             //reload any workspaces that need to be reloaded
             await this.reloadWorkspaces(workspacesToReload);
+
+            //set the list of workspaces to non-reloaded workspaces
+            workspaces = workspaces.filter(x => workspacesToReload.indexOf(x) === -1);
         }
+
+        //convert created folders into a list of files of their contents
+        const directoryChanges = changes
+            //get only creation items
+            .filter(change => change.type === FileChangeType.Created)
+            //keep only the directories
+            .filter(change => util.isDirectorySync(change.pathAbsolute));
+
+        //remove the created directories from the changes array (we will add back each of their files next)
+        changes = changes.filter(x => directoryChanges.indexOf(x) === -1);
+
+        //look up every file in each of the newly added directories
+        const newFileChanges = directoryChanges
+            //take just the path
+            .map(x => x.pathAbsolute)
+            //exclude the roku deploy staging folder
+            .filter(dirPath => dirPath.indexOf('.roku-deploy-staging') === -1)
+            //get the files for each folder recursively
+            .flatMap(dirPath => {
+                //create a glob pattern to match all files
+                let pattern = rokuDeploy.util.toForwardSlashes(`${dirPath}/**/*`);
+                let files = glob.sync(pattern, {
+                    absolute: true
+                });
+                return files.map(x => {
+                    return {
+                        type: FileChangeType.Created as FileChangeType,
+                        pathAbsolute: util.standardizePath(x)
+                    };
+                });
+            });
+
+        //add the new file changes to the changes array.
+        changes.push(...newFileChanges);
 
         //give every workspace the chance to handle file changes
         await Promise.all(
-            workspaces.map((x) => x.builder.handleFileChanges(params.changes))
+            workspaces.map((workspace) => this.handleFileChanges(workspace, changes))
         );
 
         //revalidate every program
@@ -649,6 +699,65 @@ export class LanguageServer {
         //send all diagnostics to the client
         await this.sendDiagnostics();
         this.connection.sendNotification('build-status', 'success');
+    }
+
+    /**
+     * This only operates on files that match the specified files globs, so it is safe to throw
+     * any file changes you receive with no unexpected side-effects
+     * @param changes
+     */
+    public async handleFileChanges(workspace: Workspace, changes: { type: FileChangeType; pathAbsolute: string; }[]) {
+        const program = workspace.builder.program;
+        const options = workspace.builder.options;
+        const rootDir = workspace.builder.rootDir;
+
+        //this loop assumes paths are both file paths and folder paths,
+        //Which eliminates the need to detect. All functions below can handle being given
+        //a file path AND a folder path, and will only operate on the one they are looking for
+        for (let change of changes) {
+            //deleted
+            if (change.type === FileChangeType.Deleted) {
+                //try to act on this path as a directory
+                workspace.builder.removeFilesInFolder(change.pathAbsolute);
+
+                //if this is a file loaded in the program, remove it
+                if (program.hasFile(change.pathAbsolute)) {
+                    program.removeFile(change.pathAbsolute);
+                }
+
+                //created
+            } else if (change.type === FileChangeType.Created) {
+                // thanks to `onDidChangeWatchedFiles`, we can safely assume that all "Created" changes are file paths, (not directories)
+
+                //get the dest path for this file.
+                let destPath = rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir);
+
+                //if we got a dest path, then the program wants this file
+                if (destPath) {
+                    await program.addOrReplaceFile({
+                        src: change.pathAbsolute,
+                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
+                    });
+                } else {
+                    //no dest path means the program doesn't want this file
+                }
+
+                //changed
+            } else {
+                if (program.hasFile(change.pathAbsolute)) {
+                    //sometimes "changed" events are emitted on files that were actually deleted,
+                    //so determine file existance and act accordingly
+                    if (await util.fileExists(change.pathAbsolute)) {
+                        await program.addOrReplaceFile({
+                            src: change.pathAbsolute,
+                            dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
+                        });
+                    } else {
+                        await program.removeFile(change.pathAbsolute);
+                    }
+                }
+            }
+        }
     }
 
     private async onHover(params: TextDocumentPositionParams) {
@@ -812,7 +921,7 @@ export class LanguageServer {
     }
 }
 
-interface Workspace {
+export interface Workspace {
     firstRunPromise: Promise<any>;
     builder: ProgramBuilder;
     workspacePath: string;

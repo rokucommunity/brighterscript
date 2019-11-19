@@ -14,7 +14,8 @@
         "noUnusedLocals": false,
         "allowSyntheticDefaultImports": true,
         "lib": [
-            "es2015"
+            "es2015",
+            "es2019.array"
         ]
     },
     "include": [

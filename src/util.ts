@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import * as fs from 'fs';
 import * as fsExtra from 'fs-extra';
 import { parse as parseJsonc, ParseError, parseTree, printParseErrorCode } from 'jsonc-parser';
 import * as moment from 'moment';
@@ -50,6 +51,13 @@ export class Util {
         } else {
             return await fsExtra.pathExists(filePath);
         }
+    }
+
+    /**
+     * Determine if this path is a directory
+     */
+    public isDirectorySync(dirPath: string | undefined) {
+        return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
     }
 
     /**

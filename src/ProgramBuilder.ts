@@ -24,7 +24,7 @@ export class ProgramBuilder {
      */
     public allowConsoleClearing = true;
 
-    private options: BsConfig;
+    public options: BsConfig;
     private isRunning = false;
     private watcher: Watcher;
     public program: Program;
@@ -151,7 +151,7 @@ export class ProgramBuilder {
     /**
      * Get the rootDir for this program
      */
-    private get rootDir() {
+    public get rootDir() {
         return this.program.options.rootDir ? this.program.options.rootDir : this.program.options.cwd;
     }
 
@@ -375,103 +375,16 @@ export class ProgramBuilder {
     }
 
     /**
-     * This only operates on files that match the specified files globs, so it is safe to throw
-     * any file changes you receive with no unexpected side-effects
-     * @param changes
-     */
-    public async handleFileChanges(changes: FileEvent[]) {
-        //lazy-load the list of file paths, and only once for this function call
-        let matchingFilePathsPromise: Promise<string[]>;
-        let getMatchingFilePaths = () => {
-            if (!matchingFilePathsPromise) {
-                matchingFilePathsPromise = util.getFilePaths(this.options).then((fileObjects) => {
-                    return fileObjects.map((obj) => obj.src);
-                });
-            }
-            return matchingFilePathsPromise;
-        };
-        //this loop assumes paths are both file paths and folder paths,
-        //Which eliminates the need to detect. All functions below can handle being given
-        //a file path AND a folder path, and will only operate on the one they are looking for
-        for (let change of changes) {
-            let pathAbsolute = util.standardizePath(Uri.parse(change.uri).fsPath);
-            //remove all files from any removed folder
-            if (change.type === FileChangeType.Deleted) {
-                //try to act on this path as a directory
-                await this.removeFilesInFolder(pathAbsolute);
-                //if this is a file loaded in the program, remove it
-                if (this.program.hasFile(pathAbsolute)) {
-                    this.program.removeFile(pathAbsolute);
-                }
-            } else if (change.type === FileChangeType.Created) {
-                //IF this path is a directory, load all matching missing files
-                await this.loadMissingFilesFromFolder(pathAbsolute);
-                let filePaths = await getMatchingFilePaths();
-                //if our program wants this file, then load it
-                if (filePaths.map(x => util.standardizePath(x)).indexOf(util.standardizePath(pathAbsolute)) > -1) {
-                    await this.program.addOrReplaceFile({
-                        src: pathAbsolute,
-                        dest: rokuDeploy.getDestPath(pathAbsolute, this.options.files, this.rootDir)
-                    });
-                }
-            } else /*changed*/ {
-                if (this.program.hasFile(pathAbsolute)) {
-                    //sometimes "changed" events are emitted on files that were actually deleted,
-                    //so determine file existance and act accordingly
-                    if (await util.fileExists(pathAbsolute)) {
-                        await this.program.addOrReplaceFile({
-                            src: pathAbsolute,
-                            dest: rokuDeploy.getDestPath(pathAbsolute, this.program.options.files, this.rootDir)
-                        });
-                    } else {
-                        await this.program.removeFile(pathAbsolute);
-                    }
-                }
-            }
-        }
-    }
-
-    /**
      * Remove all files from the program that are in the specified folder path
      * @param folderPathAbsolute
      */
-    public async removeFilesInFolder(folderPathAbsolute: string) {
+    public removeFilesInFolder(folderPathAbsolute: string) {
         for (let filePath in this.program.files) {
             //if the file path starts with the parent path and the file path does not exactly match the folder path
             if (filePath.indexOf(folderPathAbsolute) === 0 && filePath !== folderPathAbsolute) {
                 this.program.removeFile(filePath);
             }
         }
-    }
-
-    /**
-     * Load any files from the given folder that are not already loaded into the program.
-     * This is mainly used when folders get moved, but we also have some active changes in
-     * some of the files from the new location already
-     * @param folderPathAbsolute
-     */
-    public async loadMissingFilesFromFolder(folderPathAbsolute: string) {
-        folderPathAbsolute = util.standardizePath(folderPathAbsolute);
-        let allFilesObjects = await util.getFilePaths(this.options);
-
-        let promises = [] as Array<Promise<any>>;
-        //for every matching file
-        for (let fileObj of allFilesObjects) {
-            let src = util.standardizePath(fileObj.src);
-            if (
-                //file path starts with folder path
-                src.indexOf(folderPathAbsolute) === 0 &&
-                //paths are not identical (solves problem when passing file path into this method instead of folder path)
-                src !== folderPathAbsolute &&
-                this.program.hasFile(src) === false
-            ) {
-                promises.push(this.program.addOrReplaceFile({
-                    src: src,
-                    dest: rokuDeploy.getDestPath(src, this.program.options.files, this.rootDir)
-                }));
-            }
-        }
-        await Promise.all(promises);
     }
 
     /**

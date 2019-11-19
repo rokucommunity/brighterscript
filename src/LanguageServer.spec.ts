@@ -1,7 +1,8 @@
 import { expect } from 'chai';
 import * as fsExtra from 'fs-extra';
+import * as glob from 'glob';
 import * as path from 'path';
-import { TextDocumentSyncKind } from 'vscode-languageserver';
+import { DidChangeWatchedFilesParams, FileChangeType, TextDocumentSyncKind } from 'vscode-languageserver';
 
 import * as sinonImport from 'sinon';
 let sinon: sinonImport.SinonSandbox;
@@ -12,13 +13,13 @@ afterEach(() => {
     sinon.restore();
 });
 
+import { BsConfig } from './BsConfig';
 import { Deferred } from './deferred';
-import { LanguageServer } from './LanguageServer';
+import { LanguageServer, Workspace } from './LanguageServer';
 import { ProgramBuilder } from './ProgramBuilder';
-import { getFileProtocolPath } from './ProgramBuilder.spec';
 import util from './util';
-let rootDir = process.cwd();
 let n = path.normalize;
+let rootDir = n(process.cwd());
 
 describe('LanguageServer', () => {
     let server: LanguageServer;
@@ -190,4 +191,97 @@ describe('LanguageServer', () => {
             expect(server.workspaces[0].builder.program.hasFile(libPath)).to.be.true;
         });
     });
+
+    describe('handleFileChanges', () => {
+        it('only adds files that match the files array', async () => {
+            let addOrReplaceFileStub = sinon.stub().returns(Promise.resolve());
+            const workspace = {
+                builder: {
+                    options: {
+                        files: [
+                            'source/**/*'
+                        ]
+                    },
+                    rootDir: rootDir,
+                    program: {
+                        addOrReplaceFile: <any>addOrReplaceFileStub
+                    }
+                }
+            } as Workspace;
+
+            let mainPath = n(`${rootDir}/source/main.brs`);
+            // setVfsFile(mainPath, 'sub main()\nend sub');
+
+            await server.handleFileChanges(workspace, [{
+                type: <FileChangeType>FileChangeType.Created,
+                pathAbsolute: mainPath
+            }]);
+
+            expect(addOrReplaceFileStub.getCalls()[0].args[0]).to.eql({
+                src: mainPath,
+                dest: util.standardizePkgPath('source/main.brs')
+            });
+
+            let libPath = n(`${rootDir}/components/lib.brs`);
+
+            expect(addOrReplaceFileStub.callCount).to.equal(1);
+            await server.handleFileChanges(workspace, [{
+                type: <FileChangeType>FileChangeType.Created,
+                pathAbsolute: libPath
+            }]);
+            //the function should have ignored the lib file, so no additional files were added
+            expect(addOrReplaceFileStub.callCount).to.equal(1);
+        });
+    });
+
+    describe('onDidChangeWatchedFiles', () => {
+        it('converts folder paths into an array of file paths', async () => {
+            s.connection = {
+                sendNotification: () => { }
+            };
+            s.workspaces.push({
+                builder: {
+                    getDiagnostics: () => [],
+                    program: {
+                        validate: () => { }
+                    }
+                }
+            });
+
+            sinon.stub(util, 'isDirectorySync').returns(true);
+            sinon.stub(glob, 'sync').returns([
+                n(`${rootDir}/source/main.brs`),
+                n(`${rootDir}/source/lib.brs`)
+            ]);
+            const stub = sinon.stub(server, 'handleFileChanges').returns(Promise.resolve());
+
+            let sourcePath = n(`${rootDir}/source`);
+            await (server as any).onDidChangeWatchedFiles({
+                changes: [{
+                    type: FileChangeType.Created,
+                    uri: getFileProtocolPath(sourcePath)
+                }]
+            } as DidChangeWatchedFilesParams);
+
+            expect(stub.callCount).to.equal(1);
+
+            expect(stub.getCalls()[0].args[1]).to.eql([{
+                type: FileChangeType.Created,
+                pathAbsolute: n(`${rootDir}/source/main.brs`)
+            }, {
+                type: FileChangeType.Created,
+                pathAbsolute: n(`${rootDir}/source/lib.brs`)
+            }]);
+        });
+    });
 });
+
+export function getFileProtocolPath(fullPath: string) {
+    let result: string;
+    if (fullPath.indexOf('/') === 0 || fullPath.indexOf('\\') === 0) {
+        result = `file://${fullPath}`;
+    } else {
+        result = `file:///${fullPath}`;
+    }
+    return result;
+}

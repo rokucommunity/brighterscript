@@ -91,5 +91,10 @@
             "check-type-operator",
             "check-preblock"
         ]
+    },
+    "linterOptions": {
+        "exclude": [
+            "node_modules/**"
+        ]
     }
 }
