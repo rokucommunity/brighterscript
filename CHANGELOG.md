@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.4.0] - 2019-12-20
+### Added 
+ - ability to specify the pkgPath of a file when adding to the project. 
+### Changed
+ - upgraded to [roku-deploy@3.0.0-beta.5](https://www.npmjs.com/package/roku-deploy/v/3.0.0-beta.5)
+### Fixed
+ - reduced memory consumtion and FS calls during file watcher events
+ - issue in getFileByPkgPath related to path separator mismatches
+ - bugs related to standalone workspaces causing issues for other workspaces. 
+
+
 ## [0.3.1] - 2019-11-08
 ### Fixed
  - language server bug that was showing error messages in certain startup race conditions.
@@ -58,6 +69,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.4.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.3.1...v0.4.0
+[0.3.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.3.0...v0.3.1
 [0.3.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.2.2...v0.3.0
 [0.2.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.2.1...v0.2.2
 [0.2.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.2.0...v0.2.1
