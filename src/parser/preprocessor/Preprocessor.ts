@@ -29,10 +29,10 @@ export class Preprocessor implements CC.Visitor {
      * Emits an error via this processor's `events` property, then throws it.
      * @param err the ParseError to emit then throw
      */
-    private addError(err: BrsError): never {
+    private addError(err: BrsError) {
         this.errors.push(err);
         this.events.emit('err', err);
-        throw err;
+        return err;
     }
 
     /**
@@ -72,7 +72,7 @@ export class Preprocessor implements CC.Visitor {
      */
     public visitDeclaration(chunk: CC.Declaration) {
         if (this.constants.has(chunk.name.text)) {
-            return this.addError(
+            this.addError(
                 new BrsError(
                     `Attempting to re-declare #const with name '${chunk.name.text}'`,
                     chunk.name.location
@@ -94,14 +94,14 @@ export class Preprocessor implements CC.Visitor {
                     break;
                 }
 
-                return this.addError(
+                this.addError(
                     new BrsError(
                         `Attempting to create #const alias of '${chunk.value.text}', but no such #const exists`,
                         chunk.value.location
                     )
                 );
             default:
-                return this.addError(
+                this.addError(
                     new BrsError(
                         '#const declarations can only have values of `true`, `false`, or other #const names',
                         chunk.value.location
@@ -120,7 +120,7 @@ export class Preprocessor implements CC.Visitor {
      * @throws a JavaScript error with the provided message
      */
     public visitError(chunk: CC.Error): never {
-        return this.addError(new ParseError(chunk.hashError, chunk.message));
+        throw this.addError(new ParseError(chunk.hashError, chunk.message));
     }
 
     /**
@@ -171,14 +171,15 @@ export class Preprocessor implements CC.Visitor {
                     return this.constants.get(token.text) as boolean;
                 }
 
-                return this.addError(
+                this.addError(
                     new BrsError(
                         `Attempting to reference undefined #const with name '${token.text}'`,
                         token.location
                     )
                 );
+                break;
             default:
-                return this.addError(
+                this.addError(
                     new BrsError(
                         '#if conditionals can only be `true`, `false`, or other #const names',
                         token.location
