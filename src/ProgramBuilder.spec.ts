@@ -1,8 +1,8 @@
 import { expect } from 'chai';
+import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import * as sinonImport from 'sinon';
 import { FileChangeType } from 'vscode-languageserver';
-import * as fsExtra from 'fs-extra';
 
 import { BsConfig } from './BsConfig';
 import { Program } from './Program';
@@ -114,7 +114,7 @@ describe('ProgramBuilder', () => {
             });
             const diagnostics = builder.getDiagnostics();
             expect(diagnostics.map(x => x.message)).to.eql([]);
-            expect(builder.program.getFileByPathAbsolute(n(``)))
+            expect(builder.program.getFileByPathAbsolute(n(``)));
         });
     });
 });
