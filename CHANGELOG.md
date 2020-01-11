@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.4.1] - 2020-01-11
+### Changed
+ - upgraded to [roku-deploy@3.0.0-beta.7](https://www.npmjs.com/package/roku-deploy/v/3.0.0-beta.7) which fixed a critical bug during pkg creation.
+
+
+
 ## [0.4.0] - 2020-01-07
 ### Added 
  - ability to specify the pkgPath of a file when adding to the project. 
@@ -71,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.4.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.0...v0.4.1
 [0.4.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.3.1...v0.4.0
 [0.3.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.3.0...v0.3.1
 [0.3.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.2.2...v0.3.0
