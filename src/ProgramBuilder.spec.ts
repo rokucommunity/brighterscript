@@ -91,7 +91,7 @@ describe('ProgramBuilder', () => {
             }
         });
 
-        it.only('only adds the last file with the same pkg path', async () => {
+        it('only adds the last file with the same pkg path', async () => {
             //undo the vfs for this test
             sinon.restore();
             fsExtra.ensureDirSync(`${rootDir}/testProject/source`);
