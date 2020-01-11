@@ -98,7 +98,7 @@
     "luxon": "^1.8.3",
     "moment": "^2.23.0",
     "p-settle": "^2.1.0",
-    "roku-deploy": "^3.0.0-beta.6",
+    "roku-deploy": "^3.0.0-beta.7",
     "source-map": "^0.7.3",
     "vscode-languageserver": "^5.2.1",
     "vscode-uri": "^1.0.6",
