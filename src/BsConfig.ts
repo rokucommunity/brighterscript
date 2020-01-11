@@ -64,15 +64,6 @@ export interface BsConfig {
      */
     password?: string;
     /**
-     * A list of error codes the compiler should NOT emit, even if encountered.
-     */
-    ignoreErrorCodes?: number[];
-
-    /**
-     * Emit full paths to files when printing diagnostics to the console. Defaults to false
-     */
-    emitFullPaths?: boolean;
-    /**
      * Prevent the staging folder from being deleted after creating the package
      * @default false
      */
@@ -81,4 +72,12 @@ export interface BsConfig {
      * The path to the staging folder (where all files are copied to right before creating the zip package)
      */
     stagingFolderPath?: string;
+    /**
+     * A list of error codes the compiler should NOT emit, even if encountered.
+     */
+    ignoreErrorCodes?: number[];
+    /**
+     * Emit full paths to files when printing diagnostics to the console. Defaults to false
+     */
+    emitFullPaths?: boolean;
 }
