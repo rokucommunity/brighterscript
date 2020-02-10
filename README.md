@@ -98,9 +98,9 @@ These are the options available in the `bsconfig.json` file.
 
  - **watch**: `boolean` -  If true, the server will keep running and will watch and recompile on every file change.
 
- - **deploy**: `boolean` -  If true, after a success buld, the project will be deployed to the roku specified in host
+ - **deploy**: `boolean` -  If true, after a successful build, the project will be deployed to the Roku specified in host.
 
- - **host**: `string` -  The host of the Roku that this project will deploy to
+ - **host**: `string` -  The host of the Roku that this project will deploy to.
 
  - **username**: `string` - the username to use when deploying to a Roku device.
 
