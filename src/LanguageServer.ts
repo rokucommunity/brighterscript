@@ -1,3 +1,4 @@
+import 'array-flat-polyfill';
 import * as glob from 'glob';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
