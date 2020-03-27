@@ -8,10 +8,10 @@
     "watch": "rimraf out && tsc --watch",
     "prepublishOnly": "npm run build",
     "tslint": "tslint -p tsconfig.json -c tslint.json",
-    "test": "ts-mocha \"src/**/*.spec.ts\" --full-trace",
-    "test:coverage": "nyc mocha \"src/**/*.spec.ts\" --full-trace",
+    "test": "nyc mocha \"src/**/*.spec.ts\" --full-trace",
+    "test:nocover": "ts-mocha \"src/**/*.spec.ts\" --full-trace",
     "test:watch": "ts-mocha \"src/**/*.spec.ts\" --full-trace --watch --watch-extensions ts",
-    "report-coverage": "nyc report --reporter=text-lcov > coverage.lcov && codecov",
+    "publish-coverage": "nyc report --reporter=text-lcov | coveralls",
     "dep-graph": "madge --image graph.svg --extensions ts ./src/parser"
   },
   "files": [

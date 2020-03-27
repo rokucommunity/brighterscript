@@ -10,3 +10,4 @@ coverage
 *.zip
 graph.svg
 .history
+*.tgz
