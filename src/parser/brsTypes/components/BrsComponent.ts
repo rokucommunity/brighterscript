@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 import { BrsType } from "..";
 import { BrsInvalid, } from "../BrsType";
 import { Callable } from "../Callable";

@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 import { RoAssociativeArray } from "./RoAssociativeArray";
 import { RoArray } from "./RoArray";
 import { Timespan } from "./Timespan";

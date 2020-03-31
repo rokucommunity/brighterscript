@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 declare type Interpreter = any;
 import * as Brs from ".";
 import * as Expr from "../parser/Expression";

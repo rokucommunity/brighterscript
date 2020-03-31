@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 /**
  * Determines whether or not a single-character string is a base-10 digit.
  *

@@ -11,7 +11,7 @@
         "strictNullChecks": false,
         "preserveConstEnums": true,
         "downlevelIteration": true,
-        "noUnusedLocals": false,
+        "noUnusedLocals": true,
         "allowSyntheticDefaultImports": true,
         "lib": [
             "es2015",

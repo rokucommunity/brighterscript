@@ -2,8 +2,8 @@ import { BrsType } from './BrsType';
 
 export class DynamicType implements BrsType {
     public isAssignableTo(targetType: BrsType) {
-        //everything can be dynamic
-        return true;
+        //everything can be dynamic, so as long as a type is provided, this is true
+        return !!targetType;
     }
 
     /**
@@ -11,7 +11,8 @@ export class DynamicType implements BrsType {
      * @param targetType
      */
     public isConvertibleTo(targetType: BrsType) {
-        return true;
+        //everything can be dynamic, so as long as a type is provided, this is true
+        return !!targetType;
     }
 
     public toString() {

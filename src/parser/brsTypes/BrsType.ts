@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 import { BrsType } from ".";
 import { Boxable } from "./Boxing";
 import { RoString } from "./components/RoString";

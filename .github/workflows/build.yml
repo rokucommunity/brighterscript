@@ -16,7 +16,7 @@ jobs:
           node-version: "10.19.0"
       - run: npm ci
       - run: npm run build
-      - run: npm run tslint
+      - run: npm run lint
       - run: npm run test
       - run: npm run publish-coverage
   npm-release:

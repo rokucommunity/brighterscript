@@ -3,8 +3,12 @@ import * as fsExtra from 'fs-extra';
 import * as glob from 'glob';
 import * as path from 'path';
 import { DidChangeWatchedFilesParams, FileChangeType, TextDocumentSyncKind } from 'vscode-languageserver';
-
+import { Deferred } from './deferred';
+import { LanguageServer, Workspace } from './LanguageServer';
+import { ProgramBuilder } from './ProgramBuilder';
+import util from './util';
 import * as sinonImport from 'sinon';
+
 let sinon: sinonImport.SinonSandbox;
 beforeEach(() => {
     sinon = sinonImport.createSandbox();
@@ -13,11 +17,6 @@ afterEach(() => {
     sinon.restore();
 });
 
-import { BsConfig } from './BsConfig';
-import { Deferred } from './deferred';
-import { LanguageServer, Workspace } from './LanguageServer';
-import { ProgramBuilder } from './ProgramBuilder';
-import util from './util';
 let n = util.standardizePath.bind(util);
 let rootDir = n(process.cwd());
 
@@ -66,7 +65,9 @@ describe('LanguageServer', () => {
                 sendDiagnostics: () => null,
                 workspace: {
                     getWorkspaceFolders: () => workspaceFolders,
-                    getConfiguration: () => { return {}; }
+                    getConfiguration: () => {
+                        return {};
+                    }
                 }
             };
             return connection;
@@ -117,7 +118,7 @@ describe('LanguageServer', () => {
                 }
             });
             expect(s.clientHasWorkspaceFolderCapability).to.be.true;
-            await server.run();
+            server.run();
             let deferred = new Deferred();
             let workspace: any = {
                 builder: {
@@ -180,7 +181,6 @@ describe('LanguageServer', () => {
                 {
                     uri: getFileProtocolPath(path.join(workspacePath, 'source')),
                     type: 2 //changed
-
                 }
                     // ,{
                     //     uri: 'file:///c%3A/projects/PlumMediaCenter/Roku/appconfig.brs',
@@ -278,7 +278,7 @@ describe('LanguageServer', () => {
 
 export function getFileProtocolPath(fullPath: string) {
     let result: string;
-    if (fullPath.indexOf('/') === 0 || fullPath.indexOf('\\') === 0) {
+    if (fullPath.startsWith('/') || fullPath.startsWith('\\')) {
         result = `file://${fullPath}`;
     } else {
         result = `file:///${fullPath}`;

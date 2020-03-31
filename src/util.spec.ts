@@ -4,6 +4,8 @@ import * as sinonImport from 'sinon';
 
 import util from './util';
 
+//shorthand for normalizing a path
+let n = path.normalize;
 let sinon = sinonImport.createSandbox();
 let cwd = process.cwd();
 let rootConfigPath = path.join(process.cwd(), 'bsconfig.json');
@@ -14,8 +16,6 @@ function addFile(relativeFilePath: string, fileContents?: string) {
     vfs[absFilePath] = fileContents || '';
     return absFilePath;
 }
-//shorthand for normalizing a path
-let n = path.normalize;
 
 describe('util', () => {
     beforeEach(() => {
@@ -59,7 +59,7 @@ describe('util', () => {
         });
     });
 
-    describe('getConfigFilePath', async () => {
+    describe('getConfigFilePath', () => {
         it('returns undefined when it does not find the file', async () => {
             let configFilePath = await util.getConfigFilePath(path.join(process.cwd(), 'testProjects', 'project1'));
             expect(configFilePath).not.to.exist;
@@ -80,7 +80,7 @@ describe('util', () => {
             //sanity check
             expect(await util.getConfigFilePath()).not.to.exist;
 
-            let actualConfigPath = addFile('testProjects/project2/bsconfig.json');
+            addFile('testProjects/project2/bsconfig.json');
 
             let rootDir = path.join(cwd, 'testProjects', 'project2');
             process.chdir(rootDir);
@@ -107,7 +107,9 @@ describe('util', () => {
     describe('findClosestConfigFile', () => {
         beforeEach(() => {
             sinon.stub(util, 'fileExists').callsFake(async (filePath) => {
-                return Object.keys(vfs).indexOf(filePath) > -1;
+                return Promise.resolve(
+                    Object.keys(vfs).includes(filePath)
+                );
             });
         });
 
@@ -265,7 +267,9 @@ describe('util', () => {
                     id: 4,
                     name: 'bob'
                 }]
-            }, (x) => { return x.name === 'bob'; });
+            }, (x) => {
+                return x.name === 'bob';
+            });
 
             expect(results[0].key).to.eql('children.0');
             expect(results[0].value.id).to.eql(1);

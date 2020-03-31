@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 import { BrsType } from "../brsTypes";
 import { BrsError } from "../Error";
 import { Location } from "../lexer";

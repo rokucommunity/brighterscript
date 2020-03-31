@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 import { ValueKind, Comparable, BrsBoolean } from "./BrsType";
 import { BrsNumber, Numeric } from "./BrsNumber";
 import { BrsType } from "./";

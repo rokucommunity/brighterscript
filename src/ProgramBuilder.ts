@@ -2,11 +2,8 @@ import chalk from 'chalk';
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import { FileChangeType, FileEvent } from 'vscode-languageserver';
-import Uri from 'vscode-uri';
 
 import { BsConfig } from './BsConfig';
-import { diagnosticMessages } from './DiagnosticMessages';
 import { Diagnostic, File } from './interfaces';
 import { FileResolver, Program } from './Program';
 import util from './util';
@@ -16,9 +13,6 @@ import { Watcher } from './Watcher';
  * A runner class that handles
  */
 export class ProgramBuilder {
-
-    constructor() { }
-
     /**
      * Determines whether the console should be cleared after a run (true for cli, false for languageserver)
      */
@@ -72,7 +66,7 @@ export class ProgramBuilder {
         try {
             this.options = await util.normalizeAndResolveConfig(options);
         } catch (e) {
-            if (e && e.file && e.message && e.code) {
+            if (e?.file && e.message && e.code) {
                 let err = e as Diagnostic;
                 this.staticDiagnostics.push(err);
             } else {
@@ -83,7 +77,7 @@ export class ProgramBuilder {
 
             //we added diagnostics, so hopefully that draws attention to the underlying issues.
             //For now, just use a default options object so we have a functioning program
-            this.options = await util.normalizeConfig({});
+            this.options = util.normalizeConfig({});
         }
 
         this.program = new Program(this.options);
@@ -96,7 +90,7 @@ export class ProgramBuilder {
         if (this.options.watch) {
             util.log('Starting compilation in watch mode...');
             await this.runOnce();
-            await this.enableWatchMode();
+            this.enableWatchMode();
         } else {
             await this.runOnce();
         }
@@ -108,7 +102,7 @@ export class ProgramBuilder {
         }
     }
 
-    public async enableWatchMode() {
+    public enableWatchMode() {
         this.watcher = new Watcher(this.options);
         //keep the process alive indefinitely by setting an interval that runs once every 12 days
         setInterval(() => { }, 1073741824);
@@ -120,7 +114,7 @@ export class ProgramBuilder {
 
         //add each set of files to the file watcher
         for (let fileObject of fileObjects) {
-            let src = (typeof fileObject === 'string') ? fileObject : fileObject.src;
+            let src = typeof fileObject === 'string' ? fileObject : fileObject.src;
             this.watcher.watch(src);
         }
 
@@ -134,17 +128,17 @@ export class ProgramBuilder {
         }, 50);
 
         //on any file watcher event
-        this.watcher.on('all', async (event: string, path: string) => {
+        this.watcher.on('all', async (event: string, thePath: string) => { //eslint-disable-line @typescript-eslint/no-misused-promises
             if (event === 'add' || event === 'change') {
                 await this.program.addOrReplaceFile({
-                    src: util.standardizePath(path),
-                    dest: rokuDeploy.getDestPath(path, this.program.options.files, this.rootDir)
+                    src: util.standardizePath(thePath),
+                    dest: rokuDeploy.getDestPath(thePath, this.program.options.files, this.rootDir)
                 });
             } else if (event === 'unlink') {
-                this.program.removeFile(path);
+                this.program.removeFile(thePath);
             }
             //wait for change events to settle, and then execute `run`
-            debouncedRunOnce();
+            await debouncedRunOnce();
         });
     }
 
@@ -159,7 +153,9 @@ export class ProgramBuilder {
      * A method that is used to cancel a previous run task.
      * Does nothing if previous run has completed or was already canceled
      */
-    private cancelLastRun = () => { return Promise.resolve(); };
+    private cancelLastRun = () => {
+        return Promise.resolve();
+    };
 
     /**
      * Run the entire process exactly one time.
@@ -218,7 +214,7 @@ export class ProgramBuilder {
                 information: chalk.blue,
                 hint: chalk.green,
                 warning: chalk.yellow,
-                error: chalk.red,
+                error: chalk.red
 
             };
             if (this.options && this.options.emitFullPaths !== true) {
@@ -277,7 +273,9 @@ export class ProgramBuilder {
      */
     private async _runOnce(cancellationToken: { isCanceled: any }) {
         //maybe cancel?
-        if (cancellationToken.isCanceled === true) { return -1; }
+        if (cancellationToken.isCanceled === true) {
+            return -1;
+        }
 
         //validate program
         await this.validateProject();
@@ -285,7 +283,9 @@ export class ProgramBuilder {
         let errorCount = this.getDiagnostics().length;
 
         //maybe cancel?
-        if (cancellationToken.isCanceled === true) { return -1; }
+        if (cancellationToken.isCanceled === true) {
+            return -1;
+        }
 
         if (errorCount > 0) {
             return errorCount;
@@ -295,7 +295,9 @@ export class ProgramBuilder {
         await this.createPackageIfEnabled();
 
         //maybe cancel?
-        if (cancellationToken.isCanceled === true) { return -1; }
+        if (cancellationToken.isCanceled === true) {
+            return -1;
+        }
 
         //deploy the package
         await this.deployPackageIfEnabled();
@@ -361,7 +363,7 @@ export class ProgramBuilder {
                     let fileExtension = path.extname(file.src).toLowerCase();
 
                     //only process certain file types
-                    if (['.bs', '.brs', '.xml'].indexOf(fileExtension) > -1) {
+                    if (['.bs', '.brs', '.xml'].includes(fileExtension)) {
                         await this.program.addOrReplaceFile(file);
                     }
                 } catch (e) {
@@ -381,7 +383,7 @@ export class ProgramBuilder {
     public removeFilesInFolder(folderPathAbsolute: string) {
         for (let filePath in this.program.files) {
             //if the file path starts with the parent path and the file path does not exactly match the folder path
-            if (filePath.indexOf(folderPathAbsolute) === 0 && filePath !== folderPathAbsolute) {
+            if (filePath.startsWith(folderPathAbsolute) && filePath !== folderPathAbsolute) {
                 this.program.removeFile(filePath);
             }
         }

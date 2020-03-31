@@ -1,0 +1,156 @@
+module.exports = {
+    root: true,
+    parser: '@typescript-eslint/parser',
+    env: {
+        node: true,
+        mocha: true,
+        es6: true
+    },
+    parserOptions: {
+        project: './tsconfig.json'
+    },
+    plugins: [
+        '@typescript-eslint'
+    ],
+    extends: [
+        'eslint:all',
+        'plugin:@typescript-eslint/all'
+    ],
+    rules: {
+        '@typescript-eslint/array-type': 'off',
+        '@typescript-eslint/consistent-type-assertions': 'off',
+        '@typescript-eslint/explicit-function-return-type': 'off',
+        '@typescript-eslint/explicit-member-accessibility': 'off',
+        '@typescript-eslint/explicit-module-boundary-types': 'off',
+        '@typescript-eslint/member-ordering': 'off',
+        '@typescript-eslint/no-dynamic-delete': 'off',
+        '@typescript-eslint/no-empty-function': 'off',
+        '@typescript-eslint/no-explicit-any': 'off',
+        '@typescript-eslint/no-extra-parens': 'off',
+        '@typescript-eslint/no-floating-promises': 'error',
+        '@typescript-eslint/no-magic-numbers': 'off',
+        '@typescript-eslint/no-parameter-properties': 'off',
+        '@typescript-eslint/no-this-alias': 'off',
+        '@typescript-eslint/no-type-alias': 'off',
+        '@typescript-eslint/no-unnecessary-boolean-literal-compare': 'off',
+        '@typescript-eslint/no-unnecessary-condition': 'off',
+        '@typescript-eslint/no-unsafe-call': 'off',
+        '@typescript-eslint/no-unsafe-member-access': 'off',
+        '@typescript-eslint/no-unsafe-return': 'off',
+        '@typescript-eslint/no-use-before-define': 'off',
+        '@typescript-eslint/prefer-readonly': 'off',
+        '@typescript-eslint/prefer-readonly-parameter-types': 'off',
+        '@typescript-eslint/promise-function-async': 'off',
+        '@typescript-eslint/quotes': [
+            'error',
+            'single',
+            {
+                'allowTemplateLiterals': true
+            }
+        ],
+        '@typescript-eslint/require-array-sort-compare': 'off',
+        '@typescript-eslint/restrict-plus-operands': 'off',
+        '@typescript-eslint/restrict-template-expressions': 'off',
+        '@typescript-eslint/space-before-function-paren': 'off',
+        '@typescript-eslint/strict-boolean-expressions': 'off',
+        '@typescript-eslint/typedef': 'off',
+        '@typescript-eslint/unbound-method': 'off',
+        '@typescript-eslint/unified-signatures': 'off',
+        'array-bracket-newline': 'off',
+        'array-element-newline': 'off',
+        'array-type': 'off',
+        'arrow-body-style': 'off',
+        'arrow-parens': 'off',
+        'callback-return': 'off',
+        'capitalized-comments': 'off',
+        'class-methods-use-this': 'off',
+        'consistent-return': 'off',
+        'consistent-this': 'off',
+        'curly': 'error',
+        'dot-location': 'off',
+        'func-style': 'off',
+        'function-call-argument-newline': 'off',
+        'function-paren-newline': 'off',
+        'guard-for-in': 'off',
+        'id-length': 'off',
+        'indent': 'off',
+        'init-declarations': 'off',
+        'line-comment-position': 'off',
+        'linebreak-style': 'off',
+        'lines-around-comment': 'off',
+        'lines-between-class-members': 'off',
+        'max-classes-per-file': 'off',
+        'max-depth': 'off',
+        'max-len': 'off',
+        'max-lines': 'off',
+        'max-lines-per-function': 'off',
+        'max-params': 'off',
+        'max-statements': 'off',
+        'multiline-comment-style': 'off',
+        'multiline-ternary': 'off',
+        'new-cap': 'off',
+        'newline-per-chained-call': 'off',
+        'no-await-in-loop': 'off',
+        'no-console': 'off',
+        'no-continue': 'off',
+        'no-else-return': 'off',
+        'no-empty': 'off',
+        'no-implicit-coercion': 'off',
+        'no-inline-comments': 'off',
+        'no-labels': 'off',
+        'no-negated-condition': 'off',
+        'no-param-reassign': 'off',
+        'no-plusplus': 'off',
+        'no-process-exit': 'off',
+        'no-prototype-builtins': 'off',
+        'no-sync': 'off',
+        'no-ternary': 'off',
+        'no-undefined': 'off',
+        'no-underscore-dangle': 'off',
+        'no-unneeded-ternary': 'off',
+        'no-useless-escape': 'off',
+        'no-warning-comments': 'off',
+        'object-curly-spacing': [
+            'error',
+            'always'
+        ],
+        'object-property-newline': 'off',
+        'object-shorthand': [
+            'error',
+            'never'
+        ],
+        'one-var': [
+            'error',
+            'never'
+        ],
+        'padded-blocks': 'off',
+        'prefer-const': 'off',
+        'prefer-destructuring': 'off',
+        'prefer-named-capture-group': 'off',
+        'prefer-template': 'off',
+        'quote-props': 'off',
+        'radix': 'off',
+        'require-atomic-updates': 'off',
+        'require-unicode-regexp': 'off',
+        'sort-imports': 'off',
+        'sort-keys': 'off',
+        'spaced-comment': 'off',
+        'wrap-regex': 'off'
+    },
+    overrides: [
+        //disable certain rules for tests
+        {
+            files: ['*.spec.ts'],
+            rules: {
+                '@typescript-eslint/no-unsafe-call': 'off',
+                '@typescript-eslint/no-unsafe-member-access': 'off',
+                '@typescript-eslint/no-unsafe-return': 'off',
+                '@typescript-eslint/no-unused-expressions': 'off',
+                '@typescript-eslint/no-unused-vars': 'off',
+                '@typescript-eslint/no-unused-vars-experimental': 'off',
+                'new-cap': 'off',
+                'no-shadow': 'off'
+            }
+        }
+    ]
+};

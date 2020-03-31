@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { expect } from 'chai';
 
 import { diagnosticMessages } from '../../DiagnosticMessages';
@@ -26,7 +27,7 @@ describe('parser', () => {
                 end sub
 
             `);
-            let { errors, statements } = parser.parse(tokens) as any;
+            let { errors } = parser.parse(tokens) as any;
             expect(errors).to.be.lengthOf(1, 'Error count should be 0');
         });
 
@@ -102,7 +103,7 @@ describe('parser', () => {
                         'comment
                     }
                 `);
-                let { errors, statements } = parser.parse(tokens);
+                let { errors} = parser.parse(tokens);
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
             });
 
@@ -156,7 +157,7 @@ describe('parser', () => {
                 `);
                 let { errors, statements } = parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Should have zero errors');
-                let ifStmt = statements[0].func.body.statements[0] as any;
+                let ifStmt = statements[0].func.body.statements[0];
 
                 expect(ifStmt.thenBranch.statements[0].text).to.equal('comment 1');
                 expect(ifStmt.thenBranch.statements[1].text).to.equal('comment 2');
@@ -186,7 +187,7 @@ describe('parser', () => {
                 `);
                 let { errors, statements } = parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be zero');
-                let stmt = statements[0].func.body.statements[0] as any;
+                let stmt = statements[0].func.body.statements[0];
 
                 expect(stmt.body.statements[0].text).to.equal('comment 1');
                 expect(stmt.body.statements[1].text).to.equal('comment 2');
@@ -207,7 +208,7 @@ describe('parser', () => {
                 `);
                 let { errors, statements } = parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be zero');
-                let stmt = statements[0].func.body.statements[0] as any;
+                let stmt = statements[0].func.body.statements[0];
 
                 expect(stmt.body.statements[0].text).to.equal('comment 1');
                 expect(stmt.body.statements[1].text).to.equal('comment 2');
@@ -228,7 +229,7 @@ describe('parser', () => {
                 `);
                 let { errors, statements } = parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be zero');
-                let stmt = statements[0].func.body.statements[0] as any;
+                let stmt = statements[0].func.body.statements[0];
 
                 expect(stmt.body.statements[0].text).to.equal('comment 1');
                 expect(stmt.body.statements[1].text).to.equal('comment 2');

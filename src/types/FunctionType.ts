@@ -16,7 +16,7 @@ export class FunctionType implements BrsType {
     /**
      * Determines if this is a sub or not
      */
-    public isSub: boolean = false;
+    public isSub = false;
 
     public params = [] as Array<{ name: string; type: BrsType; isRequired: boolean }>;
 

@@ -34,7 +34,8 @@ describe('BrsFile', () => {
 
     describe('getCompletions', () => {
         it('waits for the file to be processed before collecting completions', async () => {
-            (program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     print "hello"
                     Say
@@ -42,7 +43,7 @@ describe('BrsFile', () => {
 
                 sub SayHello()
                 end sub
-            `));
+            `);
 
             let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 23));
             let names = result.map(x => x.label);
@@ -51,26 +52,30 @@ describe('BrsFile', () => {
         });
 
         it('does not provide duplicate entries for variables', async () => {
-            (program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     name = "bob"
                     age = 12
                     name = "john"
                 end sub
-            `));
+            `);
 
             let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 23));
 
-            let count = result.reduce((total, x) => x.label === 'name' ? total + 1 : total, 0);
+            let count = result.reduce((total, x) => {
+                return x.label === 'name' ? total + 1 : total;
+            }, 0);
             expect(count).to.equal(1);
         });
 
         it('does not include `as` and `string` text options when used in function params', async () => {
-            (program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
 
                 end sub
-            `));
+            `);
 
             let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 23));
             expect(result.filter(x => x.kind === CompletionItemKind.Text)).not.to.contain('as');
@@ -78,11 +83,12 @@ describe('BrsFile', () => {
         });
 
         it('does not provide intellisense results when inside a comment', async () => {
-            (program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                     'this is a comment
                 end sub
-            `));
+            `);
 
             let results = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 30));
             expect(results).to.be.empty;
@@ -93,12 +99,12 @@ describe('BrsFile', () => {
     describe('comment flags', () => {
         describe('bs:disable-next-line', () => {
             it('works for all', async () => {
-                let file: BrsFile = (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line
                         name = "bob
                     end sub
-                `) as any);
+                `) as BrsFile;
                 expect(file.commentFlags[0]).to.exist;
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: null,
@@ -111,12 +117,12 @@ describe('BrsFile', () => {
             });
 
             it('works for specific codes', async () => {
-                let file: BrsFile = (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line: 1000, 1001
                         name = "bob
                     end sub
-                `) as any);
+                `) as BrsFile;
                 expect(file.commentFlags[0]).to.exist;
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: [1000, 1001],
@@ -152,11 +158,11 @@ describe('BrsFile', () => {
 
         describe('bs:disable-line', () => {
             it('works for all', async () => {
-                let file: BrsFile = (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         name = "bob 'bs:disable-line
                     end sub
-                `) as any);
+                `) as BrsFile;
                 expect(file.commentFlags[0]).to.exist;
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: null,
@@ -925,15 +931,15 @@ describe('BrsFile', () => {
                 end function
             `);
             expect(file.functionCalls.length).to.equal(1);
-            expect(file.functionCalls[0].args[0]).deep.include(<CallableArg>{
+            expect(file.functionCalls[0].args[0]).deep.include({
                 type: new DynamicType(),
                 text: 'count'
             });
-            expect(file.functionCalls[0].args[1]).deep.include(<CallableArg>{
+            expect(file.functionCalls[0].args[1]).deep.include({
                 type: new DynamicType(),
                 text: 'name'
             });
-            expect(file.functionCalls[0].args[2]).deep.include(<CallableArg>{
+            expect(file.functionCalls[0].args[2]).deep.include({
                 type: new DynamicType(),
                 text: 'isAlive'
             });
@@ -956,7 +962,7 @@ describe('BrsFile', () => {
                 },
                 message: 'some lex error',
                 stack: ''
-            }], [])).to.eql([<Diagnostic>{
+            }])).to.eql([<Diagnostic>{
                 code: 1000,
                 message: 'some lex error',
                 location: Range.create(0, 0, 1, 4),
@@ -990,7 +996,7 @@ describe('BrsFile', () => {
         });
     });
 
-    describe('createFunctionScopes', async () => {
+    describe('createFunctionScopes', () => {
         it('creates range properly', async () => {
             await file.parse(`
                 sub Main()

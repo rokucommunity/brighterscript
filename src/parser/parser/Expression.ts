@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 import { Token, Identifier, Location } from "../lexer";
 import { BrsType, ValueKind, BrsString, FunctionParameter } from "../brsTypes";
 import { Block, CommentStatement } from "./Statement";

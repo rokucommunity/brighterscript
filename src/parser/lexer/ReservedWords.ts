@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 import { Lexeme as L } from "./Lexeme";
 
 /**

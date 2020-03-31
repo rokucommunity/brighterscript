@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { expect } from 'chai';
 
 import { Expr, Parser, Stmt } from '../..';

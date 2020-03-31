@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 import * as Expression from "./Expression";
 import * as Statement from "./Statement";
 

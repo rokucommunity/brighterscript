@@ -47,17 +47,14 @@ export class Watcher {
     public on(event: 'all', callback: (event, path, details) => void) {
         let watchers = [...this.watchers];
         for (let watcher of watchers) {
-            watcher.on(event, cb);
+            watcher.on(event, callback);
         }
 
-        function cb(event, path, details) {
-            callback(event, path, details);
-        }
 
         //a disconnect function
         return () => {
             for (let watcher of watchers) {
-                watcher.removeListener('all', cb);
+                watcher.removeListener('all', callback);
             }
         };
     }

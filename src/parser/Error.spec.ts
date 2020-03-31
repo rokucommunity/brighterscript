@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { expect } from 'chai';
 
 import { Int32, ValueKind } from './brsTypes';

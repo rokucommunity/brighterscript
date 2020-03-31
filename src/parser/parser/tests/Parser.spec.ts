@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { Lexeme, Location, ReservedWords } from '../../lexer';
 
 /* A set of utilities to be used while writing tests for the BRS parser. */

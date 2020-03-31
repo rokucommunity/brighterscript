@@ -10,7 +10,6 @@ import {
     DidChangeConfigurationNotification,
     DidChangeWatchedFilesParams,
     FileChangeType,
-    FileEvent,
     Hover,
     InitializeParams,
     Location,
@@ -19,7 +18,7 @@ import {
     ServerCapabilities,
     TextDocument,
     TextDocumentPositionParams,
-    TextDocuments,
+    TextDocuments
 } from 'vscode-languageserver';
 import Uri from 'vscode-uri';
 
@@ -30,11 +29,8 @@ import { ProgramBuilder } from './ProgramBuilder';
 import util from './util';
 
 export class LanguageServer {
-    constructor() {
-
-    }
-
-    private connection: Connection = <any>undefined; //cast undefined as any to get around strictNullChecks...it's ok in this case
+    //cast undefined as any to get around strictNullChecks...it's ok in this case
+    private connection: Connection = <any>undefined;
 
     public workspaces = [] as Workspace[];
 
@@ -71,11 +67,11 @@ export class LanguageServer {
 
         this.connection.onInitialize(this.onInitialize.bind(this));
 
-        this.connection.onInitialized(this.onInitialized.bind(this));
+        this.connection.onInitialized(this.onInitialized.bind(this)); //eslint-disable-line
 
-        this.connection.onDidChangeConfiguration(this.onDidChangeConfiguration.bind(this));
+        this.connection.onDidChangeConfiguration(this.onDidChangeConfiguration.bind(this)); //eslint-disable-line
 
-        this.connection.onDidChangeWatchedFiles(this.onDidChangeWatchedFiles.bind(this));
+        this.connection.onDidChangeWatchedFiles(this.onDidChangeWatchedFiles.bind(this)); //eslint-disable-line
 
         // The content of a text document has changed. This event is emitted
         // when the text document is first opened, when its content has changed,
@@ -131,7 +127,7 @@ export class LanguageServer {
      * Called when the client starts initialization
      * @param params
      */
-    public async onInitialize(params: InitializeParams) {
+    public onInitialize(params: InitializeParams) {
         let clientCapabilities = params.capabilities;
 
         // Does the client support the `workspace/configuration` request?
@@ -173,7 +169,7 @@ export class LanguageServer {
             }
 
             //ask the client for all workspace folders
-            let workspaceFolders = (await this.connection.workspace.getWorkspaceFolders()) || [];
+            let workspaceFolders = await this.connection.workspace.getWorkspaceFolders() ?? [];
             let workspacePaths = workspaceFolders.map((x) => {
                 return util.uriToPath(x.uri);
             });
@@ -244,8 +240,8 @@ export class LanguageServer {
      * @param workspaceFolders
      */
     private async createWorkspaces(workspacePaths: string[]) {
-        return await Promise.all(
-            workspacePaths.map((workspacePath) => this.createWorkspace(workspacePath))
+        return Promise.all(
+            workspacePaths.map(async (workspacePath) => this.createWorkspace(workspacePath))
         );
     }
 
@@ -263,7 +259,7 @@ export class LanguageServer {
 
     private async getConfigFilePath(workspacePath: string) {
         let scopeUri: string;
-        if (workspacePath.indexOf('file:') === 0) {
+        if (workspacePath.startsWith('file:')) {
             scopeUri = Uri.parse(workspacePath).toString();
         } else {
             scopeUri = Uri.file(workspacePath).toString();
@@ -276,7 +272,7 @@ export class LanguageServer {
         let configFilePath: string;
 
         //if there's a setting, we need to find the file or show error if it can't be found
-        if (config && config.configFile) {
+        if (config?.configFile) {
             configFilePath = path.resolve(workspacePath, config.configFile);
             if (await util.fileExists(configFilePath)) {
                 return configFilePath;
@@ -360,13 +356,13 @@ export class LanguageServer {
         }).catch(() => {
             newWorkspace.isFirstRunComplete = true;
             newWorkspace.isFirstRunSuccessful = false;
-        }).finally(() => {
+        }).then(() => {
             //if we found a depricated brsconfig.json, add a diagnostic warning the user
             if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
                 builder.addDiagnostic(configFilePath, {
                     location: Range.create(0, 0, 0, 0),
                     severity: 'warning',
-                    ...diagnosticMessages.BrsConfigJson_is_depricated_1020(),
+                    ...diagnosticMessages.BrsConfigJson_is_depricated_1020()
                 });
                 return this.sendDiagnostics();
             }
@@ -484,11 +480,11 @@ export class LanguageServer {
      */
     private onCompletionResolve(item: CompletionItem): CompletionItem {
         if (item.data === 1) {
-            (item.detail = 'TypeScript details'),
-                (item.documentation = 'TypeScript documentation');
+            item.detail = 'TypeScript details';
+            item.documentation = 'TypeScript documentation';
         } else if (item.data === 2) {
-            (item.detail = 'JavaScript details'),
-                (item.documentation = 'JavaScript documentation');
+            item.detail = 'JavaScript details';
+            item.documentation = 'JavaScript documentation';
         }
         return item;
     }
@@ -534,7 +530,7 @@ export class LanguageServer {
 
         //validate each workspace
         await Promise.all(
-            this.workspaces.map((x) => {
+            this.workspaces.map(async (x) => {
                 //only validate workspaces with a working builder (i.e. no critical runtime errors)
                 if (x.isFirstRunComplete && x.isFirstRunSuccessful) {
                     return x.builder.program.validate();
@@ -642,7 +638,7 @@ export class LanguageServer {
             let filePaths = params.changes.map((x) => x.uri);
 
             for (let workspace of workspaces) {
-                if (workspace.configFilePath && filePaths.indexOf(workspace.configFilePath) > -1) {
+                if (workspace.configFilePath && filePaths.includes(workspace.configFilePath)) {
                     workspacesToReload.push(workspace);
                 }
             }
@@ -650,7 +646,7 @@ export class LanguageServer {
             await this.reloadWorkspaces(workspacesToReload);
 
             //set the list of workspaces to non-reloaded workspaces
-            workspaces = workspaces.filter(x => workspacesToReload.indexOf(x) === -1);
+            workspaces = workspaces.filter(x => workspacesToReload.includes(x));
         }
 
         //convert created folders into a list of files of their contents
@@ -661,14 +657,14 @@ export class LanguageServer {
             .filter(change => util.isDirectorySync(change.pathAbsolute));
 
         //remove the created directories from the changes array (we will add back each of their files next)
-        changes = changes.filter(x => directoryChanges.indexOf(x) === -1);
+        changes = changes.filter(x => !directoryChanges.includes(x));
 
         //look up every file in each of the newly added directories
         const newFileChanges = directoryChanges
             //take just the path
             .map(x => x.pathAbsolute)
             //exclude the roku deploy staging folder
-            .filter(dirPath => dirPath.indexOf('.roku-deploy-staging') === -1)
+            .filter(dirPath => !dirPath.includes('.roku-deploy-staging'))
             //get the files for each folder recursively
             .flatMap(dirPath => {
                 //create a glob pattern to match all files
@@ -707,7 +703,7 @@ export class LanguageServer {
      * any file changes you receive with no unexpected side-effects
      * @param changes
      */
-    public async handleFileChanges(workspace: Workspace, changes: { type: FileChangeType; pathAbsolute: string; }[]) {
+    public async handleFileChanges(workspace: Workspace, changes: { type: FileChangeType; pathAbsolute: string }[]) {
         const program = workspace.builder.program;
         const options = workspace.builder.options;
         const rootDir = workspace.builder.rootDir;
@@ -744,18 +740,16 @@ export class LanguageServer {
                 }
 
                 //changed
-            } else {
-                if (program.hasFile(change.pathAbsolute)) {
-                    //sometimes "changed" events are emitted on files that were actually deleted,
-                    //so determine file existance and act accordingly
-                    if (await util.fileExists(change.pathAbsolute)) {
-                        await program.addOrReplaceFile({
-                            src: change.pathAbsolute,
-                            dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
-                        });
-                    } else {
-                        await program.removeFile(change.pathAbsolute);
-                    }
+            } else if (program.hasFile(change.pathAbsolute)) {
+                //sometimes "changed" events are emitted on files that were actually deleted,
+                //so determine file existance and act accordingly
+                if (await util.fileExists(change.pathAbsolute)) {
+                    await program.addOrReplaceFile({
+                        src: change.pathAbsolute,
+                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
+                    });
+                } else {
+                    program.removeFile(change.pathAbsolute);
                 }
             }
         }
@@ -769,7 +763,7 @@ export class LanguageServer {
         let workspaces = this.getWorkspaces();
         let hovers = await Promise.all(
             Array.prototype.concat.call([],
-                workspaces.map((x) => x.builder.program.getHover(pathAbsolute, params.position))
+                workspaces.map(async (x) => x.builder.program.getHover(pathAbsolute, params.position))
             )
         ) as Hover[];
 
@@ -777,7 +771,7 @@ export class LanguageServer {
         let hover = hovers.filter((x) => !!x)[0];
 
         //TODO improve this to support more than just .brs files
-        if (hover && hover.contents) {
+        if (hover?.contents) {
             //create fenced code block to get colorization
             hover.contents = {
                 //TODO - make the program.getHover call figure out what language this is for
@@ -909,7 +903,7 @@ export class LanguageServer {
         //clear any diagnostics for files that are no longer present
         let currentFilePaths = Object.keys(issuesByFile);
         for (let filePath in this.latestDiagnosticsByFile) {
-            if (currentFilePaths.indexOf(filePath) === -1) {
+            if (!currentFilePaths.includes(filePath)) {
                 this.connection.sendDiagnostics({
                     uri: Uri.file(filePath).toString(),
                     diagnostics: []

@@ -1,4 +1,4 @@
-// tslint:disable
+/* eslint-disable camelcase */
 /**
  * An object that keeps track of all possible error messages.
  */
@@ -6,7 +6,7 @@ export let diagnosticMessages = {
     //this one won't be used much, we just need a catchall object for the code since we pass through the message from the parser
     Generic_parser_message: () => ({
         message: `There was an error parsing the file`,
-        code: 1000,
+        code: 1000
     }),
     Call_to_unknown_function_1001: (name: string, scopeName: string) => ({
         message: `Cannot find function with name '${name}' when this file is included in scope "${scopeName}".`,
@@ -88,14 +88,14 @@ export let diagnosticMessages = {
     BrsConfigJson_is_depricated_1020: () => ({
         message: `brsconfig.json is depricated. Please rename to 'bsconfig.json'`,
         code: 1020
-    }),    
+    }),
     BsConfigJson_has_syntax_errors_1021: () => ({
         message: `Encountered syntax errors in bsconfig.json`,
         code: 1021
-    }),
+    })
 };
 
-let allCodes = [];
+let allCodes = [] as number[];
 for (let key in diagnosticMessages) {
     allCodes.push(diagnosticMessages[key]().code);
 }

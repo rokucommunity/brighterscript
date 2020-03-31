@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 import { Lexeme } from "./Lexeme";
 import { BrsType } from "../brsTypes";
 

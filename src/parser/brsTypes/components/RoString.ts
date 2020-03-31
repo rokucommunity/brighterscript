@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 import { BrsComponent } from "./BrsComponent";
 import { RoArray } from "./RoArray";
 import { BrsValue, ValueKind, BrsString, BrsBoolean, BrsInvalid, Comparable } from "../BrsType";

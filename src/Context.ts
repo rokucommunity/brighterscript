@@ -67,7 +67,6 @@ export class Context {
             disconnect();
         }
         this.detachParent();
-        (this as any)._isDisposed = true;
     }
 
     private parentContextHandles = [] as Array<() => void>;
@@ -107,7 +106,7 @@ export class Context {
      * @param filePath
      */
     public shouldIncludeFile(file: File) {
-        return this.matcher(file) === true ? true : false;
+        return this.matcher(file) === true;
     }
 
     private files = {} as { [filePath: string]: ContextFile };
@@ -315,7 +314,7 @@ export class Context {
                 }
                 let expCallArgCount = expCall.args.length;
                 if (expCall.args.length > maxParams || expCall.args.length < minParams) {
-                    let minMaxParamsText = minParams === maxParams ? maxParams : minParams + '-' + maxParams;
+                    let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
                     this.diagnostics.push({
                         ...diagnosticMessages.Expected_a_arguments_but_got_b_1002(minMaxParamsText, expCallArgCount),
                         location: expCall.nameRange,
@@ -369,28 +368,26 @@ export class Context {
 
             //get the local scope for this expression
             let scope = file.getFunctionScopeAtPosition(expCall.nameRange.start);
-            if (scope) {
+
+            //if we don't already have a variable with this name.
+            if (!scope?.getVariableByName(lowerName)) {
+                let callablesWithThisName = callablesByLowerName[lowerName];
+
+                //use the first item from callablesByLowerName, because if there are more, that's a separate error
+                let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
+
+                //detect calls to unknown functions
+                if (!knownCallable) {
+                    this.diagnostics.push({
+                        ...diagnosticMessages.Call_to_unknown_function_1001(expCall.name, this.name),
+                        location: expCall.nameRange,
+                        file: file,
+                        severity: 'error'
+                    });
+                }
+            } else {
                 //if we found a variable with the same name as the function, assume the call is "known".
                 //If the variable is a different type, some other check should add a diagnostic for that.
-                if (scope.getVariableByName(lowerName)) {
-                    continue;
-                }
-            }
-
-            let callablesWithThisName = callablesByLowerName[expCall.name.toLowerCase()];
-
-            //use the first item from callablesByLowerName, because if there are more, that's a separate error
-            let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
-
-            //detect calls to unknown functions
-            if (!knownCallable) {
-                this.diagnostics.push({
-                    ...diagnosticMessages.Call_to_unknown_function_1001(expCall.name, this.name),
-                    location: expCall.nameRange,
-                    file: file,
-                    severity: 'error'
-                });
-                continue;
             }
         }
     }
@@ -424,24 +421,23 @@ export class Context {
 
             //add info diagnostics about child shadowing parent functions
             if (ownCallables.length > 0 && ancestorNonPlatformCallables.length > 0) {
-                inner: for (let container of ownCallables) {
+                for (let container of ownCallables) {
                     //skip the init function (because every component will have one of those){
-                    if (lowerName === 'init') {
-                        continue inner;
+                    if (lowerName !== 'init') {
+                        let shadowedCallable = ancestorNonPlatformCallables[ancestorNonPlatformCallables.length - 1];
+                        this.diagnostics.push({
+                            ...diagnosticMessages.Overrides_ancestor_function_1010(
+                                container.callable.name,
+                                container.context.name,
+                                shadowedCallable.callable.file.pkgPath,
+                                //grab the last item in the list, which should be the closest ancestor's version
+                                shadowedCallable.context.name
+                            ),
+                            location: container.callable.nameRange,
+                            file: container.callable.file,
+                            severity: 'hint'
+                        });
                     }
-                    let shadowedCallable = ancestorNonPlatformCallables[ancestorNonPlatformCallables.length - 1];
-                    this.diagnostics.push({
-                        ...diagnosticMessages.Overrides_ancestor_function_1010(
-                            container.callable.name,
-                            container.context.name,
-                            shadowedCallable.callable.file.pkgPath,
-                            //grab the last item in the list, which should be the closest ancestor's version
-                            shadowedCallable.context.name,
-                        ),
-                        location: container.callable.nameRange,
-                        file: container.callable.file,
-                        severity: 'hint'
-                    });
                 }
             }
 
@@ -519,7 +515,7 @@ export class Context {
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
-    public getDefinition(file: BrsFile | XmlFile, position: Position): Location[] {
+    public getDefinition(file: BrsFile | XmlFile, position: Position): Location[] { //eslint-disable-line
         //TODO implement for brs files
         return [];
     }
@@ -528,7 +524,7 @@ export class Context {
      * Scan all files for property names, and return them as completions
      */
     public getPropertyNameCompletions() {
-        let results = [];
+        let results = [] as CompletionItem[];
         for (let key in this.files) {
             let file = this.files[key];
             results.push(...file.file.propertyNameCompletions);

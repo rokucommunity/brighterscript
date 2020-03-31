@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as sinonImport from 'sinon';
 import { Position } from 'vscode-languageserver';
 
-import { Context as Context } from './Context';
+import { Context } from './Context';
 import { diagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { Program } from './Program';
@@ -28,8 +28,8 @@ describe('Context', () => {
     });
 
     describe('attachProgram', () => {
-        it('correctly listens to program events', async () => {
-            let context = new Context('some context', (file) => true);
+        it('correctly listens to program events', () => {
+            context = new Context('some context', () => true);
 
             let file = new BrsFile(util.standardizePath(`${rootDir}/source/file.brs`), n('source/file.brs'), program);
 
@@ -53,7 +53,7 @@ describe('Context', () => {
     });
 
     describe('attachParentContext', () => {
-        it('listens for invalidated events', async () => {
+        it('listens for invalidated events', () => {
             let parentCtx = new Context('parent', null);
             parentCtx.isValidated = false;
 
@@ -350,14 +350,14 @@ describe('Context', () => {
             //should have an error
             expect(context.getDiagnostics().length).to.equal(1);
             expect(context.getDiagnostics()[0]).to.deep.include({
-                ...diagnosticMessages.Expected_a_arguments_but_got_b_1002(1, 2),
+                ...diagnosticMessages.Expected_a_arguments_but_got_b_1002(1, 2)
             });
         });
     });
 
     describe('inheritance', () => {
         it('inherits callables from parent', () => {
-            let program = new Program({ rootDir: rootDir });
+            program = new Program({ rootDir: rootDir });
             //erase the platform context so our tests are more stable
             program.platformContext = new Context('platform', null);
 
@@ -395,7 +395,7 @@ describe('Context', () => {
 
     describe('shouldIncludeFile', () => {
         it('should detect whether to keep a file or not', () => {
-            let context = new Context('testContext1', () => {
+            context = new Context('testContext1', () => {
                 return false;
             });
             expect(context.shouldIncludeFile({} as any)).to.be.false;
@@ -418,7 +418,7 @@ describe('Context', () => {
     describe('getDefinition', () => {
         it('returns empty list when there are no files', async () => {
             let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
-            let context = program.getContextByName('global');
+            context = program.getContextByName('global');
             expect(context.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
         });
     });

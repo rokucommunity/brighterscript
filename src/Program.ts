@@ -31,7 +31,7 @@ export class Program {
         this.rootDir = util.getRootDir(this.options);
 
         //create the 'platform' context
-        this.platformContext = new Context('platform', (file) => false);
+        this.platformContext = new Context('platform', () => false);
 
         //add all platform callables
         this.platformContext.addOrReplaceFile(platformFile);
@@ -44,7 +44,7 @@ export class Program {
         //create the "global" context
         let globalContext = new Context('global', (file) => {
             //global context includes every file under the `source` folder
-            return file.pkgPath.indexOf(`source${path.sep}`) === 0;
+            return file.pkgPath.startsWith(`source${path.sep}`);
         });
         globalContext.attachProgram(this);
         //the global context inherits from platform context
@@ -108,17 +108,12 @@ export class Program {
      */
     public getUnreferencedFiles() {
         let result = [] as File[];
-        outer: for (let filePath in this.files) {
+        for (let filePath in this.files) {
             let file = this.files[filePath];
-            for (let key in this.contexts) {
-                let context = this.contexts[key];
-                //if any context has this file, then it is not unreferenced. skip to the next file
-                if (context.hasFile(filePath)) {
-                    continue outer;
-                }
-            }
+            if (this.fileIsIncludedInAnyContext(file)) {
             //no contexts reference this file. add it to the list
             result.push(file);
+        }
         }
         return result;
     }
@@ -151,18 +146,17 @@ export class Program {
         let finalDiagnostics = [] as Diagnostic[];
 
         for (let diagnostic of diagnostics) {
-            //skip duplicate diagnostics (by reference). This skips file parse diagnostics when multiple contexts include same file
-            if (finalDiagnostics.indexOf(diagnostic) > -1) {
-                continue;
-            }
+            if (
+                //skip duplicate diagnostics (by reference).
+                //This skips file parse diagnostics when multiple contexts include same file
+                !finalDiagnostics.includes(diagnostic) &&
 
             //skip any specified error codes
-            if (this.options.ignoreErrorCodes && this.options.ignoreErrorCodes.indexOf(diagnostic.code) > -1) {
-                continue;
-            }
-
+                !this.options.ignoreErrorCodes?.includes(diagnostic.code)
+            ) {
             //add the diagnostic to the final list
             finalDiagnostics.push(diagnostic);
+        }
         }
 
         return finalDiagnostics;
@@ -190,14 +184,14 @@ export class Program {
      * contents from the file system.
      * @param filePaths
      */
-    public addOrReplaceFiles(fileObjects: Array<StandardizedFileEntry>) {
+    public async addOrReplaceFiles(fileObjects: Array<StandardizedFileEntry>) {
         return Promise.all(
-            fileObjects.map((fileObject) => this.addOrReplaceFile(fileObject))
+            fileObjects.map(async (fileObject) => this.addOrReplaceFile(fileObject))
         );
     }
 
-    public getPkgPath(...args: any[]): any {
-
+    public getPkgPath(...args: any[]): any { //eslint-disable-line
+        throw new Error('Not implemented');
     }
 
     /**
@@ -236,7 +230,7 @@ export class Program {
         //load the file contents by file path if not provided
         let getFileContents = async () => {
             if (fileContents === undefined) {
-                return await this.getFileContents(pathAbsolute);
+                return this.getFileContents(pathAbsolute);
             } else {
                 return fileContents;
             }
@@ -289,7 +283,7 @@ export class Program {
         return file;
     }
 
-    private emitter = new EventEmitter();
+    private readonly emitter = new EventEmitter();
 
     public on(name: 'file-added', callback: (file: BrsFile | XmlFile) => void);
     public on(name: 'file-removed', callback: (file: BrsFile | XmlFile) => void);
@@ -381,14 +375,10 @@ export class Program {
         }
 
         //find any files NOT loaded into a context
-        outer: for (let filePath in this.files) {
+        for (let filePath in this.files) {
             let file = this.files[filePath];
-            for (let contextName in this.contexts) {
-                if (this.contexts[contextName].hasFile(file)) {
-                    continue outer;
-                }
-            }
-            //if we got here, the file is not loaded in any context
+            if (!this.fileIsIncludedInAnyContext(file)) {
+                //the file is not loaded in any context
             this.diagnostics.push({
                 file: file,
                 location: Range.create(0, 0, 0, Number.MAX_VALUE),
@@ -396,6 +386,20 @@ export class Program {
                 ...diagnosticMessages.File_not_referenced_by_any_file_1013()
             });
         }
+    }
+        await Promise.resolve();
+    }
+
+    /**
+     * Determine if the given file is included in at least one context in this program
+     */
+    private fileIsIncludedInAnyContext(file: BrsFile | XmlFile) {
+        for (let contextName in this.contexts) {
+            if (this.contexts[contextName].hasFile(file)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -430,8 +434,6 @@ export class Program {
      * @param columnIndex
      */
     public async getCompletions(pathAbsolute: string, position: Position) {
-        let completions = [] as CompletionItem[];
-
         let file = this.getFile(pathAbsolute);
         if (!file) {
             return [];
@@ -451,7 +453,7 @@ export class Program {
         //get the completions from all contexts for this file
         let allCompletions = util.flatMap(
             await Promise.all(
-                contexts.map(ctx => file.getCompletions(position, ctx))
+                contexts.map(async ctx => file.getCompletions(position, ctx))
             ),
             c => c
         );
@@ -459,7 +461,7 @@ export class Program {
         let result = [] as CompletionItem[];
 
         //only keep completions common to every completion
-        let keyCounts = {};
+        let keyCounts = {} as { [key: string]: number };
         for (let completion of allCompletions) {
             let key = `${completion.label}-${completion.kind}`;
             keyCounts[key] = keyCounts[key] ? keyCounts[key] + 1 : 1;
@@ -494,7 +496,7 @@ export class Program {
             return null;
         }
 
-        return await file.getHover(position);
+        return file.getHover(position);
     }
 
     public async transpile(fileEntries: StandardizedFileEntry[], stagingFolderPath: string) {
@@ -508,7 +510,7 @@ export class Program {
                 }
 
                 //replace the file extension
-                let outputCodePath = filePathObj.dest.replace(new RegExp('\.bs$'), '.brs');
+                let outputCodePath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
                 //prepend the staging folder path
                 outputCodePath = util.standardizePath(`${stagingFolderPath}/${outputCodePath}`);
                 let outputCodeMapPath = outputCodePath + '.map';

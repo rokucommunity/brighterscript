@@ -23,7 +23,7 @@ export class XmlContext extends Context {
             //when xml file detaches its parent, remove the context link
             this.xmlFile.on('detach-parent', () => {
                 this.detachParent();
-            }),
+            })
         ];
 
         //if the xml file already has a parent attached, attach our context to that parent xml's context
@@ -134,7 +134,7 @@ export class XmlContext extends Context {
             for (let scriptImport of this.xmlFile.ownScriptImports) {
                 let ancestorScriptImport = lookup[scriptImport.pkgPath];
                 if (ancestorScriptImport) {
-                    let ancestorComponentName = (ancestorScriptImport.sourceFile as XmlFile).componentName;
+                    let ancestorComponentName = ancestorScriptImport.sourceFile.componentName;
                     this.diagnostics.push({
                         severity: 'warning',
                         file: this.xmlFile,
@@ -143,7 +143,6 @@ export class XmlContext extends Context {
                     });
                 }
             }
-
         }
     }
 
@@ -196,23 +195,21 @@ export class XmlContext extends Context {
                         scriptImport.columnIndexEnd
                     ),
                     file: this.xmlFile,
-                    severity: 'error',
+                    severity: 'error'
                 });
-            } else {
                 //if the character casing of the script import path does not match that of the actual path
-                if (scriptImport.pkgPath !== referencedFile.file.pkgPath) {
-                    this.diagnostics.push({
-                        ...diagnosticMessages.Script_import_case_mismatch_1012(referencedFile.file.pkgPath),
-                        location: Range.create(
-                            scriptImport.lineIndex,
-                            scriptImport.columnIndexBegin,
-                            scriptImport.lineIndex,
-                            scriptImport.columnIndexEnd
-                        ),
-                        file: this.xmlFile,
-                        severity: 'warning'
-                    });
-                }
+            } else if (scriptImport.pkgPath !== referencedFile.file.pkgPath) {
+                this.diagnostics.push({
+                    ...diagnosticMessages.Script_import_case_mismatch_1012(referencedFile.file.pkgPath),
+                    location: Range.create(
+                        scriptImport.lineIndex,
+                        scriptImport.columnIndexBegin,
+                        scriptImport.lineIndex,
+                        scriptImport.columnIndexEnd
+                    ),
+                    file: this.xmlFile,
+                    severity: 'warning'
+                });
             }
         }
     }

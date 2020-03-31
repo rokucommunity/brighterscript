@@ -11,7 +11,7 @@ const Lexeme = brs.lexer.Lexeme;
 import { Deferred } from '../deferred';
 import { FunctionParameter } from '../parser/brsTypes';
 import { BrsError, ParseError } from '../parser/Error';
-import { Lexer, Location as BrsLocation, Token } from '../parser/lexer';
+import { Lexer, Token } from '../parser/lexer';
 import { Parser } from '../parser/parser';
 import { AALiteralExpression, DottedGet } from '../parser/parser/Expression';
 import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement } from '../parser/parser/Statement';
@@ -102,9 +102,6 @@ export class BrsFile {
         }
     }
 
-    private static idCounter = 1;
-    private id = BrsFile.idCounter++;
-
     private parser: Parser;
 
     /**
@@ -145,7 +142,7 @@ export class BrsFile {
             preprocessorWasSuccessful = false;
             //if the thrown error is DIFFERENT than any errors from the preprocessor, add that error to the list as well
             if (preprocessorResults.errors.find((ex) => ex === e) === undefined) {
-                preprocessorResults.errors.push(e as any);
+                preprocessorResults.errors.push(e);
             }
         }
         //dispose of the onError event listener
@@ -161,18 +158,18 @@ export class BrsFile {
         let errors = [...lexResult.errors, ...<any>parseResult.errors, ...<any>preprocessorResults.errors];
 
         //convert the brs library's errors into our format
-        this.diagnostics.push(...this.standardizeLexParseErrors(errors, lines));
+        this.diagnostics.push(...this.standardizeLexParseErrors(errors));
 
         this.ast = <any>parseResult.statements;
 
         //extract all callables from this file
-        this.findCallables(lines);
+        this.findCallables();
 
         //traverse the ast and find all functions and create a scope object
-        this.createFunctionScopes(lines, this.ast);
+        this.createFunctionScopes(this.ast);
 
         //find all places where a sub/function is being called
-        this.findFunctionCalls(lines);
+        this.findFunctionCalls();
 
         //scan the full text for any word that looks like a variable
         this.findPropertyNameCompletions();
@@ -228,7 +225,7 @@ export class BrsFile {
 
     public propertyNameCompletions = [] as CompletionItem[];
 
-    public standardizeLexParseErrors(errors: ParseError[], lines: string[]) {
+    public standardizeLexParseErrors(errors: ParseError[]) {
         let standardizedDiagnostics = [] as Diagnostic[];
         for (let error of errors) {
             let diagnostic = <Diagnostic>{
@@ -293,7 +290,7 @@ export class BrsFile {
                             };
 
                             //disable specific rules on the next line
-                        } else if (stmt.indexOf(':') === 0) {
+                        } else if (stmt.startsWith(':')) {
                             stmt = stmt.replace(':', '');
                             let codes = [] as number[];
                             //starting position + search.text length + 1 for the colon
@@ -302,7 +299,7 @@ export class BrsFile {
                             for (let codeToken of codeTokens) {
                                 let codeInt = parseInt(codeToken.text);
                                 //add a warning for unknown codes
-                                if (diagnosticCodes.indexOf(codeInt) === -1) {
+                                if (!diagnosticCodes.includes(codeInt)) {
                                     this.diagnostics.push({
                                         ...diagnosticMessages.Unknown_diagnostic_code_1014(codeInt),
                                         file: this,
@@ -318,7 +315,7 @@ export class BrsFile {
                                     file: this,
                                     codes: codes,
                                     range: Range.create(lineIndex, idx, lineIndex, line.length),
-                                    affectedRange: affectedRange,
+                                    affectedRange: affectedRange
                                 };
                             }
                         }
@@ -345,7 +342,7 @@ export class BrsFile {
     /**
      * Create a scope for every function in this file
      */
-    private createFunctionScopes(lines: string[], statements: any, parent?: FunctionScope) {
+    private createFunctionScopes(statements: any) {
         //find every function
         let functions = util.findAllDeep<brs.parser.Expr.FunctionExpression>(this.ast, (x) => x instanceof brs.parser.Expr.FunctionExpression);
 
@@ -496,7 +493,7 @@ export class BrsFile {
         }
     }
 
-    private findCallables(lines: string[]) {
+    private findCallables() {
         this.callables = [];
         for (let statement of this.ast as any) {
             if (!(statement instanceof brs.parser.Stmt.FunctionStatement)) {
@@ -537,7 +534,7 @@ export class BrsFile {
         }
     }
 
-    private findFunctionCalls(lines: string[]) {
+    private findFunctionCalls() {
         this.functionCalls = [];
 
         //for now, just dig into top-level function declarations.
@@ -643,8 +640,6 @@ export class BrsFile {
     public async getCompletions(position: Position, context?: Context): Promise<CompletionItem[]> {
         let result = [] as CompletionItem[];
 
-        let id = this.id;
-        id = id;
         //wait for the file to finish processing
         await this.isReady();
         let names = {};
@@ -724,9 +719,9 @@ export class BrsFile {
             }
             //if the position less than this token range, then this position touches no token,
             if (util.positionIsGreaterThanRange(position, range) === false) {
-                let token = tokens[i - 1];
+                let t = tokens[i - 1];
                 //return the token or the first token
-                return token ? token : tokens[0];
+                return t ? t : tokens[0];
             }
         }
         //return the last token
@@ -747,7 +742,7 @@ export class BrsFile {
         ];
 
         //throw out invalid tokens and the wrong kind of tokens
-        if (!token || hoverTokenTypes.indexOf(token.kind) === -1) {
+        if (!token || !hoverTokenTypes.includes(token.kind)) {
             return null;
         }
 
@@ -812,7 +807,7 @@ export class BrsFile {
             //if comment is on same line as prior sibling
             if (statement instanceof CommentStatement && previousStatement && statement.location.start.line === previousStatement.location.end.line) {
                 chunks.push(
-                    ' ',
+                    ' '
                 );
 
                 //add double newline if this is a comment, and next is a function

@@ -90,7 +90,7 @@ export class XmlFile {
         try {
             parsedXml = await util.parseXml(fileContents);
 
-            if (parsedXml && parsedXml.component) {
+            if (parsedXml?.component) {
                 if (parsedXml.component.$) {
                     this.componentName = parsedXml.component.$.name;
                     this.parentName = parsedXml.component.$.extends;
@@ -173,7 +173,7 @@ export class XmlFile {
         }
 
         //find script imports
-        if (parsedXml && parsedXml.component) {
+        if (parsedXml?.component) {
 
             let scripts = parsedXml.component.script ? parsedXml.component.script : [];
             let scriptImports = [] as FileReference[];
@@ -198,8 +198,8 @@ export class XmlFile {
                 let line = lines[lineIndex];
                 let regex = /(.*?\s+uri\s*=\s*")(.*?)"/gi;
                 let lineIndexOffset = 0;
-                let match;
-                while (match = regex.exec(line)) {
+                let match: RegExpExecArray;
+                while (match = regex.exec(line)) { //eslint-disable-line no-cond-assign
                     let preUriContent = match[1];
                     let uri = match[2];
                     if (!uriRanges[uri]) {
@@ -259,7 +259,7 @@ export class XmlFile {
      */
     public getAllScriptImports() {
         let imports = [...this.ownScriptImports] as FileReference[];
-        let file: XmlFile = this;
+        let file = this as XmlFile;
         while (file.parent) {
             imports = [...imports, ...file.parent.getOwnScriptImports()];
             file = file.parent;
@@ -308,7 +308,7 @@ export class XmlFile {
         if (scriptImport) {
             return this.getScriptImportCompletions(scriptImport);
         } else {
-            return [];
+            return Promise.resolve([]);
         }
     }
 
@@ -334,7 +334,7 @@ export class XmlFile {
                 //is a BrightScript or BrighterScript file
                 (file.extension === '.bs' || file.extension === '.brs') &&
                 //not already referenced in this file
-                currentImports.indexOf(file.pkgPath) === -1
+                !currentImports.includes(file.pkgPath)
             ) {
                 //the text range to replace if the user selects this result
                 let range = {
@@ -350,7 +350,8 @@ export class XmlFile {
 
                 //add the relative path
                 let relativePath = util.getRelativePath(this.pkgPath, file.pkgPath).replace(/\\/g, '/');
-                let pkgPath = 'pkg:/' + file.pkgPath.replace(/\\/g, '/');
+                let pkgPathStandardized = file.pkgPath.replace(/\\/g, '/');
+                let pkgPath = `pkg:/${pkgPathStandardized}`;
 
                 result.push({
                     label: relativePath,
@@ -440,13 +441,13 @@ export class XmlFile {
         }
     }
 
-    public getHover(position: Position): Hover {
+    public getHover(position: Position): Hover { //eslint-disable-line
         //TODO implement
         // let result = {} as Hover;
         return null;
     }
 
-    public getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]): FunctionScope {
+    public getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]): FunctionScope { //eslint-disable-line
         //TODO implement
         return null;
     }

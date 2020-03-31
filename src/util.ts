@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as fsExtra from 'fs-extra';
-import { parse as parseJsonc, ParseError, parseTree, printParseErrorCode } from 'jsonc-parser';
+import { parse as parseJsonc, ParseError, printParseErrorCode } from 'jsonc-parser';
 import * as moment from 'moment';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
@@ -13,7 +13,7 @@ import { BsConfig } from './BsConfig';
 import { diagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { CallableContainer, Diagnostic, ValueKind } from './interfaces';
-import { Location, Token } from './parser/lexer';
+import { Location } from './parser/lexer';
 import { FunctionExpression as ExpressionFunction } from './parser/parser/Expression';
 import { BooleanType } from './types/BooleanType';
 import { BrsType } from './types/BrsType';
@@ -49,7 +49,7 @@ export class Util {
         if (!filePath) {
             return false;
         } else {
-            return await fsExtra.pathExists(filePath);
+            return fsExtra.pathExists(filePath);
         }
     }
 
@@ -100,7 +100,7 @@ export class Util {
         //remove any leading file protocol
         pkgPath = pkgPath.replace(/^\w+:/, '');
         //remove any leading slash
-        pkgPath = pkgPath.replace(/^[\\\/]*/, '');
+        pkgPath = pkgPath.replace(/^[\\/]*/, '');
         return pkgPath;
     }
 
@@ -110,7 +110,7 @@ export class Util {
      */
     public pathSepNormalize(filePath: string, separator?: string) {
         separator = separator ? separator : path.sep;
-        return filePath.replace(/[\\\/]+/g, separator);
+        return filePath.replace(/[\\/]+/g, separator);
     }
 
     /**
@@ -165,7 +165,7 @@ export class Util {
             //keep track of the inheritance chain
             parentProjectPaths = parentProjectPaths ? parentProjectPaths : [];
             configFilePath = path.resolve(configFilePath);
-            if (parentProjectPaths && parentProjectPaths.indexOf(configFilePath) > -1) {
+            if (parentProjectPaths?.includes(configFilePath)) {
                 parentProjectPaths.push(configFilePath);
                 parentProjectPaths.reverse();
                 throw new Error('Circular dependency detected: "' + parentProjectPaths.join('" => ') + '"');
@@ -185,7 +185,7 @@ export class Util {
                     },
                     location: this.getLocationFromOffsetLength(projectFileContents, err.offset, err.length)
                 } as Diagnostic;
-                throw diagnostic;
+                throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
 
             //set working directory to the location of the project file
@@ -196,7 +196,7 @@ export class Util {
             if (projectConfig && typeof projectConfig.extends === 'string') {
                 let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath]);
                 //extend the base config with the current project settings
-                result = Object.assign({}, baseProjectConfig, projectConfig);
+                result = { ...baseProjectConfig, ...projectConfig };
             } else {
                 result = projectConfig;
                 let ancestors = parentProjectPaths ? parentProjectPaths : [];
@@ -331,19 +331,33 @@ export class Util {
 
     public valueKindToBrsType(kind: ValueKind): BrsType {
         switch (kind) {
-            case ValueKind.Boolean: return new BooleanType();
+            case ValueKind.Boolean:
+                return new BooleanType();
             //TODO refine the function type on the outside (I don't think this ValueKind is actually returned)
-            case ValueKind.Callable: return new FunctionType(new VoidType());
-            case ValueKind.Double: return new DoubleType();
-            case ValueKind.Dynamic: return new DynamicType();
-            case ValueKind.Float: return new FloatType();
-            case ValueKind.Int32: return new IntegerType();
-            case ValueKind.Int64: return new LongIntegerType();
-            case ValueKind.Invalid: return new InvalidType();
-            case ValueKind.Object: return new ObjectType();
-            case ValueKind.String: return new StringType();
-            case ValueKind.Uninitialized: return new UninitializedType();
-            case ValueKind.Void: return new VoidType();
+            case ValueKind.Callable:
+                return new FunctionType(new VoidType());
+            case ValueKind.Double:
+                return new DoubleType();
+            case ValueKind.Dynamic:
+                return new DynamicType();
+            case ValueKind.Float:
+                return new FloatType();
+            case ValueKind.Int32:
+                return new IntegerType();
+            case ValueKind.Int64:
+                return new LongIntegerType();
+            case ValueKind.Invalid:
+                return new InvalidType();
+            case ValueKind.Object:
+                return new ObjectType();
+            case ValueKind.String:
+                return new StringType();
+            case ValueKind.Uninitialized:
+                return new UninitializedType();
+            case ValueKind.Void:
+                return new VoidType();
+            default:
+                return undefined;
         }
     }
 
@@ -432,7 +446,7 @@ export class Util {
      */
     public getPkgPathFromTarget(containingFilePathAbsolute: string, targetPath: string) {
         //if the target starts with 'pkg:', it's an absolute path. Return as is
-        if (targetPath.indexOf('pkg:/') === 0) {
+        if (targetPath.startsWith('pkg:/')) {
             targetPath = targetPath.substring(5);
             if (targetPath === '') {
                 return null;
@@ -498,11 +512,11 @@ export class Util {
         //throw out the filename part of source
         sourceParts.splice(sourceParts.length - 1, 1);
         //start out by adding updir paths for each remaining source part
-        let resultParts = sourceParts.map((x) => '..');
+        let resultParts = sourceParts.map(() => '..');
 
         //now add every target part
         resultParts = [...resultParts, ...targetParts];
-        return path.join.apply(path, resultParts);
+        return path.join(...resultParts);
     }
 
     /**
@@ -582,7 +596,9 @@ export class Util {
 
     public padLeft(subject: string, totalLength: number, char: string) {
         totalLength = totalLength > 1000 ? 1000 : totalLength;
-        while (subject.length < totalLength) { subject = char + subject; }
+        while (subject.length < totalLength) {
+            subject = char + subject;
+        }
         return subject;
     }
 
@@ -608,7 +624,7 @@ export class Util {
      * @param fullPath
      */
     public lowerDrivePath(fullPath: string) {
-        let match = /([a-z]):[\\\/]/i.exec(fullPath);
+        let match = /([a-z]):[\\/]/i.exec(fullPath);
         if (match) {
             let driveText = match[1];
             fullPath = driveText.toLowerCase() + fullPath.substring(1);
@@ -658,7 +674,7 @@ export class Util {
                 //this diagnostic is affected by this flag
                 if (this.rangeContains(flag.affectedRange, diagnostic.location.start)) {
                     //if the flag acts upon this diagnostic's code
-                    if (flag.codes === null || flag.codes.indexOf(diagnostic.code) > -1) {
+                    if (flag.codes === null || flag.codes.includes(diagnostic.code)) {
                         return true;
                     }
                 }

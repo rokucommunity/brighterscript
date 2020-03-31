@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 import * as Expr from "./Expression";
 import { Token, Identifier, Location, Lexeme } from "../lexer";
 import { BrsType, BrsInvalid } from "../brsTypes";

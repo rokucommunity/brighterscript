@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 export * from "./Lexeme";
 export * from "./ReservedWords";
 export * from "./Token";

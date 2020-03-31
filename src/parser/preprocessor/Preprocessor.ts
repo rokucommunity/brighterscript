@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { EventEmitter } from 'events';
 
 import { BrsError, ParseError } from '../Error';
@@ -90,7 +91,7 @@ export class Preprocessor implements CC.Visitor {
                 break;
             case Lexeme.Identifier:
                 if (this.constants.has(chunk.value.text)) {
-                    value = this.constants.get(chunk.value.text) as boolean;
+                    value = this.constants.get(chunk.value.text);
                     break;
                 }
 
@@ -100,6 +101,7 @@ export class Preprocessor implements CC.Visitor {
                         chunk.value.location
                     )
                 );
+                break;
             default:
                 this.addError(
                     new BrsError(
@@ -168,7 +170,7 @@ export class Preprocessor implements CC.Visitor {
                 return false;
             case Lexeme.Identifier:
                 if (this.constants.has(token.text)) {
-                    return this.constants.get(token.text) as boolean;
+                    return this.constants.get(token.text);
                 }
 
                 this.addError(

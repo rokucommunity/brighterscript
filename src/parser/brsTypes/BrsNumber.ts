@@ -1,4 +1,4 @@
-//tslint:disable
+/* eslint-disable */
 import Long from "long";
 import { BrsValue } from "./BrsType";
 import { Int32 } from "./Int32";

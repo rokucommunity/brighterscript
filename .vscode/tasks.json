@@ -63,26 +63,16 @@
             "problemMatcher": []
         },
         {
-            "label": "tslint",
-            "type": "npm",
-            "script": "tslint",
-            "problemMatcher": {
-                "owner": "tslint",
-                "fileLocation": "absolute",
-                "pattern": {
-                    "regexp": "^(WARNING|ERROR):\\s+(.*\\.ts):(\\d+):(\\d+)\\s*-\\s*(.+)$",
-                    "severity": 1,
-                    "file": 2,
-                    "line": 3,
-                    "column": 4,
-                    "message": 5
-                }
-            }
-        },
-        {
             "type": "npm",
             "script": "test:coverage",
             "problemMatcher": []
+        },
+        {
+            "type": "npm",
+            "script": "lint",
+            "problemMatcher": [
+                "$eslint-stylish"
+            ]
         }
     ]
 }

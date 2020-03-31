@@ -1,10 +1,7 @@
 import { expect } from 'chai';
 import * as fsExtra from 'fs-extra';
-import * as path from 'path';
 import * as sinonImport from 'sinon';
-import { FileChangeType } from 'vscode-languageserver';
 
-import { BsConfig } from './BsConfig';
 import { Program } from './Program';
 import { ProgramBuilder } from './ProgramBuilder';
 import util from './util';
@@ -34,7 +31,7 @@ describe('ProgramBuilder', () => {
             if (vfs[filePath]) {
                 return vfs[filePath];
             } else {
-                throw new Error('Cannot find file ' + filePath);
+                throw new Error(`Cannot find file "${filePath}"`);
             }
         });
     });
@@ -110,7 +107,7 @@ describe('ProgramBuilder', () => {
                 }, {
                     src: n(`${rootDir}/testProject/source/lib2.brs`),
                     dest: 'source/lib.brs'
-                }],
+                }]
             });
             const diagnostics = builder.getDiagnostics();
             expect(diagnostics.map(x => x.message)).to.eql([]);

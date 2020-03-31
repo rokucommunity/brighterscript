@@ -409,7 +409,7 @@ describe('Program', () => {
         });
     });
 
-    describe('addOrReplaceFile', async () => {
+    describe('addOrReplaceFile', () => {
         it('emits file-removed when file already exists', async () => {
             let callCount = 0;
             program.on('file-removed', () => {
@@ -471,7 +471,7 @@ describe('Program', () => {
             await program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
 
             let context = program.getContextByName(`components/component1.xml`);
-            let normalizedPkgPath = n(`components/component1.xml`);
+            n(`components/component1.xml`);
             expect(context.getFile(xmlPath).file.pkgPath).to.equal(util.standardizePkgPath(`components/component1.xml`));
             expect(context.getFile(brsPath).file.pkgPath).to.equal(util.standardizePkgPath(`components/component1.brs`));
         });
@@ -837,7 +837,7 @@ describe('Program', () => {
             let childCount = 20;
             //add many children, we should never encounter an error
             for (let i = 0; i < childCount; i++) {
-                await program.addOrReplaceFile({ src: `${rootDir}/components/child${i}.xml`, dest: 'components/child${i}.xml' }, `
+                await program.addOrReplaceFile({ src: `${rootDir}/components/child${i}.xml`, dest: `components/child${i}.xml` }, `
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="Child${i}" extends="BaseScene">
                         <script type="text/brightscript" uri="pkg:/source/lib.brs" />
@@ -919,7 +919,7 @@ describe('Program', () => {
             expect(Object.keys(program.files).length).to.equal(0);
             let brsFilePath = n(`${rootDir}/components/comp1.brs`.toLowerCase());
             let xmlFilePath = n(`${rootDir}/components/comp1.xml`.toLowerCase());
-            program.fileResolvers.push(async (filePath) => {
+            program.fileResolvers.push((filePath) => {
                 if (filePath.toLowerCase() === n(brsFilePath)) {
                     return `'${filePath}`;
                 } else if (filePath.toLowerCase() === n(xmlFilePath)) {
