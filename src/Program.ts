@@ -111,9 +111,9 @@ export class Program {
         for (let filePath in this.files) {
             let file = this.files[filePath];
             if (this.fileIsIncludedInAnyContext(file)) {
-            //no contexts reference this file. add it to the list
-            result.push(file);
-        }
+                //no contexts reference this file. add it to the list
+                result.push(file);
+            }
         }
         return result;
     }
@@ -151,12 +151,12 @@ export class Program {
                 //This skips file parse diagnostics when multiple contexts include same file
                 !finalDiagnostics.includes(diagnostic) &&
 
-            //skip any specified error codes
+                //skip any specified error codes
                 !this.options.ignoreErrorCodes?.includes(diagnostic.code)
             ) {
-            //add the diagnostic to the final list
-            finalDiagnostics.push(diagnostic);
-        }
+                //add the diagnostic to the final list
+                finalDiagnostics.push(diagnostic);
+            }
         }
 
         return finalDiagnostics;
@@ -379,14 +379,14 @@ export class Program {
             let file = this.files[filePath];
             if (!this.fileIsIncludedInAnyContext(file)) {
                 //the file is not loaded in any context
-            this.diagnostics.push({
-                file: file,
-                location: Range.create(0, 0, 0, Number.MAX_VALUE),
-                severity: 'warning',
-                ...diagnosticMessages.File_not_referenced_by_any_file_1013()
-            });
+                this.diagnostics.push({
+                    file: file,
+                    location: Range.create(0, 0, 0, Number.MAX_VALUE),
+                    severity: 'warning',
+                    ...diagnosticMessages.File_not_referenced_by_any_file_1013()
+                });
+            }
         }
-    }
         await Promise.resolve();
     }
 
