@@ -646,7 +646,7 @@ export class LanguageServer {
             await this.reloadWorkspaces(workspacesToReload);
 
             //set the list of workspaces to non-reloaded workspaces
-            workspaces = workspaces.filter(x => workspacesToReload.includes(x));
+            workspaces = workspaces.filter(x => !workspacesToReload.includes(x));
         }
 
         //convert created folders into a list of files of their contents

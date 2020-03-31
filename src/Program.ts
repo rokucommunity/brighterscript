@@ -110,7 +110,7 @@ export class Program {
         let result = [] as File[];
         for (let filePath in this.files) {
             let file = this.files[filePath];
-            if (this.fileIsIncludedInAnyContext(file)) {
+            if (!this.fileIsIncludedInAnyContext(file)) {
                 //no contexts reference this file. add it to the list
                 result.push(file);
             }
