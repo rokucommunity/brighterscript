@@ -5,34 +5,8 @@ import { Stmt } from '.';
 import { TranspileState, indent, Expression, FunctionExpression } from './Expression';
 import { util } from '../../util';
 
-export interface Visitor<T> {
-    visitAssignment(statement: AssignmentStatement): BrsType;
-    visitExpression(statement: ExpressionStatement): BrsType;
-    visitExitFor(statement: ExitForStatement): never;
-    visitExitWhile(statement: ExitWhileStatement): never;
-    visitPrint(statement: PrintStatement): BrsType;
-    visitIf(statement: IfStatement): BrsType;
-    visitBlock(block: Block): BrsType;
-    visitFor(statement: ForStatement): BrsType;
-    visitForEach(statement: ForEachStatement): BrsType;
-    visitWhile(statement: WhileStatement): BrsType;
-    visitNamedFunction(statement: FunctionStatement): BrsType;
-    visitReturn(statement: ReturnStatement): never;
-    visitDottedSet(statement: DottedSetStatement): BrsType;
-    visitIndexedSet(statement: IndexedSetStatement): BrsType;
-    visitIncrement(expression: IncrementStatement): BrsInvalid;
-}
-
 /** A BrightScript statement */
 export interface Statement {
-    /**
-     * Handles the enclosing `Statement` with `visitor`.
-     * @param visitor the `Visitor` that will handle the enclosing `Statement`
-     * @returns a BrightScript value (typically `invalid`) and the reason why
-     *          the statement exited (typically `StopReason.End`)
-     */
-    accept<R>(visitor: Visitor<R>): BrsType;
-
     /** The starting and ending location of the expression. */
     location: Location;
 
@@ -47,10 +21,6 @@ export class AssignmentStatement implements Statement {
         readonly name: Identifier,
         readonly value: Expression
     ) { }
-
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitAssignment(this);
-    }
 
     get location() {
         return {
@@ -76,10 +46,6 @@ export class Block implements Statement {
         readonly statements: Statement[],
         readonly startingLocation: Location
     ) { }
-
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitBlock(this);
-    }
 
     get location() {
         let end = this.statements.length
@@ -131,10 +97,6 @@ export class ExpressionStatement implements Statement {
         readonly expression: Expression
     ) { }
 
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitExpression(this);
-    }
-
     get location() {
         return this.expression.location;
     }
@@ -148,10 +110,6 @@ export class CommentStatement implements Statement, Expression {
     constructor(
         public comments: Token[]
     ) { }
-
-    accept(...args: any): any {
-        throw new Error('comment statement visitor not implemented');
-    }
 
     get location() {
         return {
@@ -192,10 +150,6 @@ export class ExitForStatement implements Statement {
         }
     ) { }
 
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitExitFor(this);
-    }
-
     get location() {
         return this.tokens.exitFor.location;
     }
@@ -214,10 +168,6 @@ export class ExitWhileStatement implements Statement {
         }
     ) { }
 
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitExitWhile(this);
-    }
-
     get location() {
         return this.tokens.exitWhile.location;
     }
@@ -231,10 +181,6 @@ export class ExitWhileStatement implements Statement {
 
 export class FunctionStatement implements Statement {
     constructor(readonly name: Identifier, readonly func: FunctionExpression) { }
-
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitNamedFunction(this);
-    }
 
     get location() {
         return {
@@ -272,10 +218,6 @@ export class IfStatement implements Statement {
         readonly elseIfs: ElseIf[],
         readonly elseBranch?: Block
     ) { }
-
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitIf(this);
-    }
 
     private getEndLocation(): Location {
         if (this.tokens.endIf) {
@@ -389,10 +331,6 @@ export class IfStatement implements Statement {
 export class IncrementStatement implements Statement {
     constructor(readonly value: Expression, readonly operator: Token) { }
 
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitIncrement(this);
-    }
-
     get location() {
         return {
             file: this.value.location.file,
@@ -435,10 +373,6 @@ export class PrintStatement implements Statement {
         readonly expressions: Array<Expression | PrintSeparatorTab | Stmt.PrintSeparatorSpace>
     ) { }
 
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitPrint(this);
-    }
-
     get location() {
         let end = this.expressions.length
             ? this.expressions[this.expressions.length - 1].location.end
@@ -480,11 +414,6 @@ export class GotoStatement implements Statement {
         }
     ) { }
 
-    accept<R>(visitor: Visitor<R>): BrsType {
-        //should search the code for the corresponding label, and set that as the next line to execute
-        throw new Error('Not implemented');
-    }
-
     get location() {
         return {
             file: this.tokens.goto.location.file,
@@ -510,10 +439,6 @@ export class LabelStatement implements Statement {
         }
     ) { }
 
-    accept<R>(visitor: Visitor<R>): BrsType {
-        throw new Error('Not implemented');
-    }
-
     get location() {
         return {
             file: this.tokens.identifier.location.file,
@@ -538,10 +463,6 @@ export class ReturnStatement implements Statement {
         },
         readonly value?: Expression
     ) { }
-
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitReturn(this);
-    }
 
     get location() {
         return {
@@ -571,11 +492,6 @@ export class EndStatement implements Statement {
         }
     ) { }
 
-    accept<R>(visitor: Visitor<R>): BrsType {
-        //TODO implement this in the runtime. It should immediately terminate program execution, without error
-        throw new Error('Not implemented');
-    }
-
     get location() {
         return {
             file: this.tokens.end.location.file,
@@ -597,11 +513,6 @@ export class StopStatement implements Statement {
             stop: Token;
         }
     ) { }
-
-    accept<R>(visitor: Visitor<R>): BrsType {
-        //TODO implement this in the runtime. It should pause code execution until a `c` command is issued from the console
-        throw new Error('Not implemented');
-    }
 
     get location() {
         return {
@@ -631,10 +542,6 @@ export class ForStatement implements Statement {
         readonly increment: Expression,
         readonly body: Block
     ) { }
-
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitFor(this);
-    }
 
     get location() {
         return {
@@ -701,10 +608,6 @@ export class ForEachStatement implements Statement {
         readonly body: Block
     ) { }
 
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitForEach(this);
-    }
-
     get location() {
         return {
             file: this.tokens.forEach.location.file,
@@ -758,10 +661,6 @@ export class WhileStatement implements Statement {
         readonly body: Block
     ) { }
 
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitWhile(this);
-    }
-
     get location() {
         return {
             file: this.tokens.while.location.file,
@@ -806,10 +705,6 @@ export class DottedSetStatement implements Statement {
         readonly value: Expression
     ) { }
 
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitDottedSet(this);
-    }
-
     get location() {
         return {
             file: this.obj.location.file,
@@ -840,10 +735,6 @@ export class IndexedSetStatement implements Statement {
         readonly openingSquare: Token,
         readonly closingSquare: Token
     ) { }
-
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitIndexedSet(this);
-    }
 
     get location() {
         return {
@@ -878,9 +769,6 @@ export class LibraryStatement implements Statement {
             filePath: Token | undefined;
         }
     ) { }
-    accept<R>(visitor: Visitor<R>): BrsType {
-        throw new Error('Library is not implemented');
-    }
 
     get location() {
         return {
@@ -930,10 +818,6 @@ export class ClassStatement implements Statement {
     public methods = [] as ClassMethodStatement[];
     public fields = [] as ClassFieldStatement[];
 
-    accept<R>(visitor: Visitor<R>): BrsType {
-        throw new Error('Method not implemented.');
-    }
-
     get location() {
         return {
             file: this.keyword.location.file,
@@ -953,10 +837,6 @@ export class ClassMethodStatement implements Statement {
         readonly name: Identifier,
         readonly func: FunctionExpression
     ) { }
-
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitNamedFunction(this as any);
-    }
 
     get location() {
         return {
@@ -979,10 +859,6 @@ export class ClassFieldStatement implements Statement {
         readonly as: Token,
         readonly type: Token
     ) { }
-
-    accept<R>(visitor: Visitor<R>): BrsType {
-        throw new Error('Method not implemented.');
-    }
 
     get location() {
         return {

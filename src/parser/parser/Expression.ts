@@ -5,20 +5,6 @@ import { SourceNode } from 'source-map';
 
 import { util } from '../../util';
 
-export interface Visitor<T> {
-    visitBinary(expression: BinaryExpression): T;
-    visitCall(expression: CallExpression): T;
-    visitAnonymousFunction(func: FunctionExpression): T;
-    visitDottedGet(expression: DottedGetExpression): T;
-    visitIndexedGet(expression: IndexedGetExpression): T;
-    visitGrouping(expression: GroupingExpression): T;
-    visitLiteral(expression: LiteralExpression): T;
-    visitArrayLiteral(expression: ArrayLiteralExpression): T;
-    visitAALiteral(expression: AALiteralExpression): T;
-    visitUnary(expression: UnaryExpression): T;
-    visitVariable(expression: VariableExpression): T;
-}
-
 export interface TranspileState {
     //the path for this file relative to the root of the output package
     pkgPath: string;
@@ -34,13 +20,6 @@ export interface TranspileState {
 
 /** A BrightScript expression */
 export interface Expression {
-    /**
-     * Handles the enclosing `Expression` with `visitor`.
-     * @param visitor the `Visitor` that will handle the enclosing `Expression`
-     * @returns the BrightScript value resulting from evaluating the expression
-     */
-    accept<R>(visitor: Visitor<R>): R;
-
     /** The starting and ending location of the expression. */
     location: Location;
 
@@ -53,10 +32,6 @@ export class BinaryExpression implements Expression {
         readonly operator: Token,
         readonly right: Expression
     ) { }
-
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitBinary(this);
-    }
 
     get location() {
         return {
@@ -86,10 +61,6 @@ export class CallExpression implements Expression {
         readonly closingParen: Token,
         readonly args: Expression[]
     ) { }
-
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitCall(this);
-    }
 
     get location() {
         return {
@@ -132,10 +103,6 @@ export class FunctionExpression implements Expression {
         readonly asToken?: Token,
         readonly returnTypeToken?: Token
     ) { }
-
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitAnonymousFunction(this);
-    }
 
     get location() {
         return {
@@ -204,10 +171,6 @@ export class FunctionExpression implements Expression {
 export class DottedGetExpression implements Expression {
     constructor(readonly obj: Expression, readonly name: Identifier) { }
 
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitDottedGet(this);
-    }
-
     get location() {
         return {
             file: this.obj.location.file,
@@ -232,10 +195,6 @@ export class IndexedGetExpression implements Expression {
         readonly openingSquare: Token,
         readonly closingSquare: Token
     ) { }
-
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitIndexedGet(this);
-    }
 
     get location() {
         return {
@@ -264,10 +223,6 @@ export class GroupingExpression implements Expression {
         readonly expression: Expression
     ) { }
 
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitGrouping(this);
-    }
-
     get location() {
         return {
             file: this.tokens.left.location.file,
@@ -290,10 +245,6 @@ export class LiteralExpression implements Expression {
         readonly value: BrsType,
         readonly _location: Location
     ) { }
-
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitLiteral(this);
-    }
 
     get location() {
         return (
@@ -329,10 +280,6 @@ export class ArrayLiteralExpression implements Expression {
         readonly open: Token,
         readonly close: Token
     ) { }
-
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitArrayLiteral(this);
-    }
 
     get location() {
         return {
@@ -416,10 +363,6 @@ export class AALiteralExpression implements Expression {
         readonly open: Token,
         readonly close: Token
     ) { }
-
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitAALiteral(this);
-    }
 
     get location() {
         return {
@@ -514,10 +457,6 @@ export class AALiteralExpression implements Expression {
 export class UnaryExpression implements Expression {
     constructor(readonly operator: Token, readonly right: Expression) { }
 
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitUnary(this);
-    }
-
     get location() {
         return {
             file: this.operator.location.file,
@@ -537,10 +476,6 @@ export class UnaryExpression implements Expression {
 
 export class VariableExpression implements Expression {
     constructor(readonly name: Identifier) { }
-
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitVariable(this);
-    }
 
     get location() {
         return this.name.location;
