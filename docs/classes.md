@@ -19,11 +19,10 @@ end class
   
 ```BrightScript
 function Person()
-    instance = {
-        name: invalid,
-        sayHello: function()
-        end function,
-    }
+    instance = {}
+    instance.name = invalid
+    instance.sayHello = function()
+    end function
     return instance
 end function
 ```
@@ -105,11 +104,10 @@ end sub
   
 ```BrightScript
 function Person(name as string)
-    instance = {
-        name: invalid
-        sayHello: function()
-        end function,
-    }
+    instance = {}
+    instance.name = invalid
+    instance.sayHello = function()
+    end function
     
     'sub new
     instance.name = name
@@ -194,23 +192,22 @@ end class
   
 ```BrightScript
 function Person()
-    instance = {
-        'defaults to public
-        name: invalid,
-        
-        'specified private
-        socialSecurityNumber: invalid,
-        
-        'defaults to public
-        getName: function()
-            return m.name
-        end function,
+    instance = {}
+    'defaults to public
+    instance.name = invalid,
+    
+    'specified private
+    instance.socialSecurityNumber = invalid
+    
+    'defaults to public
+    instance.getName = function()
+        return m.name
+    end function
 
-        'specified private
-        setSocialSecurityNumber(value as string)
-            m.socialSecurityNumber = value
-        end sub
-    }
+    'specified private
+    instance.setSocialSecurityNumber = sub(value as string)
+        m.socialSecurityNumber = value
+    end sub
     return instance
 end function
 ```
@@ -238,18 +235,18 @@ end class
   
 ```BrightScript
 function Person()
-    instance = {
-       'defaults to type "dynamic"
-        name: invalid,
+    instance = {}
 
-        'infers type "integer"
-        age: 12,
+    'defaults to type "dynamic"
+    instance.name = invalid
 
-        'infers type "integer"
-        getAge: getAge()
-            return m.age
-        end function
-    }
+    'infers type "integer"
+    instance.age = 12
+
+    'infers type "integer"
+    instance.getAge = function()
+        return m.age
+    end function
     return instance
 end function
 ```
