@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { EventEmitter } from 'events';
 
 import { BrsError, ParseError } from '../Error';
@@ -52,7 +51,7 @@ export class Preprocessor implements CC.Visitor {
                     (allTokens: Token[], chunkTokens: Token[]) => [...allTokens, ...chunkTokens],
                     []
                 ),
-            errors: this.errors,
+            errors: this.errors
         };
     }
 

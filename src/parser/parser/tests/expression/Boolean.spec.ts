@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -20,7 +19,7 @@ describe('parser boolean expressions', () => {
             token(Lexeme.True, 'true', BrsBoolean.True),
             token(Lexeme.And, 'and'),
             token(Lexeme.False, 'false', BrsBoolean.False),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -35,7 +34,7 @@ describe('parser boolean expressions', () => {
             token(Lexeme.True, 'true', BrsBoolean.True),
             token(Lexeme.Or, 'or'),
             token(Lexeme.False, 'false', BrsBoolean.False),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -57,8 +56,8 @@ describe('parser boolean expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 0 },
-                    end: { line: 1, column: 1 },
-                },
+                    end: { line: 1, column: 1 }
+                }
             },
             {
                 kind: Lexeme.Equal,
@@ -66,8 +65,8 @@ describe('parser boolean expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 2 },
-                    end: { line: 1, column: 3 },
-                },
+                    end: { line: 1, column: 3 }
+                }
             },
             {
                 kind: Lexeme.True,
@@ -76,8 +75,8 @@ describe('parser boolean expressions', () => {
                 isReserved: true,
                 location: {
                     start: { line: 1, column: 4 },
-                    end: { line: 1, column: 8 },
-                },
+                    end: { line: 1, column: 8 }
+                }
             },
             {
                 kind: Lexeme.And,
@@ -85,8 +84,8 @@ describe('parser boolean expressions', () => {
                 isReserved: true,
                 location: {
                     start: { line: 1, column: 9 },
-                    end: { line: 1, column: 12 },
-                },
+                    end: { line: 1, column: 12 }
+                }
             },
             {
                 kind: Lexeme.False,
@@ -95,8 +94,8 @@ describe('parser boolean expressions', () => {
                 isReserved: true,
                 location: {
                     start: { line: 1, column: 13 },
-                    end: { line: 1, column: 18 },
-                },
+                    end: { line: 1, column: 18 }
+                }
             },
             {
                 kind: Lexeme.Eof,
@@ -104,16 +103,16 @@ describe('parser boolean expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 18 },
-                    end: { line: 1, column: 19 },
-                },
-            },
+                    end: { line: 1, column: 19 }
+                }
+            }
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].value.location).deep.include({
             start: { line: 1, column: 4 },
-            end: { line: 1, column: 18 },
+            end: { line: 1, column: 18 }
         });
     });
 });

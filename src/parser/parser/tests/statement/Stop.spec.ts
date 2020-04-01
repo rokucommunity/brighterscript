@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -11,7 +10,7 @@ describe('stop statement', () => {
             token(Lexeme.Stop, 'stop'),
             token(Lexeme.Equal, '='),
             token(Lexeme.True, 'true'),
-            EOF,
+            EOF
         ]);
 
         //should be an error

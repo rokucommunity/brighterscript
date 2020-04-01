@@ -1,25 +1,24 @@
-/* eslint-disable */
-import * as fs from "fs";
-import * as readline from "readline";
-import { promisify } from "util";
-import pSettle from "p-settle";
+import * as fs from 'fs';
+import * as readline from 'readline';
+import { promisify } from 'util';
+import pSettle from 'p-settle';
 const readFile = promisify(fs.readFile);
 
-import { Lexer } from "./lexer";
-import * as PP from "./preprocessor";
-import { Parser } from "./parser";
-declare var Interpreter: any;
+import { Lexer } from './lexer';
+import * as PP from './preprocessor';
+import { Parser } from './parser';
+declare let Interpreter: any;
 declare type Interpreter = any;
 declare type ExecutionOptions = any;
-declare var defaultExecutionOptions: any;
-import * as BrsError from "./Error";
+declare let defaultExecutionOptions: any;
+import * as BrsError from './Error';
 
-import * as _lexer from "./lexer";
+import * as _lexer from './lexer'; //eslint-disable-line
 export { _lexer as lexer };
-import * as BrsTypes from "./brsTypes";
+import * as BrsTypes from './brsTypes';
 export { BrsTypes as types };
 export { PP as preprocessor };
-import * as _parser from "./parser";
+import * as _parser from './parser'; //eslint-disable-line
 export { _parser as parser };
 
 /**
@@ -43,11 +42,9 @@ export async function execute(filenames: string[], options: Partial<ExecutionOpt
         filenames.map(async filename => {
             let contents;
             try {
-                contents = await readFile(filename, "utf-8");
+                contents = await readFile(filename, 'utf-8');
             } catch (err) {
-                return Promise.reject({
-                    message: `brs: can't open file '${filename}': [Errno ${err.errno}]`,
-                });
+                throw new Error(`brs: can't open file '${filename}': [Errno ${err.errno}]`);
             }
 
             let lexer = new Lexer();
@@ -57,23 +54,17 @@ export async function execute(filenames: string[], options: Partial<ExecutionOpt
 
             let scanResults = lexer.scan(contents, filename);
             if (scanResults.errors.length > 0) {
-                return Promise.reject({
-                    message: "Error occurred during lexing",
-                });
+                throw new Error('Error occurred during lexing');
             }
 
             let preprocessResults = preprocessor.preprocess(scanResults.tokens, manifest);
             if (preprocessResults.errors.length > 0) {
-                return Promise.reject({
-                    message: "Error occurred during pre-processing",
-                });
+                throw new Error('Error occurred during pre-processing');
             }
 
             let parseResults = parser.parse(preprocessResults.processedTokens);
             if (parseResults.errors.length > 0) {
-                return Promise.reject({
-                    message: "Error occurred parsing",
-                });
+                throw new Error('Error occurred parsing');
             }
 
             return Promise.resolve(parseResults.statements);
@@ -82,10 +73,10 @@ export async function execute(filenames: string[], options: Partial<ExecutionOpt
 
     // don't execute anything if there were reading, lexing, or parsing errors
     if (parsedFiles.some(file => file.isRejected)) {
-        return Promise.reject({
+        return Promise.reject({ //eslint-disable-line
             messages: parsedFiles
                 .filter(file => file.isRejected)
-                .map(rejection => rejection.reason.message),
+                .map(rejection => rejection.reason.message)
         });
     }
 
@@ -123,7 +114,7 @@ export function executeSync(
 
     let allStatements = filenames
         .map(filename => {
-            let contents = fs.readFileSync(filename, "utf8");
+            let contents = fs.readFileSync(filename, 'utf8');
             let scanResults = Lexer.scan(contents, filename);
             let preprocessor = new PP.Preprocessor();
             let preprocessorResults = preprocessor.preprocess(scanResults.tokens, manifest);
@@ -146,11 +137,11 @@ export function repl() {
 
     const rl = readline.createInterface({
         input: process.stdin,
-        output: process.stdout,
+        output: process.stdout
     });
-    rl.setPrompt("brs> ");
+    rl.setPrompt('brs> ');
 
-    rl.on("line", line => {
+    rl.on('line', line => {
         let results = run(line, defaultExecutionOptions, replInterpreter);
         if (results) {
             results.map(result => console.log(result.toString()));
@@ -175,7 +166,7 @@ export function repl() {
  */
 function run(
     contents: string,
-    options: ExecutionOptions = defaultExecutionOptions,
+    options: ExecutionOptions = defaultExecutionOptions,//eslint-disable-line
     interpreter: Interpreter
 ) {
     const lexer = new Lexer();
@@ -184,7 +175,7 @@ function run(
     lexer.onError(logError);
     parser.onError(logError);
 
-    const scanResults = lexer.scan(contents, "REPL");
+    const scanResults = lexer.scan(contents, 'REPL');
     if (scanResults.errors.length > 0) {
         return;
     }
@@ -202,7 +193,7 @@ function run(
         return interpreter.exec(parseResults.statements);
     } catch (e) {
         //options.stderr.write(e.message);
-        return;
+
     }
 }
 

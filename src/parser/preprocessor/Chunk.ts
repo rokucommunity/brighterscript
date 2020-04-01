@@ -1,5 +1,4 @@
-/* eslint-disable */
-import { Token } from "../lexer";
+import { Token } from '../lexer';
 
 /**
  * A set of operations that must be implemented to properly handle conditional compilation chunks.

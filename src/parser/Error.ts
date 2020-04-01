@@ -1,5 +1,4 @@
-/* eslint-disable */
-import { BrsType, ValueKind } from './brsTypes';
+import { BrsType, ValueKind, valueKindToString } from './brsTypes';
 import { Lexeme, Location, Token } from './lexer';
 
 export class BrsError {
@@ -60,13 +59,13 @@ export class TypeMismatch extends BrsError {
     constructor(mismatchMetadata: TypeMismatchMetadata) {
         let messageLines = [
             mismatchMetadata.message,
-            `    left: ${ValueKind.toString(getKind(mismatchMetadata.left.type))}`,
+            `    left: ${valueKindToString(getKind(mismatchMetadata.left.type))}`
         ];
         let location = mismatchMetadata.left.location;
 
         if (mismatchMetadata.right) {
             messageLines.push(
-                `    right: ${ValueKind.toString(getKind(mismatchMetadata.right.type))}`
+                `    right: ${valueKindToString(getKind(mismatchMetadata.right.type))}`
             );
 
             location.end = mismatchMetadata.right.location.end;

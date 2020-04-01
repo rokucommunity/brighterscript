@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -23,7 +22,7 @@ describe('parser return statements', () => {
             token(Lexeme.Return, 'return'),
             token(Lexeme.Newline, '\\n'),
             token(Lexeme.EndFunction, 'end function'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -42,7 +41,7 @@ describe('parser return statements', () => {
             { kind: Lexeme.String, literal: new BrsString('test'), text: '"test"', line: 2 },
             token(Lexeme.Newline, '\\n'),
             token(Lexeme.EndFunction, 'end function'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -63,7 +62,7 @@ describe('parser return statements', () => {
             token(Lexeme.RightParen, ')'),
             token(Lexeme.Newline, '\\n'),
             token(Lexeme.EndFunction, 'end function'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -92,8 +91,8 @@ describe('parser return statements', () => {
                 isReserved: true,
                 location: {
                     start: { line: 2, column: 2 },
-                    end: { line: 2, column: 8 },
-                },
+                    end: { line: 2, column: 8 }
+                }
             },
             {
                 kind: Lexeme.Integer,
@@ -102,18 +101,18 @@ describe('parser return statements', () => {
                 isReserved: false,
                 location: {
                     start: { line: 2, column: 9 },
-                    end: { line: 2, column: 10 },
-                },
+                    end: { line: 2, column: 10 }
+                }
             },
             token(Lexeme.Newline, '\\n'),
             token(Lexeme.EndFunction, 'end function'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements[0].func.body.statements[0].location).to.deep.include({
             start: { line: 2, column: 2 },
-            end: { line: 2, column: 10 },
+            end: { line: 2, column: 10 }
         });
     });
 });

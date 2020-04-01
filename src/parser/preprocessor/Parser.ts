@@ -1,9 +1,8 @@
-/* eslint-disable */
-import { EventEmitter } from "events";
+import { EventEmitter } from 'events';
 
-import { Token } from "../lexer/Token";
-import { Lexeme } from "../lexer/Lexeme";
-import * as CC from "./Chunk";
+import { Token } from '../lexer/Token';
+import { Lexeme } from '../lexer/Lexeme';
+import * as CC from './Chunk';
 import { ParseError } from '../Error';
 
 /** The results of a chunk-parser's parsing pass. */
@@ -37,19 +36,19 @@ export class Parser {
          */
         const emitError = (err: ParseError): never => {
             errors.push(err);
-            this.events.emit("err", err);
-            throw err;
+            this.events.emit('err', err);
+            throw err; // eslint-disable-line @typescript-eslint/no-throw-literal
         };
 
         try {
             return {
                 chunks: nChunks(),
-                errors: errors,
+                errors: errors
             };
         } catch (conditionalCompilationError) {
             return {
                 chunks: [],
-                errors: errors,
+                errors: errors
             };
         }
 
@@ -85,7 +84,7 @@ export class Parser {
         function hashConst(): CC.Chunk | undefined {
             if (match(Lexeme.HashConst)) {
                 let name = advance();
-                consume("Expected '=' after #const (name)", Lexeme.Equal);
+                consume('Expected \'=\' after #const (name)', Lexeme.Equal);
                 let value = advance();
                 match(Lexeme.Newline);
                 return new CC.Declaration(name, value);
@@ -117,7 +116,7 @@ export class Parser {
 
                     elseIfs.push({
                         condition: condition,
-                        thenChunks: nChunks(),
+                        thenChunks: nChunks()
                     });
                 }
 
@@ -146,9 +145,9 @@ export class Parser {
          */
         function hashError(): CC.Chunk | undefined {
             if (check(Lexeme.HashError)) {
-                let hashError = advance();
+                let hashErr = advance();
                 let message = advance();
-                return new CC.Error(hashError, message.text || "");
+                return new CC.Error(hashErr, message.text || '');
             }
 
             return brightScriptChunk();

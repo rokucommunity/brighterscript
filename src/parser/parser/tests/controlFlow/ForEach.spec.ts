@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Expr, Parser, Stmt } from '../..';
@@ -23,7 +22,7 @@ describe('parser foreach loops', () => {
             // body would go here, but it's not necessary for this test
             token(Lexeme.EndFor, 'end for'),
             token(Lexeme.Newline, '\n'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -33,7 +32,7 @@ describe('parser foreach loops', () => {
         expect(forEach).to.be.instanceof(Stmt.ForEachStatement);
 
         expect(forEach.item).to.deep.include(identifier('word'));
-        expect(forEach.target).to.be.instanceof(Expr.Variable);
+        expect(forEach.target).to.be.instanceof(Expr.VariableExpression);
         expect(forEach.target.name).to.deep.include(identifier('lipsum'));
 
         //expect(statements).toMatchSnapshot();
@@ -50,7 +49,7 @@ describe('parser foreach loops', () => {
             // body would go here, but it's not necessary for this test
             token(Lexeme.Next, 'next'),
             token(Lexeme.Newline, '\n'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -75,8 +74,8 @@ describe('parser foreach loops', () => {
                 isReserved: true,
                 location: {
                     start: { line: 1, column: 0 },
-                    end: { line: 1, column: 8 },
-                },
+                    end: { line: 1, column: 8 }
+                }
             },
             {
                 kind: Lexeme.Identifier,
@@ -84,8 +83,8 @@ describe('parser foreach loops', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 9 },
-                    end: { line: 1, column: 10 },
-                },
+                    end: { line: 1, column: 10 }
+                }
             },
             {
                 kind: Lexeme.Identifier,
@@ -93,8 +92,8 @@ describe('parser foreach loops', () => {
                 isReserved: true,
                 location: {
                     start: { line: 1, column: 11 },
-                    end: { line: 1, column: 13 },
-                },
+                    end: { line: 1, column: 13 }
+                }
             },
             {
                 kind: Lexeme.Identifier,
@@ -102,8 +101,8 @@ describe('parser foreach loops', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 14 },
-                    end: { line: 1, column: 15 },
-                },
+                    end: { line: 1, column: 15 }
+                }
             },
             {
                 kind: Lexeme.Newline,
@@ -111,8 +110,8 @@ describe('parser foreach loops', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 15 },
-                    end: { line: 1, column: 16 },
-                },
+                    end: { line: 1, column: 16 }
+                }
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
@@ -126,17 +125,17 @@ describe('parser foreach loops', () => {
                 isReserved: false,
                 location: {
                     start: { line: 3, column: 0 },
-                    end: { line: 3, column: 7 },
-                },
+                    end: { line: 3, column: 7 }
+                }
             },
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].location).deep.include({
             start: { line: 1, column: 0 },
-            end: { line: 3, column: 7 },
+            end: { line: 3, column: 7 }
         });
     });
 });

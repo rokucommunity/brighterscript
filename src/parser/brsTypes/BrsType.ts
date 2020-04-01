@@ -1,7 +1,6 @@
-/* eslint-disable */
-import { BrsType } from ".";
-import { Boxable } from "./Boxing";
-import { RoString } from "./components/RoString";
+import { BrsType } from '.';
+import { Boxable } from './Boxing';
+import { RoString } from './components/RoString';
 
 /** Set of values supported in BrightScript. */
 export enum ValueKind {
@@ -16,77 +15,77 @@ export enum ValueKind {
     Uninitialized,
     Dynamic,
     Void,
-    Object,
+    Object
 }
 
-export namespace ValueKind {
-    /**
-     * Converts a `ValueKind` enum member to a human-readable string representation.
-     * @returns a textual representation of the provided value kind.
-     */
-    export function toString(kind: ValueKind): string {
-        switch (kind) {
-            case ValueKind.Invalid:
-                return "Invalid";
-            case ValueKind.Boolean:
-                return "Boolean";
-            case ValueKind.String:
-                return "String";
-            case ValueKind.Int32:
-                return "Integer";
-            case ValueKind.Int64:
-                return "LongInteger";
-            case ValueKind.Float:
-                return "Float";
-            case ValueKind.Double:
-                return "Double";
-            case ValueKind.Callable:
-                return "Function";
-            case ValueKind.Dynamic:
-                return "Dynamic";
-            case ValueKind.Void:
-                return "Void";
-            case ValueKind.Uninitialized:
-                return "<UNINITIALIZED>";
-            case ValueKind.Object:
-                return "Object";
-        }
+/**
+ * Converts a `ValueKind` enum member to a human-readable string representation.
+ * @returns a textual representation of the provided value kind.
+ */
+export function valueKindToString(kind: ValueKind): string {
+    switch (kind) {
+        case ValueKind.Invalid:
+            return 'Invalid';
+        case ValueKind.Boolean:
+            return 'Boolean';
+        case ValueKind.String:
+            return 'String';
+        case ValueKind.Int32:
+            return 'Integer';
+        case ValueKind.Int64:
+            return 'LongInteger';
+        case ValueKind.Float:
+            return 'Float';
+        case ValueKind.Double:
+            return 'Double';
+        case ValueKind.Callable:
+            return 'Function';
+        case ValueKind.Dynamic:
+            return 'Dynamic';
+        case ValueKind.Void:
+            return 'Void';
+        case ValueKind.Uninitialized:
+            return '<UNINITIALIZED>';
+        case ValueKind.Object:
+            return 'Object';
+        default:
+            return 'unknown';
     }
+}
 
-    /**
-     * Fetches a `ValueKind` enum member by its string representation.
-     * @param kind the string representation of a `ValueKind`
-     * @returns the corresponding `ValueKind` if one exists, otherwise `undefined`.
-     */
-    export function fromString(kind: string): ValueKind | undefined {
-        switch (kind.toLowerCase()) {
-            case "invalid":
-                return ValueKind.Invalid;
-            case "boolean":
-                return ValueKind.Boolean;
-            case "string":
-                return ValueKind.String;
-            case "integer":
-                return ValueKind.Int32;
-            case "longinteger":
-                return ValueKind.Int64;
-            case "float":
-                return ValueKind.Float;
-            case "double":
-                return ValueKind.Double;
-            case "function":
-                return ValueKind.Callable;
-            case "dynamic":
-                return ValueKind.Dynamic;
-            case "void":
-                return ValueKind.Void;
-            case "<uninitialized>":
-                return ValueKind.Uninitialized;
-            case "object":
-                return ValueKind.Object;
-            default:
-                return undefined;
-        }
+/**
+ * Fetches a `ValueKind` enum member by its string representation.
+ * @param kind the string representation of a `ValueKind`
+ * @returns the corresponding `ValueKind` if one exists, otherwise `undefined`.
+ */
+export function valueKindFromString(kind: string): ValueKind | undefined {
+    switch (kind.toLowerCase()) {
+        case 'invalid':
+            return ValueKind.Invalid;
+        case 'boolean':
+            return ValueKind.Boolean;
+        case 'string':
+            return ValueKind.String;
+        case 'integer':
+            return ValueKind.Int32;
+        case 'longinteger':
+            return ValueKind.Int64;
+        case 'float':
+            return ValueKind.Float;
+        case 'double':
+            return ValueKind.Double;
+        case 'function':
+            return ValueKind.Callable;
+        case 'dynamic':
+            return ValueKind.Dynamic;
+        case 'void':
+            return ValueKind.Void;
+        case '<uninitialized>':
+            return ValueKind.Uninitialized;
+        case 'object':
+            return ValueKind.Object;
+        default:
+            return undefined;
     }
 }
 
@@ -133,7 +132,7 @@ export interface Comparable {
 /** Internal representation of a string in BrightScript. */
 export class BrsString implements BrsValue, Comparable, Boxable {
     readonly kind = ValueKind.String;
-    constructor(readonly value: string) {}
+    constructor(readonly value: string) { }
 
     lessThan(other: BrsType): BrsBoolean {
         if (other.kind === ValueKind.String) {
@@ -180,7 +179,7 @@ export class BrsString implements BrsValue, Comparable, Boxable {
 /** Internal representation of a boolean in BrightScript. */
 export class BrsBoolean implements BrsValue, Comparable {
     readonly kind = ValueKind.Boolean;
-    private constructor(private readonly value: boolean) {}
+    private constructor(private readonly value: boolean) { }
 
     toBoolean(): boolean {
         return this.value;
@@ -270,7 +269,7 @@ export class BrsInvalid implements BrsValue, Comparable {
     }
 
     toString(parent?: BrsType) {
-        return "invalid";
+        return 'invalid';
     }
 }
 
@@ -300,6 +299,6 @@ export class Uninitialized implements BrsValue, Comparable {
     }
 
     toString(parent?: BrsType) {
-        return "<UNINITIALIZED>";
+        return '<UNINITIALIZED>';
     }
 }

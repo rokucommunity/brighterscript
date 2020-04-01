@@ -1,10 +1,9 @@
-/* eslint-disable */
-import { BrsType, BrsBoolean } from "./";
-import { ValueKind, Comparable } from "./BrsType";
-import { BrsNumber, Numeric } from "./BrsNumber";
-import { Int32 } from "./Int32";
-import { Double } from "./Double";
-import { Int64 } from "./Int64";
+import { BrsType, BrsBoolean } from './';
+import { ValueKind, Comparable } from './BrsType';
+import { BrsNumber, Numeric } from './BrsNumber';
+import { Int32 } from './Int32';
+import { Double } from './Double';
+import { Int64 } from './Int64';
 
 /**
  * Number of significant digits represented in an IEEE 32-bit floating point number.
@@ -118,13 +117,13 @@ export class Float implements Numeric, Comparable {
     pow(exponent: BrsNumber): BrsNumber {
         switch (exponent.kind) {
             case ValueKind.Int32:
-                return new Float(Math.pow(this.getValue(), exponent.getValue()));
+                return new Float(this.getValue() ** exponent.getValue());
             case ValueKind.Int64:
-                return new Float(Math.pow(this.getValue(), exponent.getValue().toNumber()));
+                return new Float(this.getValue() ** exponent.getValue().toNumber());
             case ValueKind.Float:
-                return new Float(Math.pow(this.getValue(), exponent.getValue()));
+                return new Float(this.getValue() ** exponent.getValue());
             case ValueKind.Double:
-                return new Double(Math.pow(this.getValue(), exponent.getValue()));
+                return new Double(this.getValue() ** exponent.getValue());
         }
     }
 
@@ -135,7 +134,7 @@ export class Float implements Numeric, Comparable {
             case ValueKind.Int32:
             case ValueKind.Float:
             case ValueKind.Double:
-                return new Int32(this.getValue() & rhs.getValue());
+                return new Int32(this.getValue() & rhs.getValue()); //eslint-disable-line
         }
     }
 
@@ -146,7 +145,7 @@ export class Float implements Numeric, Comparable {
             case ValueKind.Int32:
             case ValueKind.Float:
             case ValueKind.Double:
-                return new Int32(this.getValue() | rhs.getValue());
+                return new Int32(this.getValue() | rhs.getValue()); //eslint-disable-line
         }
     }
 

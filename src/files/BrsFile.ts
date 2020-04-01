@@ -13,7 +13,7 @@ import { FunctionParameter } from '../parser/brsTypes';
 import { BrsError, ParseError } from '../parser/Error';
 import { Lexer, Token } from '../parser/lexer';
 import { Parser } from '../parser/parser';
-import { AALiteralExpression, DottedGet } from '../parser/parser/Expression';
+import { AALiteralExpression, DottedGetExpression } from '../parser/parser/Expression';
 import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement } from '../parser/parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
@@ -189,7 +189,7 @@ export class BrsFile {
             let ancestors = this.getAncestors(this.ast, identifier.key);
             let parent = ancestors[ancestors.length - 1];
 
-            let isObjectProperty = !!ancestors.find(x => (x instanceof DottedGet) || (x instanceof AALiteralExpression));
+            let isObjectProperty = !!ancestors.find(x => (x instanceof DottedGetExpression) || (x instanceof AALiteralExpression));
 
             //filter out certain text items
             if (
@@ -457,11 +457,11 @@ export class BrsFile {
                 return functionType;
 
                 //literal
-            } else if (assignment.value instanceof brs.parser.Expr.Literal) {
+            } else if (assignment.value instanceof brs.parser.Expr.LiteralExpression) {
                 return util.valueKindToBrsType((assignment.value as any).value.kind);
 
                 //function call
-            } else if (assignment.value instanceof brs.parser.Expr.Call) {
+            } else if (assignment.value instanceof brs.parser.Expr.CallExpression) {
                 let calleeName = (assignment.value.callee as any).name.text;
                 if (calleeName) {
                     let func = this.getCallableByName(calleeName);
@@ -469,7 +469,7 @@ export class BrsFile {
                         return func.type.returnType;
                     }
                 }
-            } else if (assignment.value instanceof brs.parser.Expr.Variable) {
+            } else if (assignment.value instanceof brs.parser.Expr.VariableExpression) {
                 let variableName = assignment.value.name.text;
                 let variable = scope.getVariableByName(variableName);
                 return variable.type;
@@ -544,8 +544,8 @@ export class BrsFile {
             }
             let bodyStatements = statement.func.body.statements;
             for (let bodyStatement of bodyStatements) {
-                if (bodyStatement.expression && bodyStatement.expression instanceof brs.parser.Expr.Call) {
-                    let expression: brs.parser.Expr.Call = bodyStatement.expression;
+                if (bodyStatement.expression && bodyStatement.expression instanceof brs.parser.Expr.CallExpression) {
+                    let expression: brs.parser.Expr.CallExpression = bodyStatement.expression;
 
                     //filter out dotted function invocations (i.e. object.doSomething()) (not currently supported. TODO support it)
                     if (bodyStatement.expression.callee.obj) {
@@ -554,7 +554,7 @@ export class BrsFile {
                     let functionName = (expression.callee as any).name.text;
 
                     //callee is the name of the function being called
-                    let callee = expression.callee as brs.parser.Expr.Variable;
+                    let callee = expression.callee as brs.parser.Expr.VariableExpression;
 
                     let calleeRange = util.locationToRange(callee.location);
 

@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Int32, ValueKind } from './brsTypes';
@@ -24,7 +23,7 @@ describe('parser error', () => {
 
             it('handles locations from different lines', () => {
                 location.end = Object.assign(location.end);
-                location.end.line = location.end.line + 1;
+                location.end.line += 1;
                 const err = new BrsError('TestError', location);
                 expect(err.format()).to.equal('Test.brs(1,0,2,2): TestError');
             });

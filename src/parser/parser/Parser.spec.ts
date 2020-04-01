@@ -1,9 +1,8 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { diagnosticMessages } from '../../DiagnosticMessages';
 import { Lexeme, Lexer } from '../lexer';
-import { DottedGet } from './Expression';
+import { DottedGetExpression } from './Expression';
 import { Parser } from './Parser';
 import { ClassFieldStatement, ClassStatement, PrintStatement } from './Statement';
 
@@ -37,7 +36,7 @@ describe('parser', () => {
             let printStatement = statements[0] as PrintStatement;
             expect(errors).to.be.empty;
             expect(printStatement).to.be.instanceof(PrintStatement);
-            expect(printStatement.expressions[0]).to.be.instanceof(DottedGet);
+            expect(printStatement.expressions[0]).to.be.instanceof(DottedGetExpression);
         });
 
         describe('comments', () => {
@@ -103,7 +102,7 @@ describe('parser', () => {
                         'comment
                     }
                 `);
-                let { errors} = parser.parse(tokens);
+                let { errors } = parser.parse(tokens);
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
             });
 

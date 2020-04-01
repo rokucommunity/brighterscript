@@ -1,11 +1,10 @@
-/* eslint-disable */
-import * as Long from "long";
+import * as Long from 'long';
 
-import { BrsType, BrsBoolean } from "./";
-import { BrsNumber, Numeric } from "./BrsNumber";
-import { ValueKind, Comparable } from "./BrsType";
-import { Float } from "./Float";
-import { Double } from "./Double";
+import { BrsType, BrsBoolean } from './';
+import { BrsNumber, Numeric } from './BrsNumber';
+import { ValueKind, Comparable } from './BrsType';
+import { Float } from './Float';
+import { Double } from './Double';
 
 export class Int64 implements Numeric, Comparable {
     readonly kind = ValueKind.Int64;
@@ -37,17 +36,17 @@ export class Int64 implements Numeric, Comparable {
     static fromString(asString: string): Int64 {
         let radix = 10;
 
-        if (asString.toLowerCase().startsWith("&h")) {
+        if (asString.toLowerCase().startsWith('&h')) {
             radix = 16; // it's a hex literal!
             asString = asString.slice(2); // remove "&h" from the string representation
         }
 
         let i64 = new Int64(Long.fromString(asString, undefined, radix));
-        const decimalLocation = asString.indexOf(".");
+        const decimalLocation = asString.indexOf('.');
         if (decimalLocation > -1 && decimalLocation + 1 < asString.length) {
             // Long.fromString truncates to integers instead of rounding, so manually add one to
             // compensate if necessary
-            if (asString[decimalLocation + 1] >= "5" && asString[decimalLocation + 1] <= "9") {
+            if (asString[decimalLocation + 1] >= '5' && asString[decimalLocation + 1] <= '9') {
                 i64 = new Int64(i64.getValue().add(Long.ONE));
             }
         }
@@ -132,14 +131,14 @@ export class Int64 implements Numeric, Comparable {
     pow(exponent: BrsNumber): BrsNumber {
         switch (exponent.kind) {
             case ValueKind.Int32:
-                return new Int64(Math.pow(this.getValue().toNumber(), exponent.getValue()));
+                return new Int64(this.getValue().toNumber() ** exponent.getValue());
             case ValueKind.Float:
-                return new Float(Math.pow(this.getValue().toNumber(), exponent.getValue()));
+                return new Float(this.getValue().toNumber() ** exponent.getValue());
             case ValueKind.Double:
-                return new Double(Math.pow(this.getValue().toNumber(), exponent.getValue()));
+                return new Double(this.getValue().toNumber() ** exponent.getValue());
             case ValueKind.Int64:
                 return new Int64(
-                    Math.pow(this.getValue().toNumber(), exponent.getValue().toNumber())
+                    this.getValue().toNumber() ** exponent.getValue().toNumber()
                 );
         }
     }

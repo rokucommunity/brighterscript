@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -49,7 +48,7 @@ describe('parser', () => {
             expect(errors[0].location).to.deep.include({
                 file: '',
                 start: { line: 3, column: 20 },
-                end: { line: 3, column: 23 },
+                end: { line: 3, column: 23 }
             });
             //expect(statements).toMatchSnapshot();
         });

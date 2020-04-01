@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -22,7 +21,7 @@ describe('parser additive expressions', () => {
             token(Lexeme.Integer, '2', new Int32(2)),
             token(Lexeme.Plus, '+'),
             token(Lexeme.Integer, '3', new Int32(3)),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -39,7 +38,7 @@ describe('parser additive expressions', () => {
             token(Lexeme.Integer, '2', new Int32(2)),
             token(Lexeme.Minus, '-'),
             token(Lexeme.Integer, '3', new Int32(3)),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -60,8 +59,8 @@ describe('parser additive expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 0 },
-                    end: { line: 1, column: 1 },
-                },
+                    end: { line: 1, column: 1 }
+                }
             },
             {
                 kind: Lexeme.Equal,
@@ -69,8 +68,8 @@ describe('parser additive expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 2 },
-                    end: { line: 1, column: 2 },
-                },
+                    end: { line: 1, column: 2 }
+                }
             },
             {
                 kind: Lexeme.Integer,
@@ -79,8 +78,8 @@ describe('parser additive expressions', () => {
                 literal: new Int32(1),
                 location: {
                     start: { line: 1, column: 4 },
-                    end: { line: 1, column: 5 },
-                },
+                    end: { line: 1, column: 5 }
+                }
             },
             {
                 kind: Lexeme.Plus,
@@ -88,8 +87,8 @@ describe('parser additive expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 6 },
-                    end: { line: 1, column: 7 },
-                },
+                    end: { line: 1, column: 7 }
+                }
             },
             {
                 kind: Lexeme.Integer,
@@ -98,8 +97,8 @@ describe('parser additive expressions', () => {
                 literal: new Int32(2),
                 location: {
                     start: { line: 1, column: 8 },
-                    end: { line: 1, column: 9 },
-                },
+                    end: { line: 1, column: 9 }
+                }
             },
             {
                 kind: Lexeme.Plus,
@@ -107,8 +106,8 @@ describe('parser additive expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 10 },
-                    end: { line: 1, column: 11 },
-                },
+                    end: { line: 1, column: 11 }
+                }
             },
             {
                 kind: Lexeme.Integer,
@@ -117,8 +116,8 @@ describe('parser additive expressions', () => {
                 literal: new Int32(3),
                 location: {
                     start: { line: 1, column: 12 },
-                    end: { line: 1, column: 13 },
-                },
+                    end: { line: 1, column: 13 }
+                }
             },
             {
                 kind: Lexeme.Eof,
@@ -126,16 +125,16 @@ describe('parser additive expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 13 },
-                    end: { line: 1, column: 14 },
-                },
-            },
+                    end: { line: 1, column: 14 }
+                }
+            }
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].value.location).to.deep.include({
             start: { line: 1, column: 4 },
-            end: { line: 1, column: 13 },
+            end: { line: 1, column: 13 }
         });
     });
 });

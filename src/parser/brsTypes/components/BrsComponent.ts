@@ -1,7 +1,6 @@
-/* eslint-disable */
-import { BrsType } from "..";
-import { BrsInvalid, } from "../BrsType";
-import { Callable } from "../Callable";
+import { BrsType } from '..';
+import { BrsInvalid } from '../BrsType';
+import { Callable } from '../Callable';
 
 export class BrsComponent {
     private methods: Map<string, Callable> = new Map();
@@ -24,7 +23,7 @@ export class BrsComponent {
 
     protected registerMethods(methods: Callable[]) {
         this.methods = new Map(
-            methods.map(m => [(m.name || "").toLowerCase(), m] as [string, Callable])
+            methods.map(m => [(m.name || '').toLowerCase(), m] as [string, Callable])
         );
     }
 

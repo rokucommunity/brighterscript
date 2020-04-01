@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -19,7 +18,7 @@ describe('parser primary expressions', () => {
             identifier('_'),
             equals,
             token(Lexeme.Integer, '5', new Int32(5)),
-            EOF,
+            EOF
         ]);
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.have.length.greaterThan(0);
@@ -32,7 +31,7 @@ describe('parser primary expressions', () => {
             identifier('_'),
             equals,
             token(Lexeme.String, 'hello', new BrsString('hello')),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -51,7 +50,7 @@ describe('parser primary expressions', () => {
             token(Lexeme.Star, '*'),
             token(Lexeme.Integer, '3', new Int32(3)),
             token(Lexeme.RightParen, ')'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -76,8 +75,8 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 0 },
-                    end: { line: 1, column: 1 },
-                },
+                    end: { line: 1, column: 1 }
+                }
             },
             {
                 kind: Lexeme.Equal,
@@ -85,8 +84,8 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 2 },
-                    end: { line: 1, column: 3 },
-                },
+                    end: { line: 1, column: 3 }
+                }
             },
             {
                 kind: Lexeme.Integer,
@@ -95,8 +94,8 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 4 },
-                    end: { line: 1, column: 5 },
-                },
+                    end: { line: 1, column: 5 }
+                }
             },
             {
                 kind: Lexeme.Newline,
@@ -104,8 +103,8 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 5 },
-                    end: { line: 1, column: 6 },
-                },
+                    end: { line: 1, column: 6 }
+                }
             },
             {
                 kind: Lexeme.Identifier,
@@ -113,8 +112,8 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 2, column: 0 },
-                    end: { line: 2, column: 1 },
-                },
+                    end: { line: 2, column: 1 }
+                }
             },
             {
                 kind: Lexeme.Equal,
@@ -122,8 +121,8 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 2, column: 2 },
-                    end: { line: 2, column: 3 },
-                },
+                    end: { line: 2, column: 3 }
+                }
             },
             {
                 kind: Lexeme.String,
@@ -132,8 +131,8 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 2, column: 4 },
-                    end: { line: 2, column: 9 },
-                },
+                    end: { line: 2, column: 9 }
+                }
             },
             {
                 kind: Lexeme.Newline,
@@ -141,8 +140,8 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 2, column: 9 },
-                    end: { line: 2, column: 10 },
-                },
+                    end: { line: 2, column: 10 }
+                }
             },
             {
                 kind: Lexeme.Identifier,
@@ -150,8 +149,8 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 3, column: 0 },
-                    end: { line: 3, column: 1 },
-                },
+                    end: { line: 3, column: 1 }
+                }
             },
             {
                 kind: Lexeme.Equal,
@@ -159,8 +158,8 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 3, column: 2 },
-                    end: { line: 3, column: 3 },
-                },
+                    end: { line: 3, column: 3 }
+                }
             },
             {
                 kind: Lexeme.LeftParen,
@@ -168,8 +167,8 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 3, column: 4 },
-                    end: { line: 3, column: 5 },
-                },
+                    end: { line: 3, column: 5 }
+                }
             },
             {
                 kind: Lexeme.Integer,
@@ -178,8 +177,8 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 3, column: 6 },
-                    end: { line: 3, column: 7 },
-                },
+                    end: { line: 3, column: 7 }
+                }
             },
             {
                 kind: Lexeme.RightParen,
@@ -187,8 +186,8 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 3, column: 8 },
-                    end: { line: 3, column: 9 },
-                },
+                    end: { line: 3, column: 9 }
+                }
             },
             {
                 kind: Lexeme.Eof,
@@ -196,24 +195,24 @@ describe('parser primary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 2, column: 9 },
-                    end: { line: 2, column: 10 },
-                },
-            },
+                    end: { line: 2, column: 10 }
+                }
+            }
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(3);
         expect(statements[0].value.location).to.deep.include({
             start: { line: 1, column: 4 },
-            end: { line: 1, column: 5 },
+            end: { line: 1, column: 5 }
         });
         expect(statements[1].value.location).to.deep.include({
             start: { line: 2, column: 4 },
-            end: { line: 2, column: 9 },
+            end: { line: 2, column: 9 }
         });
         expect(statements[2].value.location).to.deep.include({
             start: { line: 3, column: 4 },
-            end: { line: 3, column: 9 },
+            end: { line: 3, column: 9 }
         });
     });
 });

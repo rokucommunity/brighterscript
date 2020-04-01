@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { EventEmitter } from 'events';
 
 import { BrsError, ParseError } from '../Error';
@@ -24,7 +23,7 @@ export class Preprocessor {
         return {
             dispose: () => {
                 this.events.removeListener('err', errorHandler);
-            },
+            }
         };
     }
 
@@ -53,7 +52,7 @@ export class Preprocessor {
         if (parserResults.errors.length > 0) {
             return {
                 processedTokens: [],
-                errors: parserResults.errors,
+                errors: parserResults.errors
             };
         }
 

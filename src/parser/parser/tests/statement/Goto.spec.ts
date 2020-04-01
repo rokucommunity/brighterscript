@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -10,7 +9,7 @@ describe('parser goto statements', () => {
         let { errors } = Parser.parse([
             token(Lexeme.Goto, 'goto'),
             identifier('SomeLabel'),
-            EOF,
+            EOF
         ]);
         expect(errors).to.be.lengthOf(0);
         //expect({ errors, statements }).toMatchSnapshot();
@@ -20,7 +19,7 @@ describe('parser goto statements', () => {
         let { errors } = Parser.parse([
             identifier('SomeLabel'),
             token(Lexeme.Colon, ':'),
-            EOF,
+            EOF
         ]);
         expect(errors).to.be.lengthOf(0);
         //expect(statements).toMatchSnapshot();

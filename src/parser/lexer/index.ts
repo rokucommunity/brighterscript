@@ -1,5 +1,4 @@
-/* eslint-disable */
-export * from "./Lexeme";
-export * from "./ReservedWords";
-export * from "./Token";
-export { Lexer } from "./Lexer";
+export * from './Lexeme';
+export * from './ReservedWords';
+export * from './Token';
+export { Lexer } from './Lexer';

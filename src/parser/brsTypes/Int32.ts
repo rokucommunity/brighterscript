@@ -1,10 +1,9 @@
-/* eslint-disable */
-import { ValueKind, Comparable, BrsBoolean } from "./BrsType";
-import { BrsNumber, Numeric } from "./BrsNumber";
-import { BrsType } from "./";
-import { Float } from "./Float";
-import { Double } from "./Double";
-import { Int64 } from "./Int64";
+import { ValueKind, Comparable, BrsBoolean } from './BrsType';
+import { BrsNumber, Numeric } from './BrsNumber';
+import { BrsType } from './';
+import { Float } from './Float';
+import { Double } from './Double';
+import { Int64 } from './Int64';
 
 export class Int32 implements Numeric, Comparable {
     readonly kind = ValueKind.Int32;
@@ -31,7 +30,7 @@ export class Int32 implements Numeric, Comparable {
      * @returns a BrightScript 32-bit integer value representing `asString`.
      */
     static fromString(asString: string): Int32 {
-        if (asString.toLowerCase().startsWith("&h")) {
+        if (asString.toLowerCase().startsWith('&h')) {
             asString = asString.slice(2); // remove "&h" from the string representation
             return new Int32(Number.parseInt(asString, 16));
         }
@@ -118,39 +117,39 @@ export class Int32 implements Numeric, Comparable {
     pow(exponent: BrsNumber): BrsNumber {
         switch (exponent.kind) {
             case ValueKind.Int32:
-                return new Float(Math.pow(this.getValue(), exponent.getValue()));
+                return new Float(this.getValue() ** exponent.getValue());
             case ValueKind.Int64:
                 return new Int64(this.getValue()).pow(exponent);
             case ValueKind.Float:
-                return new Float(Math.pow(this.getValue(), exponent.getValue()));
+                return new Float(this.getValue() ** exponent.getValue());
             case ValueKind.Double:
-                return new Double(Math.pow(this.getValue(), exponent.getValue()));
+                return new Double(this.getValue() ** exponent.getValue());
         }
     }
 
     and(rhs: BrsNumber): BrsNumber {
         switch (rhs.kind) {
             case ValueKind.Int32:
-                return new Int32(this.getValue() & rhs.getValue());
+                return new Int32(this.getValue() & rhs.getValue());//eslint-disable-line
             case ValueKind.Int64:
                 return new Int64(this.getValue()).and(rhs);
             case ValueKind.Float:
-                return new Int32(this.getValue() & rhs.getValue());
+                return new Int32(this.getValue() & rhs.getValue());//eslint-disable-line
             case ValueKind.Double:
-                return new Int32(this.getValue() & rhs.getValue());
+                return new Int32(this.getValue() & rhs.getValue());//eslint-disable-line
         }
     }
 
     or(rhs: BrsNumber): BrsNumber {
         switch (rhs.kind) {
             case ValueKind.Int32:
-                return new Int32(this.getValue() | rhs.getValue());
+                return new Int32(this.getValue() | rhs.getValue());//eslint-disable-line
             case ValueKind.Int64:
                 return new Int64(this.getValue()).or(rhs);
             case ValueKind.Float:
-                return new Int32(this.getValue() | rhs.getValue());
+                return new Int32(this.getValue() | rhs.getValue());//eslint-disable-line
             case ValueKind.Double:
-                return new Int32(this.getValue() | rhs.getValue());
+                return new Int32(this.getValue() | rhs.getValue());//eslint-disable-line
         }
     }
 

@@ -1,17 +1,15 @@
-/* eslint-disable */
-import * as Expr from "./Expression";
-import { Token, Identifier, Location, Lexeme } from "../lexer";
-import { BrsType, BrsInvalid } from "../brsTypes";
+import { Token, Identifier, Location, Lexeme } from '../lexer';
+import { BrsType, BrsInvalid } from '../brsTypes';
 import { SourceNode } from 'source-map';
 import { Stmt } from '.';
-import { TranspileState, indent, Expression } from './Expression';
+import { TranspileState, indent, Expression, FunctionExpression } from './Expression';
 import { util } from '../../util';
 
 export interface Visitor<T> {
     visitAssignment(statement: AssignmentStatement): BrsType;
     visitExpression(statement: ExpressionStatement): BrsType;
-    visitExitFor(statement: ExitFor): never;
-    visitExitWhile(statement: ExitWhile): never;
+    visitExitFor(statement: ExitForStatement): never;
+    visitExitWhile(statement: ExitWhileStatement): never;
     visitPrint(statement: PrintStatement): BrsType;
     visitIf(statement: IfStatement): BrsType;
     visitBlock(block: Block): BrsType;
@@ -19,7 +17,7 @@ export interface Visitor<T> {
     visitForEach(statement: ForEachStatement): BrsType;
     visitWhile(statement: WhileStatement): BrsType;
     visitNamedFunction(statement: FunctionStatement): BrsType;
-    visitReturn(statement: Return): never;
+    visitReturn(statement: ReturnStatement): never;
     visitDottedSet(statement: DottedSetStatement): BrsType;
     visitIndexedSet(statement: IndexedSetStatement): BrsType;
     visitIncrement(expression: IncrementStatement): BrsInvalid;
@@ -47,7 +45,7 @@ export class AssignmentStatement implements Statement {
             equals: Token;
         },
         readonly name: Identifier,
-        readonly value: Expr.Expression
+        readonly value: Expression
     ) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
@@ -58,7 +56,7 @@ export class AssignmentStatement implements Statement {
         return {
             file: this.name.location.file,
             start: this.name.location.start,
-            end: this.value.location.end,
+            end: this.value.location.end
         };
     }
 
@@ -91,7 +89,7 @@ export class Block implements Statement {
         return {
             file: this.startingLocation.file,
             start: this.startingLocation.start,
-            end: end,
+            end: end
         };
     }
 
@@ -124,13 +122,13 @@ export class Block implements Statement {
             state.lineage.shift();
         }
         state.blockDepth--;
-        return results
+        return results;
     }
 }
 
 export class ExpressionStatement implements Statement {
     constructor(
-        readonly expression: Expr.Expression
+        readonly expression: Expression
     ) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
@@ -176,7 +174,7 @@ export class CommentStatement implements Statement, Expression {
             }
             result.push(
                 `'`,
-                new SourceNode(comment.location.start.line, comment.location.start.column, state.pathAbsolute, comment.text),
+                new SourceNode(comment.location.start.line, comment.location.start.column, state.pathAbsolute, comment.text)
             );
             //add newline for all except final comment
             if (i < this.comments.length - 1) {
@@ -187,7 +185,7 @@ export class CommentStatement implements Statement, Expression {
     }
 }
 
-export class ExitFor implements Statement {
+export class ExitForStatement implements Statement {
     constructor(
         readonly tokens: {
             exitFor: Token;
@@ -209,7 +207,7 @@ export class ExitFor implements Statement {
     }
 }
 
-export class ExitWhile implements Statement {
+export class ExitWhileStatement implements Statement {
     constructor(
         readonly tokens: {
             exitWhile: Token;
@@ -232,7 +230,7 @@ export class ExitWhile implements Statement {
 }
 
 export class FunctionStatement implements Statement {
-    constructor(readonly name: Identifier, readonly func: Expr.FunctionExpression) { }
+    constructor(readonly name: Identifier, readonly func: FunctionExpression) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
         return visitor.visitNamedFunction(this);
@@ -242,7 +240,7 @@ export class FunctionStatement implements Statement {
         return {
             file: this.name.location.file,
             start: this.func.location.start,
-            end: this.func.location.end,
+            end: this.func.location.end
         };
     }
 
@@ -251,62 +249,10 @@ export class FunctionStatement implements Statement {
     }
 }
 
-export class ClassMethodStatement implements Statement {
-    constructor(
-        readonly accessModifier: Token,
-        readonly name: Identifier,
-        readonly func: Expr.FunctionExpression
-    ) { }
-
-    accept<R>(visitor: Visitor<R>): BrsType {
-        return visitor.visitNamedFunction(this as any);
-    }
-
-    get location() {
-        return {
-            file: this.name.location.file,
-            start: this.accessModifier ? this.accessModifier.location.start : this.func.location.start,
-            end: this.func.location.end,
-        };
-    }
-
-    transpile(state: TranspileState): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
-    }
-}
-
-export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;
-
-export class ClassFieldStatement implements Statement {
-
-    constructor(
-        readonly accessModifier: Token,
-        readonly name: Identifier,
-        readonly as: Token,
-        readonly type: Token
-    ) { }
-
-    accept<R>(visitor: Visitor<R>): BrsType {
-        throw new Error('Method not implemented.');
-    }
-
-    get location() {
-        return {
-            file: this.name.location.file,
-            start: this.accessModifier.location.start,
-            end: this.type.location.end
-        };
-    }
-
-    transpile(state: TranspileState): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
-    }
-}
-
 export interface ElseIf {
     elseIfToken: Token;
     thenToken?: Token;
-    condition: Expr.Expression;
+    condition: Expression;
     thenBranch: Block;
 }
 
@@ -321,7 +267,7 @@ export class IfStatement implements Statement {
             else?: Token;
             endIf?: Token;
         },
-        readonly condition: Expr.Expression,
+        readonly condition: Expression,
         readonly thenBranch: Block,
         readonly elseIfs: ElseIf[],
         readonly elseBranch?: Block
@@ -347,7 +293,7 @@ export class IfStatement implements Statement {
         return {
             file: this.tokens.if.location.file,
             start: this.tokens.if.location.start,
-            end: this.getEndLocation().end,
+            end: this.getEndLocation().end
         };
     }
 
@@ -365,7 +311,7 @@ export class IfStatement implements Statement {
                 new SourceNode(this.tokens.then.location.start.line, this.tokens.then.location.start.column, state.pathAbsolute, 'then')
             );
         } else {
-            results.push('then')
+            results.push('then');
         }
         state.lineage.unshift(this);
         //if statement body
@@ -373,12 +319,11 @@ export class IfStatement implements Statement {
         state.lineage.shift();
         if (thenNodes.length > 0) {
             results.push(thenNodes);
-            results.push('\n')
+            results.push('\n');
         }
 
         //else if blocks
-        for (let i = 0; i < this.elseIfs.length; i++) {
-            let elseif = this.elseIfs[i];
+        for (let elseif of this.elseIfs) {
             //elseif
             results.push(
                 indent(state.blockDepth),
@@ -442,7 +387,7 @@ export class IfStatement implements Statement {
 }
 
 export class IncrementStatement implements Statement {
-    constructor(readonly value: Expr.Expression, readonly operator: Token) { }
+    constructor(readonly value: Expression, readonly operator: Token) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
         return visitor.visitIncrement(this);
@@ -452,7 +397,7 @@ export class IncrementStatement implements Statement {
         return {
             file: this.value.location.file,
             start: this.value.location.start,
-            end: this.operator.location.end,
+            end: this.operator.location.end
         };
     }
 
@@ -464,17 +409,14 @@ export class IncrementStatement implements Statement {
     }
 }
 
-/** The set of all accepted `print` statement separators. */
-export namespace PrintSeparator {
-    /** Used to indent the current `print` position to the next 16-character-width output zone. */
-    export interface Tab extends Token {
-        kind: Lexeme.Comma;
-    }
+/** Used to indent the current `print` position to the next 16-character-width output zone. */
+export interface PrintSeparatorTab extends Token {
+    kind: Lexeme.Comma;
+}
 
-    /** Used to insert a single whitespace character at the current `print` position. */
-    export interface Space extends Token {
-        kind: Lexeme.Semicolon;
-    }
+/** Used to insert a single whitespace character at the current `print` position. */
+export interface PrintSeparatorSpace extends Token {
+    kind: Lexeme.Semicolon;
 }
 
 /**
@@ -490,7 +432,7 @@ export class PrintStatement implements Statement {
         readonly tokens: {
             print: Token;
         },
-        readonly expressions: Array<Expr.Expression | Stmt.PrintSeparator.Tab | Stmt.PrintSeparator.Space>
+        readonly expressions: Array<Expression | PrintSeparatorTab | Stmt.PrintSeparatorSpace>
     ) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
@@ -505,7 +447,7 @@ export class PrintStatement implements Statement {
         return {
             file: this.tokens.print.location.file,
             start: this.tokens.print.location.start,
-            end: end,
+            end: end
         };
     }
 
@@ -530,7 +472,7 @@ export class PrintStatement implements Statement {
     }
 }
 
-export class Goto implements Statement {
+export class GotoStatement implements Statement {
     constructor(
         readonly tokens: {
             goto: Token;
@@ -540,14 +482,14 @@ export class Goto implements Statement {
 
     accept<R>(visitor: Visitor<R>): BrsType {
         //should search the code for the corresponding label, and set that as the next line to execute
-        throw new Error("Not implemented");
+        throw new Error('Not implemented');
     }
 
     get location() {
         return {
             file: this.tokens.goto.location.file,
             start: this.tokens.goto.location.start,
-            end: this.tokens.label.location.end,
+            end: this.tokens.label.location.end
         };
     }
 
@@ -555,12 +497,12 @@ export class Goto implements Statement {
         return [
             new SourceNode(this.tokens.goto.location.start.line, this.tokens.goto.location.start.column, state.pathAbsolute, 'goto'),
             ' ',
-            new SourceNode(this.tokens.label.location.start.line, this.tokens.label.location.start.column, state.pathAbsolute, this.tokens.label.text),
+            new SourceNode(this.tokens.label.location.start.line, this.tokens.label.location.start.column, state.pathAbsolute, this.tokens.label.text)
         ];
     }
 }
 
-export class Label implements Statement {
+export class LabelStatement implements Statement {
     constructor(
         readonly tokens: {
             identifier: Token;
@@ -569,32 +511,32 @@ export class Label implements Statement {
     ) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
-        throw new Error("Not implemented");
+        throw new Error('Not implemented');
     }
 
     get location() {
         return {
             file: this.tokens.identifier.location.file,
             start: this.tokens.identifier.location.start,
-            end: this.tokens.colon.location.end,
+            end: this.tokens.colon.location.end
         };
     }
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         return [
             new SourceNode(this.tokens.identifier.location.start.line, this.tokens.identifier.location.start.column, state.pathAbsolute, this.tokens.identifier.text),
-            new SourceNode(this.tokens.colon.location.start.line, this.tokens.colon.location.start.column, state.pathAbsolute, ':'),
+            new SourceNode(this.tokens.colon.location.start.line, this.tokens.colon.location.start.column, state.pathAbsolute, ':')
 
         ];
     }
 }
 
-export class Return implements Statement {
+export class ReturnStatement implements Statement {
     constructor(
         readonly tokens: {
             return: Token;
         },
-        readonly value?: Expr.Expression
+        readonly value?: Expression
     ) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
@@ -605,7 +547,7 @@ export class Return implements Statement {
         return {
             file: this.tokens.return.location.file,
             start: this.tokens.return.location.start,
-            end: (this.value && this.value.location.end) || this.tokens.return.location.end,
+            end: (this.value && this.value.location.end) || this.tokens.return.location.end
         };
     }
 
@@ -622,7 +564,7 @@ export class Return implements Statement {
     }
 }
 
-export class End implements Statement {
+export class EndStatement implements Statement {
     constructor(
         readonly tokens: {
             end: Token;
@@ -631,14 +573,14 @@ export class End implements Statement {
 
     accept<R>(visitor: Visitor<R>): BrsType {
         //TODO implement this in the runtime. It should immediately terminate program execution, without error
-        throw new Error("Not implemented");
+        throw new Error('Not implemented');
     }
 
     get location() {
         return {
             file: this.tokens.end.location.file,
             start: this.tokens.end.location.start,
-            end: this.tokens.end.location.end,
+            end: this.tokens.end.location.end
         };
     }
 
@@ -649,7 +591,7 @@ export class End implements Statement {
     }
 }
 
-export class Stop implements Statement {
+export class StopStatement implements Statement {
     constructor(
         readonly tokens: {
             stop: Token;
@@ -658,14 +600,14 @@ export class Stop implements Statement {
 
     accept<R>(visitor: Visitor<R>): BrsType {
         //TODO implement this in the runtime. It should pause code execution until a `c` command is issued from the console
-        throw new Error("Not implemented");
+        throw new Error('Not implemented');
     }
 
     get location() {
         return {
             file: this.tokens.stop.location.file,
             start: this.tokens.stop.location.start,
-            end: this.tokens.stop.location.end,
+            end: this.tokens.stop.location.end
         };
     }
 
@@ -685,8 +627,8 @@ export class ForStatement implements Statement {
             endFor: Token;
         },
         readonly counterDeclaration: AssignmentStatement,
-        readonly finalValue: Expr.Expression,
-        readonly increment: Expr.Expression,
+        readonly finalValue: Expression,
+        readonly increment: Expression,
         readonly body: Block
     ) { }
 
@@ -698,7 +640,7 @@ export class ForStatement implements Statement {
         return {
             file: this.tokens.for.location.file,
             start: this.tokens.for.location.start,
-            end: this.tokens.endFor.location.end,
+            end: this.tokens.endFor.location.end
         };
     }
 
@@ -728,7 +670,7 @@ export class ForStatement implements Statement {
                 new SourceNode(this.tokens.step.location.start.line, this.tokens.step.location.start.column, state.pathAbsolute, 'step'),
                 ' ',
                 this.increment.transpile(state)
-            )
+            );
         }
         //loop body
         state.lineage.unshift(this);
@@ -755,7 +697,7 @@ export class ForEachStatement implements Statement {
             endFor: Token;
         },
         readonly item: Token,
-        readonly target: Expr.Expression,
+        readonly target: Expression,
         readonly body: Block
     ) { }
 
@@ -767,7 +709,7 @@ export class ForEachStatement implements Statement {
         return {
             file: this.tokens.forEach.location.file,
             start: this.tokens.forEach.location.start,
-            end: this.tokens.endFor.location.end,
+            end: this.tokens.endFor.location.end
         };
     }
 
@@ -800,7 +742,7 @@ export class ForEachStatement implements Statement {
         //end for
         result.push(
             indent(state.blockDepth),
-            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pathAbsolute, 'end for'),
+            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pathAbsolute, 'end for')
         );
         return result;
     }
@@ -812,7 +754,7 @@ export class WhileStatement implements Statement {
             while: Token;
             endWhile: Token;
         },
-        readonly condition: Expr.Expression,
+        readonly condition: Expression,
         readonly body: Block
     ) { }
 
@@ -824,7 +766,7 @@ export class WhileStatement implements Statement {
         return {
             file: this.tokens.while.location.file,
             start: this.tokens.while.location.start,
-            end: this.tokens.endWhile.location.end,
+            end: this.tokens.endWhile.location.end
         };
     }
 
@@ -837,7 +779,7 @@ export class WhileStatement implements Statement {
         );
         //condition
         result.push(
-            ...this.condition.transpile(state),
+            ...this.condition.transpile(state)
         );
         state.lineage.unshift(this);
         //body
@@ -859,9 +801,9 @@ export class WhileStatement implements Statement {
 
 export class DottedSetStatement implements Statement {
     constructor(
-        readonly obj: Expr.Expression,
+        readonly obj: Expression,
         readonly name: Identifier,
-        readonly value: Expr.Expression
+        readonly value: Expression
     ) { }
 
     accept<R>(visitor: Visitor<R>): BrsType {
@@ -872,7 +814,7 @@ export class DottedSetStatement implements Statement {
         return {
             file: this.obj.location.file,
             start: this.obj.location.start,
-            end: this.value.location.end,
+            end: this.value.location.end
         };
     }
 
@@ -892,9 +834,9 @@ export class DottedSetStatement implements Statement {
 
 export class IndexedSetStatement implements Statement {
     constructor(
-        readonly obj: Expr.Expression,
-        readonly index: Expr.Expression,
-        readonly value: Expr.Expression,
+        readonly obj: Expression,
+        readonly index: Expression,
+        readonly value: Expression,
         readonly openingSquare: Token,
         readonly closingSquare: Token
     ) { }
@@ -907,7 +849,7 @@ export class IndexedSetStatement implements Statement {
         return {
             file: this.obj.location.file,
             start: this.obj.location.start,
-            end: this.value.location.end,
+            end: this.value.location.end
         };
     }
 
@@ -937,7 +879,7 @@ export class LibraryStatement implements Statement {
         }
     ) { }
     accept<R>(visitor: Visitor<R>): BrsType {
-        throw new Error("Library is not implemented");
+        throw new Error('Library is not implemented');
     }
 
     get location() {
@@ -946,14 +888,14 @@ export class LibraryStatement implements Statement {
             start: this.tokens.library.location.start,
             end: this.tokens.filePath
                 ? this.tokens.filePath.location.end
-                : this.tokens.library.location.end,
+                : this.tokens.library.location.end
         };
     }
 
     transpile(state: TranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.tokens.library.location.start.line, this.tokens.library.location.start.column, state.pathAbsolute, 'library'),
+            new SourceNode(this.tokens.library.location.start.line, this.tokens.library.location.start.column, state.pathAbsolute, 'library')
         );
         //there will be a parse error if file path is missing, but let's prevent a runtime error just in case
         if (this.tokens.filePath) {
@@ -996,11 +938,62 @@ export class ClassStatement implements Statement {
         return {
             file: this.keyword.location.file,
             start: this.keyword.location.start,
-            end: this.end.location.end,
+            end: this.end.location.end
         };
     }
 
     transpile(state: TranspileState): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + (this as any).__proto__.constructor.name);
+        throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
     }
 }
+
+export class ClassMethodStatement implements Statement {
+    constructor(
+        readonly accessModifier: Token,
+        readonly name: Identifier,
+        readonly func: FunctionExpression
+    ) { }
+
+    accept<R>(visitor: Visitor<R>): BrsType {
+        return visitor.visitNamedFunction(this as any);
+    }
+
+    get location() {
+        return {
+            file: this.name.location.file,
+            start: this.accessModifier ? this.accessModifier.location.start : this.func.location.start,
+            end: this.func.location.end
+        };
+    }
+
+    transpile(state: TranspileState): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
+    }
+}
+
+export class ClassFieldStatement implements Statement {
+
+    constructor(
+        readonly accessModifier: Token,
+        readonly name: Identifier,
+        readonly as: Token,
+        readonly type: Token
+    ) { }
+
+    accept<R>(visitor: Visitor<R>): BrsType {
+        throw new Error('Method not implemented.');
+    }
+
+    get location() {
+        return {
+            file: this.name.location.file,
+            start: this.accessModifier.location.start,
+            end: this.type.location.end
+        };
+    }
+
+    transpile(state: TranspileState): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
+    }
+}
+export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;

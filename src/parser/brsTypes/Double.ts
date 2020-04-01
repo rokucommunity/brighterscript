@@ -1,10 +1,9 @@
-/* eslint-disable */
-import { BrsType, BrsBoolean } from "./";
-import { ValueKind, Comparable } from "./BrsType";
-import { BrsNumber, Numeric } from "./BrsNumber";
-import { Int32 } from "./Int32";
-import { Int64 } from "./Int64";
-import { Float } from "./Float";
+import { BrsType, BrsBoolean } from './';
+import { ValueKind, Comparable } from './BrsType';
+import { BrsNumber, Numeric } from './BrsNumber';
+import { Int32 } from './Int32';
+import { Int64 } from './Int64';
+import { Float } from './Float';
 
 export class Double implements Numeric, Comparable {
     readonly kind = ValueKind.Double;
@@ -107,13 +106,13 @@ export class Double implements Numeric, Comparable {
     pow(exponent: BrsNumber): BrsNumber {
         switch (exponent.kind) {
             case ValueKind.Int32:
-                return new Float(Math.pow(this.getValue(), exponent.getValue()));
+                return new Float(this.getValue() ** exponent.getValue());
             case ValueKind.Int64:
                 return new Int64(this.getValue()).pow(exponent);
             case ValueKind.Float:
-                return new Float(Math.pow(this.getValue(), exponent.getValue()));
+                return new Float(this.getValue() ** exponent.getValue());
             case ValueKind.Double:
-                return new Double(Math.pow(this.getValue(), exponent.getValue()));
+                return new Double(this.getValue() ** exponent.getValue());
         }
     }
 
@@ -124,7 +123,7 @@ export class Double implements Numeric, Comparable {
             case ValueKind.Int32:
             case ValueKind.Float:
             case ValueKind.Double:
-                return new Int32(this.getValue() & rhs.getValue());
+                return new Int32(this.getValue() & rhs.getValue());//eslint-disable-line
         }
     }
 
@@ -135,7 +134,7 @@ export class Double implements Numeric, Comparable {
             case ValueKind.Int32:
             case ValueKind.Float:
             case ValueKind.Double:
-                return new Int32(this.getValue() | rhs.getValue());
+                return new Int32(this.getValue() | rhs.getValue()); //eslint-disable-line
         }
     }
 

@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -18,7 +17,7 @@ describe('parser call expressions', () => {
             identifier('RebootSystem'),
             { kind: Lexeme.LeftParen, text: '(', line: 1 },
             token(Lexeme.RightParen, ')'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -71,7 +70,7 @@ describe('parser call expressions', () => {
             token(Lexeme.Newline, '\\n'),
             token(Lexeme.Newline, '\\n'),
             token(Lexeme.RightParen, ')'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -87,7 +86,7 @@ describe('parser call expressions', () => {
             { kind: Lexeme.Comma, text: ',', line: 1 },
             token(Lexeme.Integer, '2', new Int32(2)),
             token(Lexeme.RightParen, ')'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -110,8 +109,8 @@ describe('parser call expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 0 },
-                    end: { line: 1, column: 3 },
-                },
+                    end: { line: 1, column: 3 }
+                }
             },
             {
                 kind: Lexeme.LeftParen,
@@ -119,8 +118,8 @@ describe('parser call expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 3 },
-                    end: { line: 1, column: 4 },
-                },
+                    end: { line: 1, column: 4 }
+                }
             },
             {
                 kind: Lexeme.String,
@@ -129,8 +128,8 @@ describe('parser call expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 4 },
-                    end: { line: 1, column: 9 },
-                },
+                    end: { line: 1, column: 9 }
+                }
             },
             {
                 kind: Lexeme.Comma,
@@ -138,8 +137,8 @@ describe('parser call expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 9 },
-                    end: { line: 1, column: 10 },
-                },
+                    end: { line: 1, column: 10 }
+                }
             },
             {
                 kind: Lexeme.String,
@@ -148,8 +147,8 @@ describe('parser call expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 11 },
-                    end: { line: 1, column: 16 },
-                },
+                    end: { line: 1, column: 16 }
+                }
             },
             {
                 kind: Lexeme.RightParen,
@@ -157,8 +156,8 @@ describe('parser call expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 16 },
-                    end: { line: 1, column: 17 },
-                },
+                    end: { line: 1, column: 17 }
+                }
             },
             {
                 kind: Lexeme.Eof,
@@ -166,16 +165,16 @@ describe('parser call expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 17 },
-                    end: { line: 1, column: 18 },
-                },
-            },
+                    end: { line: 1, column: 18 }
+                }
+            }
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].location).to.deep.include({
             start: { line: 1, column: 0 },
-            end: { line: 1, column: 17 },
+            end: { line: 1, column: 17 }
         });
     });
 });

@@ -1,10 +1,9 @@
-/* eslint-disable */
-import Long from "long";
-import { BrsValue } from "./BrsType";
-import { Int32 } from "./Int32";
-import { Int64 } from "./Int64";
-import { Float } from "./Float";
-import { Double } from "./Double";
+import Long from 'long';
+import { BrsValue } from './BrsType';
+import { Int32 } from './Int32';
+import { Int64 } from './Int64';
+import { Float } from './Float';
+import { Double } from './Double';
 
 /** The set of operations available on a BrightScript numeric variable. */
 export interface Numeric extends BrsValue {

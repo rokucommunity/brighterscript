@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -20,7 +19,7 @@ describe('parser associative array literals', () => {
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftBrace, '{'),
                 token(Lexeme.RightBrace, '}'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -40,7 +39,7 @@ describe('parser associative array literals', () => {
                 token(Lexeme.Newline, '\n'),
                 token(Lexeme.Newline, '\n'),
                 token(Lexeme.RightBrace, '}'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -67,7 +66,7 @@ describe('parser associative array literals', () => {
                 token(Lexeme.Colon, ':'),
                 token(Lexeme.Integer, '3', new Int32(3)),
                 token(Lexeme.RightBrace, '}'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -96,7 +95,7 @@ describe('parser associative array literals', () => {
                 token(Lexeme.Integer, '3', new Int32(3)),
                 token(Lexeme.Newline, '\n'),
                 token(Lexeme.RightBrace, '}'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -123,7 +122,7 @@ describe('parser associative array literals', () => {
                 token(Lexeme.Integer, '3', new Int32(3)),
                 token(Lexeme.Newline, '\n'),
                 token(Lexeme.RightBrace, '}'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -156,7 +155,7 @@ describe('parser associative array literals', () => {
             token(Lexeme.RightBrace, '}'),
             token(Lexeme.Newline, '\n'),
             token(Lexeme.EndSub, 'end sub'),
-            EOF,
+            EOF
         ]);
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
@@ -184,7 +183,7 @@ describe('parser associative array literals', () => {
             token(Lexeme.Integer, '3', new Int32(3)),
             token(Lexeme.Newline, '\n'),
             token(Lexeme.RightBrace, '}'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -211,8 +210,8 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 0 },
-                    end: { line: 1, column: 1 },
-                },
+                    end: { line: 1, column: 1 }
+                }
             },
             {
                 kind: Lexeme.Equal,
@@ -220,8 +219,8 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 2 },
-                    end: { line: 1, column: 3 },
-                },
+                    end: { line: 1, column: 3 }
+                }
             },
             {
                 kind: Lexeme.LeftBrace,
@@ -229,8 +228,8 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 4 },
-                    end: { line: 1, column: 5 },
-                },
+                    end: { line: 1, column: 5 }
+                }
             },
             {
                 kind: Lexeme.RightBrace,
@@ -238,8 +237,8 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 8 },
-                    end: { line: 1, column: 9 },
-                },
+                    end: { line: 1, column: 9 }
+                }
             },
             {
                 kind: Lexeme.Newline,
@@ -247,8 +246,8 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 9 },
-                    end: { line: 1, column: 10 },
-                },
+                    end: { line: 1, column: 10 }
+                }
             },
             {
                 kind: Lexeme.Newline,
@@ -256,8 +255,8 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: {
                     start: { line: 2, column: 0 },
-                    end: { line: 2, column: 1 },
-                },
+                    end: { line: 2, column: 1 }
+                }
             },
             {
                 kind: Lexeme.Identifier,
@@ -265,8 +264,8 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: {
                     start: { line: 3, column: 0 },
-                    end: { line: 3, column: 1 },
-                },
+                    end: { line: 3, column: 1 }
+                }
             },
             {
                 kind: Lexeme.Equal,
@@ -274,8 +273,8 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: {
                     start: { line: 3, column: 2 },
-                    end: { line: 3, column: 3 },
-                },
+                    end: { line: 3, column: 3 }
+                }
             },
             {
                 kind: Lexeme.LeftBrace,
@@ -283,8 +282,8 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: {
                     start: { line: 3, column: 4 },
-                    end: { line: 3, column: 5 },
-                },
+                    end: { line: 3, column: 5 }
+                }
             },
             {
                 kind: Lexeme.Newline,
@@ -292,8 +291,8 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: {
                     start: { line: 4, column: 0 },
-                    end: { line: 4, column: 1 },
-                },
+                    end: { line: 4, column: 1 }
+                }
             },
             {
                 kind: Lexeme.Newline,
@@ -301,8 +300,8 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: {
                     start: { line: 5, column: 0 },
-                    end: { line: 5, column: 1 },
-                },
+                    end: { line: 5, column: 1 }
+                }
             },
             {
                 kind: Lexeme.RightBrace,
@@ -310,8 +309,8 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: {
                     start: { line: 6, column: 0 },
-                    end: { line: 6, column: 1 },
-                },
+                    end: { line: 6, column: 1 }
+                }
             },
             {
                 kind: Lexeme.Eof,
@@ -319,20 +318,20 @@ describe('parser associative array literals', () => {
                 isReserved: false,
                 location: {
                     start: { line: 6, column: 1 },
-                    end: { line: 6, column: 2 },
-                },
-            },
+                    end: { line: 6, column: 2 }
+                }
+            }
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(2);
         expect(statements[0].value.location).to.deep.include({
             start: { line: 1, column: 4 },
-            end: { line: 1, column: 9 },
+            end: { line: 1, column: 9 }
         });
         expect(statements[1].value.location).to.deep.include({
             start: { line: 3, column: 4 },
-            end: { line: 6, column: 1 },
+            end: { line: 6, column: 1 }
         });
     });
 });

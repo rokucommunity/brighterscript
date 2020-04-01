@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { Lexeme, Location, ReservedWords } from '../../lexer';
 
 /* A set of utilities to be used while writing tests for the BRS parser. */
@@ -19,7 +18,7 @@ export function token(kind, text?, literal?) {
         location: <Location>{
             start: { line: -9, column: -9 },
             end: { line: -9, column: -9 }
-        },
+        }
     };
 }
 

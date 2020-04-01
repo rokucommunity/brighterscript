@@ -1,9 +1,8 @@
-/* eslint-disable */
 declare type Interpreter = any;
-import * as Brs from ".";
-import * as Expr from "../parser/Expression";
-declare var Scope: any;
-import { Location, Identifier, Token } from "../lexer";
+import * as Brs from '.';
+import * as Expr from '../parser/Expression';
+declare let Scope: any;
+import { Location, Identifier, Token } from '../lexer';
 import { SourceNode } from 'source-map';
 
 /** An argument to a BrightScript `function` or `sub`. */
@@ -32,10 +31,10 @@ export interface Argument {
  * functions.
  */
 export class StdlibArgument implements Argument {
-    readonly location: Argument["location"];
-    readonly name: Argument["name"];
-    readonly type: Argument["type"];
-    readonly defaultValue: Argument["defaultValue"];
+    readonly location: Argument['location'];
+    readonly name: Argument['name'];
+    readonly type: Argument['type'];
+    readonly defaultValue: Argument['defaultValue'];
 
     /**
      * Creates an `Argument` without requiring locations to be specified.
@@ -49,15 +48,15 @@ export class StdlibArgument implements Argument {
         this.name = { text: name, location: StdlibArgument.InternalLocation };
         this.type = { kind: type, location: StdlibArgument.InternalLocation };
         if (defaultValue) {
-            this.defaultValue = new Expr.Literal(defaultValue, StdlibArgument.InternalLocation);
+            this.defaultValue = new Expr.LiteralExpression(defaultValue, StdlibArgument.InternalLocation);
         }
     }
 
     /** A fake location exists only within the BRS runtime. */
     static InternalLocation = {
-        file: "(stdlib)",
+        file: '(stdlib)',
         start: { line: -1, column: -1 },
-        end: { line: -1, column: -1 },
+        end: { line: -1, column: -1 }
     };
 }
 
@@ -70,14 +69,14 @@ export class FunctionParameter {
         },
         public typeToken?: Token,
         public defaultValue?: Expr.Expression,
-        public asToken?: Token,
+        public asToken?: Token
 
     ) { }
     public get location(): Location {
         return {
             file: this.name.location.file,
             start: this.name.location.start,
-            end: this.typeToken ? this.typeToken.location.end : this.name.location.end,
+            end: this.typeToken ? this.typeToken.location.end : this.name.location.end
         };
     }
 
@@ -109,12 +108,12 @@ export interface Signature {
 }
 
 /** A BrightScript function signature paired with its implementation. */
-export type SignatureAndImplementation = {
+export interface SignatureAndImplementation {
     /** A BrightScript function's signature. */
     signature: Signature;
     /** The implementation corresponding to `signature`. */
     impl: CallableImplementation;
-};
+}
 
 type SignatureMismatch = AnonymousMismatch | ArgumentMismatch;
 
@@ -151,12 +150,12 @@ export enum MismatchReason {
 }
 
 /** A BrightScript function's signature, paired with a set of detected signature mismatches. */
-export type SignatureAndMismatches = {
+export interface SignatureAndMismatches {
     /** A BrightScript function's signature. */
     signature: Signature;
     /** The set of mismatches between `signature` and the detected mismatches. */
     mismatches: SignatureMismatch[];
-};
+}
 
 /*
  * Note that TypeScript's `--strictFunctionTypes` compiler argument prevents the `args` parameter
@@ -188,10 +187,10 @@ export class Callable implements Brs.BrsValue {
      */
     call(interpreter: Interpreter, ...args: Brs.BrsType[]) {
         let satisfiedSignature = this.getFirstSatisfiedSignature(args);
-        if (satisfiedSignature == null) {
+        if (satisfiedSignature === null) {
             throw new Error(
-                "BrightScript function called without first checking for satisfied signatures. " +
-                "Ensure `Callable#getAllSignatureMismatches` is called before `Callable#call`."
+                'BrightScript function called without first checking for satisfied signatures. ' +
+                'Ensure `Callable#getAllSignatureMismatches` is called before `Callable#call`.'
             );
         }
 
@@ -203,7 +202,7 @@ export class Callable implements Brs.BrsValue {
             // first, we need to evaluate all of the parameter default values
             // and define them in a new environment
             signature.args.forEach((param, index) => {
-                if (param.defaultValue && mutableArgs[index] == null) {
+                if (param.defaultValue && mutableArgs[index] === null) {
                     mutableArgs[index] = subInterpreter.evaluate(param.defaultValue);
                 }
 
@@ -230,11 +229,11 @@ export class Callable implements Brs.BrsValue {
         this.signatures = signatures;
     }
 
-    lessThan(other: Brs.BrsType): Brs.BrsBoolean {
+    lessThan(): Brs.BrsBoolean {
         return Brs.BrsBoolean.False;
     }
 
-    greaterThan(other: Brs.BrsType): Brs.BrsBoolean {
+    greaterThan(): Brs.BrsBoolean {
         return Brs.BrsBoolean.False;
     }
 
@@ -242,16 +241,16 @@ export class Callable implements Brs.BrsValue {
         return Brs.BrsBoolean.from(this === other);
     }
 
-    toString(parent?: Brs.BrsType): string {
+    toString(): string {
         if (this.name) {
             return `[Function ${this.name}]`;
         } else {
-            return "[anonymous function]";
+            return '[anonymous function]';
         }
     }
 
     getName(): string {
-        return this.name || "";
+        return this.name || '';
     }
 
     getFirstSatisfiedSignature(args: Brs.BrsType[]): SignatureAndImplementation | undefined {
@@ -263,7 +262,7 @@ export class Callable implements Brs.BrsValue {
     getAllSignatureMismatches(args: Brs.BrsType[]): SignatureAndMismatches[] {
         return this.signatures.map(sigAndImpl => ({
             signature: sigAndImpl.signature,
-            mismatches: this.getSignatureMismatches(sigAndImpl.signature, args),
+            mismatches: this.getSignatureMismatches(sigAndImpl.signature, args)
         }));
     }
 
@@ -275,13 +274,13 @@ export class Callable implements Brs.BrsValue {
             reasons.push({
                 reason: MismatchReason.TooFewArguments,
                 expected: sig.args.length.toString(),
-                received: args.length.toString(),
+                received: args.length.toString()
             });
         } else if (args.length > sig.args.length) {
             reasons.push({
                 reason: MismatchReason.TooManyArguments,
                 expected: sig.args.length.toString(),
-                received: args.length.toString(),
+                received: args.length.toString()
             });
         }
 
@@ -299,9 +298,9 @@ export class Callable implements Brs.BrsValue {
             if (expected.type.kind !== received.kind) {
                 reasons.push({
                     reason: MismatchReason.ArgumentTypeMismatch,
-                    expected: Brs.ValueKind.toString(expected.type.kind),
-                    received: Brs.ValueKind.toString(received.kind),
-                    argName: expected.name.text,
+                    expected: Brs.valueKindToString(expected.type.kind),
+                    received: Brs.valueKindToString(received.kind),
+                    argName: expected.name.text
                 });
             }
         });

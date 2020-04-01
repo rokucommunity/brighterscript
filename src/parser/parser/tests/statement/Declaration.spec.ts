@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -21,7 +20,7 @@ describe('parser variable declarations', () => {
             identifier('hasNewlines'),
             token(Lexeme.Equal),
             token(Lexeme.True),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -35,7 +34,7 @@ describe('parser variable declarations', () => {
             token(Lexeme.Equal),
             token(Lexeme.True),
             token(Lexeme.Newline),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -48,7 +47,7 @@ describe('parser variable declarations', () => {
             identifier('foo'),
             token(Lexeme.Equal),
             token(Lexeme.Integer, '5', new Int32(5)),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -64,7 +63,7 @@ describe('parser variable declarations', () => {
             token(Lexeme.Integer, '5', new Int32(5)),
             token(Lexeme.Caret),
             token(Lexeme.Integer, '3', new Int32(3)),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -78,7 +77,7 @@ describe('parser variable declarations', () => {
             identifier('baz'),
             token(Lexeme.Equal),
             identifier('foo'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -101,8 +100,8 @@ describe('parser variable declarations', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 0 },
-                    end: { line: 1, column: 3 },
-                },
+                    end: { line: 1, column: 3 }
+                }
             },
             {
                 kind: Lexeme.Equal,
@@ -110,8 +109,8 @@ describe('parser variable declarations', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 4 },
-                    end: { line: 1, column: 5 },
-                },
+                    end: { line: 1, column: 5 }
+                }
             },
             {
                 kind: Lexeme.Invalid,
@@ -120,8 +119,8 @@ describe('parser variable declarations', () => {
                 isReserved: true,
                 location: {
                     start: { line: 1, column: 6 },
-                    end: { line: 1, column: 13 },
-                },
+                    end: { line: 1, column: 13 }
+                }
             },
             {
                 kind: Lexeme.Eof,
@@ -129,16 +128,16 @@ describe('parser variable declarations', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 13 },
-                    end: { line: 1, column: 14 },
-                },
-            },
+                    end: { line: 1, column: 14 }
+                }
+            }
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].location).to.deep.include({
             start: { line: 1, column: 0 },
-            end: { line: 1, column: 13 },
+            end: { line: 1, column: 13 }
         });
     });
 });

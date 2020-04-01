@@ -1,6 +1,5 @@
-/* eslint-disable */
-import { Lexeme } from "./Lexeme";
-import { BrsType } from "../brsTypes";
+import { Lexeme } from './Lexeme';
+import { BrsType } from '../brsTypes';
 
 /**
  * Represents a chunk of BrightScript scanned by the lexer.
@@ -43,7 +42,7 @@ export interface LineAndColumn {
     line: number;
     /** A *zero-indexed* column number. */
     column: number;
-};
+}
 
 /** Represents an identifier as scanned by the lexer. */
 export interface Identifier extends Token {

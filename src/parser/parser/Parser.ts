@@ -1,11 +1,6 @@
-/* eslint-disable */
-import { EventEmitter } from "events";
+import { EventEmitter } from 'events';
 
-import * as Expr from "./Expression";
-type Expression = Expr.Expression;
-import * as Stmt from "./Statement";
-type Statement = Stmt.Statement;
-import { Lexeme, Token, Identifier, Location, ReservedWords } from "../lexer";
+import { Lexeme, Token, Identifier, Location, ReservedWords } from '../lexer';
 
 import {
     BrsInvalid,
@@ -16,11 +11,43 @@ import {
     Argument,
     StdlibArgument,
     FunctionParameter,
-} from "../brsTypes";
-import { FunctionStatement, ClassStatement, ClassFieldStatement, ClassMemberStatement, ClassMethodStatement, CommentStatement } from './Statement';
+    valueKindFromString
+} from '../brsTypes';
+import {
+    Statement,
+    FunctionStatement,
+    ClassStatement,
+    ClassFieldStatement,
+    ClassMemberStatement,
+    ClassMethodStatement,
+    CommentStatement,
+    PrintSeparatorTab,
+    PrintSeparatorSpace,
+    AssignmentStatement,
+    WhileStatement,
+    ExitWhileStatement,
+    ForStatement,
+    ForEachStatement,
+    ExitForStatement,
+    LibraryStatement,
+    Block,
+    IfStatement,
+    ElseIf,
+    DottedSetStatement,
+    IndexedSetStatement,
+    ExpressionStatement,
+    IncrementStatement,
+    ReturnStatement,
+    EndStatement,
+    PrintStatement,
+    LabelStatement,
+    GotoStatement,
+    StopStatement
+} from './Statement';
 import { diagnosticMessages, DiagnosticMessage } from '../../DiagnosticMessages';
 import { util } from '../../util';
 import { ParseError } from '../Error';
+import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression } from './Expression';
 
 /** Set of all keywords that end blocks. */
 type BlockTerminator =
@@ -42,7 +69,7 @@ const assignmentOperators = [
     Lexeme.SlashEqual,
     Lexeme.BackslashEqual,
     Lexeme.LeftShiftEqual,
-    Lexeme.RightShiftEqual,
+    Lexeme.RightShiftEqual
 ];
 
 /** List of Lexemes that are permitted as property names. */
@@ -89,7 +116,7 @@ const allowedProperties = [
     Lexeme.To,
     Lexeme.True,
     Lexeme.Type,
-    Lexeme.While,
+    Lexeme.While
 ];
 
 /** List of Lexeme that are allowed as local var identifiers. */
@@ -146,7 +173,7 @@ export const disallowedIdentifiers = new Set(
 /** The results of a Parser's parsing pass. */
 interface ParseResults {
     /** The statements produced by the parser. */
-    statements: Stmt.Statement[];
+    statements: Statement[];
     /** The errors encountered by the Parser. */
     errors: ParseError[];
 }
@@ -173,11 +200,11 @@ export class Parser {
      * @returns an object with a `dispose` function, used to unsubscribe from errors
      */
     public onError(errorHandler: (err: ParseError) => void) {
-        this.events.on("err", errorHandler);
+        this.events.on('err', errorHandler);
         return {
             dispose: () => {
-                this.events.removeListener("err", errorHandler);
-            },
+                this.events.removeListener('err', errorHandler);
+            }
         };
     }
 
@@ -186,7 +213,7 @@ export class Parser {
      * @param errorHandler the function to call for the first Parser error emitted after subscribing
      */
     public onErrorOnce(errorHandler: (err: ParseError) => void) {
-        this.events.once("err", errorHandler);
+        this.events.once('err', errorHandler);
     }
 
     /**
@@ -226,18 +253,18 @@ export class Parser {
         const addError = (token: Token, message: string, code = 1000) => {
             let err = new ParseError(token, message, code);
             errors.push(err);
-            this.events.emit("err", err);
+            this.events.emit('err', err);
             return err;
         };
 
         /**
          * Wrapper around addError that extracts the properties from a diagnostic object
-         * @param token 
-         * @param diagnostic 
+         * @param token
+         * @param diagnostic
          */
         const addDiagnostic = (token: Token, diagnostic: DiagnosticMessage) => {
             return addError(token, diagnostic.message, diagnostic.code);
-        }
+        };
 
         /**
          * Throws an error if the input file type is not BrighterScript
@@ -246,7 +273,7 @@ export class Parser {
             if (mode !== 'brighterscript') {
                 throw addDiagnostic(peek(), diagnosticMessages.Bs_feature_not_supported_in_brs_files_1019(featureName));
             }
-        }
+        };
 
         /**
          * Add an error at the given location.
@@ -260,7 +287,7 @@ export class Parser {
         if (toParse.length === 0) {
             return {
                 statements: [],
-                errors: [],
+                errors: []
             };
         }
 
@@ -272,11 +299,11 @@ export class Parser {
                 }
             }
 
-            return { statements, errors };
+            return { statements: statements, errors: errors };
         } catch (parseError) {
             return {
                 statements: [],
-                errors: errors,
+                errors: errors
             };
         }
 
@@ -287,7 +314,7 @@ export class Parser {
          * @returns `true` if the next token is an identifier with text `end`, otherwise `false`
          */
         function checkEnd() {
-            return check(Lexeme.Identifier) && peek().text.toLowerCase() === "end";
+            return check(Lexeme.Identifier) && peek().text.toLowerCase() === 'end';
         }
 
         /**
@@ -296,13 +323,13 @@ export class Parser {
          * so the lexer handles it as an identifier
          */
         function checkAs() {
-            return check(Lexeme.Identifier) && peek().text.toLowerCase() === "as";
+            return check(Lexeme.Identifier) && peek().text.toLowerCase() === 'as';
         }
 
         function declaration(...additionalTerminators: BlockTerminator[]): Statement | undefined {
             try {
                 // consume any leading newlines
-                while (match(Lexeme.Newline));
+                while (match(Lexeme.Newline)) { }
 
                 //TODO implement this in a future commit
                 if (check(Lexeme.Class)) {
@@ -330,29 +357,31 @@ export class Parser {
                 if (check(Lexeme.Comment)) {
                     let stmt = commentStatement();
                     //scrap consecutive newlines
-                    while (match(Lexeme.Newline));
+                    while (match(Lexeme.Newline)) {
+
+                    }
                     return stmt;
                 }
-                let nextThing = peek();
-                nextThing = nextThing;
+                peek();
 
                 return statement(...additionalTerminators);
             } catch (error) {
                 synchronize();
-                return;
+
             }
         }
 
         /**
          * A BrighterScript class declaration
          */
-        function classDeclaration(): Stmt.ClassStatement {
+        function classDeclaration(): ClassStatement {
             ensureBrighterScriptMode('class declarations');
             let keyword = consume(`Expected 'class' keyword`, Lexeme.Class);
             //get the class name
             let className = consumeContinue(diagnosticMessages.Missing_identifier_after_class_keyword_1016(), Lexeme.Identifier) as Identifier;
             //consume newlines (at least one)
-            while (match(Lexeme.Newline));
+            while (match(Lexeme.Newline)) {
+            }
 
             let members = [] as ClassMemberStatement[];
             //gather up all class members (Fields, Methods)
@@ -378,12 +407,12 @@ export class Parser {
 
                     //methods (function/sub keyword OR identifier followed by opening paren)
                     if (check(Lexeme.Function, Lexeme.Sub) || (check(Lexeme.Identifier) && checkNext(Lexeme.LeftParen))) {
-                        let declaration = functionDeclaration(false);
+                        let funcDeclaration = functionDeclaration(false);
                         members.push(
                             new ClassMethodStatement(
                                 accessModifier,
-                                declaration.name,
-                                declaration.func
+                                funcDeclaration.name,
+                                funcDeclaration.func
                             )
                         );
 
@@ -399,11 +428,13 @@ export class Parser {
                 }
 
                 //consume trailing newlines
-                while (match(Lexeme.Newline));
+                while (match(Lexeme.Newline)) { }
             }
 
             //consume trailing newlines
-            while (match(Lexeme.Newline));
+            while (match(Lexeme.Newline)) {
+
+            }
 
             let endingKeyword = advance();
             if (endingKeyword.kind !== Lexeme.EndClass) {
@@ -413,7 +444,9 @@ export class Parser {
                 );
             }
             //consume any trailing newlines
-            while (match(Lexeme.Newline));
+            while (match(Lexeme.Newline)) {
+
+            }
 
             const result = new ClassStatement(
                 keyword,
@@ -434,7 +467,7 @@ export class Parser {
                 fieldType = advance();
 
                 //no field type specified
-                if (!ValueKind.fromString(`${fieldType.text}`) && !check(Lexeme.Identifier)) {
+                if (!valueKindFromString(`${fieldType.text}`) && !check(Lexeme.Identifier)) {
                     addDiagnostic(peek(), diagnosticMessages.Expected_valid_type_to_follow_as_keyword_1018());
                 }
             }
@@ -450,7 +483,7 @@ export class Parser {
             );
         }
 
-        function functionDeclaration(isAnonymous: true): Expr.FunctionExpression;
+        function functionDeclaration(isAnonymous: true): FunctionExpression;
         function functionDeclaration(isAnonymous: false): FunctionStatement;
         function functionDeclaration(isAnonymous: boolean) {
             try {
@@ -502,7 +535,7 @@ export class Parser {
 
                     //prevent functions from ending with type designators
                     let lastChar = name.text[name.text.length - 1];
-                    if (["$", "%", "!", "#", "&"].includes(lastChar)) {
+                    if (['$', '%', '!', '#', '&'].includes(lastChar)) {
                         //don't throw this error; let the parser continue
                         addError(
                             name,
@@ -516,10 +549,10 @@ export class Parser {
                 let typeToken: Token;
                 if (!check(Lexeme.RightParen)) {
                     do {
-                        if (args.length >= Expr.Call.MaximumArguments) {
+                        if (args.length >= CallExpression.MaximumArguments) {
                             throw addError(
                                 peek(),
-                                `Cannot have more than ${Expr.Call.MaximumArguments} parameters`
+                                `Cannot have more than ${CallExpression.MaximumArguments} parameters`
                             );
                         }
 
@@ -529,12 +562,12 @@ export class Parser {
                 let rightParen = advance();
 
                 let maybeAs = peek();
-                if (check(Lexeme.Identifier) && maybeAs.text.toLowerCase() === "as") {
+                if (check(Lexeme.Identifier) && maybeAs.text.toLowerCase() === 'as') {
                     asToken = advance();
 
                     typeToken = advance();
-                    let typeString = typeToken.text || "";
-                    let maybeReturnType = ValueKind.fromString(typeString);
+                    let typeString = typeToken.text || '';
+                    let maybeReturnType = valueKindFromString(typeString);
 
                     if (!maybeReturnType) {
                         throw addError(
@@ -553,7 +586,7 @@ export class Parser {
                                 kind: Lexeme.Identifier,
                                 text: arg.name.text,
                                 isReserved: ReservedWords.has(arg.name.text),
-                                location: arg.location,
+                                location: arg.location
                             },
                             `Argument '${arg.name.text}' has no default value, but comes after arguments with default values`
                         );
@@ -561,7 +594,7 @@ export class Parser {
 
                     return haveFoundOptional || !!arg.defaultValue;
                 }, false);
-                let comment: Stmt.CommentStatement;
+                let comment: CommentStatement;
                 //get a comment if available
                 if (check(Lexeme.Comment)) {
                     comment = commentStatement();
@@ -597,7 +630,7 @@ export class Parser {
                     );
                 }
 
-                let func = new Expr.FunctionExpression(
+                let func = new FunctionExpression(
                     args,
                     returnType,
                     body,
@@ -614,8 +647,9 @@ export class Parser {
                 } else {
                     // only consume trailing newlines in the statement context; expressions
                     // expect to handle their own trailing whitespace
-                    while (match(Lexeme.Newline));
-                    return new Stmt.FunctionStatement(name!, func);
+                    while (match(Lexeme.Newline)) {
+                    }
+                    return new FunctionStatement(name, func);
                 }
             } finally {
                 functionDeclarationLevel--;
@@ -626,7 +660,7 @@ export class Parser {
             if (!check(Lexeme.Identifier)) {
                 throw addError(
                     peek(),
-                    `Expected parameter name, but received '${peek().text || ""}'`
+                    `Expected parameter name, but received '${peek().text || ''}'`
                 );
             }
 
@@ -643,14 +677,14 @@ export class Parser {
 
             let asToken = null;
             let next = peek();
-            if (check(Lexeme.Identifier) && next.text && next.text.toLowerCase() === "as") {
+            if (check(Lexeme.Identifier) && next.text && next.text.toLowerCase() === 'as') {
                 // 'as' isn't a reserved word, so it can't be lexed into an As token without the lexer
                 // understanding language context.  That's less than ideal, so we'll have to do some
                 // more intelligent comparisons to detect the 'as' sometimes-keyword here.
                 asToken = advance();
 
                 typeToken = advance();
-                let typeValueKind = ValueKind.fromString(typeToken.text);
+                let typeValueKind = valueKindFromString(typeToken.text);
 
                 if (!typeValueKind) {
                     throw addError(
@@ -666,7 +700,7 @@ export class Parser {
                 name,
                 {
                     kind: type,
-                    location: typeToken ? typeToken.location : StdlibArgument.InternalLocation,
+                    location: typeToken ? typeToken.location : StdlibArgument.InternalLocation
                 },
                 typeToken,
                 defaultValue,
@@ -674,7 +708,7 @@ export class Parser {
             );
         }
 
-        function assignment(...additionalterminators: Lexeme[]): Stmt.AssignmentStatement {
+        function assignment(...additionalterminators: Lexeme[]): AssignmentStatement {
             let name = advance() as Identifier;
             //add error if name is a reserved word that cannot be used as an identifier
             if (disallowedIdentifiers.has(name.text.toLowerCase())) {
@@ -689,7 +723,7 @@ export class Parser {
             let value = expression();
             if (!check(...additionalterminators, Lexeme.Comment)) {
                 consume(
-                    "Expected newline or ':' after assignment",
+                    'Expected newline or \':\' after assignment',
                     Lexeme.Newline,
                     Lexeme.Colon,
                     Lexeme.Eof,
@@ -698,30 +732,30 @@ export class Parser {
             }
 
             if (operator.kind === Lexeme.Equal) {
-                return new Stmt.AssignmentStatement({ equals: operator }, name, value);
+                return new AssignmentStatement({ equals: operator }, name, value);
             } else {
-                return new Stmt.AssignmentStatement(
+                return new AssignmentStatement(
                     { equals: operator },
                     name,
-                    new Expr.Binary(new Expr.Variable(name), operator, value)
+                    new BinaryExpression(new VariableExpression(name), operator, value)
                 );
             }
         }
 
         function checkLibrary() {
-            let isLibraryIdentifier = check(Lexeme.Identifier) && peek().text.toLowerCase() === "library";
+            let isLibraryIdentifier = check(Lexeme.Identifier) && peek().text.toLowerCase() === 'library';
 
             //if we are at the top level, any line that starts with "library" should be considered a library statement
             if (isAtRootLevel() && isLibraryIdentifier) {
                 return true;
-            }
-            //not at root level, library statements are all invalid here, but try to detect if the tokens look
-            //like a library statement (and let the libraryStatement function handle emitting the errors)
-            else if (isLibraryIdentifier && checkNext(Lexeme.String)) {
+
+                //not at root level, library statements are all invalid here, but try to detect if the tokens look
+                //like a library statement (and let the libraryStatement function handle emitting the errors)
+            } else if (isLibraryIdentifier && checkNext(Lexeme.String)) {
                 return true;
-            }
-            //definitely not a library statement
-            else {
+
+                //definitely not a library statement
+            } else {
                 return false;
             }
         }
@@ -784,19 +818,19 @@ export class Parser {
             return setStatement(...additionalterminators);
         }
 
-        function whileStatement(): Stmt.WhileStatement {
+        function whileStatement(): WhileStatement {
             const whileKeyword = advance();
             const condition = expression();
 
-            let comment: Stmt.CommentStatement;
+            let comment: CommentStatement;
             if (check(Lexeme.Comment)) {
                 comment = commentStatement();
             }
 
-            consume("Expected newline after 'while ...condition...'", Lexeme.Newline);
+            consume('Expected newline after \'while ...condition...\'', Lexeme.Newline);
             const whileBlock = block(Lexeme.EndWhile);
             if (!whileBlock) {
-                throw addError(peek(), "Expected 'end while' to terminate while-loop block");
+                throw addError(peek(), 'Expected \'end while\' to terminate while-loop block');
             }
 
             //set comment as first statement in block
@@ -805,26 +839,27 @@ export class Parser {
             }
 
             const endWhile = advance();
-            while (match(Lexeme.Newline));
+            while (match(Lexeme.Newline)) {
+            }
 
-            return new Stmt.WhileStatement(
+            return new WhileStatement(
                 { while: whileKeyword, endWhile: endWhile },
                 condition,
                 whileBlock
             );
         }
 
-        function exitWhile(): Stmt.ExitWhile {
+        function exitWhile(): ExitWhileStatement {
             let keyword = advance();
 
             if (check(Lexeme.Newline, Lexeme.Comment) === false) {
                 addError(peek(), `Expected newline or comment after 'exit while'`);
             }
             while (match(Lexeme.Newline)) { }
-            return new Stmt.ExitWhile({ exitWhile: keyword });
+            return new ExitWhileStatement({ exitWhile: keyword });
         }
 
-        function forStatement(): Stmt.ForStatement {
+        function forStatement(): ForStatement {
             const forKeyword = advance();
             const initializer = assignment(Lexeme.To);
             const to = advance();
@@ -837,25 +872,27 @@ export class Parser {
                 increment = expression();
             } else {
                 // BrightScript for/to/step loops default to a step of 1 if no `step` is provided
-                increment = new Expr.Literal(new Int32(1), peek().location);
+                increment = new LiteralExpression(new Int32(1), peek().location);
             }
-            while (match(Lexeme.Newline));
+            while (match(Lexeme.Newline)) {
+
+            }
 
             let body = block(Lexeme.EndFor, Lexeme.Next);
             if (!body) {
-                throw addError(peek(), "Expected 'end for' or 'next' to terminate for-loop block");
+                throw addError(peek(), 'Expected \'end for\' or \'next\' to terminate for-loop block');
             }
             let endFor = advance();
-            while (match(Lexeme.Newline));
+            while (match(Lexeme.Newline)) { }
 
             // WARNING: BrightScript doesn't delete the loop initial value after a for/to loop! It just
             // stays around in scope with whatever value it was when the loop exited.
-            return new Stmt.ForStatement(
+            return new ForStatement(
                 {
                     for: forKeyword,
                     to: to,
                     step: step,
-                    endFor: endFor,
+                    endFor: endFor
                 },
                 initializer,
                 finalValue,
@@ -864,31 +901,33 @@ export class Parser {
             );
         }
 
-        function forEachStatement(): Stmt.ForEachStatement {
+        function forEachStatement(): ForEachStatement {
             let forEach = advance();
             let name = advance();
 
             let maybeIn = peek();
-            if (check(Lexeme.Identifier) && maybeIn.text.toLowerCase() === "in") {
+            if (check(Lexeme.Identifier) && maybeIn.text.toLowerCase() === 'in') {
                 advance();
             } else {
-                throw addError(maybeIn, "Expected 'in' after 'for each <name>'");
+                throw addError(maybeIn, 'Expected \'in\' after \'for each <name>\'');
             }
 
             let target = expression();
             if (!target) {
-                throw addError(peek(), "Expected target object to iterate over");
+                throw addError(peek(), 'Expected target object to iterate over');
             }
-            let comment: Stmt.CommentStatement;
+            let comment: CommentStatement;
             if (check(Lexeme.Comment)) {
                 comment = commentStatement();
             }
             advance();
-            while (match(Lexeme.Newline));
+            while (match(Lexeme.Newline)) {
+
+            }
 
             let body = block(Lexeme.EndFor, Lexeme.Next);
             if (!body) {
-                throw addError(peek(), "Expected 'end for' or 'next' to terminate for-loop block");
+                throw addError(peek(), 'Expected \'end for\' or \'next\' to terminate for-loop block');
             }
 
             //add comment to beginning of block of avaiable
@@ -896,13 +935,13 @@ export class Parser {
                 body.statements.unshift(comment);
             }
             let endFor = advance();
-            while (match(Lexeme.Newline));
+            while (match(Lexeme.Newline)) { }
 
-            return new Stmt.ForEachStatement(
+            return new ForEachStatement(
                 {
                     forEach: forEach,
                     in: maybeIn,
-                    endFor: endFor,
+                    endFor: endFor
                 },
                 name,
                 target,
@@ -910,13 +949,15 @@ export class Parser {
             );
         }
 
-        function exitFor(): Stmt.ExitFor {
+        function exitFor(): ExitForStatement {
             let keyword = advance();
             if (!check(Lexeme.Comment)) {
-                consume("Expected newline after 'exit for'", Lexeme.Newline);
-                while (match(Lexeme.Newline));
+                consume('Expected newline after \'exit for\'', Lexeme.Newline);
+                while (match(Lexeme.Newline)) {
+
+                }
             }
-            return new Stmt.ExitFor({ exitFor: keyword });
+            return new ExitForStatement({ exitFor: keyword });
         }
 
         function commentStatement() {
@@ -924,12 +965,12 @@ export class Parser {
             //then this comment should be treated as a single-line comment
             let prev = previous();
             if (prev && prev.location.end.line === peek().location.start.line) {
-                return new Stmt.CommentStatement([advance()]);
+                return new CommentStatement([advance()]);
             } else {
                 let comments = [advance()];
                 while (check(Lexeme.Newline)) {
                     //absorb newlines
-                    while (match(Lexeme.Newline));
+                    while (match(Lexeme.Newline)) { }
 
                     //if this is a comment, and it's the next line down from the previous comment
                     if (check(Lexeme.Comment) && comments[comments.length - 1].location.end.line === peek().location.start.line - 1) {
@@ -938,29 +979,22 @@ export class Parser {
                         break;
                     }
                 }
-                return new Stmt.CommentStatement(comments);
+                return new CommentStatement(comments);
             }
         }
 
-        function libraryStatement(): Stmt.LibraryStatement | undefined {
-            let libraryStatement = new Stmt.LibraryStatement({
+        function libraryStatement(): LibraryStatement | undefined {
+            let libStatement = new LibraryStatement({
                 library: advance(),
                 //grab the next token only if it's a string
-                filePath: check(Lexeme.String) ? advance() : undefined,
+                filePath: check(Lexeme.String) ? advance() : undefined
             });
 
             //no token following library keyword token
-            if (!libraryStatement.tokens.filePath && check(Lexeme.Newline, Lexeme.Colon, Lexeme.Comment)) {
+            if (!libStatement.tokens.filePath && check(Lexeme.Newline, Lexeme.Colon, Lexeme.Comment)) {
                 addErrorAtLocation(
-                    libraryStatement.tokens.library.location,
-                    `Missing string literal after ${libraryStatement.tokens.library.text} keyword`
-                );
-            }
-            //does not have a string literal as next token
-            else if (!libraryStatement.tokens.filePath && check(Lexeme.Newline, Lexeme.Colon, Lexeme.Comment)) {
-                addErrorAtLocation(
-                    peek().location,
-                    `Expected string literal after ${libraryStatement.tokens.library.text} keyword`
+                    libStatement.tokens.library.location,
+                    `Missing string literal after ${libStatement.tokens.library.text} keyword`
                 );
             }
 
@@ -979,33 +1013,35 @@ export class Parser {
 
             //libraries must be at the very top of the file before any other declarations.
             let isAtTopOfFile = true;
-            for (let statement of statements) {
+            for (let loopStatement of statements) {
                 //if we found a non-library statement, this statement is not at the top of the file
-                if (!(statement instanceof Stmt.LibraryStatement) && !(statement instanceof Stmt.CommentStatement)) {
+                if (!(loopStatement instanceof LibraryStatement) && !(loopStatement instanceof CommentStatement)) {
                     isAtTopOfFile = false;
+                    break;
                 }
             }
 
             //libraries must be a root-level statement (i.e. NOT nested inside of functions)
             if (!isAtRootLevel() || !isAtTopOfFile) {
                 addErrorAtLocation(
-                    libraryStatement.location,
-                    "Library statements may only appear at the top of a file"
+                    libStatement.location,
+                    'Library statements may only appear at the top of a file'
                 );
             }
             //consume to the next newline, eof, or colon
-            while (match(Lexeme.Newline, Lexeme.Eof, Lexeme.Colon));
-            return libraryStatement;
+            while (match(Lexeme.Newline, Lexeme.Eof, Lexeme.Colon)) {
+            }
+            return libStatement;
         }
 
-        function ifStatement(): Stmt.IfStatement {
+        function ifStatement(): IfStatement {
             const ifToken = advance();
             const startingLine = ifToken.location;
 
             const condition = expression();
-            let thenBranch: Stmt.Block;
-            let elseIfBranches: Stmt.ElseIf[] = [];
-            let elseBranch: Stmt.Block | undefined;
+            let thenBranch: Block;
+            let elseIfBranches: ElseIf[] = [];
+            let elseBranch: Block | undefined;
 
             let thenToken: Token | undefined;
             let elseIfTokens: Token[] = [];
@@ -1020,7 +1056,7 @@ export class Parser {
              * @returns `true` if the next token is an identifier with text "then", otherwise `false`.
              */
             function checkThen() {
-                return check(Lexeme.Identifier) && peek().text.toLowerCase() === "then";
+                return check(Lexeme.Identifier) && peek().text.toLowerCase() === 'then';
             }
 
             if (checkThen()) {
@@ -1028,7 +1064,7 @@ export class Parser {
                 thenToken = advance();
             }
 
-            let comment: Stmt.CommentStatement;
+            let comment: CommentStatement;
             if (check(Lexeme.Comment)) {
                 comment = commentStatement();
             }
@@ -1061,7 +1097,7 @@ export class Parser {
                     //this whole if statement is bogus...add error to the if token and hard-fail
                     throw addError(
                         ifToken,
-                        "Expected 'end if', 'else if', or 'else' to terminate 'then' block"
+                        'Expected \'end if\', \'else if\', or \'else\' to terminate \'then\' block'
                     );
                 }
                 //add any comment from the same line as the if statement
@@ -1097,7 +1133,7 @@ export class Parser {
                     if (!elseIfThen) {
                         throw addError(
                             peek(),
-                            "Expected 'end if', 'else if', or 'else' to terminate 'then' block"
+                            'Expected \'end if\', \'else if\', or \'else\' to terminate \'then\' block'
                         );
                     }
 
@@ -1130,7 +1166,7 @@ export class Parser {
                         let index = tokens.indexOf(endIfToken);
                         let previousToken = tokens[index - 1];
                         if (previousToken.kind !== Lexeme.Colon) {
-                            addError(endIfToken, "Expected ':' to preceed 'end if'");
+                            addError(endIfToken, 'Expected \':\' to preceed \'end if\'');
                         }
                     }
                     match(Lexeme.Newline);
@@ -1146,7 +1182,7 @@ export class Parser {
                         let index = tokens.indexOf(endIfToken);
                         let previousToken = tokens[index - 1];
                         if (previousToken.kind !== Lexeme.Colon) {
-                            addError(endIfToken, "Expected ':' to preceed 'end if'");
+                            addError(endIfToken, 'Expected \':\' to preceed \'end if\'');
                         }
                     }
                     match(Lexeme.Newline);
@@ -1156,10 +1192,10 @@ export class Parser {
                 if (!thenStatement) {
                     throw addError(
                         peek(),
-                        "Expected a statement to follow 'if ...condition... then'"
+                        'Expected a statement to follow \'if ...condition... then\''
                     );
                 }
-                thenBranch = new Stmt.Block([thenStatement], peek().location);
+                thenBranch = new Block([thenStatement], peek().location);
 
                 //add any comment from the same line as the if statement
                 if (comment) {
@@ -1185,7 +1221,7 @@ export class Parser {
 
                     elseIfBranches.push({
                         condition: elseIfCondition,
-                        thenBranch: new Stmt.Block([elseIfThen], peek().location),
+                        thenBranch: new Block([elseIfThen], peek().location),
                         thenToken: thenToken,
                         elseIfToken: elseIf
                     });
@@ -1196,11 +1232,11 @@ export class Parser {
                     if (!elseStatement) {
                         throw addError(peek(), `Expected a statement to follow 'else'`);
                     }
-                    elseBranch = new Stmt.Block([elseStatement], peek().location);
+                    elseBranch = new Block([elseStatement], peek().location);
                 }
             }
 
-            return new Stmt.IfStatement(
+            return new IfStatement(
                 {
                     if: ifToken,
                     then: thenToken,
@@ -1217,14 +1253,14 @@ export class Parser {
 
         function setStatement(
             ...additionalTerminators: BlockTerminator[]
-        ): Stmt.DottedSetStatement | Stmt.IndexedSetStatement | Stmt.ExpressionStatement | Stmt.IncrementStatement {
+        ): DottedSetStatement | IndexedSetStatement | ExpressionStatement | IncrementStatement {
             /**
              * Attempts to find an expression-statement or an increment statement.
              * While calls are valid expressions _and_ statements, increment (e.g. `foo++`)
              * statements aren't valid expressions. They _do_ however fall under the same parsing
              * priority as standalone function calls though, so we can parse them in the same way.
              */
-            function _expressionStatement(): Stmt.ExpressionStatement | Stmt.IncrementStatement {
+            function _expressionStatement(): ExpressionStatement | IncrementStatement {
                 let expressionStart = peek();
 
                 if (check(Lexeme.PlusPlus, Lexeme.MinusMinus)) {
@@ -1233,50 +1269,51 @@ export class Parser {
                     if (check(Lexeme.PlusPlus, Lexeme.MinusMinus)) {
                         throw addError(
                             peek(),
-                            "Consecutive increment/decrement operators are not allowed"
+                            'Consecutive increment/decrement operators are not allowed'
                         );
-                    } else if (expr instanceof Expr.Call) {
+                    } else if (expr instanceof CallExpression) {
                         throw addError(
                             expressionStart,
-                            "Increment/decrement operators are not allowed on the result of a function call"
+                            'Increment/decrement operators are not allowed on the result of a function call'
                         );
                     }
 
-                    while (match(Lexeme.Newline, Lexeme.Colon));
+                    while (match(Lexeme.Newline, Lexeme.Colon)) {
+                    }
 
-                    return new Stmt.IncrementStatement(expr, operator);
+                    return new IncrementStatement(expr, operator);
                 }
 
                 if (!check(...additionalTerminators, Lexeme.Comment)) {
                     consume(
-                        "Expected newline or ':' after expression statement",
+                        'Expected newline or \':\' after expression statement',
                         Lexeme.Newline,
                         Lexeme.Colon,
                         Lexeme.Eof
                     );
                 }
 
-                if (expr instanceof Expr.Call) {
-                    return new Stmt.ExpressionStatement(expr);
+                if (expr instanceof CallExpression) {
+                    return new ExpressionStatement(expr);
                 }
 
                 //at this point, it's probably an error. However, we recover a little more gracefully by creating an assignment
                 throw addError(
                     expressionStart,
-                    "Expected statement or function call, but received an expression"
+                    'Expected statement or function call, but received an expression'
                 );
             }
 
             let expr = call();
-            if (check(...assignmentOperators) && !(expr instanceof Expr.Call)) {
+            if (check(...assignmentOperators) && !(expr instanceof CallExpression)) {
                 let left = expr;
                 let operator = advance();
                 let right = expression();
 
                 // Create a dotted or indexed "set" based on the left-hand side's type
-                if (left instanceof Expr.IndexedGetExpression) {
+                if (left instanceof IndexedGetExpression) {
                     consume(
-                        "Expected newline or ':' after indexed 'set' statement",
+                        'Expected newline or \':\' after indexed \'set\' statement',
                         Lexeme.Newline,
                         Lexeme.Else,
                         Lexeme.ElseIf,
@@ -1288,18 +1325,18 @@ export class Parser {
                         current--;
                     }
 
-                    return new Stmt.IndexedSetStatement(
+                    return new IndexedSetStatement(
                         left.obj,
                         left.index,
                         operator.kind === Lexeme.Equal
                             ? right
-                            : new Expr.Binary(left, operator, right),
+                            : new BinaryExpression(left, operator, right),
                         left.openingSquare,
                         left.closingSquare
                     );
-                } else if (left instanceof Expr.DottedGet) {
+                } else if (left instanceof DottedGetExpression) {
                     consume(
-                        "Expected newline or ':' after dotted 'set' statement",
+                        'Expected newline or \':\' after dotted \'set\' statement',
                         Lexeme.Newline,
                         Lexeme.Else,
                         Lexeme.ElseIf,
@@ -1312,12 +1349,12 @@ export class Parser {
                         current--;
                     }
 
-                    return new Stmt.DottedSetStatement(
+                    return new DottedSetStatement(
                         left.obj,
                         left.name,
                         operator.kind === Lexeme.Equal
                             ? right
-                            : new Expr.Binary(left, operator, right)
+                            : new BinaryExpression(left, operator, right)
                     );
                 } else {
                     return _expressionStatement();
@@ -1327,17 +1364,17 @@ export class Parser {
             }
         }
 
-        function printStatement(...additionalterminators: BlockTerminator[]): Stmt.PrintStatement {
+        function printStatement(...additionalterminators: BlockTerminator[]): PrintStatement {
             let printKeyword = advance();
 
             let values: (
-                | Expr.Expression
-                | Stmt.PrintSeparator.Tab
-                | Stmt.PrintSeparator.Space)[] = [];
+                | Expression
+                | PrintSeparatorTab
+                | PrintSeparatorSpace)[] = [];
 
             //print statements can be empty, so look for empty print conditions
             if (isAtEnd() || check(Lexeme.Newline, Lexeme.Colon)) {
-                let emptyStringLiteral = new Expr.Literal(new BrsString(""), printKeyword.location);
+                let emptyStringLiteral = new LiteralExpression(new BrsString(''), printKeyword.location);
                 values.push(emptyStringLiteral);
             } else {
                 values.push(expression());
@@ -1345,11 +1382,11 @@ export class Parser {
 
             while (!check(Lexeme.Newline, Lexeme.Colon, ...additionalterminators, Lexeme.Comment) && !isAtEnd()) {
                 if (check(Lexeme.Semicolon)) {
-                    values.push(advance() as Stmt.PrintSeparator.Space);
+                    values.push(advance() as PrintSeparatorSpace);
                 }
 
                 if (check(Lexeme.Comma)) {
-                    values.push(advance() as Stmt.PrintSeparator.Tab);
+                    values.push(advance() as PrintSeparatorTab);
                 }
 
                 if (!check(Lexeme.Newline, Lexeme.Colon) && !isAtEnd()) {
@@ -1359,32 +1396,33 @@ export class Parser {
 
             if (!check(...additionalterminators, Lexeme.Comment)) {
                 consume(
-                    "Expected newline or ':' after printed values",
+                    'Expected newline or \':\' after printed values',
                     Lexeme.Newline,
                     Lexeme.Colon,
                     Lexeme.Eof
                 );
             }
 
-            return new Stmt.PrintStatement({ print: printKeyword }, values);
+            return new PrintStatement({ print: printKeyword }, values);
         }
 
         /**
          * Parses a return statement with an optional return value.
          * @returns an AST representation of a return statement.
          */
-        function returnStatement(): Stmt.Return {
+        function returnStatement(): ReturnStatement {
             let tokens = { return: previous() };
 
             if (check(Lexeme.Colon, Lexeme.Newline, Lexeme.Eof)) {
-                while (match(Lexeme.Colon, Lexeme.Newline, Lexeme.Eof));
-                return new Stmt.Return(tokens);
+                while (match(Lexeme.Colon, Lexeme.Newline, Lexeme.Eof)) { }
+                return new ReturnStatement(tokens);
             }
 
             let toReturn = expression();
-            while (match(Lexeme.Newline, Lexeme.Colon));
+            while (match(Lexeme.Newline, Lexeme.Colon)) {
+            }
 
-            return new Stmt.Return(tokens, toReturn);
+            return new ReturnStatement(tokens, toReturn);
         }
 
         /**
@@ -1394,14 +1432,14 @@ export class Parser {
         function labelStatement() {
             let tokens = {
                 identifier: advance(),
-                colon: advance(),
+                colon: advance()
             };
 
             if (!check(Lexeme.Comment)) {
-                consume("Labels must be declared on their own line", Lexeme.Newline, Lexeme.Eof);
+                consume('Labels must be declared on their own line', Lexeme.Newline, Lexeme.Eof);
             }
 
-            return new Stmt.Label(tokens);
+            return new LabelStatement(tokens);
         }
 
         /**
@@ -1411,12 +1449,13 @@ export class Parser {
         function gotoStatement() {
             let tokens = {
                 goto: advance(),
-                label: consume("Expected label identifier after goto keyword", Lexeme.Identifier),
+                label: consume('Expected label identifier after goto keyword', Lexeme.Identifier)
             };
 
-            while (match(Lexeme.Newline, Lexeme.Colon));
+            while (match(Lexeme.Newline, Lexeme.Colon)) {
+            }
 
-            return new Stmt.Goto(tokens);
+            return new GotoStatement(tokens);
         }
 
         /**
@@ -1426,9 +1465,11 @@ export class Parser {
         function endStatement() {
             let tokens = { end: advance() };
 
-            while (match(Lexeme.Newline));
+            while (match(Lexeme.Newline)) {
 
-            return new Stmt.End(tokens);
+            }
+
+            return new EndStatement(tokens);
         }
         /**
          * Parses a `stop` statement
@@ -1437,9 +1478,11 @@ export class Parser {
         function stopStatement() {
             let tokens = { stop: advance() };
 
-            while (match(Lexeme.Newline, Lexeme.Colon));
+            while (match(Lexeme.Newline, Lexeme.Colon)) {
 
-            return new Stmt.Stop(tokens);
+            }
+
+            return new StopStatement(tokens);
         }
 
         /**
@@ -1447,7 +1490,7 @@ export class Parser {
          * @param terminators the token(s) that signifies the end of this block; all other terminators are
          *                    ignored.
          */
-        function block(...terminators: BlockTerminator[]): Stmt.Block | undefined {
+        function block(...terminators: BlockTerminator[]): Block | undefined {
             let startingToken = peek();
 
             const statements: Statement[] = [];
@@ -1475,7 +1518,7 @@ export class Parser {
                 // TODO: Figure out how to handle unterminated blocks well
             }
 
-            return new Stmt.Block(statements, startingToken.location);
+            return new Block(statements, startingToken.location);
         }
 
         function expression(): Expression {
@@ -1496,7 +1539,7 @@ export class Parser {
             while (match(Lexeme.And, Lexeme.Or)) {
                 let operator = previous();
                 let right = relational();
-                expr = new Expr.Binary(expr, operator, right);
+                expr = new BinaryExpression(expr, operator, right);
             }
 
             return expr;
@@ -1517,7 +1560,7 @@ export class Parser {
             ) {
                 let operator = previous();
                 let right = additive();
-                expr = new Expr.Binary(expr, operator, right);
+                expr = new BinaryExpression(expr, operator, right);
             }
 
             return expr;
@@ -1531,7 +1574,7 @@ export class Parser {
             while (match(Lexeme.Plus, Lexeme.Minus)) {
                 let operator = previous();
                 let right = multiplicative();
-                expr = new Expr.Binary(expr, operator, right);
+                expr = new BinaryExpression(expr, operator, right);
             }
 
             return expr;
@@ -1543,7 +1586,7 @@ export class Parser {
             while (match(Lexeme.Slash, Lexeme.Backslash, Lexeme.Star, Lexeme.Mod)) {
                 let operator = previous();
                 let right = exponential();
-                expr = new Expr.Binary(expr, operator, right);
+                expr = new BinaryExpression(expr, operator, right);
             }
 
             return expr;
@@ -1555,7 +1598,7 @@ export class Parser {
             while (match(Lexeme.Caret)) {
                 let operator = previous();
                 let right = prefixUnary();
-                expr = new Expr.Binary(expr, operator, right);
+                expr = new BinaryExpression(expr, operator, right);
             }
 
             return expr;
@@ -1565,7 +1608,7 @@ export class Parser {
             if (match(Lexeme.Not, Lexeme.Minus)) {
                 let operator = previous();
                 let right = prefixUnary();
-                return new Expr.Unary(operator, right);
+                return new UnaryExpression(operator, right);
             }
 
             return call();
@@ -1579,20 +1622,22 @@ export class Parser {
                     expr = finishCall(previous(), expr);
                 } else if (match(Lexeme.LeftSquare)) {
                     let openingSquare = previous();
-                    while (match(Lexeme.Newline));
+                    while (match(Lexeme.Newline)) { }
 
                     let index = expression();
 
-                    while (match(Lexeme.Newline));
+                    while (match(Lexeme.Newline)) {
+
+                    }
                     let closingSquare = consume(
-                        "Expected ']' after array or object index",
+                        'Expected \']\' after array or object index',
                         Lexeme.RightSquare
                     );
 
-                    expr = new Expr.IndexedGetExpression(expr, index, openingSquare, closingSquare);
+                    expr = new IndexedGetExpression(expr, index, openingSquare, closingSquare);
                 } else if (match(Lexeme.Dot)) {
                     let name = consume(
-                        "Expected property name after '.'",
+                        'Expected property name after \'.\'',
                         Lexeme.Identifier,
                         ...allowedProperties
                     );
@@ -1600,7 +1645,7 @@ export class Parser {
                     // force it into an identifier so the AST makes some sense
                     name.kind = Lexeme.Identifier;
 
-                    expr = new Expr.DottedGet(expr, name as Identifier);
+                    expr = new DottedGetExpression(expr, name as Identifier);
                 } else {
                     break;
                 }
@@ -1611,39 +1656,43 @@ export class Parser {
 
         function finishCall(openingParen: Token, callee: Expression): Expression {
             let args = [] as Expression[];
-            while (match(Lexeme.Newline));
+            while (match(Lexeme.Newline)) {
+            }
 
             if (!check(Lexeme.RightParen)) {
                 do {
-                    while (match(Lexeme.Newline));
+                    while (match(Lexeme.Newline)) {
 
-                    if (args.length >= Expr.Call.MaximumArguments) {
+                    }
+
+                    if (args.length >= CallExpression.MaximumArguments) {
                         throw addError(
                             peek(),
-                            `Cannot have more than ${Expr.Call.MaximumArguments} arguments`
+                            `Cannot have more than ${CallExpression.MaximumArguments} arguments`
                         );
                     }
                     args.push(expression());
                 } while (match(Lexeme.Comma));
             }
 
-            while (match(Lexeme.Newline));
+            while (match(Lexeme.Newline)) {
+            }
             const closingParen = consume(
-                "Expected ')' after function call arguments",
+                'Expected \')\' after function call arguments',
                 Lexeme.RightParen
             );
 
-            return new Expr.Call(callee, openingParen, closingParen, args);
+            return new CallExpression(callee, openingParen, closingParen, args);
         }
 
         function primary(): Expression {
             switch (true) {
                 case match(Lexeme.False):
-                    return new Expr.Literal(BrsBoolean.False, previous().location);
+                    return new LiteralExpression(BrsBoolean.False, previous().location);
                 case match(Lexeme.True):
-                    return new Expr.Literal(BrsBoolean.True, previous().location);
+                    return new LiteralExpression(BrsBoolean.True, previous().location);
                 case match(Lexeme.Invalid):
-                    return new Expr.Literal(BrsInvalid.Instance, previous().location);
+                    return new LiteralExpression(BrsInvalid.Instance, previous().location);
                 case match(
                     Lexeme.Integer,
                     Lexeme.LongInteger,
@@ -1651,20 +1700,18 @@ export class Parser {
                     Lexeme.Double,
                     Lexeme.String
                 ):
-                    return new Expr.Literal(previous().literal!, previous().location);
+                    return new LiteralExpression(previous().literal, previous().location);
                 case match(Lexeme.Identifier):
-                    return new Expr.Variable(previous() as Identifier);
+                    return new VariableExpression(previous() as Identifier);
                 case match(Lexeme.LeftParen):
                     let left = previous();
                     let expr = expression();
                     let right = consume(
-                        "Unmatched '(' - expected ')' after expression",
+                        'Unmatched \'(\' - expected \')\' after expression',
                         Lexeme.RightParen
                     );
-                    return new Expr.Grouping({ left, right }, expr);
+                    return new GroupingExpression({ left: left, right: right }, expr);
                 case match(Lexeme.LeftSquare):
-                    var r = errors;
-                    r = r;
                     let elements: Array<Expression | CommentStatement> = [];
                     let openingSquare = previous();
 
@@ -1673,7 +1720,8 @@ export class Parser {
                         elements.push(new CommentStatement([advance()]));
                     }
 
-                    while (match(Lexeme.Newline));
+                    while (match(Lexeme.Newline)) {
+                    }
 
                     if (!match(Lexeme.RightSquare)) {
                         elements.push(expression());
@@ -1681,9 +1729,11 @@ export class Parser {
                         while (match(Lexeme.Comma, Lexeme.Newline, Lexeme.Comment)) {
                             if (checkPrevious(Lexeme.Comment) || check(Lexeme.Comment)) {
                                 let comment = check(Lexeme.Comment) ? advance() : previous();
-                                elements.push(new Stmt.CommentStatement([comment]));
+                                elements.push(new CommentStatement([comment]));
                             }
-                            while (match(Lexeme.Newline));
+                            while (match(Lexeme.Newline)) {
+
+                            }
 
                             if (check(Lexeme.RightSquare)) {
                                 break;
@@ -1693,7 +1743,7 @@ export class Parser {
                         }
 
                         consume(
-                            "Unmatched '[' - expected ']' after array literal",
+                            'Unmatched \'[\' - expected \']\' after array literal',
                             Lexeme.RightSquare
                         );
                     }
@@ -1701,12 +1751,12 @@ export class Parser {
                     let closingSquare = previous();
 
                     //consume("Expected newline or ':' after array literal", Lexeme.Newline, Lexeme.Colon, Lexeme.Eof);
-                    return new Expr.ArrayLiteralExpression(elements, openingSquare, closingSquare);
+                    return new ArrayLiteralExpression(elements, openingSquare, closingSquare);
                 case match(Lexeme.LeftBrace):
                     let openingBrace = previous();
-                    let members: Array<Expr.AAMember | Stmt.CommentStatement> = [];
+                    let members: Array<AAMemberExpression | CommentStatement> = [];
 
-                    var key = () => {
+                    let key = () => {
                         let result = {
                             colonToken: null as Token,
                             keyToken: null as Token,
@@ -1715,31 +1765,32 @@ export class Parser {
                         };
                         if (check(Lexeme.Identifier, ...allowedProperties)) {
                             result.keyToken = advance();
-                            result.key = new BrsString(result.keyToken.text!);
+                            result.key = new BrsString(result.keyToken.text);
                         } else if (check(Lexeme.String)) {
                             result.keyToken = advance();
-                            result.key = result.keyToken.literal! as BrsString;
+                            result.key = result.keyToken.literal as BrsString;
                         } else {
                             throw addError(
                                 peek(),
                                 `Expected identifier or string as associative array key, but received '${peek()
-                                    .text || ""}'`
+                                    .text || ''}'`
                             );
                         }
 
                         result.colonToken = consume(
-                            "Expected ':' between associative array key and value",
+                            'Expected \':\' between associative array key and value',
                             Lexeme.Colon
                         );
                         result.location = util.getLocation(result.keyToken, result.keyToken, result.colonToken);
                         return result;
-                    }
+                    };
 
-                    while (match(Lexeme.Newline));
+                    while (match(Lexeme.Newline)) {
+                    }
 
                     if (!match(Lexeme.RightBrace)) {
                         if (check(Lexeme.Comment)) {
-                            members.push(new Stmt.CommentStatement([advance()]));
+                            members.push(new CommentStatement([advance()]));
                         } else {
                             let k = key();
                             let expr = expression();
@@ -1756,13 +1807,15 @@ export class Parser {
                             //check for comment at the end of the current line
                             if (check(Lexeme.Comment) || checkPrevious(Lexeme.Comment)) {
                                 let token = checkPrevious(Lexeme.Comment) ? previous() : advance();
-                                members.push(new Stmt.CommentStatement([token]));
+                                members.push(new CommentStatement([token]));
                             } else {
-                                while (match(Lexeme.Newline, Lexeme.Colon));
+                                while (match(Lexeme.Newline, Lexeme.Colon)) {
+
+                                }
                                 //check for a comment on its own line
                                 if (check(Lexeme.Comment) || checkPrevious(Lexeme.Comment)) {
                                     let token = checkPrevious(Lexeme.Comment) ? previous() : advance();
-                                    members.push(new Stmt.CommentStatement([token]));
+                                    members.push(new CommentStatement([token]));
                                     continue;
                                 }
 
@@ -1782,23 +1835,23 @@ export class Parser {
                         }
 
                         consume(
-                            "Unmatched '{' - expected '}' after associative array literal",
+                            'Unmatched \'{\' - expected \'}\' after associative array literal',
                             Lexeme.RightBrace
                         );
                     }
 
                     let closingBrace = previous();
 
-                    return new Expr.AALiteralExpression(members, openingBrace, closingBrace);
+                    return new AALiteralExpression(members, openingBrace, closingBrace);
                 case match(Lexeme.Pos, Lexeme.Tab):
                     let token = Object.assign(previous(), {
-                        kind: Lexeme.Identifier,
+                        kind: Lexeme.Identifier
                     }) as Identifier;
-                    return new Expr.Variable(token);
+                    return new VariableExpression(token);
                 case check(Lexeme.Function, Lexeme.Sub):
                     return anonymousFunction();
                 case check(Lexeme.Comment):
-                    return new Stmt.CommentStatement([advance()]);
+                    return new CommentStatement([advance()]);
                 default:
                     throw addError(peek(), `Found unexpected token '${peek().text}'`);
             }
@@ -1806,7 +1859,7 @@ export class Parser {
 
         /**
          * Pop tokens until we encounter a token not in the specified list
-         * @param lexemes 
+         * @param lexemes
          */
         function match(...lexemes: Lexeme[]) {
             for (let lexeme of lexemes) {
@@ -1847,8 +1900,8 @@ export class Parser {
 
         /**
          * Consume, or add a message if not found. But then continue and return undefined
-         * @param message 
-         * @param lexemes 
+         * @param message
+         * @param lexemes
          */
         function consumeContinue(diagnostic: DiagnosticMessage, ...lexemes: Lexeme[]): Token | undefined {
             try {
@@ -1917,7 +1970,7 @@ export class Parser {
                     return;
                 }
 
-                switch (peek().kind) {
+                switch (peek().kind) { //eslint-disable-line @typescript-eslint/switch-exhaustiveness-check
                     case Lexeme.Function:
                     case Lexeme.Sub:
                     case Lexeme.If:
