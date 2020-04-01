@@ -29,7 +29,65 @@ end function
 ```
 </details>
 
-## Constructor
+## Inheritance
+In BrighterScript, we can use patterns common to other object-oriented languages. A common pattern is being able to use inheritance to create a new class based off of an existing class.
+```BrighterScript
+class Animal
+    name as string
+    sub move(distanceInMeters as integer)
+        print m.name + " moved " + distanceInMeters.ToStr() + " meters"
+    end sub
+end class
+
+class Duck extends Animal
+    sub move(distanceInMeters as integer)
+        print "Waddling..."
+        super.move(distanceInMeters)
+    end sub
+end class
+
+class BabyDuck extends Duck
+    sub move(distanceInMeters as integer)
+        super.move(distanceInMeters)
+        print "Fell over...I'm still new at this"
+    end sub
+end class
+```
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+  
+```BrightScript
+function Animal()
+    instance = {}
+    instance.name = invalid,
+    instance.move = sub(distanceInMeters as integer)
+        print m.name + " moved " + distanceInMeters.ToStr() + " meters"
+    end sub
+    return instance
+end function
+
+function Duck()
+    instance = Animal()
+    instance.super0_move = instance.move
+    instance.move = sub(distanceInMeters as integer)
+        print "Waddling..."
+        m.super0_move(distanceInMeters)
+    end sub
+    return instance
+end function
+
+function BabyDuck()
+    instance = Duck()
+    instance.super1_move = instance.move
+    instance.move = sub(distanceInMeters as integer)
+        instance.super1_move(distanceInMeters)
+    end sub
+    return instance
+```
+</details>
+
+
+## Constructor function
 The constructor function for a class is called `new`. 
 
 ```BrighterScript
@@ -61,6 +119,53 @@ function Person(name as string)
 end function
 ```
 </details>
+
+### Constructor function with inheritance
+When constructing a child that inherits from a base class, the first call in the child's constructor must be a call to the parent's constructor
+
+```BrighterScript
+class Person
+    sub new(name as string)
+        m.name = name
+    end sub
+    name as string
+end class
+
+class ConstructionWorker
+    sub new(name as string, age)
+        'the first line in this constructor must be a call to super()
+        super(name)
+        m.age = age
+    end sub
+    age as integer
+end sub
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+  
+```BrightScript
+function Person(name as string)
+    instance = {}
+    instance.name = invalid
+   
+    'sub new
+    instance.name = name
+    'end sub
+
+    return instance
+end function
+
+function ConstructionWorker(name as string, age as integer)
+    'sub new
+    instance = Person(name)
+    instance.age = age
+    'end sub
+end function
+
+```
+</details>
+
 
 ## Public by default
 Class fields and methods are public by default, which aligns with the general BrightScript approach that "everything is public". 
@@ -165,4 +270,3 @@ jack = Person("Jack")
 jill = Person("Jill")
 ```
 </details>
-
