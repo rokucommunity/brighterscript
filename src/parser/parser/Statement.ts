@@ -1,5 +1,4 @@
 import { Token, Identifier, Location, Lexeme } from '../lexer';
-import { BrsType, BrsInvalid } from '../brsTypes';
 import { SourceNode } from 'source-map';
 import { Stmt } from '.';
 import { TranspileState, indent, Expression, FunctionExpression } from './Expression';
