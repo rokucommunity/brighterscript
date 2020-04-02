@@ -554,9 +554,7 @@ export class BrsFile {
                     let functionName = (expression.callee as any).name.text;
 
                     //callee is the name of the function being called
-                    let callee = expression.callee as brs.parser.Expr.VariableExpression;
-
-                    let calleeRange = util.locationToRange(callee.location);
+                    let calleeRange = util.locationToRange(expression.callee.location);
 
                     let columnIndexBegin = calleeRange.start.character;
                     let columnIndexEnd = calleeRange.end.character;

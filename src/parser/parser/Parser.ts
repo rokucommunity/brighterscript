@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 
-import { Lexeme, Token, Identifier, Location, ReservedWords } from '../lexer';
+import { Lexeme, Token, Identifier, Location, ReservedWords, Lexer } from '../lexer';
 
 import {
     BrsInvalid,
@@ -16,10 +16,6 @@ import {
 import {
     Statement,
     FunctionStatement,
-    ClassStatement,
-    ClassFieldStatement,
-    ClassMemberStatement,
-    ClassMethodStatement,
     CommentStatement,
     PrintSeparatorTab,
     PrintSeparatorSpace,
@@ -48,6 +44,7 @@ import { diagnosticMessages, DiagnosticMessage } from '../../DiagnosticMessages'
 import { util } from '../../util';
 import { ParseError } from '../Error';
 import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression } from './Expression';
+import { ClassMemberStatement, ClassMethodStatement, ClassStatement, ClassFieldStatement } from './ClassStatement';
 
 /** Set of all keywords that end blocks. */
 type BlockTerminator =
@@ -190,8 +187,18 @@ export class Parser {
      * @returns an array of `Statement` objects that together form the abstract syntax tree of the
      *          program
      */
-    static parse(toParse: Token[], mode: 'brightscript' | 'brighterscript' = 'brightscript') {
-        return new Parser().parse(toParse, mode);
+    static parse(sourceCode: string, mode?: 'brightscript' | 'brighterscript');
+    static parse(token: Token[], mode?: 'brightscript' | 'brighterscript');
+    static parse(toParse: Token[] | string, mode: 'brightscript' | 'brighterscript' = 'brightscript') {
+        let tokens: Token[];
+        if (typeof toParse === 'string') {
+            let lexResult = Lexer.scan(toParse);
+            tokens = lexResult.tokens;
+        } else {
+            tokens = toParse;
+        }
+
+        return new Parser().parse(tokens, mode);
     }
 
     /**
@@ -391,18 +398,6 @@ export class Parser {
                     if (check(Lexeme.Public, Lexeme.Protected, Lexeme.Private)) {
                         //use actual access modifier
                         accessModifier = advance();
-                    } else {
-                        accessModifier = {
-                            isReserved: false,
-                            kind: Lexeme.Public,
-                            text: 'public',
-                            //zero-length token which indicates derived
-                            location: {
-                                start: peek().location.start,
-                                end: peek().location.start,
-                                file: peek().location.file
-                            }
-                        };
                     }
 
                     //methods (function/sub keyword OR identifier followed by opening paren)

@@ -5,19 +5,6 @@ import { SourceNode } from 'source-map';
 
 import { util } from '../../util';
 
-export interface TranspileState {
-    //the path for this file relative to the root of the output package
-    pkgPath: string;
-    //the absolute path to the source location of this file
-    pathAbsolute: string;
-    blockDepth: number;
-    //the tree of parents, with the first index being direct parent, and the last index being the furthest removed ancestor.
-    //Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
-    lineage: Array<{
-        location: Location;
-    }>;
-}
-
 /** A BrightScript expression */
 export interface Expression {
     /** The starting and ending location of the expression. */
@@ -161,7 +148,7 @@ export class FunctionExpression implements Expression {
         results.push('\n');
         //'end sub'|'end function'
         results.push(
-            indent(state.blockDepth),
+            indent(state),
             new SourceNode(this.end.location.start.line, this.end.location.start.column, state.pathAbsolute, this.end.text)
         );
         return results;
@@ -308,7 +295,7 @@ export class ArrayLiteralExpression implements Expression {
                 } else {
                     result.push(
                         '\n',
-                        indent(state.blockDepth)
+                        indent(state)
                     );
                 }
                 state.lineage.unshift(this);
@@ -318,7 +305,7 @@ export class ArrayLiteralExpression implements Expression {
                 result.push('\n');
 
                 result.push(
-                    indent(state.blockDepth),
+                    indent(state),
                     ...element.transpile(state)
                 );
                 //add a comma if we know there will be another non-comment statement after this
@@ -336,7 +323,7 @@ export class ArrayLiteralExpression implements Expression {
         //add a newline between open and close if there are elements
         if (hasChildren) {
             result.push('\n');
-            result.push(indent(state.blockDepth));
+            result.push(indent(state));
         }
 
         result.push(
@@ -397,7 +384,7 @@ export class AALiteralExpression implements Expression {
 
                 //indent line
             } else {
-                result.push(indent(state.blockDepth));
+                result.push(indent(state));
             }
 
             //render comments
@@ -444,7 +431,7 @@ export class AALiteralExpression implements Expression {
 
         //only indent the closing curly if we have children
         if (hasChildren) {
-            result.push(indent(state.blockDepth));
+            result.push(indent(state));
         }
         //close curly
         result.push(
@@ -486,18 +473,4 @@ export class VariableExpression implements Expression {
             new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pathAbsolute, this.name.text)
         ];
     }
-}
-
-/**
- * Create a newline (including leading spaces)
- * @param state
- */
-export function indent(blockDepth: number) {
-    let result = '';
-    let totalSpaceCount = blockDepth * 4;
-    totalSpaceCount = totalSpaceCount > -1 ? totalSpaceCount : 0;
-    for (let i = 0; i < totalSpaceCount; i++) {
-        result += ' ';
-    }
-    return result;
 }

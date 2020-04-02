@@ -17,6 +17,8 @@ describe('BrsFile', () => {
     let rootDir = process.cwd();
     let program: Program;
     let file: BrsFile;
+    let testTranspile = getTestTranspile(() => [program, rootDir]);
+
     beforeEach(() => {
         program = new Program({ rootDir: rootDir });
         file = new BrsFile('abs', 'rel', program);
@@ -1480,45 +1482,49 @@ describe('BrsFile', () => {
             `);
         });
 
-        async function testTranspile(source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'trim') {
-            let formatter = null; //new BrightScriptFormatter();
-            expected = expected ? expected : source;
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, source) as BrsFile;
-            let firstDiagnosticMessage = file.getDiagnostics().length > 0 ? file.getDiagnostics()[0].message : '';
-            expect(file.getDiagnostics()).to.be.lengthOf(0, `Found parse errors: '${firstDiagnosticMessage}'`);
-            let transpiled = file.transpile();
-
-            let sources = [transpiled.code, expected];
-            for (let i = 0; i < sources.length; i++) {
-                if (formatType === 'trim') {
-                    let lines = sources[i].split('\n');
-                    //throw out leading newlines
-                    while (lines[0].length === 0) {
-                        lines.splice(0, 1);
-                    }
-                    let trimStartIndex = null;
-                    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                        //if we don't have a starting trim count, compute it
-                        if (!trimStartIndex) {
-                            trimStartIndex = lines[lineIndex].length - lines[lineIndex].trim().length;
-                        }
-                        //only trim the expected file (since that's what we passed in from the test)
-                        if (lines[lineIndex].length > 0 && i === 1) {
-                            lines[lineIndex] = lines[lineIndex].substring(trimStartIndex);
-                        }
-                    }
-                    //trim trailing newlines
-                    while (lines[lines.length - 1].length === 0) {
-                        lines.splice(lines.length - 1);
-                    }
-                    sources[i] = lines.join('\n');
-
-                } else if (formatType === 'format') {
-                    sources[i] = formatter.format(sources[i].trim());
-                }
-            }
-            expect(sources[0]).to.equal(sources[1]);
-            return transpiled;
-        }
     });
 });
+
+export function getTestTranspile(scopeGetter: () => [Program, string]) {
+    return async (source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'trim') => {
+        let [program, rootDir] = scopeGetter();
+        let formatter = null; //new BrightScriptFormatter();
+        expected = expected ? expected : source;
+        let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, source) as BrsFile;
+        let firstDiagnosticMessage = file.getDiagnostics().length > 0 ? file.getDiagnostics()[0].message : '';
+        expect(file.getDiagnostics()).to.be.lengthOf(0, `Found parse errors: '${firstDiagnosticMessage}'`);
+        let transpiled = file.transpile();
+
+        let sources = [transpiled.code, expected];
+        for (let i = 0; i < sources.length; i++) {
+            if (formatType === 'trim') {
+                let lines = sources[i].split('\n');
+                //throw out leading newlines
+                while (lines[0].length === 0) {
+                    lines.splice(0, 1);
+                }
+                let trimStartIndex = null;
+                for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+                    //if we don't have a starting trim count, compute it
+                    if (!trimStartIndex) {
+                        trimStartIndex = lines[lineIndex].length - lines[lineIndex].trim().length;
+                    }
+                    //only trim the expected file (since that's what we passed in from the test)
+                    if (lines[lineIndex].length > 0 && i === 1) {
+                        lines[lineIndex] = lines[lineIndex].substring(trimStartIndex);
+                    }
+                }
+                //trim trailing newlines
+                while (lines[lines.length - 1].length === 0) {
+                    lines.splice(lines.length - 1);
+                }
+                sources[i] = lines.join('\n');
+
+            } else if (formatType === 'format') {
+                sources[i] = formatter.format(sources[i].trim());
+            }
+        }
+        expect(sources[0]).to.equal(sources[1]);
+        return transpiled;
+    };
+}

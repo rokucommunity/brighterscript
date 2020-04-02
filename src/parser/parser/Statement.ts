@@ -76,7 +76,7 @@ export class Block implements Statement {
                 //add a newline
                 results.push('\n');
                 //indent
-                results.push(indent(state.blockDepth));
+                results.push(indent(state));
             }
 
             //push block onto parent list
@@ -127,7 +127,7 @@ export class CommentStatement implements Statement, Expression {
         for (let i = 0; i < this.comments.length; i++) {
             let comment = this.comments[i];
             if (i > 0) {
-                result.push(indent(state.blockDepth));
+                result.push(indent(state));
             }
             result.push(
                 `'`,
@@ -267,7 +267,7 @@ export class IfStatement implements Statement {
         for (let elseif of this.elseIfs) {
             //elseif
             results.push(
-                indent(state.blockDepth),
+                indent(state),
                 new SourceNode(elseif.elseIfToken.location.start.line, elseif.elseIfToken.location.start.column, state.pathAbsolute, 'else if'),
                 ' '
             );
@@ -299,7 +299,7 @@ export class IfStatement implements Statement {
         if (this.tokens.else) {
             //else
             results.push(
-                indent(state.blockDepth),
+                indent(state),
                 new SourceNode(this.tokens.else.location.start.line, this.tokens.else.location.start.column, state.pathAbsolute, 'else')
             );
 
@@ -314,7 +314,7 @@ export class IfStatement implements Statement {
             }
         }
         //end if
-        results.push(indent(state.blockDepth));
+        results.push(indent(state));
         if (this.tokens.endIf) {
             results.push(
                 new SourceNode(this.tokens.endIf.location.start.line, this.tokens.endIf.location.start.column, state.pathAbsolute, 'end if')
@@ -587,7 +587,7 @@ export class ForStatement implements Statement {
         }
         //end for
         result.push(
-            indent(state.blockDepth),
+            indent(state),
             new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pathAbsolute, 'end for')
         );
 
@@ -643,7 +643,7 @@ export class ForEachStatement implements Statement {
         }
         //end for
         result.push(
-            indent(state.blockDepth),
+            indent(state),
             new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pathAbsolute, 'end for')
         );
         return result;
@@ -689,7 +689,7 @@ export class WhileStatement implements Statement {
 
         //end while
         result.push(
-            indent(state.blockDepth),
+            indent(state),
             new SourceNode(this.tokens.endWhile.location.start.line, this.tokens.endWhile.location.start.column, state.pathAbsolute, 'end while')
         );
 
@@ -794,81 +794,3 @@ export class LibraryStatement implements Statement {
         return result;
     }
 }
-
-export class ClassStatement implements Statement {
-
-    constructor(
-        readonly keyword: Token,
-        readonly name: Identifier,
-        readonly members: ClassMemberStatement[],
-        readonly end: Token
-    ) {
-        for (let member of this.members) {
-            if (member instanceof ClassMethodStatement) {
-                this.methods.push(member);
-            } else if (member instanceof ClassFieldStatement) {
-                this.fields.push(member);
-            } else {
-                throw new Error(`Critical error: unknown member type added to class definition ${this.name}`);
-            }
-        }
-    }
-
-    public methods = [] as ClassMethodStatement[];
-    public fields = [] as ClassFieldStatement[];
-
-    get location() {
-        return {
-            file: this.keyword.location.file,
-            start: this.keyword.location.start,
-            end: this.end.location.end
-        };
-    }
-
-    transpile(state: TranspileState): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
-    }
-}
-
-export class ClassMethodStatement implements Statement {
-    constructor(
-        readonly accessModifier: Token,
-        readonly name: Identifier,
-        readonly func: FunctionExpression
-    ) { }
-
-    get location() {
-        return {
-            file: this.name.location.file,
-            start: this.accessModifier ? this.accessModifier.location.start : this.func.location.start,
-            end: this.func.location.end
-        };
-    }
-
-    transpile(state: TranspileState): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
-    }
-}
-
-export class ClassFieldStatement implements Statement {
-
-    constructor(
-        readonly accessModifier: Token,
-        readonly name: Identifier,
-        readonly as: Token,
-        readonly type: Token
-    ) { }
-
-    get location() {
-        return {
-            file: this.name.location.file,
-            start: this.accessModifier.location.start,
-            end: this.type.location.end
-        };
-    }
-
-    transpile(state: TranspileState): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
-    }
-}
-export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;
