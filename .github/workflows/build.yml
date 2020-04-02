@@ -37,7 +37,7 @@ jobs:
       - run: npm run build
       
       #create npm package
-      - run: npm package
+      - run: npm pack
 
        #compute release version
       - name: Compute release version
