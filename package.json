@@ -3,7 +3,7 @@
   "version": "0.4.1",
   "description": "A superset of Roku's BrightScript language.",
   "scripts": {
-    "preversion": "npm run build && npm run tslint && npm run test",
+    "preversion": "npm run build && npm run lint && npm run test",
     "build": "rimraf out && tsc",
     "watch": "rimraf out && tsc --watch",
     "prepublishOnly": "npm run build",
