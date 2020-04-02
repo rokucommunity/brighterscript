@@ -4,6 +4,7 @@ import * as Expr from '../parser/Expression';
 declare let Scope: any;
 import { Location, Identifier, Token } from '../lexer';
 import { SourceNode } from 'source-map';
+import { TranspileState } from '../parser/TranspileState';
 
 /** An argument to a BrightScript `function` or `sub`. */
 export interface Argument {
@@ -80,7 +81,7 @@ export class FunctionParameter {
         };
     }
 
-    public transpile(state: Expr.TranspileState) {
+    public transpile(state: TranspileState) {
         let result = [
             //name
             new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pkgPath, this.name.text)

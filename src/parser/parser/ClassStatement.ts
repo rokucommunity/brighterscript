@@ -1,7 +1,8 @@
 import { Token, Identifier } from '../lexer';
 import { Statement } from './Statement';
-import { TranspileState, FunctionExpression, indent } from './Expression';
+import { FunctionExpression } from './Expression';
 import { SourceNode } from 'source-map';
+import { TranspileState } from './TranspileState';
 
 export class ClassStatement implements Statement {
 
@@ -40,7 +41,7 @@ export class ClassStatement implements Statement {
         result.push(...this.getTranspiledBuilder(state));
         result.push(
             '\n',
-            indent(state)
+            state.indent()
         );
         //make the class assembler (i.e. the public-facing class creator method)
         result.push(...this.getTranspiledAssembler(state));
@@ -67,17 +68,20 @@ export class ClassStatement implements Statement {
         result.push(`function ${this.builderName}()\n`);
         state.blockDepth++;
         //indent
-        result.push(indent(state));
+        result.push(state.indent());
         //create the instance
         result.push('instance = {}\n');
-        result.push(indent(state));
+        result.push(state.indent());
 
         //if this class doesn't have a constructor function, create an empty one (to simplify the transpile process)
         if (!this.getConstructorFunction()) {
             result.push(
-                `instance.new = sub()\n`,
-                indent(state),
-                'end sub'
+                `instance.new = sub()`,
+                state.newline(),
+                state.indent(),
+                'end sub',
+                state.newline(),
+                state.indent()
             );
         }
 
@@ -91,18 +95,18 @@ export class ClassStatement implements Statement {
             } else if (member instanceof ClassMethodStatement) {
                 result.push(`instance.`);
                 result.push(
-                    new SourceNode(member.name.location.start.line, member.name.location.start.column, member.name.text),
+                    state.sourceNode(member.name, member.name.text),
                     ' = ',
                     ...member.func.transpile(state),
                     '\n'
                 );
             }
-            result.push(indent(state));
+            result.push(state.indent());
         }
         //return the instance
         result.push('return instance\n');
         state.blockDepth--;
-        result.push(indent(state));
+        result.push(state.indent());
         result.push(`end function`);
         return result;
     }
@@ -128,10 +132,10 @@ export class ClassStatement implements Statement {
         );
 
         state.blockDepth++;
-        result.push(indent(state));
+        result.push(state.indent());
         result.push(`instance = ${this.builderName}()\n`);
 
-        result.push(indent(state));
+        result.push(state.indent());
         result.push(`instance.new(`);
 
         //append constructor arguments
@@ -141,7 +145,7 @@ export class ClassStatement implements Statement {
                 result.push(', ');
             }
             result.push(
-                new SourceNode(param.location.start.line, param.location.start.column, param.name.text)
+                state.sourceNode(param, param.name.text)
             );
             i++;
         }
@@ -150,11 +154,11 @@ export class ClassStatement implements Statement {
             '\n'
         );
 
-        result.push(indent(state));
+        result.push(state.indent());
         result.push(`return instance\n`);
 
         state.blockDepth--;
-        result.push(indent(state));
+        result.push(state.indent());
         result.push(`end function`);
         return result;
     }

@@ -1,8 +1,9 @@
 import { Token, Identifier, Location, Lexeme } from '../lexer';
 import { SourceNode } from 'source-map';
 import { Stmt } from '.';
-import { TranspileState, indent, Expression, FunctionExpression } from './Expression';
+import { Expression, FunctionExpression } from './Expression';
 import { util } from '../../util';
+import { TranspileState } from './TranspileState';
 
 /** A BrightScript statement */
 export interface Statement {
@@ -73,10 +74,11 @@ export class Block implements Statement {
 
                 //is not a comment
             } else {
-                //add a newline
-                results.push('\n');
-                //indent
-                results.push(indent(state));
+                //add a newline and indent
+                results.push(
+                    state.newline(),
+                    state.indent()
+                );
             }
 
             //push block onto parent list
@@ -127,7 +129,7 @@ export class CommentStatement implements Statement, Expression {
         for (let i = 0; i < this.comments.length; i++) {
             let comment = this.comments[i];
             if (i > 0) {
-                result.push(indent(state));
+                result.push(state.indent());
             }
             result.push(
                 `'`,
@@ -267,7 +269,7 @@ export class IfStatement implements Statement {
         for (let elseif of this.elseIfs) {
             //elseif
             results.push(
-                indent(state),
+                state.indent(),
                 new SourceNode(elseif.elseIfToken.location.start.line, elseif.elseIfToken.location.start.column, state.pathAbsolute, 'else if'),
                 ' '
             );
@@ -299,7 +301,7 @@ export class IfStatement implements Statement {
         if (this.tokens.else) {
             //else
             results.push(
-                indent(state),
+                state.indent(),
                 new SourceNode(this.tokens.else.location.start.line, this.tokens.else.location.start.column, state.pathAbsolute, 'else')
             );
 
@@ -314,7 +316,7 @@ export class IfStatement implements Statement {
             }
         }
         //end if
-        results.push(indent(state));
+        results.push(state.indent());
         if (this.tokens.endIf) {
             results.push(
                 new SourceNode(this.tokens.endIf.location.start.line, this.tokens.endIf.location.start.column, state.pathAbsolute, 'end if')
@@ -587,7 +589,7 @@ export class ForStatement implements Statement {
         }
         //end for
         result.push(
-            indent(state),
+            state.indent(),
             new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pathAbsolute, 'end for')
         );
 
@@ -643,7 +645,7 @@ export class ForEachStatement implements Statement {
         }
         //end for
         result.push(
-            indent(state),
+            state.indent(),
             new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pathAbsolute, 'end for')
         );
         return result;
@@ -689,7 +691,7 @@ export class WhileStatement implements Statement {
 
         //end while
         result.push(
-            indent(state),
+            state.indent(),
             new SourceNode(this.tokens.endWhile.location.start.line, this.tokens.endWhile.location.start.column, state.pathAbsolute, 'end while')
         );
 

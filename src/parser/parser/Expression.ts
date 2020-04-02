@@ -4,6 +4,7 @@ import { Block, CommentStatement } from './Statement';
 import { SourceNode } from 'source-map';
 
 import { util } from '../../util';
+import { TranspileState } from './TranspileState';
 
 /** A BrightScript expression */
 export interface Expression {
@@ -148,7 +149,7 @@ export class FunctionExpression implements Expression {
         results.push('\n');
         //'end sub'|'end function'
         results.push(
-            indent(state),
+            state.indent(),
             new SourceNode(this.end.location.start.line, this.end.location.start.column, state.pathAbsolute, this.end.text)
         );
         return results;
@@ -295,7 +296,7 @@ export class ArrayLiteralExpression implements Expression {
                 } else {
                     result.push(
                         '\n',
-                        indent(state)
+                        state.indent()
                     );
                 }
                 state.lineage.unshift(this);
@@ -305,7 +306,7 @@ export class ArrayLiteralExpression implements Expression {
                 result.push('\n');
 
                 result.push(
-                    indent(state),
+                    state.indent(),
                     ...element.transpile(state)
                 );
                 //add a comma if we know there will be another non-comment statement after this
@@ -323,7 +324,7 @@ export class ArrayLiteralExpression implements Expression {
         //add a newline between open and close if there are elements
         if (hasChildren) {
             result.push('\n');
-            result.push(indent(state));
+            result.push(state.indent());
         }
 
         result.push(
@@ -384,7 +385,7 @@ export class AALiteralExpression implements Expression {
 
                 //indent line
             } else {
-                result.push(indent(state));
+                result.push(state.indent());
             }
 
             //render comments
@@ -431,7 +432,7 @@ export class AALiteralExpression implements Expression {
 
         //only indent the closing curly if we have children
         if (hasChildren) {
-            result.push(indent(state));
+            result.push(state.indent());
         }
         //close curly
         result.push(

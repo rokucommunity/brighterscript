@@ -22,6 +22,7 @@ import { FunctionType } from '../types/FunctionType';
 import { StringType } from '../types/StringType';
 import { VoidType } from '../types/VoidType';
 import util from '../util';
+import { TranspileState } from '../parser/parser/TranspileState';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -790,13 +791,8 @@ export class BrsFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile() {
+        const state = new TranspileState(this.pkgPath, this.pathAbsolute);
         let chunks = [] as Array<string | SourceNode>;
-        let state = {
-            pkgPath: this.pkgPath,
-            pathAbsolute: this.pathAbsolute,
-            blockDepth: 0,
-            lineage: []
-        };
         for (let i = 0; i < this.ast.length; i++) {
             let statement = this.ast[i];
             let previousStatement = this.ast[i - 1];

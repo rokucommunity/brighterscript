@@ -100,7 +100,7 @@ describe('parser class', () => {
             expect(errors[0].code).to.equal(diagnosticMessages.Expected_valid_type_to_follow_as_keyword_1018().code);
         });
 
-        it('field access modifier defaults to public when omitted', () => {
+        it('field access modifier defaults to undefined when omitted', () => {
             let { tokens } = Lexer.scan(`
                     class Person
                         firstName as string
@@ -109,7 +109,7 @@ describe('parser class', () => {
             let { statements, errors } = Parser.parse(tokens, 'brighterscript');
             expect(errors).to.be.lengthOf(0);
             let cls = statements[0] as ClassStatement;
-            expect(cls.fields[0].accessModifier.kind).to.equal(Lexeme.Public);
+            expect(cls.fields[0].accessModifier).to.be.undefined;
         });
     });
 

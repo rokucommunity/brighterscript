@@ -25,16 +25,19 @@ describe('BrsFile BrighterScript classes', () => {
             `, `
                 function __Duck_builder()
                     instance = {}
+                    instance.new = sub()
+                    end sub
                     return instance
                 end function
                 function Duck()
                     instance = __Duck_builder()
+                    instance.new()
                     return instance
                 end function
             `);
         });
 
-        it.only('registers the constructor and properly handles its parameters', async () => {
+        it('registers the constructor and properly handles its parameters', async () => {
             await testTranspile(`
                 class Duck
                     sub new(name as string, age as integer)
