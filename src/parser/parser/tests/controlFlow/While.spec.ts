@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -22,7 +21,7 @@ describe('parser while statements', () => {
             token(Lexeme.String, 'looping', new BrsString('looping')),
             token(Lexeme.Newline, '\n'),
             token(Lexeme.EndWhile, 'end while'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -41,7 +40,7 @@ describe('parser while statements', () => {
             token(Lexeme.ExitWhile, 'exit while'),
             token(Lexeme.Newline, '\n'),
             token(Lexeme.EndWhile, 'end while'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -65,8 +64,8 @@ describe('parser while statements', () => {
                 isReserved: true,
                 location: {
                     start: { line: 1, column: 0 },
-                    end: { line: 1, column: 5 },
-                },
+                    end: { line: 1, column: 5 }
+                }
             },
             {
                 kind: Lexeme.True,
@@ -75,8 +74,8 @@ describe('parser while statements', () => {
                 isReserved: true,
                 location: {
                     start: { line: 1, column: 6 },
-                    end: { line: 1, column: 10 },
-                },
+                    end: { line: 1, column: 10 }
+                }
             },
             {
                 kind: Lexeme.Newline,
@@ -84,8 +83,8 @@ describe('parser while statements', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 10 },
-                    end: { line: 1, column: 11 },
-                },
+                    end: { line: 1, column: 11 }
+                }
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
@@ -100,17 +99,17 @@ describe('parser while statements', () => {
                 isReserved: false,
                 location: {
                     start: { line: 3, column: 0 },
-                    end: { line: 3, column: 9 },
-                },
+                    end: { line: 3, column: 9 }
+                }
             },
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].location).deep.include({
             start: { line: 1, column: 0 },
-            end: { line: 3, column: 9 },
+            end: { line: 3, column: 9 }
         });
     });
 });

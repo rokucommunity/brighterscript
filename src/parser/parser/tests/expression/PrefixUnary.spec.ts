@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -19,7 +18,7 @@ describe('parser prefix unary expressions', () => {
             token(Lexeme.Equal, '='),
             token(Lexeme.Not, 'not'),
             token(Lexeme.True, 'true', BrsBoolean.True),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -37,7 +36,7 @@ describe('parser prefix unary expressions', () => {
             token(Lexeme.Not, 'not'),
             token(Lexeme.Not, 'not'),
             token(Lexeme.True, 'true', BrsBoolean.True),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -51,7 +50,7 @@ describe('parser prefix unary expressions', () => {
             token(Lexeme.Equal, '='),
             token(Lexeme.Minus, '-'),
             token(Lexeme.Integer, '5', new Int32(5)),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -69,7 +68,7 @@ describe('parser prefix unary expressions', () => {
             token(Lexeme.Minus, '-'),
             token(Lexeme.Minus, '-'),
             token(Lexeme.Integer, '5', new Int32(5)),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -91,8 +90,8 @@ describe('parser prefix unary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 0 },
-                    end: { line: 1, column: 6 },
-                },
+                    end: { line: 1, column: 6 }
+                }
             },
             {
                 kind: Lexeme.Equal,
@@ -100,8 +99,8 @@ describe('parser prefix unary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 7 },
-                    end: { line: 1, column: 8 },
-                },
+                    end: { line: 1, column: 8 }
+                }
             },
             {
                 kind: Lexeme.Not,
@@ -109,8 +108,8 @@ describe('parser prefix unary expressions', () => {
                 isReserved: true,
                 location: {
                     start: { line: 1, column: 9 },
-                    end: { line: 1, column: 12 },
-                },
+                    end: { line: 1, column: 12 }
+                }
             },
             {
                 kind: Lexeme.True,
@@ -119,8 +118,8 @@ describe('parser prefix unary expressions', () => {
                 isReserved: true,
                 location: {
                     start: { line: 1, column: 13 },
-                    end: { line: 1, column: 17 },
-                },
+                    end: { line: 1, column: 17 }
+                }
             },
             {
                 kind: Lexeme.Eof,
@@ -128,16 +127,16 @@ describe('parser prefix unary expressions', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 17 },
-                    end: { line: 1, column: 18 },
-                },
-            },
+                    end: { line: 1, column: 18 }
+                }
+            }
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].value.location).to.deep.include({
             start: { line: 1, column: 9 },
-            end: { line: 1, column: 17 },
+            end: { line: 1, column: 17 }
         });
     });
 });

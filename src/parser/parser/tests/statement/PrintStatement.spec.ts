@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -16,7 +15,7 @@ describe('parser print statements', () => {
         let { statements, errors } = Parser.parse([
             token(Lexeme.Print),
             token(Lexeme.String, 'Hello, world'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -39,7 +38,7 @@ describe('parser print statements', () => {
             token(Lexeme.String, 'Foo', new BrsString('Foo')),
             token(Lexeme.String, 'bar', new BrsString('bar')),
             token(Lexeme.String, 'baz', new BrsString('baz')),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -56,7 +55,7 @@ describe('parser print statements', () => {
             token(Lexeme.String, 'bar', new BrsString('bar')),
             token(Lexeme.Semicolon),
             token(Lexeme.String, 'baz', new BrsString('baz')),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -81,7 +80,7 @@ describe('parser print statements', () => {
                     start: { line: 1, column: 0 },
                     end: { line: 1, column: 5 },
                     file: 'test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.String,
@@ -92,7 +91,7 @@ describe('parser print statements', () => {
                     start: { line: 1, column: 6 },
                     end: { line: 1, column: 11 },
                     file: 'test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.Eof,
@@ -102,15 +101,15 @@ describe('parser print statements', () => {
                     start: { line: 1, column: 11 },
                     end: { line: 1, column: 12 },
                     file: 'test.brs'
-                },
-            },
+                }
+            }
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].location).to.deep.include({
             start: { line: 1, column: 0 },
-            end: { line: 1, column: 11 },
+            end: { line: 1, column: 11 }
         });
     });
 });

@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * Determines whether or not a single-character string is a base-10 digit.
  *
@@ -10,7 +9,7 @@ export function isDecimalDigit(char: string) {
         throw new Error(`Lexer#isDecimalDigit expects a single character; received '${char}'`);
     }
 
-    return char >= "0" && char <= "9";
+    return char >= '0' && char <= '9';
 }
 
 /**
@@ -25,7 +24,7 @@ export function isHexDigit(char: string) {
     }
 
     let c = char.toLowerCase();
-    return isDecimalDigit(c) || (c >= "a" && c <= "f");
+    return isDecimalDigit(c) || (c >= 'a' && c <= 'f');
 }
 
 /**
@@ -41,7 +40,7 @@ export function isAlpha(char: string) {
     }
 
     let c = char.toLowerCase();
-    return (c >= "a" && c <= "z") || c === "_";
+    return (c >= 'a' && c <= 'z') || c === '_';
 }
 
 /**

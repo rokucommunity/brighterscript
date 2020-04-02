@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.4.2] - 2020-04-01
+### Changed
+ - upgraded to [roku-deploy@3.0.0](https://www.npmjs.com/package/roku-deploy/v/3.0.0)
+
+
+
 ## [0.4.1] - 2020-01-11
 ### Changed
  - upgraded to [roku-deploy@3.0.0-beta.7](https://www.npmjs.com/package/roku-deploy/v/3.0.0-beta.7) which fixed a critical bug during pkg creation.
@@ -77,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.4.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.1...v0.4.2
 [0.4.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.0...v0.4.1
 [0.4.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.3.1...v0.4.0
 [0.3.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.3.0...v0.3.1

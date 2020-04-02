@@ -1,24 +1,9 @@
-/* eslint-disable */
-import { Token, Identifier, Location } from "../lexer";
-import { BrsType, ValueKind, BrsString, FunctionParameter } from "../brsTypes";
-import { Block, CommentStatement } from "./Statement";
+import { Token, Identifier, Location } from '../lexer';
+import { BrsType, ValueKind, BrsString, FunctionParameter } from '../brsTypes';
+import { Block, CommentStatement } from './Statement';
 import { SourceNode } from 'source-map';
 
 import { util } from '../../util';
-
-export interface Visitor<T> {
-    visitBinary(expression: Binary): T;
-    visitCall(expression: Call): T;
-    visitAnonymousFunction(func: FunctionExpression): T;
-    visitDottedGet(expression: DottedGet): T;
-    visitIndexedGet(expression: IndexedGetExpression): T;
-    visitGrouping(expression: Grouping): T;
-    visitLiteral(expression: Literal): T;
-    visitArrayLiteral(expression: ArrayLiteralExpression): T;
-    visitAALiteral(expression: AALiteralExpression): T;
-    visitUnary(expression: Unary): T;
-    visitVariable(expression: Variable): T;
-}
 
 export interface TranspileState {
     //the path for this file relative to the root of the output package
@@ -26,7 +11,7 @@ export interface TranspileState {
     //the absolute path to the source location of this file
     pathAbsolute: string;
     blockDepth: number;
-    //the tree of parents, with the first index being direct parent, and the last index being the furthest removed ancestor. 
+    //the tree of parents, with the first index being direct parent, and the last index being the furthest removed ancestor.
     //Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
     lineage: Array<{
         location: Location;
@@ -35,35 +20,24 @@ export interface TranspileState {
 
 /** A BrightScript expression */
 export interface Expression {
-    /**
-     * Handles the enclosing `Expression` with `visitor`.
-     * @param visitor the `Visitor` that will handle the enclosing `Expression`
-     * @returns the BrightScript value resulting from evaluating the expression
-     */
-    accept<R>(visitor: Visitor<R>): R;
-
     /** The starting and ending location of the expression. */
     location: Location;
 
     transpile(state: TranspileState): Array<SourceNode | string>;
 }
 
-export class Binary implements Expression {
+export class BinaryExpression implements Expression {
     constructor(
         readonly left: Expression,
         readonly operator: Token,
         readonly right: Expression
     ) { }
 
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitBinary(this);
-    }
-
     get location() {
         return {
             file: this.operator.location.file,
             start: this.left.location.start,
-            end: this.right.location.end,
+            end: this.right.location.end
         };
     }
 
@@ -78,7 +52,7 @@ export class Binary implements Expression {
     }
 }
 
-export class Call implements Expression {
+export class CallExpression implements Expression {
     static MaximumArguments = 32;
 
     constructor(
@@ -88,15 +62,11 @@ export class Call implements Expression {
         readonly args: Expression[]
     ) { }
 
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitCall(this);
-    }
-
     get location() {
         return {
             file: this.closingParen.location.file,
             start: this.callee.location.start,
-            end: this.closingParen.location.end,
+            end: this.closingParen.location.end
         };
     }
 
@@ -134,15 +104,11 @@ export class FunctionExpression implements Expression {
         readonly returnTypeToken?: Token
     ) { }
 
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitAnonymousFunction(this);
-    }
-
     get location() {
         return {
             file: this.leftParen.location.file,
             start: this.functionType ? this.functionType.location.start : this.leftParen.location.start,
-            end: this.end.location.end,
+            end: this.end.location.end
         };
     }
 
@@ -150,7 +116,7 @@ export class FunctionExpression implements Expression {
         let results = [];
         //'function'|'sub'
         results.push(
-            new SourceNode(this.functionType.location.start.line, this.functionType.location.start.column, state.pathAbsolute, this.functionType.text.toLowerCase()),
+            new SourceNode(this.functionType.location.start.line, this.functionType.location.start.column, state.pathAbsolute, this.functionType.text.toLowerCase())
         );
         //functionName?
         if (name) {
@@ -202,18 +168,14 @@ export class FunctionExpression implements Expression {
     }
 }
 
-export class DottedGet implements Expression {
+export class DottedGetExpression implements Expression {
     constructor(readonly obj: Expression, readonly name: Identifier) { }
-
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitDottedGet(this);
-    }
 
     get location() {
         return {
             file: this.obj.location.file,
             start: this.obj.location.start,
-            end: this.name.location.end,
+            end: this.name.location.end
         };
     }
 
@@ -234,15 +196,11 @@ export class IndexedGetExpression implements Expression {
         readonly closingSquare: Token
     ) { }
 
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitIndexedGet(this);
-    }
-
     get location() {
         return {
             file: this.obj.location.file,
             start: this.obj.location.start,
-            end: this.closingSquare.location.end,
+            end: this.closingSquare.location.end
         };
     }
 
@@ -256,7 +214,7 @@ export class IndexedGetExpression implements Expression {
     }
 }
 
-export class Grouping implements Expression {
+export class GroupingExpression implements Expression {
     constructor(
         readonly tokens: {
             left: Token;
@@ -265,15 +223,11 @@ export class Grouping implements Expression {
         readonly expression: Expression
     ) { }
 
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitGrouping(this);
-    }
-
     get location() {
         return {
             file: this.tokens.left.location.file,
             start: this.tokens.left.location.start,
-            end: this.tokens.right.location.end,
+            end: this.tokens.right.location.end
         };
     }
 
@@ -281,33 +235,29 @@ export class Grouping implements Expression {
         return [
             new SourceNode(this.tokens.left.location.start.line, this.tokens.left.location.start.column, state.pathAbsolute, '('),
             ...this.expression.transpile(state),
-            new SourceNode(this.tokens.right.location.start.line, this.tokens.right.location.start.column, state.pathAbsolute, ')'),
+            new SourceNode(this.tokens.right.location.start.line, this.tokens.right.location.start.column, state.pathAbsolute, ')')
         ];
     }
 }
 
-export class Literal implements Expression {
+export class LiteralExpression implements Expression {
     constructor(
         readonly value: BrsType,
         readonly _location: Location
     ) { }
 
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitLiteral(this);
-    }
-
     get location() {
         return (
             this._location || {
-                file: "(internal)",
+                file: '(internal)',
                 start: {
                     line: -1,
-                    column: -1,
+                    column: -1
                 },
                 end: {
                     line: -1,
-                    column: -1,
-                },
+                    column: -1
+                }
             }
         );
     }
@@ -320,7 +270,7 @@ export class Literal implements Expression {
                 state.pathAbsolute,
                 this.value.kind === ValueKind.String ? `"${this.value.toString()}"` : this.value.toString()
             )
-        ]
+        ];
     }
 }
 
@@ -331,15 +281,11 @@ export class ArrayLiteralExpression implements Expression {
         readonly close: Token
     ) { }
 
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitArrayLiteral(this);
-    }
-
     get location() {
         return {
             file: this.open.location.file,
             start: this.open.location.start,
-            end: this.close.location.end,
+            end: this.close.location.end
         };
     }
 
@@ -376,12 +322,12 @@ export class ArrayLiteralExpression implements Expression {
                     ...element.transpile(state)
                 );
                 //add a comma if we know there will be another non-comment statement after this
-                inner: for (var j = i + 1; j < this.elements.length; j++) {
+                for (let j = i + 1; j < this.elements.length; j++) {
                     let el = this.elements[j];
                     //add a comma if there will be another element after this
                     if (el instanceof CommentStatement === false) {
                         result.push(',');
-                        break inner;
+                        break;
                     }
                 }
             }
@@ -401,7 +347,7 @@ export class ArrayLiteralExpression implements Expression {
 }
 
 /** A member of an associative array literal. */
-export interface AAMember {
+export interface AAMemberExpression {
     /** The name of the member. */
     key: BrsString;
     keyToken: Token;
@@ -413,20 +359,16 @@ export interface AAMember {
 
 export class AALiteralExpression implements Expression {
     constructor(
-        readonly elements: Array<AAMember | CommentStatement>,
+        readonly elements: Array<AAMemberExpression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) { }
-
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitAALiteral(this);
-    }
 
     get location() {
         return {
             file: this.open.location.file,
             start: this.open.location.start,
-            end: this.close.location.end,
+            end: this.close.location.end
         };
     }
 
@@ -434,7 +376,7 @@ export class AALiteralExpression implements Expression {
         let result = [];
         //open curly
         result.push(
-            new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pathAbsolute, this.open.text),
+            new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pathAbsolute, this.open.text)
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
@@ -444,7 +386,7 @@ export class AALiteralExpression implements Expression {
         state.blockDepth++;
         for (let i = 0; i < this.elements.length; i++) {
             let element = this.elements[i];
-            let previousElement = this.elements[i - 1]
+            let previousElement = this.elements[i - 1];
             let nextElement = this.elements[i + 1];
 
             //don't indent if comment is same-line
@@ -474,23 +416,20 @@ export class AALiteralExpression implements Expression {
 
                 //determine if comments are the only members left in the array
                 let onlyCommentsRemaining = true;
-                inner: for (let j = i + 1; j < this.elements.length; j++) {
+                for (let j = i + 1; j < this.elements.length; j++) {
                     if ((this.elements[j] instanceof CommentStatement) === false) {
                         onlyCommentsRemaining = false;
-                        break inner;
+                        break;
                     }
                 }
 
                 //value
-                result.push(...element.value.transpile(state))
+                result.push(...element.value.transpile(state));
                 //add trailing comma if not final element (excluding comments)
                 if (i !== this.elements.length - 1 && onlyCommentsRemaining === false) {
                     result.push(',');
                 }
             }
-
-
-
 
 
             //if next element is a same-line comment, skip the newline
@@ -515,18 +454,14 @@ export class AALiteralExpression implements Expression {
     }
 }
 
-export class Unary implements Expression {
+export class UnaryExpression implements Expression {
     constructor(readonly operator: Token, readonly right: Expression) { }
-
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitUnary(this);
-    }
 
     get location() {
         return {
             file: this.operator.location.file,
             start: this.operator.location.start,
-            end: this.right.location.end,
+            end: this.right.location.end
         };
     }
 
@@ -539,12 +474,8 @@ export class Unary implements Expression {
     }
 }
 
-export class Variable implements Expression {
+export class VariableExpression implements Expression {
     constructor(readonly name: Identifier) { }
-
-    accept<R>(visitor: Visitor<R>): R {
-        return visitor.visitVariable(this);
-    }
 
     get location() {
         return this.name.location;
@@ -559,12 +490,12 @@ export class Variable implements Expression {
 
 /**
  * Create a newline (including leading spaces)
- * @param state 
+ * @param state
  */
 export function indent(blockDepth: number) {
     let result = '';
     let totalSpaceCount = blockDepth * 4;
-    totalSpaceCount > -1 ? totalSpaceCount : 0;
+    totalSpaceCount = totalSpaceCount > -1 ? totalSpaceCount : 0;
     for (let i = 0; i < totalSpaceCount; i++) {
         result += ' ';
     }

@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -25,7 +24,7 @@ describe('parser indexed assignment', () => {
                 token(Lexeme.RightParen, ')'),
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndFunction, 'end function'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.empty;
@@ -44,7 +43,7 @@ describe('parser indexed assignment', () => {
                 token(Lexeme.And, 'and'),
                 token(Lexeme.False, 'false'),
                 token(Lexeme.Newline, '\\n'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.empty;
@@ -61,7 +60,7 @@ describe('parser indexed assignment', () => {
                 token(Lexeme.StarEqual, '*='),
                 token(Lexeme.Integer, '5', new Int32(5)),
                 token(Lexeme.Newline, '\\n'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.empty;
@@ -84,7 +83,7 @@ describe('parser indexed assignment', () => {
                 token(Lexeme.RightParen, ')'),
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndFunction, 'end function'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.empty;
@@ -104,7 +103,7 @@ describe('parser indexed assignment', () => {
                 token(Lexeme.And, 'and'),
                 token(Lexeme.False, 'false'),
                 token(Lexeme.Newline, '\\n'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.empty;
@@ -121,7 +120,7 @@ describe('parser indexed assignment', () => {
                 token(Lexeme.RightSquare, ']'),
                 token(Lexeme.StarEqual, '*='),
                 token(Lexeme.Integer, '3', new Int32(3)),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.empty;
@@ -148,7 +147,7 @@ describe('parser indexed assignment', () => {
                     start: { line: 1, column: 0 },
                     end: { line: 1, column: 3 },
                     file: 'Test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.LeftSquare,
@@ -158,7 +157,7 @@ describe('parser indexed assignment', () => {
                     start: { line: 1, column: 3 },
                     end: { line: 1, column: 4 },
                     file: 'Test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.Integer,
@@ -169,7 +168,7 @@ describe('parser indexed assignment', () => {
                     start: { line: 1, column: 4 },
                     end: { line: 1, column: 5 },
                     file: 'Test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.RightSquare,
@@ -179,7 +178,7 @@ describe('parser indexed assignment', () => {
                     start: { line: 1, column: 5 },
                     end: { line: 1, column: 6 },
                     file: 'Test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.Equal,
@@ -189,7 +188,7 @@ describe('parser indexed assignment', () => {
                     start: { line: 1, column: 7 },
                     end: { line: 1, column: 8 },
                     file: 'Test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.Integer,
@@ -200,7 +199,7 @@ describe('parser indexed assignment', () => {
                     start: { line: 1, column: 9 },
                     end: { line: 1, column: 10 },
                     file: 'Test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.Newline,
@@ -210,7 +209,7 @@ describe('parser indexed assignment', () => {
                     start: { line: 1, column: 10 },
                     end: { line: 1, column: 11 },
                     file: 'Test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.Identifier,
@@ -220,7 +219,7 @@ describe('parser indexed assignment', () => {
                     start: { line: 2, column: 0 },
                     end: { line: 2, column: 3 },
                     file: 'Test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.Dot,
@@ -230,7 +229,7 @@ describe('parser indexed assignment', () => {
                     start: { line: 2, column: 3 },
                     end: { line: 2, column: 4 },
                     file: 'Test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.Identifier,
@@ -240,7 +239,7 @@ describe('parser indexed assignment', () => {
                     start: { line: 2, column: 4 },
                     end: { line: 2, column: 5 },
                     file: 'Test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.Equal,
@@ -250,7 +249,7 @@ describe('parser indexed assignment', () => {
                     start: { line: 2, column: 6 },
                     end: { line: 2, column: 7 },
                     file: 'Test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.Integer,
@@ -261,7 +260,7 @@ describe('parser indexed assignment', () => {
                     start: { line: 2, column: 8 },
                     end: { line: 2, column: 9 },
                     file: 'Test.brs'
-                },
+                }
             },
             {
                 kind: Lexeme.Eof,
@@ -271,8 +270,8 @@ describe('parser indexed assignment', () => {
                     start: { line: 2, column: 10 },
                     end: { line: 2, column: 11 },
                     file: 'Test.brs'
-                },
-            },
+                }
+            }
         ]);
 
         expect(errors).to.be.empty;
@@ -287,7 +286,7 @@ describe('parser indexed assignment', () => {
                 start: { line: 2, column: 0 },
                 end: { line: 2, column: 9 },
                 file: 'Test.brs'
-            },
+            }
         ]);
     });
 });

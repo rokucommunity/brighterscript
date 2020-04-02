@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -27,7 +26,7 @@ describe('parser for loops', () => {
             // body would go here, but it's not necessary for this test
             token(Lexeme.EndFor, 'end for'),
             token(Lexeme.Newline, '\n'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -51,7 +50,7 @@ describe('parser for loops', () => {
             // body would go here, but it's not necessary for this test
             token(Lexeme.EndFor, 'end for'),
             token(Lexeme.Newline, '\n'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -75,7 +74,7 @@ describe('parser for loops', () => {
             // body would go here, but it's not necessary for this test
             token(Lexeme.Next, 'next'),
             token(Lexeme.Newline, '\n'),
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
@@ -99,8 +98,8 @@ describe('parser for loops', () => {
                 isReserved: true,
                 location: {
                     start: { line: 1, column: 0 },
-                    end: { line: 1, column: 3 },
-                },
+                    end: { line: 1, column: 3 }
+                }
             },
             {
                 kind: Lexeme.Identifier,
@@ -108,8 +107,8 @@ describe('parser for loops', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 4 },
-                    end: { line: 1, column: 5 },
-                },
+                    end: { line: 1, column: 5 }
+                }
             },
             {
                 kind: Lexeme.Equal,
@@ -117,8 +116,8 @@ describe('parser for loops', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 6 },
-                    end: { line: 1, column: 7 },
-                },
+                    end: { line: 1, column: 7 }
+                }
             },
             {
                 kind: Lexeme.Integer,
@@ -127,8 +126,8 @@ describe('parser for loops', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 8 },
-                    end: { line: 1, column: 9 },
-                },
+                    end: { line: 1, column: 9 }
+                }
             },
             {
                 kind: Lexeme.To,
@@ -136,8 +135,8 @@ describe('parser for loops', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 10 },
-                    end: { start: 1, column: 12 },
-                },
+                    end: { start: 1, column: 12 }
+                }
             },
             {
                 kind: Lexeme.Integer,
@@ -146,8 +145,8 @@ describe('parser for loops', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 13 },
-                    end: { line: 1, column: 15 },
-                },
+                    end: { line: 1, column: 15 }
+                }
             },
             {
                 kind: Lexeme.Newline,
@@ -155,8 +154,8 @@ describe('parser for loops', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 15 },
-                    end: { line: 1, column: 16 },
-                },
+                    end: { line: 1, column: 16 }
+                }
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
@@ -170,17 +169,17 @@ describe('parser for loops', () => {
                 isReserved: false,
                 location: {
                     start: { line: 3, column: 0 },
-                    end: { line: 3, column: 8 },
-                },
+                    end: { line: 3, column: 8 }
+                }
             },
-            EOF,
+            EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].location).to.deep.include({
             start: { line: 1, column: 0 },
-            end: { line: 3, column: 8 },
+            end: { line: 3, column: 8 }
         });
     });
 });

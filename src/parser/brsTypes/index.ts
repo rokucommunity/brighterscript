@@ -1,35 +1,34 @@
-/* eslint-disable */
 import {
     ValueKind,
     BrsInvalid,
     BrsBoolean,
     BrsString,
     Uninitialized,
-    BrsValue,
-} from "./BrsType";
-import { RoArray } from "./components/RoArray";
-import { RoAssociativeArray } from "./components/RoAssociativeArray";
-import { Int32 } from "./Int32";
-import { Int64 } from "./Int64";
-import { Float } from "./Float";
-import { Double } from "./Double";
-import { Callable } from "./Callable";
-import { BrsComponent } from "./components/BrsComponent";
-import { RoString } from "./components/RoString";
+    BrsValue
+} from './BrsType';
+import { RoArray } from './components/RoArray';
+import { RoAssociativeArray } from './components/RoAssociativeArray';
+import { Int32 } from './Int32';
+import { Int64 } from './Int64';
+import { Float } from './Float';
+import { Double } from './Double';
+import { Callable } from './Callable';
+import { BrsComponent } from './components/BrsComponent';
+import { RoString } from './components/RoString';
 
-export * from "./BrsType";
-export * from "./Int32";
-export * from "./Int64";
-export * from "./Float";
-export * from "./Double";
-export * from "./components/RoArray";
-export * from "./components/RoAssociativeArray";
-export * from "./components/Timespan";
-export * from "./components/RoSGNode";
-export * from "./components/BrsObjects";
-export * from "./components/RoRegex";
-export * from "./components/RoString";
-export * from "./Callable";
+export * from './BrsType';
+export * from './Int32';
+export * from './Int64';
+export * from './Float';
+export * from './Double';
+export * from './components/RoArray';
+export * from './components/RoAssociativeArray';
+export * from './components/Timespan';
+export * from './components/RoSGNode';
+export * from './components/BrsObjects';
+export * from './components/RoRegex';
+export * from './components/RoString';
+export * from './Callable';
 
 /**
  * Determines whether or not the given value is a number.
@@ -81,7 +80,7 @@ export function isBrsCallable(value: BrsType): value is Callable {
  * @returns `true` if `value` can be iterated across, otherwise `false`.
  */
 export function isIterable(value: BrsType): value is Iterable {
-    return "get" in value && "getElements" in value && "set" in value;
+    return 'get' in value && 'getElements' in value && 'set' in value;
 }
 
 /** The set of BrightScript numeric types. */

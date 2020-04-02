@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -71,7 +70,7 @@ describe('parser if statements', () => {
                 token(Lexeme.Equal, '='),
                 token(Lexeme.True, 'true', BrsBoolean.True),
                 token(Lexeme.Newline, '\n'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -94,7 +93,7 @@ describe('parser if statements', () => {
                 token(Lexeme.Equal, '='),
                 token(Lexeme.False, 'true', BrsBoolean.False),
                 token(Lexeme.Newline, '\n'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -125,7 +124,7 @@ describe('parser if statements', () => {
                 token(Lexeme.Equal, '='),
                 token(Lexeme.True, 'true', BrsBoolean.False),
                 token(Lexeme.Newline, '\n'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -154,7 +153,7 @@ describe('parser if statements', () => {
                 token(Lexeme.Equal, '='),
                 token(Lexeme.False, 'false', BrsBoolean.False),
                 token(Lexeme.Newline, '\n'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);

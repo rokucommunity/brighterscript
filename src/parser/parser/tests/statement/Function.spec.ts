@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 
 import { Parser } from '../..';
@@ -39,7 +38,7 @@ describe('parser', () => {
                 token(Lexeme.RightParen, ')'),
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndFunction, 'end function'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -59,7 +58,7 @@ describe('parser', () => {
                 token(Lexeme.String, 'Lorem ipsum', new BrsString('Lorem ipsum')),
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndFunction, 'end function'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -79,7 +78,7 @@ describe('parser', () => {
                 token(Lexeme.RightParen, ')'),
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndFunction, 'end function'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -103,7 +102,7 @@ describe('parser', () => {
                 token(Lexeme.RightParen, ')'),
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndFunction, 'end function'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -137,7 +136,7 @@ describe('parser', () => {
 
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndFunction, 'end function'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -170,7 +169,7 @@ describe('parser', () => {
 
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndFunction, 'end function'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -189,7 +188,7 @@ describe('parser', () => {
                 identifier('void'),
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndFunction, 'end function'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -250,7 +249,7 @@ describe('parser', () => {
                 token(Lexeme.RightParen, ')'),
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndSub, 'end sub'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -270,7 +269,7 @@ describe('parser', () => {
                 token(Lexeme.String, 'Lorem ipsum', new BrsString('Lorem ipsum')),
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndSub, 'end sub'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -290,7 +289,7 @@ describe('parser', () => {
                 token(Lexeme.RightParen, ')'),
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndFunction, 'end sub'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -314,7 +313,7 @@ describe('parser', () => {
                 token(Lexeme.RightParen, ')'),
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndFunction, 'end sub'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -348,7 +347,7 @@ describe('parser', () => {
 
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndSub, 'end sub'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);
@@ -380,7 +379,7 @@ describe('parser', () => {
 
                 token(Lexeme.Newline, '\\n'),
                 token(Lexeme.EndSub, 'end sub'),
-                EOF,
+                EOF
             ]);
 
             expect(errors).to.be.lengthOf(0);

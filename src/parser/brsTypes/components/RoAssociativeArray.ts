@@ -1,11 +1,10 @@
-/* eslint-disable */
-import { BrsValue, ValueKind, BrsString, BrsBoolean, BrsInvalid } from "../BrsType";
-import { BrsComponent, BrsIterable } from "./BrsComponent";
-import { BrsType } from "..";
-import { Callable, StdlibArgument } from "../Callable";
+import { BrsValue, ValueKind, BrsString, BrsBoolean, BrsInvalid } from '../BrsType';
+import { BrsComponent, BrsIterable } from './BrsComponent';
+import { BrsType } from '..';
+import { Callable, StdlibArgument } from '../Callable';
 declare type Interpreter = any;
-import { Int32 } from "../Int32";
-import { RoArray } from "./RoArray";
+import { Int32 } from '../Int32';
+import { RoArray } from './RoArray';
 
 /** A member of an `AssociativeArray` in BrightScript. */
 export interface AAMember {
@@ -20,9 +19,8 @@ export class RoAssociativeArray extends BrsComponent implements BrsValue, BrsIte
     elements = new Map<string, BrsType>();
 
     constructor(elements: AAMember[]) {
-        super("roAssociativeArray");
-        elements.forEach(member =>
-            this.elements.set(member.name.value.toLowerCase(), member.value)
+        super('roAssociativeArray');
+        elements.forEach(member => this.elements.set(member.name.value.toLowerCase(), member.value)
         );
 
         this.registerMethods([
@@ -34,26 +32,26 @@ export class RoAssociativeArray extends BrsComponent implements BrsValue, BrsIte
             this.append,
             this.keys,
             this.items,
-            this.lookup,
+            this.lookup
         ]);
     }
 
     toString(parent?: BrsType): string {
         if (parent) {
-            return "<Component: roAssociativeArray>";
+            return '<Component: roAssociativeArray>';
         }
 
         return [
-            "<Component: roAssociativeArray> =",
-            "{",
+            '<Component: roAssociativeArray> =',
+            '{',
             ...Array.from(this.elements.entries()).map(
-                ([key, value]) => `    ${key}: ${value.toString(this)}`
+                ([key, value]) => `    ${key}: ${(value as any).toString(this)}`
             ),
-            "}",
-        ].join("\n");
+            '}'
+        ].join('\n');
     }
 
-    equalTo(other: BrsType) {
+    equalTo() {
         return BrsBoolean.False;
     }
 
@@ -75,7 +73,7 @@ export class RoAssociativeArray extends BrsComponent implements BrsValue, BrsIte
 
     get(index: BrsType) {
         if (index.kind !== ValueKind.String) {
-            throw new Error("Associative array indexes must be strings");
+            throw new Error('Associative array indexes must be strings');
         }
 
         // TODO: this works for now, in that a property with the same name as a method essentially
@@ -98,80 +96,80 @@ export class RoAssociativeArray extends BrsComponent implements BrsValue, BrsIte
 
     set(index: BrsType, value: BrsType) {
         if (index.kind !== ValueKind.String) {
-            throw new Error("Associative array indexes must be strings");
+            throw new Error('Associative array indexes must be strings');
         }
         this.elements.set(index.value.toLowerCase(), value);
         return BrsInvalid.Instance;
     }
 
     /** Removes all elements from the associative array */
-    private clear = new Callable("clear", {
+    private clear = new Callable('clear', {
         signature: {
             args: [],
-            returns: ValueKind.Void,
+            returns: ValueKind.Void
         },
         impl: (interpreter: Interpreter) => {
             this.elements.clear();
             return BrsInvalid.Instance;
-        },
+        }
     });
 
     /** Removes a given item from the associative array */
-    private delete = new Callable("delete", {
+    private delete = new Callable('delete', {
         signature: {
-            args: [new StdlibArgument("str", ValueKind.String)],
-            returns: ValueKind.Boolean,
+            args: [new StdlibArgument('str', ValueKind.String)],
+            returns: ValueKind.Boolean
         },
         impl: (interpreter: Interpreter, str: BrsString) => {
             let deleted = this.elements.delete(str.value);
             return BrsBoolean.from(deleted);
-        },
+        }
     });
 
     /** Given a key and value, adds an item to the associative array if it doesn't exist
      * Or replaces the value of a key that already exists in the associative array
      */
-    private addreplace = new Callable("addreplace", {
+    private addreplace = new Callable('addreplace', {
         signature: {
             args: [
-                new StdlibArgument("key", ValueKind.String),
-                new StdlibArgument("value", ValueKind.Dynamic),
+                new StdlibArgument('key', ValueKind.String),
+                new StdlibArgument('value', ValueKind.Dynamic)
             ],
-            returns: ValueKind.Void,
+            returns: ValueKind.Void
         },
         impl: (interpreter: Interpreter, key: BrsString, value: BrsType) => {
             this.set(key, value);
             return BrsInvalid.Instance;
-        },
+        }
     });
 
     /** Returns the number of items in the associative array */
-    private count = new Callable("count", {
+    private count = new Callable('count', {
         signature: {
             args: [],
-            returns: ValueKind.Int32,
+            returns: ValueKind.Int32
         },
         impl: (interpreter: Interpreter) => {
             return new Int32(this.elements.size);
-        },
+        }
     });
 
     /** Returns a boolean indicating whether or not a given key exists in the associative array */
-    private doesexist = new Callable("doesexist", {
+    private doesexist = new Callable('doesexist', {
         signature: {
-            args: [new StdlibArgument("str", ValueKind.String)],
-            returns: ValueKind.Boolean,
+            args: [new StdlibArgument('str', ValueKind.String)],
+            returns: ValueKind.Boolean
         },
         impl: (interpreter: Interpreter, str: BrsString) => {
             return this.get(str) !== BrsInvalid.Instance ? BrsBoolean.True : BrsBoolean.False;
-        },
+        }
     });
 
     /** Appends a new associative array to another. If two keys are the same, the value of the original AA is replaced with the new one. */
-    private append = new Callable("append", {
+    private append = new Callable('append', {
         signature: {
-            args: [new StdlibArgument("obj", ValueKind.Object)],
-            returns: ValueKind.Void,
+            args: [new StdlibArgument('obj', ValueKind.Object)],
+            returns: ValueKind.Void
         },
         impl: (interpreter: Interpreter, obj: BrsType) => {
             if (!(obj instanceof RoAssociativeArray)) {
@@ -182,40 +180,40 @@ export class RoAssociativeArray extends BrsComponent implements BrsValue, BrsIte
             this.elements = new Map<string, BrsType>([...this.elements, ...obj.elements]);
 
             return BrsInvalid.Instance;
-        },
+        }
     });
 
     /** Returns an array of keys from the associative array in lexicographical order */
-    private keys = new Callable("keys", {
+    private keys = new Callable('keys', {
         signature: {
             args: [],
-            returns: ValueKind.Object,
+            returns: ValueKind.Object
         },
         impl: (interpreter: Interpreter) => {
             return new RoArray(this.getElements());
-        },
+        }
     });
 
     /** Returns an array of values from the associative array in lexicographical order */
-    private items = new Callable("items", {
+    private items = new Callable('items', {
         signature: {
             args: [],
-            returns: ValueKind.Object,
+            returns: ValueKind.Object
         },
         impl: (interpreter: Interpreter) => {
             return new RoArray(this.getValues());
-        },
+        }
     });
 
     /** Given a key, returns the value associated with that key. This method is case insensitive. */
-    private lookup = new Callable("lookup", {
+    private lookup = new Callable('lookup', {
         signature: {
-            args: [new StdlibArgument("key", ValueKind.String)],
-            returns: ValueKind.Dynamic,
+            args: [new StdlibArgument('key', ValueKind.String)],
+            returns: ValueKind.Dynamic
         },
         impl: (interpreter: Interpreter, key: BrsString) => {
             let lKey = key.value.toLowerCase();
             return this.get(new BrsString(lKey));
-        },
+        }
     });
 }

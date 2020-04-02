@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { expect } from 'chai';
 import * as sinon from 'sinon';
 
@@ -42,7 +41,7 @@ describe('lexer', () => {
             Lexeme.Print,
             Lexeme.Integer,
             Lexeme.Newline,
-            Lexeme.Eof,
+            Lexeme.Eof
         ]);
     });
 
@@ -107,7 +106,7 @@ describe('lexer', () => {
                 Lexeme.RightParen,
                 Lexeme.LeftBrace,
                 Lexeme.RightBrace,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
             expect(tokens.filter(t => !!t.literal).length).to.equal(0);
         });
@@ -125,7 +124,7 @@ describe('lexer', () => {
                 Lexeme.Backslash,
                 Lexeme.MinusMinus,
                 Lexeme.PlusPlus,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
             expect(tokens.filter(t => !!t.literal).length).to.equal(0);
         });
@@ -136,7 +135,7 @@ describe('lexer', () => {
                 Lexeme.LeftShift,
                 Lexeme.RightShift,
                 Lexeme.LeftShift,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
             expect(tokens.filter(t => !!t.literal).length).to.equal(0);
         });
@@ -146,7 +145,7 @@ describe('lexer', () => {
             expect(tokens.map(t => t.kind)).to.deep.equal([
                 Lexeme.LeftShiftEqual,
                 Lexeme.RightShiftEqual,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
             expect(tokens.filter(t => !!t.literal).length).to.equal(0);
         });
@@ -160,7 +159,7 @@ describe('lexer', () => {
                 Lexeme.GreaterEqual,
                 Lexeme.Equal,
                 Lexeme.LessGreater,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
             expect(tokens.filter(t => !!t.literal).length).to.equal(0);
         });
@@ -309,7 +308,7 @@ describe('lexer', () => {
                 Lexeme.True,
                 Lexeme.False,
                 Lexeme.Identifier,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
             expect(tokens.filter(w => !!w.literal).length).to.equal(0);
         });
@@ -323,7 +322,7 @@ describe('lexer', () => {
                 Lexeme.EndSub,
                 Lexeme.EndFunction,
                 Lexeme.ExitWhile,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
             expect(tokens.filter(w => !!w.literal).length).to.equal(0);
         });
@@ -333,7 +332,7 @@ describe('lexer', () => {
             expect(tokens.map(w => w.kind)).to.deep.equal([
                 Lexeme.ExitFor,
                 Lexeme.Identifier,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
         });
 
@@ -344,7 +343,7 @@ describe('lexer', () => {
                 Lexeme.Else,
                 Lexeme.EndIf,
                 Lexeme.Function,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
         });
 
@@ -363,7 +362,7 @@ describe('lexer', () => {
                 'ipsum%',
                 'dolor!',
                 'sit#',
-                'amet&',
+                'amet&'
             ]);
         });
     });
@@ -375,7 +374,7 @@ describe('lexer', () => {
                 Lexeme.HashConst,
                 Lexeme.Identifier,
                 Lexeme.True,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
         });
 
@@ -385,7 +384,7 @@ describe('lexer', () => {
                 Lexeme.HashConst,
                 Lexeme.Identifier,
                 Lexeme.Identifier,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
         });
 
@@ -398,7 +397,7 @@ describe('lexer', () => {
                 Lexeme.HashElse,
                 Lexeme.HashEndIf,
                 Lexeme.HashEndIf,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
         });
 
@@ -407,7 +406,7 @@ describe('lexer', () => {
             expect(tokens.map(t => t.kind)).to.deep.equal([
                 Lexeme.HashError,
                 Lexeme.HashErrorMessage,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
 
             expect(tokens[1].text).to.equal('a message goes here');
@@ -434,7 +433,7 @@ describe('lexer', () => {
                 [10, 15], // "bar"
                 [15, 16], // \n
                 [0, 7], // end sub
-                [7, 8], // EOF
+                [7, 8] // EOF
             ]);
         });
     });
@@ -452,7 +451,7 @@ describe('lexer', () => {
                 Lexeme.ForEach,
                 Lexeme.ForEach,
                 Lexeme.ForEach,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
         });
         it('supports various spacing between else if', () => {
@@ -467,7 +466,7 @@ describe('lexer', () => {
                 Lexeme.ElseIf,
                 Lexeme.ElseIf,
                 Lexeme.ElseIf,
-                Lexeme.Eof,
+                Lexeme.Eof
             ]);
         });
     });
@@ -480,7 +479,7 @@ describe('lexer', () => {
             Lexeme.Identifier,
             Lexeme.Equal,
             Lexeme.True,
-            Lexeme.Eof,
+            Lexeme.Eof
         ]);
 
         //verify the location of `rem`
@@ -490,7 +489,7 @@ describe('lexer', () => {
             [7, 10], // rem
             [10, 11], // =
             [11, 15], // true
-            [15, 16], // EOF
+            [15, 16] // EOF
         ]);
     });
 
@@ -499,13 +498,13 @@ describe('lexer', () => {
             let location = {
                 start: {
                     line: 1,
-                    column: 1,
+                    column: 1
                 },
                 end: {
                     line: 1,
-                    column: 2,
+                    column: 2
                 },
-                file: 'SomeFile.brs',
+                file: 'SomeFile.brs'
             };
 
             expect(isToken({ kind: Lexeme.And, text: 'and', location: location })).is.true;
