@@ -8,7 +8,7 @@ Here's an example of a simple BrighterScript class
 class Animal
     public name as string
 
-    public function Walk()
+    public function walk()
 
     end function
 
@@ -21,7 +21,7 @@ And here's the transpiled BrightScript code
 function Animal$Build()
     instance = {}
     instance.name = invalid
-    instance.Walk = function()
+    instance.walk = function()
     end function
     return instance
 end function
@@ -51,14 +51,14 @@ class Animal
 end class
 
 class Duck extends Animal
-    sub move(distanceInMeters as integer)
+    override sub move(distanceInMeters as integer)
         print "Waddling..."
         super.move(distanceInMeters)
     end sub
 end class
 
 class BabyDuck extends Duck
-    sub move(distanceInMeters as integer)
+    override sub move(distanceInMeters as integer)
         super.move(distanceInMeters)
         print "Fell over...I'm still new at this"
     end sub
@@ -124,6 +124,18 @@ function BabyDuck(name as string)
     instance.new(name)
     return instance
 end function
+
+
+sub Main()
+    Animal("Bear").move(1) 
+    '> Bear moved 1 meters
+
+    Duck("Donald").move(2) 
+    '> Waddling...\nDonald moved 2 meters
+
+    BabyDuck("Dewey").move(3) 
+    '> Waddling...\nDewey moved 2 meters\nFell over...I'm still new at this
+end sub
 ```
 </details>
 
@@ -132,7 +144,7 @@ end function
 The constructor function for a class is called `new`. 
 
 ```vb
-class Person
+class Duck
     sub new(name as string)
         m.name = name
     end sub
@@ -219,7 +231,7 @@ end function
 </details>
 
 ## Overrides
-Child classes can override methods on parent classes. In this example, the `BabyDuck.Eat()` method completely overrides the parent method. 
+Child classes can override methods on parent classes. In this example, the `BabyDuck.Eat()` method completely overrides the parent method. Note: the `override` keyword is mandatory, and you will get a compile error if it is not included in the child class and there is a matching method on the base class. Also, you will get a compile error if the override keyword is present in a child class, but that method doesn't exist in the parent class. 
 
 ```vb
 class Duck
@@ -229,7 +241,7 @@ class Duck
 end class
 
 class BabyDuck
-    sub Eat()
+    override sub Eat()
         print "Ate half the food, because I'm a baby duck"
     end sub
 end sub
@@ -265,15 +277,15 @@ You can also call the original methods on the base class from within an overridd
 
 ```vb
 class Duck
-    public sub Walk(meters as integer)
+    public sub walk(meters as integer)
         print "Walked " + meters.ToStr() + " meters"
     end sub
 end class
 
 class BabyDuck extends Duck
-    public sub Walk(meters as integer)
+    public override sub walk(meters as integer)
         print "Tripped"
-        super.Walk(meters)
+        super.walk(meters)
     end sub
 end class
 
@@ -284,7 +296,7 @@ end class
 ```vb
 function Duck$Build
     instance = {}
-    instance.Walk = sub(meters as integer)
+    instance.walk = sub(meters as integer)
         print "Walked " + meters.ToStr() + " meters"
     end sub
     return instance
@@ -299,7 +311,7 @@ function BabyDuck$Build(name as string, age as integer)
     instance.super0_Walk = instance.walk
     instance.walk = sub(meters as integer)
         print "Tripped"
-        m.super0_Walk(meters)
+        m.super0_walk(meters)
     end sub
 end function
 function BabyDuck(name as string, age as integer)
