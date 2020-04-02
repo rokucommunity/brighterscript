@@ -222,7 +222,7 @@ export class Util {
     }
 
     /**
-     * Do work within the context of a changed current working directory
+     * Do work within the scope of a changed current working directory
      * @param targetCwd
      * @param callback
      */

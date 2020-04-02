@@ -2,7 +2,7 @@ import * as path from 'path';
 import { SourceNode } from 'source-map';
 import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
 
-import { Context } from '../Context';
+import { Scope } from '../Scope';
 import { diagnosticCodes, diagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import { Callable, CallableArg, CallableParam, CommentFlag, Diagnostic, FunctionCall } from '../interfaces';
@@ -24,7 +24,7 @@ import { VoidType } from '../types/VoidType';
 import util from '../util';
 
 /**
- * Holds all details about this file within the context of the whole program
+ * Holds all details about this file within the scope of the whole program
  */
 export class BrsFile {
     constructor(
@@ -635,9 +635,9 @@ export class BrsFile {
     }
 
     /**
-     * Get completions available at the given cursor. This aggregates all values from this file and the current context.
+     * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
      */
-    public async getCompletions(position: Position, context?: Context): Promise<CompletionItem[]> {
+    public async getCompletions(position: Position, scope?: Scope): Promise<CompletionItem[]> {
         let result = [] as CompletionItem[];
 
         //wait for the file to finish processing
@@ -659,12 +659,12 @@ export class BrsFile {
 
         //is next to a period (or an identifier that is next to a period). include the property names
         if (this.isPositionNextToDot(position)) {
-            result.push(...context.getPropertyNameCompletions());
+            result.push(...scope.getPropertyNameCompletions());
 
             //is NOT next to period
         } else {
             //include the global callables
-            result.push(...context.getCallablesAsCompletions());
+            result.push(...scope.getCallablesAsCompletions());
 
             //include local variables
             let variables = functionScope.variableDeclarations;
@@ -765,7 +765,7 @@ export class BrsFile {
                         }
                         return {
                             range: util.locationToRange(token.location),
-                            //append the variable name to the front for context
+                            //append the variable name to the front for scope
                             contents: typeText
                         };
                     }
@@ -773,11 +773,11 @@ export class BrsFile {
             }
         }
 
-        //look through all callables in relevant contexts
+        //look through all callables in relevant scopes
         {
-            let contexts = this.program.getContextsForFile(this);
-            for (let context of contexts) {
-                let callable = context.getCallableByName(lowerTokenText);
+            let scopes = this.program.getScopesForFile(this);
+            for (let scope of scopes) {
+                let callable = scope.getCallableByName(lowerTokenText);
                 if (callable) {
                     return {
                         range: util.locationToRange(token.location),

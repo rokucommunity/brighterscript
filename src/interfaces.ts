@@ -1,6 +1,6 @@
 import { Range } from 'vscode-languageserver';
 
-import { Context } from './Context';
+import { Scope } from './Scope';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { FunctionScope } from './FunctionScope';
@@ -152,7 +152,7 @@ export enum ValueKind {
  */
 export interface CallableContainer {
     callable: Callable;
-    context: Context;
+    scope: Scope;
 }
 
 export interface CommentFlag {

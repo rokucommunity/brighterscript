@@ -4,24 +4,24 @@ import * as path from 'path';
 import * as sinonImport from 'sinon';
 import { Position } from 'vscode-languageserver';
 
-import { Context } from './Context';
+import { Scope } from './Scope';
 import { diagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { Program } from './Program';
 import util from './util';
 let n = path.normalize;
 
-describe('Context', () => {
+describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
     let rootDir = process.cwd();
     let program: Program;
-    let context: Context;
+    let scope: Scope;
     beforeEach(() => {
         program = new Program({
             rootDir: rootDir
         });
-        context = new Context('root', () => { });
-        context.attachProgram(program);
+        scope = new Scope('root', () => { });
+        scope.attachProgram(program);
     });
     afterEach(() => {
         sinon.restore();
@@ -29,7 +29,7 @@ describe('Context', () => {
 
     describe('attachProgram', () => {
         it('correctly listens to program events', () => {
-            context = new Context('some context', () => true);
+            scope = new Scope('some scope', () => true);
 
             let file = new BrsFile(util.standardizePath(`${rootDir}/source/file.brs`), n('source/file.brs'), program);
 
@@ -38,30 +38,30 @@ describe('Context', () => {
             (fakeProgram as any).files = {};
 
             //attach the program (and therefore to the program's events)
-            context.attachProgram(fakeProgram as any);
+            scope.attachProgram(fakeProgram as any);
 
-            expect(context.hasFile(file)).to.be.false;
+            expect(scope.hasFile(file)).to.be.false;
 
-            //"add" a file. context should keep it
+            //"add" a file. scope should keep it
             fakeProgram.emit('file-added', file);
-            expect(context.hasFile(file)).to.be.true;
+            expect(scope.hasFile(file)).to.be.true;
 
-            //"remove" a file. context should discard it
+            //"remove" a file. scope should discard it
             fakeProgram.emit('file-removed', file);
-            expect(context.hasFile(file)).to.be.false;
+            expect(scope.hasFile(file)).to.be.false;
         });
     });
 
-    describe('attachParentContext', () => {
+    describe('attachParentScope', () => {
         it('listens for invalidated events', () => {
-            let parentCtx = new Context('parent', null);
+            let parentCtx = new Scope('parent', null);
             parentCtx.isValidated = false;
 
-            let childCtx = new Context('child', null);
+            let childCtx = new Scope('child', null);
             childCtx.isValidated = true;
 
             //attaching child to invalidated parent invalidates child
-            childCtx.attachParentContext(parentCtx);
+            childCtx.attachParentScope(parentCtx);
             expect(childCtx.isValidated).to.be.false;
 
             childCtx.isValidated = true;
@@ -74,9 +74,9 @@ describe('Context', () => {
 
     describe('addFile', () => {
         it('detects callables from all loaded files', async () => {
-            program.platformContext = new Context('platform', () => false);
-            const globalContext = program.getContextByName('global');
-            globalContext.attachParentContext(program.platformContext);
+            program.platformScope = new Scope('platform', () => false);
+            const globalScope = program.getScopeByName('global');
+            globalScope.attachParentScope(program.platformScope);
 
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: '/source/main.brs' }, `
                 sub Main()
@@ -93,16 +93,16 @@ describe('Context', () => {
 
             await program.validate();
 
-            expect(globalContext.hasFile(`${rootDir}/source/main.brs`));
-            expect(globalContext.hasFile(`${rootDir}/source/lib.brs`));
+            expect(globalScope.hasFile(`${rootDir}/source/main.brs`));
+            expect(globalScope.hasFile(`${rootDir}/source/lib.brs`));
             expect(program.getDiagnostics()).to.be.lengthOf(0);
-            expect(globalContext.getOwnCallables()).is.lengthOf(3);
-            expect(globalContext.getAllCallables()).is.lengthOf(3);
+            expect(globalScope.getOwnCallables()).is.lengthOf(3);
+            expect(globalScope.getAllCallables()).is.lengthOf(3);
         });
 
         it('picks up new callables', async () => {
             //we have global callables, so get that initial number
-            let originalLength = context.getAllCallables().length;
+            let originalLength = scope.getAllCallables().length;
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
             await file.parse(`
                 function DoA()
@@ -113,14 +113,14 @@ describe('Context', () => {
                      print "A"
                  end function
             `);
-            context.addOrReplaceFile(file);
-            expect(context.getAllCallables().length).to.equal(originalLength + 2);
+            scope.addOrReplaceFile(file);
+            expect(scope.getAllCallables().length).to.equal(originalLength + 2);
         });
     });
 
     describe('removeFile', () => {
         it('removes callables from list', async () => {
-            let initCallableCount = context.getAllCallables().length;
+            let initCallableCount = scope.getAllCallables().length;
             //add the file
             let file = new BrsFile(util.standardizePath(`${rootDir}/source/file.brs`), n('source/file.brs'), program);
             await file.parse(`
@@ -128,12 +128,12 @@ describe('Context', () => {
                     print "A"
                 end function
             `);
-            context.addOrReplaceFile(file);
-            expect(context.getAllCallables().length).to.equal(initCallableCount + 1);
+            scope.addOrReplaceFile(file);
+            expect(scope.getAllCallables().length).to.equal(initCallableCount + 1);
 
             //remove the file
-            context.removeFile(file);
-            expect(context.getAllCallables().length).to.equal(initCallableCount);
+            scope.removeFile(file);
+            expect(scope.getAllCallables().length).to.equal(initCallableCount);
         });
     });
 
@@ -169,7 +169,7 @@ describe('Context', () => {
         });
 
         it('detects duplicate callables', async () => {
-            expect(context.getDiagnostics().length).to.equal(0);
+            expect(scope.getDiagnostics().length).to.equal(0);
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
             await file.parse(`
                 function DoA()
@@ -180,37 +180,37 @@ describe('Context', () => {
                      print "A"
                  end function
             `);
-            context.addOrReplaceFile(file);
+            scope.addOrReplaceFile(file);
             expect(
-                context.getDiagnostics().length
+                scope.getDiagnostics().length
             ).to.equal(0);
-            //validate the context
-            context.validate();
+            //validate the scope
+            scope.validate();
             //we should have the "DoA declared more than once" error twice (one for each function named "DoA")
-            expect(context.getDiagnostics().length).to.equal(2);
+            expect(scope.getDiagnostics().length).to.equal(2);
         });
 
         it('detects calls to unknown callables', async () => {
-            expect(context.getDiagnostics().length).to.equal(0);
+            expect(scope.getDiagnostics().length).to.equal(0);
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
             await file.parse(`
                 function DoA()
                     DoB()
                 end function
             `);
-            context.addOrReplaceFile(file);
-            expect(context.getDiagnostics().length).to.equal(0);
-            //validate the context
-            context.validate();
+            scope.addOrReplaceFile(file);
+            expect(scope.getDiagnostics().length).to.equal(0);
+            //validate the scope
+            scope.validate();
             //we should have the "DoA declared more than once" error twice (one for each function named "DoA")
-            expect(context.getDiagnostics().length).to.equal(1);
-            expect(context.getDiagnostics()[0]).to.deep.include({
+            expect(scope.getDiagnostics().length).to.equal(1);
+            expect(scope.getDiagnostics()[0]).to.deep.include({
                 code: diagnosticMessages.Call_to_unknown_function_1001('DoB', '').code
             });
         });
 
         it('recognizes known callables', async () => {
-            expect(context.getDiagnostics().length).to.equal(0);
+            expect(scope.getDiagnostics().length).to.equal(0);
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
             await file.parse(`
                 function DoA()
@@ -220,30 +220,30 @@ describe('Context', () => {
                     DoC()
                 end function
             `);
-            context.addOrReplaceFile(file);
-            expect(context.getDiagnostics().length).to.equal(0);
-            //validate the context
-            context.validate();
-            expect(context.getDiagnostics().length).to.equal(1);
-            expect(context.getDiagnostics()[0]).to.deep.include({
+            scope.addOrReplaceFile(file);
+            expect(scope.getDiagnostics().length).to.equal(0);
+            //validate the scope
+            scope.validate();
+            expect(scope.getDiagnostics().length).to.equal(1);
+            expect(scope.getDiagnostics()[0]).to.deep.include({
                 code: diagnosticMessages.Call_to_unknown_function_1001('DoC', '').code
             });
         });
 
         //We don't currently support someObj.callSomething() format, so don't throw errors on those
         it('does not fail on object callables', async () => {
-            expect(context.getDiagnostics().length).to.equal(0);
+            expect(scope.getDiagnostics().length).to.equal(0);
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
             await file.parse(`
                 function DoB()
                     m.doSomething()
                 end function
             `);
-            context.addOrReplaceFile(file);
-            //validate the context
-            context.validate();
+            scope.addOrReplaceFile(file);
+            //validate the scope
+            scope.validate();
             //shouldn't have any errors
-            expect(context.getDiagnostics().length).to.equal(0);
+            expect(scope.getDiagnostics().length).to.equal(0);
         });
 
         it('detects calling functions with too many parameters', async () => {
@@ -256,11 +256,11 @@ describe('Context', () => {
                     a(1)
                 end sub
             `);
-            context.addOrReplaceFile(file);
-            context.validate();
+            scope.addOrReplaceFile(file);
+            scope.validate();
             //should have an error
-            expect(context.getDiagnostics().length).to.equal(1);
-            expect(context.getDiagnostics()[0]).to.deep.include({
+            expect(scope.getDiagnostics().length).to.equal(1);
+            expect(scope.getDiagnostics()[0]).to.deep.include({
                 ...diagnosticMessages.Expected_a_arguments_but_got_b_1002(0, 1)
             });
         });
@@ -275,11 +275,11 @@ describe('Context', () => {
                     a()
                 end sub
             `);
-            context.addOrReplaceFile(file);
-            context.validate();
+            scope.addOrReplaceFile(file);
+            scope.validate();
             //should have an error
-            expect(context.getDiagnostics().length).to.equal(1);
-            expect(context.getDiagnostics()[0]).to.deep.include({
+            expect(scope.getDiagnostics().length).to.equal(1);
+            expect(scope.getDiagnostics()[0]).to.deep.include({
                 ...diagnosticMessages.Expected_a_arguments_but_got_b_1002(1, 0)
             });
         });
@@ -294,10 +294,10 @@ describe('Context', () => {
                     a()
                 end sub
             `);
-            context.addOrReplaceFile(file);
-            context.validate();
+            scope.addOrReplaceFile(file);
+            scope.validate();
             //should have an error
-            expect(context.getDiagnostics().length).to.equal(0);
+            expect(scope.getDiagnostics().length).to.equal(0);
         });
 
         it('shows expected parameter range in error message', async () => {
@@ -310,11 +310,11 @@ describe('Context', () => {
                     a()
                 end sub
             `);
-            context.addOrReplaceFile(file);
-            context.validate();
+            scope.addOrReplaceFile(file);
+            scope.validate();
             //should have an error
-            expect(context.getDiagnostics().length).to.equal(1);
-            expect(context.getDiagnostics()[0]).to.deep.include({
+            expect(scope.getDiagnostics().length).to.equal(1);
+            expect(scope.getDiagnostics()[0]).to.deep.include({
                 ...diagnosticMessages.Expected_a_arguments_but_got_b_1002('1-2', 0)
             });
         });
@@ -329,10 +329,10 @@ describe('Context', () => {
                     a("cat" + "dog" + "mouse")
                 end sub
             `);
-            context.addOrReplaceFile(file);
-            context.validate();
+            scope.addOrReplaceFile(file);
+            scope.validate();
             //should have an error
-            expect(context.getDiagnostics().length).to.equal(0);
+            expect(scope.getDiagnostics().length).to.equal(0);
         });
 
         it('Catches extra arguments for expressions as arguments to a function', async () => {
@@ -345,11 +345,11 @@ describe('Context', () => {
                     a(m.lib.movies[0], 1)
                 end sub
             `);
-            context.addOrReplaceFile(file);
-            context.validate();
+            scope.addOrReplaceFile(file);
+            scope.validate();
             //should have an error
-            expect(context.getDiagnostics().length).to.equal(1);
-            expect(context.getDiagnostics()[0]).to.deep.include({
+            expect(scope.getDiagnostics().length).to.equal(1);
+            expect(scope.getDiagnostics()[0]).to.deep.include({
                 ...diagnosticMessages.Expected_a_arguments_but_got_b_1002(1, 2)
             });
         });
@@ -358,59 +358,59 @@ describe('Context', () => {
     describe('inheritance', () => {
         it('inherits callables from parent', () => {
             program = new Program({ rootDir: rootDir });
-            //erase the platform context so our tests are more stable
-            program.platformContext = new Context('platform', null);
+            //erase the platform scope so our tests are more stable
+            program.platformScope = new Scope('platform', null);
 
             let parentFile = new BrsFile('parentFile.brs', 'parentFile.brs', program);
             parentFile.callables.push(<any>{
                 name: 'parentFunction'
             });
-            let parentContext = new Context('parent', null);
-            parentContext.attachProgram(program);
-            parentContext.addOrReplaceFile(parentFile);
+            let parentScope = new Scope('parent', null);
+            parentScope.attachProgram(program);
+            parentScope.addOrReplaceFile(parentFile);
 
-            let childContext = new Context('child', null);
-            childContext.attachProgram(program);
-            expect(childContext.getAllCallables()).to.be.lengthOf(0);
+            let childScope = new Scope('child', null);
+            childScope.attachProgram(program);
+            expect(childScope.getAllCallables()).to.be.lengthOf(0);
 
-            childContext.attachParentContext(parentContext);
+            childScope.attachParentScope(parentScope);
 
             //now that we attached the parent, the child should recognize the parent's callables
-            expect(childContext.getAllCallables()).to.be.lengthOf(1);
-            expect(childContext.getAllCallables()[0].callable.name).to.equal('parentFunction');
+            expect(childScope.getAllCallables()).to.be.lengthOf(1);
+            expect(childScope.getAllCallables()[0].callable.name).to.equal('parentFunction');
 
             //removes parent callables when parent is detached
-            childContext.detachParent();
-            expect(childContext.getAllCallables()).to.be.lengthOf(0);
+            childScope.detachParent();
+            expect(childScope.getAllCallables()).to.be.lengthOf(0);
         });
     });
 
     describe('detachParent', () => {
         it('does not attach platform to itself', () => {
-            expect(program.platformContext.parentContext).to.be.undefined;
-            program.platformContext.detachParent();
-            expect(program.platformContext.parentContext).to.be.undefined;
+            expect(program.platformScope.parentScope).to.be.undefined;
+            program.platformScope.detachParent();
+            expect(program.platformScope.parentScope).to.be.undefined;
         });
     });
 
     describe('shouldIncludeFile', () => {
         it('should detect whether to keep a file or not', () => {
-            context = new Context('testContext1', () => {
+            scope = new Scope('testScope1', () => {
                 return false;
             });
-            expect(context.shouldIncludeFile({} as any)).to.be.false;
+            expect(scope.shouldIncludeFile({} as any)).to.be.false;
 
-            context = new Context('testContext2', () => {
+            scope = new Scope('testScope2', () => {
                 return true;
             });
-            expect(context.shouldIncludeFile({} as any)).to.be.true;
+            expect(scope.shouldIncludeFile({} as any)).to.be.true;
 
             //should bubble the error
             expect(() => {
-                context = new Context('testContext2', () => {
+                scope = new Scope('testScope2', () => {
                     throw new Error('error');
                 });
-                context.shouldIncludeFile({} as any);
+                scope.shouldIncludeFile({} as any);
             }).to.throw;
         });
     });
@@ -418,14 +418,14 @@ describe('Context', () => {
     describe('getDefinition', () => {
         it('returns empty list when there are no files', async () => {
             let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
-            context = program.getContextByName('global');
-            expect(context.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
+            scope = program.getScopeByName('global');
+            expect(scope.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
         });
     });
 
     describe('getCallablesAsCompletions', () => {
         it('returns documentation when possible', () => {
-            let completions = program.platformContext.getCallablesAsCompletions();
+            let completions = program.platformScope.getCallablesAsCompletions();
             expect(completions.filter(x => !!x.documentation)).to.have.length.greaterThan(0);
         });
     });

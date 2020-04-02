@@ -6,14 +6,14 @@ import { StandardizedFileEntry } from 'roku-deploy';
 import { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 
 import { BsConfig } from './BsConfig';
-import { Context } from './Context';
+import { Scope } from './Scope';
 import { diagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { Diagnostic, File } from './interfaces';
 import { platformFile } from './platformCallables';
 import { util } from './util';
-import { XmlContext } from './XmlContext';
+import { XmlScope } from './XmlScope';
 
 export class Program {
     constructor(
@@ -30,26 +30,26 @@ export class Program {
         //normalize the root dir path
         this.rootDir = util.getRootDir(this.options);
 
-        //create the 'platform' context
-        this.platformContext = new Context('platform', () => false);
+        //create the 'platform' scope
+        this.platformScope = new Scope('platform', () => false);
 
         //add all platform callables
-        this.platformContext.addOrReplaceFile(platformFile);
+        this.platformScope.addOrReplaceFile(platformFile);
         platformFile.program = this;
-        this.platformContext.attachProgram(this);
-        //for now, disable validation of this context because the platform files have some duplicate method declarations
-        this.platformContext.validate = () => [];
-        this.platformContext.isValidated = true;
+        this.platformScope.attachProgram(this);
+        //for now, disable validation of this scope because the platform files have some duplicate method declarations
+        this.platformScope.validate = () => [];
+        this.platformScope.isValidated = true;
 
-        //create the "global" context
-        let globalContext = new Context('global', (file) => {
-            //global context includes every file under the `source` folder
+        //create the "global" scope
+        let globalScope = new Scope('global', (file) => {
+            //global scope includes every file under the `source` folder
             return file.pkgPath.startsWith(`source${path.sep}`);
         });
-        globalContext.attachProgram(this);
-        //the global context inherits from platform context
-        globalContext.attachParentContext(this.platformContext);
-        this.contexts[globalContext.name] = globalContext;
+        globalScope.attachProgram(this);
+        //the global scope inherits from platform scope
+        globalScope.attachParentScope(this.platformScope);
+        this.scopes[globalScope.name] = globalScope;
 
         //add the default file resolver
         this.fileResolvers.push(async (pathAbsolute) => {
@@ -86,10 +86,10 @@ export class Program {
     }
 
     /**
-     * A context that contains all platform-provided functions.
-     * All contexts should directly or indirectly inherit from this context
+     * A scope that contains all platform-provided functions.
+     * All scopes should directly or indirectly inherit from this scope
      */
-    public platformContext: Context;
+    public platformScope: Scope;
 
     /**
      * The full path to the root of the project (where the manifest file lives)
@@ -97,21 +97,21 @@ export class Program {
     public rootDir: string;
 
     /**
-     * A set of diagnostics. This does not include any of the context diagnostics.
+     * A set of diagnostics. This does not include any of the scope diagnostics.
      * Should only be set from `this.validate()`
      */
     private diagnostics = [] as Diagnostic[];
 
     /**
      * Get a list of all files that are inlcuded in the project but are not referenced
-     * by any context in the program.
+     * by any scope in the program.
      */
     public getUnreferencedFiles() {
         let result = [] as File[];
         for (let filePath in this.files) {
             let file = this.files[filePath];
-            if (!this.fileIsIncludedInAnyContext(file)) {
-                //no contexts reference this file. add it to the list
+            if (!this.fileIsIncludedInAnyScope(file)) {
+                //no scopes reference this file. add it to the list
                 result.push(file);
             }
         }
@@ -125,12 +125,12 @@ export class Program {
     public getDiagnostics() {
         let diagnostics = [...this.diagnostics];
 
-        //get the diagnostics from all contexts
-        for (let contextName in this.contexts) {
-            let context = this.contexts[contextName];
+        //get the diagnostics from all scopes
+        for (let scopeName in this.scopes) {
+            let scope = this.scopes[scopeName];
             diagnostics = [
                 ...diagnostics,
-                ...context.getDiagnostics()
+                ...scope.getDiagnostics()
             ];
         }
 
@@ -148,7 +148,7 @@ export class Program {
         for (let diagnostic of diagnostics) {
             if (
                 //skip duplicate diagnostics (by reference).
-                //This skips file parse diagnostics when multiple contexts include same file
+                //This skips file parse diagnostics when multiple scopes include same file
                 !finalDiagnostics.includes(diagnostic) &&
 
                 //skip any specified error codes
@@ -167,7 +167,7 @@ export class Program {
      */
     public files = {} as { [filePath: string]: BrsFile | XmlFile };
 
-    private contexts = {} as { [name: string]: Context };
+    private scopes = {} as { [name: string]: Scope };
 
     /**
      * Determine if the specified file is loaded in this program right now.
@@ -195,15 +195,15 @@ export class Program {
     }
 
     /**
-     * roku filesystem is case INsensitive, so find the context by key case insensitive
-     * @param contextName
+     * roku filesystem is case INsensitive, so find the scope by key case insensitive
+     * @param scopeName
      */
-    public getContextByName(contextName: string) {
-        //most contexts are xml file pkg paths. however, the ones that are not are single names like "platform" and "global",
+    public getScopeByName(scopeName: string) {
+        //most scopes are xml file pkg paths. however, the ones that are not are single names like "platform" and "global",
         //so it's safe to run the standardizePkgPath method
-        contextName = util.standardizePkgPath(contextName);
-        let key = Object.keys(this.contexts).find(x => x.toLowerCase() === contextName.toLowerCase());
-        return this.contexts[key];
+        scopeName = util.standardizePkgPath(scopeName);
+        let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName.toLowerCase());
+        return this.scopes[key];
     }
 
     /**
@@ -251,17 +251,17 @@ export class Program {
             await xmlFile.parse(await getFileContents());
             file = xmlFile;
 
-            //create a new context for this xml file
-            let context = new XmlContext(xmlFile);
-            //attach this program to the new context
-            context.attachProgram(this);
+            //create a new scope for this xml file
+            let scope = new XmlScope(xmlFile);
+            //attach this program to the new scope
+            scope.attachProgram(this);
 
-            //if the context doesn't have a parent context, give it the platform context
-            if (!context.parentContext) {
-                context.parentContext = this.platformContext;
+            //if the scope doesn't have a parent scope, give it the platform scope
+            if (!scope.parentScope) {
+                scope.parentScope = this.platformScope;
             }
 
-            this.contexts[context.name] = context;
+            this.scopes[scope.name] = scope;
         } else {
             //TODO do we actually need to implement this? Figure out how to handle img paths
             // let genericFile = this.files[pathAbsolute] = <any>{
@@ -347,17 +347,17 @@ export class Program {
         pathAbsolute = util.standardizePath(pathAbsolute);
         let file = this.getFile(pathAbsolute);
 
-        //notify every context of this file removal
-        for (let contextName in this.contexts) {
-            let context = this.contexts[contextName];
-            context.removeFile(file);
+        //notify every scope of this file removal
+        for (let scopeName in this.scopes) {
+            let scope = this.scopes[scopeName];
+            scope.removeFile(file);
         }
 
-        //if there is a context named the same as this file's path, remove it (i.e. xml contexts)
-        let context = this.contexts[file.pkgPath];
-        if (context) {
-            context.dispose();
-            delete this.contexts[file.pkgPath];
+        //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
+        let scope = this.scopes[file.pkgPath];
+        if (scope) {
+            scope.dispose();
+            delete this.scopes[file.pkgPath];
         }
         //remove the file from the program
         delete this.files[pathAbsolute];
@@ -365,20 +365,20 @@ export class Program {
     }
 
     /**
-     * Traverse the entire project, and validate all contexts
+     * Traverse the entire project, and validate all scopes
      */
     public async validate() {
         this.diagnostics = [];
-        for (let contextName in this.contexts) {
-            let context = this.contexts[contextName];
-            context.validate();
+        for (let scopeName in this.scopes) {
+            let scope = this.scopes[scopeName];
+            scope.validate();
         }
 
-        //find any files NOT loaded into a context
+        //find any files NOT loaded into a scope
         for (let filePath in this.files) {
             let file = this.files[filePath];
-            if (!this.fileIsIncludedInAnyContext(file)) {
-                //the file is not loaded in any context
+            if (!this.fileIsIncludedInAnyScope(file)) {
+                //the file is not loaded in any scope
                 this.diagnostics.push({
                     file: file,
                     location: Range.create(0, 0, 0, Number.MAX_VALUE),
@@ -391,11 +391,11 @@ export class Program {
     }
 
     /**
-     * Determine if the given file is included in at least one context in this program
+     * Determine if the given file is included in at least one scope in this program
      */
-    private fileIsIncludedInAnyContext(file: BrsFile | XmlFile) {
-        for (let contextName in this.contexts) {
-            if (this.contexts[contextName].hasFile(file)) {
+    private fileIsIncludedInAnyScope(file: BrsFile | XmlFile) {
+        for (let scopeName in this.scopes) {
+            if (this.scopes[scopeName].hasFile(file)) {
                 return true;
             }
         }
@@ -412,16 +412,16 @@ export class Program {
     }
 
     /**
-     * Get a list of all contexts the file is loaded into
+     * Get a list of all scopes the file is loaded into
      * @param file
      */
-    public getContextsForFile(file: XmlFile | BrsFile) {
-        let result = [] as Context[];
-        for (let key in this.contexts) {
-            let context = this.contexts[key];
+    public getScopesForFile(file: XmlFile | BrsFile) {
+        let result = [] as Scope[];
+        for (let key in this.scopes) {
+            let scope = this.scopes[key];
 
-            if (context.hasFile(file)) {
-                result.push(context);
+            if (scope.hasFile(file)) {
+                result.push(scope);
             }
         }
         return result;
@@ -442,18 +442,18 @@ export class Program {
         //wait for the file to finish loading
         await file.isReady();
 
-        //find the contexts for this file
-        let contexts = this.getContextsForFile(file);
+        //find the scopes for this file
+        let scopes = this.getScopesForFile(file);
 
-        //if there are no contexts, include the platform context so we at least get the built-in functions
-        contexts = contexts.length > 0 ? contexts : [this.platformContext];
+        //if there are no scopes, include the platform scope so we at least get the built-in functions
+        scopes = scopes.length > 0 ? scopes : [this.platformScope];
 
-        //get the completions for this file for every context
+        //get the completions for this file for every scope
 
-        //get the completions from all contexts for this file
+        //get the completions from all scopes for this file
         let allCompletions = util.flatMap(
             await Promise.all(
-                contexts.map(async ctx => file.getCompletions(position, ctx))
+                scopes.map(async ctx => file.getCompletions(position, ctx))
             ),
             c => c
         );
@@ -465,7 +465,7 @@ export class Program {
         for (let completion of allCompletions) {
             let key = `${completion.label}-${completion.kind}`;
             keyCounts[key] = keyCounts[key] ? keyCounts[key] + 1 : 1;
-            if (keyCounts[key] === contexts.length) {
+            if (keyCounts[key] === scopes.length) {
                 result.push(completion);
             }
         }
@@ -482,9 +482,9 @@ export class Program {
             return [];
         }
         let results = [] as Location[];
-        let contexts = this.getContextsForFile(file);
-        for (let context of contexts) {
-            results = results.concat(...context.getDefinition(file, position));
+        let scopes = this.getScopesForFile(file);
+        for (let scope of scopes) {
+            results = results.concat(...scope.getDefinition(file, position));
         }
         return results;
     }
@@ -535,10 +535,10 @@ export class Program {
         for (let filePath in this.files) {
             this.files[filePath].dispose();
         }
-        for (let name in this.contexts) {
-            this.contexts[name].dispose();
+        for (let name in this.scopes) {
+            this.scopes[name].dispose();
         }
-        this.platformContext.dispose();
+        this.platformScope.dispose();
     }
 }
 

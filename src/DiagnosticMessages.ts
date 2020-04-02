@@ -45,8 +45,8 @@ export let diagnosticMessages = {
         message: `Unnecessary script import: Script is already imported in ancestor component "${parentComponentName}".`,
         code: 1009
     }),
-    Overrides_ancestor_function_1010: (callableName: string, currentContextName: string, parentFilePath: string, parentContextName: string) => ({
-        message: `Function "${callableName}" included in "${currentContextName}" overrides function in "${parentFilePath}" included in "${parentContextName}".`,
+    Overrides_ancestor_function_1010: (callableName: string, currentScopeName: string, parentFilePath: string, parentScopeName: string) => ({
+        message: `Function "${callableName}" included in "${currentScopeName}" overrides function in "${parentFilePath}" included in "${parentScopeName}".`,
         code: 1010
     }),
     Local_var_shadows_global_function_1011: (localName: string, globalLocation: string) => ({

@@ -9,9 +9,9 @@ import { Program } from './Program';
 import util from './util';
 
 /**
- * A class to keep track of all declarations within a given context (like global scope, component scope)
+ * A class to keep track of all declarations within a given scope (like global scope, component scope)
  */
-export class Context {
+export class Scope {
     constructor(
         public name: string,
         private matcher: (file: File) => boolean | void
@@ -21,7 +21,7 @@ export class Context {
     }
 
     /**
-     * Indicates whether this context needs to be validated.
+     * Indicates whether this scope needs to be validated.
      * Will be true when first constructed, or anytime one of its watched files is added, changed, or removed
      */
     public isValidated = true;
@@ -31,7 +31,7 @@ export class Context {
     protected programHandles = [] as Array<() => void>;
 
     /**
-     * Attach the context to a program. This allows the context to monitor file adds, changes, and removals, and respond accordingly
+     * Attach the scope to a program. This allows the scope to monitor file adds, changes, and removals, and respond accordingly
      * @param program
      */
     public attachProgram(program: Program) {
@@ -69,11 +69,11 @@ export class Context {
         this.detachParent();
     }
 
-    private parentContextHandles = [] as Array<() => void>;
+    private parentScopeHandles = [] as Array<() => void>;
 
-    public attachParentContext(parent: Context) {
-        this.parentContext = parent;
-        this.parentContextHandles = [
+    public attachParentScope(parent: Scope) {
+        this.parentScope = parent;
+        this.parentScopeHandles = [
             //whenever the parent is marked dirty, mark ourself as dirty
             parent.on('invalidated', () => {
                 this.isValidated = false;
@@ -81,25 +81,25 @@ export class Context {
         ];
 
         //immediately invalidate self if parent is not validated
-        if (!this.parentContext.isValidated) {
+        if (!this.parentScope.isValidated) {
             this.isValidated = false;
         }
     }
 
     public detachParent() {
-        for (let disconnect of this.parentContextHandles) {
+        for (let disconnect of this.parentScopeHandles) {
             disconnect();
         }
-        //attach the platform context as the parent (except when this IS the platform context)
-        if (this.program.platformContext !== this) {
-            this.parentContext = this.program.platformContext;
+        //attach the platform scope as the parent (except when this IS the platform scope)
+        if (this.program.platformScope !== this) {
+            this.parentScope = this.program.platformScope;
         }
     }
 
     /**
-     * A parent context that this context inherits all things from.
+     * A parent scope that this scope inherits all things from.
      */
-    public parentContext: Context;
+    public parentScope: Scope;
 
     /**
      * Determine if this file should
@@ -109,7 +109,7 @@ export class Context {
         return this.matcher(file) === true;
     }
 
-    private files = {} as { [filePath: string]: ContextFile };
+    private files = {} as { [filePath: string]: ScopeFile };
 
     public get fileCount() {
         return Object.keys(this.files).length;
@@ -120,7 +120,7 @@ export class Context {
     }
 
     /**
-     * Get the list of errors for this context. It's calculated on the fly, so
+     * Get the list of errors for this scope. It's calculated on the fly, so
      * call this sparingly.
      */
     public getDiagnostics() {
@@ -142,17 +142,17 @@ export class Context {
     }
 
     /**
-     * The list of diagnostics found specifically for this context. Individual file diagnostics are stored on the files themselves.
+     * The list of diagnostics found specifically for this scope. Individual file diagnostics are stored on the files themselves.
      */
     protected diagnostics = [] as Diagnostic[];
 
     /**
-     * Get the list of callables available in this context (either declared in this context or in a parent context)
+     * Get the list of callables available in this scope (either declared in this scope or in a parent scope)
      */
     public getAllCallables(): CallableContainer[] {
-        //get callables from parent contexts
-        if (this.parentContext) {
-            return [...this.getOwnCallables(), ...this.parentContext.getAllCallables()];
+        //get callables from parent scopes
+        if (this.parentScope) {
+            return [...this.getOwnCallables(), ...this.parentScope.getAllCallables()];
         } else {
             return [...this.getOwnCallables()];
         }
@@ -160,7 +160,7 @@ export class Context {
 
     /**
      * Get the callable with the specified name.
-     * If there are overridden callables with the same name, the closest callable to this context is returned
+     * If there are overridden callables with the same name, the closest callable to this scope is returned
      * @param name
      */
     public getCallableByName(name: string) {
@@ -174,7 +174,7 @@ export class Context {
     }
 
     /**
-     * Get the list of callables explicitly defined in files in this context.
+     * Get the list of callables explicitly defined in files in this scope.
      * This excludes ancestor callables
      */
     public getOwnCallables(): CallableContainer[] {
@@ -186,7 +186,7 @@ export class Context {
             for (let callable of file.file.callables) {
                 result.push({
                     callable: callable,
-                    context: this
+                    scope: this
                 });
             }
         }
@@ -221,14 +221,14 @@ export class Context {
             this.removeFile(file);
         }
 
-        let ctxFile = new ContextFile(file);
+        let ctxFile = new ScopeFile(file);
 
         //keep a reference to this file
         this.files[file.pathAbsolute] = ctxFile;
     }
 
     /**
-     * Remove the file from this context.
+     * Remove the file from this scope.
      * If the file doesn't exist, the method exits immediately, but does not throw an error.
      * @param file
      * @param emitRemovedEvent - if false, the 'remove-file' event will not be emitted
@@ -247,15 +247,15 @@ export class Context {
     }
 
     public validate() {
-        //if this context is already validated, no need to revalidate
+        //if this scope is already validated, no need to revalidate
         if (this.isValidated === true) {
             return;
         }
         //validate our parent before we validate ourself
-        if (this.parentContext && this.parentContext.isValidated === false) {
-            this.parentContext.validate();
+        if (this.parentScope && this.parentScope.isValidated === false) {
+            this.parentScope.validate();
         }
-        //clear the context's errors list (we will populate them from this method)
+        //clear the scope's errors list (we will populate them from this method)
         this.diagnostics = [];
 
         let callables = this.getAllCallables();
@@ -278,10 +278,10 @@ export class Context {
 
         //do many per-file checks
         for (let key in this.files) {
-            let contextFile = this.files[key];
-            this.diagnosticDetectCallsToUnknownFunctions(contextFile.file, callableContainersByLowerName);
-            this.diagnosticDetectFunctionCallsWithWrongParamCount(contextFile.file, callableContainersByLowerName);
-            this.diagnosticDetectShadowedLocalVars(contextFile.file, callableContainersByLowerName);
+            let scopeFile = this.files[key];
+            this.diagnosticDetectCallsToUnknownFunctions(scopeFile.file, callableContainersByLowerName);
+            this.diagnosticDetectFunctionCallsWithWrongParamCount(scopeFile.file, callableContainersByLowerName);
+            this.diagnosticDetectShadowedLocalVars(scopeFile.file, callableContainersByLowerName);
         }
 
         this.isValidated = false;
@@ -328,7 +328,7 @@ export class Context {
     }
 
     /**
-     * Detect local variables (function scope) that have the same name as context calls
+     * Detect local variables (function scope) that have the same name as scope calls
      * @param file
      * @param callablesByLowerName
      */
@@ -357,7 +357,7 @@ export class Context {
     }
 
     /**
-     * Detect calls to functions that are not defined in this context
+     * Detect calls to functions that are not defined in this scope
      * @param file
      * @param callablesByLowerName
      */
@@ -407,11 +407,11 @@ export class Context {
             let ancestorNonPlatformCallables = [] as CallableContainer[];
 
             for (let container of callableContainers) {
-                if (container.context === this.program.platformContext) {
+                if (container.scope === this.program.platformScope) {
                     platformCallables.push(container);
                 } else {
                     nonPlatformCallables.push(container);
-                    if (container.context === this) {
+                    if (container.scope === this) {
                         ownCallables.push(container);
                     } else {
                         ancestorNonPlatformCallables.push(container);
@@ -428,10 +428,10 @@ export class Context {
                         this.diagnostics.push({
                             ...diagnosticMessages.Overrides_ancestor_function_1010(
                                 container.callable.name,
-                                container.context.name,
+                                container.scope.name,
                                 shadowedCallable.callable.file.pkgPath,
                                 //grab the last item in the list, which should be the closest ancestor's version
-                                shadowedCallable.context.name
+                                shadowedCallable.scope.name
                             ),
                             location: container.callable.nameRange,
                             file: container.callable.file,
@@ -441,14 +441,14 @@ export class Context {
                 }
             }
 
-            //add error diagnostics about duplicate functions in the same context
+            //add error diagnostics about duplicate functions in the same scope
             if (ownCallables.length > 1) {
 
                 for (let callableContainer of ownCallables) {
                     let callable = callableContainer.callable;
 
                     this.diagnostics.push({
-                        ...diagnosticMessages.Duplicate_function_implementation_1003(callable.name, callableContainer.context.name),
+                        ...diagnosticMessages.Duplicate_function_implementation_1003(callable.name, callableContainer.scope.name),
                         location: Range.create(
                             callable.nameRange.start.line,
                             callable.nameRange.start.character,
@@ -476,7 +476,7 @@ export class Context {
     }
 
     /**
-     * Determine if the context already has this file in its files list
+     * Determine if the scope already has this file in its files list
      * @param file
      */
     public hasFile(pathAbsolute: string);
@@ -533,7 +533,7 @@ export class Context {
     }
 }
 
-class ContextFile {
+class ScopeFile {
     constructor(
         public file: BrsFile | XmlFile
     ) {

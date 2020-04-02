@@ -1,6 +1,6 @@
 import { Location, Position, Range } from 'vscode-languageserver';
 
-import { Context } from './Context';
+import { Scope } from './Scope';
 import { diagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
@@ -8,25 +8,25 @@ import { FileReference } from './interfaces';
 import { Program } from './Program';
 import util from './util';
 
-export class XmlContext extends Context {
+export class XmlScope extends Scope {
     constructor(xmlFile: XmlFile) {
         super(xmlFile.pkgPath, (file) => {
             return this.xmlFile.doesReferenceFile(file);
         });
         this.xmlFile = xmlFile;
         this.xmlFileHandles = [
-            //when the xml file gets a parent added, link to that parent's context
+            //when the xml file gets a parent added, link to that parent's scope
             this.xmlFile.on('attach-parent', (parent: XmlFile) => {
                 this.handleXmlFileParentAttach(parent);
             }),
 
-            //when xml file detaches its parent, remove the context link
+            //when xml file detaches its parent, remove the scope link
             this.xmlFile.on('detach-parent', () => {
                 this.detachParent();
             })
         ];
 
-        //if the xml file already has a parent attached, attach our context to that parent xml's context
+        //if the xml file already has a parent attached, attach our scope to that parent xml's scope
         if (this.xmlFile.parent) {
             this.handleXmlFileParentAttach(this.xmlFile.parent);
         }
@@ -52,7 +52,7 @@ export class XmlContext extends Context {
         }
 
         //if the xml file already has a parent xml file, attach it
-        if (this.xmlFile.parent && this.xmlFile.parent !== (this.program.platformContext as any)) {
+        if (this.xmlFile.parent && this.xmlFile.parent !== (this.program.platformScope as any)) {
             this.handleXmlFileParentAttach(this.xmlFile.parent);
         }
     }
@@ -75,15 +75,15 @@ export class XmlContext extends Context {
             this.isValidated = false;
             this.xmlFile.detachParent();
 
-            //disconnect the context link
+            //disconnect the scope link
             this.detachParent();
         }
     }
 
     private handleXmlFileParentAttach(file: XmlFile) {
-        let parentContext = this.program.getContextByName(file.pkgPath);
-        if (parentContext) {
-            this.attachParentContext(parentContext);
+        let parentScope = this.program.getScopeByName(file.pkgPath);
+        if (parentScope) {
+            this.attachParentScope(parentScope);
         }
     }
 
@@ -110,7 +110,7 @@ export class XmlContext extends Context {
             //detect when the child imports a script that its ancestor also imports
             this.diagnosticDetectDuplicateAncestorScriptImports();
 
-            //detect script imports to files that are not loaded in this context
+            //detect script imports to files that are not loaded in this scope
             this.diagnosticValidateScriptImportPaths();
         }
     }

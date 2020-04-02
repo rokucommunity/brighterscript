@@ -6,7 +6,7 @@ import { ClassFieldStatement, ClassStatement } from './Statement';
 
 describe('parser', () => {
     describe('class', () => {
-        it('throws exception when used in brightscript context', () => {
+        it('throws exception when used in brightscript scope', () => {
             let { tokens } = Lexer.scan(`
                 class Person
                 end class

@@ -5,24 +5,24 @@ import { Position } from 'vscode-languageserver';
 import { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
 import util from './util';
-import { XmlContext } from './XmlContext';
+import { XmlScope } from './XmlScope';
 
 let n = path.normalize;
 let rootDir = 'C:/projects/RokuApp';
 
-describe('XmlContext', () => {
+describe('XmlScope', () => {
     let xmlFile: XmlFile;
-    let context: XmlContext;
+    let scope: XmlScope;
     let program: Program;
     let xmlFilePath = n(`${rootDir}/components/component.xml`);
     beforeEach(() => {
 
         program = new Program({ rootDir: rootDir });
         xmlFile = new XmlFile(xmlFilePath, n('components/component.xml'), program);
-        context = new XmlContext(xmlFile);
-        context.attachProgram(program);
+        scope = new XmlScope(xmlFile);
+        scope.attachProgram(program);
 
-        context.parentContext = program.platformContext;
+        scope.parentScope = program.platformScope;
     });
     describe('onProgramFileRemove', () => {
         it('handles file-removed event when file does not have component name', async () => {
@@ -34,7 +34,7 @@ describe('XmlContext', () => {
                 </component>
             `);
             try {
-                (context as any).onProgramFileRemove(namelessComponent);
+                (scope as any).onProgramFileRemove(namelessComponent);
             } catch (e) {
                 assert.fail(null, null, 'Should not have thrown');
             }
@@ -44,18 +44,18 @@ describe('XmlContext', () => {
     describe('constructor', () => {
         it('listens for attach/detach parent events', () => {
             let parentXmlFile = new XmlFile(n(`${rootDir}/components/parent.xml`), n('components/parent.xml'), program);
-            let parentContext = new XmlContext(parentXmlFile);
-            (program as any).contexts[parentContext.name] = parentContext;
+            let parentScope = new XmlScope(parentXmlFile);
+            (program as any).scopes[parentScope.name] = parentScope;
 
-            //should default to platform context
-            expect(context.parentContext).to.equal(program.platformContext);
+            //should default to platform scope
+            expect(scope.parentScope).to.equal(program.platformScope);
 
-            //when the xml file attaches an xml parent, the xml context should be notified and find its parent context
+            //when the xml file attaches an xml parent, the xml scope should be notified and find its parent scope
             xmlFile.attachParent(parentXmlFile);
-            expect(context.parentContext).to.equal(parentContext);
+            expect(scope.parentScope).to.equal(parentScope);
 
             xmlFile.detachParent();
-            expect(context.parentContext).to.equal(program.platformContext);
+            expect(scope.parentScope).to.equal(program.platformScope);
         });
     });
 
@@ -71,8 +71,8 @@ describe('XmlContext', () => {
                 <component name="ChildComponent" extends="ParentComponent">
                 </component>
             `);
-            let childContext = program.getContextsForFile(childXmlFile);
-            let definition = childContext[0].getDefinition(childXmlFile, Position.create(2, 64));
+            let childScope = program.getScopesForFile(childXmlFile);
+            let definition = childScope[0].getDefinition(childXmlFile, Position.create(2, 64));
             expect(definition).to.be.lengthOf(1);
             expect(definition[0].uri).to.equal(util.pathToUri(parentXmlFile.pathAbsolute));
         });
