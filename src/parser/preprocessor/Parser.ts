@@ -86,7 +86,8 @@ export class Parser {
                 let name = advance();
                 consume('Expected \'=\' after #const (name)', Lexeme.Equal);
                 let value = advance();
-                match(Lexeme.Newline);
+                //consume trailing newlines
+                while (match(Lexeme.Newline)) { }
                 return new CC.Declaration(name, value);
             }
 
@@ -192,6 +193,10 @@ export class Parser {
             }
         }
 
+        /**
+         * If the next token is any of the provided lexemes, advance and return true.
+         * Otherwise return false
+         */
         function match(...lexemes: Lexeme[]) {
             for (let lexeme of lexemes) {
                 if (check(lexeme)) {

@@ -464,7 +464,7 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('does not error with `stop` as object key', async () => {
+        it.only('does not error with `stop` as object key', async () => {
             await file.parse(`
                 function GetObject()
                     obj = {

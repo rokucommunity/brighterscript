@@ -229,7 +229,8 @@ export class Parser {
      */
     parse(toParse: Token[], mode: 'brightscript' | 'brighterscript' = 'brightscript'): ParseResults {
         let current = 0;
-        let tokens = toParse;
+        //filter out all of the whitespace tokens
+        let tokens = toParse.filter(x => x?.kind !== Lexeme.Whitespace);
         this.tokens = toParse;
 
         //the depth of the calls to function declarations. Helps some checks know if they are at the root or not.
@@ -605,6 +606,7 @@ export class Parser {
                     Lexeme.Newline,
                     Lexeme.Colon
                 );
+                while (match(Lexeme.Newline)) { }
                 //support ending the function with `end sub` OR `end function`
                 let body = block(Lexeme.EndSub, Lexeme.EndFunction);
                 if (!body) {
@@ -730,6 +732,7 @@ export class Parser {
                     ...additionalterminators
                 );
             }
+            while (match(Lexeme.Newline)) { }
 
             if (operator.kind === Lexeme.Equal) {
                 return new AssignmentStatement({ equals: operator }, name, value);
@@ -828,6 +831,7 @@ export class Parser {
             }
 
             consume('Expected newline after \'while ...condition...\'', Lexeme.Newline);
+            while (match(Lexeme.Newline)) { }
             const whileBlock = block(Lexeme.EndWhile);
             if (!whileBlock) {
                 throw addError(peek(), 'Expected \'end while\' to terminate while-loop block');

@@ -119,6 +119,7 @@ export enum Lexeme {
     Comment = 'Comment',
 
     // structural
+    Whitespace = 'Whitespace',
     Newline = 'Newline',
     Eof = 'Eof'
 }

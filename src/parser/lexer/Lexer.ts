@@ -300,21 +300,12 @@ export class Lexer {
                     });
                     break;
                 case ' ':
-                case '\r':
                 case '\t':
-                    // ignore whitespace; indentation isn't signficant in BrightScript
+                    whitespace();
                     break;
+                case '\r':
                 case '\n':
-                    // consecutive newlines aren't significant, because they're just blank lines
-                    // so only add blank lines when they're not consecutive
-                    let previous = lastToken();
-                    if (previous && previous.kind !== Lexeme.Newline) {
-                        addToken(Lexeme.Newline);
-                    }
-                    // but always advance the line counter
-                    line++;
-                    // and always reset the column counter
-                    column = 0;
+                    newline();
                     break;
                 case '"':
                     string();
@@ -335,6 +326,24 @@ export class Lexer {
                     }
                     break;
             }
+        }
+
+        function whitespace() {
+            while (peek() === ' ' || peek() === '\t') {
+                advance();
+            }
+            addToken(Lexeme.Whitespace);
+        }
+
+        function newline() {
+            if (peek() === '\r' && peekNext() === '\n') {
+                advance();
+            }
+            addToken(Lexeme.Newline);
+            // advance the line counter
+            line++;
+            // and always reset the column counter
+            column = 0;
         }
 
         /**
@@ -778,13 +787,14 @@ export class Lexer {
         function addToken(kind: Lexeme, literal?: BrsType): void {
             let withWhitespace = source.slice(start, current);
             let text = withWhitespace.trimLeft() || withWhitespace;
-            tokens.push({
+            let token = {
                 kind: kind,
                 text: text,
                 isReserved: ReservedWords.has(text.toLowerCase()),
                 literal: literal,
                 location: locationOf(text)
-            });
+            };
+            tokens.push(token);
         }
 
         /**
@@ -793,7 +803,7 @@ export class Lexer {
          * @returns the location of `text` as a `TokenLocation`
          */
         function locationOf(text: string): Location {
-            return {
+            let location = {
                 start: {
                     line: line,
                     column: column - text.length
@@ -804,6 +814,7 @@ export class Lexer {
                 },
                 file: filename
             };
+            return location;
         }
     }
 }
