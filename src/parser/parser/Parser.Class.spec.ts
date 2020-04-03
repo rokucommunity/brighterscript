@@ -3,6 +3,8 @@ import { diagnosticMessages } from '../../DiagnosticMessages';
 import { Lexeme, Lexer } from '../lexer';
 import { Parser } from './Parser';
 import { ClassFieldStatement, ClassStatement } from './ClassStatement';
+import { FunctionStatement, AssignmentStatement } from './Statement';
+import { NewExpression } from './Expression';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -208,4 +210,21 @@ describe('parser class', () => {
         let { errors } = Parser.parse(tokens, 'brighterscript');
         expect(errors[0].code).to.equal(diagnosticMessages.Missing_identifier_after_extends_keyword_1022().code);
     });
+
+    describe('new keyword', () => {
+        it('parses properly', () => {
+            let { statements, errors } = Parser.parse(`
+                sub main()
+                    a = new Animal()
+                end sub
+                class Animal
+                end class
+            `, 'brighterscript');
+            expect(errors[0]?.message).to.not.exist;
+            let body = (statements[0] as FunctionStatement).func.body;
+            let stmt = (body.statements[0] as AssignmentStatement);
+            expect(stmt.value).to.be.instanceof(NewExpression);
+        });
+    });
+
 });

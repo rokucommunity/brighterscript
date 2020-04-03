@@ -475,3 +475,19 @@ export class VariableExpression implements Expression {
         ];
     }
 }
+
+export class NewExpression implements Expression {
+    constructor(readonly newKeyword: Token, readonly expression: Expression) { }
+
+    get location() {
+        return {
+            start: this.newKeyword.location.start,
+            end: this.expression.location.end,
+            file: this.newKeyword.location.file
+        };
+    }
+
+    transpile(state: TranspileState) {
+        return this.expression.transpile(state);
+    }
+}

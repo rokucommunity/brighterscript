@@ -43,7 +43,7 @@ import {
 import { diagnosticMessages, DiagnosticMessage } from '../../DiagnosticMessages';
 import { util } from '../../util';
 import { ParseError } from '../Error';
-import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression } from './Expression';
+import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression } from './Expression';
 import { ClassMemberStatement, ClassMethodStatement, ClassStatement, ClassFieldStatement } from './ClassStatement';
 
 /** Set of all keywords that end blocks. */
@@ -338,7 +338,6 @@ export class Parser {
                 // consume any leading newlines
                 while (match(Lexeme.Newline)) { }
 
-                //TODO implement this in a future commit
                 if (check(Lexeme.Class)) {
                     return classDeclaration();
                 }
@@ -1632,7 +1631,15 @@ export class Parser {
             return call();
         }
 
+        function checkNew() {
+            return peek().text.toLowerCase() === 'new';
+        }
+
         function call(): Expression {
+            let newToken: Token;
+            if (checkNew()) {
+                newToken = advance();
+            }
             let expr = primary();
 
             while (true) {
@@ -1669,7 +1676,12 @@ export class Parser {
                 }
             }
 
-            return expr;
+            if (newToken) {
+                ensureBrighterScriptMode('using new keyword to construct a class');
+                return new NewExpression(newToken, expr);
+            } else {
+                return expr;
+            }
         }
 
         function finishCall(openingParen: Token, callee: Expression): Expression {

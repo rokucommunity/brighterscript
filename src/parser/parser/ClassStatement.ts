@@ -252,6 +252,7 @@ export class ClassMethodStatement implements Statement {
     }
 
     transpile(state: TranspileState): Array<SourceNode | string> {
+        //TODO - remove type information from these methods because that doesn't work
         //convert the `super` calls into the proper methods
         util.findAllDeep(this.func.body.statements, (value) => {
             //if this is a method call
@@ -259,11 +260,11 @@ export class ClassMethodStatement implements Statement {
                 let parentClassIndex = state.classStatement.getParentClassIndex(state);
                 //this is the 'super()' call in the new method.
                 if (value.callee instanceof VariableExpression && value.callee.name.text.toLowerCase() === 'super') {
-                    value.callee.name.text = `instance.super${parentClassIndex}_new`;
+                    value.callee.name.text = `m.super${parentClassIndex}_new`;
 
                     //this is a super.SomeMethod() call.
                 } else if (value.callee instanceof DottedGetExpression) {
-                    (value.callee.obj as VariableExpression).name.text = 'instance';
+                    (value.callee.obj as VariableExpression).name.text = 'm';
                     value.callee.name.text = `super${parentClassIndex}_${value.callee.name.text}`;
                 }
             }

@@ -82,7 +82,7 @@ export let diagnosticMessages = {
         code: 1018
     }),
     Bs_feature_not_supported_in_brs_files_1019: (featureName) => ({
-        message: `BrighterScript feature ${featureName} is not supported in BrightScript files`,
+        message: `BrighterScript feature "${featureName}" is not supported in BrightScript files`,
         code: 1019
     }),
     BrsConfigJson_is_depricated_1020: () => ({

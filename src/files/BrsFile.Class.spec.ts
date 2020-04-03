@@ -19,6 +19,10 @@ describe('BrsFile BrighterScript classes', () => {
         sinon.restore();
     });
 
+    async function addFile(relativePath: string, text: string) {
+        return await program.addOrReplaceFile({ src: `${rootDir}/${relativePath}`, dest: relativePath }, text) as BrsFile;
+    }
+
     it('detects all classes after parse', async () => {
         let file = (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             class Animal
@@ -99,8 +103,8 @@ describe('BrsFile BrighterScript classes', () => {
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
                     instance.new = sub(name as string, age as integer)
-                        instance.super0_new(name)
-                        instance.super0_DoSomething()
+                        m.super0_new(name)
+                        m.super0_DoSomething()
                     end sub
                     return instance
                 end function
@@ -111,6 +115,23 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
             `);
         });
-    });
 
+        it('new keyword transpiles correctly', async () => {
+            await addFile('source/Animal.brs', ` 
+                class Animal
+                    sub new(name as string)
+                    end sub
+                end class
+            `);
+            await testTranspile(`
+                sub main()
+                    a = new Animal("donald")
+                end sub
+            `, `
+                sub main()
+                    a = Animal("donald")
+                end sub
+            `);
+        });
+    });
 });
