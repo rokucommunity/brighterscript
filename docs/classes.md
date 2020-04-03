@@ -18,7 +18,7 @@ end class
 And here's the transpiled BrightScript code
   
 ```vb
-function Animal$Build()
+function __Animal_Build()
     instance = {}
     instance.name = invalid
     instance.walk = function()
@@ -27,12 +27,12 @@ function Animal$Build()
 end function
 
 function Animal()
-    instance = Animal$Build()
+    instance = __Animal_Build()
     return instance
 end function
 ```
 
-Notice that there are two functions created in the transpiled code for the `Animal` class. At runtime, BrighterScript classes are built in two steps in order to support class inheritance. The first step uses the `ClassName$Build()` method to create the skeleton structure of the class. Then the class's constructor function will be run. Child classes will call the parent's `ParentClassName$Build()` method, then rename overridden  methods, and then call the child's constructor (without calling the parent constructor). Take a look at the transpiled output of the other examples below for more information on this. 
+Notice that there are two functions created in the transpiled code for the `Animal` class. At runtime, BrighterScript classes are built in two steps in order to support class inheritance. The first step uses the `__ClassName_Build()` method to create the skeleton structure of the class. Then the class's constructor function will be run. Child classes will call the parent's `__ParentClassName_Build()` method, then rename overridden  methods, and then call the child's constructor (without calling the parent constructor). Take a look at the transpiled output of the other examples below for more information on this. 
 
 
 ## Inheritance
@@ -79,7 +79,7 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
   
 ```vb
-function Animal$Build()
+function __Animal_Build()
     instance = {}
     instance.new = sub(name as string)
         m.Name = name
@@ -91,13 +91,13 @@ function Animal$Build()
     return instance
 end function
 function Animal(name as string)
-    instance = Animal$Build()
+    instance = __Animal_Build()
     instance.new(name)
     return instance
 end function
 
-function Duck$Build()
-    instance = Animal$Build()
+function __Duck_Build()
+    instance =__Animal_Build()
     instance.super0_move = instance.move
     instance.move = sub(distanceInMeters as integer)
         print "Waddling..."
@@ -106,13 +106,13 @@ function Duck$Build()
     return instance
 end function
 function Duck(name as string)
-    instance = Duck$Build()
+    instance = __Duck_Build()
     instance.new(name)
     return instance
 end function
 
-function BabyDuck$Build()
-    instance = Duck$Build()
+function __BabyDuck_Build()
+    instance = __Duck_Build()
     instance.super1_move = instance.move
     instance.move = sub(distanceInMeters as integer)
         instance.super1_move(distanceInMeters)
@@ -120,7 +120,7 @@ function BabyDuck$Build()
     return instance
 end function
 function BabyDuck(name as string)
-    instance = BabyDuck$Build()
+    instance = __BabyDuck_Build()
     instance.new(name)
     return instance
 end function
@@ -157,7 +157,7 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
   
 ```vb
-function Duck$Build()
+function __Duck_Build()
     instance = {}
     instance.new = sub(name as string)
         m.name = name
@@ -167,7 +167,7 @@ function Duck$Build()
 end function
 
 function Duck(name as string)
-    instance = Duck$Build()
+    instance = __Duck_Build()
     instance.new(name)
     return instance
 end function
@@ -199,7 +199,7 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
   
 ```vb
-function Duck$Build
+function __Duck_Build
     instance = {}
     instance.new = sub(name as string)
         m.name = name
@@ -208,13 +208,13 @@ function Duck$Build
     return instance
 end function
 function Duck(name as string)
-    instance = Duck$Build()
+    instance = __Duck_Build()
     instance.new(name)
     return instance
 end function
 
-function BabyDuck$Build(name as string, age as integer)
-    instance = Duck$Build()
+function __BabyDuck_Build(name as string, age as integer)
+    instance = __Duck_Build()
     instance.super0_new = m.new
     instance.new = sub(name as string, age)
         m.super0_new(name)
@@ -222,7 +222,7 @@ function BabyDuck$Build(name as string, age as integer)
     instance.age = age
 end function
 function BabyDuck(name as string, age as integer)
-    instance = BabyDuck$Build()
+    instance = __BabyDuck_Build()
     instance.new(name, age)
     return instance
 end function
@@ -252,21 +252,21 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
   
 ```vb
-function Duck$Build
+function __Duck_Build
     instance = {}
     return instance
 end function
 function Duck(name as string)
-    instance = Duck$Build()
+    instance = __Duck_Build()
     return instance
 end function
 
-function BabyDuck$Build(name as string, age as integer)
-    instance = Duck$Build()
+function __BabyDuck_Build(name as string, age as integer)
+    instance = __Duck_Build()
     instance.age = age
 end function
 function BabyDuck(name as string, age as integer)
-    instance = BabyDuck$Build()
+    instance = __BabyDuck_Build()
     return instance
 end function
 ```
@@ -294,7 +294,7 @@ end class
   <summary>View the transpiled BrightScript code</summary>
   
 ```vb
-function Duck$Build
+function __Duck_Build
     instance = {}
     instance.walk = sub(meters as integer)
         print "Walked " + meters.ToStr() + " meters"
@@ -302,12 +302,12 @@ function Duck$Build
     return instance
 end function
 function Duck(name as string)
-    instance = Duck$Build()
+    instance = __Duck_Build()
     return instance
 end function
 
-function BabyDuck$Build(name as string, age as integer)
-    instance = Duck$Build()
+function __BabyDuck_Build(name as string, age as integer)
+    instance = __Duck_Build()
     instance.super0_Walk = instance.walk
     instance.walk = sub(meters as integer)
         print "Tripped"
@@ -315,7 +315,7 @@ function BabyDuck$Build(name as string, age as integer)
     end sub
 end function
 function BabyDuck(name as string, age as integer)
-    instance = BabyDuck$Build()
+    instance = __BabyDuck_Build()
     return instance
 end function
 ```
