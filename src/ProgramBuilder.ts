@@ -93,6 +93,15 @@ export class ProgramBuilder {
             this.enableWatchMode();
         } else {
             await this.runOnce();
+            const diagnostics = this.getDiagnostics();
+
+            // throw if not watching so process exit code != 1
+            const hasError = !!diagnostics.find(d => {
+                return d.severity === 'error';
+            });
+            if (hasError) {
+                throw new Error('Project contains lint errors');
+            }
         }
     }
 
