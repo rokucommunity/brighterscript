@@ -842,6 +842,20 @@ export class Util {
             return false;
         }
     }
+
+    public getEmptyLocation() {
+        return {
+            start: {
+                line: 1,
+                column: 0
+            },
+            end: {
+                line: 1,
+                column: 0
+            },
+            file: undefined
+        } as Location;
+    }
 }
 
 export let util = new Util();

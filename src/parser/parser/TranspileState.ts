@@ -1,25 +1,33 @@
 import { SourceNode } from 'source-map';
 import { Location } from '../lexer';
+import { BrsFile } from '../../files/BrsFile';
+import { ClassStatement } from './ClassStatement';
 
 /**
  * Holds the state of a transpile operation as it works its way through the transpile process
  */
 export class TranspileState {
     constructor(
-        pkgPath: string,
-        pathAbsolute: string
+        file: BrsFile
     ) {
-        this.pkgPath = pkgPath;
-        this.pathAbsolute = pathAbsolute;
+        this.file = file;
     }
+    /**
+     * The BrsFile that is currently being transpiled
+     */
+    file: BrsFile;
     /**
      * the path for this file relative to the root of the output package
      */
-    pkgPath: string;
+    get pkgPath() {
+        return this.file.pkgPath;
+    }
     /**
      * the absolute path to the source location of this file
      */
-    pathAbsolute: string;
+    get pathAbsolute() {
+        return this.file.pathAbsolute;
+    }
     /**
      * The number of active parent blocks for the current location of the state.
      */
@@ -31,6 +39,11 @@ export class TranspileState {
     lineage = [] as Array<{
         location: Location;
     }>;
+
+    /**
+     * Used by ClassMethodStatements to determine information about their enclosing class
+     */
+    public classStatement?: ClassStatement;
 
     /**
      * Append whitespace until we reach the current blockDepth amount

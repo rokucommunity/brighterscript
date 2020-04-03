@@ -92,6 +92,14 @@ export let diagnosticMessages = {
     BsConfigJson_has_syntax_errors_1021: () => ({
         message: `Encountered syntax errors in bsconfig.json`,
         code: 1021
+    }),
+    Missing_identifier_after_extends_keyword_1022: () => ({
+        message: 'Missing identifier after extends keyword',
+        code: 1022
+    }),
+    Cannot_use_override_keyword_on_constructor_function_1023: () => ({
+        message: 'Override keyword is not allowed on class constructor method',
+        code: 1023
     })
 };
 

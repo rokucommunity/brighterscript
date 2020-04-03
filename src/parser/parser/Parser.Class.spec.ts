@@ -175,4 +175,37 @@ describe('parser class', () => {
             expect(errors[0].code).to.equal(diagnosticMessages.Missing_function_sub_keyword_1017('').code);
         });
     });
+
+    it('recognizes the "extends" keyword', () => {
+        let { tokens } = Lexer.scan(`
+            class Person
+                public sub sayHi()
+                    print "hi"
+                end sub
+            end class
+
+            class Toddler extends Person
+            end class
+        `);
+        let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+        expect(errors[0]?.message).to.not.exist;
+        let stmt = (statements[1] as ClassStatement);
+        expect(stmt.extendsKeyword.text).to.equal('extends');
+        expect(stmt.extendsIdentifier.text).to.equal('Person');
+    });
+
+    it('catches missing identifier after "extends" keyword', () => {
+        let { tokens } = Lexer.scan(`
+            class Person
+                public sub sayHi()
+                    print "hi"
+                end sub
+            end class
+
+            class Toddler extends
+            end class
+        `);
+        let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+        expect(errors[0].code).to.equal(diagnosticMessages.Missing_identifier_after_extends_keyword_1022().code);
+    });
 });

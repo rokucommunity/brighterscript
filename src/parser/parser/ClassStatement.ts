@@ -1,16 +1,20 @@
 import { Token, Identifier } from '../lexer';
 import { Statement } from './Statement';
-import { FunctionExpression } from './Expression';
+import { FunctionExpression, CallExpression, VariableExpression, DottedGetExpression } from './Expression';
 import { SourceNode } from 'source-map';
 import { TranspileState } from './TranspileState';
+import { Parser } from './Parser';
+import util from '../../util';
 
 export class ClassStatement implements Statement {
 
     constructor(
-        readonly keyword: Token,
+        readonly classKeyword: Token,
         readonly name: Identifier,
         readonly members: ClassMemberStatement[],
-        readonly end: Token
+        readonly end: Token,
+        readonly extendsKeyword?: Token,
+        readonly extendsIdentifier?: Identifier
     ) {
         this.members = this.members ?? [];
         for (let member of this.members) {
@@ -29,8 +33,8 @@ export class ClassStatement implements Statement {
 
     get location() {
         return {
-            file: this.keyword.location.file,
-            start: this.keyword.location.start,
+            file: this.classKeyword.location.file,
+            start: this.classKeyword.location.start,
             end: this.end.location.end
         };
     }
@@ -48,8 +52,34 @@ export class ClassStatement implements Statement {
         return result;
     }
 
-    private get builderName() {
-        return `__${this.name.text}_builder`;
+    /**
+     * Find the parent index for this class's parent.
+     * For class inheritance, every class is given an index.
+     * The base class is index 0, its child is index 1, and so on.
+     */
+    public getParentClassIndex(state: TranspileState) {
+        let myIndex = 0;
+        let stmt = this as ClassStatement;
+        while (stmt) {
+            if (stmt.extendsIdentifier) {
+                stmt = state.file.getClassByName(stmt.extendsIdentifier.text);
+                myIndex++;
+            } else {
+                break;
+            }
+        }
+        return myIndex - 1;
+    }
+
+    private getParentClass(state: TranspileState, classStatement: ClassStatement) {
+        let stmt = classStatement;
+        if (stmt.extendsIdentifier) {
+            return state.file.getClassByName(stmt.extendsIdentifier.text);
+        }
+    }
+
+    private getBuilderName(name: string) {
+        return `__${name}_builder`;
     }
 
     /**
@@ -62,26 +92,47 @@ export class ClassStatement implements Statement {
             }
         }
     }
+    private getEmptyNewFunction() {
+        let stmt = (Parser.parse(`
+            class UtilClass
+                sub new()
+                end sub
+            end class
+        `, 'brighterscript').statements[0] as ClassStatement).members[0] as ClassMethodStatement;
+        //TODO make locations point to 1,0 (might not matter?)
+        return stmt;
+    }
 
     private getTranspiledBuilder(state: TranspileState) {
         let result = [];
-        result.push(`function ${this.builderName}()\n`);
+        result.push(`function ${this.getBuilderName(this.name.text)}()\n`);
         state.blockDepth++;
         //indent
         result.push(state.indent());
         //create the instance
-        result.push('instance = {}\n');
-        result.push(state.indent());
+        result.push('instance = ');
 
-        //if this class doesn't have a constructor function, create an empty one (to simplify the transpile process)
-        if (!this.getConstructorFunction()) {
+        //construct parent class or empty object
+        if (this.extendsIdentifier) {
             result.push(
-                `instance.new = sub()`,
-                state.newline(),
-                state.indent(),
-                'end sub',
-                state.newline(),
-                state.indent()
+                this.getBuilderName(this.extendsIdentifier.text),
+                '()'
+            );
+        } else {
+            //use an empty object
+            result.push('{}');
+        }
+        result.push(
+            state.newline(),
+            state.indent()
+        );
+        let parentClass = this.getParentClass(state, this);
+        let parentClassIndex = this.getParentClassIndex(state);
+
+        //create empty `new` function if class is missing it (simplifies transpile logic)
+        if (!this.getConstructorFunction()) {
+            this.members.push(
+                this.getEmptyNewFunction()
             );
         }
 
@@ -89,17 +140,37 @@ export class ClassStatement implements Statement {
             //fields
             if (member instanceof ClassFieldStatement) {
                 // add and initialize all fields to null
-                result.push(`instance.${member.name.text} = invalid\n`);
+                result.push(
+                    `instance.${member.name.text} = invalid`,
+                    state.newline()
+                );
 
                 //methods
             } else if (member instanceof ClassMethodStatement) {
+
+                //store overridden parent methods as super{parentIndex}_{methodName}
+                if (
+                    //is override method
+                    member.overrides ||
+                    //is constructor function in child class
+                    (member.name.text.toLowerCase() === 'new' && parentClass)
+                ) {
+                    result.push(
+                        `instance.super${parentClassIndex}_${member.name.text} = instance.${member.name.text}`,
+                        state.newline(),
+                        state.indent()
+                    );
+                }
+
                 result.push(`instance.`);
+                state.classStatement = this;
                 result.push(
                     state.sourceNode(member.name, member.name.text),
                     ' = ',
-                    ...member.func.transpile(state),
+                    ...member.transpile(state),
                     '\n'
                 );
+                delete state.classStatement;
             }
             result.push(state.indent());
         }
@@ -133,7 +204,7 @@ export class ClassStatement implements Statement {
 
         state.blockDepth++;
         result.push(state.indent());
-        result.push(`instance = ${this.builderName}()\n`);
+        result.push(`instance = ${this.getBuilderName(this.name.text)}()\n`);
 
         result.push(state.indent());
         result.push(`instance.new(`);
@@ -168,7 +239,8 @@ export class ClassMethodStatement implements Statement {
     constructor(
         readonly accessModifier: Token,
         readonly name: Identifier,
-        readonly func: FunctionExpression
+        readonly func: FunctionExpression,
+        readonly overrides: Token
     ) { }
 
     get location() {
@@ -180,7 +252,24 @@ export class ClassMethodStatement implements Statement {
     }
 
     transpile(state: TranspileState): Array<SourceNode | string> {
-        throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
+        //convert the `super` calls into the proper methods
+        util.findAllDeep(this.func.body.statements, (value) => {
+            //if this is a method call
+            if (value instanceof CallExpression) {
+                let parentClassIndex = state.classStatement.getParentClassIndex(state);
+                //this is the 'super()' call in the new method.
+                if (value.callee instanceof VariableExpression && value.callee.name.text.toLowerCase() === 'super') {
+                    value.callee.name.text = `instance.super${parentClassIndex}_new`;
+
+                    //this is a super.SomeMethod() call.
+                } else if (value.callee instanceof DottedGetExpression) {
+                    (value.callee.obj as VariableExpression).name.text = 'instance';
+                    value.callee.name.text = `super${parentClassIndex}_${value.callee.name.text}`;
+                }
+            }
+            return false;
+        });
+        return this.func.transpile(state);
     }
 }
 

@@ -23,6 +23,7 @@ import { StringType } from '../types/StringType';
 import { VoidType } from '../types/VoidType';
 import util from '../util';
 import { TranspileState } from '../parser/parser/TranspileState';
+import { ClassStatement } from '../parser/parser/ClassStatement';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -80,6 +81,8 @@ export class BrsFile {
     public functionCalls = [] as FunctionCall[];
 
     public functionScopes = [] as FunctionScope[];
+
+    public classStatements = [] as ClassStatement[];
 
     /**
      * Does this file need to be transpiled?
@@ -175,7 +178,32 @@ export class BrsFile {
         //scan the full text for any word that looks like a variable
         this.findPropertyNameCompletions();
 
+        this.findClassStatements();
+
         this.parseDeferred.resolve();
+    }
+
+    /**
+     * Loop through all of the class statements and add them to `this.classStatements`
+     */
+    public findClassStatements() {
+        for (let stmt of this.ast) {
+            if (stmt instanceof ClassStatement) {
+                this.classStatements.push(stmt);
+            }
+        }
+    }
+
+    /**
+     * Find a class by its name.
+     * Returns undefined if not found.
+     */
+    public getClassByName(className: string) {
+        for (let stmt of this.classStatements) {
+            if (stmt.name.text === className) {
+                return stmt;
+            }
+        }
     }
 
     public findPropertyNameCompletions() {
@@ -791,7 +819,7 @@ export class BrsFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile() {
-        const state = new TranspileState(this.pkgPath, this.pathAbsolute);
+        const state = new TranspileState(this);
         let chunks = [] as Array<string | SourceNode>;
         for (let i = 0; i < this.ast.length; i++) {
             let statement = this.ast[i];

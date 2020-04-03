@@ -46,6 +46,135 @@ import { ParseError } from '../Error';
 import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression } from './Expression';
 import { ClassMemberStatement, ClassMethodStatement, ClassStatement, ClassFieldStatement } from './ClassStatement';
 
+/** Set of all keywords that end blocks. */
+type BlockTerminator =
+    | Lexeme.ElseIf
+    | Lexeme.Else
+    | Lexeme.EndFor
+    | Lexeme.Next
+    | Lexeme.EndIf
+    | Lexeme.EndWhile
+    | Lexeme.EndSub
+    | Lexeme.EndFunction;
+
+/** The set of operators valid for use in assignment statements. */
+const assignmentOperators = [
+    Lexeme.Equal,
+    Lexeme.MinusEqual,
+    Lexeme.PlusEqual,
+    Lexeme.StarEqual,
+    Lexeme.SlashEqual,
+    Lexeme.BackslashEqual,
+    Lexeme.LeftShiftEqual,
+    Lexeme.RightShiftEqual
+];
+
+/** List of Lexemes that are permitted as property names. */
+const allowedProperties = [
+    Lexeme.And,
+    Lexeme.Box,
+    Lexeme.CreateObject,
+    Lexeme.Dim,
+    Lexeme.Else,
+    Lexeme.ElseIf,
+    Lexeme.End,
+    Lexeme.EndFunction,
+    Lexeme.EndFor,
+    Lexeme.EndIf,
+    Lexeme.EndSub,
+    Lexeme.EndWhile,
+    Lexeme.Eval,
+    Lexeme.Exit,
+    Lexeme.ExitFor,
+    Lexeme.ExitWhile,
+    Lexeme.False,
+    Lexeme.For,
+    Lexeme.ForEach,
+    Lexeme.Function,
+    Lexeme.GetGlobalAA,
+    Lexeme.GetLastRunCompileError,
+    Lexeme.GetLastRunRunTimeError,
+    Lexeme.Goto,
+    Lexeme.If,
+    Lexeme.Invalid,
+    Lexeme.Let,
+    Lexeme.Next,
+    Lexeme.Not,
+    Lexeme.ObjFun,
+    Lexeme.Or,
+    Lexeme.Pos,
+    Lexeme.Print,
+    Lexeme.Rem,
+    Lexeme.Return,
+    Lexeme.Step,
+    Lexeme.Stop,
+    Lexeme.Sub,
+    Lexeme.Tab,
+    Lexeme.To,
+    Lexeme.True,
+    Lexeme.Type,
+    Lexeme.While
+];
+
+/** List of Lexeme that are allowed as local var identifiers. */
+const allowedIdentifiers = [Lexeme.EndFor, Lexeme.ExitFor, Lexeme.ForEach];
+
+/**
+ * List of string versions of Lexeme that are NOT allowed as local var identifiers.
+ * Used to throw more helpful "you can't use a reserved word as an identifier" errors.
+ */
+export const disallowedIdentifiers = new Set(
+    [
+        Lexeme.And,
+        Lexeme.Box,
+        Lexeme.CreateObject,
+        Lexeme.Dim,
+        Lexeme.Else,
+        Lexeme.ElseIf,
+        Lexeme.End,
+        Lexeme.EndFunction,
+        Lexeme.EndIf,
+        Lexeme.EndSub,
+        Lexeme.EndWhile,
+        Lexeme.Eval,
+        Lexeme.Exit,
+        Lexeme.ExitWhile,
+        Lexeme.False,
+        Lexeme.For,
+        Lexeme.Function,
+        Lexeme.GetGlobalAA,
+        Lexeme.GetLastRunCompileError,
+        Lexeme.GetLastRunRunTimeError,
+        Lexeme.Goto,
+        Lexeme.If,
+        Lexeme.Invalid,
+        Lexeme.Let,
+        Lexeme.Next,
+        Lexeme.Not,
+        Lexeme.ObjFun,
+        Lexeme.Or,
+        Lexeme.Pos,
+        Lexeme.Print,
+        Lexeme.Rem,
+        Lexeme.Return,
+        Lexeme.Step,
+        Lexeme.Sub,
+        Lexeme.Tab,
+        Lexeme.To,
+        Lexeme.True,
+        Lexeme.Type,
+        Lexeme.While
+    ].map(x => Lexeme[x].toLowerCase())
+);
+
+/** The results of a Parser's parsing pass. */
+interface ParseResults {
+    /** The statements produced by the parser. */
+    statements: Statement[];
+    /** The errors encountered by the Parser. */
+    errors: ParseError[];
+}
+
 export class Parser {
     /** Allows consumers to observe errors as they're detected. */
     readonly events = new EventEmitter();
@@ -58,9 +187,9 @@ export class Parser {
      * @returns an array of `Statement` objects that together form the abstract syntax tree of the
      *          program
      */
-    static parse(sourceCode: string, mode?: 'brightscript' | 'brighterscript');
-    static parse(token: Token[], mode?: 'brightscript' | 'brighterscript');
-    static parse(toParse: Token[] | string, mode: 'brightscript' | 'brighterscript' = 'brightscript') {
+    static parse(sourceCode: string, mode?: 'brightscript' | 'brighterscript'): ParseResults;
+    static parse(token: Token[], mode?: 'brightscript' | 'brighterscript'): ParseResults;
+    static parse(toParse: Token[] | string, mode: 'brightscript' | 'brighterscript' = 'brightscript'): ParseResults {
         let tokens: Token[];
         if (typeof toParse === 'string') {
             let lexResult = Lexer.scan(toParse);
@@ -254,9 +383,20 @@ export class Parser {
          */
         function classDeclaration(): ClassStatement {
             ensureBrighterScriptMode('class declarations');
-            let keyword = consume(`Expected 'class' keyword`, Lexeme.Class);
+            let classKeyword = consume(`Expected 'class' keyword`, Lexeme.Class);
+            let extendsKeyword: Token;
+            let extendsIdentifier: Identifier;
+
             //get the class name
             let className = consumeContinue(diagnosticMessages.Missing_identifier_after_class_keyword_1016(), Lexeme.Identifier) as Identifier;
+
+            //see if the class inherits from parent
+            if (peek().text.toLowerCase() === 'extends') {
+                extendsKeyword = advance();
+
+                extendsIdentifier = consumeContinue(diagnosticMessages.Missing_identifier_after_extends_keyword_1022(), Lexeme.Identifier) as Identifier;
+            }
+
             //consume newlines (at least one)
             while (match(Lexeme.Newline)) {
             }
@@ -271,14 +411,24 @@ export class Parser {
                         accessModifier = advance();
                     }
 
+                    let overrideKeyword: Token;
+                    if (peek().text.toLowerCase() === 'override') {
+                        overrideKeyword = advance();
+                    }
+
                     //methods (function/sub keyword OR identifier followed by opening paren)
                     if (check(Lexeme.Function, Lexeme.Sub) || (check(Lexeme.Identifier) && checkNext(Lexeme.LeftParen))) {
                         let funcDeclaration = functionDeclaration(false);
+                        //if we have an overrides keyword AND this method is called 'new', that's not allowed
+                        if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
+                            addDiagnostic(overrideKeyword, diagnosticMessages.Cannot_use_override_keyword_on_constructor_function_1023());
+                        }
                         members.push(
                             new ClassMethodStatement(
                                 accessModifier,
                                 funcDeclaration.name,
-                                funcDeclaration.func
+                                funcDeclaration.func,
+                                overrideKeyword
                             )
                         );
 
@@ -315,10 +465,12 @@ export class Parser {
             }
 
             const result = new ClassStatement(
-                keyword,
+                classKeyword,
                 className,
                 members,
-                endingKeyword
+                endingKeyword,
+                extendsKeyword,
+                extendsIdentifier
             );
             return result;
         }
@@ -1854,133 +2006,4 @@ export class Parser {
             }
         }
     }
-}
-
-/** Set of all keywords that end blocks. */
-type BlockTerminator =
-    | Lexeme.ElseIf
-    | Lexeme.Else
-    | Lexeme.EndFor
-    | Lexeme.Next
-    | Lexeme.EndIf
-    | Lexeme.EndWhile
-    | Lexeme.EndSub
-    | Lexeme.EndFunction;
-
-/** The set of operators valid for use in assignment statements. */
-const assignmentOperators = [
-    Lexeme.Equal,
-    Lexeme.MinusEqual,
-    Lexeme.PlusEqual,
-    Lexeme.StarEqual,
-    Lexeme.SlashEqual,
-    Lexeme.BackslashEqual,
-    Lexeme.LeftShiftEqual,
-    Lexeme.RightShiftEqual
-];
-
-/** List of Lexemes that are permitted as property names. */
-const allowedProperties = [
-    Lexeme.And,
-    Lexeme.Box,
-    Lexeme.CreateObject,
-    Lexeme.Dim,
-    Lexeme.Else,
-    Lexeme.ElseIf,
-    Lexeme.End,
-    Lexeme.EndFunction,
-    Lexeme.EndFor,
-    Lexeme.EndIf,
-    Lexeme.EndSub,
-    Lexeme.EndWhile,
-    Lexeme.Eval,
-    Lexeme.Exit,
-    Lexeme.ExitFor,
-    Lexeme.ExitWhile,
-    Lexeme.False,
-    Lexeme.For,
-    Lexeme.ForEach,
-    Lexeme.Function,
-    Lexeme.GetGlobalAA,
-    Lexeme.GetLastRunCompileError,
-    Lexeme.GetLastRunRunTimeError,
-    Lexeme.Goto,
-    Lexeme.If,
-    Lexeme.Invalid,
-    Lexeme.Let,
-    Lexeme.Next,
-    Lexeme.Not,
-    Lexeme.ObjFun,
-    Lexeme.Or,
-    Lexeme.Pos,
-    Lexeme.Print,
-    Lexeme.Rem,
-    Lexeme.Return,
-    Lexeme.Step,
-    Lexeme.Stop,
-    Lexeme.Sub,
-    Lexeme.Tab,
-    Lexeme.To,
-    Lexeme.True,
-    Lexeme.Type,
-    Lexeme.While
-];
-
-/** List of Lexeme that are allowed as local var identifiers. */
-const allowedIdentifiers = [Lexeme.EndFor, Lexeme.ExitFor, Lexeme.ForEach];
-
-/**
- * List of string versions of Lexeme that are NOT allowed as local var identifiers.
- * Used to throw more helpful "you can't use a reserved word as an identifier" errors.
- */
-export const disallowedIdentifiers = new Set(
-    [
-        Lexeme.And,
-        Lexeme.Box,
-        Lexeme.CreateObject,
-        Lexeme.Dim,
-        Lexeme.Else,
-        Lexeme.ElseIf,
-        Lexeme.End,
-        Lexeme.EndFunction,
-        Lexeme.EndIf,
-        Lexeme.EndSub,
-        Lexeme.EndWhile,
-        Lexeme.Eval,
-        Lexeme.Exit,
-        Lexeme.ExitWhile,
-        Lexeme.False,
-        Lexeme.For,
-        Lexeme.Function,
-        Lexeme.GetGlobalAA,
-        Lexeme.GetLastRunCompileError,
-        Lexeme.GetLastRunRunTimeError,
-        Lexeme.Goto,
-        Lexeme.If,
-        Lexeme.Invalid,
-        Lexeme.Let,
-        Lexeme.Next,
-        Lexeme.Not,
-        Lexeme.ObjFun,
-        Lexeme.Or,
-        Lexeme.Pos,
-        Lexeme.Print,
-        Lexeme.Rem,
-        Lexeme.Return,
-        Lexeme.Step,
-        Lexeme.Sub,
-        Lexeme.Tab,
-        Lexeme.To,
-        Lexeme.True,
-        Lexeme.Type,
-        Lexeme.While
-    ].map(x => Lexeme[x].toLowerCase())
-);
-
-/** The results of a Parser's parsing pass. */
-interface ParseResults {
-    /** The statements produced by the parser. */
-    statements: Statement[];
-    /** The errors encountered by the Parser. */
-    errors: ParseError[];
 }
