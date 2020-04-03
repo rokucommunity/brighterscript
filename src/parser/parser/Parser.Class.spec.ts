@@ -205,7 +205,7 @@ describe('parser class', () => {
             class Toddler extends
             end class
         `);
-        let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+        let { errors } = Parser.parse(tokens, 'brighterscript');
         expect(errors[0].code).to.equal(diagnosticMessages.Missing_identifier_after_extends_keyword_1022().code);
     });
 });

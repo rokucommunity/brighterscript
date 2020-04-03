@@ -1,3 +1,4 @@
+import { Location } from "../lexer/Token";
 
 export interface TranspileState {
     //the path for this file relative to the root of the output package
