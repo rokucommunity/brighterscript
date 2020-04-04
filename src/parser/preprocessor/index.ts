@@ -6,6 +6,7 @@ import * as Chunk from './Chunk';
 import { getBsConst, Manifest } from './Manifest';
 import { Parser } from './Parser';
 import { FilterResults, Preprocessor as InternalPreprocessor } from './Preprocessor';
+import { Lexeme } from '../lexer';
 
 export class Preprocessor {
     private parser = new Parser();
@@ -48,6 +49,8 @@ export class Preprocessor {
      * @returns an array of processed tokens representing a subset of the provided ones
      */
     public preprocess(tokens: ReadonlyArray<Token>, manifest: Manifest): FilterResults {
+        //filter out whitespace tokens (TODO figure out how to do this more performantly than a .filter() call)
+        tokens = tokens.filter(x => x?.kind !== Lexeme.Whitespace);
         let parserResults = this.parser.parse(tokens);
         if (parserResults.errors.length > 0) {
             return {
