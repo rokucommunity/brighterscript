@@ -129,9 +129,12 @@ export class ProgramBuilder {
 
         //on any file watcher event
         this.watcher.on('all', async (event: string, thePath: string) => { //eslint-disable-line @typescript-eslint/no-misused-promises
+            thePath = util.standardizePath(
+                path.resolve(this.rootDir, thePath)
+            );
             if (event === 'add' || event === 'change') {
                 await this.program.addOrReplaceFile({
-                    src: util.standardizePath(thePath),
+                    src: thePath,
                     dest: rokuDeploy.getDestPath(thePath, this.program.options.files, this.rootDir)
                 });
             } else if (event === 'unlink') {
@@ -146,7 +149,12 @@ export class ProgramBuilder {
      * Get the rootDir for this program
      */
     public get rootDir() {
-        return this.program.options.rootDir ? this.program.options.rootDir : this.program.options.cwd;
+        return util.standardizePath(
+            path.resolve(
+                this.program.options.cwd,
+                this.program.options.rootDir ?? this.program.options.cwd
+            )
+        );
     }
 
     /**
