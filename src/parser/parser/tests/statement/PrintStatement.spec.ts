@@ -6,11 +6,6 @@ import { Lexeme } from '../../../lexer';
 import { EOF, token } from '../Parser.spec';
 
 describe('parser print statements', () => {
-    let parser: Parser;
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     it('parses singular print statements', () => {
         let { statements, errors } = Parser.parse([
             token(Lexeme.Print),
@@ -25,7 +20,7 @@ describe('parser print statements', () => {
     });
 
     it('supports empty print', () => {
-        let { statements, errors } = parser.parse([token(Lexeme.Print), EOF]);
+        let { statements, errors } = Parser.parse([token(Lexeme.Print), EOF]);
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
@@ -33,7 +28,7 @@ describe('parser print statements', () => {
     });
 
     it('parses print lists with no separator', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.Print),
             token(Lexeme.String, 'Foo', new BrsString('Foo')),
             token(Lexeme.String, 'bar', new BrsString('bar')),
@@ -48,7 +43,7 @@ describe('parser print statements', () => {
     });
 
     it('parses print lists with separators', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.Print),
             token(Lexeme.String, 'Foo', new BrsString('Foo')),
             token(Lexeme.Semicolon),
@@ -71,7 +66,7 @@ describe('parser print statements', () => {
          *  +--------------
          * 1| print "foo"
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             {
                 kind: Lexeme.Print,
                 text: 'print',

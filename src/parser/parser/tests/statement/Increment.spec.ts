@@ -5,14 +5,8 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser postfix unary expressions', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     it('parses postfix \'++\' for variables', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('foo'),
             token(Lexeme.PlusPlus, '++'),
             EOF
@@ -25,7 +19,7 @@ describe('parser postfix unary expressions', () => {
     });
 
     it('parses postfix \'--\' for dotted get expressions', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('obj'),
             token(Lexeme.Dot, '.'),
             identifier('property'),
@@ -40,7 +34,7 @@ describe('parser postfix unary expressions', () => {
     });
 
     it('parses postfix \'++\' for indexed get expressions', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('obj'),
             token(Lexeme.LeftSquare, '['),
             identifier('property'),
@@ -56,7 +50,7 @@ describe('parser postfix unary expressions', () => {
     });
 
     it('disallows consecutive postfix operators', () => {
-        let { errors } = parser.parse([
+        let { errors } = Parser.parse([
             identifier('foo'),
             token(Lexeme.PlusPlus, '++'),
             token(Lexeme.PlusPlus, '++'),
@@ -70,7 +64,7 @@ describe('parser postfix unary expressions', () => {
     });
 
     it('disallows postfix \'--\' for function call results', () => {
-        let { errors } = parser.parse([
+        let { errors } = Parser.parse([
             identifier('func'),
             token(Lexeme.LeftParen, '('),
             token(Lexeme.RightParen, ')'),
@@ -85,7 +79,7 @@ describe('parser postfix unary expressions', () => {
     });
 
     it('allows \'++\' at the end of a function', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.Sub, 'sub'),
             identifier('foo'),
             token(Lexeme.LeftParen, '('),
@@ -111,7 +105,7 @@ describe('parser postfix unary expressions', () => {
          *  +--------------
          * 1| someNumber++
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse(<any>[
             {
                 kind: Lexeme.Identifier,
                 text: 'someNumber',

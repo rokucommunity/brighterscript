@@ -5,14 +5,8 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser foreach loops', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     it('requires a name and target', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.ForEach, 'for each'),
             identifier('word'),
             identifier('in'),
@@ -28,7 +22,7 @@ describe('parser foreach loops', () => {
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.exist;
 
-        let forEach = statements[0];
+        let forEach = statements[0] as any;
         expect(forEach).to.be.instanceof(Stmt.ForEachStatement);
 
         expect(forEach.item).to.deep.include(identifier('word'));
@@ -39,7 +33,7 @@ describe('parser foreach loops', () => {
     });
 
     it('allows \'next\' to terminate loop', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.ForEach, 'for each'),
             identifier('word'),
             identifier('in'),
@@ -67,7 +61,7 @@ describe('parser foreach loops', () => {
          * 2|   Rnd(a)
          * 3| end for
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             {
                 kind: Lexeme.ForEach,
                 text: 'for each',

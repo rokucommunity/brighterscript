@@ -6,15 +6,9 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     describe('exponential expressions', () => {
         it('parses exponential operators', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Integer, '2', new Int32(2)),
@@ -29,7 +23,7 @@ describe('parser', () => {
         });
 
         it('parses repeated exponential operators as left-associative', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Integer, '2', new Int32(2)),

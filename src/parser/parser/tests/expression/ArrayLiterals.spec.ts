@@ -6,15 +6,9 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser array literals', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     describe('empty arrays', () => {
         it('on one line', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftSquare, '['),
@@ -28,7 +22,7 @@ describe('parser array literals', () => {
         });
 
         it('on multiple lines', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftSquare, '['),
@@ -50,7 +44,7 @@ describe('parser array literals', () => {
 
     describe('filled arrays', () => {
         it('on one line', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftSquare, '['),
@@ -69,7 +63,7 @@ describe('parser array literals', () => {
         });
 
         it('on multiple lines with commas', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftSquare, '['),
@@ -92,7 +86,7 @@ describe('parser array literals', () => {
         });
 
         it('on multiple lines without commas', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftSquare, '['),
@@ -115,7 +109,7 @@ describe('parser array literals', () => {
 
     describe('contents', () => {
         it('can contain primitives', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftSquare, '['),
@@ -134,7 +128,7 @@ describe('parser array literals', () => {
         });
 
         it('can contain other arrays', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftSquare, '['),
@@ -163,7 +157,7 @@ describe('parser array literals', () => {
         });
 
         it('can contain expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftSquare, '['),
@@ -195,7 +189,7 @@ describe('parser array literals', () => {
          * 5|
          * 6| ]
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse(<any>[
             {
                 kind: Lexeme.Identifier,
                 text: 'a',
@@ -313,7 +307,7 @@ describe('parser array literals', () => {
                     end: { line: 6, column: 2 }
                 }
             }
-        ]);
+        ]) as any;
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(2);

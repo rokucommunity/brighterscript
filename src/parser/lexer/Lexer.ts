@@ -772,14 +772,6 @@ export class Lexer {
         }
 
         /**
-         * Retrieves the token that was most recently added.
-         * @returns the most recently added token.
-         */
-        function lastToken(): Token | undefined {
-            return tokens[tokens.length - 1];
-        }
-
-        /**
          * Creates a `Token` and adds it to the `tokens` array.
          * @param kind the type of token to produce.
          * @param literal an optional literal value to include in the token.

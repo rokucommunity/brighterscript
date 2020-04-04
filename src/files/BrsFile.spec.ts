@@ -231,8 +231,10 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports single-word #elseif and #endif', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        describe('conditional compile', () => {
+
+            it('supports single-word #elseif and #endif', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     #const someFlag = true
                     #if someFlag
@@ -242,11 +244,11 @@ describe('BrsFile', () => {
                     #endif
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
-        });
+                expect(file.getDiagnostics()).to.be.lengthOf(0);
+            });
 
-        it('supports multi-word #else if and #end if', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('supports multi-word #else if and #end if', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     #const someFlag = true
                     #if someFlag
@@ -256,18 +258,19 @@ describe('BrsFile', () => {
                     #end if
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
-        });
+                expect(file.getDiagnostics()).to.be.lengthOf(0);
+            });
 
-        it('does not choke on invalid code inside a false conditional compile', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('does not choke on invalid code inside a false conditional compile', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     #if false
                         non-commented code here should not cause parse errors
                     #end if
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+                expect(file.getDiagnostics()).to.be.lengthOf(0);
+            });
         });
 
         it('supports stop statement', async () => {
@@ -464,7 +467,7 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it.only('does not error with `stop` as object key', async () => {
+        it('does not error with `stop` as object key', async () => {
             await file.parse(`
                 function GetObject()
                     obj = {
@@ -957,8 +960,7 @@ describe('BrsFile', () => {
                     }, end: {
                         column: 4,
                         line: 2
-                    },
-                    file: ''
+                    }
                 },
                 message: 'some lex error',
                 stack: ''

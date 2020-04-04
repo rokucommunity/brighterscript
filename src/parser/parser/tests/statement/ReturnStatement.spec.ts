@@ -4,16 +4,11 @@ import { Parser } from '../..';
 import { BrsString, Int32 } from '../../../brsTypes';
 import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
+import { FunctionStatement } from '../../Statement';
 
 describe('parser return statements', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     it('parses void returns', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.Function, 'function'),
             identifier('foo'),
             token(Lexeme.LeftParen, '('),
@@ -31,7 +26,7 @@ describe('parser return statements', () => {
     });
 
     it('parses literal returns', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.Function, 'function'),
             identifier('foo'),
             token(Lexeme.LeftParen, '('),
@@ -50,7 +45,7 @@ describe('parser return statements', () => {
     });
 
     it('parses expression returns', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.Function, 'function'),
             identifier('foo'),
             token(Lexeme.LeftParen, '('),
@@ -79,7 +74,7 @@ describe('parser return statements', () => {
          * 2|   return 5
          * 3| end function
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.Function, 'function'),
             identifier('foo'),
             token(Lexeme.LeftParen, '('),
@@ -110,7 +105,7 @@ describe('parser return statements', () => {
         ]);
 
         expect(errors).to.be.lengthOf(0);
-        expect(statements[0].func.body.statements[0].location).to.deep.include({
+        expect((statements[0] as FunctionStatement).func.body.statements[0].location).to.deep.include({
             start: { line: 2, column: 2 },
             end: { line: 2, column: 10 }
         });

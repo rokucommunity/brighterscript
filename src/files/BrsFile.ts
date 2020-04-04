@@ -22,6 +22,7 @@ import { FunctionType } from '../types/FunctionType';
 import { StringType } from '../types/StringType';
 import { VoidType } from '../types/VoidType';
 import util from '../util';
+import { ParseMode } from '../parser/parser/Parser';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -153,7 +154,7 @@ export class BrsFile {
         tokens = preprocessorWasSuccessful ? (preprocessorResults.processedTokens as any) : lexResult.tokens;
 
         this.parser = new Parser();
-        let parseResult = this.parser.parse(tokens, this.extension === 'brs' ? 'brightscript' : 'brighterscript');
+        let parseResult = this.parser.parse(tokens, this.extension === 'brs' ? ParseMode.brightscript : ParseMode.brighterscript);
 
         let errors = [...lexResult.errors, ...<any>parseResult.errors, ...<any>preprocessorResults.errors];
 

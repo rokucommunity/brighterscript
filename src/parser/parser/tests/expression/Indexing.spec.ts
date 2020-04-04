@@ -6,15 +6,9 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser indexing', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     describe('one level', () => {
         it('dotted', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 identifier('foo'),
@@ -30,7 +24,7 @@ describe('parser indexing', () => {
         });
 
         it('bracketed', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 identifier('foo'),
@@ -54,7 +48,7 @@ describe('parser indexing', () => {
              * 1| a = foo.bar
              * 2| b = foo[2]
              */
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse(<any>[
                 {
                     kind: Lexeme.Identifier,
                     text: 'a',
@@ -177,7 +171,7 @@ describe('parser indexing', () => {
 
             expect(errors).to.be.lengthOf(0);
             expect(statements).to.be.lengthOf(2);
-            expect(statements.map(s => s.value.location)).to.deep.equal([
+            expect(statements.map(s => (s as any).value.location)).to.deep.equal([
                 {
                     start: { line: 1, column: 4 },
                     end: { line: 1, column: 11 },
@@ -194,7 +188,7 @@ describe('parser indexing', () => {
 
     describe('multi-level', () => {
         it('dotted', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 identifier('foo'),
@@ -209,7 +203,7 @@ describe('parser indexing', () => {
         });
 
         it('bracketed', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 identifier('foo'),
@@ -231,7 +225,7 @@ describe('parser indexing', () => {
         });
 
         it('mixed', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 identifier('foo'),

@@ -6,14 +6,8 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser variable declarations', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     it('allows newlines before assignments', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.Newline),
             token(Lexeme.Newline),
             token(Lexeme.Newline),
@@ -29,7 +23,7 @@ describe('parser variable declarations', () => {
     });
 
     it('allows newlines after assignments', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('hasNewlines'),
             token(Lexeme.Equal),
             token(Lexeme.True),
@@ -43,7 +37,7 @@ describe('parser variable declarations', () => {
     });
 
     it('parses literal value assignments', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('foo'),
             token(Lexeme.Equal),
             token(Lexeme.Integer, '5', new Int32(5)),
@@ -57,7 +51,7 @@ describe('parser variable declarations', () => {
     });
 
     it('parses evaluated value assignments', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('bar'),
             token(Lexeme.Equal),
             token(Lexeme.Integer, '5', new Int32(5)),
@@ -73,7 +67,7 @@ describe('parser variable declarations', () => {
     });
 
     it('parses variable aliasing', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('baz'),
             token(Lexeme.Equal),
             identifier('foo'),
@@ -93,7 +87,7 @@ describe('parser variable declarations', () => {
          *  +------------------
          * 1| foo = invalid
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse(<any>[
             {
                 kind: Lexeme.Identifier,
                 text: 'foo',

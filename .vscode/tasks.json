@@ -12,7 +12,9 @@
                 "clear": true
             },
             "script": "build",
-            "problemMatcher": []
+            "problemMatcher": [
+                "$tsc"
+            ]
         },
         {
             "type": "npm",

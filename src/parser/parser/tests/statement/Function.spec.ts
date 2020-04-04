@@ -6,11 +6,6 @@ import { Lexeme, Lexer } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
 
     describe('function declarations', () => {
         it('recovers when using `end sub` instead of `end function`', () => {
@@ -23,7 +18,7 @@ describe('parser', () => {
 
                 end sub
             `);
-            let { statements, errors } = parser.parse(tokens);
+            let { statements, errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(1);
             expect(statements).to.length.greaterThan(0);
 
@@ -31,7 +26,7 @@ describe('parser', () => {
         });
 
         it('parses minimal empty function declarations', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 token(Lexeme.Function, 'function'),
                 identifier('foo'),
                 token(Lexeme.LeftParen, '('),
@@ -48,7 +43,7 @@ describe('parser', () => {
         });
 
         it('parses non-empty function declarations', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 token(Lexeme.Function, 'function'),
                 identifier('foo'),
                 token(Lexeme.LeftParen, '('),
@@ -68,7 +63,7 @@ describe('parser', () => {
         });
 
         it('parses functions with implicit-dynamic arguments', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 token(Lexeme.Function, 'function'),
                 identifier('add2'),
                 token(Lexeme.LeftParen, '('),
@@ -88,7 +83,7 @@ describe('parser', () => {
         });
 
         it('parses functions with typed arguments', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 token(Lexeme.Function, 'function'),
                 identifier('repeat'),
                 token(Lexeme.LeftParen, '('),
@@ -112,7 +107,7 @@ describe('parser', () => {
         });
 
         it('parses functions with default argument expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 token(Lexeme.Function, 'function'),
                 identifier('add'),
                 token(Lexeme.LeftParen, '('),
@@ -146,7 +141,7 @@ describe('parser', () => {
         });
 
         it('parses functions with typed arguments and default expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 token(Lexeme.Function, 'function'),
                 identifier('add'),
                 token(Lexeme.LeftParen, '('),
@@ -179,7 +174,7 @@ describe('parser', () => {
         });
 
         it('parses return types', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 token(Lexeme.Function, 'function'),
                 identifier('foo'),
                 token(Lexeme.LeftParen, '('),
@@ -215,7 +210,7 @@ describe('parser', () => {
                     return 1
                 end function
             `);
-            const { statements, errors } = parser.parse(tokens);
+            const { statements, errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(4);
             expect(statements).to.length.greaterThan(0);
 
@@ -234,7 +229,7 @@ describe('parser', () => {
 
                 end sub
             `);
-            let { statements, errors } = parser.parse(tokens);
+            let { statements, errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(1);
             expect(statements).to.length.greaterThan(0);
 
@@ -242,7 +237,7 @@ describe('parser', () => {
         });
 
         it('parses minimal sub declarations', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 token(Lexeme.Sub, 'sub'),
                 identifier('bar'),
                 token(Lexeme.LeftParen, '('),
@@ -259,7 +254,7 @@ describe('parser', () => {
         });
 
         it('parses non-empty sub declarations', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 token(Lexeme.Sub, 'sub'),
                 identifier('foo'),
                 token(Lexeme.LeftParen, '('),
@@ -279,7 +274,7 @@ describe('parser', () => {
         });
 
         it('parses subs with implicit-dynamic arguments', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 token(Lexeme.Function, 'sub'),
                 identifier('add2'),
                 token(Lexeme.LeftParen, '('),
@@ -299,7 +294,7 @@ describe('parser', () => {
         });
 
         it('parses subs with typed arguments', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 token(Lexeme.Function, 'sub'),
                 identifier('repeat'),
                 token(Lexeme.LeftParen, '('),
@@ -323,7 +318,7 @@ describe('parser', () => {
         });
 
         it('parses subs with default argument expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 token(Lexeme.Sub, 'sub'),
                 identifier('add'),
                 token(Lexeme.LeftParen, '('),
@@ -356,7 +351,7 @@ describe('parser', () => {
         });
 
         it('parses subs with typed arguments and default expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 token(Lexeme.Sub, 'sub'),
                 identifier('add'),
                 token(Lexeme.LeftParen, '('),
@@ -401,7 +396,7 @@ describe('parser', () => {
                 sub DoubleSub#()
                 end sub
             `);
-            const { statements, errors } = parser.parse(tokens);
+            const { statements, errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(4);
             expect(statements).to.length.greaterThan(0);
             //expect({ errors, statements }).toMatchSnapshot();

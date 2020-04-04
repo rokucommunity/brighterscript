@@ -6,15 +6,10 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser primary expressions', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
 
     it('parses numeric literals', () => {
         let equals = token(Lexeme.Equal, '=');
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
             equals,
             token(Lexeme.Integer, '5', new Int32(5)),
@@ -27,7 +22,7 @@ describe('parser primary expressions', () => {
 
     it('parses string literals', () => {
         let equals = token(Lexeme.Equal, '=');
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
             equals,
             token(Lexeme.String, 'hello', new BrsString('hello')),
@@ -40,7 +35,7 @@ describe('parser primary expressions', () => {
     });
 
     it('parses expressions in parentheses', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
             token(Lexeme.Equal, '='),
             token(Lexeme.Integer, '1', new Int32(1)),
@@ -68,7 +63,7 @@ describe('parser primary expressions', () => {
          * 2| b = "foo"
          * 3| c = ( 0 )
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse(<any>[
             {
                 kind: Lexeme.Identifier,
                 text: 'a',
@@ -198,7 +193,7 @@ describe('parser primary expressions', () => {
                     end: { line: 2, column: 10 }
                 }
             }
-        ]);
+        ]) as any;
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(3);

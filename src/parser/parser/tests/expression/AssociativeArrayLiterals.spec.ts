@@ -6,15 +6,9 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser associative array literals', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     describe('empty associative arrays', () => {
         it('on one line', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftBrace, '{'),
@@ -28,7 +22,7 @@ describe('parser associative array literals', () => {
         });
 
         it('on multiple lines', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftBrace, '{'),
@@ -50,7 +44,7 @@ describe('parser associative array literals', () => {
 
     describe('filled arrays', () => {
         it('on one line', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftBrace, '{'),
@@ -75,7 +69,7 @@ describe('parser associative array literals', () => {
         });
 
         it('on multiple lines with commas', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftBrace, '{'),
@@ -104,7 +98,7 @@ describe('parser associative array literals', () => {
         });
 
         it('on multiple lines without commas', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.LeftBrace, '{'),
@@ -132,7 +126,7 @@ describe('parser associative array literals', () => {
     });
 
     it('allows separating properties with colons', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.Sub, 'sub'),
             identifier('main'),
             token(Lexeme.LeftParen, '('),
@@ -163,7 +157,7 @@ describe('parser associative array literals', () => {
     });
 
     it('allows a mix of quoted and unquoted keys', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
             token(Lexeme.Equal, '='),
             token(Lexeme.LeftBrace, '{'),
@@ -203,7 +197,7 @@ describe('parser associative array literals', () => {
          * 5|
          * 6| }
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse(<any>[
             {
                 kind: Lexeme.Identifier,
                 text: 'a',
@@ -321,7 +315,7 @@ describe('parser associative array literals', () => {
                     end: { line: 6, column: 2 }
                 }
             }
-        ]);
+        ]) as any;
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(2);

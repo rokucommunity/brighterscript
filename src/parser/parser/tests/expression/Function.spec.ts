@@ -6,15 +6,10 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
 
     describe('function expressions', () => {
         it('parses minimal empty function expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Function, 'function'),
@@ -31,7 +26,7 @@ describe('parser', () => {
         });
 
         it('parses colon-separated function declarations', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Function, 'function'),
@@ -51,7 +46,7 @@ describe('parser', () => {
         });
 
         it('parses non-empty function expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Function, 'function'),
@@ -71,7 +66,7 @@ describe('parser', () => {
         });
 
         it('parses functions with implicit-dynamic arguments', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Function, 'function'),
@@ -91,7 +86,7 @@ describe('parser', () => {
         });
 
         it('parses functions with typed arguments', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Function, 'function'),
@@ -119,7 +114,7 @@ describe('parser', () => {
         });
 
         it('parses functions with default argument expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Function, 'function'),
@@ -153,7 +148,7 @@ describe('parser', () => {
         });
 
         it('parses functions with typed arguments and default expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Function, 'function'),
@@ -186,7 +181,7 @@ describe('parser', () => {
         });
 
         it('parses return types', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Function, 'function'),
@@ -207,7 +202,7 @@ describe('parser', () => {
 
     describe('sub expressions', () => {
         it('parses minimal sub expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Sub, 'sub'),
@@ -224,7 +219,7 @@ describe('parser', () => {
         });
 
         it('parses non-empty sub expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Sub, 'sub'),
@@ -244,7 +239,7 @@ describe('parser', () => {
         });
 
         it('parses subs with implicit-dynamic arguments', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Function, 'sub'),
@@ -264,7 +259,7 @@ describe('parser', () => {
         });
 
         it('parses subs with typed arguments', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Function, 'sub'),
@@ -292,7 +287,7 @@ describe('parser', () => {
         });
 
         it('parses subs with default argument expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Sub, 'sub'),
@@ -326,7 +321,7 @@ describe('parser', () => {
         });
 
         it('parses subs with typed arguments and default expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Sub, 'sub'),
@@ -361,7 +356,7 @@ describe('parser', () => {
 
     describe('usage', () => {
         it('allows sub expressions in call arguments', () => {
-            const { statements, errors } = parser.parse([
+            const { statements, errors } = Parser.parse([
                 identifier('acceptsCallback'),
                 token(Lexeme.LeftParen, '('),
                 token(Lexeme.Newline, '\\n'),
@@ -386,7 +381,7 @@ describe('parser', () => {
         });
 
         it('allows function expressions in assignment RHS', () => {
-            const { statements, errors } = parser.parse([
+            const { statements, errors } = Parser.parse([
                 identifier('anonymousFunction'),
                 token(Lexeme.Equal, '='),
 
@@ -417,7 +412,7 @@ describe('parser', () => {
          * 2|
          * 3| end sub
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse(<any>[
             {
                 kind: Lexeme.Identifier,
                 text: '_',
@@ -490,7 +485,7 @@ describe('parser', () => {
                     end: { line: 3, column: 8 }
                 }
             }
-        ]);
+        ]) as any;
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);

@@ -6,14 +6,8 @@ import { Lexeme, Lexer } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser call expressions', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     it('parses named function calls', () => {
-        const { statements, errors } = parser.parse([
+        const { statements, errors } = Parser.parse([
             identifier('RebootSystem'),
             { kind: Lexeme.LeftParen, text: '(', line: 1 },
             token(Lexeme.RightParen, ')'),
@@ -33,7 +27,7 @@ describe('parser call expressions', () => {
             sub DoThingTwo()
             end sub
         `);
-        const { statements, errors } = parser.parse(tokens);
+        const { statements, errors } = Parser.parse(tokens);
         expect(errors).to.length.greaterThan(0);
         expect(statements).to.be.length.greaterThan(0);
 
@@ -54,7 +48,7 @@ describe('parser call expressions', () => {
             sub DoThingTwo()
             end sub
         `);
-        const { statements, errors } = parser.parse(tokens);
+        const { statements, errors } = Parser.parse(tokens);
         //there should only be 1 error
         expect(errors).to.be.lengthOf(1);
         expect(statements).to.be.length.greaterThan(0);
@@ -64,7 +58,7 @@ describe('parser call expressions', () => {
     });
 
     it('allows closing parentheses on separate line', () => {
-        const { statements, errors } = parser.parse([
+        const { statements, errors } = Parser.parse([
             identifier('RebootSystem'),
             { kind: Lexeme.LeftParen, text: '(', line: 1 },
             token(Lexeme.Newline, '\\n'),
@@ -79,7 +73,7 @@ describe('parser call expressions', () => {
     });
 
     it('accepts arguments', () => {
-        const { statements, errors } = parser.parse([
+        const { statements, errors } = Parser.parse([
             identifier('add'),
             { kind: Lexeme.LeftParen, text: '(', line: 1 },
             token(Lexeme.Integer, '1', new Int32(1)),
@@ -87,7 +81,7 @@ describe('parser call expressions', () => {
             token(Lexeme.Integer, '2', new Int32(2)),
             token(Lexeme.RightParen, ')'),
             EOF
-        ]);
+        ]) as any;
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
@@ -102,7 +96,7 @@ describe('parser call expressions', () => {
          *  +----------------------
          * 1| foo("bar", "baz")
          */
-        const { statements, errors } = parser.parse([
+        const { statements, errors } = Parser.parse(<any>[
             {
                 kind: Lexeme.Identifier,
                 text: 'foo',

@@ -6,14 +6,8 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser additive expressions', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     it('parses left-associative addition chains', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
             token(Lexeme.Equal, '='),
             token(Lexeme.Integer, '1', new Int32(1)),
@@ -30,7 +24,7 @@ describe('parser additive expressions', () => {
     });
 
     it('parses left-associative subtraction chains', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
             token(Lexeme.Equal, '='),
             token(Lexeme.Integer, '1', new Int32(1)),
@@ -52,7 +46,7 @@ describe('parser additive expressions', () => {
         // ^^ columns ^^
         //
         // _ = 1 + 2 + 3
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse(<any>[
             {
                 kind: Lexeme.Identifier,
                 text: '_',
@@ -128,7 +122,7 @@ describe('parser additive expressions', () => {
                     end: { line: 1, column: 14 }
                 }
             }
-        ]);
+        ]) as any;
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);

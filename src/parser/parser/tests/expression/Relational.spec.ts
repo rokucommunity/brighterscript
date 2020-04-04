@@ -6,15 +6,10 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
 
     describe('relational expressions', () => {
         it('parses less-than expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Integer, '5', new Int32(5)),
@@ -29,7 +24,7 @@ describe('parser', () => {
         });
 
         it('parses less-than-or-equal-to expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Integer, '5', new Int32(5)),
@@ -45,7 +40,7 @@ describe('parser', () => {
         });
 
         it('parses greater-than expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Integer, '5', new Int32(5)),
@@ -61,7 +56,7 @@ describe('parser', () => {
         });
 
         it('parses greater-than-or-equal-to expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Integer, '5', new Int32(5)),
@@ -76,7 +71,7 @@ describe('parser', () => {
         });
 
         it('parses equality expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Integer, '5', new Int32(5)),
@@ -92,7 +87,7 @@ describe('parser', () => {
         });
 
         it('parses inequality expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Integer, '5', new Int32(5)),

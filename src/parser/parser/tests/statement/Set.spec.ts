@@ -6,15 +6,9 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser indexed assignment', () => {
-    let parser: Parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     describe('dotted', () => {
         it('assigns anonymous functions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('foo'),
                 token(Lexeme.Dot, '.'),
                 identifier('bar'),
@@ -34,7 +28,7 @@ describe('parser indexed assignment', () => {
         });
 
         it('assigns boolean expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('foo'),
                 token(Lexeme.Dot, '.'),
                 identifier('bar'),
@@ -53,7 +47,7 @@ describe('parser indexed assignment', () => {
         });
 
         it('assignment operator', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('foo'),
                 token(Lexeme.Dot, '.'),
                 identifier('bar'),
@@ -72,7 +66,7 @@ describe('parser indexed assignment', () => {
 
     describe('bracketed', () => {
         it('assigns anonymous functions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('someArray'),
                 token(Lexeme.LeftSquare, '['),
                 token(Lexeme.Integer, '0', new Int32(0)),
@@ -93,7 +87,7 @@ describe('parser indexed assignment', () => {
         });
 
         it('assigns boolean expressions', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('someArray'),
                 token(Lexeme.LeftSquare, '['),
                 token(Lexeme.Integer, '0', new Int32(0)),
@@ -113,7 +107,7 @@ describe('parser indexed assignment', () => {
         });
 
         it('assignment operator', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('someArray'),
                 token(Lexeme.LeftSquare, '['),
                 token(Lexeme.Integer, '0', new Int32(0)),
@@ -138,7 +132,7 @@ describe('parser indexed assignment', () => {
          * 1| arr[0] = 1
          * 2| obj.a = 5
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             {
                 kind: Lexeme.Identifier,
                 text: 'arr',

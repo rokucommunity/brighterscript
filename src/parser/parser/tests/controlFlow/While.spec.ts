@@ -6,14 +6,9 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser while statements', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
 
     it('while without exit', () => {
-        const { statements, errors } = parser.parse([
+        const { statements, errors } = Parser.parse([
             token(Lexeme.While, 'while'),
             token(Lexeme.True, 'true', BrsBoolean.True),
             token(Lexeme.Newline, '\n'),
@@ -30,7 +25,7 @@ describe('parser while statements', () => {
     });
 
     it('while with exit', () => {
-        const { statements, errors } = parser.parse([
+        const { statements, errors } = Parser.parse([
             token(Lexeme.While, 'while'),
             token(Lexeme.True, 'true', BrsBoolean.True),
             token(Lexeme.Newline, '\n'),
@@ -57,7 +52,7 @@ describe('parser while statements', () => {
          * 2|   Rnd(0)
          * 3| end while
          */
-        const { statements, errors } = parser.parse([
+        const { statements, errors } = Parser.parse([
             {
                 kind: Lexeme.While,
                 text: 'while',

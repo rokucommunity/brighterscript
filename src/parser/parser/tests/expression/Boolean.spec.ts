@@ -6,14 +6,9 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser boolean expressions', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
 
     it('parses boolean ANDs', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
             token(Lexeme.Equal, '='),
             token(Lexeme.True, 'true', BrsBoolean.True),
@@ -28,7 +23,7 @@ describe('parser boolean expressions', () => {
     });
 
     it('parses boolean ORs', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
             token(Lexeme.Equal, '='),
             token(Lexeme.True, 'true', BrsBoolean.True),
@@ -49,7 +44,7 @@ describe('parser boolean expressions', () => {
          *  +----------------------
          * 1| a = true and false
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse(<any>[
             {
                 kind: Lexeme.Identifier,
                 text: 'a',
@@ -106,7 +101,7 @@ describe('parser boolean expressions', () => {
                     end: { line: 1, column: 19 }
                 }
             }
-        ]);
+        ]) as any;
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);

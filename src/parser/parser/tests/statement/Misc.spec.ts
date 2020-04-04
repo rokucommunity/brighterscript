@@ -5,12 +5,6 @@ import { Lexer } from '../../../lexer';
 import { disallowedIdentifiers } from '../../Parser';
 
 describe('parser', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     describe('`end` keyword', () => {
         it('does not produce errors', () => {
             let { tokens } = Lexer.scan(`
@@ -18,7 +12,7 @@ describe('parser', () => {
                     end
                 end sub
             `);
-            let { errors } = parser.parse(tokens);
+            let { errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(0);
             //expect(statements).toMatchSnapshot();
         });
@@ -30,7 +24,7 @@ describe('parser', () => {
                     }
                 end sub
             `);
-            let { errors } = parser.parse(tokens);
+            let { errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(0);
             //expect(statements).toMatchSnapshot();
         });
@@ -42,7 +36,7 @@ describe('parser', () => {
                     end = true
                 end sub
             `);
-            let { errors } = parser.parse(tokens);
+            let { errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(1);
             //specifically check for the error location, because the identifier location was wrong in the past
             expect(errors[0].location).to.deep.include({
@@ -67,7 +61,7 @@ describe('parser', () => {
                 string = true
             end sub
         `);
-        let { errors } = parser.parse(tokens);
+        let { errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         //expect(statements).toMatchSnapshot();
     });
@@ -85,7 +79,7 @@ describe('parser', () => {
                     ${disallowedIdentifier} = true
                 end sub
             `);
-            let { statements, errors } = parser.parse(tokens);
+            let { statements, errors } = Parser.parse(tokens);
             if (errors.length === 0) {
                 console.log(disallowedIdentifiers);
                 throw new Error(`'${disallowedIdentifier}' cannot be used as an identifier, but was not detected as an error`);
@@ -105,7 +99,7 @@ describe('parser', () => {
                 interface = true
             end sub
         `);
-        let { errors } = parser.parse(tokens);
+        let { errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         // expect(statementList).toMatchSnapshot();
     });
@@ -170,7 +164,7 @@ describe('parser', () => {
                 person.while = true
             end sub
         `);
-        let { errors } = parser.parse(tokens);
+        let { errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         //expect(statements).toMatchSnapshot();
     });
@@ -191,9 +185,8 @@ describe('parser', () => {
             end function
             `
         );
-        let { errors, statements } = parser.parse(tokens);
+        let { errors, statements } = Parser.parse(tokens) as any;
         expect(errors).to.be.lengthOf(0, 'Error count should be 0');
-
         expect(statements[0].func.body.statements[0].value.elements[0].text).to.equal(': 1');
         expect(statements[0].func.body.statements[1].value.elements[1].text).to.equal(': 2');
         expect(statements[0].func.body.statements[2].value.elements[0].text).to.equal(': 3: name: "bob"');

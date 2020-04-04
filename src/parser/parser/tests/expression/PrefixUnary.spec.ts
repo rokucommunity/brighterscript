@@ -6,14 +6,9 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser prefix unary expressions', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
 
     it('parses unary \'not\'', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
             token(Lexeme.Equal, '='),
             token(Lexeme.Not, 'not'),
@@ -27,7 +22,7 @@ describe('parser prefix unary expressions', () => {
     });
 
     it('parses consecutive unary \'not\'', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
             token(Lexeme.Equal, '='),
             token(Lexeme.Not, 'not'),
@@ -45,7 +40,7 @@ describe('parser prefix unary expressions', () => {
     });
 
     it('parses unary \'-\'', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
             token(Lexeme.Equal, '='),
             token(Lexeme.Minus, '-'),
@@ -59,7 +54,7 @@ describe('parser prefix unary expressions', () => {
     });
 
     it('parses consecutive unary \'-\'', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
             token(Lexeme.Equal, '='),
             token(Lexeme.Minus, '-'),
@@ -83,7 +78,7 @@ describe('parser prefix unary expressions', () => {
          *  +----------------------
          * 1| _false = not true
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse(<any>[
             {
                 kind: Lexeme.Identifier,
                 text: '_false',
@@ -134,7 +129,7 @@ describe('parser prefix unary expressions', () => {
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].value.location).to.deep.include({
+        expect((statements[0] as any).value.location).to.deep.include({
             start: { line: 1, column: 9 },
             end: { line: 1, column: 17 }
         });

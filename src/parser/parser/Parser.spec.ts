@@ -5,10 +5,6 @@ import { Parser } from './Parser';
 import { PrintStatement } from './Statement';
 
 describe('parser', () => {
-    let parser: Parser;
-    beforeEach(() => {
-        parser = new Parser();
-    });
     it('emits empty object when empty token list is provided', () => {
         expect(Parser.parse([])).to.deep.include({
             statements: [],
@@ -24,13 +20,13 @@ describe('parser', () => {
                 end sub
 
             `);
-            let { errors } = parser.parse(tokens) as any;
+            let { errors } = Parser.parse(tokens) as any;
             expect(errors).to.be.lengthOf(1, 'Error count should be 0');
         });
 
         it.skip('allows printing object with trailing period', () => {
             let { tokens } = Lexer.scan(`print a.`);
-            let { statements, errors } = parser.parse(tokens);
+            let { statements, errors } = Parser.parse(tokens);
             let printStatement = statements[0] as PrintStatement;
             expect(errors).to.be.empty;
             expect(printStatement).to.be.instanceof(PrintStatement);
@@ -44,7 +40,7 @@ describe('parser', () => {
                     'line 2
                     'line 3
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
 
                 expect(statements[0].text).to.equal('line 1\nline 2\nline 3');
@@ -58,7 +54,7 @@ describe('parser', () => {
 
                     'line 3
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
 
                 expect(statements).to.be.lengthOf(3);
@@ -74,7 +70,7 @@ describe('parser', () => {
                         print "hi" 'comment 1
                     end sub
                 `);
-                let { errors, statements } = parser.parse(tokens);
+                let { errors, statements } = Parser.parse(tokens);
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
 
                 expect((statements as any)[0].func.body.statements[1].text).to.equal('comment 1');
@@ -87,7 +83,7 @@ describe('parser', () => {
                     end function
                     'comment 2
                 `);
-                let { errors, statements } = parser.parse(tokens);
+                let { errors, statements } = Parser.parse(tokens);
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
                 expect((statements as any)[0].text).to.equal('comment 1');
                 expect((statements as any)[2].text).to.equal('comment 2');
@@ -100,7 +96,7 @@ describe('parser', () => {
                         'comment
                     }
                 `);
-                let { errors } = parser.parse(tokens);
+                let { errors } = Parser.parse(tokens);
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
             });
 
@@ -111,7 +107,7 @@ describe('parser', () => {
                         DoSomething(name) 'comment 1
                     end sub
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Should have zero errors');
 
                 expect(statements[0].func.body.statements[2].text).to.equal('comment 1');
@@ -125,7 +121,7 @@ describe('parser', () => {
                         'comment 3
                     end function 'comment 4
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Should have zero errors');
 
                 expect(statements[0].func.body.statements[0].text).to.equal('comment 1');
@@ -152,7 +148,7 @@ describe('parser', () => {
                         end if 'comment 10
                     end function
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Should have zero errors');
                 let ifStmt = statements[0].func.body.statements[0];
 
@@ -182,7 +178,7 @@ describe('parser', () => {
                         end while 'comment 4
                     end function
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0];
 
@@ -203,7 +199,7 @@ describe('parser', () => {
                         end for 'comment 4
                     end function
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0];
 
@@ -224,7 +220,7 @@ describe('parser', () => {
                         end for 'comment 4
                     end function
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0];
 

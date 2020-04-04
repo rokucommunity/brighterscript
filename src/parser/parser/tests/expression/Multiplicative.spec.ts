@@ -6,15 +6,10 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
 
     describe('multiplicative expressions', () => {
         it('parses left-associative multiplication chains', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Float, '3.0', new Float(3.0)),
@@ -31,7 +26,7 @@ describe('parser', () => {
         });
 
         it('parses left-associative division chains', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Float, '7.0', new Float(7.0)),
@@ -48,7 +43,7 @@ describe('parser', () => {
         });
 
         it('parses left-associative modulo chains', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Float, '7.0', new Float(7.0)),
@@ -65,7 +60,7 @@ describe('parser', () => {
         });
 
         it('parses left-associative integer-division chains', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(Lexeme.Equal, '='),
                 token(Lexeme.Float, '32.5', new Float(32.5)),

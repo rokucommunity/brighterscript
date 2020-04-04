@@ -6,14 +6,8 @@ import { Lexeme } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser for loops', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     it('accepts a \'step\' clause', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.For, 'for'),
             identifier('i'),
             token(Lexeme.Equal, '='),
@@ -27,7 +21,7 @@ describe('parser for loops', () => {
             token(Lexeme.EndFor, 'end for'),
             token(Lexeme.Newline, '\n'),
             EOF
-        ]);
+        ]) as any;
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
@@ -39,7 +33,7 @@ describe('parser for loops', () => {
     });
 
     it('defaults a missing \'step\' clause to \'1\'', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.For, 'for'),
             identifier('i'),
             token(Lexeme.Equal, '='),
@@ -51,7 +45,7 @@ describe('parser for loops', () => {
             token(Lexeme.EndFor, 'end for'),
             token(Lexeme.Newline, '\n'),
             EOF
-        ]);
+        ]) as any;
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
@@ -63,7 +57,7 @@ describe('parser for loops', () => {
     });
 
     it('allows \'next\' to terminate loop', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             token(Lexeme.For, 'for'),
             identifier('i'),
             token(Lexeme.Equal, '='),
@@ -91,7 +85,7 @@ describe('parser for loops', () => {
          * 2|   Rnd(i)
          * 3| end for
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             {
                 kind: Lexeme.For,
                 text: 'for',
