@@ -67,8 +67,6 @@ describe('ProgramBuilder', () => {
             await builder.run({
                 project: n(`${rootDir}/bsconfig.json`),
                 username: 'john'
-            }).catch((e: Error) => {
-                expect(e.message).to.equal('Project contains lint errors');
             });
             expect(builder.program.options.username).to.equal('rokudev');
         });
