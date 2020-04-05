@@ -120,18 +120,19 @@ const allowedProperties = [
 ];
 
 /** List of Lexeme that are allowed as local var identifiers. */
-const allowedIdentifiers = [Lexeme.EndFor, Lexeme.ExitFor, Lexeme.ForEach];
+const allowedLocalIdentifiers = [Lexeme.EndFor, Lexeme.ExitFor, Lexeme.ForEach];
 
 /**
  * List of string versions of Lexeme that are NOT allowed as local var identifiers.
  * Used to throw more helpful "you can't use a reserved word as an identifier" errors.
  */
-export const disallowedIdentifiers = new Set(
+export const disallowedLocalIdentifiers = new Set(
     [
         Lexeme.And,
         Lexeme.Box,
         Lexeme.CreateObject,
         Lexeme.Dim,
+        Lexeme.Each,
         Lexeme.Else,
         Lexeme.ElseIf,
         Lexeme.End,
@@ -353,7 +354,7 @@ export class Parser {
             // `let`, (...) keyword. As such, we must check the token *after* an identifier to figure
             // out what to do with it.
             if (
-                this.check(Lexeme.Identifier, ...allowedIdentifiers) &&
+                this.check(Lexeme.Identifier, ...allowedLocalIdentifiers) &&
                 this.checkNext(...assignmentOperators)
             ) {
                 return this.assignment(...additionalTerminators);
@@ -716,7 +717,7 @@ export class Parser {
     private assignment(...additionalterminators: Lexeme[]): AssignmentStatement {
         let name = this.advance() as Identifier;
         //add error if name is a reserved word that cannot be used as an identifier
-        if (disallowedIdentifiers.has(name.text.toLowerCase())) {
+        if (disallowedLocalIdentifiers.has(name.text.toLowerCase())) {
             //don't throw...this is fully recoverable
             this.addError(name, `Cannot use reserved word "${name.text}" as an identifier`);
         }

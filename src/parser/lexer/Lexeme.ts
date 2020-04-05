@@ -70,6 +70,7 @@ export enum Lexeme {
     Box = 'Box',
     CreateObject = 'CreateObject',
     Dim = 'Dim',
+    Each = 'Each',
     Else = 'Else',
     ElseIf = 'ElseIf',
     End = 'End',
