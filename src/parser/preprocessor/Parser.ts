@@ -171,7 +171,10 @@ export class Parser {
                     Lexeme.HashError
                 )
             ) {
-                chunkTokens.push(advance());
+                let token = advance();
+                if (token) {
+                    chunkTokens.push(token);
+                }
 
                 if (isAtEnd()) {
                     break;
