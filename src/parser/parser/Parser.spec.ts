@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { Lexer } from '../lexer';
+import { Lexer, ReservedWords } from '../lexer';
 import { DottedGetExpression } from './Expression';
 import { Parser } from './Parser';
 import { PrintStatement } from './Statement';
@@ -262,4 +262,34 @@ describe('parser', () => {
             });
         });
     });
+
+    describe('reservedWords', () => {
+        it('"end" is not allowed as a local identifier', () => {
+            let { errors } = parse(`
+                sub main()
+                    end = true
+                end sub
+            `);
+            expect(errors).to.be.lengthOf(1);
+        });
+        it.only('none of them can be used as local variables', () => {
+            let reservedWords = new Set(ReservedWords);
+            //remove the rem keyword because it's a comment...won't cause error
+            reservedWords.delete('rem');
+            for (let reservedWord of reservedWords) {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        ${reservedWord} = true
+                    end sub
+                `);
+                let { errors } = Parser.parse(tokens);
+                expect(errors, `assigning to reserved word "${reservedWord}" should have been an error`).to.be.length.greaterThan(0);
+            }
+        });
+    });
 });
+
+function parse(text: string) {
+    let { tokens } = Lexer.scan(text);
+    return Parser.parse(tokens);
+}

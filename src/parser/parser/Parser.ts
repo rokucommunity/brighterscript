@@ -123,7 +123,7 @@ const allowedProperties = [
 const allowedLocalIdentifiers = [Lexeme.EndFor, Lexeme.ExitFor, Lexeme.ForEach];
 
 /**
- * List of string versions of Lexeme that are NOT allowed as local var identifiers.
+ * List of string versions of Lexeme and various globals that are NOT allowed as local var identifiers.
  * Used to throw more helpful "you can't use a reserved word as an identifier" errors.
  */
 export const disallowedLocalIdentifiers = new Set(
@@ -159,16 +159,20 @@ export const disallowedLocalIdentifiers = new Set(
         Lexeme.Or,
         Lexeme.Pos,
         Lexeme.Print,
+        //technically you aren't allowed to make a local var for Rem, but it's a comment so that'll never actually cause a compile error
         Lexeme.Rem,
         Lexeme.Return,
+        'run',
         Lexeme.Step,
         Lexeme.Sub,
         Lexeme.Tab,
+        'then',
         Lexeme.To,
         Lexeme.True,
         Lexeme.Type,
-        Lexeme.While
-    ].map(x => Lexeme[x].toLowerCase())
+        Lexeme.While,
+        'line_num'
+    ].map(x => x.toLowerCase())
 );
 
 export class Parser {
