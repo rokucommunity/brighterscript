@@ -49,132 +49,6 @@ import { util } from '../../util';
 import { ParseError } from '../Error';
 import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression } from './Expression';
 
-/** Set of all keywords that end blocks. */
-type BlockTerminator =
-    | Lexeme.ElseIf
-    | Lexeme.Else
-    | Lexeme.EndFor
-    | Lexeme.Next
-    | Lexeme.EndIf
-    | Lexeme.EndWhile
-    | Lexeme.EndSub
-    | Lexeme.EndFunction;
-
-/** The set of operators valid for use in assignment statements. */
-const assignmentOperators = [
-    Lexeme.Equal,
-    Lexeme.MinusEqual,
-    Lexeme.PlusEqual,
-    Lexeme.StarEqual,
-    Lexeme.SlashEqual,
-    Lexeme.BackslashEqual,
-    Lexeme.LeftShiftEqual,
-    Lexeme.RightShiftEqual
-];
-
-/** List of Lexemes that are permitted as property names. */
-const allowedProperties = [
-    Lexeme.And,
-    Lexeme.Box,
-    Lexeme.CreateObject,
-    Lexeme.Dim,
-    Lexeme.Else,
-    Lexeme.ElseIf,
-    Lexeme.End,
-    Lexeme.EndFunction,
-    Lexeme.EndFor,
-    Lexeme.EndIf,
-    Lexeme.EndSub,
-    Lexeme.EndWhile,
-    Lexeme.Eval,
-    Lexeme.Exit,
-    Lexeme.ExitFor,
-    Lexeme.ExitWhile,
-    Lexeme.False,
-    Lexeme.For,
-    Lexeme.ForEach,
-    Lexeme.Function,
-    Lexeme.GetGlobalAA,
-    Lexeme.GetLastRunCompileError,
-    Lexeme.GetLastRunRunTimeError,
-    Lexeme.Goto,
-    Lexeme.If,
-    Lexeme.Invalid,
-    Lexeme.Let,
-    Lexeme.Next,
-    Lexeme.Not,
-    Lexeme.ObjFun,
-    Lexeme.Or,
-    Lexeme.Pos,
-    Lexeme.Print,
-    Lexeme.Rem,
-    Lexeme.Return,
-    Lexeme.Step,
-    Lexeme.Stop,
-    Lexeme.Sub,
-    Lexeme.Tab,
-    Lexeme.To,
-    Lexeme.True,
-    Lexeme.Type,
-    Lexeme.While
-];
-
-/** List of Lexeme that are allowed as local var identifiers. */
-const allowedLocalIdentifiers = [Lexeme.EndFor, Lexeme.ExitFor, Lexeme.ForEach];
-
-/**
- * List of string versions of Lexeme and various globals that are NOT allowed as local var identifiers.
- * Used to throw more helpful "you can't use a reserved word as an identifier" errors.
- */
-export const disallowedLocalIdentifiers = new Set(
-    [
-        Lexeme.And,
-        Lexeme.Box,
-        Lexeme.CreateObject,
-        Lexeme.Dim,
-        Lexeme.Each,
-        Lexeme.Else,
-        Lexeme.ElseIf,
-        Lexeme.End,
-        Lexeme.EndFunction,
-        Lexeme.EndIf,
-        Lexeme.EndSub,
-        Lexeme.EndWhile,
-        Lexeme.Eval,
-        Lexeme.Exit,
-        Lexeme.ExitWhile,
-        Lexeme.False,
-        Lexeme.For,
-        Lexeme.Function,
-        Lexeme.GetGlobalAA,
-        Lexeme.GetLastRunCompileError,
-        Lexeme.GetLastRunRunTimeError,
-        Lexeme.Goto,
-        Lexeme.If,
-        Lexeme.Invalid,
-        Lexeme.Let,
-        Lexeme.Next,
-        Lexeme.Not,
-        Lexeme.ObjFun,
-        Lexeme.Or,
-        Lexeme.Pos,
-        Lexeme.Print,
-        //technically you aren't allowed to make a local var for Rem, but it's a comment so that'll never actually cause a compile error
-        Lexeme.Rem,
-        Lexeme.Return,
-        'run',
-        Lexeme.Step,
-        Lexeme.Sub,
-        Lexeme.Tab,
-        'then',
-        Lexeme.To,
-        Lexeme.True,
-        Lexeme.Type,
-        Lexeme.While,
-        'line_num'
-    ].map(x => x.toLowerCase())
-);
-
 export class Parser {
     /** Allows consumers to observe errors as they're detected. */
     readonly events = new EventEmitter();
@@ -204,25 +78,29 @@ export class Parser {
     private functionDeclarationLevel: number;
 
     /**
-     * The parse mode. When in 'brightscript' mode, no brighterscript syntax is allowed, and will emit errors.
+     * The options used to parse the file
      */
-    private mode: 'brightscript' | 'brighterscript';
+    public options: ParseOptions;
+
     /**
-     * Parses an array of `Token`s into an abstract syntax tree that can be executed with the `Interpreter`.
-     * @param toParse the array of tokens to parse
+     * Static wrapper around creating a new parser and parsing a list of tokens
+     */
+    public static parse(tokens: Token[], options?: ParseOptions) {
+        return new Parser().parse(tokens, options);
+    }
+
+    /**
+     * Parses an array of `Token`s into an abstract syntax tree
+     * @param toParse the array of tokens to parse. May not contain any whitespace tokens
      * @returns the same instance of the parser which contains the errors and statements
      */
-    public parse(tokens: Token[], mode = ParseMode.brightscript) {
+    public parse(tokens: Token[], options?: ParseOptions) {
         this.tokens = tokens.slice();
-        this.mode = mode;
+        this.options = this.sanitizeParseOptions(options);
         this.current = 0;
         this.statements = [];
         this.errors = [];
         this.functionDeclarationLevel = 0;
-
-        //filter out all whitespace tokens
-        //TODO find a way to do this without a loop
-        this.tokens = this.tokens.filter(x => x?.kind !== Lexeme.Whitespace);
 
         if (this.tokens.length > 0) {
             try {
@@ -240,11 +118,11 @@ export class Parser {
         return this;
     }
 
-    /**
-     * Static wrapper around creating a new parser and parsing a list of tokens
-     */
-    public static parse(tokens: Token[], mode = ParseMode.brightscript) {
-        return new Parser().parse(tokens, mode);
+    private sanitizeParseOptions(options: ParseOptions) {
+        return {
+            mode: 'brightscript',
+            ...(options || {})
+        } as ParseOptions;
     }
 
     /**
@@ -303,7 +181,7 @@ export class Parser {
      * Throws an error if the input file type is not BrighterScript
      */
     private ensureBrighterScriptMode(featureName: string) {
-        if (this.mode !== 'brighterscript') {
+        if (this.options.mode !== 'brighterscript') {
             throw this.addDiagnostic(this.peek(), diagnosticMessages.Bs_feature_not_supported_in_brs_files_1019(featureName));
         }
     }
@@ -2002,4 +1880,138 @@ export class Parser {
 export enum ParseMode {
     brightscript = 'brightscript',
     brighterscript = 'brighterscript'
+}
+
+
+/** Set of all keywords that end blocks. */
+type BlockTerminator =
+    | Lexeme.ElseIf
+    | Lexeme.Else
+    | Lexeme.EndFor
+    | Lexeme.Next
+    | Lexeme.EndIf
+    | Lexeme.EndWhile
+    | Lexeme.EndSub
+    | Lexeme.EndFunction;
+
+/** The set of operators valid for use in assignment statements. */
+const assignmentOperators = [
+    Lexeme.Equal,
+    Lexeme.MinusEqual,
+    Lexeme.PlusEqual,
+    Lexeme.StarEqual,
+    Lexeme.SlashEqual,
+    Lexeme.BackslashEqual,
+    Lexeme.LeftShiftEqual,
+    Lexeme.RightShiftEqual
+];
+
+/** List of Lexemes that are permitted as property names. */
+const allowedProperties = [
+    Lexeme.And,
+    Lexeme.Box,
+    Lexeme.CreateObject,
+    Lexeme.Dim,
+    Lexeme.Else,
+    Lexeme.ElseIf,
+    Lexeme.End,
+    Lexeme.EndFunction,
+    Lexeme.EndFor,
+    Lexeme.EndIf,
+    Lexeme.EndSub,
+    Lexeme.EndWhile,
+    Lexeme.Eval,
+    Lexeme.Exit,
+    Lexeme.ExitFor,
+    Lexeme.ExitWhile,
+    Lexeme.False,
+    Lexeme.For,
+    Lexeme.ForEach,
+    Lexeme.Function,
+    Lexeme.GetGlobalAA,
+    Lexeme.GetLastRunCompileError,
+    Lexeme.GetLastRunRunTimeError,
+    Lexeme.Goto,
+    Lexeme.If,
+    Lexeme.Invalid,
+    Lexeme.Let,
+    Lexeme.Next,
+    Lexeme.Not,
+    Lexeme.ObjFun,
+    Lexeme.Or,
+    Lexeme.Pos,
+    Lexeme.Print,
+    Lexeme.Rem,
+    Lexeme.Return,
+    Lexeme.Step,
+    Lexeme.Stop,
+    Lexeme.Sub,
+    Lexeme.Tab,
+    Lexeme.To,
+    Lexeme.True,
+    Lexeme.Type,
+    Lexeme.While
+];
+
+/** List of Lexeme that are allowed as local var identifiers. */
+const allowedLocalIdentifiers = [Lexeme.EndFor, Lexeme.ExitFor, Lexeme.ForEach];
+
+/**
+ * List of string versions of Lexeme and various globals that are NOT allowed as local var identifiers.
+ * Used to throw more helpful "you can't use a reserved word as an identifier" errors.
+ */
+export const disallowedLocalIdentifiers = new Set(
+    [
+        Lexeme.And,
+        Lexeme.Box,
+        Lexeme.CreateObject,
+        Lexeme.Dim,
+        Lexeme.Each,
+        Lexeme.Else,
+        Lexeme.ElseIf,
+        Lexeme.End,
+        Lexeme.EndFunction,
+        Lexeme.EndIf,
+        Lexeme.EndSub,
+        Lexeme.EndWhile,
+        Lexeme.Eval,
+        Lexeme.Exit,
+        Lexeme.ExitWhile,
+        Lexeme.False,
+        Lexeme.For,
+        Lexeme.Function,
+        Lexeme.GetGlobalAA,
+        Lexeme.GetLastRunCompileError,
+        Lexeme.GetLastRunRunTimeError,
+        Lexeme.Goto,
+        Lexeme.If,
+        Lexeme.Invalid,
+        Lexeme.Let,
+        Lexeme.Next,
+        Lexeme.Not,
+        Lexeme.ObjFun,
+        Lexeme.Or,
+        Lexeme.Pos,
+        Lexeme.Print,
+        //technically you aren't allowed to make a local var for Rem, but it's a comment so that'll never actually cause a compile error
+        Lexeme.Rem,
+        Lexeme.Return,
+        'run',
+        Lexeme.Step,
+        Lexeme.Sub,
+        Lexeme.Tab,
+        'then',
+        Lexeme.To,
+        Lexeme.True,
+        Lexeme.Type,
+        Lexeme.While,
+        'line_num'
+    ].map(x => x.toLowerCase())
+);
+
+export interface ParseOptions {
+    /**
+     * The parse mode. When in 'brightscript' mode, no brighterscript syntax is allowed, and will emit errors.
+     */
+    mode: ParseMode;
 }

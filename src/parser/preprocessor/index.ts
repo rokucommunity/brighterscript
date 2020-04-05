@@ -44,13 +44,11 @@ export class Preprocessor {
 
     /**
      * Pre-processes a set of tokens, evaluating any conditional compilation directives encountered.
-     * @param tokens the set of tokens to process
+     * @param tokens the set of tokens to process. Must not contain any whitespace tokens.
      * @param manifest the data stored in the found manifest file
      * @returns an array of processed tokens representing a subset of the provided ones
      */
     public preprocess(tokens: ReadonlyArray<Token>, manifest: Manifest): FilterResults {
-        //filter out whitespace tokens (TODO figure out how to do this more performantly than a .filter() call)
-        tokens = tokens.filter(x => x?.kind !== Lexeme.Whitespace);
         let parserResults = this.parser.parse(tokens);
         if (parserResults.errors.length > 0) {
             return {

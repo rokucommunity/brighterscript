@@ -272,7 +272,7 @@ describe('parser', () => {
             `);
             expect(errors).to.be.lengthOf(1);
         });
-        it.only('none of them can be used as local variables', () => {
+        it('none of them can be used as local variables', () => {
             let reservedWords = new Set(ReservedWords);
             //remove the rem keyword because it's a comment...won't cause error
             reservedWords.delete('rem');
