@@ -9,7 +9,7 @@ describe('parser print statements', () => {
     it('parses singular print statements', () => {
         let { statements, errors } = Parser.parse([
             token(TokenKind.Print),
-            token(TokenKind.String, 'Hello, world'),
+            token(TokenKind.StringLiteral, 'Hello, world'),
             EOF
         ]);
 
@@ -30,9 +30,9 @@ describe('parser print statements', () => {
     it('parses print lists with no separator', () => {
         let { statements, errors } = Parser.parse([
             token(TokenKind.Print),
-            token(TokenKind.String, 'Foo', new BrsString('Foo')),
-            token(TokenKind.String, 'bar', new BrsString('bar')),
-            token(TokenKind.String, 'baz', new BrsString('baz')),
+            token(TokenKind.StringLiteral, 'Foo', new BrsString('Foo')),
+            token(TokenKind.StringLiteral, 'bar', new BrsString('bar')),
+            token(TokenKind.StringLiteral, 'baz', new BrsString('baz')),
             EOF
         ]);
 
@@ -45,11 +45,11 @@ describe('parser print statements', () => {
     it('parses print lists with separators', () => {
         let { statements, errors } = Parser.parse([
             token(TokenKind.Print),
-            token(TokenKind.String, 'Foo', new BrsString('Foo')),
+            token(TokenKind.StringLiteral, 'Foo', new BrsString('Foo')),
             token(TokenKind.Semicolon),
-            token(TokenKind.String, 'bar', new BrsString('bar')),
+            token(TokenKind.StringLiteral, 'bar', new BrsString('bar')),
             token(TokenKind.Semicolon),
-            token(TokenKind.String, 'baz', new BrsString('baz')),
+            token(TokenKind.StringLiteral, 'baz', new BrsString('baz')),
             EOF
         ]);
 
@@ -78,7 +78,7 @@ describe('parser print statements', () => {
                 }
             },
             {
-                kind: TokenKind.String,
+                kind: TokenKind.StringLiteral,
                 text: `"foo"`,
                 literal: new BrsString('foo'),
                 isReserved: false,

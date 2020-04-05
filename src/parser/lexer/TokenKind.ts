@@ -1,67 +1,82 @@
 export enum TokenKind {
     // parens (and friends)
-    LeftParen = 'LeftParen',
-    RightParen = 'RightParen',
-    LeftSquare = 'LeftSquare',
-    RightSquare = 'RightSquare',
-    LeftBrace = 'LeftBrace',
-    RightBrace = 'RightBrace',
+    LeftParen = 'LeftParen', // (
+    RightParen = 'RightParen', // )
+    LeftSquareBracket = 'LeftSquare', // [
+    RightSquareBracket = 'RightSquare', // ]
+    LeftCurlyBrace = 'LeftCurlyBrace', // {
+    RightCurlyBrace = 'RightCurlyBrace', // }
 
     // operators
-    Caret = 'Caret',
-    Minus = 'Minus',
-    Plus = 'Plus',
-    Star = 'Star',
-    Slash = 'Slash',
-    Mod = 'Mod',
-    Backslash = 'Backslash',
+    Caret = 'Caret', // ^
+    Minus = 'Minus', // -
+    Plus = 'Plus', // +
+    Star = 'Star', // *
+    Forwardslash = 'Forwardslash', // /
+    Mod = 'Mod', // mod
+    Backslash = 'Backslash', // \
 
     // postfix operators
     PlusPlus = 'PlusPlus', // ++
     MinusMinus = 'MinusMinus', // --
 
     // bitshift
-    LeftShift = 'LeftShift', // <<
-    RightShift = 'RightShift', // >>
+    LessLess = 'LessLess', // <<
+    GreaterGreater = 'GreaterGreater', // >>
 
     // assignment operators
     MinusEqual = 'MinusEqual', // -=
     PlusEqual = 'PlusEqual', // +=
     StarEqual = 'StarEqual', // *=
-    SlashEqual = 'SlashEqual', // /=
+    ForwardslashEqual = 'ForwardslashEqual', // /=
     BackslashEqual = 'BackslashEqual', // \=
-    LeftShiftEqual = 'LeftShiftEqual', // <<=
-    RightShiftEqual = 'RightShiftEqual', // >>=
+    LessLessEqual = 'LessLessEqual', // <<=
+    GreaterGreaterEqual = 'GreaterGreaterEqual', // >>=
 
     // comparators
-    Less = 'Less',
-    LessEqual = 'LessEqual',
-    Greater = 'Greater',
-    GreaterEqual = 'GreaterEqual',
-    Equal = 'Equal',
+    Less = 'Less', // <
+    LessEqual = 'LessEqual', // <=
+    Greater = 'Greater', // >
+    GreaterEqual = 'GreaterEqual', // >=
+    Equal = 'Equal', // =
     LessGreater = 'LessGreater', // BrightScript uses `<>` for "not equal"
 
     // literals
-    Identifier = 'Identifier',
-    String = 'String',
+    BooleanLiteral = 'BooleanLiteral',
+    IdentifierLiteral = 'IdentifierLiteral',
+    StringLiteral = 'StringLiteral',
+    IntegerLiteral = 'IntegerLiteral',
+    FloatLiteral = 'FloatLiteral',
+    DoubleLiteral = 'DoubleLiteral',
+    LongIntegerLiteral = 'LongIntegerLiteral',
+
+    //types
+    Void = 'Void',
+    Number = 'Number',
+    Boolean = 'Boolean',
     Integer = 'Integer',
+    LongInteger = 'LongInteger',
     Float = 'Float',
     Double = 'Double',
-    LongInteger = 'LongInteger',
+    String = 'String',
+    Object = 'Object',
+    Interface = 'Interface',
+    Invalid = 'Invalid',
+    Dynamic = 'Dynamic',
 
     // other single-character symbols
-    Dot = 'Dot',
-    Comma = 'Comma',
-    Colon = 'Colon',
-    Semicolon = 'Semicolon',
+    Dot = 'Dot', // .
+    Comma = 'Comma', // ,
+    Colon = 'Colon', // :
+    Semicolon = 'Semicolon', // ;
 
     // conditional compilation
-    HashIf = 'HashIf',
-    HashElseIf = 'HashElseIf',
-    HashElse = 'HashElse',
-    HashEndIf = 'HashEndIf',
-    HashConst = 'HashConst',
-    HashError = 'HashError',
+    HashIf = 'HashIf', // #if
+    HashElseIf = 'HashElseIf', // #elseif
+    HashElse = 'HashElse', // #else
+    HashEndIf = 'HashEndIf', // #endif
+    HashConst = 'HashConst', // #const
+    HashError = 'HashError', // #error
     HashErrorMessage = 'HashErrorMessage',
 
     // keywords
@@ -72,6 +87,7 @@ export enum TokenKind {
     Dim = 'Dim',
     Each = 'Each',
     Else = 'Else',
+    Then = 'Then',
     ElseIf = 'ElseIf',
     End = 'End',
     EndFunction = 'EndFunction',
@@ -92,7 +108,6 @@ export enum TokenKind {
     GetLastRunRunTimeError = 'GetLastRunRunTimeError',
     Goto = 'Goto',
     If = 'If',
-    Invalid = 'Invalid',
     Let = 'Let',
     Next = 'Next',
     Not = 'Not',
@@ -125,4 +140,10 @@ export enum TokenKind {
     Whitespace = 'Whitespace',
     Newline = 'Newline',
     Eof = 'Eof'
+}
+
+export enum CommentKind {
+    SingleQuote = 'SingleQuote',
+    Rem = 'Rem',
+    Block = 'Block'
 }

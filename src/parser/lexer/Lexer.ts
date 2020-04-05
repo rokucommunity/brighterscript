@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 
-import { TokenKind } from './TokenKind';
-import { Token, Location } from './Token';
+import { TokenKind, CommentKind } from './TokenKind';
+import { Token, Location, CommentToken } from './Token';
 import { ReservedWords, KeyWords } from './ReservedWords';
 import { BrsError } from '../Error';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
@@ -98,7 +98,7 @@ export class Lexer {
         this.tokens.push({
             kind: TokenKind.Eof,
             isReserved: false,
-            text: '\0',
+            text: '',
             location: {
                 start: {
                     line: this.line,
@@ -176,16 +176,16 @@ export class Lexer {
                 this.addToken(TokenKind.RightParen);
                 break;
             case '{':
-                this.addToken(TokenKind.LeftBrace);
+                this.addToken(TokenKind.LeftCurlyBrace);
                 break;
             case '}':
-                this.addToken(TokenKind.RightBrace);
+                this.addToken(TokenKind.RightCurlyBrace);
                 break;
             case '[':
-                this.addToken(TokenKind.LeftSquare);
+                this.addToken(TokenKind.LeftSquareBracket);
                 break;
             case ']':
-                this.addToken(TokenKind.RightSquare);
+                this.addToken(TokenKind.RightSquareBracket);
                 break;
             case ',':
                 this.addToken(TokenKind.Comma);
@@ -244,10 +244,10 @@ export class Lexer {
                 switch (this.peek()) {
                     case '=':
                         this.advance();
-                        this.addToken(TokenKind.SlashEqual);
+                        this.addToken(TokenKind.ForwardslashEqual);
                         break;
                     default:
-                        this.addToken(TokenKind.Slash);
+                        this.addToken(TokenKind.Forwardslash);
                         break;
                 }
                 break;
@@ -288,10 +288,10 @@ export class Lexer {
                         switch (this.peek()) {
                             case '=':
                                 this.advance();
-                                this.addToken(TokenKind.LeftShiftEqual);
+                                this.addToken(TokenKind.LessLessEqual);
                                 break;
                             default:
-                                this.addToken(TokenKind.LeftShift);
+                                this.addToken(TokenKind.LessLess);
                                 break;
                         }
                         break;
@@ -315,10 +315,10 @@ export class Lexer {
                         switch (this.peek()) {
                             case '=':
                                 this.advance();
-                                this.addToken(TokenKind.RightShiftEqual);
+                                this.addToken(TokenKind.GreaterGreaterEqual);
                                 break;
                             default:
-                                this.addToken(TokenKind.RightShift);
+                                this.addToken(TokenKind.GreaterGreater);
                                 break;
                         }
                         break;
@@ -327,16 +327,17 @@ export class Lexer {
                         break;
                 }
                 break;
-            case '\'':
+            case `'`:
                 let comment = '';
                 // BrightScript doesn't have block comments; only line
                 while (this.peek() !== '\n' && !this.isAtEnd()) {
                     comment += this.advance();
                 }
-                this.tokens.push({
+                this.tokens.push(<CommentToken>{
                     text: comment,
                     isReserved: false,
                     kind: TokenKind.Comment,
+                    commentKind: CommentKind.SingleQuote,
                     location: this.locationOf(comment)
                 });
                 break;
@@ -498,7 +499,7 @@ export class Lexer {
 
         // trim the surrounding quotes, and replace the double-" literal with a single
         let value = this.source.slice(this.start + 1, this.current - 1).replace(/""/g, '"');
-        this.addToken(TokenKind.String, new BrsString(value));
+        this.addToken(TokenKind.StringLiteral, new BrsString(value));
     }
 
     /**
@@ -535,13 +536,13 @@ export class Lexer {
 
         if (numberOfDigits >= 10 && designator !== '&') {
             // numeric literals over 10 digits with no type designator are implicitly Doubles
-            this.addToken(TokenKind.Double, Double.fromString(asString));
+            this.addToken(TokenKind.DoubleLiteral, Double.fromString(asString));
             return;
         } else if (designator === '#') {
             // numeric literals ending with "#" are forced to Doubles
             this.advance();
             asString = this.source.slice(this.start, this.current);
-            this.addToken(TokenKind.Double, Double.fromString(asString));
+            this.addToken(TokenKind.DoubleLiteral, Double.fromString(asString));
             return;
         } else if (designator === 'd') {
             // literals that use "D" as the exponent are also automatic Doubles
@@ -561,7 +562,7 @@ export class Lexer {
 
             // replace the exponential marker with a JavaScript-friendly "e"
             asString = this.source.slice(this.start, this.current).replace(/[dD]/, 'e');
-            this.addToken(TokenKind.Double, Double.fromString(asString));
+            this.addToken(TokenKind.DoubleLiteral, Double.fromString(asString));
             return;
         }
 
@@ -569,7 +570,7 @@ export class Lexer {
             // numeric literals ending with "!" are forced to Floats
             this.advance();
             asString = this.source.slice(this.start, this.current);
-            this.addToken(TokenKind.Float, Float.fromString(asString));
+            this.addToken(TokenKind.FloatLiteral, Float.fromString(asString));
             return;
         } else if (designator === 'e') {
             // literals that use "E" as the exponent are also automatic Floats
@@ -588,11 +589,11 @@ export class Lexer {
             }
 
             asString = this.source.slice(this.start, this.current);
-            this.addToken(TokenKind.Float, Float.fromString(asString));
+            this.addToken(TokenKind.FloatLiteral, Float.fromString(asString));
             return;
         } else if (containsDecimal) {
             // anything with a decimal but without matching Double rules is a Float
-            this.addToken(TokenKind.Float, Float.fromString(asString));
+            this.addToken(TokenKind.FloatLiteral, Float.fromString(asString));
             return;
         }
 
@@ -600,11 +601,11 @@ export class Lexer {
             // numeric literals ending with "&" are forced to LongIntegers
             asString = this.source.slice(this.start, this.current);
             this.advance();
-            this.addToken(TokenKind.LongInteger, Int64.fromString(asString));
+            this.addToken(TokenKind.LongIntegerLiteral, Int64.fromString(asString));
 
         } else {
             // otherwise, it's a regular integer
-            this.addToken(TokenKind.Integer, Int32.fromString(asString));
+            this.addToken(TokenKind.IntegerLiteral, Int32.fromString(asString));
 
         }
     }
@@ -637,10 +638,10 @@ export class Lexer {
             // literals ending with "&" are forced to LongIntegers
             this.advance();
             let asString = this.source.slice(this.start, this.current);
-            this.addToken(TokenKind.LongInteger, Int64.fromString(asString));
+            this.addToken(TokenKind.LongIntegerLiteral, Int64.fromString(asString));
         } else {
             let asString = this.source.slice(this.start, this.current);
-            this.addToken(TokenKind.Integer, Int32.fromString(asString));
+            this.addToken(TokenKind.IntegerLiteral, Int32.fromString(asString));
         }
     }
 
@@ -698,12 +699,12 @@ export class Lexer {
             this.advance();
         }
 
-        let tokenType = KeyWords[text.toLowerCase()] || TokenKind.Identifier;
+        let tokenType = KeyWords[text.toLowerCase()] || TokenKind.IdentifierLiteral;
         if (tokenType === KeyWords.rem) {
             //the rem keyword can be used as an identifier on objects,
             //so do a quick look-behind to see if there's a preceeding dot
             if (this.checkPrevious(TokenKind.Dot)) {
-                this.addToken(TokenKind.Identifier);
+                this.addToken(TokenKind.IdentifierLiteral);
             } else {
                 // The 'rem' keyword can be used to indicate comments as well, so
                 // consume the rest of the line

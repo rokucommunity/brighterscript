@@ -1,4 +1,4 @@
-import { TokenKind } from './TokenKind';
+import { TokenKind, CommentKind } from './TokenKind';
 import { BrsType } from '../brsTypes';
 
 /**
@@ -44,9 +44,19 @@ export interface LineAndColumn {
     column: number;
 }
 
-/** Represents an identifier as scanned by the lexer. */
+/**
+ * Represents an identifier as scanned by the lexer.
+ */
 export interface Identifier extends Token {
-    kind: TokenKind.Identifier;
+    kind: TokenKind.IdentifierLiteral;
+}
+
+/**
+ * Represents a comment token as scanned by the lexer
+ */
+export interface CommentToken extends Token {
+    kind: TokenKind.Comment;
+    commentKind: CommentKind;
 }
 
 /**

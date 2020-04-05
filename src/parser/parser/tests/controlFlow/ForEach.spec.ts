@@ -72,7 +72,7 @@ describe('parser foreach loops', () => {
                 }
             },
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'a',
                 isReserved: false,
                 location: {
@@ -81,7 +81,7 @@ describe('parser foreach loops', () => {
                 }
             },
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'in',
                 isReserved: true,
                 location: {
@@ -90,7 +90,7 @@ describe('parser foreach loops', () => {
                 }
             },
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'b',
                 isReserved: false,
                 location: {

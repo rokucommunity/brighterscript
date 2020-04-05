@@ -10,7 +10,7 @@ describe('parser assignment operators', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.PlusEqual),
-            token(TokenKind.String, `"lorem"`, new BrsString('lorem')),
+            token(TokenKind.StringLiteral, `"lorem"`, new BrsString('lorem')),
             EOF
         ]);
 
@@ -23,7 +23,7 @@ describe('parser assignment operators', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.MinusEqual),
-            token(TokenKind.Integer, '1', new Int32(1)),
+            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
             EOF
         ]);
 
@@ -36,7 +36,7 @@ describe('parser assignment operators', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.StarEqual),
-            token(TokenKind.Integer, '3', new Int32(3)),
+            token(TokenKind.IntegerLiteral, '3', new Int32(3)),
             EOF
         ]);
 
@@ -48,8 +48,8 @@ describe('parser assignment operators', () => {
     it('/=', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(TokenKind.SlashEqual),
-            token(TokenKind.Integer, '4', new Int32(4)),
+            token(TokenKind.ForwardslashEqual),
+            token(TokenKind.IntegerLiteral, '4', new Int32(4)),
             EOF
         ]);
 
@@ -62,7 +62,7 @@ describe('parser assignment operators', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.BackslashEqual),
-            token(TokenKind.Integer, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
             EOF
         ]);
 
@@ -74,8 +74,8 @@ describe('parser assignment operators', () => {
     it('<<=', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(TokenKind.LeftShiftEqual),
-            token(TokenKind.Integer, '6', new Int32(6)),
+            token(TokenKind.LessLessEqual),
+            token(TokenKind.IntegerLiteral, '6', new Int32(6)),
             EOF
         ]);
 
@@ -87,8 +87,8 @@ describe('parser assignment operators', () => {
     it('>>=', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(TokenKind.RightShiftEqual),
-            token(TokenKind.Integer, '7', new Int32(7)),
+            token(TokenKind.GreaterGreaterEqual),
+            token(TokenKind.IntegerLiteral, '7', new Int32(7)),
             EOF
         ]);
 

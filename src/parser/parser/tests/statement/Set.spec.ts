@@ -52,7 +52,7 @@ describe('parser indexed assignment', () => {
                 token(TokenKind.Dot, '.'),
                 identifier('bar'),
                 token(TokenKind.StarEqual, '*='),
-                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
                 token(TokenKind.Newline, '\\n'),
                 EOF
             ]);
@@ -68,9 +68,9 @@ describe('parser indexed assignment', () => {
         it('assigns anonymous functions', () => {
             let { statements, errors } = Parser.parse([
                 identifier('someArray'),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.Integer, '0', new Int32(0)),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+                token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
                 token(TokenKind.LeftParen, '('),
@@ -89,9 +89,9 @@ describe('parser indexed assignment', () => {
         it('assigns boolean expressions', () => {
             let { statements, errors } = Parser.parse([
                 identifier('someArray'),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.Integer, '0', new Int32(0)),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+                token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.True, 'true'),
                 token(TokenKind.And, 'and'),
@@ -109,11 +109,11 @@ describe('parser indexed assignment', () => {
         it('assignment operator', () => {
             let { statements, errors } = Parser.parse([
                 identifier('someArray'),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.Integer, '0', new Int32(0)),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+                token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.StarEqual, '*='),
-                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
                 EOF
             ]);
 
@@ -134,7 +134,7 @@ describe('parser indexed assignment', () => {
          */
         let { statements, errors } = Parser.parse([
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'arr',
                 isReserved: false,
                 location: {
@@ -144,7 +144,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: TokenKind.LeftSquare,
+                kind: TokenKind.LeftSquareBracket,
                 text: '[',
                 isReserved: false,
                 location: {
@@ -154,7 +154,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: TokenKind.Integer,
+                kind: TokenKind.IntegerLiteral,
                 text: '0',
                 literal: new Int32(0),
                 isReserved: false,
@@ -165,7 +165,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: TokenKind.RightSquare,
+                kind: TokenKind.RightSquareBracket,
                 text: ']',
                 isReserved: false,
                 location: {
@@ -185,7 +185,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: TokenKind.Integer,
+                kind: TokenKind.IntegerLiteral,
                 text: '1',
                 literal: new Int32(1),
                 isReserved: false,
@@ -206,7 +206,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'obj',
                 isReserved: false,
                 location: {
@@ -226,7 +226,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'a',
                 isReserved: false,
                 location: {
@@ -246,7 +246,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: TokenKind.Integer,
+                kind: TokenKind.IntegerLiteral,
                 text: '5',
                 literal: new Int32(5),
                 isReserved: false,

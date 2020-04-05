@@ -33,7 +33,7 @@ describe('parser return statements', () => {
             token(TokenKind.RightParen, ')'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.Return, 'return'),
-            { kind: TokenKind.String, literal: new BrsString('test'), text: '"test"', line: 2 },
+            { kind: TokenKind.StringLiteral, literal: new BrsString('test'), text: '"test"', line: 2 },
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.EndFunction, 'end function'),
             EOF
@@ -90,7 +90,7 @@ describe('parser return statements', () => {
                 }
             },
             {
-                kind: TokenKind.Integer,
+                kind: TokenKind.IntegerLiteral,
                 text: '5',
                 literal: new Int32(5),
                 isReserved: false,

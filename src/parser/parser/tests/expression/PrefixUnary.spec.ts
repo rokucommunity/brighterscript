@@ -44,7 +44,7 @@ describe('parser prefix unary expressions', () => {
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Minus, '-'),
-            token(TokenKind.Integer, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
             EOF
         ]);
 
@@ -62,7 +62,7 @@ describe('parser prefix unary expressions', () => {
             token(TokenKind.Minus, '-'),
             token(TokenKind.Minus, '-'),
             token(TokenKind.Minus, '-'),
-            token(TokenKind.Integer, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
             EOF
         ]);
 
@@ -80,7 +80,7 @@ describe('parser prefix unary expressions', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: '_false',
                 isReserved: false,
                 location: {

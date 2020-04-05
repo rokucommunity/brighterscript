@@ -40,7 +40,7 @@ describe('parser variable declarations', () => {
         let { statements, errors } = Parser.parse([
             identifier('foo'),
             token(TokenKind.Equal),
-            token(TokenKind.Integer, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
             EOF
         ]);
 
@@ -54,9 +54,9 @@ describe('parser variable declarations', () => {
         let { statements, errors } = Parser.parse([
             identifier('bar'),
             token(TokenKind.Equal),
-            token(TokenKind.Integer, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
             token(TokenKind.Caret),
-            token(TokenKind.Integer, '3', new Int32(3)),
+            token(TokenKind.IntegerLiteral, '3', new Int32(3)),
             EOF
         ]);
 
@@ -89,7 +89,7 @@ describe('parser variable declarations', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'foo',
                 isReserved: false,
                 location: {

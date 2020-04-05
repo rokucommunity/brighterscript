@@ -34,7 +34,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Colon, ':'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.String, 'Lorem ipsum', new BrsString('Lorem ipsum')),
+                token(TokenKind.StringLiteral, 'Lorem ipsum', new BrsString('Lorem ipsum')),
                 token(TokenKind.Colon, ':'),
                 token(TokenKind.EndFunction, 'end function'),
                 EOF
@@ -54,7 +54,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.String, 'Lorem ipsum', new BrsString('Lorem ipsum')),
+                token(TokenKind.StringLiteral, 'Lorem ipsum', new BrsString('Lorem ipsum')),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndFunction, 'end function'),
                 EOF
@@ -122,19 +122,19 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
                 token(TokenKind.Comma, ','),
 
                 identifier('b'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '4', new Int32(4)),
+                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
                 token(TokenKind.Comma, ','),
 
                 identifier('c'),
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
                 token(TokenKind.RightParen, ')'),
 
                 token(TokenKind.Newline, '\\n'),
@@ -156,7 +156,7 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
                 identifier('as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
@@ -165,7 +165,7 @@ describe('parser', () => {
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
                 identifier('as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
@@ -227,7 +227,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.String, 'Lorem ipsum', new BrsString('Lorem ipsum')),
+                token(TokenKind.StringLiteral, 'Lorem ipsum', new BrsString('Lorem ipsum')),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndSub, 'end sub'),
                 EOF
@@ -295,19 +295,19 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
                 token(TokenKind.Comma, ','),
 
                 identifier('b'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '4', new Int32(4)),
+                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
                 token(TokenKind.Comma, ','),
 
                 identifier('c'),
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
                 token(TokenKind.RightParen, ')'),
 
                 token(TokenKind.Newline, '\\n'),
@@ -329,7 +329,7 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
                 identifier('as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
@@ -338,7 +338,7 @@ describe('parser', () => {
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
                 identifier('as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
@@ -366,7 +366,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.String, 'I\'m a callback', new BrsString('I\'m a callback')),
+                token(TokenKind.StringLiteral, 'I\'m a callback', new BrsString('I\'m a callback')),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndFunction, 'end function'),
                 token(TokenKind.Newline, '\\n'),
@@ -390,7 +390,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.String, 'I\'m anonymous', new BrsString('I\'m anonymous')),
+                token(TokenKind.StringLiteral, 'I\'m anonymous', new BrsString('I\'m anonymous')),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndFunction, 'end function'),
 
@@ -414,7 +414,7 @@ describe('parser', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: '_',
                 isReserved: false,
                 location: {

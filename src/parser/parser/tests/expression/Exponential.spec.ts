@@ -11,9 +11,9 @@ describe('parser', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 token(TokenKind.Caret, '^'),
-                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
                 EOF
             ]);
 
@@ -26,11 +26,11 @@ describe('parser', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 token(TokenKind.Caret, '^'),
-                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
                 token(TokenKind.Caret, '^'),
-                token(TokenKind.Integer, '4', new Int32(4)),
+                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
                 EOF
             ]);
 

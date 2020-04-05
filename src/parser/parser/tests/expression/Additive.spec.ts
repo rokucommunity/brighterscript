@@ -10,11 +10,11 @@ describe('parser additive expressions', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.Integer, '1', new Int32(1)),
+            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
             token(TokenKind.Plus, '+'),
-            token(TokenKind.Integer, '2', new Int32(2)),
+            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
             token(TokenKind.Plus, '+'),
-            token(TokenKind.Integer, '3', new Int32(3)),
+            token(TokenKind.IntegerLiteral, '3', new Int32(3)),
             EOF
         ]);
 
@@ -27,11 +27,11 @@ describe('parser additive expressions', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.Integer, '1', new Int32(1)),
+            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
             token(TokenKind.Minus, '-'),
-            token(TokenKind.Integer, '2', new Int32(2)),
+            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
             token(TokenKind.Minus, '-'),
-            token(TokenKind.Integer, '3', new Int32(3)),
+            token(TokenKind.IntegerLiteral, '3', new Int32(3)),
             EOF
         ]);
 
@@ -48,7 +48,7 @@ describe('parser additive expressions', () => {
         // _ = 1 + 2 + 3
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: '_',
                 isReserved: false,
                 location: {
@@ -66,7 +66,7 @@ describe('parser additive expressions', () => {
                 }
             },
             {
-                kind: TokenKind.Integer,
+                kind: TokenKind.IntegerLiteral,
                 text: '1',
                 isReserved: false,
                 literal: new Int32(1),
@@ -85,7 +85,7 @@ describe('parser additive expressions', () => {
                 }
             },
             {
-                kind: TokenKind.Integer,
+                kind: TokenKind.IntegerLiteral,
                 text: '2',
                 isReserved: false,
                 literal: new Int32(2),
@@ -104,7 +104,7 @@ describe('parser additive expressions', () => {
                 }
             },
             {
-                kind: TokenKind.Integer,
+                kind: TokenKind.IntegerLiteral,
                 text: '3',
                 isReserved: false,
                 literal: new Int32(3),

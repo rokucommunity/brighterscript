@@ -11,11 +11,11 @@ describe('parser for loops', () => {
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.Integer, '0', new Int32(0)),
+            token(TokenKind.IntegerLiteral, '0', new Int32(0)),
             token(TokenKind.To, 'to'),
-            token(TokenKind.Integer, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
             token(TokenKind.Step, 'step'),
-            token(TokenKind.Integer, '2', new Int32(2)),
+            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
             token(TokenKind.Newline, '\n'),
             // body would go here, but it's not necessary for this test
             token(TokenKind.EndFor, 'end for'),
@@ -37,9 +37,9 @@ describe('parser for loops', () => {
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.Integer, '0', new Int32(0)),
+            token(TokenKind.IntegerLiteral, '0', new Int32(0)),
             token(TokenKind.To, 'to'),
-            token(TokenKind.Integer, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
             token(TokenKind.Newline, '\n'),
             // body would go here, but it's not necessary for this test
             token(TokenKind.EndFor, 'end for'),
@@ -61,9 +61,9 @@ describe('parser for loops', () => {
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.Integer, '0', new Int32(0)),
+            token(TokenKind.IntegerLiteral, '0', new Int32(0)),
             token(TokenKind.To, 'to'),
-            token(TokenKind.Integer, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
             token(TokenKind.Newline, '\n'),
             // body would go here, but it's not necessary for this test
             token(TokenKind.Next, 'next'),
@@ -96,7 +96,7 @@ describe('parser for loops', () => {
                 }
             },
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'i',
                 isReserved: false,
                 location: {
@@ -114,7 +114,7 @@ describe('parser for loops', () => {
                 }
             },
             {
-                kind: TokenKind.Integer,
+                kind: TokenKind.IntegerLiteral,
                 text: '0',
                 literal: new Int32(0),
                 isReserved: false,
@@ -133,7 +133,7 @@ describe('parser for loops', () => {
                 }
             },
             {
-                kind: TokenKind.Integer,
+                kind: TokenKind.IntegerLiteral,
                 text: '10',
                 literal: new Int32(10),
                 isReserved: false,

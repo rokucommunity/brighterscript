@@ -28,9 +28,9 @@ describe('parser indexing', () => {
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.Integer, '2', new Int32(2)),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
 
@@ -50,7 +50,7 @@ describe('parser indexing', () => {
              */
             let { statements, errors } = Parser.parse(<any>[
                 {
-                    kind: TokenKind.Identifier,
+                    kind: TokenKind.IdentifierLiteral,
                     text: 'a',
                     isReserved: false,
                     location: {
@@ -68,7 +68,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: TokenKind.Identifier,
+                    kind: TokenKind.IdentifierLiteral,
                     text: 'foo',
                     isReserved: false,
                     location: {
@@ -86,7 +86,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: TokenKind.Identifier,
+                    kind: TokenKind.IdentifierLiteral,
                     text: 'bar',
                     isReserved: false,
                     location: {
@@ -104,7 +104,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: TokenKind.Identifier,
+                    kind: TokenKind.IdentifierLiteral,
                     text: 'b',
                     isReserved: false,
                     location: {
@@ -122,7 +122,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: TokenKind.Identifier,
+                    kind: TokenKind.IdentifierLiteral,
                     text: 'bar',
                     isReserved: false,
                     location: {
@@ -131,7 +131,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: TokenKind.LeftSquare,
+                    kind: TokenKind.LeftSquareBracket,
                     text: '[',
                     isReserved: false,
                     location: {
@@ -140,7 +140,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: TokenKind.Integer,
+                    kind: TokenKind.IntegerLiteral,
                     text: '2',
                     literal: new Int32(2),
                     isReserved: false,
@@ -150,7 +150,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: TokenKind.RightSquare,
+                    kind: TokenKind.RightSquareBracket,
                     text: ']',
                     isReserved: false,
                     location: {
@@ -207,15 +207,15 @@ describe('parser indexing', () => {
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.Integer, '2', new Int32(2)),
-                token(TokenKind.RightSquare, ']'),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.Integer, '0', new Int32(0)),
-                token(TokenKind.RightSquare, ']'),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.Integer, '6', new Int32(6)),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.RightSquareBracket, ']'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+                token(TokenKind.RightSquareBracket, ']'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '6', new Int32(6)),
+                token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
 
@@ -231,9 +231,9 @@ describe('parser indexing', () => {
                 identifier('foo'),
                 token(TokenKind.Dot, '.'),
                 identifier('bar'),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.Integer, '0', new Int32(0)),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+                token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.Dot, '.'),
                 identifier('baz'),
                 EOF

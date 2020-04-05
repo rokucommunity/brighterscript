@@ -13,7 +13,7 @@ describe('parser while statements', () => {
             token(TokenKind.True, 'true', BrsBoolean.True),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.Print, 'print'),
-            token(TokenKind.String, 'looping', new BrsString('looping')),
+            token(TokenKind.StringLiteral, 'looping', new BrsString('looping')),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.EndWhile, 'end while'),
             EOF
@@ -30,7 +30,7 @@ describe('parser while statements', () => {
             token(TokenKind.True, 'true', BrsBoolean.True),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.Print, 'print'),
-            token(TokenKind.String, 'looping', new BrsString('looping')),
+            token(TokenKind.StringLiteral, 'looping', new BrsString('looping')),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.ExitWhile, 'exit while'),
             token(TokenKind.Newline, '\n'),
@@ -84,7 +84,7 @@ describe('parser while statements', () => {
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
             token(TokenKind.LeftParen, '('),
-            token(TokenKind.Integer, '0', new Int32(0)),
+            token(TokenKind.IntegerLiteral, '0', new Int32(0)),
             token(TokenKind.RightParen, ')'),
             token(TokenKind.Newline, '\n'),
 

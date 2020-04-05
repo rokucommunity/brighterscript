@@ -88,7 +88,7 @@ export class Preprocessor implements CC.Visitor {
             case TokenKind.False:
                 value = false;
                 break;
-            case TokenKind.Identifier:
+            case TokenKind.IdentifierLiteral:
                 if (this.constants.has(chunk.value.text)) {
                     value = this.constants.get(chunk.value.text);
                     break;
@@ -167,7 +167,7 @@ export class Preprocessor implements CC.Visitor {
                 return true;
             case TokenKind.False:
                 return false;
-            case TokenKind.Identifier:
+            case TokenKind.IdentifierLiteral:
                 if (this.constants.has(token.text)) {
                     return this.constants.get(token.text);
                 }

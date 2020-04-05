@@ -11,8 +11,8 @@ describe('parser array literals', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
 
@@ -25,14 +25,14 @@ describe('parser array literals', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.LeftSquareBracket, '['),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
 
@@ -47,13 +47,13 @@ describe('parser array literals', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.Integer, '3', new Int32(3)),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
 
@@ -66,17 +66,17 @@ describe('parser array literals', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.LeftSquareBracket, '['),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
                 token(TokenKind.Comma, ','),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 token(TokenKind.Comma, ','),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
 
@@ -89,15 +89,15 @@ describe('parser array literals', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.LeftSquareBracket, '['),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
 
@@ -112,13 +112,13 @@ describe('parser array literals', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.Integer, '3', new Int32(3)),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
 
@@ -131,23 +131,23 @@ describe('parser array literals', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.Integer, '3', new Int32(3)),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.Integer, '4', new Int32(4)),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.Integer, '6', new Int32(6)),
-                token(TokenKind.RightSquare, ']'),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.IntegerLiteral, '6', new Int32(6)),
+                token(TokenKind.RightSquareBracket, ']'),
+                token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
 
@@ -160,14 +160,14 @@ describe('parser array literals', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.LeftSquare, '['),
-                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 token(TokenKind.Comma, ','),
                 token(TokenKind.Not, 'not'),
                 token(TokenKind.False, 'false', BrsBoolean.False),
-                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
 
@@ -191,7 +191,7 @@ describe('parser array literals', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'a',
                 isReserved: false,
                 location: {
@@ -209,7 +209,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: TokenKind.LeftSquare,
+                kind: TokenKind.LeftSquareBracket,
                 text: '[',
                 isReserved: false,
                 location: {
@@ -218,7 +218,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: TokenKind.RightSquare,
+                kind: TokenKind.RightSquareBracket,
                 text: ']',
                 isReserved: false,
                 location: {
@@ -245,7 +245,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'b',
                 isReserved: false,
                 location: {
@@ -263,7 +263,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: TokenKind.LeftSquare,
+                kind: TokenKind.LeftSquareBracket,
                 text: '[',
                 isReserved: false,
                 location: {
@@ -290,7 +290,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: TokenKind.RightSquare,
+                kind: TokenKind.RightSquareBracket,
                 text: ']',
                 isReserved: false,
                 location: {

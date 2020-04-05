@@ -28,7 +28,7 @@ export function token(kind, text?, literal?) {
  * @returns {object} a token with the provided `text`.
  */
 export function identifier(text) {
-    return exports.token(TokenKind.Identifier, text);
+    return exports.token(TokenKind.IdentifierLiteral, text);
 }
 
 /** An end-of-file token. */

@@ -11,8 +11,8 @@ describe('parser associative array literals', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.LeftBrace, '{'),
-                token(TokenKind.RightBrace, '}'),
+                token(TokenKind.LeftCurlyBrace, '{'),
+                token(TokenKind.RightCurlyBrace, '}'),
                 EOF
             ]);
 
@@ -25,14 +25,14 @@ describe('parser associative array literals', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.LeftBrace, '{'),
+                token(TokenKind.LeftCurlyBrace, '{'),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.RightBrace, '}'),
+                token(TokenKind.RightCurlyBrace, '}'),
                 EOF
             ]);
 
@@ -47,19 +47,19 @@ describe('parser associative array literals', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.LeftBrace, '{'),
+                token(TokenKind.LeftCurlyBrace, '{'),
                 identifier('foo'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
                 token(TokenKind.Comma, ','),
                 identifier('bar'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 token(TokenKind.Comma, ','),
                 identifier('baz'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.Integer, '3', new Int32(3)),
-                token(TokenKind.RightBrace, '}'),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.RightCurlyBrace, '}'),
                 EOF
             ]);
 
@@ -72,23 +72,23 @@ describe('parser associative array literals', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.LeftBrace, '{'),
+                token(TokenKind.LeftCurlyBrace, '{'),
                 token(TokenKind.Newline, '\n'),
                 identifier('foo'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
                 token(TokenKind.Comma, ','),
                 token(TokenKind.Newline, '\n'),
                 identifier('bar'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 token(TokenKind.Comma, ','),
                 token(TokenKind.Newline, '\n'),
                 identifier('baz'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.RightBrace, '}'),
+                token(TokenKind.RightCurlyBrace, '}'),
                 EOF
             ]);
 
@@ -101,21 +101,21 @@ describe('parser associative array literals', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.LeftBrace, '{'),
+                token(TokenKind.LeftCurlyBrace, '{'),
                 token(TokenKind.Newline, '\n'),
                 identifier('foo'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
                 token(TokenKind.Newline, '\n'),
                 identifier('bar'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 token(TokenKind.Newline, '\n'),
                 identifier('baz'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.RightBrace, '}'),
+                token(TokenKind.RightCurlyBrace, '}'),
                 EOF
             ]);
 
@@ -134,10 +134,10 @@ describe('parser associative array literals', () => {
             token(TokenKind.Newline, '\n'),
             identifier('person'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.LeftBrace, '{'),
+            token(TokenKind.LeftCurlyBrace, '{'),
             identifier('name'),
             token(TokenKind.Colon, ':'),
-            token(TokenKind.String, 'Bob', new BrsString('Bob')),
+            token(TokenKind.StringLiteral, 'Bob', new BrsString('Bob')),
             token(TokenKind.Colon, ':'),
             token(TokenKind.Colon, ':'),
             token(TokenKind.Colon, ':'),
@@ -145,8 +145,8 @@ describe('parser associative array literals', () => {
             token(TokenKind.Colon, ':'),
             identifier('age'),
             token(TokenKind.Colon, ':'),
-            token(TokenKind.Integer, '50', new Int32(3)),
-            token(TokenKind.RightBrace, '}'),
+            token(TokenKind.IntegerLiteral, '50', new Int32(3)),
+            token(TokenKind.RightCurlyBrace, '}'),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.EndSub, 'end sub'),
             EOF
@@ -160,23 +160,23 @@ describe('parser associative array literals', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.LeftBrace, '{'),
+            token(TokenKind.LeftCurlyBrace, '{'),
             token(TokenKind.Newline, '\n'),
-            token(TokenKind.String, 'foo', new BrsString('foo')),
+            token(TokenKind.StringLiteral, 'foo', new BrsString('foo')),
             token(TokenKind.Colon, ':'),
-            token(TokenKind.Integer, '1', new Int32(1)),
+            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
             token(TokenKind.Comma, ','),
             token(TokenKind.Newline, '\n'),
             identifier('bar'),
             token(TokenKind.Colon, ':'),
-            token(TokenKind.Integer, '2', new Int32(2)),
+            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
             token(TokenKind.Comma, ','),
             token(TokenKind.Newline, '\n'),
-            token(TokenKind.String, 'requires-hyphens', new BrsString('requires-hyphens')),
+            token(TokenKind.StringLiteral, 'requires-hyphens', new BrsString('requires-hyphens')),
             token(TokenKind.Colon, ':'),
-            token(TokenKind.Integer, '3', new Int32(3)),
+            token(TokenKind.IntegerLiteral, '3', new Int32(3)),
             token(TokenKind.Newline, '\n'),
-            token(TokenKind.RightBrace, '}'),
+            token(TokenKind.RightCurlyBrace, '}'),
             EOF
         ]);
 
@@ -199,7 +199,7 @@ describe('parser associative array literals', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'a',
                 isReserved: false,
                 location: {
@@ -217,7 +217,7 @@ describe('parser associative array literals', () => {
                 }
             },
             {
-                kind: TokenKind.LeftBrace,
+                kind: TokenKind.LeftCurlyBrace,
                 text: '{',
                 isReserved: false,
                 location: {
@@ -226,7 +226,7 @@ describe('parser associative array literals', () => {
                 }
             },
             {
-                kind: TokenKind.RightBrace,
+                kind: TokenKind.RightCurlyBrace,
                 text: '}',
                 isReserved: false,
                 location: {
@@ -253,7 +253,7 @@ describe('parser associative array literals', () => {
                 }
             },
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'b',
                 isReserved: false,
                 location: {
@@ -271,7 +271,7 @@ describe('parser associative array literals', () => {
                 }
             },
             {
-                kind: TokenKind.LeftBrace,
+                kind: TokenKind.LeftCurlyBrace,
                 text: '{',
                 isReserved: false,
                 location: {
@@ -298,7 +298,7 @@ describe('parser associative array literals', () => {
                 }
             },
             {
-                kind: TokenKind.RightBrace,
+                kind: TokenKind.RightCurlyBrace,
                 text: '}',
                 isReserved: false,
                 location: {

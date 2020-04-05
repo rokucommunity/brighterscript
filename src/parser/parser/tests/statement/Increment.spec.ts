@@ -36,9 +36,9 @@ describe('parser postfix unary expressions', () => {
     it('parses postfix \'++\' for indexed get expressions', () => {
         let { statements, errors } = Parser.parse([
             identifier('obj'),
-            token(TokenKind.LeftSquare, '['),
+            token(TokenKind.LeftSquareBracket, '['),
             identifier('property'),
-            token(TokenKind.RightSquare, ']'),
+            token(TokenKind.RightSquareBracket, ']'),
             token(TokenKind.PlusPlus, '++'),
             EOF
         ]);
@@ -107,7 +107,7 @@ describe('parser postfix unary expressions', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'someNumber',
                 isReserved: false,
                 location: {

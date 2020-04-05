@@ -12,9 +12,9 @@ describe('parser', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
                 token(TokenKind.Less, '<'),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 EOF
             ]);
 
@@ -27,9 +27,9 @@ describe('parser', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
                 token(TokenKind.LessEqual, '<='),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 EOF
             ]);
 
@@ -43,9 +43,9 @@ describe('parser', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
                 token(TokenKind.Greater, '>'),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 EOF
             ]);
 
@@ -59,9 +59,9 @@ describe('parser', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
                 token(TokenKind.GreaterEqual, '>='),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 EOF
             ]);
 
@@ -74,9 +74,9 @@ describe('parser', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 EOF
             ]);
 
@@ -90,9 +90,9 @@ describe('parser', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
                 token(TokenKind.LessGreater, '<>'),
-                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
                 EOF
             ]);
 

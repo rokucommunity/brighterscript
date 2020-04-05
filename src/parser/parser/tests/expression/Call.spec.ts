@@ -76,9 +76,9 @@ describe('parser call expressions', () => {
         const { statements, errors } = Parser.parse([
             identifier('add'),
             { kind: TokenKind.LeftParen, text: '(', line: 1 },
-            token(TokenKind.Integer, '1', new Int32(1)),
+            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
             { kind: TokenKind.Comma, text: ',', line: 1 },
-            token(TokenKind.Integer, '2', new Int32(2)),
+            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
             token(TokenKind.RightParen, ')'),
             EOF
         ]) as any;
@@ -98,7 +98,7 @@ describe('parser call expressions', () => {
          */
         const { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.Identifier,
+                kind: TokenKind.IdentifierLiteral,
                 text: 'foo',
                 isReserved: false,
                 location: {
@@ -116,7 +116,7 @@ describe('parser call expressions', () => {
                 }
             },
             {
-                kind: TokenKind.String,
+                kind: TokenKind.StringLiteral,
                 text: `"bar"`,
                 literal: new BrsString('bar'),
                 isReserved: false,
@@ -135,7 +135,7 @@ describe('parser call expressions', () => {
                 }
             },
             {
-                kind: TokenKind.String,
+                kind: TokenKind.StringLiteral,
                 text: `"baz"`,
                 literal: new BrsString('baz'),
                 isReserved: false,
