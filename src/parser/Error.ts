@@ -1,5 +1,5 @@
 import { BrsType, ValueKind, valueKindToString } from './brsTypes';
-import { Lexeme, Location, Token } from './lexer';
+import { TokenKind, Location, Token } from './lexer';
 
 export class BrsError {
     constructor(readonly message: string, readonly location: Location, readonly code: number = 100) {
@@ -91,7 +91,7 @@ export function getKind(maybeType: BrsType | ValueKind): ValueKind {
 export class ParseError extends BrsError {
     constructor(token: Token, message: string, code = 1000) {
         let m = message;
-        if (token.kind === Lexeme.Eof) {
+        if (token.kind === TokenKind.Eof) {
             m = '(At end of file) ' + message;
         }
 

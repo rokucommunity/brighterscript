@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { BrsBoolean, Int32 } from '../../../brsTypes';
-import { Lexeme, Lexer } from '../../../lexer';
+import { TokenKind, Lexer } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser if statements', () => {
@@ -55,15 +55,15 @@ describe('parser if statements', () => {
     describe('single-line if', () => {
         it('parses if only', () => {
             let { statements, errors } = Parser.parse([
-                token(Lexeme.If, 'if'),
-                token(Lexeme.Integer, '1', new Int32(1)),
-                token(Lexeme.Less, '<'),
-                token(Lexeme.Integer, '2', new Int32(2)),
+                token(TokenKind.If, 'if'),
+                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.Less, '<'),
+                token(TokenKind.Integer, '2', new Int32(2)),
                 identifier('then'),
                 identifier('foo'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.True, 'true', BrsBoolean.True),
-                token(Lexeme.Newline, '\n'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true', BrsBoolean.True),
+                token(TokenKind.Newline, '\n'),
                 EOF
             ]);
 
@@ -74,19 +74,19 @@ describe('parser if statements', () => {
 
         it('parses if-else', () => {
             let { statements, errors } = Parser.parse([
-                token(Lexeme.If, 'if'),
-                token(Lexeme.Integer, '1', new Int32(1)),
-                token(Lexeme.Less, '<'),
-                token(Lexeme.Integer, '2', new Int32(2)),
+                token(TokenKind.If, 'if'),
+                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.Less, '<'),
+                token(TokenKind.Integer, '2', new Int32(2)),
                 identifier('Then'),
                 identifier('foo'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.True, 'true', BrsBoolean.True),
-                token(Lexeme.Else, 'else'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true', BrsBoolean.True),
+                token(TokenKind.Else, 'else'),
                 identifier('foo'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.False, 'true', BrsBoolean.False),
-                token(Lexeme.Newline, '\n'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.False, 'true', BrsBoolean.False),
+                token(TokenKind.Newline, '\n'),
                 EOF
             ]);
 
@@ -97,27 +97,27 @@ describe('parser if statements', () => {
 
         it('parses if-elseif-else', () => {
             let { statements, errors } = Parser.parse([
-                token(Lexeme.If, 'if'),
-                token(Lexeme.Integer, '1', new Int32(1)),
-                token(Lexeme.Less, '<'),
-                token(Lexeme.Integer, '2', new Int32(2)),
+                token(TokenKind.If, 'if'),
+                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.Less, '<'),
+                token(TokenKind.Integer, '2', new Int32(2)),
                 identifier('then'),
                 identifier('foo'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.True, 'true', BrsBoolean.True),
-                token(Lexeme.ElseIf, 'else if'),
-                token(Lexeme.Integer, '1', new Int32(1)),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.Integer, '2', new Int32(2)),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true', BrsBoolean.True),
+                token(TokenKind.ElseIf, 'else if'),
+                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.Integer, '2', new Int32(2)),
                 identifier('then'),
                 identifier('same'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.True, 'true', BrsBoolean.True),
-                token(Lexeme.Else, 'else'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true', BrsBoolean.True),
+                token(TokenKind.Else, 'else'),
                 identifier('foo'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.True, 'true', BrsBoolean.False),
-                token(Lexeme.Newline, '\n'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true', BrsBoolean.False),
+                token(TokenKind.Newline, '\n'),
                 EOF
             ]);
 
@@ -128,25 +128,25 @@ describe('parser if statements', () => {
 
         it('allows \'then\' to be skipped', () => {
             let { statements, errors } = Parser.parse([
-                token(Lexeme.If, 'if'),
-                token(Lexeme.Integer, '1', new Int32(1)),
-                token(Lexeme.Less, '<'),
-                token(Lexeme.Integer, '2', new Int32(2)),
+                token(TokenKind.If, 'if'),
+                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.Less, '<'),
+                token(TokenKind.Integer, '2', new Int32(2)),
                 identifier('foo'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.True, 'true', BrsBoolean.True),
-                token(Lexeme.ElseIf, 'else if'),
-                token(Lexeme.Integer, '1', new Int32(1)),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.Integer, '2', new Int32(2)),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true', BrsBoolean.True),
+                token(TokenKind.ElseIf, 'else if'),
+                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.Integer, '2', new Int32(2)),
                 identifier('same'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.True, 'true', BrsBoolean.True),
-                token(Lexeme.Else, 'else'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true', BrsBoolean.True),
+                token(TokenKind.Else, 'else'),
                 identifier('foo'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.False, 'false', BrsBoolean.False),
-                token(Lexeme.Newline, '\n'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.False, 'false', BrsBoolean.False),
+                token(TokenKind.Newline, '\n'),
                 EOF
             ]);
 

@@ -2,20 +2,20 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { BrsBoolean, BrsString, Int32 } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser while statements', () => {
 
     it('while without exit', () => {
         const { statements, errors } = Parser.parse([
-            token(Lexeme.While, 'while'),
-            token(Lexeme.True, 'true', BrsBoolean.True),
-            token(Lexeme.Newline, '\n'),
-            token(Lexeme.Print, 'print'),
-            token(Lexeme.String, 'looping', new BrsString('looping')),
-            token(Lexeme.Newline, '\n'),
-            token(Lexeme.EndWhile, 'end while'),
+            token(TokenKind.While, 'while'),
+            token(TokenKind.True, 'true', BrsBoolean.True),
+            token(TokenKind.Newline, '\n'),
+            token(TokenKind.Print, 'print'),
+            token(TokenKind.String, 'looping', new BrsString('looping')),
+            token(TokenKind.Newline, '\n'),
+            token(TokenKind.EndWhile, 'end while'),
             EOF
         ]);
 
@@ -26,15 +26,15 @@ describe('parser while statements', () => {
 
     it('while with exit', () => {
         const { statements, errors } = Parser.parse([
-            token(Lexeme.While, 'while'),
-            token(Lexeme.True, 'true', BrsBoolean.True),
-            token(Lexeme.Newline, '\n'),
-            token(Lexeme.Print, 'print'),
-            token(Lexeme.String, 'looping', new BrsString('looping')),
-            token(Lexeme.Newline, '\n'),
-            token(Lexeme.ExitWhile, 'exit while'),
-            token(Lexeme.Newline, '\n'),
-            token(Lexeme.EndWhile, 'end while'),
+            token(TokenKind.While, 'while'),
+            token(TokenKind.True, 'true', BrsBoolean.True),
+            token(TokenKind.Newline, '\n'),
+            token(TokenKind.Print, 'print'),
+            token(TokenKind.String, 'looping', new BrsString('looping')),
+            token(TokenKind.Newline, '\n'),
+            token(TokenKind.ExitWhile, 'exit while'),
+            token(TokenKind.Newline, '\n'),
+            token(TokenKind.EndWhile, 'end while'),
             EOF
         ]);
 
@@ -54,7 +54,7 @@ describe('parser while statements', () => {
          */
         const { statements, errors } = Parser.parse([
             {
-                kind: Lexeme.While,
+                kind: TokenKind.While,
                 text: 'while',
                 isReserved: true,
                 location: {
@@ -63,7 +63,7 @@ describe('parser while statements', () => {
                 }
             },
             {
-                kind: Lexeme.True,
+                kind: TokenKind.True,
                 text: 'true',
                 literal: BrsBoolean.True,
                 isReserved: true,
@@ -73,7 +73,7 @@ describe('parser while statements', () => {
                 }
             },
             {
-                kind: Lexeme.Newline,
+                kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
                 location: {
@@ -83,13 +83,13 @@ describe('parser while statements', () => {
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
-            token(Lexeme.LeftParen, '('),
-            token(Lexeme.Integer, '0', new Int32(0)),
-            token(Lexeme.RightParen, ')'),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.LeftParen, '('),
+            token(TokenKind.Integer, '0', new Int32(0)),
+            token(TokenKind.RightParen, ')'),
+            token(TokenKind.Newline, '\n'),
 
             {
-                kind: Lexeme.EndWhile,
+                kind: TokenKind.EndWhile,
                 text: 'end while',
                 isReserved: false,
                 location: {

@@ -1,15 +1,15 @@
 import { expect } from 'chai';
 
 import { Parser } from '../..';
-import { Lexeme, Lexer } from '../../../lexer';
+import { TokenKind, Lexer } from '../../../lexer';
 import { EOF, token } from '../Parser.spec';
 
 describe('stop statement', () => {
     it('cannot be used as a local variable', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.Stop, 'stop'),
-            token(Lexeme.Equal, '='),
-            token(Lexeme.True, 'true'),
+            token(TokenKind.Stop, 'stop'),
+            token(TokenKind.Equal, '='),
+            token(TokenKind.True, 'true'),
             EOF
         ]);
 
@@ -21,7 +21,7 @@ describe('stop statement', () => {
     });
 
     it('is valid as a statement', () => {
-        let { errors } = Parser.parse([token(Lexeme.Stop, 'stop'), EOF]);
+        let { errors } = Parser.parse([token(TokenKind.Stop, 'stop'), EOF]);
         expect(errors[0]).to.be.undefined;
         // //expect(statements).toMatchSnapshot();
     });

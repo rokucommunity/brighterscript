@@ -2,17 +2,17 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { BrsString, Int32 } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser primary expressions', () => {
 
     it('parses numeric literals', () => {
-        let equals = token(Lexeme.Equal, '=');
+        let equals = token(TokenKind.Equal, '=');
         let { statements, errors } = Parser.parse([
             identifier('_'),
             equals,
-            token(Lexeme.Integer, '5', new Int32(5)),
+            token(TokenKind.Integer, '5', new Int32(5)),
             EOF
         ]);
         expect(errors).to.be.lengthOf(0);
@@ -21,11 +21,11 @@ describe('parser primary expressions', () => {
     });
 
     it('parses string literals', () => {
-        let equals = token(Lexeme.Equal, '=');
+        let equals = token(TokenKind.Equal, '=');
         let { statements, errors } = Parser.parse([
             identifier('_'),
             equals,
-            token(Lexeme.String, 'hello', new BrsString('hello')),
+            token(TokenKind.String, 'hello', new BrsString('hello')),
             EOF
         ]);
 
@@ -37,14 +37,14 @@ describe('parser primary expressions', () => {
     it('parses expressions in parentheses', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.Equal, '='),
-            token(Lexeme.Integer, '1', new Int32(1)),
-            token(Lexeme.Plus, '+'),
-            token(Lexeme.LeftParen, '('),
-            token(Lexeme.Integer, '2', new Int32(2)),
-            token(Lexeme.Star, '*'),
-            token(Lexeme.Integer, '3', new Int32(3)),
-            token(Lexeme.RightParen, ')'),
+            token(TokenKind.Equal, '='),
+            token(TokenKind.Integer, '1', new Int32(1)),
+            token(TokenKind.Plus, '+'),
+            token(TokenKind.LeftParen, '('),
+            token(TokenKind.Integer, '2', new Int32(2)),
+            token(TokenKind.Star, '*'),
+            token(TokenKind.Integer, '3', new Int32(3)),
+            token(TokenKind.RightParen, ')'),
             EOF
         ]);
 
@@ -65,7 +65,7 @@ describe('parser primary expressions', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
                 location: {
@@ -74,7 +74,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Equal,
+                kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 location: {
@@ -83,7 +83,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Integer,
+                kind: TokenKind.Integer,
                 text: '5',
                 literal: new Int32(5),
                 isReserved: false,
@@ -93,7 +93,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Newline,
+                kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
                 location: {
@@ -102,7 +102,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'b',
                 isReserved: false,
                 location: {
@@ -111,7 +111,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Equal,
+                kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 location: {
@@ -120,7 +120,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.String,
+                kind: TokenKind.String,
                 text: `"foo"`,
                 literal: new BrsString('foo'),
                 isReserved: false,
@@ -130,7 +130,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Newline,
+                kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
                 location: {
@@ -139,7 +139,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'c',
                 isReserved: false,
                 location: {
@@ -148,7 +148,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Equal,
+                kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 location: {
@@ -157,7 +157,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.LeftParen,
+                kind: TokenKind.LeftParen,
                 text: '(',
                 isReserved: false,
                 location: {
@@ -166,7 +166,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Integer,
+                kind: TokenKind.Integer,
                 text: '0',
                 literal: new Int32(0),
                 isReserved: false,
@@ -176,7 +176,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.RightParen,
+                kind: TokenKind.RightParen,
                 text: ')',
                 isReserved: false,
                 location: {
@@ -185,7 +185,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Eof,
+                kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 location: {

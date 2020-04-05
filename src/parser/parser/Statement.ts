@@ -1,4 +1,4 @@
-import { Token, Identifier, Location, Lexeme } from '../lexer';
+import { Token, Identifier, Location, TokenKind } from '../lexer';
 import { SourceNode } from 'source-map';
 import { Stmt } from '.';
 import { TranspileState, indent, Expression, FunctionExpression } from './Expression';
@@ -348,12 +348,12 @@ export class IncrementStatement implements Statement {
 
 /** Used to indent the current `print` position to the next 16-character-width output zone. */
 export interface PrintSeparatorTab extends Token {
-    kind: Lexeme.Comma;
+    kind: TokenKind.Comma;
 }
 
 /** Used to insert a single whitespace character at the current `print` position. */
 export interface PrintSeparatorSpace extends Token {
-    kind: Lexeme.Semicolon;
+    kind: TokenKind.Semicolon;
 }
 
 /**

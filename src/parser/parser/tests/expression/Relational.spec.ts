@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { Int32 } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser', () => {
@@ -11,10 +11,10 @@ describe('parser', () => {
         it('parses less-than expressions', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.Integer, '5', new Int32(5)),
-                token(Lexeme.Less, '<'),
-                token(Lexeme.Integer, '2', new Int32(2)),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.Less, '<'),
+                token(TokenKind.Integer, '2', new Int32(2)),
                 EOF
             ]);
 
@@ -26,10 +26,10 @@ describe('parser', () => {
         it('parses less-than-or-equal-to expressions', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.Integer, '5', new Int32(5)),
-                token(Lexeme.LessEqual, '<='),
-                token(Lexeme.Integer, '2', new Int32(2)),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.LessEqual, '<='),
+                token(TokenKind.Integer, '2', new Int32(2)),
                 EOF
             ]);
 
@@ -42,10 +42,10 @@ describe('parser', () => {
         it('parses greater-than expressions', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.Integer, '5', new Int32(5)),
-                token(Lexeme.Greater, '>'),
-                token(Lexeme.Integer, '2', new Int32(2)),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.Greater, '>'),
+                token(TokenKind.Integer, '2', new Int32(2)),
                 EOF
             ]);
 
@@ -58,10 +58,10 @@ describe('parser', () => {
         it('parses greater-than-or-equal-to expressions', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.Integer, '5', new Int32(5)),
-                token(Lexeme.GreaterEqual, '>='),
-                token(Lexeme.Integer, '2', new Int32(2)),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.GreaterEqual, '>='),
+                token(TokenKind.Integer, '2', new Int32(2)),
                 EOF
             ]);
 
@@ -73,10 +73,10 @@ describe('parser', () => {
         it('parses equality expressions', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.Integer, '5', new Int32(5)),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.Integer, '2', new Int32(2)),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.Integer, '2', new Int32(2)),
                 EOF
             ]);
 
@@ -89,10 +89,10 @@ describe('parser', () => {
         it('parses inequality expressions', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.Integer, '5', new Int32(5)),
-                token(Lexeme.LessGreater, '<>'),
-                token(Lexeme.Integer, '2', new Int32(2)),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.LessGreater, '<>'),
+                token(TokenKind.Integer, '2', new Int32(2)),
                 EOF
             ]);
 

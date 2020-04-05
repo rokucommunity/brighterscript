@@ -1,14 +1,14 @@
 import { expect } from 'chai';
 
 import { Parser } from '../..';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser postfix unary expressions', () => {
     it('parses postfix \'++\' for variables', () => {
         let { statements, errors } = Parser.parse([
             identifier('foo'),
-            token(Lexeme.PlusPlus, '++'),
+            token(TokenKind.PlusPlus, '++'),
             EOF
         ]);
 
@@ -21,9 +21,9 @@ describe('parser postfix unary expressions', () => {
     it('parses postfix \'--\' for dotted get expressions', () => {
         let { statements, errors } = Parser.parse([
             identifier('obj'),
-            token(Lexeme.Dot, '.'),
+            token(TokenKind.Dot, '.'),
             identifier('property'),
-            token(Lexeme.MinusMinus, '--'),
+            token(TokenKind.MinusMinus, '--'),
             EOF
         ]);
 
@@ -36,10 +36,10 @@ describe('parser postfix unary expressions', () => {
     it('parses postfix \'++\' for indexed get expressions', () => {
         let { statements, errors } = Parser.parse([
             identifier('obj'),
-            token(Lexeme.LeftSquare, '['),
+            token(TokenKind.LeftSquare, '['),
             identifier('property'),
-            token(Lexeme.RightSquare, ']'),
-            token(Lexeme.PlusPlus, '++'),
+            token(TokenKind.RightSquare, ']'),
+            token(TokenKind.PlusPlus, '++'),
             EOF
         ]);
 
@@ -52,8 +52,8 @@ describe('parser postfix unary expressions', () => {
     it('disallows consecutive postfix operators', () => {
         let { errors } = Parser.parse([
             identifier('foo'),
-            token(Lexeme.PlusPlus, '++'),
-            token(Lexeme.PlusPlus, '++'),
+            token(TokenKind.PlusPlus, '++'),
+            token(TokenKind.PlusPlus, '++'),
             EOF
         ]);
 
@@ -66,9 +66,9 @@ describe('parser postfix unary expressions', () => {
     it('disallows postfix \'--\' for function call results', () => {
         let { errors } = Parser.parse([
             identifier('func'),
-            token(Lexeme.LeftParen, '('),
-            token(Lexeme.RightParen, ')'),
-            token(Lexeme.MinusMinus, '--'),
+            token(TokenKind.LeftParen, '('),
+            token(TokenKind.RightParen, ')'),
+            token(TokenKind.MinusMinus, '--'),
             EOF
         ]);
 
@@ -80,15 +80,15 @@ describe('parser postfix unary expressions', () => {
 
     it('allows \'++\' at the end of a function', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.Sub, 'sub'),
+            token(TokenKind.Sub, 'sub'),
             identifier('foo'),
-            token(Lexeme.LeftParen, '('),
-            token(Lexeme.RightParen, ')'),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.LeftParen, '('),
+            token(TokenKind.RightParen, ')'),
+            token(TokenKind.Newline, '\n'),
             identifier('someValue'),
-            token(Lexeme.PlusPlus, '++'),
-            token(Lexeme.Newline, '\n'),
-            token(Lexeme.EndSub, 'end sub'),
+            token(TokenKind.PlusPlus, '++'),
+            token(TokenKind.Newline, '\n'),
+            token(TokenKind.EndSub, 'end sub'),
             EOF
         ]);
 
@@ -107,7 +107,7 @@ describe('parser postfix unary expressions', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'someNumber',
                 isReserved: false,
                 location: {
@@ -116,7 +116,7 @@ describe('parser postfix unary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.PlusPlus,
+                kind: TokenKind.PlusPlus,
                 text: '++',
                 isReserved: false,
                 location: {
@@ -125,7 +125,7 @@ describe('parser postfix unary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Eof,
+                kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 location: {

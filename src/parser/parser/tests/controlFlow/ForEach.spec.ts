@@ -1,21 +1,21 @@
 import { expect } from 'chai';
 
 import { Expr, Parser, Stmt } from '../..';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser foreach loops', () => {
     it('requires a name and target', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.ForEach, 'for each'),
+            token(TokenKind.ForEach, 'for each'),
             identifier('word'),
             identifier('in'),
             identifier('lipsum'),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.Newline, '\n'),
 
             // body would go here, but it's not necessary for this test
-            token(Lexeme.EndFor, 'end for'),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.EndFor, 'end for'),
+            token(TokenKind.Newline, '\n'),
             EOF
         ]);
 
@@ -34,15 +34,15 @@ describe('parser foreach loops', () => {
 
     it('allows \'next\' to terminate loop', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.ForEach, 'for each'),
+            token(TokenKind.ForEach, 'for each'),
             identifier('word'),
             identifier('in'),
             identifier('lipsum'),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.Newline, '\n'),
 
             // body would go here, but it's not necessary for this test
-            token(Lexeme.Next, 'next'),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.Next, 'next'),
+            token(TokenKind.Newline, '\n'),
             EOF
         ]);
 
@@ -63,7 +63,7 @@ describe('parser foreach loops', () => {
          */
         let { statements, errors } = Parser.parse([
             {
-                kind: Lexeme.ForEach,
+                kind: TokenKind.ForEach,
                 text: 'for each',
                 isReserved: true,
                 location: {
@@ -72,7 +72,7 @@ describe('parser foreach loops', () => {
                 }
             },
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
                 location: {
@@ -81,7 +81,7 @@ describe('parser foreach loops', () => {
                 }
             },
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'in',
                 isReserved: true,
                 location: {
@@ -90,7 +90,7 @@ describe('parser foreach loops', () => {
                 }
             },
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'b',
                 isReserved: false,
                 location: {
@@ -99,7 +99,7 @@ describe('parser foreach loops', () => {
                 }
             },
             {
-                kind: Lexeme.Newline,
+                kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
                 location: {
@@ -109,12 +109,12 @@ describe('parser foreach loops', () => {
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
-            token(Lexeme.LeftParen, '('),
+            token(TokenKind.LeftParen, '('),
             identifier('a'),
-            token(Lexeme.RightParen, ')'),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.RightParen, ')'),
+            token(TokenKind.Newline, '\n'),
             {
-                kind: Lexeme.EndFor,
+                kind: TokenKind.EndFor,
                 text: 'end for',
                 isReserved: false,
                 location: {

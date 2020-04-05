@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { Int32 } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser indexing', () => {
@@ -10,9 +10,9 @@ describe('parser indexing', () => {
         it('dotted', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
+                token(TokenKind.Equal, '='),
                 identifier('foo'),
-                token(Lexeme.Dot, '.'),
+                token(TokenKind.Dot, '.'),
                 identifier('bar'),
                 EOF
             ]);
@@ -26,11 +26,11 @@ describe('parser indexing', () => {
         it('bracketed', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
+                token(TokenKind.Equal, '='),
                 identifier('foo'),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '2', new Int32(2)),
-                token(Lexeme.RightSquare, ']'),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.RightSquare, ']'),
                 EOF
             ]);
 
@@ -50,7 +50,7 @@ describe('parser indexing', () => {
              */
             let { statements, errors } = Parser.parse(<any>[
                 {
-                    kind: Lexeme.Identifier,
+                    kind: TokenKind.Identifier,
                     text: 'a',
                     isReserved: false,
                     location: {
@@ -59,7 +59,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Equal,
+                    kind: TokenKind.Equal,
                     text: '=',
                     isReserved: false,
                     location: {
@@ -68,7 +68,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Identifier,
+                    kind: TokenKind.Identifier,
                     text: 'foo',
                     isReserved: false,
                     location: {
@@ -77,7 +77,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Dot,
+                    kind: TokenKind.Dot,
                     text: '.',
                     isReserved: false,
                     location: {
@@ -86,7 +86,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Identifier,
+                    kind: TokenKind.Identifier,
                     text: 'bar',
                     isReserved: false,
                     location: {
@@ -95,7 +95,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Newline,
+                    kind: TokenKind.Newline,
                     text: '\n',
                     isReserved: false,
                     location: {
@@ -104,7 +104,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Identifier,
+                    kind: TokenKind.Identifier,
                     text: 'b',
                     isReserved: false,
                     location: {
@@ -113,7 +113,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Equal,
+                    kind: TokenKind.Equal,
                     text: '=',
                     isReserved: false,
                     location: {
@@ -122,7 +122,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Identifier,
+                    kind: TokenKind.Identifier,
                     text: 'bar',
                     isReserved: false,
                     location: {
@@ -131,7 +131,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.LeftSquare,
+                    kind: TokenKind.LeftSquare,
                     text: '[',
                     isReserved: false,
                     location: {
@@ -140,7 +140,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Integer,
+                    kind: TokenKind.Integer,
                     text: '2',
                     literal: new Int32(2),
                     isReserved: false,
@@ -150,7 +150,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.RightSquare,
+                    kind: TokenKind.RightSquare,
                     text: ']',
                     isReserved: false,
                     location: {
@@ -159,7 +159,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Eof,
+                    kind: TokenKind.Eof,
                     text: '\0',
                     isReserved: false,
                     location: {
@@ -190,9 +190,9 @@ describe('parser indexing', () => {
         it('dotted', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
+                token(TokenKind.Equal, '='),
                 identifier('foo'),
-                token(Lexeme.Dot, '.'),
+                token(TokenKind.Dot, '.'),
                 identifier('bar'),
                 EOF
             ]);
@@ -205,17 +205,17 @@ describe('parser indexing', () => {
         it('bracketed', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
+                token(TokenKind.Equal, '='),
                 identifier('foo'),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '2', new Int32(2)),
-                token(Lexeme.RightSquare, ']'),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '0', new Int32(0)),
-                token(Lexeme.RightSquare, ']'),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '6', new Int32(6)),
-                token(Lexeme.RightSquare, ']'),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Integer, '0', new Int32(0)),
+                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Integer, '6', new Int32(6)),
+                token(TokenKind.RightSquare, ']'),
                 EOF
             ]);
 
@@ -227,14 +227,14 @@ describe('parser indexing', () => {
         it('mixed', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
+                token(TokenKind.Equal, '='),
                 identifier('foo'),
-                token(Lexeme.Dot, '.'),
+                token(TokenKind.Dot, '.'),
                 identifier('bar'),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '0', new Int32(0)),
-                token(Lexeme.RightSquare, ']'),
-                token(Lexeme.Dot, '.'),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Integer, '0', new Int32(0)),
+                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.Dot, '.'),
                 identifier('baz'),
                 EOF
             ]);

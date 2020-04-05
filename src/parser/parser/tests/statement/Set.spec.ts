@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { Int32 } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser indexed assignment', () => {
@@ -10,14 +10,14 @@ describe('parser indexed assignment', () => {
         it('assigns anonymous functions', () => {
             let { statements, errors } = Parser.parse([
                 identifier('foo'),
-                token(Lexeme.Dot, '.'),
+                token(TokenKind.Dot, '.'),
                 identifier('bar'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.Function, 'function'),
-                token(Lexeme.LeftParen, '('),
-                token(Lexeme.RightParen, ')'),
-                token(Lexeme.Newline, '\\n'),
-                token(Lexeme.EndFunction, 'end function'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.Function, 'function'),
+                token(TokenKind.LeftParen, '('),
+                token(TokenKind.RightParen, ')'),
+                token(TokenKind.Newline, '\\n'),
+                token(TokenKind.EndFunction, 'end function'),
                 EOF
             ]);
 
@@ -30,13 +30,13 @@ describe('parser indexed assignment', () => {
         it('assigns boolean expressions', () => {
             let { statements, errors } = Parser.parse([
                 identifier('foo'),
-                token(Lexeme.Dot, '.'),
+                token(TokenKind.Dot, '.'),
                 identifier('bar'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.True, 'true'),
-                token(Lexeme.And, 'and'),
-                token(Lexeme.False, 'false'),
-                token(Lexeme.Newline, '\\n'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true'),
+                token(TokenKind.And, 'and'),
+                token(TokenKind.False, 'false'),
+                token(TokenKind.Newline, '\\n'),
                 EOF
             ]);
 
@@ -49,11 +49,11 @@ describe('parser indexed assignment', () => {
         it('assignment operator', () => {
             let { statements, errors } = Parser.parse([
                 identifier('foo'),
-                token(Lexeme.Dot, '.'),
+                token(TokenKind.Dot, '.'),
                 identifier('bar'),
-                token(Lexeme.StarEqual, '*='),
-                token(Lexeme.Integer, '5', new Int32(5)),
-                token(Lexeme.Newline, '\\n'),
+                token(TokenKind.StarEqual, '*='),
+                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.Newline, '\\n'),
                 EOF
             ]);
 
@@ -68,15 +68,15 @@ describe('parser indexed assignment', () => {
         it('assigns anonymous functions', () => {
             let { statements, errors } = Parser.parse([
                 identifier('someArray'),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '0', new Int32(0)),
-                token(Lexeme.RightSquare, ']'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.Function, 'function'),
-                token(Lexeme.LeftParen, '('),
-                token(Lexeme.RightParen, ')'),
-                token(Lexeme.Newline, '\\n'),
-                token(Lexeme.EndFunction, 'end function'),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Integer, '0', new Int32(0)),
+                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.Function, 'function'),
+                token(TokenKind.LeftParen, '('),
+                token(TokenKind.RightParen, ')'),
+                token(TokenKind.Newline, '\\n'),
+                token(TokenKind.EndFunction, 'end function'),
                 EOF
             ]);
 
@@ -89,14 +89,14 @@ describe('parser indexed assignment', () => {
         it('assigns boolean expressions', () => {
             let { statements, errors } = Parser.parse([
                 identifier('someArray'),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '0', new Int32(0)),
-                token(Lexeme.RightSquare, ']'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.True, 'true'),
-                token(Lexeme.And, 'and'),
-                token(Lexeme.False, 'false'),
-                token(Lexeme.Newline, '\\n'),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Integer, '0', new Int32(0)),
+                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true'),
+                token(TokenKind.And, 'and'),
+                token(TokenKind.False, 'false'),
+                token(TokenKind.Newline, '\\n'),
                 EOF
             ]);
 
@@ -109,11 +109,11 @@ describe('parser indexed assignment', () => {
         it('assignment operator', () => {
             let { statements, errors } = Parser.parse([
                 identifier('someArray'),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '0', new Int32(0)),
-                token(Lexeme.RightSquare, ']'),
-                token(Lexeme.StarEqual, '*='),
-                token(Lexeme.Integer, '3', new Int32(3)),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Integer, '0', new Int32(0)),
+                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.StarEqual, '*='),
+                token(TokenKind.Integer, '3', new Int32(3)),
                 EOF
             ]);
 
@@ -134,7 +134,7 @@ describe('parser indexed assignment', () => {
          */
         let { statements, errors } = Parser.parse([
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'arr',
                 isReserved: false,
                 location: {
@@ -144,7 +144,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: Lexeme.LeftSquare,
+                kind: TokenKind.LeftSquare,
                 text: '[',
                 isReserved: false,
                 location: {
@@ -154,7 +154,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: Lexeme.Integer,
+                kind: TokenKind.Integer,
                 text: '0',
                 literal: new Int32(0),
                 isReserved: false,
@@ -165,7 +165,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: Lexeme.RightSquare,
+                kind: TokenKind.RightSquare,
                 text: ']',
                 isReserved: false,
                 location: {
@@ -175,7 +175,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: Lexeme.Equal,
+                kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 location: {
@@ -185,7 +185,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: Lexeme.Integer,
+                kind: TokenKind.Integer,
                 text: '1',
                 literal: new Int32(1),
                 isReserved: false,
@@ -196,7 +196,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: Lexeme.Newline,
+                kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
                 location: {
@@ -206,7 +206,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'obj',
                 isReserved: false,
                 location: {
@@ -216,7 +216,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: Lexeme.Dot,
+                kind: TokenKind.Dot,
                 text: '.',
                 isReserved: false,
                 location: {
@@ -226,7 +226,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
                 location: {
@@ -236,7 +236,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: Lexeme.Equal,
+                kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 location: {
@@ -246,7 +246,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: Lexeme.Integer,
+                kind: TokenKind.Integer,
                 text: '5',
                 literal: new Int32(5),
                 isReserved: false,
@@ -257,7 +257,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: Lexeme.Eof,
+                kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 location: {

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 
-import { Lexeme, Token, Identifier, Location, ReservedWords } from '../lexer';
+import { TokenKind, Token, Identifier, Location, ReservedWords } from '../lexer';
 
 import {
     BrsInvalid,
@@ -202,7 +202,7 @@ export class Parser {
      * @returns `true` if the next token is an identifier with text `end`, otherwise `false`
      */
     private checkEnd() {
-        return this.check(Lexeme.Identifier) && this.peek().text.toLowerCase() === 'end';
+        return this.check(TokenKind.Identifier) && this.peek().text.toLowerCase() === 'end';
     }
 
     /**
@@ -211,20 +211,20 @@ export class Parser {
      * so the lexer handles it as an identifier
      */
     private checkAs() {
-        return this.check(Lexeme.Identifier) && this.peek().text.toLowerCase() === 'as';
+        return this.check(TokenKind.Identifier) && this.peek().text.toLowerCase() === 'as';
     }
 
     private declaration(...additionalTerminators: BlockTerminator[]): Statement | undefined {
         try {
             // consume any leading newlines
-            while (this.match(Lexeme.Newline)) { }
+            while (this.match(TokenKind.Newline)) { }
 
             //TODO implement this in a future commit
-            if (this.check(Lexeme.Class)) {
+            if (this.check(TokenKind.Class)) {
                 return this.classDeclaration();
             }
 
-            if (this.check(Lexeme.Sub, Lexeme.Function)) {
+            if (this.check(TokenKind.Sub, TokenKind.Function)) {
                 return this.functionDeclaration(false);
             }
 
@@ -236,16 +236,16 @@ export class Parser {
             // `let`, (...) keyword. As such, we must check the token *after* an identifier to figure
             // out what to do with it.
             if (
-                this.check(Lexeme.Identifier, ...allowedLocalIdentifiers) &&
+                this.check(TokenKind.Identifier, ...allowedLocalIdentifiers) &&
                 this.checkNext(...assignmentOperators)
             ) {
                 return this.assignment(...additionalTerminators);
             }
 
-            if (this.check(Lexeme.Comment)) {
+            if (this.check(TokenKind.Comment)) {
                 let stmt = this.commentStatement();
                 //scrap consecutive newlines
-                while (this.match(Lexeme.Newline)) {
+                while (this.match(TokenKind.Newline)) {
 
                 }
                 return stmt;
@@ -263,25 +263,25 @@ export class Parser {
      */
     private classDeclaration(): ClassStatement {
         this.ensureBrighterScriptMode('class declarations');
-        let keyword = this.consume(`Expected 'class' keyword`, Lexeme.Class);
+        let keyword = this.consume(`Expected 'class' keyword`, TokenKind.Class);
         //get the class name
-        let className = this.consumeContinue(diagnosticMessages.Missing_identifier_after_class_keyword_1016(), Lexeme.Identifier) as Identifier;
+        let className = this.consumeContinue(diagnosticMessages.Missing_identifier_after_class_keyword_1016(), TokenKind.Identifier) as Identifier;
         //consume newlines (at least one)
-        while (this.match(Lexeme.Newline)) {
+        while (this.match(TokenKind.Newline)) {
         }
 
         let members = [] as ClassMemberStatement[];
         //gather up all class members (Fields, Methods)
-        while (this.check(Lexeme.Public, Lexeme.Protected, Lexeme.Private, Lexeme.Function, Lexeme.Sub, Lexeme.Identifier)) {
+        while (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Identifier)) {
             try {
                 let accessModifier: Token;
-                if (this.check(Lexeme.Public, Lexeme.Protected, Lexeme.Private)) {
+                if (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private)) {
                     //use actual access modifier
                     accessModifier = this.advance();
                 } else {
                     accessModifier = {
                         isReserved: false,
-                        kind: Lexeme.Public,
+                        kind: TokenKind.Public,
                         text: 'public',
                         //zero-length token which indicates derived
                         location: {
@@ -293,7 +293,7 @@ export class Parser {
                 }
 
                 //methods (function/sub keyword OR identifier followed by opening paren)
-                if (this.check(Lexeme.Function, Lexeme.Sub) || (this.check(Lexeme.Identifier) && this.checkNext(Lexeme.LeftParen))) {
+                if (this.check(TokenKind.Function, TokenKind.Sub) || (this.check(TokenKind.Identifier) && this.checkNext(TokenKind.LeftParen))) {
                     let funcDeclaration = this.functionDeclaration(false);
                     members.push(
                         new ClassMethodStatement(
@@ -304,34 +304,34 @@ export class Parser {
                     );
 
                     //fields
-                } else if (this.check(Lexeme.Identifier)) {
+                } else if (this.check(TokenKind.Identifier)) {
                     members.push(
                         this.classFieldDeclaration(accessModifier)
                     );
                 }
             } catch (e) {
                 //throw out any failed members and move on to the next line
-                this.consumeUntil(Lexeme.Newline, Lexeme.Eof);
+                this.consumeUntil(TokenKind.Newline, TokenKind.Eof);
             }
 
             //consume trailing newlines
-            while (this.match(Lexeme.Newline)) { }
+            while (this.match(TokenKind.Newline)) { }
         }
 
         //consume trailing newlines
-        while (this.match(Lexeme.Newline)) {
+        while (this.match(TokenKind.Newline)) {
 
         }
 
         let endingKeyword = this.advance();
-        if (endingKeyword.kind !== Lexeme.EndClass) {
+        if (endingKeyword.kind !== TokenKind.EndClass) {
             this.addError(
                 endingKeyword,
                 `Expected 'end class' to terminate class block`
             );
         }
         //consume any trailing newlines
-        while (this.match(Lexeme.Newline)) {
+        while (this.match(TokenKind.Newline)) {
 
         }
 
@@ -345,7 +345,7 @@ export class Parser {
     }
 
     private classFieldDeclaration(accessModifier: Token | null) {
-        let name = this.consume(`Expected identifier`, Lexeme.Identifier) as Identifier;
+        let name = this.consume(`Expected identifier`, TokenKind.Identifier) as Identifier;
         let asToken: Token;
         let fieldType: Token;
         //look for `as SOME_TYPE`
@@ -354,7 +354,7 @@ export class Parser {
             fieldType = this.advance();
 
             //no field type specified
-            if (!valueKindFromString(`${fieldType.text}`) && !this.check(Lexeme.Identifier)) {
+            if (!valueKindFromString(`${fieldType.text}`) && !this.check(TokenKind.Identifier)) {
                 this.addDiagnostic(this.peek(), diagnosticMessages.Expected_valid_type_to_follow_as_keyword_1018());
             }
         }
@@ -377,13 +377,13 @@ export class Parser {
             //track depth to help certain statements need to know if they are contained within a function body
             this.functionDeclarationLevel++;
             let functionType: Token;
-            if (this.check(Lexeme.Sub, Lexeme.Function)) {
+            if (this.check(TokenKind.Sub, TokenKind.Function)) {
                 functionType = this.advance();
             } else {
                 this.addDiagnostic(this.peek(), diagnosticMessages.Missing_function_sub_keyword_1017(this.peek().text));
                 functionType = {
                     isReserved: true,
-                    kind: Lexeme.Function,
+                    kind: TokenKind.Function,
                     text: 'function',
                     //zero-length location means derived
                     location: {
@@ -393,7 +393,7 @@ export class Parser {
                     }
                 };
             }
-            let isSub = functionType && functionType.kind === Lexeme.Sub;
+            let isSub = functionType && functionType.kind === TokenKind.Sub;
             let functionTypeText = isSub ? 'sub' : 'function';
             let name: Identifier;
             let returnType: ValueKind;
@@ -408,16 +408,16 @@ export class Parser {
             if (isAnonymous) {
                 leftParen = this.consume(
                     `Expected '(' after ${functionTypeText}`,
-                    Lexeme.LeftParen
+                    TokenKind.LeftParen
                 );
             } else {
                 name = this.consume(
                     `Expected ${functionTypeText} name after '${functionTypeText}'`,
-                    Lexeme.Identifier
+                    TokenKind.Identifier
                 ) as Identifier;
                 leftParen = this.consume(
                     `Expected '(' after ${functionTypeText} name`,
-                    Lexeme.LeftParen
+                    TokenKind.LeftParen
                 );
 
                 //prevent functions from ending with type designators
@@ -434,7 +434,7 @@ export class Parser {
             let args: FunctionParameter[] = [];
             let asToken: Token;
             let typeToken: Token;
-            if (!this.check(Lexeme.RightParen)) {
+            if (!this.check(TokenKind.RightParen)) {
                 do {
                     if (args.length >= CallExpression.MaximumArguments) {
                         throw this.addError(
@@ -444,12 +444,12 @@ export class Parser {
                     }
 
                     args.push(this.functionParameter());
-                } while (this.match(Lexeme.Comma));
+                } while (this.match(TokenKind.Comma));
             }
             let rightParen = this.advance();
 
             let maybeAs = this.peek();
-            if (this.check(Lexeme.Identifier) && maybeAs.text.toLowerCase() === 'as') {
+            if (this.check(TokenKind.Identifier) && maybeAs.text.toLowerCase() === 'as') {
                 asToken = this.advance();
 
                 typeToken = this.advance();
@@ -470,7 +470,7 @@ export class Parser {
                 if (haveFoundOptional && !arg.defaultValue) {
                     throw this.addError(
                         {
-                            kind: Lexeme.Identifier,
+                            kind: TokenKind.Identifier,
                             text: arg.name.text,
                             isReserved: ReservedWords.has(arg.name.text),
                             location: arg.location
@@ -483,18 +483,18 @@ export class Parser {
             }, false);
             let comment: CommentStatement;
             //get a comment if available
-            if (this.check(Lexeme.Comment)) {
+            if (this.check(TokenKind.Comment)) {
                 comment = this.commentStatement();
             }
 
             this.consume(
                 `Expected newline or ':' after ${functionTypeText} signature`,
-                Lexeme.Newline,
-                Lexeme.Colon
+                TokenKind.Newline,
+                TokenKind.Colon
             );
-            while (this.match(Lexeme.Newline)) { }
+            while (this.match(TokenKind.Newline)) { }
             //support ending the function with `end sub` OR `end function`
-            let body = this.block(Lexeme.EndSub, Lexeme.EndFunction);
+            let body = this.block(TokenKind.EndSub, TokenKind.EndFunction);
             if (!body) {
                 throw this.addError(
                     this.peek(),
@@ -507,7 +507,7 @@ export class Parser {
             }
             // consume 'end sub' or 'end function'
             let endingKeyword = this.advance();
-            let expectedEndKind = isSub ? Lexeme.EndSub : Lexeme.EndFunction;
+            let expectedEndKind = isSub ? TokenKind.EndSub : TokenKind.EndFunction;
 
             //if `function` is ended with `end sub`, or `sub` is ended with `end function`, then
             //add an error but don't hard-fail so the AST can continue more gracefully
@@ -535,7 +535,7 @@ export class Parser {
             } else {
                 // only consume trailing newlines in the statement context; expressions
                 // expect to handle their own trailing whitespace
-                while (this.match(Lexeme.Newline)) {
+                while (this.match(TokenKind.Newline)) {
                 }
                 return new FunctionStatement(name, func);
             }
@@ -545,7 +545,7 @@ export class Parser {
     }
 
     private functionParameter(): FunctionParameter {
-        if (!this.check(Lexeme.Identifier)) {
+        if (!this.check(TokenKind.Identifier)) {
             throw this.addError(
                 this.peek(),
                 `Expected parameter name, but received '${this.peek().text || ''}'`
@@ -558,14 +558,14 @@ export class Parser {
         let defaultValue;
 
         // parse argument default value
-        if (this.match(Lexeme.Equal)) {
+        if (this.match(TokenKind.Equal)) {
             // it seems any expression is allowed here -- including ones that operate on other arguments!
             defaultValue = this.expression();
         }
 
         let asToken = null;
         let next = this.peek();
-        if (this.check(Lexeme.Identifier) && next.text && next.text.toLowerCase() === 'as') {
+        if (this.check(TokenKind.Identifier) && next.text && next.text.toLowerCase() === 'as') {
             // 'as' isn't a reserved word, so it can't be lexed into an As token without the lexer
             // understanding language context.  That's less than ideal, so we'll have to do some
             // more intelligent comparisons to detect the 'as' sometimes-keyword here.
@@ -596,7 +596,7 @@ export class Parser {
         );
     }
 
-    private assignment(...additionalterminators: Lexeme[]): AssignmentStatement {
+    private assignment(...additionalterminators: TokenKind[]): AssignmentStatement {
         let name = this.advance() as Identifier;
         //add error if name is a reserved word that cannot be used as an identifier
         if (disallowedLocalIdentifiers.has(name.text.toLowerCase())) {
@@ -609,18 +609,18 @@ export class Parser {
         );
 
         let value = this.expression();
-        if (!this.check(...additionalterminators, Lexeme.Comment)) {
+        if (!this.check(...additionalterminators, TokenKind.Comment)) {
             this.consume(
                 'Expected newline or \':\' after assignment',
-                Lexeme.Newline,
-                Lexeme.Colon,
-                Lexeme.Eof,
+                TokenKind.Newline,
+                TokenKind.Colon,
+                TokenKind.Eof,
                 ...additionalterminators
             );
         }
-        while (this.match(Lexeme.Newline)) { }
+        while (this.match(TokenKind.Newline)) { }
 
-        if (operator.kind === Lexeme.Equal) {
+        if (operator.kind === TokenKind.Equal) {
             return new AssignmentStatement({ equals: operator }, name, value);
         } else {
             return new AssignmentStatement(
@@ -632,7 +632,7 @@ export class Parser {
     }
 
     private checkLibrary() {
-        let isLibraryIdentifier = this.check(Lexeme.Identifier) && this.peek().text.toLowerCase() === 'library';
+        let isLibraryIdentifier = this.check(TokenKind.Identifier) && this.peek().text.toLowerCase() === 'library';
 
         //if we are at the top level, any line that starts with "library" should be considered a library statement
         if (this.isAtRootLevel() && isLibraryIdentifier) {
@@ -640,7 +640,7 @@ export class Parser {
 
             //not at root level, library statements are all invalid here, but try to detect if the tokens look
             //like a library statement (and let the libraryStatement function handle emitting the errors)
-        } else if (isLibraryIdentifier && this.checkNext(Lexeme.String)) {
+        } else if (isLibraryIdentifier && this.checkNext(TokenKind.String)) {
             return true;
 
             //definitely not a library statement
@@ -654,35 +654,35 @@ export class Parser {
             return this.libraryStatement();
         }
 
-        if (this.check(Lexeme.Stop)) {
+        if (this.check(TokenKind.Stop)) {
             return this.stopStatement();
         }
 
-        if (this.check(Lexeme.If)) {
+        if (this.check(TokenKind.If)) {
             return this.ifStatement();
         }
 
-        if (this.check(Lexeme.Print)) {
+        if (this.check(TokenKind.Print)) {
             return this.printStatement(...additionalterminators);
         }
 
-        if (this.check(Lexeme.While)) {
+        if (this.check(TokenKind.While)) {
             return this.whileStatement();
         }
 
-        if (this.check(Lexeme.ExitWhile)) {
+        if (this.check(TokenKind.ExitWhile)) {
             return this.exitWhile();
         }
 
-        if (this.check(Lexeme.For)) {
+        if (this.check(TokenKind.For)) {
             return this.forStatement();
         }
 
-        if (this.check(Lexeme.ForEach)) {
+        if (this.check(TokenKind.ForEach)) {
             return this.forEachStatement();
         }
 
-        if (this.check(Lexeme.ExitFor)) {
+        if (this.check(TokenKind.ExitFor)) {
             return this.exitFor();
         }
 
@@ -690,16 +690,16 @@ export class Parser {
             return this.endStatement();
         }
 
-        if (this.match(Lexeme.Return)) {
+        if (this.match(TokenKind.Return)) {
             return this.returnStatement();
         }
 
-        if (this.check(Lexeme.Goto)) {
+        if (this.check(TokenKind.Goto)) {
             return this.gotoStatement();
         }
 
         //does this line look like a label? (i.e.  `someIdentifier:` )
-        if (this.check(Lexeme.Identifier) && this.checkNext(Lexeme.Colon)) {
+        if (this.check(TokenKind.Identifier) && this.checkNext(TokenKind.Colon)) {
             return this.labelStatement();
         }
 
@@ -712,13 +712,13 @@ export class Parser {
         const condition = this.expression();
 
         let comment: CommentStatement;
-        if (this.check(Lexeme.Comment)) {
+        if (this.check(TokenKind.Comment)) {
             comment = this.commentStatement();
         }
 
-        this.consume('Expected newline after \'while ...condition...\'', Lexeme.Newline);
-        while (this.match(Lexeme.Newline)) { }
-        const whileBlock = this.block(Lexeme.EndWhile);
+        this.consume('Expected newline after \'while ...condition...\'', TokenKind.Newline);
+        while (this.match(TokenKind.Newline)) { }
+        const whileBlock = this.block(TokenKind.EndWhile);
         if (!whileBlock) {
             throw this.addError(this.peek(), 'Expected \'end while\' to terminate while-loop block');
         }
@@ -729,7 +729,7 @@ export class Parser {
         }
 
         const endWhile = this.advance();
-        while (this.match(Lexeme.Newline)) {
+        while (this.match(TokenKind.Newline)) {
         }
 
         return new WhileStatement(
@@ -742,38 +742,38 @@ export class Parser {
     private exitWhile(): ExitWhileStatement {
         let keyword = this.advance();
 
-        if (this.check(Lexeme.Newline, Lexeme.Comment) === false) {
+        if (this.check(TokenKind.Newline, TokenKind.Comment) === false) {
             this.addError(this.peek(), `Expected newline or comment after 'exit while'`);
         }
-        while (this.match(Lexeme.Newline)) { }
+        while (this.match(TokenKind.Newline)) { }
         return new ExitWhileStatement({ exitWhile: keyword });
     }
 
     private forStatement(): ForStatement {
         const forKeyword = this.advance();
-        const initializer = this.assignment(Lexeme.To);
+        const initializer = this.assignment(TokenKind.To);
         const to = this.advance();
         const finalValue = this.expression();
         let increment: Expression | undefined;
         let step: Token | undefined;
 
-        if (this.check(Lexeme.Step)) {
+        if (this.check(TokenKind.Step)) {
             step = this.advance();
             increment = this.expression();
         } else {
             // BrightScript for/to/step loops default to a step of 1 if no `step` is provided
             increment = new LiteralExpression(new Int32(1), this.peek().location);
         }
-        while (this.match(Lexeme.Newline)) {
+        while (this.match(TokenKind.Newline)) {
 
         }
 
-        let body = this.block(Lexeme.EndFor, Lexeme.Next);
+        let body = this.block(TokenKind.EndFor, TokenKind.Next);
         if (!body) {
             throw this.addError(this.peek(), 'Expected \'end for\' or \'next\' to terminate for-loop block');
         }
         let endFor = this.advance();
-        while (this.match(Lexeme.Newline)) { }
+        while (this.match(TokenKind.Newline)) { }
 
         // WARNING: BrightScript doesn't delete the loop initial value after a for/to loop! It just
         // stays around in scope with whatever value it was when the loop exited.
@@ -796,7 +796,7 @@ export class Parser {
         let name = this.advance();
 
         let maybeIn = this.peek();
-        if (this.check(Lexeme.Identifier) && maybeIn.text.toLowerCase() === 'in') {
+        if (this.check(TokenKind.Identifier) && maybeIn.text.toLowerCase() === 'in') {
             this.advance();
         } else {
             throw this.addError(maybeIn, 'Expected \'in\' after \'for each <name>\'');
@@ -807,15 +807,15 @@ export class Parser {
             throw this.addError(this.peek(), 'Expected target object to iterate over');
         }
         let comment: CommentStatement;
-        if (this.check(Lexeme.Comment)) {
+        if (this.check(TokenKind.Comment)) {
             comment = this.commentStatement();
         }
         this.advance();
-        while (this.match(Lexeme.Newline)) {
+        while (this.match(TokenKind.Newline)) {
 
         }
 
-        let body = this.block(Lexeme.EndFor, Lexeme.Next);
+        let body = this.block(TokenKind.EndFor, TokenKind.Next);
         if (!body) {
             throw this.addError(this.peek(), 'Expected \'end for\' or \'next\' to terminate for-loop block');
         }
@@ -825,7 +825,7 @@ export class Parser {
             body.statements.unshift(comment);
         }
         let endFor = this.advance();
-        while (this.match(Lexeme.Newline)) { }
+        while (this.match(TokenKind.Newline)) { }
 
         return new ForEachStatement(
             {
@@ -841,9 +841,9 @@ export class Parser {
 
     private exitFor(): ExitForStatement {
         let keyword = this.advance();
-        if (!this.check(Lexeme.Comment)) {
-            this.consume('Expected newline after \'exit for\'', Lexeme.Newline);
-            while (this.match(Lexeme.Newline)) {
+        if (!this.check(TokenKind.Comment)) {
+            this.consume('Expected newline after \'exit for\'', TokenKind.Newline);
+            while (this.match(TokenKind.Newline)) {
 
             }
         }
@@ -858,12 +858,12 @@ export class Parser {
             return new CommentStatement([this.advance()]);
         } else {
             let comments = [this.advance()];
-            while (this.check(Lexeme.Newline)) {
+            while (this.check(TokenKind.Newline)) {
                 //absorb newlines
-                while (this.match(Lexeme.Newline)) { }
+                while (this.match(TokenKind.Newline)) { }
 
                 //if this is a comment, and it's the next line down from the previous comment
-                if (this.check(Lexeme.Comment) && comments[comments.length - 1].location.end.line === this.peek().location.start.line - 1) {
+                if (this.check(TokenKind.Comment) && comments[comments.length - 1].location.end.line === this.peek().location.start.line - 1) {
                     comments.push(this.advance());
                 } else {
                     break;
@@ -877,11 +877,11 @@ export class Parser {
         let libStatement = new LibraryStatement({
             library: this.advance(),
             //grab the next token only if it's a string
-            filePath: this.check(Lexeme.String) ? this.advance() : undefined
+            filePath: this.check(TokenKind.String) ? this.advance() : undefined
         });
 
         //no token following library keyword token
-        if (!libStatement.tokens.filePath && this.check(Lexeme.Newline, Lexeme.Colon, Lexeme.Comment)) {
+        if (!libStatement.tokens.filePath && this.check(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
             this.addErrorAtLocation(
                 libStatement.tokens.library.location,
                 `Missing string literal after ${libStatement.tokens.library.text} keyword`
@@ -889,7 +889,7 @@ export class Parser {
         }
 
         //consume all tokens until the end of the line
-        let invalidTokens = this.consumeUntil(Lexeme.Newline, Lexeme.Eof, Lexeme.Colon, Lexeme.Comment);
+        let invalidTokens = this.consumeUntil(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon, TokenKind.Comment);
 
         if (invalidTokens.length > 0) {
             //add an error for every invalid token
@@ -919,7 +919,7 @@ export class Parser {
             );
         }
         //consume to the next newline, eof, or colon
-        while (this.match(Lexeme.Newline, Lexeme.Eof, Lexeme.Colon)) {
+        while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) {
         }
         return libStatement;
     }
@@ -946,7 +946,7 @@ export class Parser {
          * @returns `true` if the next token is an identifier with text "then", otherwise `false`.
          */
         const checkThen = () => {
-            return this.check(Lexeme.Identifier) && this.peek().text.toLowerCase() === 'then';
+            return this.check(TokenKind.Identifier) && this.peek().text.toLowerCase() === 'then';
         };
 
         if (checkThen()) {
@@ -955,18 +955,18 @@ export class Parser {
         }
 
         let comment: CommentStatement;
-        if (this.check(Lexeme.Comment)) {
+        if (this.check(TokenKind.Comment)) {
             comment = this.commentStatement();
         }
 
-        if (this.match(Lexeme.Newline) || this.match(Lexeme.Colon)) {
+        if (this.match(TokenKind.Newline) || this.match(TokenKind.Colon)) {
             //consume until no more colons
-            while (this.check(Lexeme.Colon)) {
+            while (this.check(TokenKind.Colon)) {
                 this.advance();
             }
 
             //consume exactly 1 newline, if found
-            if (this.check(Lexeme.Newline)) {
+            if (this.check(TokenKind.Newline)) {
                 this.advance();
             }
 
@@ -977,7 +977,7 @@ export class Parser {
             // we're parsing a multi-line ("block") form of the BrightScript if/then/else and must find
             // a trailing "end if"
 
-            let maybeThenBranch = this.block(Lexeme.EndIf, Lexeme.Else, Lexeme.ElseIf);
+            let maybeThenBranch = this.block(TokenKind.EndIf, TokenKind.Else, TokenKind.ElseIf);
             if (!maybeThenBranch) {
                 //throw out any new errors created as a result of a `then` block parse failure.
                 //the block() function will discard the current line, so any discarded errors will
@@ -995,15 +995,15 @@ export class Parser {
                 maybeThenBranch.statements.unshift(comment);
             }
             let blockEnd = this.previous();
-            if (blockEnd.kind === Lexeme.EndIf) {
+            if (blockEnd.kind === TokenKind.EndIf) {
                 endIfToken = blockEnd;
             }
 
             thenBranch = maybeThenBranch;
-            this.match(Lexeme.Newline);
+            this.match(TokenKind.Newline);
 
             // attempt to read a bunch of "else if" clauses
-            while (this.check(Lexeme.ElseIf)) {
+            while (this.check(TokenKind.ElseIf)) {
                 let elseIfToken = this.advance();
                 elseIfTokens.push(elseIfToken);
                 let elseIfCondition = this.expression();
@@ -1014,12 +1014,12 @@ export class Parser {
                 }
 
                 //consume any trailing colons
-                while (this.check(Lexeme.Colon)) {
+                while (this.check(TokenKind.Colon)) {
                     this.advance();
                 }
 
-                this.match(Lexeme.Newline);
-                let elseIfThen = this.block(Lexeme.EndIf, Lexeme.Else, Lexeme.ElseIf);
+                this.match(TokenKind.Newline);
+                let elseIfThen = this.block(TokenKind.EndIf, TokenKind.Else, TokenKind.ElseIf);
                 if (!elseIfThen) {
                     throw this.addError(
                         this.peek(),
@@ -1028,7 +1028,7 @@ export class Parser {
                 }
 
                 let blockEnd = this.previous();
-                if (blockEnd.kind === Lexeme.EndIf) {
+                if (blockEnd.kind === TokenKind.EndIf) {
                     endIfToken = blockEnd;
                 }
 
@@ -1040,45 +1040,45 @@ export class Parser {
                 });
             }
 
-            if (this.match(Lexeme.Else)) {
+            if (this.match(TokenKind.Else)) {
                 elseToken = this.previous();
                 //consume any trailing colons
-                while (this.check(Lexeme.Colon)) {
+                while (this.check(TokenKind.Colon)) {
                     this.advance();
                 }
 
-                this.match(Lexeme.Newline);
-                elseBranch = this.block(Lexeme.EndIf);
+                this.match(TokenKind.Newline);
+                elseBranch = this.block(TokenKind.EndIf);
                 endIfToken = this.advance(); // skip past "end if"
 
                 //ensure that single-line `if` statements have a colon right before 'end if'
                 if (util.sameStartLine(ifToken, endIfToken)) {
                     let index = this.tokens.indexOf(endIfToken);
                     let previousToken = this.tokens[index - 1];
-                    if (previousToken.kind !== Lexeme.Colon) {
+                    if (previousToken.kind !== TokenKind.Colon) {
                         this.addError(endIfToken, 'Expected \':\' to preceed \'end if\'');
                     }
                 }
-                this.match(Lexeme.Newline);
+                this.match(TokenKind.Newline);
             } else {
-                this.match(Lexeme.Newline);
+                this.match(TokenKind.Newline);
                 endIfToken = this.consume(
                     `Expected 'end if' to close 'if' statement started on line ${startingLine}`,
-                    Lexeme.EndIf
+                    TokenKind.EndIf
                 );
 
                 //ensure that single-line `if` statements have a colon right before 'end if'
                 if (util.sameStartLine(ifToken, endIfToken)) {
                     let index = this.tokens.indexOf(endIfToken);
                     let previousToken = this.tokens[index - 1];
-                    if (previousToken.kind !== Lexeme.Colon) {
+                    if (previousToken.kind !== TokenKind.Colon) {
                         this.addError(endIfToken, 'Expected \':\' to preceed \'end if\'');
                     }
                 }
-                this.match(Lexeme.Newline);
+                this.match(TokenKind.Newline);
             }
         } else {
-            let thenStatement = this.declaration(Lexeme.ElseIf, Lexeme.Else);
+            let thenStatement = this.declaration(TokenKind.ElseIf, TokenKind.Else);
             if (!thenStatement) {
                 throw this.addError(
                     this.peek(),
@@ -1092,7 +1092,7 @@ export class Parser {
                 thenBranch.statements.unshift(comment);
             }
 
-            while (this.previous().kind !== Lexeme.Newline && this.match(Lexeme.ElseIf)) {
+            while (this.previous().kind !== TokenKind.Newline && this.match(TokenKind.ElseIf)) {
                 let elseIf = this.previous();
                 let elseIfCondition = this.expression();
                 let thenToken: Token;
@@ -1101,7 +1101,7 @@ export class Parser {
                     thenToken = this.advance();
                 }
 
-                let elseIfThen = this.declaration(Lexeme.ElseIf, Lexeme.Else);
+                let elseIfThen = this.declaration(TokenKind.ElseIf, TokenKind.Else);
                 if (!elseIfThen) {
                     throw this.addError(
                         this.peek(),
@@ -1116,7 +1116,7 @@ export class Parser {
                     elseIfToken: elseIf
                 });
             }
-            if (this.previous().kind !== Lexeme.Newline && this.match(Lexeme.Else)) {
+            if (this.previous().kind !== TokenKind.Newline && this.match(TokenKind.Else)) {
                 elseToken = this.previous();
                 let elseStatement = this.declaration();
                 if (!elseStatement) {
@@ -1143,10 +1143,10 @@ export class Parser {
     private expressionStatement(expr: Expression, additionalTerminators: BlockTerminator[]): ExpressionStatement | IncrementStatement {
         let expressionStart = this.peek();
 
-        if (this.check(Lexeme.PlusPlus, Lexeme.MinusMinus)) {
+        if (this.check(TokenKind.PlusPlus, TokenKind.MinusMinus)) {
             let operator = this.advance();
 
-            if (this.check(Lexeme.PlusPlus, Lexeme.MinusMinus)) {
+            if (this.check(TokenKind.PlusPlus, TokenKind.MinusMinus)) {
                 throw this.addError(
                     this.peek(),
                     'Consecutive increment/decrement operators are not allowed'
@@ -1158,18 +1158,18 @@ export class Parser {
                 );
             }
 
-            while (this.match(Lexeme.Newline, Lexeme.Colon)) {
+            while (this.match(TokenKind.Newline, TokenKind.Colon)) {
             }
 
             return new IncrementStatement(expr, operator);
         }
 
-        if (!this.check(...additionalTerminators, Lexeme.Comment)) {
+        if (!this.check(...additionalTerminators, TokenKind.Comment)) {
             this.consume(
                 'Expected newline or \':\' after expression statement',
-                Lexeme.Newline,
-                Lexeme.Colon,
-                Lexeme.Eof
+                TokenKind.Newline,
+                TokenKind.Colon,
+                TokenKind.Eof
             );
         }
 
@@ -1204,21 +1204,21 @@ export class Parser {
             if (left instanceof IndexedGetExpression) {
                 this.consume(
                     'Expected newline or \':\' after indexed \'set\' statement',
-                    Lexeme.Newline,
-                    Lexeme.Else,
-                    Lexeme.ElseIf,
-                    Lexeme.Colon,
-                    Lexeme.Eof, Lexeme.Comment
+                    TokenKind.Newline,
+                    TokenKind.Else,
+                    TokenKind.ElseIf,
+                    TokenKind.Colon,
+                    TokenKind.Eof, TokenKind.Comment
                 );
                 //if we just consumed a comment, backtrack 1 token so it can be collected later
-                if (this.checkPrevious(Lexeme.Comment)) {
+                if (this.checkPrevious(TokenKind.Comment)) {
                     this.current--;
                 }
 
                 return new IndexedSetStatement(
                     left.obj,
                     left.index,
-                    operator.kind === Lexeme.Equal
+                    operator.kind === TokenKind.Equal
                         ? right
                         : new BinaryExpression(left, operator, right),
                     left.openingSquare,
@@ -1227,22 +1227,22 @@ export class Parser {
             } else if (left instanceof DottedGetExpression) {
                 this.consume(
                     'Expected newline or \':\' after dotted \'set\' statement',
-                    Lexeme.Newline,
-                    Lexeme.Else,
-                    Lexeme.ElseIf,
-                    Lexeme.Colon,
-                    Lexeme.Eof,
-                    Lexeme.Comment
+                    TokenKind.Newline,
+                    TokenKind.Else,
+                    TokenKind.ElseIf,
+                    TokenKind.Colon,
+                    TokenKind.Eof,
+                    TokenKind.Comment
                 );
                 //if we just consumed a comment, backtrack 1 token so it can be collected later
-                if (this.checkPrevious(Lexeme.Comment)) {
+                if (this.checkPrevious(TokenKind.Comment)) {
                     this.current--;
                 }
 
                 return new DottedSetStatement(
                     left.obj,
                     left.name,
-                    operator.kind === Lexeme.Equal
+                    operator.kind === TokenKind.Equal
                         ? right
                         : new BinaryExpression(left, operator, right)
                 );
@@ -1263,33 +1263,33 @@ export class Parser {
             | PrintSeparatorSpace)[] = [];
 
         //print statements can be empty, so look for empty print conditions
-        if (this.isAtEnd() || this.check(Lexeme.Newline, Lexeme.Colon)) {
+        if (this.isAtEnd() || this.check(TokenKind.Newline, TokenKind.Colon)) {
             let emptyStringLiteral = new LiteralExpression(new BrsString(''), printKeyword.location);
             values.push(emptyStringLiteral);
         } else {
             values.push(this.expression());
         }
 
-        while (!this.check(Lexeme.Newline, Lexeme.Colon, ...additionalterminators, Lexeme.Comment) && !this.isAtEnd()) {
-            if (this.check(Lexeme.Semicolon)) {
+        while (!this.check(TokenKind.Newline, TokenKind.Colon, ...additionalterminators, TokenKind.Comment) && !this.isAtEnd()) {
+            if (this.check(TokenKind.Semicolon)) {
                 values.push(this.advance() as PrintSeparatorSpace);
             }
 
-            if (this.check(Lexeme.Comma)) {
+            if (this.check(TokenKind.Comma)) {
                 values.push(this.advance() as PrintSeparatorTab);
             }
 
-            if (!this.check(Lexeme.Newline, Lexeme.Colon) && !this.isAtEnd()) {
+            if (!this.check(TokenKind.Newline, TokenKind.Colon) && !this.isAtEnd()) {
                 values.push(this.expression());
             }
         }
 
-        if (!this.check(...additionalterminators, Lexeme.Comment)) {
+        if (!this.check(...additionalterminators, TokenKind.Comment)) {
             this.consume(
                 'Expected newline or \':\' after printed values',
-                Lexeme.Newline,
-                Lexeme.Colon,
-                Lexeme.Eof
+                TokenKind.Newline,
+                TokenKind.Colon,
+                TokenKind.Eof
             );
         }
 
@@ -1303,13 +1303,13 @@ export class Parser {
     private returnStatement(): ReturnStatement {
         let tokens = { return: this.previous() };
 
-        if (this.check(Lexeme.Colon, Lexeme.Newline, Lexeme.Eof)) {
-            while (this.match(Lexeme.Colon, Lexeme.Newline, Lexeme.Eof)) { }
+        if (this.check(TokenKind.Colon, TokenKind.Newline, TokenKind.Eof)) {
+            while (this.match(TokenKind.Colon, TokenKind.Newline, TokenKind.Eof)) { }
             return new ReturnStatement(tokens);
         }
 
         let toReturn = this.expression();
-        while (this.match(Lexeme.Newline, Lexeme.Colon)) {
+        while (this.match(TokenKind.Newline, TokenKind.Colon)) {
         }
 
         return new ReturnStatement(tokens, toReturn);
@@ -1325,8 +1325,8 @@ export class Parser {
             colon: this.advance()
         };
 
-        if (!this.check(Lexeme.Comment)) {
-            this.consume('Labels must be declared on their own line', Lexeme.Newline, Lexeme.Eof);
+        if (!this.check(TokenKind.Comment)) {
+            this.consume('Labels must be declared on their own line', TokenKind.Newline, TokenKind.Eof);
         }
 
         return new LabelStatement(tokens);
@@ -1339,10 +1339,10 @@ export class Parser {
     private gotoStatement() {
         let tokens = {
             goto: this.advance(),
-            label: this.consume('Expected label identifier after goto keyword', Lexeme.Identifier)
+            label: this.consume('Expected label identifier after goto keyword', TokenKind.Identifier)
         };
 
-        while (this.match(Lexeme.Newline, Lexeme.Colon)) {
+        while (this.match(TokenKind.Newline, TokenKind.Colon)) {
         }
 
         return new GotoStatement(tokens);
@@ -1355,7 +1355,7 @@ export class Parser {
     private endStatement() {
         let endTokens = { end: this.advance() };
 
-        while (this.match(Lexeme.Newline)) { }
+        while (this.match(TokenKind.Newline)) { }
 
         return new EndStatement(endTokens);
     }
@@ -1366,7 +1366,7 @@ export class Parser {
     private stopStatement() {
         let tokens = { stop: this.advance() };
 
-        while (this.match(Lexeme.Newline, Lexeme.Colon)) {
+        while (this.match(TokenKind.Newline, TokenKind.Colon)) {
 
         }
 
@@ -1394,7 +1394,7 @@ export class Parser {
                 this.current = loopCurrent;
 
                 //scrap the entire line
-                this.consumeUntil(Lexeme.Colon, Lexeme.Newline, Lexeme.Eof);
+                this.consumeUntil(TokenKind.Colon, TokenKind.Newline, TokenKind.Eof);
 
                 //trash the newline character so we start the next iteraion on the next line
                 this.advance();
@@ -1414,7 +1414,7 @@ export class Parser {
     }
 
     private anonymousFunction(): Expression {
-        if (this.check(Lexeme.Sub, Lexeme.Function)) {
+        if (this.check(TokenKind.Sub, TokenKind.Function)) {
             return this.functionDeclaration(true);
         }
 
@@ -1424,7 +1424,7 @@ export class Parser {
     private boolean(): Expression {
         let expr = this.relational();
 
-        while (this.match(Lexeme.And, Lexeme.Or)) {
+        while (this.match(TokenKind.And, TokenKind.Or)) {
             let operator = this.previous();
             let right = this.relational();
             expr = new BinaryExpression(expr, operator, right);
@@ -1438,12 +1438,12 @@ export class Parser {
 
         while (
             this.match(
-                Lexeme.Equal,
-                Lexeme.LessGreater,
-                Lexeme.Greater,
-                Lexeme.GreaterEqual,
-                Lexeme.Less,
-                Lexeme.LessEqual
+                TokenKind.Equal,
+                TokenKind.LessGreater,
+                TokenKind.Greater,
+                TokenKind.GreaterEqual,
+                TokenKind.Less,
+                TokenKind.LessEqual
             )
         ) {
             let operator = this.previous();
@@ -1459,7 +1459,7 @@ export class Parser {
     private additive(): Expression {
         let expr = this.multiplicative();
 
-        while (this.match(Lexeme.Plus, Lexeme.Minus)) {
+        while (this.match(TokenKind.Plus, TokenKind.Minus)) {
             let operator = this.previous();
             let right = this.multiplicative();
             expr = new BinaryExpression(expr, operator, right);
@@ -1471,7 +1471,7 @@ export class Parser {
     private multiplicative(): Expression {
         let expr = this.exponential();
 
-        while (this.match(Lexeme.Slash, Lexeme.Backslash, Lexeme.Star, Lexeme.Mod)) {
+        while (this.match(TokenKind.Slash, TokenKind.Backslash, TokenKind.Star, TokenKind.Mod)) {
             let operator = this.previous();
             let right = this.exponential();
             expr = new BinaryExpression(expr, operator, right);
@@ -1483,7 +1483,7 @@ export class Parser {
     private exponential(): Expression {
         let expr = this.prefixUnary();
 
-        while (this.match(Lexeme.Caret)) {
+        while (this.match(TokenKind.Caret)) {
             let operator = this.previous();
             let right = this.prefixUnary();
             expr = new BinaryExpression(expr, operator, right);
@@ -1493,7 +1493,7 @@ export class Parser {
     }
 
     private prefixUnary(): Expression {
-        if (this.match(Lexeme.Not, Lexeme.Minus)) {
+        if (this.match(TokenKind.Not, TokenKind.Minus)) {
             let operator = this.previous();
             let right = this.prefixUnary();
             return new UnaryExpression(operator, right);
@@ -1506,32 +1506,32 @@ export class Parser {
         let expr = this.primary();
 
         while (true) {
-            if (this.match(Lexeme.LeftParen)) {
+            if (this.match(TokenKind.LeftParen)) {
                 expr = this.finishCall(this.previous(), expr);
-            } else if (this.match(Lexeme.LeftSquare)) {
+            } else if (this.match(TokenKind.LeftSquare)) {
                 let openingSquare = this.previous();
-                while (this.match(Lexeme.Newline)) { }
+                while (this.match(TokenKind.Newline)) { }
 
                 let index = this.expression();
 
-                while (this.match(Lexeme.Newline)) {
+                while (this.match(TokenKind.Newline)) {
 
                 }
                 let closingSquare = this.consume(
                     'Expected \']\' after array or object index',
-                    Lexeme.RightSquare
+                    TokenKind.RightSquare
                 );
 
                 expr = new IndexedGetExpression(expr, index, openingSquare, closingSquare);
-            } else if (this.match(Lexeme.Dot)) {
+            } else if (this.match(TokenKind.Dot)) {
                 let name = this.consume(
                     'Expected property name after \'.\'',
-                    Lexeme.Identifier,
+                    TokenKind.Identifier,
                     ...allowedProperties
                 );
 
                 // force it into an identifier so the AST makes some sense
-                name.kind = Lexeme.Identifier;
+                name.kind = TokenKind.Identifier;
 
                 expr = new DottedGetExpression(expr, name as Identifier);
             } else {
@@ -1544,12 +1544,12 @@ export class Parser {
 
     private finishCall(openingParen: Token, callee: Expression): Expression {
         let args = [] as Expression[];
-        while (this.match(Lexeme.Newline)) {
+        while (this.match(TokenKind.Newline)) {
         }
 
-        if (!this.check(Lexeme.RightParen)) {
+        if (!this.check(TokenKind.RightParen)) {
             do {
-                while (this.match(Lexeme.Newline)) {
+                while (this.match(TokenKind.Newline)) {
 
                 }
 
@@ -1560,14 +1560,14 @@ export class Parser {
                     );
                 }
                 args.push(this.expression());
-            } while (this.match(Lexeme.Comma));
+            } while (this.match(TokenKind.Comma));
         }
 
-        while (this.match(Lexeme.Newline)) {
+        while (this.match(TokenKind.Newline)) {
         }
         const closingParen = this.consume(
             'Expected \')\' after function call arguments',
-            Lexeme.RightParen
+            TokenKind.RightParen
         );
 
         return new CallExpression(callee, openingParen, closingParen, args);
@@ -1575,55 +1575,55 @@ export class Parser {
 
     private primary(): Expression {
         switch (true) {
-            case this.match(Lexeme.False):
+            case this.match(TokenKind.False):
                 return new LiteralExpression(BrsBoolean.False, this.previous().location);
-            case this.match(Lexeme.True):
+            case this.match(TokenKind.True):
                 return new LiteralExpression(BrsBoolean.True, this.previous().location);
-            case this.match(Lexeme.Invalid):
+            case this.match(TokenKind.Invalid):
                 return new LiteralExpression(BrsInvalid.Instance, this.previous().location);
             case this.match(
-                Lexeme.Integer,
-                Lexeme.LongInteger,
-                Lexeme.Float,
-                Lexeme.Double,
-                Lexeme.String
+                TokenKind.Integer,
+                TokenKind.LongInteger,
+                TokenKind.Float,
+                TokenKind.Double,
+                TokenKind.String
             ):
                 return new LiteralExpression(this.previous().literal, this.previous().location);
-            case this.match(Lexeme.Identifier):
+            case this.match(TokenKind.Identifier):
                 return new VariableExpression(this.previous() as Identifier);
-            case this.match(Lexeme.LeftParen):
+            case this.match(TokenKind.LeftParen):
                 let left = this.previous();
                 let expr = this.expression();
                 let right = this.consume(
                     'Unmatched \'(\' - expected \')\' after expression',
-                    Lexeme.RightParen
+                    TokenKind.RightParen
                 );
                 return new GroupingExpression({ left: left, right: right }, expr);
-            case this.match(Lexeme.LeftSquare):
+            case this.match(TokenKind.LeftSquare):
                 let elements: Array<Expression | CommentStatement> = [];
                 let openingSquare = this.previous();
 
                 //add any comment found right after the opening square
-                if (this.check(Lexeme.Comment)) {
+                if (this.check(TokenKind.Comment)) {
                     elements.push(new CommentStatement([this.advance()]));
                 }
 
-                while (this.match(Lexeme.Newline)) {
+                while (this.match(TokenKind.Newline)) {
                 }
 
-                if (!this.match(Lexeme.RightSquare)) {
+                if (!this.match(TokenKind.RightSquare)) {
                     elements.push(this.expression());
 
-                    while (this.match(Lexeme.Comma, Lexeme.Newline, Lexeme.Comment)) {
-                        if (this.checkPrevious(Lexeme.Comment) || this.check(Lexeme.Comment)) {
-                            let comment = this.check(Lexeme.Comment) ? this.advance() : this.previous();
+                    while (this.match(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
+                        if (this.checkPrevious(TokenKind.Comment) || this.check(TokenKind.Comment)) {
+                            let comment = this.check(TokenKind.Comment) ? this.advance() : this.previous();
                             elements.push(new CommentStatement([comment]));
                         }
-                        while (this.match(Lexeme.Newline)) {
+                        while (this.match(TokenKind.Newline)) {
 
                         }
 
-                        if (this.check(Lexeme.RightSquare)) {
+                        if (this.check(TokenKind.RightSquare)) {
                             break;
                         }
 
@@ -1632,7 +1632,7 @@ export class Parser {
 
                     this.consume(
                         'Unmatched \'[\' - expected \']\' after array literal',
-                        Lexeme.RightSquare
+                        TokenKind.RightSquare
                     );
                 }
 
@@ -1640,7 +1640,7 @@ export class Parser {
 
                 //this.consume("Expected newline or ':' after array literal", Lexeme.Newline, Lexeme.Colon, Lexeme.Eof);
                 return new ArrayLiteralExpression(elements, openingSquare, closingSquare);
-            case this.match(Lexeme.LeftBrace):
+            case this.match(TokenKind.LeftBrace):
                 let openingBrace = this.previous();
                 let members: Array<AAMemberExpression | CommentStatement> = [];
 
@@ -1651,10 +1651,10 @@ export class Parser {
                         key: null as BrsString,
                         location: null as Location
                     };
-                    if (this.check(Lexeme.Identifier, ...allowedProperties)) {
+                    if (this.check(TokenKind.Identifier, ...allowedProperties)) {
                         result.keyToken = this.advance();
                         result.key = new BrsString(result.keyToken.text);
-                    } else if (this.check(Lexeme.String)) {
+                    } else if (this.check(TokenKind.String)) {
                         result.keyToken = this.advance();
                         result.key = result.keyToken.literal as BrsString;
                     } else {
@@ -1667,17 +1667,17 @@ export class Parser {
 
                     result.colonToken = this.consume(
                         'Expected \':\' between associative array key and value',
-                        Lexeme.Colon
+                        TokenKind.Colon
                     );
                     result.location = util.getLocation(result.keyToken, result.keyToken, result.colonToken);
                     return result;
                 };
 
-                while (this.match(Lexeme.Newline)) {
+                while (this.match(TokenKind.Newline)) {
                 }
 
-                if (!this.match(Lexeme.RightBrace)) {
-                    if (this.check(Lexeme.Comment)) {
+                if (!this.match(TokenKind.RightBrace)) {
+                    if (this.check(TokenKind.Comment)) {
                         members.push(new CommentStatement([this.advance()]));
                     } else {
                         let k = key();
@@ -1691,23 +1691,23 @@ export class Parser {
                         });
                     }
 
-                    while (this.match(Lexeme.Comma, Lexeme.Newline, Lexeme.Colon, Lexeme.Comment)) {
+                    while (this.match(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
                         //check for comment at the end of the current line
-                        if (this.check(Lexeme.Comment) || this.checkPrevious(Lexeme.Comment)) {
-                            let token = this.checkPrevious(Lexeme.Comment) ? this.previous() : this.advance();
+                        if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
+                            let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
                             members.push(new CommentStatement([token]));
                         } else {
-                            while (this.match(Lexeme.Newline, Lexeme.Colon)) {
+                            while (this.match(TokenKind.Newline, TokenKind.Colon)) {
 
                             }
                             //check for a comment on its own line
-                            if (this.check(Lexeme.Comment) || this.checkPrevious(Lexeme.Comment)) {
-                                let token = this.checkPrevious(Lexeme.Comment) ? this.previous() : this.advance();
+                            if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
+                                let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
                                 members.push(new CommentStatement([token]));
                                 continue;
                             }
 
-                            if (this.check(Lexeme.RightBrace)) {
+                            if (this.check(TokenKind.RightBrace)) {
                                 break;
                             }
                             let k = key();
@@ -1724,21 +1724,21 @@ export class Parser {
 
                     this.consume(
                         'Unmatched \'{\' - expected \'}\' after associative array literal',
-                        Lexeme.RightBrace
+                        TokenKind.RightBrace
                     );
                 }
 
                 let closingBrace = this.previous();
 
                 return new AALiteralExpression(members, openingBrace, closingBrace);
-            case this.match(Lexeme.Pos, Lexeme.Tab):
+            case this.match(TokenKind.Pos, TokenKind.Tab):
                 let token = Object.assign(this.previous(), {
-                    kind: Lexeme.Identifier
+                    kind: TokenKind.Identifier
                 }) as Identifier;
                 return new VariableExpression(token);
-            case this.check(Lexeme.Function, Lexeme.Sub):
+            case this.check(TokenKind.Function, TokenKind.Sub):
                 return this.anonymousFunction();
-            case this.check(Lexeme.Comment):
+            case this.check(TokenKind.Comment):
                 return new CommentStatement([this.advance()]);
             default:
                 throw this.addError(this.peek(), `Found unexpected token '${this.peek().text}'`);
@@ -1749,7 +1749,7 @@ export class Parser {
      * Pop tokens until we encounter a token not in the specified list
      * @param lexemes
      */
-    private match(...lexemes: Lexeme[]) {
+    private match(...lexemes: TokenKind[]) {
         for (let lexeme of lexemes) {
             if (this.check(lexeme)) {
                 this.advance();
@@ -1765,7 +1765,7 @@ export class Parser {
      * @param lexemes
      * @return - the list of tokens consumed, EXCLUDING the `stopLexeme` (you can use `this.peek()` to see which one it was)
      */
-    private consumeUntil(...stopLexemes: Lexeme[]) {
+    private consumeUntil(...stopLexemes: TokenKind[]) {
         let result = [] as Token[];
         //take tokens until we encounter one of the stopLexemes
         while (!stopLexemes.includes(this.peek().kind)) {
@@ -1774,7 +1774,7 @@ export class Parser {
         return result;
     }
 
-    private consume(errorMessage: string | DiagnosticMessage, ...lexemes: Lexeme[]): Token {
+    private consume(errorMessage: string | DiagnosticMessage, ...lexemes: TokenKind[]): Token {
         let diagnostic = typeof errorMessage === 'string' ? { message: errorMessage, code: 1000 } : errorMessage;
         let foundLexeme = lexemes
             .map(lexeme => this.peek().kind === lexeme)
@@ -1791,7 +1791,7 @@ export class Parser {
      * @param message
      * @param lexemes
      */
-    private consumeContinue(diagnostic: DiagnosticMessage, ...lexemes: Lexeme[]): Token | undefined {
+    private consumeContinue(diagnostic: DiagnosticMessage, ...lexemes: TokenKind[]): Token | undefined {
         try {
             return this.consume(diagnostic, ...lexemes);
         } catch (e) {
@@ -1806,7 +1806,7 @@ export class Parser {
         return this.previous();
     }
 
-    private checkPrevious(...lexemes: Lexeme[]) {
+    private checkPrevious(...lexemes: TokenKind[]) {
         if (this.isAtEnd()) {
             return false;
         }
@@ -1814,7 +1814,7 @@ export class Parser {
         return lexemes.some(lexeme => this.previous().kind === lexeme);
     }
 
-    private check(...lexemes: Lexeme[]) {
+    private check(...lexemes: TokenKind[]) {
         if (this.isAtEnd()) {
             return false;
         }
@@ -1822,7 +1822,7 @@ export class Parser {
         return lexemes.some(lexeme => this.peek().kind === lexeme);
     }
 
-    private checkNext(...lexemes: Lexeme[]) {
+    private checkNext(...lexemes: TokenKind[]) {
         if (this.isAtEnd()) {
             return false;
         }
@@ -1831,7 +1831,7 @@ export class Parser {
     }
 
     private isAtEnd() {
-        return this.peek().kind === Lexeme.Eof;
+        return this.peek().kind === TokenKind.Eof;
     }
 
     private peekNext() {
@@ -1853,20 +1853,20 @@ export class Parser {
         this.advance(); // skip the erroneous token
 
         while (!this.isAtEnd()) {
-            if (this.previous().kind === Lexeme.Newline || this.previous().kind === Lexeme.Colon) {
+            if (this.previous().kind === TokenKind.Newline || this.previous().kind === TokenKind.Colon) {
                 // newlines and ':' characters separate statements
                 return;
             }
 
             switch (this.peek().kind) { //eslint-disable-line @typescript-eslint/switch-exhaustiveness-check
-                case Lexeme.Function:
-                case Lexeme.Sub:
-                case Lexeme.If:
-                case Lexeme.For:
-                case Lexeme.ForEach:
-                case Lexeme.While:
-                case Lexeme.Print:
-                case Lexeme.Return:
+                case TokenKind.Function:
+                case TokenKind.Sub:
+                case TokenKind.If:
+                case TokenKind.For:
+                case TokenKind.ForEach:
+                case TokenKind.While:
+                case TokenKind.Print:
+                case TokenKind.Return:
                     // start parsing again from the next block starter or obvious
                     // expression start
                     return;
@@ -1885,76 +1885,76 @@ export enum ParseMode {
 
 /** Set of all keywords that end blocks. */
 type BlockTerminator =
-    | Lexeme.ElseIf
-    | Lexeme.Else
-    | Lexeme.EndFor
-    | Lexeme.Next
-    | Lexeme.EndIf
-    | Lexeme.EndWhile
-    | Lexeme.EndSub
-    | Lexeme.EndFunction;
+    | TokenKind.ElseIf
+    | TokenKind.Else
+    | TokenKind.EndFor
+    | TokenKind.Next
+    | TokenKind.EndIf
+    | TokenKind.EndWhile
+    | TokenKind.EndSub
+    | TokenKind.EndFunction;
 
 /** The set of operators valid for use in assignment statements. */
 const assignmentOperators = [
-    Lexeme.Equal,
-    Lexeme.MinusEqual,
-    Lexeme.PlusEqual,
-    Lexeme.StarEqual,
-    Lexeme.SlashEqual,
-    Lexeme.BackslashEqual,
-    Lexeme.LeftShiftEqual,
-    Lexeme.RightShiftEqual
+    TokenKind.Equal,
+    TokenKind.MinusEqual,
+    TokenKind.PlusEqual,
+    TokenKind.StarEqual,
+    TokenKind.SlashEqual,
+    TokenKind.BackslashEqual,
+    TokenKind.LeftShiftEqual,
+    TokenKind.RightShiftEqual
 ];
 
 /** List of Lexemes that are permitted as property names. */
 const allowedProperties = [
-    Lexeme.And,
-    Lexeme.Box,
-    Lexeme.CreateObject,
-    Lexeme.Dim,
-    Lexeme.Else,
-    Lexeme.ElseIf,
-    Lexeme.End,
-    Lexeme.EndFunction,
-    Lexeme.EndFor,
-    Lexeme.EndIf,
-    Lexeme.EndSub,
-    Lexeme.EndWhile,
-    Lexeme.Eval,
-    Lexeme.Exit,
-    Lexeme.ExitFor,
-    Lexeme.ExitWhile,
-    Lexeme.False,
-    Lexeme.For,
-    Lexeme.ForEach,
-    Lexeme.Function,
-    Lexeme.GetGlobalAA,
-    Lexeme.GetLastRunCompileError,
-    Lexeme.GetLastRunRunTimeError,
-    Lexeme.Goto,
-    Lexeme.If,
-    Lexeme.Invalid,
-    Lexeme.Let,
-    Lexeme.Next,
-    Lexeme.Not,
-    Lexeme.ObjFun,
-    Lexeme.Or,
-    Lexeme.Pos,
-    Lexeme.Print,
-    Lexeme.Rem,
-    Lexeme.Return,
-    Lexeme.Step,
-    Lexeme.Stop,
-    Lexeme.Sub,
-    Lexeme.Tab,
-    Lexeme.To,
-    Lexeme.True,
-    Lexeme.Type,
-    Lexeme.While
+    TokenKind.And,
+    TokenKind.Box,
+    TokenKind.CreateObject,
+    TokenKind.Dim,
+    TokenKind.Else,
+    TokenKind.ElseIf,
+    TokenKind.End,
+    TokenKind.EndFunction,
+    TokenKind.EndFor,
+    TokenKind.EndIf,
+    TokenKind.EndSub,
+    TokenKind.EndWhile,
+    TokenKind.Eval,
+    TokenKind.Exit,
+    TokenKind.ExitFor,
+    TokenKind.ExitWhile,
+    TokenKind.False,
+    TokenKind.For,
+    TokenKind.ForEach,
+    TokenKind.Function,
+    TokenKind.GetGlobalAA,
+    TokenKind.GetLastRunCompileError,
+    TokenKind.GetLastRunRunTimeError,
+    TokenKind.Goto,
+    TokenKind.If,
+    TokenKind.Invalid,
+    TokenKind.Let,
+    TokenKind.Next,
+    TokenKind.Not,
+    TokenKind.ObjFun,
+    TokenKind.Or,
+    TokenKind.Pos,
+    TokenKind.Print,
+    TokenKind.Rem,
+    TokenKind.Return,
+    TokenKind.Step,
+    TokenKind.Stop,
+    TokenKind.Sub,
+    TokenKind.Tab,
+    TokenKind.To,
+    TokenKind.True,
+    TokenKind.Type,
+    TokenKind.While
 ];
 
 /** List of Lexeme that are allowed as local var identifiers. */
-const allowedLocalIdentifiers = [Lexeme.EndFor, Lexeme.ExitFor, Lexeme.ForEach];
+const allowedLocalIdentifiers = [TokenKind.EndFor, TokenKind.ExitFor, TokenKind.ForEach];
 
 /**
  * List of string versions of Lexeme and various globals that are NOT allowed as local var identifiers.
@@ -1962,49 +1962,49 @@ const allowedLocalIdentifiers = [Lexeme.EndFor, Lexeme.ExitFor, Lexeme.ForEach];
  */
 export const disallowedLocalIdentifiers = new Set(
     [
-        Lexeme.And,
-        Lexeme.Box,
-        Lexeme.CreateObject,
-        Lexeme.Dim,
-        Lexeme.Each,
-        Lexeme.Else,
-        Lexeme.ElseIf,
-        Lexeme.End,
-        Lexeme.EndFunction,
-        Lexeme.EndIf,
-        Lexeme.EndSub,
-        Lexeme.EndWhile,
-        Lexeme.Eval,
-        Lexeme.Exit,
-        Lexeme.ExitWhile,
-        Lexeme.False,
-        Lexeme.For,
-        Lexeme.Function,
-        Lexeme.GetGlobalAA,
-        Lexeme.GetLastRunCompileError,
-        Lexeme.GetLastRunRunTimeError,
-        Lexeme.Goto,
-        Lexeme.If,
-        Lexeme.Invalid,
-        Lexeme.Let,
-        Lexeme.Next,
-        Lexeme.Not,
-        Lexeme.ObjFun,
-        Lexeme.Or,
-        Lexeme.Pos,
-        Lexeme.Print,
+        TokenKind.And,
+        TokenKind.Box,
+        TokenKind.CreateObject,
+        TokenKind.Dim,
+        TokenKind.Each,
+        TokenKind.Else,
+        TokenKind.ElseIf,
+        TokenKind.End,
+        TokenKind.EndFunction,
+        TokenKind.EndIf,
+        TokenKind.EndSub,
+        TokenKind.EndWhile,
+        TokenKind.Eval,
+        TokenKind.Exit,
+        TokenKind.ExitWhile,
+        TokenKind.False,
+        TokenKind.For,
+        TokenKind.Function,
+        TokenKind.GetGlobalAA,
+        TokenKind.GetLastRunCompileError,
+        TokenKind.GetLastRunRunTimeError,
+        TokenKind.Goto,
+        TokenKind.If,
+        TokenKind.Invalid,
+        TokenKind.Let,
+        TokenKind.Next,
+        TokenKind.Not,
+        TokenKind.ObjFun,
+        TokenKind.Or,
+        TokenKind.Pos,
+        TokenKind.Print,
         //technically you aren't allowed to make a local var for Rem, but it's a comment so that'll never actually cause a compile error
-        Lexeme.Rem,
-        Lexeme.Return,
+        TokenKind.Rem,
+        TokenKind.Return,
         'run',
-        Lexeme.Step,
-        Lexeme.Sub,
-        Lexeme.Tab,
+        TokenKind.Step,
+        TokenKind.Sub,
+        TokenKind.Tab,
         'then',
-        Lexeme.To,
-        Lexeme.True,
-        Lexeme.Type,
-        Lexeme.While,
+        TokenKind.To,
+        TokenKind.True,
+        TokenKind.Type,
+        TokenKind.While,
         'line_num'
     ].map(x => x.toLowerCase())
 );

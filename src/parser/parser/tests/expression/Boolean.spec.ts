@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { BrsBoolean } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser boolean expressions', () => {
@@ -10,10 +10,10 @@ describe('parser boolean expressions', () => {
     it('parses boolean ANDs', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.Equal, '='),
-            token(Lexeme.True, 'true', BrsBoolean.True),
-            token(Lexeme.And, 'and'),
-            token(Lexeme.False, 'false', BrsBoolean.False),
+            token(TokenKind.Equal, '='),
+            token(TokenKind.True, 'true', BrsBoolean.True),
+            token(TokenKind.And, 'and'),
+            token(TokenKind.False, 'false', BrsBoolean.False),
             EOF
         ]);
 
@@ -25,10 +25,10 @@ describe('parser boolean expressions', () => {
     it('parses boolean ORs', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.Equal, '='),
-            token(Lexeme.True, 'true', BrsBoolean.True),
-            token(Lexeme.Or, 'or'),
-            token(Lexeme.False, 'false', BrsBoolean.False),
+            token(TokenKind.Equal, '='),
+            token(TokenKind.True, 'true', BrsBoolean.True),
+            token(TokenKind.Or, 'or'),
+            token(TokenKind.False, 'false', BrsBoolean.False),
             EOF
         ]);
 
@@ -46,7 +46,7 @@ describe('parser boolean expressions', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
                 location: {
@@ -55,7 +55,7 @@ describe('parser boolean expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Equal,
+                kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 location: {
@@ -64,7 +64,7 @@ describe('parser boolean expressions', () => {
                 }
             },
             {
-                kind: Lexeme.True,
+                kind: TokenKind.True,
                 text: 'true',
                 literal: BrsBoolean.True,
                 isReserved: true,
@@ -74,7 +74,7 @@ describe('parser boolean expressions', () => {
                 }
             },
             {
-                kind: Lexeme.And,
+                kind: TokenKind.And,
                 text: 'and',
                 isReserved: true,
                 location: {
@@ -83,7 +83,7 @@ describe('parser boolean expressions', () => {
                 }
             },
             {
-                kind: Lexeme.False,
+                kind: TokenKind.False,
                 text: 'false',
                 literal: BrsBoolean.False,
                 isReserved: true,
@@ -93,7 +93,7 @@ describe('parser boolean expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Eof,
+                kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 location: {

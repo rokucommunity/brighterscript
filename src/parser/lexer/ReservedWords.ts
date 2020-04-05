@@ -1,4 +1,4 @@
-import { Lexeme as L } from './Lexeme';
+import { TokenKind as L } from './TokenKind';
 
 /**
  * The set of all reserved words in the reference BrightScript runtime. These can't be used for any

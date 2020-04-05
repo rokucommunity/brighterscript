@@ -2,21 +2,21 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { BrsString, Int32 } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { FunctionStatement } from '../../Statement';
 
 describe('parser return statements', () => {
     it('parses void returns', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.Function, 'function'),
+            token(TokenKind.Function, 'function'),
             identifier('foo'),
-            token(Lexeme.LeftParen, '('),
-            token(Lexeme.RightParen, ')'),
-            token(Lexeme.Newline, '\\n'),
-            token(Lexeme.Return, 'return'),
-            token(Lexeme.Newline, '\\n'),
-            token(Lexeme.EndFunction, 'end function'),
+            token(TokenKind.LeftParen, '('),
+            token(TokenKind.RightParen, ')'),
+            token(TokenKind.Newline, '\\n'),
+            token(TokenKind.Return, 'return'),
+            token(TokenKind.Newline, '\\n'),
+            token(TokenKind.EndFunction, 'end function'),
             EOF
         ]);
 
@@ -27,15 +27,15 @@ describe('parser return statements', () => {
 
     it('parses literal returns', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.Function, 'function'),
+            token(TokenKind.Function, 'function'),
             identifier('foo'),
-            token(Lexeme.LeftParen, '('),
-            token(Lexeme.RightParen, ')'),
-            token(Lexeme.Newline, '\\n'),
-            token(Lexeme.Return, 'return'),
-            { kind: Lexeme.String, literal: new BrsString('test'), text: '"test"', line: 2 },
-            token(Lexeme.Newline, '\\n'),
-            token(Lexeme.EndFunction, 'end function'),
+            token(TokenKind.LeftParen, '('),
+            token(TokenKind.RightParen, ')'),
+            token(TokenKind.Newline, '\\n'),
+            token(TokenKind.Return, 'return'),
+            { kind: TokenKind.String, literal: new BrsString('test'), text: '"test"', line: 2 },
+            token(TokenKind.Newline, '\\n'),
+            token(TokenKind.EndFunction, 'end function'),
             EOF
         ]);
 
@@ -46,17 +46,17 @@ describe('parser return statements', () => {
 
     it('parses expression returns', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.Function, 'function'),
+            token(TokenKind.Function, 'function'),
             identifier('foo'),
-            token(Lexeme.LeftParen, '('),
-            token(Lexeme.RightParen, ')'),
-            token(Lexeme.Newline, '\\n'),
-            token(Lexeme.Return, 'return'),
+            token(TokenKind.LeftParen, '('),
+            token(TokenKind.RightParen, ')'),
+            token(TokenKind.Newline, '\\n'),
+            token(TokenKind.Return, 'return'),
             identifier('RebootSystem'),
-            { kind: Lexeme.LeftParen, text: '(', line: 2 },
-            token(Lexeme.RightParen, ')'),
-            token(Lexeme.Newline, '\\n'),
-            token(Lexeme.EndFunction, 'end function'),
+            { kind: TokenKind.LeftParen, text: '(', line: 2 },
+            token(TokenKind.RightParen, ')'),
+            token(TokenKind.Newline, '\\n'),
+            token(TokenKind.EndFunction, 'end function'),
             EOF
         ]);
 
@@ -75,13 +75,13 @@ describe('parser return statements', () => {
          * 3| end function
          */
         let { statements, errors } = Parser.parse([
-            token(Lexeme.Function, 'function'),
+            token(TokenKind.Function, 'function'),
             identifier('foo'),
-            token(Lexeme.LeftParen, '('),
-            token(Lexeme.RightParen, ')'),
-            token(Lexeme.Newline, '\\n'),
+            token(TokenKind.LeftParen, '('),
+            token(TokenKind.RightParen, ')'),
+            token(TokenKind.Newline, '\\n'),
             {
-                kind: Lexeme.Return,
+                kind: TokenKind.Return,
                 text: 'return',
                 isReserved: true,
                 location: {
@@ -90,7 +90,7 @@ describe('parser return statements', () => {
                 }
             },
             {
-                kind: Lexeme.Integer,
+                kind: TokenKind.Integer,
                 text: '5',
                 literal: new Int32(5),
                 isReserved: false,
@@ -99,8 +99,8 @@ describe('parser return statements', () => {
                     end: { line: 2, column: 10 }
                 }
             },
-            token(Lexeme.Newline, '\\n'),
-            token(Lexeme.EndFunction, 'end function'),
+            token(TokenKind.Newline, '\\n'),
+            token(TokenKind.EndFunction, 'end function'),
             EOF
         ]);
 

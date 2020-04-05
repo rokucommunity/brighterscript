@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { diagnosticMessages } from '../../DiagnosticMessages';
-import { Lexeme, Lexer } from '../lexer';
+import { TokenKind, Lexer } from '../lexer';
 import { Parser, ParseMode } from './Parser';
 import { ClassFieldStatement, ClassStatement } from './Statement';
 
@@ -55,7 +55,7 @@ describe('parser', () => {
                 expect(errors).to.be.empty;
                 expect(statements[0]).instanceof(ClassStatement);
                 let field = (statements[0] as ClassStatement).members[0] as ClassFieldStatement;
-                expect(field.accessModifier.kind).to.equal(Lexeme.Public);
+                expect(field.accessModifier.kind).to.equal(TokenKind.Public);
                 expect(field.name.text).to.equal('firstName');
                 expect(field.as.text).to.equal('as');
                 expect(field.type.text).to.equal('string');
@@ -109,7 +109,7 @@ describe('parser', () => {
                 let { statements, errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
                 expect(errors).to.be.lengthOf(0);
                 let cls = statements[0] as ClassStatement;
-                expect(cls.fields[0].accessModifier.kind).to.equal(Lexeme.Public);
+                expect(cls.fields[0].accessModifier.kind).to.equal(TokenKind.Public);
             });
         });
 
@@ -159,7 +159,7 @@ describe('parser', () => {
                 let { statements, errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
                 expect(errors).to.be.lengthOf(0);
                 let cls = statements[0] as ClassStatement;
-                expect(cls.methods[0].accessModifier.kind).to.equal(Lexeme.Public);
+                expect(cls.methods[0].accessModifier.kind).to.equal(TokenKind.Public);
             });
 
             it('detects missing function keyword', () => {

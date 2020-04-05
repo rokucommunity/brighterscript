@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 
-import { Lexeme } from './Lexeme';
+import { TokenKind } from './TokenKind';
 import { Token, Location } from './Token';
 import { ReservedWords, KeyWords } from './ReservedWords';
 import { BrsError } from '../Error';
@@ -96,7 +96,7 @@ export class Lexer {
         }
 
         this.tokens.push({
-            kind: Lexeme.Eof,
+            kind: TokenKind.Eof,
             isReserved: false,
             text: '\0',
             location: {
@@ -170,25 +170,25 @@ export class Lexer {
         let c = this.advance();
         switch (c.toLowerCase()) {
             case '(':
-                this.addToken(Lexeme.LeftParen);
+                this.addToken(TokenKind.LeftParen);
                 break;
             case ')':
-                this.addToken(Lexeme.RightParen);
+                this.addToken(TokenKind.RightParen);
                 break;
             case '{':
-                this.addToken(Lexeme.LeftBrace);
+                this.addToken(TokenKind.LeftBrace);
                 break;
             case '}':
-                this.addToken(Lexeme.RightBrace);
+                this.addToken(TokenKind.RightBrace);
                 break;
             case '[':
-                this.addToken(Lexeme.LeftSquare);
+                this.addToken(TokenKind.LeftSquare);
                 break;
             case ']':
-                this.addToken(Lexeme.RightSquare);
+                this.addToken(TokenKind.RightSquare);
                 break;
             case ',':
-                this.addToken(Lexeme.Comma);
+                this.addToken(TokenKind.Comma);
                 break;
             case '.':
                 // this might be a float/double literal, because decimals without a leading 0
@@ -196,21 +196,21 @@ export class Lexer {
                 if (isDecimalDigit(this.peek())) {
                     this.decimalNumber(true);
                 } else {
-                    this.addToken(Lexeme.Dot);
+                    this.addToken(TokenKind.Dot);
                 }
                 break;
             case '+':
                 switch (this.peek()) {
                     case '=':
                         this.advance();
-                        this.addToken(Lexeme.PlusEqual);
+                        this.addToken(TokenKind.PlusEqual);
                         break;
                     case '+':
                         this.advance();
-                        this.addToken(Lexeme.PlusPlus);
+                        this.addToken(TokenKind.PlusPlus);
                         break;
                     default:
-                        this.addToken(Lexeme.Plus);
+                        this.addToken(TokenKind.Plus);
                         break;
                 }
                 break;
@@ -218,14 +218,14 @@ export class Lexer {
                 switch (this.peek()) {
                     case '=':
                         this.advance();
-                        this.addToken(Lexeme.MinusEqual);
+                        this.addToken(TokenKind.MinusEqual);
                         break;
                     case '-':
                         this.advance();
-                        this.addToken(Lexeme.MinusMinus);
+                        this.addToken(TokenKind.MinusMinus);
                         break;
                     default:
-                        this.addToken(Lexeme.Minus);
+                        this.addToken(TokenKind.Minus);
                         break;
                 }
                 break;
@@ -233,10 +233,10 @@ export class Lexer {
                 switch (this.peek()) {
                     case '=':
                         this.advance();
-                        this.addToken(Lexeme.StarEqual);
+                        this.addToken(TokenKind.StarEqual);
                         break;
                     default:
-                        this.addToken(Lexeme.Star);
+                        this.addToken(TokenKind.Star);
                         break;
                 }
                 break;
@@ -244,63 +244,63 @@ export class Lexer {
                 switch (this.peek()) {
                     case '=':
                         this.advance();
-                        this.addToken(Lexeme.SlashEqual);
+                        this.addToken(TokenKind.SlashEqual);
                         break;
                     default:
-                        this.addToken(Lexeme.Slash);
+                        this.addToken(TokenKind.Slash);
                         break;
                 }
                 break;
             case '^':
-                this.addToken(Lexeme.Caret);
+                this.addToken(TokenKind.Caret);
                 break;
             case '\\':
                 switch (this.peek()) {
                     case '=':
                         this.advance();
-                        this.addToken(Lexeme.BackslashEqual);
+                        this.addToken(TokenKind.BackslashEqual);
                         break;
                     default:
-                        this.addToken(Lexeme.Backslash);
+                        this.addToken(TokenKind.Backslash);
                         break;
                 }
                 break;
             case '=':
-                this.addToken(Lexeme.Equal);
+                this.addToken(TokenKind.Equal);
                 break;
             case ':':
-                this.addToken(Lexeme.Colon);
+                this.addToken(TokenKind.Colon);
                 break;
             case ';':
-                this.addToken(Lexeme.Semicolon);
+                this.addToken(TokenKind.Semicolon);
                 break;
             case '?':
-                this.addToken(Lexeme.Print);
+                this.addToken(TokenKind.Print);
                 break;
             case '<':
                 switch (this.peek()) {
                     case '=':
                         this.advance();
-                        this.addToken(Lexeme.LessEqual);
+                        this.addToken(TokenKind.LessEqual);
                         break;
                     case '<':
                         this.advance();
                         switch (this.peek()) {
                             case '=':
                                 this.advance();
-                                this.addToken(Lexeme.LeftShiftEqual);
+                                this.addToken(TokenKind.LeftShiftEqual);
                                 break;
                             default:
-                                this.addToken(Lexeme.LeftShift);
+                                this.addToken(TokenKind.LeftShift);
                                 break;
                         }
                         break;
                     case '>':
                         this.advance();
-                        this.addToken(Lexeme.LessGreater);
+                        this.addToken(TokenKind.LessGreater);
                         break;
                     default:
-                        this.addToken(Lexeme.Less);
+                        this.addToken(TokenKind.Less);
                         break;
                 }
                 break;
@@ -308,22 +308,22 @@ export class Lexer {
                 switch (this.peek()) {
                     case '=':
                         this.advance();
-                        this.addToken(Lexeme.GreaterEqual);
+                        this.addToken(TokenKind.GreaterEqual);
                         break;
                     case '>':
                         this.advance();
                         switch (this.peek()) {
                             case '=':
                                 this.advance();
-                                this.addToken(Lexeme.RightShiftEqual);
+                                this.addToken(TokenKind.RightShiftEqual);
                                 break;
                             default:
-                                this.addToken(Lexeme.RightShift);
+                                this.addToken(TokenKind.RightShift);
                                 break;
                         }
                         break;
                     default:
-                        this.addToken(Lexeme.Greater);
+                        this.addToken(TokenKind.Greater);
                         break;
                 }
                 break;
@@ -336,7 +336,7 @@ export class Lexer {
                 this.tokens.push({
                     text: comment,
                     isReserved: false,
-                    kind: Lexeme.Comment,
+                    kind: TokenKind.Comment,
                     location: this.locationOf(comment)
                 });
                 break;
@@ -374,7 +374,7 @@ export class Lexer {
             this.advance();
         }
         if (this.options.includeWhitespace) {
-            this.addToken(Lexeme.Whitespace);
+            this.addToken(TokenKind.Whitespace);
         }
     }
 
@@ -382,7 +382,7 @@ export class Lexer {
         if (this.peek() === '\r' && this.peekNext() === '\n') {
             this.advance();
         }
-        this.addToken(Lexeme.Newline);
+        this.addToken(TokenKind.Newline);
         // advance the line counter
         this.line++;
         // and always reset the column counter
@@ -498,7 +498,7 @@ export class Lexer {
 
         // trim the surrounding quotes, and replace the double-" literal with a single
         let value = this.source.slice(this.start + 1, this.current - 1).replace(/""/g, '"');
-        this.addToken(Lexeme.String, new BrsString(value));
+        this.addToken(TokenKind.String, new BrsString(value));
     }
 
     /**
@@ -535,13 +535,13 @@ export class Lexer {
 
         if (numberOfDigits >= 10 && designator !== '&') {
             // numeric literals over 10 digits with no type designator are implicitly Doubles
-            this.addToken(Lexeme.Double, Double.fromString(asString));
+            this.addToken(TokenKind.Double, Double.fromString(asString));
             return;
         } else if (designator === '#') {
             // numeric literals ending with "#" are forced to Doubles
             this.advance();
             asString = this.source.slice(this.start, this.current);
-            this.addToken(Lexeme.Double, Double.fromString(asString));
+            this.addToken(TokenKind.Double, Double.fromString(asString));
             return;
         } else if (designator === 'd') {
             // literals that use "D" as the exponent are also automatic Doubles
@@ -561,7 +561,7 @@ export class Lexer {
 
             // replace the exponential marker with a JavaScript-friendly "e"
             asString = this.source.slice(this.start, this.current).replace(/[dD]/, 'e');
-            this.addToken(Lexeme.Double, Double.fromString(asString));
+            this.addToken(TokenKind.Double, Double.fromString(asString));
             return;
         }
 
@@ -569,7 +569,7 @@ export class Lexer {
             // numeric literals ending with "!" are forced to Floats
             this.advance();
             asString = this.source.slice(this.start, this.current);
-            this.addToken(Lexeme.Float, Float.fromString(asString));
+            this.addToken(TokenKind.Float, Float.fromString(asString));
             return;
         } else if (designator === 'e') {
             // literals that use "E" as the exponent are also automatic Floats
@@ -588,11 +588,11 @@ export class Lexer {
             }
 
             asString = this.source.slice(this.start, this.current);
-            this.addToken(Lexeme.Float, Float.fromString(asString));
+            this.addToken(TokenKind.Float, Float.fromString(asString));
             return;
         } else if (containsDecimal) {
             // anything with a decimal but without matching Double rules is a Float
-            this.addToken(Lexeme.Float, Float.fromString(asString));
+            this.addToken(TokenKind.Float, Float.fromString(asString));
             return;
         }
 
@@ -600,11 +600,11 @@ export class Lexer {
             // numeric literals ending with "&" are forced to LongIntegers
             asString = this.source.slice(this.start, this.current);
             this.advance();
-            this.addToken(Lexeme.LongInteger, Int64.fromString(asString));
+            this.addToken(TokenKind.LongInteger, Int64.fromString(asString));
 
         } else {
             // otherwise, it's a regular integer
-            this.addToken(Lexeme.Integer, Int32.fromString(asString));
+            this.addToken(TokenKind.Integer, Int32.fromString(asString));
 
         }
     }
@@ -637,10 +637,10 @@ export class Lexer {
             // literals ending with "&" are forced to LongIntegers
             this.advance();
             let asString = this.source.slice(this.start, this.current);
-            this.addToken(Lexeme.LongInteger, Int64.fromString(asString));
+            this.addToken(TokenKind.LongInteger, Int64.fromString(asString));
         } else {
             let asString = this.source.slice(this.start, this.current);
-            this.addToken(Lexeme.Integer, Int32.fromString(asString));
+            this.addToken(TokenKind.Integer, Int32.fromString(asString));
         }
     }
 
@@ -698,12 +698,12 @@ export class Lexer {
             this.advance();
         }
 
-        let tokenType = KeyWords[text.toLowerCase()] || Lexeme.Identifier;
+        let tokenType = KeyWords[text.toLowerCase()] || TokenKind.Identifier;
         if (tokenType === KeyWords.rem) {
             //the rem keyword can be used as an identifier on objects,
             //so do a quick look-behind to see if there's a preceeding dot
-            if (this.checkPrevious(Lexeme.Dot)) {
-                this.addToken(Lexeme.Identifier);
+            if (this.checkPrevious(TokenKind.Dot)) {
+                this.addToken(TokenKind.Identifier);
             } else {
                 // The 'rem' keyword can be used to indicate comments as well, so
                 // consume the rest of the line
@@ -714,7 +714,7 @@ export class Lexer {
                 this.tokens.push({
                     text: comment,
                     isReserved: false,
-                    kind: Lexeme.Comment,
+                    kind: TokenKind.Comment,
                     location: this.locationOf(comment)
                 });
             }
@@ -727,7 +727,7 @@ export class Lexer {
      * Check that the previous token was of the specified type
      * @param kind
      */
-    private checkPrevious(kind: Lexeme) {
+    private checkPrevious(kind: TokenKind) {
         let previous = this.tokens[this.tokens.length - 1];
         if (previous && previous.kind === kind) {
             return true;
@@ -760,10 +760,10 @@ export class Lexer {
             let twoWords = this.source.slice(this.start, this.current);
             switch (twoWords.replace(/ {2,}/g, ' ')) {
                 case '#else if':
-                    this.addToken(Lexeme.HashElseIf);
+                    this.addToken(TokenKind.HashElseIf);
                     return;
                 case '#end if':
-                    this.addToken(Lexeme.HashEndIf);
+                    this.addToken(TokenKind.HashEndIf);
                     return;
             }
 
@@ -773,22 +773,22 @@ export class Lexer {
 
         switch (text) {
             case '#if':
-                this.addToken(Lexeme.HashIf);
+                this.addToken(TokenKind.HashIf);
                 return;
             case '#else':
-                this.addToken(Lexeme.HashElse);
+                this.addToken(TokenKind.HashElse);
                 return;
             case '#elseif':
-                this.addToken(Lexeme.HashElseIf);
+                this.addToken(TokenKind.HashElseIf);
                 return;
             case '#endif':
-                this.addToken(Lexeme.HashEndIf);
+                this.addToken(TokenKind.HashEndIf);
                 return;
             case '#const':
-                this.addToken(Lexeme.HashConst);
+                this.addToken(TokenKind.HashConst);
                 return;
             case '#error':
-                this.addToken(Lexeme.HashError);
+                this.addToken(TokenKind.HashError);
 
                 // #error must be followed by a message; scan it separately to preserve whitespace
                 this.start = this.current;
@@ -797,7 +797,7 @@ export class Lexer {
                 }
 
                 // grab all text since we found #error as one token
-                this.addToken(Lexeme.HashErrorMessage);
+                this.addToken(TokenKind.HashErrorMessage);
 
                 // consume the trailing newline here; it's not semantically significant
                 this.match('\n');
@@ -819,7 +819,7 @@ export class Lexer {
      * @param kind the type of token to produce.
      * @param literal an optional literal value to include in the token.
      */
-    private addToken(kind: Lexeme, literal?: BrsType): void {
+    private addToken(kind: TokenKind, literal?: BrsType): void {
         let withWhitespace = this.source.slice(this.start, this.current);
         let text = withWhitespace.trimLeft() || withWhitespace;
         let token = {

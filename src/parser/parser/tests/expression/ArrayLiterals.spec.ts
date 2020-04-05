@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { BrsBoolean, Int32 } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser array literals', () => {
@@ -10,9 +10,9 @@ describe('parser array literals', () => {
         it('on one line', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.RightSquare, ']'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.RightSquare, ']'),
                 EOF
             ]);
 
@@ -24,15 +24,15 @@ describe('parser array literals', () => {
         it('on multiple lines', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.RightSquare, ']'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.RightSquare, ']'),
                 EOF
             ]);
 
@@ -46,14 +46,14 @@ describe('parser array literals', () => {
         it('on one line', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '1', new Int32(1)),
-                token(Lexeme.Comma, ','),
-                token(Lexeme.Integer, '2', new Int32(2)),
-                token(Lexeme.Comma, ','),
-                token(Lexeme.Integer, '3', new Int32(3)),
-                token(Lexeme.RightSquare, ']'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.Comma, ','),
+                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.Comma, ','),
+                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.RightSquare, ']'),
                 EOF
             ]);
 
@@ -65,18 +65,18 @@ describe('parser array literals', () => {
         it('on multiple lines with commas', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.Integer, '1', new Int32(1)),
-                token(Lexeme.Comma, ','),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.Integer, '2', new Int32(2)),
-                token(Lexeme.Comma, ','),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.Integer, '3', new Int32(3)),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.RightSquare, ']'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.Comma, ','),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.Comma, ','),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.RightSquare, ']'),
                 EOF
             ]);
 
@@ -88,16 +88,16 @@ describe('parser array literals', () => {
         it('on multiple lines without commas', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.Integer, '1', new Int32(1)),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.Integer, '2', new Int32(2)),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.Integer, '3', new Int32(3)),
-                token(Lexeme.Newline, '\n'),
-                token(Lexeme.RightSquare, ']'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.Newline, '\n'),
+                token(TokenKind.RightSquare, ']'),
                 EOF
             ]);
 
@@ -111,14 +111,14 @@ describe('parser array literals', () => {
         it('can contain primitives', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '1', new Int32(1)),
-                token(Lexeme.Comma, ','),
-                token(Lexeme.Integer, '2', new Int32(2)),
-                token(Lexeme.Comma, ','),
-                token(Lexeme.Integer, '3', new Int32(3)),
-                token(Lexeme.RightSquare, ']'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.Comma, ','),
+                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.Comma, ','),
+                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.RightSquare, ']'),
                 EOF
             ]);
 
@@ -130,24 +130,24 @@ describe('parser array literals', () => {
         it('can contain other arrays', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '1', new Int32(1)),
-                token(Lexeme.Comma, ','),
-                token(Lexeme.Integer, '2', new Int32(2)),
-                token(Lexeme.Comma, ','),
-                token(Lexeme.Integer, '3', new Int32(3)),
-                token(Lexeme.RightSquare, ']'),
-                token(Lexeme.Comma, ','),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '4', new Int32(4)),
-                token(Lexeme.Comma, ','),
-                token(Lexeme.Integer, '5', new Int32(5)),
-                token(Lexeme.Comma, ','),
-                token(Lexeme.Integer, '6', new Int32(6)),
-                token(Lexeme.RightSquare, ']'),
-                token(Lexeme.RightSquare, ']'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.Comma, ','),
+                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.Comma, ','),
+                token(TokenKind.Integer, '3', new Int32(3)),
+                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.Comma, ','),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Integer, '4', new Int32(4)),
+                token(TokenKind.Comma, ','),
+                token(TokenKind.Integer, '5', new Int32(5)),
+                token(TokenKind.Comma, ','),
+                token(TokenKind.Integer, '6', new Int32(6)),
+                token(TokenKind.RightSquare, ']'),
+                token(TokenKind.RightSquare, ']'),
                 EOF
             ]);
 
@@ -159,15 +159,15 @@ describe('parser array literals', () => {
         it('can contain expressions', () => {
             let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '1', new Int32(1)),
-                token(Lexeme.Plus, '+'),
-                token(Lexeme.Integer, '2', new Int32(2)),
-                token(Lexeme.Comma, ','),
-                token(Lexeme.Not, 'not'),
-                token(Lexeme.False, 'false', BrsBoolean.False),
-                token(Lexeme.RightSquare, ']'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.LeftSquare, '['),
+                token(TokenKind.Integer, '1', new Int32(1)),
+                token(TokenKind.Plus, '+'),
+                token(TokenKind.Integer, '2', new Int32(2)),
+                token(TokenKind.Comma, ','),
+                token(TokenKind.Not, 'not'),
+                token(TokenKind.False, 'false', BrsBoolean.False),
+                token(TokenKind.RightSquare, ']'),
                 EOF
             ]);
 
@@ -191,7 +191,7 @@ describe('parser array literals', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
                 location: {
@@ -200,7 +200,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: Lexeme.Equal,
+                kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 location: {
@@ -209,7 +209,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: Lexeme.LeftSquare,
+                kind: TokenKind.LeftSquare,
                 text: '[',
                 isReserved: false,
                 location: {
@@ -218,7 +218,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: Lexeme.RightSquare,
+                kind: TokenKind.RightSquare,
                 text: ']',
                 isReserved: false,
                 location: {
@@ -227,7 +227,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: Lexeme.Newline,
+                kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
                 location: {
@@ -236,7 +236,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: Lexeme.Newline,
+                kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
                 location: {
@@ -245,7 +245,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'b',
                 isReserved: false,
                 location: {
@@ -254,7 +254,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: Lexeme.Equal,
+                kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 location: {
@@ -263,7 +263,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: Lexeme.LeftSquare,
+                kind: TokenKind.LeftSquare,
                 text: '[',
                 isReserved: false,
                 location: {
@@ -272,7 +272,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: Lexeme.Newline,
+                kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
                 location: {
@@ -281,7 +281,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: Lexeme.Newline,
+                kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
                 location: {
@@ -290,7 +290,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: Lexeme.RightSquare,
+                kind: TokenKind.RightSquare,
                 text: ']',
                 isReserved: false,
                 location: {
@@ -299,7 +299,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: Lexeme.Eof,
+                kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 location: {

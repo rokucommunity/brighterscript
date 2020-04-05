@@ -2,15 +2,15 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { BrsString, Int32 } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser assignment operators', () => {
     it('+=', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.PlusEqual),
-            token(Lexeme.String, `"lorem"`, new BrsString('lorem')),
+            token(TokenKind.PlusEqual),
+            token(TokenKind.String, `"lorem"`, new BrsString('lorem')),
             EOF
         ]);
 
@@ -22,8 +22,8 @@ describe('parser assignment operators', () => {
     it('-=', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.MinusEqual),
-            token(Lexeme.Integer, '1', new Int32(1)),
+            token(TokenKind.MinusEqual),
+            token(TokenKind.Integer, '1', new Int32(1)),
             EOF
         ]);
 
@@ -35,8 +35,8 @@ describe('parser assignment operators', () => {
     it('*=', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.StarEqual),
-            token(Lexeme.Integer, '3', new Int32(3)),
+            token(TokenKind.StarEqual),
+            token(TokenKind.Integer, '3', new Int32(3)),
             EOF
         ]);
 
@@ -48,8 +48,8 @@ describe('parser assignment operators', () => {
     it('/=', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.SlashEqual),
-            token(Lexeme.Integer, '4', new Int32(4)),
+            token(TokenKind.SlashEqual),
+            token(TokenKind.Integer, '4', new Int32(4)),
             EOF
         ]);
 
@@ -61,8 +61,8 @@ describe('parser assignment operators', () => {
     it('\\=', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.BackslashEqual),
-            token(Lexeme.Integer, '5', new Int32(5)),
+            token(TokenKind.BackslashEqual),
+            token(TokenKind.Integer, '5', new Int32(5)),
             EOF
         ]);
 
@@ -74,8 +74,8 @@ describe('parser assignment operators', () => {
     it('<<=', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.LeftShiftEqual),
-            token(Lexeme.Integer, '6', new Int32(6)),
+            token(TokenKind.LeftShiftEqual),
+            token(TokenKind.Integer, '6', new Int32(6)),
             EOF
         ]);
 
@@ -87,8 +87,8 @@ describe('parser assignment operators', () => {
     it('>>=', () => {
         let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.RightShiftEqual),
-            token(Lexeme.Integer, '7', new Int32(7)),
+            token(TokenKind.RightShiftEqual),
+            token(TokenKind.Integer, '7', new Int32(7)),
             EOF
         ]);
 

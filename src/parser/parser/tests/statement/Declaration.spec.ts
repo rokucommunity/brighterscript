@@ -2,18 +2,18 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { BrsInvalid, Int32 } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser variable declarations', () => {
     it('allows newlines before assignments', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.Newline),
-            token(Lexeme.Newline),
-            token(Lexeme.Newline),
+            token(TokenKind.Newline),
+            token(TokenKind.Newline),
+            token(TokenKind.Newline),
             identifier('hasNewlines'),
-            token(Lexeme.Equal),
-            token(Lexeme.True),
+            token(TokenKind.Equal),
+            token(TokenKind.True),
             EOF
         ]);
 
@@ -25,9 +25,9 @@ describe('parser variable declarations', () => {
     it('allows newlines after assignments', () => {
         let { statements, errors } = Parser.parse([
             identifier('hasNewlines'),
-            token(Lexeme.Equal),
-            token(Lexeme.True),
-            token(Lexeme.Newline),
+            token(TokenKind.Equal),
+            token(TokenKind.True),
+            token(TokenKind.Newline),
             EOF
         ]);
 
@@ -39,8 +39,8 @@ describe('parser variable declarations', () => {
     it('parses literal value assignments', () => {
         let { statements, errors } = Parser.parse([
             identifier('foo'),
-            token(Lexeme.Equal),
-            token(Lexeme.Integer, '5', new Int32(5)),
+            token(TokenKind.Equal),
+            token(TokenKind.Integer, '5', new Int32(5)),
             EOF
         ]);
 
@@ -53,10 +53,10 @@ describe('parser variable declarations', () => {
     it('parses evaluated value assignments', () => {
         let { statements, errors } = Parser.parse([
             identifier('bar'),
-            token(Lexeme.Equal),
-            token(Lexeme.Integer, '5', new Int32(5)),
-            token(Lexeme.Caret),
-            token(Lexeme.Integer, '3', new Int32(3)),
+            token(TokenKind.Equal),
+            token(TokenKind.Integer, '5', new Int32(5)),
+            token(TokenKind.Caret),
+            token(TokenKind.Integer, '3', new Int32(3)),
             EOF
         ]);
 
@@ -69,7 +69,7 @@ describe('parser variable declarations', () => {
     it('parses variable aliasing', () => {
         let { statements, errors } = Parser.parse([
             identifier('baz'),
-            token(Lexeme.Equal),
+            token(TokenKind.Equal),
             identifier('foo'),
             EOF
         ]);
@@ -89,7 +89,7 @@ describe('parser variable declarations', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'foo',
                 isReserved: false,
                 location: {
@@ -98,7 +98,7 @@ describe('parser variable declarations', () => {
                 }
             },
             {
-                kind: Lexeme.Equal,
+                kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 location: {
@@ -107,7 +107,7 @@ describe('parser variable declarations', () => {
                 }
             },
             {
-                kind: Lexeme.Invalid,
+                kind: TokenKind.Invalid,
                 text: 'invalid',
                 literal: BrsInvalid.Instance,
                 isReserved: true,
@@ -117,7 +117,7 @@ describe('parser variable declarations', () => {
                 }
             },
             {
-                kind: Lexeme.Eof,
+                kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 location: {

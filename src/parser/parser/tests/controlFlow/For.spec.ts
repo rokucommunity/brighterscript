@@ -2,24 +2,24 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { Int32 } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser for loops', () => {
     it('accepts a \'step\' clause', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.For, 'for'),
+            token(TokenKind.For, 'for'),
             identifier('i'),
-            token(Lexeme.Equal, '='),
-            token(Lexeme.Integer, '0', new Int32(0)),
-            token(Lexeme.To, 'to'),
-            token(Lexeme.Integer, '5', new Int32(5)),
-            token(Lexeme.Step, 'step'),
-            token(Lexeme.Integer, '2', new Int32(2)),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.Equal, '='),
+            token(TokenKind.Integer, '0', new Int32(0)),
+            token(TokenKind.To, 'to'),
+            token(TokenKind.Integer, '5', new Int32(5)),
+            token(TokenKind.Step, 'step'),
+            token(TokenKind.Integer, '2', new Int32(2)),
+            token(TokenKind.Newline, '\n'),
             // body would go here, but it's not necessary for this test
-            token(Lexeme.EndFor, 'end for'),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.EndFor, 'end for'),
+            token(TokenKind.Newline, '\n'),
             EOF
         ]) as any;
 
@@ -34,16 +34,16 @@ describe('parser for loops', () => {
 
     it('defaults a missing \'step\' clause to \'1\'', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.For, 'for'),
+            token(TokenKind.For, 'for'),
             identifier('i'),
-            token(Lexeme.Equal, '='),
-            token(Lexeme.Integer, '0', new Int32(0)),
-            token(Lexeme.To, 'to'),
-            token(Lexeme.Integer, '5', new Int32(5)),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.Equal, '='),
+            token(TokenKind.Integer, '0', new Int32(0)),
+            token(TokenKind.To, 'to'),
+            token(TokenKind.Integer, '5', new Int32(5)),
+            token(TokenKind.Newline, '\n'),
             // body would go here, but it's not necessary for this test
-            token(Lexeme.EndFor, 'end for'),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.EndFor, 'end for'),
+            token(TokenKind.Newline, '\n'),
             EOF
         ]) as any;
 
@@ -58,16 +58,16 @@ describe('parser for loops', () => {
 
     it('allows \'next\' to terminate loop', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.For, 'for'),
+            token(TokenKind.For, 'for'),
             identifier('i'),
-            token(Lexeme.Equal, '='),
-            token(Lexeme.Integer, '0', new Int32(0)),
-            token(Lexeme.To, 'to'),
-            token(Lexeme.Integer, '5', new Int32(5)),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.Equal, '='),
+            token(TokenKind.Integer, '0', new Int32(0)),
+            token(TokenKind.To, 'to'),
+            token(TokenKind.Integer, '5', new Int32(5)),
+            token(TokenKind.Newline, '\n'),
             // body would go here, but it's not necessary for this test
-            token(Lexeme.Next, 'next'),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.Next, 'next'),
+            token(TokenKind.Newline, '\n'),
             EOF
         ]);
 
@@ -87,7 +87,7 @@ describe('parser for loops', () => {
          */
         let { statements, errors } = Parser.parse([
             {
-                kind: Lexeme.For,
+                kind: TokenKind.For,
                 text: 'for',
                 isReserved: true,
                 location: {
@@ -96,7 +96,7 @@ describe('parser for loops', () => {
                 }
             },
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'i',
                 isReserved: false,
                 location: {
@@ -105,7 +105,7 @@ describe('parser for loops', () => {
                 }
             },
             {
-                kind: Lexeme.Equal,
+                kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 location: {
@@ -114,7 +114,7 @@ describe('parser for loops', () => {
                 }
             },
             {
-                kind: Lexeme.Integer,
+                kind: TokenKind.Integer,
                 text: '0',
                 literal: new Int32(0),
                 isReserved: false,
@@ -124,7 +124,7 @@ describe('parser for loops', () => {
                 }
             },
             {
-                kind: Lexeme.To,
+                kind: TokenKind.To,
                 text: 'to',
                 isReserved: false,
                 location: {
@@ -133,7 +133,7 @@ describe('parser for loops', () => {
                 }
             },
             {
-                kind: Lexeme.Integer,
+                kind: TokenKind.Integer,
                 text: '10',
                 literal: new Int32(10),
                 isReserved: false,
@@ -143,7 +143,7 @@ describe('parser for loops', () => {
                 }
             },
             {
-                kind: Lexeme.Newline,
+                kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
                 location: {
@@ -153,12 +153,12 @@ describe('parser for loops', () => {
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
-            token(Lexeme.LeftParen, '('),
+            token(TokenKind.LeftParen, '('),
             identifier('i'),
-            token(Lexeme.RightParen, ')'),
-            token(Lexeme.Newline, '\n'),
+            token(TokenKind.RightParen, ')'),
+            token(TokenKind.Newline, '\n'),
             {
-                kind: Lexeme.EndFor,
+                kind: TokenKind.EndFor,
                 text: 'end for',
                 isReserved: false,
                 location: {

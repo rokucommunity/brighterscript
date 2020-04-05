@@ -2,14 +2,14 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { BrsString } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, token } from '../Parser.spec';
 
 describe('parser print statements', () => {
     it('parses singular print statements', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.Print),
-            token(Lexeme.String, 'Hello, world'),
+            token(TokenKind.Print),
+            token(TokenKind.String, 'Hello, world'),
             EOF
         ]);
 
@@ -20,7 +20,7 @@ describe('parser print statements', () => {
     });
 
     it('supports empty print', () => {
-        let { statements, errors } = Parser.parse([token(Lexeme.Print), EOF]);
+        let { statements, errors } = Parser.parse([token(TokenKind.Print), EOF]);
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
@@ -29,10 +29,10 @@ describe('parser print statements', () => {
 
     it('parses print lists with no separator', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.Print),
-            token(Lexeme.String, 'Foo', new BrsString('Foo')),
-            token(Lexeme.String, 'bar', new BrsString('bar')),
-            token(Lexeme.String, 'baz', new BrsString('baz')),
+            token(TokenKind.Print),
+            token(TokenKind.String, 'Foo', new BrsString('Foo')),
+            token(TokenKind.String, 'bar', new BrsString('bar')),
+            token(TokenKind.String, 'baz', new BrsString('baz')),
             EOF
         ]);
 
@@ -44,12 +44,12 @@ describe('parser print statements', () => {
 
     it('parses print lists with separators', () => {
         let { statements, errors } = Parser.parse([
-            token(Lexeme.Print),
-            token(Lexeme.String, 'Foo', new BrsString('Foo')),
-            token(Lexeme.Semicolon),
-            token(Lexeme.String, 'bar', new BrsString('bar')),
-            token(Lexeme.Semicolon),
-            token(Lexeme.String, 'baz', new BrsString('baz')),
+            token(TokenKind.Print),
+            token(TokenKind.String, 'Foo', new BrsString('Foo')),
+            token(TokenKind.Semicolon),
+            token(TokenKind.String, 'bar', new BrsString('bar')),
+            token(TokenKind.Semicolon),
+            token(TokenKind.String, 'baz', new BrsString('baz')),
             EOF
         ]);
 
@@ -68,7 +68,7 @@ describe('parser print statements', () => {
          */
         let { statements, errors } = Parser.parse([
             {
-                kind: Lexeme.Print,
+                kind: TokenKind.Print,
                 text: 'print',
                 isReserved: true,
                 location: {
@@ -78,7 +78,7 @@ describe('parser print statements', () => {
                 }
             },
             {
-                kind: Lexeme.String,
+                kind: TokenKind.String,
                 text: `"foo"`,
                 literal: new BrsString('foo'),
                 isReserved: false,
@@ -89,7 +89,7 @@ describe('parser print statements', () => {
                 }
             },
             {
-                kind: Lexeme.Eof,
+                kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 location: {

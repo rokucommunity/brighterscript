@@ -1,10 +1,10 @@
-import { Lexeme, Location, ReservedWords } from '../../lexer';
+import { TokenKind, Location, ReservedWords } from '../../lexer';
 
 /* A set of utilities to be used while writing tests for the BRS parser. */
 
 /**
  * Creates a token with the given `kind` and (optional) `literal` value.
- * @param {Lexeme} kind the lexeme the produced token should represent.
+ * @param {TokenKind} kind the lexeme the produced token should represent.
  * @param {string} text the text represented by this token.
  * @param {*} [literal] the literal value that the produced token should contain, if any
  * @returns {object} a token of `kind` representing `text` with value `literal`.
@@ -28,8 +28,8 @@ export function token(kind, text?, literal?) {
  * @returns {object} a token with the provided `text`.
  */
 export function identifier(text) {
-    return exports.token(Lexeme.Identifier, text);
+    return exports.token(TokenKind.Identifier, text);
 }
 
 /** An end-of-file token. */
-export const EOF = token(Lexeme.Eof, '\0');
+export const EOF = token(TokenKind.Eof, '\0');

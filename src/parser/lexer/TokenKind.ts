@@ -1,4 +1,4 @@
-export enum Lexeme {
+export enum TokenKind {
     // parens (and friends)
     LeftParen = 'LeftParen',
     RightParen = 'RightParen',
@@ -112,6 +112,8 @@ export enum Lexeme {
     While = 'While',
     Class = 'Class',
     EndClass = 'EndClass',
+    Namespace = 'Namespace',
+    EndNamespace = 'EndNamespace',
     Public = 'Public',
     Protected = 'Protected',
     Private = 'Private',

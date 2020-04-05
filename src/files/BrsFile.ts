@@ -9,7 +9,7 @@ import { Callable, CallableArg, CallableParam, CommentFlag, Diagnostic, Function
 import { Deferred } from '../deferred';
 import { FunctionParameter } from '../parser/brsTypes';
 import { BrsError, ParseError } from '../parser/Error';
-import { Lexer, Token, Lexeme, Identifier } from '../parser/lexer';
+import { Lexer, Token, TokenKind, Identifier } from '../parser/lexer';
 import { Parser } from '../parser/parser';
 import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression } from '../parser/parser/Expression';
 import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, Statement } from '../parser/parser/Statement';
@@ -182,7 +182,7 @@ export class BrsFile {
     public findPropertyNameCompletions() {
         //Find every identifier in the whole file
         let identifiers = util.findAllDeep<Identifier>(this.ast, (x) => {
-            return x && x.kind === Lexeme.Identifier;
+            return x && x.kind === TokenKind.Identifier;
         });
 
         this.propertyNameCompletions = [];
@@ -655,7 +655,7 @@ export class BrsFile {
 
         //if cursor is within a comment, disable completions
         let currentToken = this.getTokenAt(position);
-        if (currentToken && currentToken.kind === Lexeme.Comment) {
+        if (currentToken && currentToken.kind === TokenKind.Comment) {
             return [];
         }
 
@@ -689,12 +689,12 @@ export class BrsFile {
         let closestToken = this.getClosestToken(position);
         let previousToken = this.getPreviousToken(closestToken);
         //next to a dot
-        if (closestToken.kind === Lexeme.Dot) {
+        if (closestToken.kind === TokenKind.Dot) {
             return true;
-        } else if (closestToken.kind === Lexeme.Newline || previousToken.kind === Lexeme.Newline) {
+        } else if (closestToken.kind === TokenKind.Newline || previousToken.kind === TokenKind.Newline) {
             return false;
             //next to an identifier, which is next to a dot
-        } else if (closestToken.kind === Lexeme.Identifier && previousToken.kind === Lexeme.Dot) {
+        } else if (closestToken.kind === TokenKind.Identifier && previousToken.kind === TokenKind.Dot) {
             return true;
         } else {
             return false;
@@ -736,11 +736,11 @@ export class BrsFile {
         let token = this.getTokenAt(position);
 
         let hoverTokenTypes = [
-            Lexeme.Identifier,
-            Lexeme.Function,
-            Lexeme.EndFunction,
-            Lexeme.Sub,
-            Lexeme.EndSub
+            TokenKind.Identifier,
+            TokenKind.Function,
+            TokenKind.EndFunction,
+            TokenKind.Sub,
+            TokenKind.EndSub
         ];
 
         //throw out invalid tokens and the wrong kind of tokens
