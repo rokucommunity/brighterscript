@@ -6,7 +6,6 @@ import * as Chunk from './Chunk';
 import { getBsConst, Manifest } from './Manifest';
 import { Parser } from './Parser';
 import { FilterResults, Preprocessor as InternalPreprocessor } from './Preprocessor';
-import { Lexeme } from '../lexer';
 
 export class Preprocessor {
     private parser = new Parser();
