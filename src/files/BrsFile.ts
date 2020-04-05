@@ -153,7 +153,9 @@ export class BrsFile {
         tokens = preprocessorWasSuccessful ? (preprocessorResults.processedTokens as any) : lexResult.tokens;
 
         this.parser = new Parser();
-        let parseResult = this.parser.parse(tokens, this.extension === 'brs' ? ParseMode.brightscript : ParseMode.brighterscript);
+        let parseResult = this.parser.parse(tokens, {
+            mode: this.extension === 'brs' ? ParseMode.brightscript : ParseMode.brighterscript
+        });
 
         let errors = [...lexResult.errors, ...<any>parseResult.errors, ...<any>preprocessorResults.errors];
 
