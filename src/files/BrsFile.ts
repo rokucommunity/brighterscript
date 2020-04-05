@@ -110,7 +110,7 @@ export class BrsFile {
      */
     public async parse(fileContents: string) {
         if (this.parseDeferred.isCompleted) {
-            throw new Error(`File was already processed. Create a new file instead. ${this.pathAbsolute}`);
+            throw new Error(`File was already processed. Create a new instance of BrsFile instead. ${this.pathAbsolute}`);
         }
 
         //split the text into lines
