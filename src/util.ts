@@ -808,7 +808,6 @@ export class Util {
      */
     public getLocation(fileObj: { location: Location }, startObj: { location: Location }, endObj: { location: Location }): Location {
         return {
-            file: fileObj.location.file,
             start: startObj.location.start,
             end: endObj.location.end
         };

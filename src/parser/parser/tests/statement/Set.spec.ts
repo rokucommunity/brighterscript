@@ -124,7 +124,8 @@ describe('parser indexed assignment', () => {
         });
     });
 
-    it('location tracking', () => {
+    it('location tracking', function asdf() {
+        this.timeout(1000000);
         /**
          *    0   0   0   1   1
          *    0   4   8   2   6
@@ -139,8 +140,7 @@ describe('parser indexed assignment', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 0 },
-                    end: { line: 1, column: 3 },
-                    file: 'Test.brs'
+                    end: { line: 1, column: 3 }
                 }
             },
             {
@@ -149,8 +149,7 @@ describe('parser indexed assignment', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 3 },
-                    end: { line: 1, column: 4 },
-                    file: 'Test.brs'
+                    end: { line: 1, column: 4 }
                 }
             },
             {
@@ -160,8 +159,7 @@ describe('parser indexed assignment', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 4 },
-                    end: { line: 1, column: 5 },
-                    file: 'Test.brs'
+                    end: { line: 1, column: 5 }
                 }
             },
             {
@@ -170,8 +168,7 @@ describe('parser indexed assignment', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 5 },
-                    end: { line: 1, column: 6 },
-                    file: 'Test.brs'
+                    end: { line: 1, column: 6 }
                 }
             },
             {
@@ -180,8 +177,7 @@ describe('parser indexed assignment', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 7 },
-                    end: { line: 1, column: 8 },
-                    file: 'Test.brs'
+                    end: { line: 1, column: 8 }
                 }
             },
             {
@@ -191,8 +187,7 @@ describe('parser indexed assignment', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 9 },
-                    end: { line: 1, column: 10 },
-                    file: 'Test.brs'
+                    end: { line: 1, column: 10 }
                 }
             },
             {
@@ -201,8 +196,7 @@ describe('parser indexed assignment', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 10 },
-                    end: { line: 1, column: 11 },
-                    file: 'Test.brs'
+                    end: { line: 1, column: 11 }
                 }
             },
             {
@@ -211,8 +205,7 @@ describe('parser indexed assignment', () => {
                 isReserved: false,
                 location: {
                     start: { line: 2, column: 0 },
-                    end: { line: 2, column: 3 },
-                    file: 'Test.brs'
+                    end: { line: 2, column: 3 }
                 }
             },
             {
@@ -221,8 +214,7 @@ describe('parser indexed assignment', () => {
                 isReserved: false,
                 location: {
                     start: { line: 2, column: 3 },
-                    end: { line: 2, column: 4 },
-                    file: 'Test.brs'
+                    end: { line: 2, column: 4 }
                 }
             },
             {
@@ -231,8 +223,7 @@ describe('parser indexed assignment', () => {
                 isReserved: false,
                 location: {
                     start: { line: 2, column: 4 },
-                    end: { line: 2, column: 5 },
-                    file: 'Test.brs'
+                    end: { line: 2, column: 5 }
                 }
             },
             {
@@ -241,8 +232,7 @@ describe('parser indexed assignment', () => {
                 isReserved: false,
                 location: {
                     start: { line: 2, column: 6 },
-                    end: { line: 2, column: 7 },
-                    file: 'Test.brs'
+                    end: { line: 2, column: 7 }
                 }
             },
             {
@@ -252,8 +242,7 @@ describe('parser indexed assignment', () => {
                 isReserved: false,
                 location: {
                     start: { line: 2, column: 8 },
-                    end: { line: 2, column: 9 },
-                    file: 'Test.brs'
+                    end: { line: 2, column: 9 }
                 }
             },
             {
@@ -262,8 +251,7 @@ describe('parser indexed assignment', () => {
                 isReserved: false,
                 location: {
                     start: { line: 2, column: 10 },
-                    end: { line: 2, column: 11 },
-                    file: 'Test.brs'
+                    end: { line: 2, column: 11 }
                 }
             }
         ]);
@@ -273,13 +261,11 @@ describe('parser indexed assignment', () => {
         expect(statements.map(s => s.location)).to.deep.equal([
             {
                 start: { line: 1, column: 0 },
-                end: { line: 1, column: 10 },
-                file: 'Test.brs'
+                end: { line: 1, column: 10 }
             },
             {
                 start: { line: 2, column: 0 },
-                end: { line: 2, column: 9 },
-                file: 'Test.brs'
+                end: { line: 2, column: 9 }
             }
         ]);
     });

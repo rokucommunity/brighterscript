@@ -4,31 +4,6 @@ import { TokenKind, Location, Token } from './lexer';
 export class BrsError {
     constructor(readonly message: string, readonly location: Location, readonly code: number = 100) {
     }
-
-    /**
-     * Formats the error into a human-readable string including filename, starting and ending line
-     * and column, and the message associated with the error, e.g.:
-     *
-     * `lorem.brs(1,1-3): Expected '(' after sub name`
-     * ```
-     */
-    public format() {
-        let location = this.location;
-
-        let formattedLocation: string;
-
-        if (location.start.line === location.end.line) {
-            let columns = `${location.start.column}`;
-            if (location.start.column !== location.end.column) {
-                columns += `-${location.end.column}`;
-            }
-            formattedLocation = `${location.file}(${location.start.line},${columns})`;
-        } else {
-            formattedLocation = `${location.file}(${location.start.line},${location.start.column},${location.end.line},${location.end.line})`;
-        }
-
-        return `${formattedLocation}: ${this.message}`;
-    }
 }
 
 /** Wraps up the metadata associated with a type mismatch error. */

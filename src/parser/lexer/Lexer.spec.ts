@@ -7,12 +7,6 @@ import { Lexer } from './Lexer';
 import { isToken } from './Token';
 
 describe('lexer', () => {
-
-    it('uses the filename when specified', () => {
-        let { tokens } = Lexer.scan('true', 'SomeFile.brs');
-        expect(tokens[0].location.file).to.equal('SomeFile.brs');
-    });
-
     it('produces a semicolon token', () => {
         let { tokens } = Lexer.scan(';');
         expect(tokens[0].kind).to.equal(TokenKind.Semicolon);
@@ -87,7 +81,6 @@ describe('lexer', () => {
             `).tokens.filter(x => ![TokenKind.Newline, TokenKind.Eof].includes(x.kind));
 
             expect(tokens[0].location).to.eql({
-                file: '',
                 start: {
                     line: 2,
                     column: 16
@@ -99,7 +92,6 @@ describe('lexer', () => {
             });
 
             expect(tokens[1].location).to.eql({
-                file: '',
                 start: {
                     line: 3,
                     column: 16
@@ -121,11 +113,10 @@ describe('lexer', () => {
                         print "else"
                     end if 'comment
                 end sub
-            `, 'testfile.brs');
+            `);
             let comments = tokens.filter(x => x.kind === TokenKind.Comment);
             expect(comments).to.be.lengthOf(1);
             expect(comments[0].location).to.eql({
-                file: 'testfile.brs',
                 start: {
                     line: 9,
                     column: 27
@@ -579,8 +570,7 @@ describe('lexer', () => {
                 end: {
                     line: 1,
                     column: 2
-                },
-                file: 'SomeFile.brs'
+                }
             };
 
             expect(isToken({ kind: TokenKind.And, text: 'and', location: location })).is.true;
@@ -631,7 +621,7 @@ describe('lexer', () => {
 
     describe('whitespace', () => {
         it('preserves the exact number of whitespace characterswhitespace', () => {
-            let { tokens } = Lexer.scan('   ', 'file.brs', { includeWhitespace: true });
+            let { tokens } = Lexer.scan('   ', { includeWhitespace: true });
             expect(tokens[0]).to.include({
                 kind: TokenKind.Whitespace,
                 text: '   '
@@ -639,7 +629,7 @@ describe('lexer', () => {
         });
 
         it('tokenizes whitespace between things', () => {
-            let { tokens } = Lexer.scan('sub main ( ) \n end sub', 'file.brs', { includeWhitespace: true });
+            let { tokens } = Lexer.scan('sub main ( ) \n end sub', { includeWhitespace: true });
             expect(tokens.map(x => x.kind)).to.eql([
                 TokenKind.Sub,
                 TokenKind.Whitespace,

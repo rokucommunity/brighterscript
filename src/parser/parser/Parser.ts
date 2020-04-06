@@ -277,8 +277,7 @@ export class Parser {
                         //zero-length token which indicates derived
                         location: {
                             start: this.peek().location.start,
-                            end: this.peek().location.start,
-                            file: this.peek().location.file
+                            end: this.peek().location.start
                         }
                     };
                 }
@@ -379,8 +378,7 @@ export class Parser {
                     //zero-length location means derived
                     location: {
                         start: this.peek().location.start,
-                        end: this.peek().location.start,
-                        file: this.peek().location.file
+                        end: this.peek().location.start
                     }
                 };
             }

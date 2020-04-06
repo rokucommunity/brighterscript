@@ -73,8 +73,7 @@ describe('parser print statements', () => {
                 isReserved: true,
                 location: {
                     start: { line: 1, column: 0 },
-                    end: { line: 1, column: 5 },
-                    file: 'test.brs'
+                    end: { line: 1, column: 5 }
                 }
             },
             {
@@ -84,8 +83,7 @@ describe('parser print statements', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 6 },
-                    end: { line: 1, column: 11 },
-                    file: 'test.brs'
+                    end: { line: 1, column: 11 }
                 }
             },
             {
@@ -94,8 +92,7 @@ describe('parser print statements', () => {
                 isReserved: false,
                 location: {
                     start: { line: 1, column: 11 },
-                    end: { line: 1, column: 12 },
-                    file: 'test.brs'
+                    end: { line: 1, column: 12 }
                 }
             }
         ]);

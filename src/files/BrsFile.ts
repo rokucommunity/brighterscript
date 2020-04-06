@@ -118,7 +118,9 @@ export class BrsFile {
 
         this.getIgnores(lines);
 
-        let lexResult = Lexer.scan(fileContents);
+        let lexResult = Lexer.scan(fileContents, {
+            includeWhitespace: false
+        });
 
         let tokens = lexResult.tokens;
 

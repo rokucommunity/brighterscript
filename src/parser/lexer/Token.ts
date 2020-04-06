@@ -32,8 +32,6 @@ export interface Location {
      * foo.location.end === { line: 1, column: 3 };
      */
     end: LineAndColumn;
-    /** The name of the file in which this token was found. */
-    file: string;
 }
 
 /** A line-column pair. */

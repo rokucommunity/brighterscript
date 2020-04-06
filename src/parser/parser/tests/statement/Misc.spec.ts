@@ -39,7 +39,6 @@ describe('parser', () => {
             expect(errors).to.be.lengthOf(1);
             //specifically check for the error location, because the identifier location was wrong in the past
             expect(errors[0].location).to.deep.include({
-                file: '',
                 start: { line: 3, column: 20 },
                 end: { line: 3, column: 23 }
             });

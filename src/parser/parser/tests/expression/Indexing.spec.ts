@@ -174,13 +174,11 @@ describe('parser indexing', () => {
             expect(statements.map(s => (s as any).value.location)).to.deep.equal([
                 {
                     start: { line: 1, column: 4 },
-                    end: { line: 1, column: 11 },
-                    file: undefined
+                    end: { line: 1, column: 11 }
                 },
                 {
                     start: { line: 2, column: 4 },
-                    end: { line: 2, column: 10 },
-                    file: undefined
+                    end: { line: 2, column: 10 }
                 }
             ]);
         });

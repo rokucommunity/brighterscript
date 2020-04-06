@@ -47,10 +47,6 @@ export class Lexer {
     public errors: BrsError[];
 
     /**
-     * The name of the file being lexed
-     */
-    public filename: string;
-    /**
      * The options used to scan this file
      */
     public options: ScanOptions;
@@ -61,12 +57,11 @@ export class Lexer {
      * an abstract syntax tree.
      *
      * @param toScan the BrightScript code to convert into tokens
-     * @param filename the name of the file to be scanned
      * @param options options used to customize the scan process
      * @returns an object containing an array of `errors` and an array of `tokens` to be passed to a parser.
      */
-    static scan(toScan: string, filename = '', options?: ScanOptions): Lexer {
-        return new Lexer().scan(toScan, filename, options);
+    static scan(toScan: string, options?: ScanOptions): Lexer {
+        return new Lexer().scan(toScan, options);
     }
 
     /**
@@ -74,13 +69,11 @@ export class Lexer {
      * later be used to build an abstract syntax tree.
      *
      * @param toScan the BrightScript code to convert into tokens
-     * @param filename the name of the file to be scanned
      * @param options options used to customize the scan process
      * @returns an object containing an array of `errors` and an array of `tokens` to be passed to a parser.
      */
-    public scan(toScan: string, filename: string, options?: ScanOptions): Lexer {
+    public scan(toScan: string, options?: ScanOptions): Lexer {
         this.source = toScan;
-        this.filename = filename;
         this.options = this.sanitizeOptions(options);
         this.start = 0;
         this.current = 0;
@@ -106,8 +99,7 @@ export class Lexer {
                 end: {
                     line: this.line,
                     column: this.column + 1
-                },
-                file: filename
+                }
             }
         });
 
@@ -841,8 +833,7 @@ export class Lexer {
             end: {
                 line: this.line,
                 column: Math.max(this.column - text.length + 1, this.column)
-            },
-            file: this.filename
+            }
         };
         return location;
     }
