@@ -346,9 +346,10 @@ describe('lexer', () => {
         it('matches single-word keywords', () => {
             // test just a sample of single-word reserved words for now.
             // if we find any that we've missed
-            let { tokens } = Lexer.scan('and or if else endif return true false line_num');
+            let { tokens } = Lexer.scan('and then or if else endif return true false line_num');
             expect(tokens.map(w => w.kind)).to.deep.equal([
                 TokenKind.And,
+                TokenKind.Then,
                 TokenKind.Or,
                 TokenKind.If,
                 TokenKind.Else,

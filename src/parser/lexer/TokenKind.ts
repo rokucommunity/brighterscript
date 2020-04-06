@@ -142,6 +142,133 @@ export enum TokenKind {
     Eof = 'Eof'
 }
 
+/** Set of all keywords that end blocks. */
+export type BlockTerminator =
+    | TokenKind.ElseIf
+    | TokenKind.Else
+    | TokenKind.EndFor
+    | TokenKind.Next
+    | TokenKind.EndIf
+    | TokenKind.EndWhile
+    | TokenKind.EndSub
+    | TokenKind.EndFunction;
+
+/** The set of operators valid for use in assignment statements. */
+export const AssignmentOperators = [
+    TokenKind.Equal,
+    TokenKind.MinusEqual,
+    TokenKind.PlusEqual,
+    TokenKind.StarEqual,
+    TokenKind.ForwardslashEqual,
+    TokenKind.BackslashEqual,
+    TokenKind.LessLessEqual,
+    TokenKind.GreaterGreaterEqual
+];
+
+/** List of Lexemes that are permitted as property names. */
+export const AllowedProperties = [
+    TokenKind.And,
+    TokenKind.Box,
+    TokenKind.CreateObject,
+    TokenKind.Dim,
+    TokenKind.Then,
+    TokenKind.Else,
+    TokenKind.ElseIf,
+    TokenKind.End,
+    TokenKind.EndFunction,
+    TokenKind.EndFor,
+    TokenKind.EndIf,
+    TokenKind.EndSub,
+    TokenKind.EndWhile,
+    TokenKind.Eval,
+    TokenKind.Exit,
+    TokenKind.ExitFor,
+    TokenKind.ExitWhile,
+    TokenKind.False,
+    TokenKind.For,
+    TokenKind.ForEach,
+    TokenKind.Function,
+    TokenKind.GetGlobalAA,
+    TokenKind.GetLastRunCompileError,
+    TokenKind.GetLastRunRunTimeError,
+    TokenKind.Goto,
+    TokenKind.If,
+    TokenKind.Invalid,
+    TokenKind.Let,
+    TokenKind.Next,
+    TokenKind.Not,
+    TokenKind.ObjFun,
+    TokenKind.Or,
+    TokenKind.Pos,
+    TokenKind.Print,
+    TokenKind.Rem,
+    TokenKind.Return,
+    TokenKind.Step,
+    TokenKind.Stop,
+    TokenKind.Sub,
+    TokenKind.Tab,
+    TokenKind.To,
+    TokenKind.True,
+    TokenKind.Type,
+    TokenKind.While
+];
+
+/** List of Lexeme that are allowed as local var identifiers. */
+export const AllowedLocalIdentifiers = [TokenKind.EndFor, TokenKind.ExitFor, TokenKind.ForEach];
+
+/**
+ * List of string versions of Lexeme and various globals that are NOT allowed as local var identifiers.
+ * Used to throw more helpful "you can't use a reserved word as an identifier" errors.
+ */
+export const DisallowedLocalIdentifiers = new Set(
+    [
+        TokenKind.And,
+        TokenKind.Box,
+        TokenKind.CreateObject,
+        TokenKind.Dim,
+        TokenKind.Each,
+        TokenKind.Else,
+        TokenKind.ElseIf,
+        TokenKind.End,
+        TokenKind.EndFunction,
+        TokenKind.EndIf,
+        TokenKind.EndSub,
+        TokenKind.EndWhile,
+        TokenKind.Eval,
+        TokenKind.Exit,
+        TokenKind.ExitWhile,
+        TokenKind.False,
+        TokenKind.For,
+        TokenKind.Function,
+        TokenKind.GetGlobalAA,
+        TokenKind.GetLastRunCompileError,
+        TokenKind.GetLastRunRunTimeError,
+        TokenKind.Goto,
+        TokenKind.If,
+        TokenKind.Invalid,
+        TokenKind.Let,
+        TokenKind.Next,
+        TokenKind.Not,
+        TokenKind.ObjFun,
+        TokenKind.Or,
+        TokenKind.Pos,
+        TokenKind.Print,
+        //technically you aren't allowed to make a local var for Rem, but it's a comment so that'll never actually cause a compile error
+        TokenKind.Rem,
+        TokenKind.Return,
+        'run',
+        TokenKind.Step,
+        TokenKind.Sub,
+        TokenKind.Tab,
+        'then',
+        TokenKind.To,
+        TokenKind.True,
+        TokenKind.Type,
+        TokenKind.While,
+        'line_num'
+    ].map(x => x.toLowerCase())
+);
+
 export enum CommentKind {
     SingleQuote = 'SingleQuote',
     Rem = 'Rem',

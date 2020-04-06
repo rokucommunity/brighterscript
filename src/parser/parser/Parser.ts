@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 
-import { TokenKind, Token, Identifier, Location, ReservedWords } from '../lexer';
+import { TokenKind, Token, Identifier, Location, ReservedWords, BlockTerminator, AllowedLocalIdentifiers, AssignmentOperators, DisallowedLocalIdentifiers, AllowedProperties } from '../lexer';
 
 import {
     BrsInvalid,
@@ -236,8 +236,8 @@ export class Parser {
             // `let`, (...) keyword. As such, we must check the token *after* an identifier to figure
             // out what to do with it.
             if (
-                this.check(TokenKind.IdentifierLiteral, ...allowedLocalIdentifiers) &&
-                this.checkNext(...assignmentOperators)
+                this.check(TokenKind.IdentifierLiteral, ...AllowedLocalIdentifiers) &&
+                this.checkNext(...AssignmentOperators)
             ) {
                 return this.assignment(...additionalTerminators);
             }
@@ -599,13 +599,13 @@ export class Parser {
     private assignment(...additionalterminators: TokenKind[]): AssignmentStatement {
         let name = this.advance() as Identifier;
         //add error if name is a reserved word that cannot be used as an identifier
-        if (disallowedLocalIdentifiers.has(name.text.toLowerCase())) {
+        if (DisallowedLocalIdentifiers.has(name.text.toLowerCase())) {
             //don't throw...this is fully recoverable
             this.addError(name, `Cannot use reserved word "${name.text}" as an identifier`);
         }
         let operator = this.consume(
             `Expected operator ('=', '+=', '-=', '*=', '/=', '\\=', '^=', '<<=', or '>>=') after idenfifier '${name.text}'`,
-            ...assignmentOperators
+            ...AssignmentOperators
         );
 
         let value = this.expression();
@@ -938,18 +938,7 @@ export class Parser {
         let endIfToken: Token | undefined;
         let elseToken: Token | undefined;
 
-        /**
-         * A simple wrapper around `check`, to make tests for a `then` identifier.
-         * As with many other words, "then" is a keyword but not reserved, so associative
-         * arrays can have properties called "then".  It's a valid identifier sometimes, so the
-         * parser has to take on the burden of understanding that I guess.
-         * @returns `true` if the next token is an identifier with text "then", otherwise `false`.
-         */
-        const checkThen = () => {
-            return this.check(TokenKind.IdentifierLiteral) && this.peek().text.toLowerCase() === 'then';
-        };
-
-        if (checkThen()) {
+        if (this.check(TokenKind.Then)) {
             // `then` is optional after `if ...condition...`, so only advance to the next token if `then` is present
             thenToken = this.advance();
         }
@@ -1008,7 +997,7 @@ export class Parser {
                 elseIfTokens.push(elseIfToken);
                 let elseIfCondition = this.expression();
                 let thenToken: Token;
-                if (checkThen()) {
+                if (this.check(TokenKind.Then)) {
                     // `then` is optional after `else if ...condition...`, so only advance to the next token if `then` is present
                     thenToken = this.advance();
                 }
@@ -1096,7 +1085,7 @@ export class Parser {
                 let elseIf = this.previous();
                 let elseIfCondition = this.expression();
                 let thenToken: Token;
-                if (checkThen()) {
+                if (this.check(TokenKind.Then)) {
                     // `then` is optional after `else if ...condition...`, so only advance to the next token if `then` is present
                     thenToken = this.advance();
                 }
@@ -1195,7 +1184,7 @@ export class Parser {
 
 
         let expr = this.call();
-        if (this.check(...assignmentOperators) && !(expr instanceof CallExpression)) {
+        if (this.check(...AssignmentOperators) && !(expr instanceof CallExpression)) {
             let left = expr;
             let operator = this.advance();
             let right = this.expression();
@@ -1527,7 +1516,7 @@ export class Parser {
                 let name = this.consume(
                     'Expected property name after \'.\'',
                     TokenKind.IdentifierLiteral,
-                    ...allowedProperties
+                    ...AllowedProperties
                 );
 
                 // force it into an identifier so the AST makes some sense
@@ -1651,7 +1640,7 @@ export class Parser {
                         key: null as BrsString,
                         location: null as Location
                     };
-                    if (this.check(TokenKind.IdentifierLiteral, ...allowedProperties)) {
+                    if (this.check(TokenKind.IdentifierLiteral, ...AllowedProperties)) {
                         result.keyToken = this.advance();
                         result.key = new BrsString(result.keyToken.text);
                     } else if (this.check(TokenKind.StringLiteral)) {
@@ -1881,133 +1870,6 @@ export enum ParseMode {
     brightscript = 'brightscript',
     brighterscript = 'brighterscript'
 }
-
-
-/** Set of all keywords that end blocks. */
-type BlockTerminator =
-    | TokenKind.ElseIf
-    | TokenKind.Else
-    | TokenKind.EndFor
-    | TokenKind.Next
-    | TokenKind.EndIf
-    | TokenKind.EndWhile
-    | TokenKind.EndSub
-    | TokenKind.EndFunction;
-
-/** The set of operators valid for use in assignment statements. */
-const assignmentOperators = [
-    TokenKind.Equal,
-    TokenKind.MinusEqual,
-    TokenKind.PlusEqual,
-    TokenKind.StarEqual,
-    TokenKind.ForwardslashEqual,
-    TokenKind.BackslashEqual,
-    TokenKind.LessLessEqual,
-    TokenKind.GreaterGreaterEqual
-];
-
-/** List of Lexemes that are permitted as property names. */
-const allowedProperties = [
-    TokenKind.And,
-    TokenKind.Box,
-    TokenKind.CreateObject,
-    TokenKind.Dim,
-    TokenKind.Else,
-    TokenKind.ElseIf,
-    TokenKind.End,
-    TokenKind.EndFunction,
-    TokenKind.EndFor,
-    TokenKind.EndIf,
-    TokenKind.EndSub,
-    TokenKind.EndWhile,
-    TokenKind.Eval,
-    TokenKind.Exit,
-    TokenKind.ExitFor,
-    TokenKind.ExitWhile,
-    TokenKind.False,
-    TokenKind.For,
-    TokenKind.ForEach,
-    TokenKind.Function,
-    TokenKind.GetGlobalAA,
-    TokenKind.GetLastRunCompileError,
-    TokenKind.GetLastRunRunTimeError,
-    TokenKind.Goto,
-    TokenKind.If,
-    TokenKind.Invalid,
-    TokenKind.Let,
-    TokenKind.Next,
-    TokenKind.Not,
-    TokenKind.ObjFun,
-    TokenKind.Or,
-    TokenKind.Pos,
-    TokenKind.Print,
-    TokenKind.Rem,
-    TokenKind.Return,
-    TokenKind.Step,
-    TokenKind.Stop,
-    TokenKind.Sub,
-    TokenKind.Tab,
-    TokenKind.To,
-    TokenKind.True,
-    TokenKind.Type,
-    TokenKind.While
-];
-
-/** List of Lexeme that are allowed as local var identifiers. */
-const allowedLocalIdentifiers = [TokenKind.EndFor, TokenKind.ExitFor, TokenKind.ForEach];
-
-/**
- * List of string versions of Lexeme and various globals that are NOT allowed as local var identifiers.
- * Used to throw more helpful "you can't use a reserved word as an identifier" errors.
- */
-export const disallowedLocalIdentifiers = new Set(
-    [
-        TokenKind.And,
-        TokenKind.Box,
-        TokenKind.CreateObject,
-        TokenKind.Dim,
-        TokenKind.Each,
-        TokenKind.Else,
-        TokenKind.ElseIf,
-        TokenKind.End,
-        TokenKind.EndFunction,
-        TokenKind.EndIf,
-        TokenKind.EndSub,
-        TokenKind.EndWhile,
-        TokenKind.Eval,
-        TokenKind.Exit,
-        TokenKind.ExitWhile,
-        TokenKind.False,
-        TokenKind.For,
-        TokenKind.Function,
-        TokenKind.GetGlobalAA,
-        TokenKind.GetLastRunCompileError,
-        TokenKind.GetLastRunRunTimeError,
-        TokenKind.Goto,
-        TokenKind.If,
-        TokenKind.Invalid,
-        TokenKind.Let,
-        TokenKind.Next,
-        TokenKind.Not,
-        TokenKind.ObjFun,
-        TokenKind.Or,
-        TokenKind.Pos,
-        TokenKind.Print,
-        //technically you aren't allowed to make a local var for Rem, but it's a comment so that'll never actually cause a compile error
-        TokenKind.Rem,
-        TokenKind.Return,
-        'run',
-        TokenKind.Step,
-        TokenKind.Sub,
-        TokenKind.Tab,
-        'then',
-        TokenKind.To,
-        TokenKind.True,
-        TokenKind.Type,
-        TokenKind.While,
-        'line_num'
-    ].map(x => x.toLowerCase())
-);
 
 export interface ParseOptions {
     /**

@@ -1,8 +1,7 @@
 import { expect } from 'chai';
 
 import { Parser } from '../..';
-import { Lexer } from '../../../lexer';
-import { disallowedLocalIdentifiers } from '../../Parser';
+import { Lexer, DisallowedLocalIdentifiers } from '../../../lexer';
 
 describe('parser', () => {
     describe('`end` keyword', () => {
@@ -68,7 +67,7 @@ describe('parser', () => {
 
     it('most reserved words are not allowed as local var identifiers', () => {
         let statementList = [];
-        disallowedLocalIdentifiers.forEach((disallowedIdentifier) => {
+        DisallowedLocalIdentifiers.forEach((disallowedIdentifier) => {
             //skip REM because that will force the line into comment mode
             if (disallowedIdentifier.toLowerCase() === 'rem') {
                 return;
@@ -81,7 +80,7 @@ describe('parser', () => {
             `);
             let { statements, errors } = Parser.parse(tokens);
             if (errors.length === 0) {
-                console.log(disallowedLocalIdentifiers);
+                console.log(DisallowedLocalIdentifiers);
                 throw new Error(`'${disallowedIdentifier}' cannot be used as an identifier, but was not detected as an error`);
             }
             statementList.push(statements);

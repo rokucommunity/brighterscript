@@ -264,6 +264,28 @@ describe('parser', () => {
     });
 
     describe('reservedWords', () => {
+        describe('`then`', () => {
+            it('is not allowed as a local identifier', () => {
+                let { errors } = parse(`
+                    sub main()
+                        then = true
+                    end sub
+                `);
+                expect(errors).to.be.lengthOf(1);
+            });
+            it('is allowed as an AA property name', () => {
+                let { errors } = parse(`
+                    sub main()
+                        person = {
+                            then: true
+                        }
+                        person.then = false
+                        print person.then
+                    end sub
+                `);
+                expect(errors[0]?.message).not.to.exist;
+            });
+        });
         it('"end" is not allowed as a local identifier', () => {
             let { errors } = parse(`
                 sub main()
