@@ -182,7 +182,7 @@ export class BrsFile {
     public findPropertyNameCompletions() {
         //Find every identifier in the whole file
         let identifiers = util.findAllDeep<Identifier>(this.ast, (x) => {
-            return x && x.kind === TokenKind.IdentifierLiteral;
+            return x && x.kind === TokenKind.Identifier;
         });
 
         this.propertyNameCompletions = [];
@@ -695,7 +695,7 @@ export class BrsFile {
         } else if (closestToken.kind === TokenKind.Newline || previousToken.kind === TokenKind.Newline) {
             return false;
             //next to an identifier, which is next to a dot
-        } else if (closestToken.kind === TokenKind.IdentifierLiteral && previousToken.kind === TokenKind.Dot) {
+        } else if (closestToken.kind === TokenKind.Identifier && previousToken.kind === TokenKind.Dot) {
             return true;
         } else {
             return false;
@@ -737,7 +737,7 @@ export class BrsFile {
         let token = this.getTokenAt(position);
 
         let hoverTokenTypes = [
-            TokenKind.IdentifierLiteral,
+            TokenKind.Identifier,
             TokenKind.Function,
             TokenKind.EndFunction,
             TokenKind.Sub,

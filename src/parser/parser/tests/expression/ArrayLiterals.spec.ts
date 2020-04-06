@@ -191,7 +191,7 @@ describe('parser array literals', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
                 location: {
@@ -245,7 +245,7 @@ describe('parser array literals', () => {
                 }
             },
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'b',
                 isReserved: false,
                 location: {

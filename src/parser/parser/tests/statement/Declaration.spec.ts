@@ -89,7 +89,7 @@ describe('parser variable declarations', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'foo',
                 isReserved: false,
                 location: {

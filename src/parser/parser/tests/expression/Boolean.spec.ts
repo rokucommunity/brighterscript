@@ -46,7 +46,7 @@ describe('parser boolean expressions', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
                 location: {

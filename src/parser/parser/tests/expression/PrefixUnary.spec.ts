@@ -80,7 +80,7 @@ describe('parser prefix unary expressions', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: '_false',
                 isReserved: false,
                 location: {

@@ -134,7 +134,7 @@ describe('parser indexed assignment', () => {
          */
         let { statements, errors } = Parser.parse([
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'arr',
                 isReserved: false,
                 location: {
@@ -206,7 +206,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'obj',
                 isReserved: false,
                 location: {
@@ -226,7 +226,7 @@ describe('parser indexed assignment', () => {
                 }
             },
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
                 location: {

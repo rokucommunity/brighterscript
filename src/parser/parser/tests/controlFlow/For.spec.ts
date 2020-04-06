@@ -96,7 +96,7 @@ describe('parser for loops', () => {
                 }
             },
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'i',
                 isReserved: false,
                 location: {

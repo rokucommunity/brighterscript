@@ -48,7 +48,7 @@ describe('parser additive expressions', () => {
         // _ = 1 + 2 + 3
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: '_',
                 isReserved: false,
                 location: {
@@ -124,7 +124,7 @@ describe('parser additive expressions', () => {
             }
         ]) as any;
 
-        expect(errors).to.be.lengthOf(0);
+        expect(errors[0]?.message).to.not.exist;
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].value.location).to.deep.include({
             start: { line: 1, column: 4 },

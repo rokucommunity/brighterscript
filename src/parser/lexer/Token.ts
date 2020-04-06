@@ -48,7 +48,7 @@ export interface LineAndColumn {
  * Represents an identifier as scanned by the lexer.
  */
 export interface Identifier extends Token {
-    kind: TokenKind.IdentifierLiteral;
+    kind: TokenKind.Identifier;
 }
 
 /**

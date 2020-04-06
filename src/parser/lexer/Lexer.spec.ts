@@ -50,7 +50,12 @@ describe('lexer', () => {
         ]);
     });
 
-    it('gives the `stop` keyword its own Lexeme', () => {
+    it('gives the `as` keyword its own TokenKind', () => {
+        let { tokens } = Lexer.scan('as');
+        expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.As, TokenKind.Eof]);
+    });
+
+    it('gives the `stop` keyword its own TokenKind', () => {
         let { tokens } = Lexer.scan('stop');
         expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.Stop, TokenKind.Eof]);
     });
@@ -342,6 +347,27 @@ describe('lexer', () => {
         });
     });
 
+    describe('types', () => {
+        it('captures type tokens', () => {
+            expect(Lexer.scan(`
+                void boolean integer longinteger float double string object interface invalid dynamic
+            `.trim()).tokens.map(x => x.kind)).to.eql([
+                TokenKind.Void,
+                TokenKind.Boolean,
+                TokenKind.Integer,
+                TokenKind.LongInteger,
+                TokenKind.Float,
+                TokenKind.Double,
+                TokenKind.String,
+                TokenKind.Object,
+                TokenKind.Interface,
+                TokenKind.Invalid,
+                TokenKind.Dynamic,
+                TokenKind.Eof
+            ]);
+        });
+    });
+
     describe('identifiers', () => {
         it('matches single-word keywords', () => {
             // test just a sample of single-word reserved words for now.
@@ -357,7 +383,7 @@ describe('lexer', () => {
                 TokenKind.Return,
                 TokenKind.True,
                 TokenKind.False,
-                TokenKind.IdentifierLiteral,
+                TokenKind.Identifier,
                 TokenKind.Eof
             ]);
             expect(tokens.filter(w => !!w.literal).length).to.equal(0);
@@ -381,7 +407,7 @@ describe('lexer', () => {
             let { tokens } = Lexer.scan('exit for exitfor');
             expect(tokens.map(w => w.kind)).to.deep.equal([
                 TokenKind.ExitFor,
-                TokenKind.IdentifierLiteral,
+                TokenKind.Identifier,
                 TokenKind.Eof
             ]);
         });
@@ -399,14 +425,14 @@ describe('lexer', () => {
 
         it('allows alpha-numeric (plus \'_\') identifiers', () => {
             let identifier = Lexer.scan('_abc_123_').tokens[0];
-            expect(identifier.kind).to.equal(TokenKind.IdentifierLiteral);
+            expect(identifier.kind).to.equal(TokenKind.Identifier);
             expect(identifier.text).to.equal('_abc_123_');
         });
 
         it('allows identifiers with trailing type designators', () => {
             let { tokens } = Lexer.scan('lorem$ ipsum% dolor! sit# amet&');
             let identifiers = tokens.filter(t => t.kind !== TokenKind.Eof);
-            expect(identifiers.every(t => t.kind === TokenKind.IdentifierLiteral));
+            expect(identifiers.every(t => t.kind === TokenKind.Identifier));
             expect(identifiers.map(t => t.text)).to.deep.equal([
                 'lorem$',
                 'ipsum%',
@@ -422,7 +448,7 @@ describe('lexer', () => {
             let { tokens } = Lexer.scan('#const foo true');
             expect(tokens.map(t => t.kind)).to.deep.equal([
                 TokenKind.HashConst,
-                TokenKind.IdentifierLiteral,
+                TokenKind.Identifier,
                 TokenKind.True,
                 TokenKind.Eof
             ]);
@@ -432,8 +458,8 @@ describe('lexer', () => {
             let { tokens } = Lexer.scan('#const bar foo');
             expect(tokens.map(t => t.kind)).to.deep.equal([
                 TokenKind.HashConst,
-                TokenKind.IdentifierLiteral,
-                TokenKind.IdentifierLiteral,
+                TokenKind.Identifier,
+                TokenKind.Identifier,
                 TokenKind.Eof
             ]);
         });
@@ -524,9 +550,9 @@ describe('lexer', () => {
     it('detects rem when used as keyword', () => {
         let { tokens } = Lexer.scan('person.rem=true');
         expect(tokens.map(t => t.kind)).to.eql([
-            TokenKind.IdentifierLiteral,
+            TokenKind.Identifier,
             TokenKind.Dot,
-            TokenKind.IdentifierLiteral,
+            TokenKind.Identifier,
             TokenKind.Equal,
             TokenKind.True,
             TokenKind.Eof
@@ -617,7 +643,7 @@ describe('lexer', () => {
             expect(tokens.map(x => x.kind)).to.eql([
                 TokenKind.Sub,
                 TokenKind.Whitespace,
-                TokenKind.IdentifierLiteral,
+                TokenKind.Identifier,
                 TokenKind.Whitespace,
                 TokenKind.LeftParen,
                 TokenKind.Whitespace,

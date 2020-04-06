@@ -98,7 +98,7 @@ describe('parser call expressions', () => {
          */
         const { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'foo',
                 isReserved: false,
                 location: {

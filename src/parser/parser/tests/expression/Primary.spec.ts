@@ -65,7 +65,7 @@ describe('parser primary expressions', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
                 location: {
@@ -102,7 +102,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'b',
                 isReserved: false,
                 location: {
@@ -139,7 +139,7 @@ describe('parser primary expressions', () => {
                 }
             },
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'c',
                 isReserved: false,
                 location: {

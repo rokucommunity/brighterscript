@@ -199,7 +199,7 @@ describe('parser associative array literals', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
                 location: {
@@ -253,7 +253,7 @@ describe('parser associative array literals', () => {
                 }
             },
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'b',
                 isReserved: false,
                 location: {

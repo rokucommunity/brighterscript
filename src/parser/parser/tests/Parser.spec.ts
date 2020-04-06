@@ -4,7 +4,7 @@ import { TokenKind, Location, ReservedWords } from '../../lexer';
 
 /**
  * Creates a token with the given `kind` and (optional) `literal` value.
- * @param {TokenKind} kind the lexeme the produced token should represent.
+ * @param {TokenKind} kind the tokenKind the produced token should represent.
  * @param {string} text the text represented by this token.
  * @param {*} [literal] the literal value that the produced token should contain, if any
  * @returns {object} a token of `kind` representing `text` with value `literal`.
@@ -28,7 +28,7 @@ export function token(kind, text?, literal?) {
  * @returns {object} a token with the provided `text`.
  */
 export function identifier(text) {
-    return exports.token(TokenKind.IdentifierLiteral, text);
+    return exports.token(TokenKind.Identifier, text);
 }
 
 /** An end-of-file token. */

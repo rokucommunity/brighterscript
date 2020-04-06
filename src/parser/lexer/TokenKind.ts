@@ -42,8 +42,8 @@ export enum TokenKind {
     LessGreater = 'LessGreater', // BrightScript uses `<>` for "not equal"
 
     // literals
+    Identifier = 'Identifier',
     BooleanLiteral = 'BooleanLiteral',
-    IdentifierLiteral = 'IdentifierLiteral',
     StringLiteral = 'StringLiteral',
     IntegerLiteral = 'IntegerLiteral',
     FloatLiteral = 'FloatLiteral',
@@ -52,7 +52,6 @@ export enum TokenKind {
 
     //types
     Void = 'Void',
-    Number = 'Number',
     Boolean = 'Boolean',
     Integer = 'Integer',
     LongInteger = 'LongInteger',
@@ -97,7 +96,7 @@ export enum TokenKind {
     EndWhile = 'EndWhile',
     Eval = 'Eval',
     Exit = 'Exit',
-    ExitFor = 'ExitFor', // not technically a reserved word, but definitely a lexeme
+    ExitFor = 'ExitFor', // not technically a reserved word, but definitely a tokenKind
     ExitWhile = 'ExitWhile',
     False = 'False',
     For = 'For',
@@ -132,6 +131,7 @@ export enum TokenKind {
     Public = 'Public',
     Protected = 'Protected',
     Private = 'Private',
+    As = 'As',
 
     //comments
     Comment = 'Comment',
@@ -141,6 +141,122 @@ export enum TokenKind {
     Newline = 'Newline',
     Eof = 'Eof'
 }
+
+/**
+ * The set of all reserved words in the reference BrightScript runtime. These can't be used for any
+ * other purpose within a BrightScript file.
+ * @see https://sdkdocs.roku.com/display/sdkdoc/Reserved+Words
+ */
+export const ReservedWords = new Set([
+    'and',
+    'box',
+    'createobject',
+    'dim',
+    'each',
+    'else',
+    'elseif',
+    'endsub',
+    'endwhile',
+    'eval',
+    'exit',
+    'exitwhile',
+    'false',
+    'for',
+    'function',
+    'getglobalaa',
+    'getlastruncompileerror',
+    'getlastrunruntimeerror',
+    'goto',
+    'if',
+    'invalid',
+    'let',
+    'line_num',
+    'next',
+    'not',
+    'objfun',
+    'or',
+    'pos',
+    'print',
+    'rem',
+    'return',
+    'run',
+    'step',
+    'stop',
+    'sub',
+    'tab',
+    'then',
+    'to',
+    'true',
+    'type',
+    'while'
+]);
+
+/**
+ * The set of keywords in the reference BrightScript runtime. Any of these that *are not* reserved
+ * words can be used within a BrightScript file for other purposes, e.g. `tab`.
+ *
+ * Unfortunately there's no canonical source for this!
+ */
+export const Keywords: { [key: string]: TokenKind } = {
+    as: TokenKind.As,
+    and: TokenKind.And,
+    dim: TokenKind.Dim,
+    then: TokenKind.Then,
+    else: TokenKind.Else,
+    elseif: TokenKind.ElseIf,
+    void: TokenKind.Void,
+    boolean: TokenKind.Boolean,
+    integer: TokenKind.Integer,
+    longinteger: TokenKind.LongInteger,
+    float: TokenKind.Float,
+    double: TokenKind.Double,
+    string: TokenKind.String,
+    object: TokenKind.Object,
+    interface: TokenKind.Interface,
+    dynamic: TokenKind.Dynamic,
+    'else if': TokenKind.ElseIf,
+    endfor: TokenKind.EndFor,
+    'end for': TokenKind.EndFor,
+    endfunction: TokenKind.EndFunction,
+    'end function': TokenKind.EndFunction,
+    endif: TokenKind.EndIf,
+    'end if': TokenKind.EndIf,
+    endsub: TokenKind.EndSub,
+    'end sub': TokenKind.EndSub,
+    endwhile: TokenKind.EndWhile,
+    'end while': TokenKind.EndWhile,
+    exit: TokenKind.Exit,
+    'exit for': TokenKind.ExitFor, // note: 'exitfor' (no space) is *not* a keyword
+    exitwhile: TokenKind.ExitWhile,
+    'exit while': TokenKind.ExitWhile,
+    false: TokenKind.False,
+    for: TokenKind.For,
+    'for each': TokenKind.ForEach, // note: 'foreach' (no space) is *not* a keyword
+    function: TokenKind.Function,
+    goto: TokenKind.Goto,
+    if: TokenKind.If,
+    invalid: TokenKind.Invalid,
+    let: TokenKind.Let,
+    mod: TokenKind.Mod,
+    next: TokenKind.Next,
+    not: TokenKind.Not,
+    or: TokenKind.Or,
+    print: TokenKind.Print,
+    rem: TokenKind.Rem,
+    return: TokenKind.Return,
+    step: TokenKind.Step,
+    stop: TokenKind.Stop,
+    sub: TokenKind.Sub,
+    to: TokenKind.To,
+    true: TokenKind.True,
+    while: TokenKind.While,
+    class: TokenKind.Class,
+    endclass: TokenKind.EndClass,
+    'end class': TokenKind.EndClass,
+    public: TokenKind.Public,
+    protected: TokenKind.Protected,
+    private: TokenKind.Private
+};
 
 /** Set of all keywords that end blocks. */
 export type BlockTerminator =
@@ -165,8 +281,9 @@ export const AssignmentOperators = [
     TokenKind.GreaterGreaterEqual
 ];
 
-/** List of Lexemes that are permitted as property names. */
+/** List of TokenKinds that are permitted as property names. */
 export const AllowedProperties = [
+    TokenKind.As,
     TokenKind.And,
     TokenKind.Box,
     TokenKind.CreateObject,
@@ -210,14 +327,42 @@ export const AllowedProperties = [
     TokenKind.To,
     TokenKind.True,
     TokenKind.Type,
-    TokenKind.While
+    TokenKind.While,
+    TokenKind.Void,
+    TokenKind.Boolean,
+    TokenKind.Integer,
+    TokenKind.LongInteger,
+    TokenKind.Float,
+    TokenKind.Double,
+    TokenKind.String,
+    TokenKind.Object,
+    TokenKind.Interface,
+    TokenKind.Dynamic,
+    TokenKind.Void,
+    TokenKind.As
 ];
 
-/** List of Lexeme that are allowed as local var identifiers. */
-export const AllowedLocalIdentifiers = [TokenKind.EndFor, TokenKind.ExitFor, TokenKind.ForEach];
+/** List of TokenKind that are allowed as local var identifiers. */
+export const AllowedLocalIdentifiers = [
+    TokenKind.EndFor,
+    TokenKind.ExitFor,
+    TokenKind.ForEach,
+    TokenKind.Void,
+    TokenKind.Boolean,
+    TokenKind.Integer,
+    TokenKind.LongInteger,
+    TokenKind.Float,
+    TokenKind.Double,
+    TokenKind.String,
+    TokenKind.Object,
+    TokenKind.Interface,
+    TokenKind.Dynamic,
+    TokenKind.Void,
+    TokenKind.As
+];
 
 /**
- * List of string versions of Lexeme and various globals that are NOT allowed as local var identifiers.
+ * List of string versions of TokenKind and various globals that are NOT allowed as local var identifiers.
  * Used to throw more helpful "you can't use a reserved word as an identifier" errors.
  */
 export const DisallowedLocalIdentifiers = new Set(
@@ -260,7 +405,7 @@ export const DisallowedLocalIdentifiers = new Set(
         TokenKind.Step,
         TokenKind.Sub,
         TokenKind.Tab,
-        'then',
+        TokenKind.Then,
         TokenKind.To,
         TokenKind.True,
         TokenKind.Type,

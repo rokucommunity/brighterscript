@@ -197,12 +197,12 @@ export class Parser {
         }
 
         /**
-         * If the next token is any of the provided lexemes, advance and return true.
+         * If the next token is any of the provided tokenKinds, advance and return true.
          * Otherwise return false
          */
-        function match(...lexemes: TokenKind[]) {
-            for (let lexeme of lexemes) {
-                if (check(lexeme)) {
+        function match(...tokenKinds: TokenKind[]) {
+            for (let tokenKind of tokenKinds) {
+                if (check(tokenKind)) {
                     advance();
                     return true;
                 }
@@ -211,12 +211,12 @@ export class Parser {
             return false;
         }
 
-        function consume(message: string, ...lexemes: TokenKind[]): Token {
-            let foundLexeme = lexemes
-                .map(lexeme => peek().kind === lexeme)
+        function consume(message: string, ...tokenKinds: TokenKind[]): Token {
+            let foundTokenKind = tokenKinds
+                .map(tokenKind => peek().kind === tokenKind)
                 .reduce((foundAny, foundCurrent) => foundAny || foundCurrent, false);
 
-            if (foundLexeme) {
+            if (foundTokenKind) {
                 return advance();
             }
             return emitError(new ParseError(peek(), message));
@@ -229,12 +229,12 @@ export class Parser {
             return previous();
         }
 
-        function check(...lexemes: TokenKind[]) {
+        function check(...tokenKinds: TokenKind[]) {
             if (isAtEnd()) {
                 return false;
             }
 
-            return lexemes.some(lexeme => peek().kind === lexeme);
+            return tokenKinds.some(tokenKind => peek().kind === tokenKind);
         }
 
         function isAtEnd() {

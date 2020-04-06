@@ -107,7 +107,7 @@ describe('parser postfix unary expressions', () => {
          */
         let { statements, errors } = Parser.parse(<any>[
             {
-                kind: TokenKind.IdentifierLiteral,
+                kind: TokenKind.Identifier,
                 text: 'someNumber',
                 isReserved: false,
                 location: {

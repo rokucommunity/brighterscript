@@ -88,11 +88,11 @@ describe('parser', () => {
                 identifier('repeat'),
                 token(TokenKind.LeftParen, '('),
                 identifier('str'),
-                identifier('as'),
+                token(TokenKind.As, 'as'),
                 identifier('string'),
                 token(TokenKind.Comma, ','),
                 identifier('count'),
-                identifier('as'),
+                token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
@@ -149,7 +149,7 @@ describe('parser', () => {
                 identifier('a'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.IntegerLiteral, '3', new Int32(3)),
-                identifier('as'),
+                token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
 
@@ -158,7 +158,7 @@ describe('parser', () => {
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
                 token(TokenKind.IntegerLiteral, '5', new Int32(5)),
-                identifier('as'),
+                token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
 
@@ -179,14 +179,14 @@ describe('parser', () => {
                 identifier('foo'),
                 token(TokenKind.LeftParen, '('),
                 token(TokenKind.RightParen, ')'),
-                identifier('as'),
-                identifier('void'),
+                token(TokenKind.As, 'as'),
+                token(TokenKind.Void, 'void'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndFunction, 'end function'),
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(errors[0]?.message).to.not.exist;
             expect(statements).to.length.greaterThan(0);
 
             //expect(statements).toMatchSnapshot();
@@ -299,11 +299,11 @@ describe('parser', () => {
                 identifier('repeat'),
                 token(TokenKind.LeftParen, '('),
                 identifier('str'),
-                identifier('as'),
+                token(TokenKind.As, 'as'),
                 identifier('string'),
                 token(TokenKind.Comma, ','),
                 identifier('count'),
-                identifier('as'),
+                token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
@@ -359,7 +359,7 @@ describe('parser', () => {
                 identifier('a'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.IntegerLiteral, '3', new Int32(3)),
-                identifier('as'),
+                token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
 
@@ -368,7 +368,7 @@ describe('parser', () => {
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
                 token(TokenKind.IntegerLiteral, '5', new Int32(5)),
-                identifier('as'),
+                token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
 

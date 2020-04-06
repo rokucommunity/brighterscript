@@ -1,12 +1,11 @@
 import { EventEmitter } from 'events';
 
-import { TokenKind } from './TokenKind';
+import { TokenKind, ReservedWords, Keywords } from './TokenKind';
 import { Token, Location } from './Token';
-import { ReservedWords, KeyWords } from './ReservedWords';
 import { BrsError } from '../Error';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 
-import { BrsType, BrsString, Int32, Int64, Float, Double } from '../brsTypes';
+import { BrsType, BrsString, Int32, Int64, Float, Double } from '../brsTypes/index';
 
 export class Lexer {
     /** Allows consumers to observe errors as they're detected. */
@@ -685,12 +684,12 @@ export class Lexer {
             let twoWords = this.source.slice(this.start, this.current);
             //replace all of the whitespace with a single space character so we can properly match keyword token types
             twoWords = twoWords.replace(whitespace, ' ');
-            let maybeTokenType = KeyWords[twoWords.toLowerCase()];
+            let maybeTokenType = Keywords[twoWords.toLowerCase()];
             if (maybeTokenType) {
                 this.addToken(maybeTokenType);
                 return;
             } else {
-                // reset if the last word and the current word didn't form a multi-word Lexeme
+                // reset if the last word and the current word didn't form a multi-word TokenKind
                 this.current = endOfFirstWord.position;
                 this.column = endOfFirstWord.column;
             }
@@ -704,12 +703,12 @@ export class Lexer {
             this.advance();
         }
 
-        let tokenType = KeyWords[lowerText] || TokenKind.IdentifierLiteral;
-        if (tokenType === KeyWords.rem) {
+        let tokenType = Keywords[lowerText] || TokenKind.Identifier;
+        if (tokenType === Keywords.rem) {
             //the rem keyword can be used as an identifier on objects,
             //so do a quick look-behind to see if there's a preceeding dot
             if (this.checkPrevious(TokenKind.Dot)) {
-                this.addToken(TokenKind.IdentifierLiteral);
+                this.addToken(TokenKind.Identifier);
             } else {
                 this.remComment();
             }
@@ -762,7 +761,7 @@ export class Lexer {
                     return;
             }
 
-            // reset if the last word and the current word didn't form a multi-word Lexeme
+            // reset if the last word and the current word didn't form a multi-word TokenKind
             this.current = endOfFirstWord;
         }
 

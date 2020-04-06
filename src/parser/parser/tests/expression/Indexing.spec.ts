@@ -50,7 +50,7 @@ describe('parser indexing', () => {
              */
             let { statements, errors } = Parser.parse(<any>[
                 {
-                    kind: TokenKind.IdentifierLiteral,
+                    kind: TokenKind.Identifier,
                     text: 'a',
                     isReserved: false,
                     location: {
@@ -68,7 +68,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: TokenKind.IdentifierLiteral,
+                    kind: TokenKind.Identifier,
                     text: 'foo',
                     isReserved: false,
                     location: {
@@ -86,7 +86,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: TokenKind.IdentifierLiteral,
+                    kind: TokenKind.Identifier,
                     text: 'bar',
                     isReserved: false,
                     location: {
@@ -104,7 +104,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: TokenKind.IdentifierLiteral,
+                    kind: TokenKind.Identifier,
                     text: 'b',
                     isReserved: false,
                     location: {
@@ -122,7 +122,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: TokenKind.IdentifierLiteral,
+                    kind: TokenKind.Identifier,
                     text: 'bar',
                     isReserved: false,
                     location: {

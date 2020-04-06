@@ -202,16 +202,7 @@ export class Parser {
      * @returns `true` if the next token is an identifier with text `end`, otherwise `false`
      */
     private checkEnd() {
-        return this.check(TokenKind.IdentifierLiteral) && this.peek().text.toLowerCase() === 'end';
-    }
-
-    /**
-     * Check if the next token is an `as` token
-     * 'as' can be used as variable and property names, but is sometimes used like a keyword (function parameters, return values, etc...)
-     * so the lexer handles it as an identifier
-     */
-    private checkAs() {
-        return this.check(TokenKind.IdentifierLiteral) && this.peek().text.toLowerCase() === 'as';
+        return this.check(TokenKind.Identifier) && this.peek().text.toLowerCase() === 'end';
     }
 
     private declaration(...additionalTerminators: BlockTerminator[]): Statement | undefined {
@@ -236,7 +227,7 @@ export class Parser {
             // `let`, (...) keyword. As such, we must check the token *after* an identifier to figure
             // out what to do with it.
             if (
-                this.check(TokenKind.IdentifierLiteral, ...AllowedLocalIdentifiers) &&
+                this.check(TokenKind.Identifier, ...AllowedLocalIdentifiers) &&
                 this.checkNext(...AssignmentOperators)
             ) {
                 return this.assignment(...additionalTerminators);
@@ -265,14 +256,14 @@ export class Parser {
         this.ensureBrighterScriptMode('class declarations');
         let keyword = this.consume(`Expected 'class' keyword`, TokenKind.Class);
         //get the class name
-        let className = this.consumeContinue(diagnosticMessages.Missing_identifier_after_class_keyword_1016(), TokenKind.IdentifierLiteral) as Identifier;
+        let className = this.consumeContinue(diagnosticMessages.Missing_identifier_after_class_keyword_1016(), TokenKind.Identifier) as Identifier;
         //consume newlines (at least one)
         while (this.match(TokenKind.Newline)) {
         }
 
         let members = [] as ClassMemberStatement[];
         //gather up all class members (Fields, Methods)
-        while (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.IdentifierLiteral)) {
+        while (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Identifier)) {
             try {
                 let accessModifier: Token;
                 if (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private)) {
@@ -293,7 +284,7 @@ export class Parser {
                 }
 
                 //methods (function/sub keyword OR identifier followed by opening paren)
-                if (this.check(TokenKind.Function, TokenKind.Sub) || (this.check(TokenKind.IdentifierLiteral) && this.checkNext(TokenKind.LeftParen))) {
+                if (this.check(TokenKind.Function, TokenKind.Sub) || (this.check(TokenKind.Identifier) && this.checkNext(TokenKind.LeftParen))) {
                     let funcDeclaration = this.functionDeclaration(false);
                     members.push(
                         new ClassMethodStatement(
@@ -304,7 +295,7 @@ export class Parser {
                     );
 
                     //fields
-                } else if (this.check(TokenKind.IdentifierLiteral)) {
+                } else if (this.check(TokenKind.Identifier)) {
                     members.push(
                         this.classFieldDeclaration(accessModifier)
                     );
@@ -345,16 +336,16 @@ export class Parser {
     }
 
     private classFieldDeclaration(accessModifier: Token | null) {
-        let name = this.consume(`Expected identifier`, TokenKind.IdentifierLiteral) as Identifier;
+        let name = this.consume(`Expected identifier`, TokenKind.Identifier) as Identifier;
         let asToken: Token;
         let fieldType: Token;
         //look for `as SOME_TYPE`
-        if (this.checkAs()) {
+        if (this.check(TokenKind.As)) {
             asToken = this.advance();
             fieldType = this.advance();
 
             //no field type specified
-            if (!valueKindFromString(`${fieldType.text}`) && !this.check(TokenKind.IdentifierLiteral)) {
+            if (!valueKindFromString(`${fieldType.text}`) && !this.check(TokenKind.Identifier)) {
                 this.addDiagnostic(this.peek(), diagnosticMessages.Expected_valid_type_to_follow_as_keyword_1018());
             }
         }
@@ -413,7 +404,7 @@ export class Parser {
             } else {
                 name = this.consume(
                     `Expected ${functionTypeText} name after '${functionTypeText}'`,
-                    TokenKind.IdentifierLiteral
+                    TokenKind.Identifier
                 ) as Identifier;
                 leftParen = this.consume(
                     `Expected '(' after ${functionTypeText} name`,
@@ -448,8 +439,7 @@ export class Parser {
             }
             let rightParen = this.advance();
 
-            let maybeAs = this.peek();
-            if (this.check(TokenKind.IdentifierLiteral) && maybeAs.text.toLowerCase() === 'as') {
+            if (this.check(TokenKind.As)) {
                 asToken = this.advance();
 
                 typeToken = this.advance();
@@ -470,7 +460,7 @@ export class Parser {
                 if (haveFoundOptional && !arg.defaultValue) {
                     throw this.addError(
                         {
-                            kind: TokenKind.IdentifierLiteral,
+                            kind: TokenKind.Identifier,
                             text: arg.name.text,
                             isReserved: ReservedWords.has(arg.name.text),
                             location: arg.location
@@ -545,7 +535,7 @@ export class Parser {
     }
 
     private functionParameter(): FunctionParameter {
-        if (!this.check(TokenKind.IdentifierLiteral)) {
+        if (!this.check(TokenKind.Identifier)) {
             throw this.addError(
                 this.peek(),
                 `Expected parameter name, but received '${this.peek().text || ''}'`
@@ -564,11 +554,7 @@ export class Parser {
         }
 
         let asToken = null;
-        let next = this.peek();
-        if (this.check(TokenKind.IdentifierLiteral) && next.text && next.text.toLowerCase() === 'as') {
-            // 'as' isn't a reserved word, so it can't be lexed into an As token without the lexer
-            // understanding language context.  That's less than ideal, so we'll have to do some
-            // more intelligent comparisons to detect the 'as' sometimes-keyword here.
+        if (this.check(TokenKind.As)) {
             asToken = this.advance();
 
             typeToken = this.advance();
@@ -632,7 +618,7 @@ export class Parser {
     }
 
     private checkLibrary() {
-        let isLibraryIdentifier = this.check(TokenKind.IdentifierLiteral) && this.peek().text.toLowerCase() === 'library';
+        let isLibraryIdentifier = this.check(TokenKind.Identifier) && this.peek().text.toLowerCase() === 'library';
 
         //if we are at the top level, any line that starts with "library" should be considered a library statement
         if (this.isAtRootLevel() && isLibraryIdentifier) {
@@ -699,7 +685,7 @@ export class Parser {
         }
 
         //does this line look like a label? (i.e.  `someIdentifier:` )
-        if (this.check(TokenKind.IdentifierLiteral) && this.checkNext(TokenKind.Colon)) {
+        if (this.check(TokenKind.Identifier) && this.checkNext(TokenKind.Colon)) {
             return this.labelStatement();
         }
 
@@ -796,7 +782,7 @@ export class Parser {
         let name = this.advance();
 
         let maybeIn = this.peek();
-        if (this.check(TokenKind.IdentifierLiteral) && maybeIn.text.toLowerCase() === 'in') {
+        if (this.check(TokenKind.Identifier) && maybeIn.text.toLowerCase() === 'in') {
             this.advance();
         } else {
             throw this.addError(maybeIn, 'Expected \'in\' after \'for each <name>\'');
@@ -1328,7 +1314,7 @@ export class Parser {
     private gotoStatement() {
         let tokens = {
             goto: this.advance(),
-            label: this.consume('Expected label identifier after goto keyword', TokenKind.IdentifierLiteral)
+            label: this.consume('Expected label identifier after goto keyword', TokenKind.Identifier)
         };
 
         while (this.match(TokenKind.Newline, TokenKind.Colon)) {
@@ -1363,7 +1349,7 @@ export class Parser {
     }
 
     /**
-     * Parses a block, looking for a specific terminating Lexeme to denote completion.
+     * Parses a block, looking for a specific terminating TokenKind to denote completion.
      * @param terminators the token(s) that signifies the end of this block; all other terminators are
      *                    ignored.
      */
@@ -1515,12 +1501,12 @@ export class Parser {
             } else if (this.match(TokenKind.Dot)) {
                 let name = this.consume(
                     'Expected property name after \'.\'',
-                    TokenKind.IdentifierLiteral,
+                    TokenKind.Identifier,
                     ...AllowedProperties
                 );
 
                 // force it into an identifier so the AST makes some sense
-                name.kind = TokenKind.IdentifierLiteral;
+                name.kind = TokenKind.Identifier;
 
                 expr = new DottedGetExpression(expr, name as Identifier);
             } else {
@@ -1578,7 +1564,7 @@ export class Parser {
                 TokenKind.StringLiteral
             ):
                 return new LiteralExpression(this.previous().literal, this.previous().location);
-            case this.match(TokenKind.IdentifierLiteral):
+            case this.match(TokenKind.Identifier):
                 return new VariableExpression(this.previous() as Identifier);
             case this.match(TokenKind.LeftParen):
                 let left = this.previous();
@@ -1627,7 +1613,7 @@ export class Parser {
 
                 let closingSquare = this.previous();
 
-                //this.consume("Expected newline or ':' after array literal", Lexeme.Newline, Lexeme.Colon, Lexeme.Eof);
+                //this.consume("Expected newline or ':' after array literal", TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
                 return new ArrayLiteralExpression(elements, openingSquare, closingSquare);
             case this.match(TokenKind.LeftCurlyBrace):
                 let openingBrace = this.previous();
@@ -1640,7 +1626,7 @@ export class Parser {
                         key: null as BrsString,
                         location: null as Location
                     };
-                    if (this.check(TokenKind.IdentifierLiteral, ...AllowedProperties)) {
+                    if (this.check(TokenKind.Identifier, ...AllowedProperties)) {
                         result.keyToken = this.advance();
                         result.key = new BrsString(result.keyToken.text);
                     } else if (this.check(TokenKind.StringLiteral)) {
@@ -1722,7 +1708,7 @@ export class Parser {
                 return new AALiteralExpression(members, openingBrace, closingBrace);
             case this.match(TokenKind.Pos, TokenKind.Tab):
                 let token = Object.assign(this.previous(), {
-                    kind: TokenKind.IdentifierLiteral
+                    kind: TokenKind.Identifier
                 }) as Identifier;
                 return new VariableExpression(token);
             case this.check(TokenKind.Function, TokenKind.Sub):
@@ -1736,11 +1722,11 @@ export class Parser {
 
     /**
      * Pop tokens until we encounter a token not in the specified list
-     * @param lexemes
+     * @param tokenKinds
      */
-    private match(...lexemes: TokenKind[]) {
-        for (let lexeme of lexemes) {
-            if (this.check(lexeme)) {
+    private match(...tokenKinds: TokenKind[]) {
+        for (let tokenKind of tokenKinds) {
+            if (this.check(tokenKind)) {
                 this.advance();
                 return true;
             }
@@ -1750,26 +1736,26 @@ export class Parser {
     }
 
     /**
-     * Consume tokens until one of the `stopLexemes` is encountered
-     * @param lexemes
-     * @return - the list of tokens consumed, EXCLUDING the `stopLexeme` (you can use `this.peek()` to see which one it was)
+     * Consume tokens until one of the `stopTokenKinds` is encountered
+     * @param tokenKinds
+     * @return - the list of tokens consumed, EXCLUDING the `stopTokenKind` (you can use `this.peek()` to see which one it was)
      */
-    private consumeUntil(...stopLexemes: TokenKind[]) {
+    private consumeUntil(...stopTokenKinds: TokenKind[]) {
         let result = [] as Token[];
-        //take tokens until we encounter one of the stopLexemes
-        while (!stopLexemes.includes(this.peek().kind)) {
+        //take tokens until we encounter one of the stopTokenKinds
+        while (!stopTokenKinds.includes(this.peek().kind)) {
             result.push(this.advance());
         }
         return result;
     }
 
-    private consume(errorMessage: string | DiagnosticMessage, ...lexemes: TokenKind[]): Token {
+    private consume(errorMessage: string | DiagnosticMessage, ...tokenKinds: TokenKind[]): Token {
         let diagnostic = typeof errorMessage === 'string' ? { message: errorMessage, code: 1000 } : errorMessage;
-        let foundLexeme = lexemes
-            .map(lexeme => this.peek().kind === lexeme)
+        let foundTokenKind = tokenKinds
+            .map(tokenKind => this.peek().kind === tokenKind)
             .reduce((foundAny, foundCurrent) => foundAny || foundCurrent, false);
 
-        if (foundLexeme) {
+        if (foundTokenKind) {
             return this.advance();
         }
         throw this.addError(this.peek(), diagnostic.message, diagnostic.code);
@@ -1778,11 +1764,11 @@ export class Parser {
     /**
      * Consume, or add a message if not found. But then continue and return undefined
      * @param message
-     * @param lexemes
+     * @param tokenKinds
      */
-    private consumeContinue(diagnostic: DiagnosticMessage, ...lexemes: TokenKind[]): Token | undefined {
+    private consumeContinue(diagnostic: DiagnosticMessage, ...tokenKinds: TokenKind[]): Token | undefined {
         try {
-            return this.consume(diagnostic, ...lexemes);
+            return this.consume(diagnostic, ...tokenKinds);
         } catch (e) {
             //do nothing;
         }
@@ -1795,28 +1781,28 @@ export class Parser {
         return this.previous();
     }
 
-    private checkPrevious(...lexemes: TokenKind[]) {
+    private checkPrevious(...tokenKinds: TokenKind[]) {
         if (this.isAtEnd()) {
             return false;
         }
 
-        return lexemes.some(lexeme => this.previous().kind === lexeme);
+        return tokenKinds.some(tokenKind => this.previous().kind === tokenKind);
     }
 
-    private check(...lexemes: TokenKind[]) {
+    private check(...tokenKinds: TokenKind[]) {
         if (this.isAtEnd()) {
             return false;
         }
 
-        return lexemes.some(lexeme => this.peek().kind === lexeme);
+        return tokenKinds.some(tokenKind => this.peek().kind === tokenKind);
     }
 
-    private checkNext(...lexemes: TokenKind[]) {
+    private checkNext(...tokenKinds: TokenKind[]) {
         if (this.isAtEnd()) {
             return false;
         }
 
-        return lexemes.some(lexeme => this.peekNext().kind === lexeme);
+        return tokenKinds.some(tokenKind => this.peekNext().kind === tokenKind);
     }
 
     private isAtEnd() {

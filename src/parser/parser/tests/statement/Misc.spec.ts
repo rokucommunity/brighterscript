@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { Parser } from '../..';
-import { Lexer, DisallowedLocalIdentifiers } from '../../../lexer';
+import { Lexer, DisallowedLocalIdentifiers, TokenKind } from '../../../lexer';
 
 describe('parser', () => {
     describe('`end` keyword', () => {
@@ -72,7 +72,7 @@ describe('parser', () => {
             if (disallowedIdentifier.toLowerCase() === 'rem') {
                 return;
             }
-            //use the lexer to generate tokens because there are many different Lexeme types represented in this list
+            //use the lexer to generate tokens because there are many different TokenKind types represented in this list
             let { tokens } = Lexer.scan(`
                 sub main()
                     ${disallowedIdentifier} = true
@@ -85,22 +85,105 @@ describe('parser', () => {
             }
             statementList.push(statements);
         });
-        //a few additional keywords that we don't have lexemes for
+    });
+    it('allows certain TokenKinds to be treated as local variables', () => {
+        //a few additional keywords that we don't have tokenKinds for
         let { tokens } = Lexer.scan(`
             sub main()
-                boolean = true
-                integer = true
-                longinteger = true
-                float = true
-                double = true
-                string = true
-                object = true
-                interface = true
+                Void = true
+                Number = true
+                Boolean = true
+                Integer = true
+                LongInteger = true
+                Float = true
+                Double = true
+                String = true
+                Object = true
+                Interface = true
+                Dynamic = true
             end sub
         `);
         let { errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         // expect(statementList).toMatchSnapshot();
+    });
+
+    it('allows certain TokenKinds as object properties', () => {
+        let kinds = [
+            TokenKind.As,
+            TokenKind.And,
+            TokenKind.Box,
+            TokenKind.CreateObject,
+            TokenKind.Dim,
+            TokenKind.Then,
+            TokenKind.Else,
+            TokenKind.ElseIf,
+            TokenKind.End,
+            TokenKind.EndFunction,
+            TokenKind.EndFor,
+            TokenKind.EndIf,
+            TokenKind.EndSub,
+            TokenKind.EndWhile,
+            TokenKind.Eval,
+            TokenKind.Exit,
+            TokenKind.ExitFor,
+            TokenKind.ExitWhile,
+            TokenKind.False,
+            TokenKind.For,
+            TokenKind.ForEach,
+            TokenKind.Function,
+            TokenKind.GetGlobalAA,
+            TokenKind.GetLastRunCompileError,
+            TokenKind.GetLastRunRunTimeError,
+            TokenKind.Goto,
+            TokenKind.If,
+            TokenKind.Invalid,
+            TokenKind.Let,
+            TokenKind.Next,
+            TokenKind.Not,
+            TokenKind.ObjFun,
+            TokenKind.Or,
+            TokenKind.Pos,
+            TokenKind.Print,
+            TokenKind.Rem,
+            TokenKind.Return,
+            TokenKind.Step,
+            TokenKind.Stop,
+            TokenKind.Sub,
+            TokenKind.Tab,
+            TokenKind.To,
+            TokenKind.True,
+            TokenKind.Type,
+            TokenKind.While,
+            TokenKind.Void,
+            TokenKind.Boolean,
+            TokenKind.Integer,
+            TokenKind.LongInteger,
+            TokenKind.Float,
+            TokenKind.Double,
+            TokenKind.String,
+            TokenKind.Object,
+            TokenKind.Interface,
+            TokenKind.Dynamic,
+            TokenKind.Void,
+            TokenKind.As
+        ].map(x => x.toLowerCase());
+
+        for (let kind of kinds) {
+            let { tokens } = Lexer.scan(`
+                obj = {
+                    ${kind}: true
+                }
+                obj.${kind} = false
+                theValue = obj.${kind}
+            `);
+            let { errors } = Parser.parse(tokens);
+            if (errors.length > 0) {
+                throw new Error(
+                    `Using "${kind}" as object property. Expected no errors, but received: ${JSON.stringify(errors)}`);
+            }
+            expect(errors).to.be.lengthOf(0);
+        }
     });
 
     it('allows whitelisted reserved words as object properties', () => {
@@ -164,6 +247,7 @@ describe('parser', () => {
             end sub
         `);
         let { errors } = Parser.parse(tokens);
+        expect(JSON.stringify(errors[0])).not.to.exist;
         expect(errors).to.be.lengthOf(0);
         //expect(statements).toMatchSnapshot();
     });
@@ -206,7 +290,7 @@ describe('parser', () => {
             end function
         `);
         let { statements, errors } = Parser.parse(tokens);
-        expect(errors).to.be.lengthOf(0);
+        expect(errors[0]?.message).not.to.exist;
         expect((statements[0] as any).func.body.statements[0].value.elements[0].keyToken.text).to.equal('"has-second-layer"');
         expect((statements[0] as any).func.body.statements[0].value.elements[0].key.value).to.equal('has-second-layer');
     });
