@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 
-import { TokenKind, CommentKind } from './TokenKind';
-import { Token, Location, CommentToken } from './Token';
+import { TokenKind } from './TokenKind';
+import { Token, Location } from './Token';
 import { ReservedWords, KeyWords } from './ReservedWords';
 import { BrsError } from '../Error';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
@@ -328,18 +328,7 @@ export class Lexer {
                 }
                 break;
             case `'`:
-                let comment = '';
-                // BrightScript doesn't have block comments; only line
-                while (this.peek() !== '\n' && !this.isAtEnd()) {
-                    comment += this.advance();
-                }
-                this.tokens.push(<CommentToken>{
-                    text: comment,
-                    isReserved: false,
-                    kind: TokenKind.Comment,
-                    commentKind: CommentKind.SingleQuote,
-                    location: this.locationOf(comment)
-                });
+                this.quoteComment();
                 break;
             case ' ':
             case '\t':
@@ -368,6 +357,21 @@ export class Lexer {
                 }
                 break;
         }
+    }
+
+    private quoteComment() {
+        // BrightScript doesn't have block comments; only line
+        while (this.peek() !== '\n' && !this.isAtEnd()) {
+            this.advance();
+        }
+        this.addToken(TokenKind.Comment);
+    }
+
+    private remComment() {
+        while (this.peek() !== '\n' && !this.isAtEnd()) {
+            this.advance();
+        }
+        this.addToken(TokenKind.Comment);
     }
 
     private whitespace() {
@@ -654,11 +658,12 @@ export class Lexer {
             this.advance();
         }
 
-        let text = this.source.slice(this.start, this.current).toLowerCase();
+        let text = this.source.slice(this.start, this.current);
+        let lowerText = text.toLowerCase();
 
         // some identifiers can be split into two words, so check the "next" word and see what we get
         if (
-            (text === 'end' || text === 'else' || text === 'exit' || text === 'for') &&
+            (lowerText === 'end' || lowerText === 'else' || lowerText === 'exit' || lowerText === 'for') &&
             (this.peek() === ' ' || this.peek() === '\t')
         ) {
             let endOfFirstWord = {
@@ -695,29 +700,18 @@ export class Lexer {
         // may not. Let the parser figure that part out.
         let nextChar = this.peek();
         if (['$', '%', '!', '#', '&'].includes(nextChar)) {
-            text += nextChar;
+            lowerText += nextChar;
             this.advance();
         }
 
-        let tokenType = KeyWords[text.toLowerCase()] || TokenKind.IdentifierLiteral;
+        let tokenType = KeyWords[lowerText] || TokenKind.IdentifierLiteral;
         if (tokenType === KeyWords.rem) {
             //the rem keyword can be used as an identifier on objects,
             //so do a quick look-behind to see if there's a preceeding dot
             if (this.checkPrevious(TokenKind.Dot)) {
                 this.addToken(TokenKind.IdentifierLiteral);
             } else {
-                // The 'rem' keyword can be used to indicate comments as well, so
-                // consume the rest of the line
-                let comment = '';
-                while (this.peek() !== '\n' && !this.isAtEnd()) {
-                    comment += this.advance();
-                }
-                this.tokens.push({
-                    text: comment,
-                    isReserved: false,
-                    kind: TokenKind.Comment,
-                    location: this.locationOf(comment)
-                });
+                this.remComment();
             }
         } else {
             this.addToken(tokenType);
@@ -820,7 +814,7 @@ export class Lexer {
      * @param kind the type of token to produce.
      * @param literal an optional literal value to include in the token.
      */
-    private addToken(kind: TokenKind, literal?: BrsType): void {
+    private addToken(kind: TokenKind, literal?: BrsType) {
         let withWhitespace = this.source.slice(this.start, this.current);
         let text = withWhitespace.trimLeft() || withWhitespace;
         let token = {
@@ -831,6 +825,7 @@ export class Lexer {
             location: this.locationOf(text)
         };
         this.tokens.push(token);
+        return token;
     }
 
     /**

@@ -130,7 +130,6 @@ export class CommentStatement implements Statement, Expression {
                 result.push(indent(state.blockDepth));
             }
             result.push(
-                `'`,
                 new SourceNode(comment.location.start.line, comment.location.start.column, state.pathAbsolute, comment.text)
             );
             //add newline for all except final comment

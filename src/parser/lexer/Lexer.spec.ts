@@ -61,6 +61,50 @@ describe('lexer', () => {
     });
 
     describe('comments', () => {
+        it('includes the comment characters in the text', () => {
+            let text = Lexer.scan(`
+                'comment
+                REM some comment
+            `).tokens
+                .filter(x => ![TokenKind.Newline, TokenKind.Eof].includes(x.kind))
+                .map(x => x.text);
+
+            expect(text).to.eql([
+                `'comment`,
+                'REM some comment'
+            ]);
+        });
+
+        it('tracks the correct location for comments', () => {
+            let tokens = Lexer.scan(`
+                'comment
+                REM some comment
+            `).tokens.filter(x => ![TokenKind.Newline, TokenKind.Eof].includes(x.kind));
+
+            expect(tokens[0].location).to.eql({
+                file: '',
+                start: {
+                    line: 2,
+                    column: 16
+                },
+                end: {
+                    line: 2,
+                    column: 24
+                }
+            });
+
+            expect(tokens[1].location).to.eql({
+                file: '',
+                start: {
+                    line: 3,
+                    column: 16
+                },
+                end: {
+                    line: 3,
+                    column: 32
+                }
+            });
+        });
         it('finds correct location for comment after if statement', () => {
             let { tokens } = Lexer.scan(`
                 sub a()
@@ -79,7 +123,7 @@ describe('lexer', () => {
                 file: 'testfile.brs',
                 start: {
                     line: 9,
-                    column: 28
+                    column: 27
                 },
                 end: {
                     line: 9,

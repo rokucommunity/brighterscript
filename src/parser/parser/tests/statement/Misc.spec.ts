@@ -187,9 +187,9 @@ describe('parser', () => {
         );
         let { errors, statements } = Parser.parse(tokens) as any;
         expect(errors).to.be.lengthOf(0, 'Error count should be 0');
-        expect(statements[0].func.body.statements[0].value.elements[0].text).to.equal(': 1');
-        expect(statements[0].func.body.statements[1].value.elements[1].text).to.equal(': 2');
-        expect(statements[0].func.body.statements[2].value.elements[0].text).to.equal(': 3: name: "bob"');
+        expect(statements[0].func.body.statements[0].value.elements[0].text).to.equal('rem: 1');
+        expect(statements[0].func.body.statements[1].value.elements[1].text).to.equal('rem: 2');
+        expect(statements[0].func.body.statements[2].value.elements[0].text).to.equal('rem: 3: name: "bob"');
         expect(statements[0].func.body.statements[3].name.text).to.equal('rem');
 
     });
