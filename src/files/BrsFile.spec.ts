@@ -113,7 +113,7 @@ describe('BrsFile', () => {
                 } as CommentFlag);
                 await program.validate();
                 //the "unterminated string" error should be filtered out
-                expect(program.getDiagnostics()).to.be.lengthOf(0);
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
             });
 
             it('works for specific codes', async () => {

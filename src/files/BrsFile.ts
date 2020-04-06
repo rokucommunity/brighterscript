@@ -248,6 +248,7 @@ export class BrsFile {
      * @param lines - the lines of the program
      */
     public getIgnores(lines: string[]) {
+        //TODO use the comment statements found in the AST for this instead of text search
         let allCodesExcept1014 = diagnosticCodes.filter((x) => x !== diagnosticMessages.Unknown_diagnostic_code_1014(0).code);
         this.commentFlags = [];
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
