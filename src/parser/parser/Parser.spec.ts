@@ -23,7 +23,7 @@ describe('parser', () => {
     });
 
     describe('parse', () => {
-        it.only('unknown function type does not invalidate rest of function', () => {
+        it('unknown function type does not invalidate rest of function', () => {
             let { statements, errors } = parse(`
                 function log() as UNKNOWN_TYPE
                 end function
