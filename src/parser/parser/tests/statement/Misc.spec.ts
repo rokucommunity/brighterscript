@@ -12,7 +12,7 @@ describe('parser', () => {
                 end sub
             `);
             let { errors } = Parser.parse(tokens);
-            expect(errors).to.be.lengthOf(0);
+            expect(errors[0]?.message).to.not.exist;
             //expect(statements).toMatchSnapshot();
         });
         it('can be used as a property name on objects', () => {
@@ -30,17 +30,13 @@ describe('parser', () => {
 
         it('is not allowed as a standalone variable', () => {
             //this test depends on token locations, so use the lexer to generate those locations.
-            let { tokens } = Lexer.scan(`
-                sub Main()
-                    end = true
-                end sub
-            `);
+            let { tokens } = Lexer.scan(`sub Main()\n    else = true\nend sub`);
             let { errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(1);
             //specifically check for the error location, because the identifier location was wrong in the past
-            expect(errors[0].location).to.deep.include({
-                start: { line: 3, column: 20 },
-                end: { line: 3, column: 23 }
+            expect(errors[0].location).to.eql({
+                start: { line: 2, column: 4 },
+                end: { line: 2, column: 8 }
             });
             //expect(statements).toMatchSnapshot();
         });

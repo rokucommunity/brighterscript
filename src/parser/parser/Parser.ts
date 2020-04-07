@@ -95,7 +95,7 @@ export class Parser {
      * @returns the same instance of the parser which contains the errors and statements
      */
     public parse(tokens: Token[], options?: ParseOptions) {
-        this.tokens = tokens.slice();
+        this.tokens = tokens;
         this.options = this.sanitizeParseOptions(options);
         this.current = 0;
         this.statements = [];
@@ -193,16 +193,6 @@ export class Parser {
      */
     private addErrorAtLocation(location: Location, message: string) {
         this.addError({ location: location } as any, message);
-    }
-
-    /**
-     * A simple wrapper around `check` to make tests for a `end` identifier.
-     * `end` is a keyword, but not reserved, so associative arrays can have properties
-     * called `end`; the parser takes on this task.
-     * @returns `true` if the next token is an identifier with text `end`, otherwise `false`
-     */
-    private checkEnd() {
-        return this.check(TokenKind.Identifier) && this.peek().text.toLowerCase() === 'end';
     }
 
     private declaration(...additionalTerminators: BlockTerminator[]): Statement | undefined {
@@ -670,7 +660,7 @@ export class Parser {
             return this.exitFor();
         }
 
-        if (this.checkEnd()) {
+        if (this.check(TokenKind.End)) {
             return this.endStatement();
         }
 

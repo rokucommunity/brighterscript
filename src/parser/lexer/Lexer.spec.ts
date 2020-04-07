@@ -5,6 +5,7 @@ import { TokenKind } from '.';
 import { BrsString, Double, Float, Int32, Int64 } from '../brsTypes';
 import { Lexer } from './Lexer';
 import { isToken } from './Token';
+import { locationToArray } from '../parser/Parser.spec';
 
 describe('lexer', () => {
     it('produces a semicolon token', () => {
@@ -44,6 +45,76 @@ describe('lexer', () => {
         ]);
     });
 
+    it('does not insert double newlines with the windows \\r\\n newline', () => {
+        let kinds = Lexer.scan(
+            'function boolToNumber() as string\r\n' +
+            '   if true then\r\n' +
+            '       print 1\r\n' +
+            '   else\r\n' +
+            '       print 0\r\n' +
+            '   end if\r\n' +
+            'end function\r\n'
+        ).tokens.map(x => x.kind);
+        expect(kinds).to.eql([
+            TokenKind.Function, TokenKind.Identifier, TokenKind.LeftParen, TokenKind.RightParen, TokenKind.As, TokenKind.String, TokenKind.Newline,
+            TokenKind.If, TokenKind.True, TokenKind.Then, TokenKind.Newline,
+            TokenKind.Print, TokenKind.IntegerLiteral, TokenKind.Newline,
+            TokenKind.Else, TokenKind.Newline,
+            TokenKind.Print, TokenKind.IntegerLiteral, TokenKind.Newline,
+            TokenKind.EndIf, TokenKind.Newline,
+            TokenKind.EndFunction, TokenKind.Newline,
+            TokenKind.Eof
+        ]);
+    });
+
+    it('computes location properly both with and without whitespace', () => {
+        let withoutWhitespace = Lexer.scan(`sub Main()\n    bob = true\nend sub`).tokens
+            .map(x => locationToArray(x.location));
+
+        let withWhitespace = Lexer.scan(`sub Main()\n    bob = true\nend sub`).tokens
+            //filter out the whitespace...we only care that it was computed during the scan
+            .filter(x => x.kind !== TokenKind.Whitespace)
+            .map(x => locationToArray(x.location));
+
+        /*eslint-disable */
+        let expectedLocations = [
+            [1, 0, 1, 3],   // sub
+            [1, 4, 1, 8],   // main
+            [1, 8, 1, 9],   // (
+            [1, 9, 1, 10],  // )
+            [1, 10, 1, 11], // \n
+            [2, 4, 2, 7],   // bob
+            [2, 8, 2, 9],   // =
+            [2, 10, 2, 14], // true,
+            [2, 14, 2, 15], // \n
+            [3, 0, 3, 7],   //end sub
+            [3, 7, 3, 8]    //Eof
+        ];
+        /*eslint-enable*/
+
+        expect(withoutWhitespace, 'Without whitespace').to.eql(expectedLocations);
+        expect(withWhitespace, 'With whitespace').to.eql(expectedLocations);
+    });
+
+    it('retains original line endings', () => {
+        let { tokens } = Lexer.scan('print "hello"\r\nprint "world"\n');
+        expect([
+            tokens[2].text.charCodeAt(0),
+            tokens[2].text.charCodeAt(1)
+        ], 'should contain \\r\\n').to.eql([13, 10]);
+        expect(tokens[5].text.charCodeAt(0), 'should contain \\r\\n').to.eql(10);
+    });
+
+    it('correctly identifies the elseif token', () => {
+        let { tokens } = Lexer.scan('else if elseif else   if');
+        expect(tokens.map(t => t.kind)).to.deep.equal([
+            TokenKind.ElseIf,
+            TokenKind.ElseIf,
+            TokenKind.ElseIf,
+            TokenKind.Eof
+        ]);
+    });
+
     it('gives the `as` keyword its own TokenKind', () => {
         let { tokens } = Lexer.scan('as');
         expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.As, TokenKind.Eof]);
@@ -71,6 +142,47 @@ describe('lexer', () => {
             expect(text).to.eql([
                 `'comment`,
                 'REM some comment'
+            ]);
+        });
+
+        it('tracks the correct location', () => {
+            let tokens = Lexer.scan(`
+                sub main() 'first comment
+                    k = 2 ' second comment
+                    REM third comment
+                end sub
+            `, {
+                includeWhitespace: true
+            }).tokens.map(x => [...locationToArray(x.location), x.text]);
+
+            expect(tokens).to.eql([
+                [1, 0, 1, 1, '\n'],
+                [2, 0, 2, 16, '                '],
+                [2, 16, 2, 19, 'sub'],
+                [2, 19, 2, 20, ' '],
+                [2, 20, 2, 24, 'main'],
+                [2, 24, 2, 25, '('],
+                [2, 25, 2, 26, ')'],
+                [2, 26, 2, 27, ' '],
+                [2, 27, 2, 41, `'first comment`],
+                [2, 41, 2, 42, '\n'],
+                [3, 0, 3, 20, '                    '],
+                [3, 20, 3, 21, 'k'],
+                [3, 21, 3, 22, ' '],
+                [3, 22, 3, 23, '='],
+                [3, 23, 3, 24, ' '],
+                [3, 24, 3, 25, '2'],
+                [3, 25, 3, 26, ' '],
+                [3, 26, 3, 42, `' second comment`],
+                [3, 42, 3, 43, '\n'],
+                [4, 0, 4, 20, '                    '],
+                [4, 20, 4, 37, 'REM third comment'],
+                [4, 37, 4, 38, '\n'],
+                [5, 0, 5, 16, '                '],
+                [5, 16, 5, 23, 'end sub'],
+                [5, 23, 5, 24, '\n'],
+                [6, 0, 6, 12, '            '],
+                [6, 12, 6, 13, '']//EOF
             ]);
         });
 
@@ -468,15 +580,31 @@ describe('lexer', () => {
             ]);
         });
 
+        it('supports various spacings between #endif', () => {
+            let { tokens } = Lexer.scan('#endif #end if #end\tif #end  if #end\t\t if');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.HashEndIf,
+                TokenKind.HashEndIf,
+                TokenKind.HashEndIf,
+                TokenKind.HashEndIf,
+                TokenKind.HashEndIf,
+                TokenKind.Eof
+            ]);
+        });
+
         it('reads forced compilation errors with messages', () => {
-            let { tokens } = Lexer.scan('#error a message goes here\n');
+            let { tokens } = Lexer.scan('#error a message goes here\n', {
+                includeWhitespace: true
+            });
             expect(tokens.map(t => t.kind)).to.deep.equal([
                 TokenKind.HashError,
+                TokenKind.Whitespace,
                 TokenKind.HashErrorMessage,
+                TokenKind.Newline,
                 TokenKind.Eof
             ]);
 
-            expect(tokens[1].text).to.equal('a message goes here');
+            expect(tokens[2].text).to.equal('a message goes here');
         });
     });
 

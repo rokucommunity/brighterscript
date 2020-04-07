@@ -122,8 +122,6 @@ export class BrsFile {
             includeWhitespace: false
         });
 
-        let tokens = lexResult.tokens;
-
         //remove all code inside false-resolved conditional compilation statements
         let manifest = await getManifest(this.program.rootDir);
         let preprocessor = new Preprocessor();
@@ -138,7 +136,7 @@ export class BrsFile {
             handle = preprocessor.onError((err) => {
                 preprocessorResults.errors.push(err);
             });
-            preprocessorResults = <any>preprocessor.preprocess(tokens, manifest);
+            preprocessorResults = <any>preprocessor.preprocess(lexResult.tokens, manifest);
             preprocessorWasSuccessful = true;
         } catch (e) {
             preprocessorWasSuccessful = false;
@@ -152,10 +150,10 @@ export class BrsFile {
             handle.dispose();
         }
         //TODO have brs change the type of `processedTokens` to not be readonly array
-        tokens = preprocessorWasSuccessful ? (preprocessorResults.processedTokens as any) : lexResult.tokens;
+        let preprocessedTokens = preprocessorWasSuccessful ? (preprocessorResults.processedTokens as any) : lexResult.tokens;
 
         this.parser = new Parser();
-        let parseResult = this.parser.parse(tokens, {
+        let parseResult = this.parser.parse(preprocessedTokens, {
             mode: this.extension === 'brs' ? ParseMode.brightscript : ParseMode.brighterscript
         });
 

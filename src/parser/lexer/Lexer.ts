@@ -372,13 +372,18 @@ export class Lexer {
         if (this.options.includeWhitespace) {
             this.addToken(TokenKind.Whitespace);
         }
+        this.start = this.current;
     }
 
     private newline() {
-        if (this.peek() === '\r' && this.peekNext() === '\n') {
+        //if this is a windows \r\n, we have already consumed the \r, so now consume the \n
+        if (this.checkPrevious('\r')) {
+            //consume the \n
             this.advance();
         }
+
         this.addToken(TokenKind.Newline);
+        this.start = this.current;
         // advance the line counter
         this.line++;
         // and always reset the column counter
@@ -393,30 +398,6 @@ export class Lexer {
         this.current++;
         this.column++;
         return this.source.charAt(this.current - 1);
-    }
-
-    /**
-     * Determines whether the "current" character matches an `expected` character and advances the
-     * "current" character if it does.
-     *
-     * @param expected a single-character string to test for.
-     * @returns `true` if `expected` is strictly equal to the current character, otherwise `false`
-     *          (including if we've reached the end of the input).
-     */
-    private match(expected: string) {
-        if (expected.length > 1) {
-            throw new Error(`Lexer#match expects a single character; received '${expected}'`);
-        }
-
-        if (this.isAtEnd()) {
-            return false;
-        }
-        if (this.source.charAt(this.current) !== expected) {
-            return false;
-        }
-
-        this.current++;
-        return true;
     }
 
     /**
@@ -699,7 +680,7 @@ export class Lexer {
         if (tokenType === Keywords.rem) {
             //the rem keyword can be used as an identifier on objects,
             //so do a quick look-behind to see if there's a preceeding dot
-            if (this.checkPrevious(TokenKind.Dot)) {
+            if (this.checkPreviousToken(TokenKind.Dot)) {
                 this.addToken(TokenKind.Identifier);
             } else {
                 this.remComment();
@@ -713,7 +694,7 @@ export class Lexer {
      * Check that the previous token was of the specified type
      * @param kind
      */
-    private checkPrevious(kind: TokenKind) {
+    private checkPreviousToken(kind: TokenKind) {
         let previous = this.tokens[this.tokens.length - 1];
         if (previous && previous.kind === kind) {
             return true;
@@ -721,6 +702,27 @@ export class Lexer {
             return false;
         }
     }
+
+    /**
+     * Looks at the current char and returns true if at least one of the candidates is a match
+     */
+    private check(...candidates: string[]) {
+        if (this.isAtEnd()) {
+            return false;
+        }
+        return candidates.includes(this.source.charAt(this.current));
+    }
+
+    /**
+     * Check the previous character
+     */
+    private checkPrevious(...candidates: string[]) {
+        this.current--;
+        let result = this.check(...candidates);
+        this.current++;
+        return result;
+    }
+
 
     /**
      * Reads characters within an identifier with a leading '#', typically reserved for conditional
@@ -735,16 +737,20 @@ export class Lexer {
         let text = this.source.slice(this.start, this.current).toLowerCase();
 
         // some identifiers can be split into two words, so check the "next" word and see what we get
-        if ((text === '#end' || text === '#else') && this.peek() === ' ') {
+        if ((text === '#end' || text === '#else') && this.check(' ', '\t')) {
             let endOfFirstWord = this.current;
 
-            this.advance(); // skip past the space
+            //skip past whitespace
+            while (this.check(' ', '\t')) {
+                this.advance();
+            }
+
             while (isAlphaNumeric(this.peek())) {
                 this.advance();
             } // read the next word
 
             let twoWords = this.source.slice(this.start, this.current);
-            switch (twoWords.replace(/ {2,}/g, ' ')) {
+            switch (twoWords.replace(/[\s\t]+/g, ' ')) {
                 case '#else if':
                     this.addToken(TokenKind.HashElseIf);
                     return;
@@ -775,18 +781,19 @@ export class Lexer {
                 return;
             case '#error':
                 this.addToken(TokenKind.HashError);
-
-                // #error must be followed by a message; scan it separately to preserve whitespace
                 this.start = this.current;
-                while (!this.isAtEnd() && this.peek() !== '\n') {
+
+                //create a token from whitespace after the #error token
+                if (this.check(' ', '\t')) {
+                    this.whitespace();
+                }
+
+                while (!this.isAtEnd() && !this.check('\n')) {
                     this.advance();
                 }
 
                 // grab all text since we found #error as one token
                 this.addToken(TokenKind.HashErrorMessage);
-
-                // consume the trailing newline here; it's not semantically significant
-                this.match('\n');
 
                 this.start = this.current;
                 return;
@@ -806,8 +813,7 @@ export class Lexer {
      * @param literal an optional literal value to include in the token.
      */
     private addToken(kind: TokenKind, literal?: BrsType) {
-        let withWhitespace = this.source.slice(this.start, this.current);
-        let text = withWhitespace.trimLeft() || withWhitespace;
+        let text = this.source.slice(this.start, this.current);
         let token = {
             kind: kind,
             text: text,

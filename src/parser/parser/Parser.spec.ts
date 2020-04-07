@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { Lexer, ReservedWords } from '../lexer';
+import { Lexer, ReservedWords, Location } from '../lexer';
 import { DottedGetExpression } from './Expression';
 import { Parser } from './Parser';
 import { PrintStatement } from './Statement';
@@ -12,7 +12,41 @@ describe('parser', () => {
         });
     });
 
+    it('tracks error locations', () => {
+        expect(parse(`
+            sub main()
+                call()a
+            end sub
+        `).errors.map(x => locationToArray(x.location))).to.eql([
+            [3, 22, 3, 23]
+        ]);
+    });
+
     describe('parse', () => {
+        it('works with conditionals', () => {
+            expect(parse(`
+                function printNumber()
+                    if true then
+                        print 1
+                    else if true
+                        print 2
+                    end if
+                end function
+            `).errors[0]?.message).not.to.exist;
+        });
+
+        it('works with excess newlines', () => {
+            let { tokens } = Lexer.scan(
+                'function boolToNumber() as string\n\n' +
+                '   if true then\n\n' +
+                '       print 1\n\n' +
+                '   else\n\n' +
+                '       print 0\n\n' +
+                '   end if\n\n' +
+                'end function\n\n'
+            );
+            expect(Parser.parse(tokens).errors[0]?.message).to.not.exist;
+        });
         it('does not invalidate entire file when line ends with a period', () => {
             let { tokens } = Lexer.scan(`
                 sub main()
@@ -314,4 +348,13 @@ describe('parser', () => {
 function parse(text: string) {
     let { tokens } = Lexer.scan(text);
     return Parser.parse(tokens);
+}
+
+export function locationToArray(location: Location) {
+    return [
+        location.start.line,
+        location.start.column,
+        location.end.line,
+        location.end.column
+    ];
 }

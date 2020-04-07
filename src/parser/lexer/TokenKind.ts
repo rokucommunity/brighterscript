@@ -43,7 +43,6 @@ export enum TokenKind {
 
     // literals
     Identifier = 'Identifier',
-    BooleanLiteral = 'BooleanLiteral',
     StringLiteral = 'StringLiteral',
     IntegerLiteral = 'IntegerLiteral',
     FloatLiteral = 'FloatLiteral',
@@ -201,6 +200,7 @@ export const Keywords: { [key: string]: TokenKind } = {
     as: TokenKind.As,
     and: TokenKind.And,
     dim: TokenKind.Dim,
+    end: TokenKind.End,
     then: TokenKind.Then,
     else: TokenKind.Else,
     elseif: TokenKind.ElseIf,
