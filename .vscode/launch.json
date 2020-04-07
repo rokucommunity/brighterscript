@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "configurations": [
         {
-            "name": "Debug Tests",
+            "name": "Debug Tests (Current file)",
             "type": "node",
             "request": "launch",
             // "preLaunchTask": "build",
@@ -17,7 +17,7 @@
                 // "--log-error",
                 "-r",
                 "source-map-support/register",
-                "./src/**/LanguageServer.spec.ts"
+                "${file}"
             ],
             "cwd": "${workspaceRoot}",
             "protocol": "inspector",

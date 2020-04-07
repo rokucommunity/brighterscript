@@ -148,6 +148,7 @@ describe('Scope', () => {
                 end sub`
             );
             await program.validate();
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
             expect(program.getDiagnostics()).to.be.lengthOf(0);
         });
 

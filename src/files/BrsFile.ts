@@ -6,15 +6,13 @@ import { Scope } from '../Scope';
 import { diagnosticCodes, diagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import { Callable, CallableArg, CallableParam, CommentFlag, Diagnostic, FunctionCall } from '../interfaces';
-import * as brs from '../parser';
-const Lexeme = brs.lexer.Lexeme;
 import { Deferred } from '../deferred';
 import { FunctionParameter } from '../parser/brsTypes';
 import { BrsError, ParseError } from '../parser/Error';
-import { Lexer, Token } from '../parser/lexer';
+import { Lexer, Token, TokenKind, Identifier } from '../parser/lexer';
 import { Parser } from '../parser/parser';
-import { AALiteralExpression, DottedGetExpression } from '../parser/parser/Expression';
-import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement } from '../parser/parser/Statement';
+import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression } from '../parser/parser/Expression';
+import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, Statement } from '../parser/parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -22,6 +20,8 @@ import { FunctionType } from '../types/FunctionType';
 import { StringType } from '../types/StringType';
 import { VoidType } from '../types/VoidType';
 import util from '../util';
+import { ParseMode } from '../parser/parser/Parser';
+import { getManifest, Preprocessor } from '../parser/preprocessor';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -88,7 +88,7 @@ export class BrsFile {
     /**
      * The AST for this file
      */
-    private ast = [] as brs.parser.Stmt.Statement[];
+    private ast = [] as Statement[];
 
     /**
      * Get the token at the specified position
@@ -110,7 +110,7 @@ export class BrsFile {
      */
     public async parse(fileContents: string) {
         if (this.parseDeferred.isCompleted) {
-            throw new Error(`File was already processed. Create a new file instead. ${this.pathAbsolute}`);
+            throw new Error(`File was already processed. Create a new instance of BrsFile instead. ${this.pathAbsolute}`);
         }
 
         //split the text into lines
@@ -118,13 +118,13 @@ export class BrsFile {
 
         this.getIgnores(lines);
 
-        let lexResult = Lexer.scan(fileContents);
-
-        let tokens = lexResult.tokens;
+        let lexResult = Lexer.scan(fileContents, {
+            includeWhitespace: false
+        });
 
         //remove all code inside false-resolved conditional compilation statements
-        let manifest = await brs.preprocessor.getManifest(this.program.rootDir);
-        let preprocessor = new brs.preprocessor.Preprocessor();
+        let manifest = await getManifest(this.program.rootDir);
+        let preprocessor = new Preprocessor();
         let preprocessorResults = {
             errors: [] as Array<BrsError | ParseError>,
             processedTokens: []
@@ -136,7 +136,7 @@ export class BrsFile {
             handle = preprocessor.onError((err) => {
                 preprocessorResults.errors.push(err);
             });
-            preprocessorResults = <any>preprocessor.preprocess(tokens, manifest);
+            preprocessorResults = <any>preprocessor.preprocess(lexResult.tokens, manifest);
             preprocessorWasSuccessful = true;
         } catch (e) {
             preprocessorWasSuccessful = false;
@@ -150,10 +150,12 @@ export class BrsFile {
             handle.dispose();
         }
         //TODO have brs change the type of `processedTokens` to not be readonly array
-        tokens = preprocessorWasSuccessful ? (preprocessorResults.processedTokens as any) : lexResult.tokens;
+        let preprocessedTokens = preprocessorWasSuccessful ? (preprocessorResults.processedTokens as any) : lexResult.tokens;
 
         this.parser = new Parser();
-        let parseResult = this.parser.parse(tokens, this.extension === 'brs' ? 'brightscript' : 'brighterscript');
+        let parseResult = this.parser.parse(preprocessedTokens, {
+            mode: this.extension === 'brs' ? ParseMode.brightscript : ParseMode.brighterscript
+        });
 
         let errors = [...lexResult.errors, ...<any>parseResult.errors, ...<any>preprocessorResults.errors];
 
@@ -179,8 +181,8 @@ export class BrsFile {
 
     public findPropertyNameCompletions() {
         //Find every identifier in the whole file
-        let identifiers = util.findAllDeep<brs.lexer.Identifier>(this.ast, (x) => {
-            return x && x.kind === Lexeme.Identifier;
+        let identifiers = util.findAllDeep<Identifier>(this.ast, (x) => {
+            return x && x.kind === TokenKind.Identifier;
         });
 
         this.propertyNameCompletions = [];
@@ -246,6 +248,7 @@ export class BrsFile {
      * @param lines - the lines of the program
      */
     public getIgnores(lines: string[]) {
+        //TODO use the comment statements found in the AST for this instead of text search
         let allCodesExcept1014 = diagnosticCodes.filter((x) => x !== diagnosticMessages.Unknown_diagnostic_code_1014(0).code);
         this.commentFlags = [];
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
@@ -337,14 +340,14 @@ export class BrsFile {
         }
     }
 
-    public scopesByFunc = new Map<brs.parser.Expr.FunctionExpression, FunctionScope>();
+    public scopesByFunc = new Map<FunctionExpression, FunctionScope>();
 
     /**
      * Create a scope for every function in this file
      */
     private createFunctionScopes(statements: any) {
         //find every function
-        let functions = util.findAllDeep<brs.parser.Expr.FunctionExpression>(this.ast, (x) => x instanceof brs.parser.Expr.FunctionExpression);
+        let functions = util.findAllDeep<FunctionExpression>(this.ast, (x) => x instanceof FunctionExpression);
 
         //create a functionScope for every function
         for (let kvp of functions) {
@@ -353,11 +356,11 @@ export class BrsFile {
 
             let ancestors = this.getAncestors(statements, kvp.key);
 
-            let parentFunc: brs.parser.Expr.FunctionExpression;
+            let parentFunc: FunctionExpression;
             //find parent function, and add this scope to it if found
             {
                 for (let i = ancestors.length - 1; i >= 0; i--) {
-                    if (ancestors[i] instanceof brs.parser.Expr.FunctionExpression) {
+                    if (ancestors[i] instanceof FunctionExpression) {
                         parentFunc = ancestors[i];
                         break;
                     }
@@ -398,7 +401,7 @@ export class BrsFile {
         }
 
         //find every variable assignment in the whole file
-        let assignmentStatements = util.findAllDeep<brs.parser.Stmt.AssignmentStatement>(this.ast, (x) => x instanceof brs.parser.Stmt.AssignmentStatement);
+        let assignmentStatements = util.findAllDeep<AssignmentStatement>(this.ast, (x) => x instanceof AssignmentStatement);
 
         for (let kvp of assignmentStatements) {
             let statement = kvp.value;
@@ -438,10 +441,10 @@ export class BrsFile {
         return ancestors;
     }
 
-    private getBRSTypeFromAssignment(assignment: brs.parser.Stmt.AssignmentStatement, scope: FunctionScope): BrsType {
+    private getBRSTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BrsType {
         try {
             //function
-            if (assignment.value instanceof brs.parser.Expr.FunctionExpression) {
+            if (assignment.value instanceof FunctionExpression) {
                 let functionType = new FunctionType(util.valueKindToBrsType(assignment.value.returns));
                 functionType.isSub = assignment.value.functionType.text === 'sub';
                 if (functionType.isSub) {
@@ -457,11 +460,11 @@ export class BrsFile {
                 return functionType;
 
                 //literal
-            } else if (assignment.value instanceof brs.parser.Expr.LiteralExpression) {
+            } else if (assignment.value instanceof LiteralExpression) {
                 return util.valueKindToBrsType((assignment.value as any).value.kind);
 
                 //function call
-            } else if (assignment.value instanceof brs.parser.Expr.CallExpression) {
+            } else if (assignment.value instanceof CallExpression) {
                 let calleeName = (assignment.value.callee as any).name.text;
                 if (calleeName) {
                     let func = this.getCallableByName(calleeName);
@@ -469,7 +472,7 @@ export class BrsFile {
                         return func.type.returnType;
                     }
                 }
-            } else if (assignment.value instanceof brs.parser.Expr.VariableExpression) {
+            } else if (assignment.value instanceof VariableExpression) {
                 let variableName = assignment.value.name.text;
                 let variable = scope.getVariableByName(variableName);
                 return variable.type;
@@ -496,7 +499,7 @@ export class BrsFile {
     private findCallables() {
         this.callables = [];
         for (let statement of this.ast as any) {
-            if (!(statement instanceof brs.parser.Stmt.FunctionStatement)) {
+            if (!(statement instanceof FunctionStatement)) {
                 continue;
             }
 
@@ -544,8 +547,8 @@ export class BrsFile {
             }
             let bodyStatements = statement.func.body.statements;
             for (let bodyStatement of bodyStatements) {
-                if (bodyStatement.expression && bodyStatement.expression instanceof brs.parser.Expr.CallExpression) {
-                    let expression: brs.parser.Expr.CallExpression = bodyStatement.expression;
+                if (bodyStatement.expression && bodyStatement.expression instanceof CallExpression) {
+                    let expression: CallExpression = bodyStatement.expression;
 
                     //filter out dotted function invocations (i.e. object.doSomething()) (not currently supported. TODO support it)
                     if (bodyStatement.expression.callee.obj) {
@@ -554,7 +557,7 @@ export class BrsFile {
                     let functionName = (expression.callee as any).name.text;
 
                     //callee is the name of the function being called
-                    let callee = expression.callee as brs.parser.Expr.VariableExpression;
+                    let callee = expression.callee as VariableExpression;
 
                     let calleeRange = util.locationToRange(callee.location);
 
@@ -653,7 +656,7 @@ export class BrsFile {
 
         //if cursor is within a comment, disable completions
         let currentToken = this.getTokenAt(position);
-        if (currentToken && currentToken.kind === Lexeme.Comment) {
+        if (currentToken && currentToken.kind === TokenKind.Comment) {
             return [];
         }
 
@@ -687,12 +690,12 @@ export class BrsFile {
         let closestToken = this.getClosestToken(position);
         let previousToken = this.getPreviousToken(closestToken);
         //next to a dot
-        if (closestToken.kind === Lexeme.Dot) {
+        if (closestToken.kind === TokenKind.Dot) {
             return true;
-        } else if (closestToken.kind === Lexeme.Newline || previousToken.kind === Lexeme.Newline) {
+        } else if (closestToken.kind === TokenKind.Newline || previousToken.kind === TokenKind.Newline) {
             return false;
             //next to an identifier, which is next to a dot
-        } else if (closestToken.kind === Lexeme.Identifier && previousToken.kind === Lexeme.Dot) {
+        } else if (closestToken.kind === TokenKind.Identifier && previousToken.kind === TokenKind.Dot) {
             return true;
         } else {
             return false;
@@ -734,11 +737,11 @@ export class BrsFile {
         let token = this.getTokenAt(position);
 
         let hoverTokenTypes = [
-            Lexeme.Identifier,
-            Lexeme.Function,
-            Lexeme.EndFunction,
-            Lexeme.Sub,
-            Lexeme.EndSub
+            TokenKind.Identifier,
+            TokenKind.Function,
+            TokenKind.EndFunction,
+            TokenKind.Sub,
+            TokenKind.EndSub
         ];
 
         //throw out invalid tokens and the wrong kind of tokens

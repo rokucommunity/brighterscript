@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 
 import { BrsError, ParseError } from '../Error';
-import { Lexeme, Token } from '../lexer';
+import { TokenKind, Token } from '../lexer';
 import * as CC from './Chunk';
 
 /** The results of a Preprocessor's filtering pass. */
@@ -82,13 +82,13 @@ export class Preprocessor implements CC.Visitor {
 
         let value;
         switch (chunk.value.kind) {
-            case Lexeme.True:
+            case TokenKind.True:
                 value = true;
                 break;
-            case Lexeme.False:
+            case TokenKind.False:
                 value = false;
                 break;
-            case Lexeme.Identifier:
+            case TokenKind.Identifier:
                 if (this.constants.has(chunk.value.text)) {
                     value = this.constants.get(chunk.value.text);
                     break;
@@ -163,11 +163,11 @@ export class Preprocessor implements CC.Visitor {
      */
     public evaluateCondition(token: Token): boolean {
         switch (token.kind) {
-            case Lexeme.True:
+            case TokenKind.True:
                 return true;
-            case Lexeme.False:
+            case TokenKind.False:
                 return false;
-            case Lexeme.Identifier:
+            case TokenKind.Identifier:
                 if (this.constants.has(token.text)) {
                     return this.constants.get(token.text);
                 }

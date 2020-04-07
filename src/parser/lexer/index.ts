@@ -1,4 +1,3 @@
-export * from './Lexeme';
-export * from './ReservedWords';
+export * from './TokenKind';
 export * from './Token';
 export { Lexer } from './Lexer';
