@@ -35,13 +35,19 @@ describe('parser', () => {
             `).errors[0]?.message).not.to.exist;
         });
 
+        it('supports single-line if statements', () => {
+            expect(parse(`If true Then print "error" : Stop`).errors[0]?.message).to.not.exist;
+        });
+
         it('works with excess newlines', () => {
             let { tokens } = Lexer.scan(
                 'function boolToNumber() as string\n\n' +
                 '   if true then\n\n' +
                 '       print 1\n\n' +
-                '   else\n\n' +
+                '   elseif true then\n\n' +
                 '       print 0\n\n' +
+                '   else\n\n' +
+                '       print 1\n\n' +
                 '   end if\n\n' +
                 'end function\n\n'
             );

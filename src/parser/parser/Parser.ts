@@ -1256,6 +1256,9 @@ export class Parser {
             );
         }
 
+        //consume excess newlines
+        while (this.match(TokenKind.Newline)) { }
+
         return new PrintStatement({ print: printKeyword }, values);
     }
 
@@ -1358,10 +1361,9 @@ export class Parser {
 
                 //scrap the entire line
                 this.consumeUntil(TokenKind.Colon, TokenKind.Newline, TokenKind.Eof);
-
-                //trash the newline character so we start the next iteraion on the next line
-                this.advance();
             }
+            //trash any newline characters
+            while (this.match(TokenKind.Newline)) { }
         }
 
         if (this.isAtEnd()) {

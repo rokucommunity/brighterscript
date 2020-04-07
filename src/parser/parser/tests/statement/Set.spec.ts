@@ -124,8 +124,7 @@ describe('parser indexed assignment', () => {
         });
     });
 
-    it('location tracking', function asdf() {
-        this.timeout(1000000);
+    it('location tracking', () => {
         /**
          *    0   0   0   1   1
          *    0   4   8   2   6
