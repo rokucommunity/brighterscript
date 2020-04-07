@@ -23,7 +23,6 @@ export class BinaryExpression implements Expression {
 
     get location() {
         return {
-            file: this.operator.location.file,
             start: this.left.location.start,
             end: this.right.location.end
         };
@@ -52,7 +51,6 @@ export class CallExpression implements Expression {
 
     get location() {
         return {
-            file: this.closingParen.location.file,
             start: this.callee.location.start,
             end: this.closingParen.location.end
         };
@@ -94,7 +92,6 @@ export class FunctionExpression implements Expression {
 
     get location() {
         return {
-            file: this.leftParen.location.file,
             start: this.functionType ? this.functionType.location.start : this.leftParen.location.start,
             end: this.end.location.end
         };
@@ -161,7 +158,6 @@ export class DottedGetExpression implements Expression {
 
     get location() {
         return {
-            file: this.obj.location.file,
             start: this.obj.location.start,
             end: this.name.location.end
         };
@@ -186,7 +182,6 @@ export class IndexedGetExpression implements Expression {
 
     get location() {
         return {
-            file: this.obj.location.file,
             start: this.obj.location.start,
             end: this.closingSquare.location.end
         };
@@ -213,7 +208,6 @@ export class GroupingExpression implements Expression {
 
     get location() {
         return {
-            file: this.tokens.left.location.file,
             start: this.tokens.left.location.start,
             end: this.tokens.right.location.end
         };
@@ -271,7 +265,6 @@ export class ArrayLiteralExpression implements Expression {
 
     get location() {
         return {
-            file: this.open.location.file,
             start: this.open.location.start,
             end: this.close.location.end
         };
@@ -354,7 +347,6 @@ export class AALiteralExpression implements Expression {
 
     get location() {
         return {
-            file: this.open.location.file,
             start: this.open.location.start,
             end: this.close.location.end
         };
@@ -447,7 +439,6 @@ export class UnaryExpression implements Expression {
 
     get location() {
         return {
-            file: this.operator.location.file,
             start: this.operator.location.start,
             end: this.right.location.end
         };
@@ -482,8 +473,7 @@ export class NewExpression implements Expression {
     get location() {
         return {
             start: this.newKeyword.location.start,
-            end: this.expression.location.end,
-            file: this.newKeyword.location.file
+            end: this.expression.location.end
         };
     }
 

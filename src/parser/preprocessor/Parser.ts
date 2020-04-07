@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 
 import { Token } from '../lexer/Token';
-import { Lexeme } from '../lexer/Lexeme';
+import { TokenKind } from '../lexer/TokenKind';
 import * as CC from './Chunk';
 import { ParseError } from '../Error';
 
@@ -82,11 +82,12 @@ export class Parser {
          * @returns a "declaration" chunk if one is detected, otherwise whatever `hashIf` returns
          */
         function hashConst(): CC.Chunk | undefined {
-            if (match(Lexeme.HashConst)) {
+            if (match(TokenKind.HashConst)) {
                 let name = advance();
-                consume('Expected \'=\' after #const (name)', Lexeme.Equal);
+                consume('Expected \'=\' after #const (name)', TokenKind.Equal);
                 let value = advance();
-                match(Lexeme.Newline);
+                //consume trailing newlines
+                while (match(TokenKind.Newline)) { }
                 return new CC.Declaration(name, value);
             }
 
@@ -99,20 +100,20 @@ export class Parser {
          * @returns an "if" chunk if one is detected, otherwise whatever `hashError` returns
          */
         function hashIf(): CC.Chunk | undefined {
-            if (match(Lexeme.HashIf)) {
+            if (match(TokenKind.HashIf)) {
                 let startingLine = previous().location.start.line;
                 let elseChunk: CC.Chunk[] | undefined;
 
                 let ifCondition = advance();
-                match(Lexeme.Newline);
+                match(TokenKind.Newline);
 
                 let thenChunk = nChunks();
 
                 let elseIfs: CC.HashElseIf[] = [];
 
-                while (match(Lexeme.HashElseIf)) {
+                while (match(TokenKind.HashElseIf)) {
                     let condition = advance();
-                    match(Lexeme.Newline);
+                    match(TokenKind.Newline);
 
                     elseIfs.push({
                         condition: condition,
@@ -120,17 +121,17 @@ export class Parser {
                     });
                 }
 
-                if (match(Lexeme.HashElse)) {
-                    match(Lexeme.Newline);
+                if (match(TokenKind.HashElse)) {
+                    match(TokenKind.Newline);
 
                     elseChunk = nChunks();
                 }
 
                 consume(
                     `Expected '#else if' to close '#if' conditional compilation statement starting on line ${startingLine}`,
-                    Lexeme.HashEndIf
+                    TokenKind.HashEndIf
                 );
-                match(Lexeme.Newline);
+                match(TokenKind.Newline);
 
                 return new CC.If(ifCondition, thenChunk, elseIfs, elseChunk);
             }
@@ -144,7 +145,7 @@ export class Parser {
          * @returns an "error" chunk if one is detected, otherwise whatever `brightScriptChunk` returns
          */
         function hashError(): CC.Chunk | undefined {
-            if (check(Lexeme.HashError)) {
+            if (check(TokenKind.HashError)) {
                 let hashErr = advance();
                 let message = advance();
                 return new CC.Error(hashErr, message.text || '');
@@ -162,15 +163,18 @@ export class Parser {
             let chunkTokens: Token[] = [];
             while (
                 !check(
-                    Lexeme.HashIf,
-                    Lexeme.HashElseIf,
-                    Lexeme.HashElse,
-                    Lexeme.HashEndIf,
-                    Lexeme.HashConst,
-                    Lexeme.HashError
+                    TokenKind.HashIf,
+                    TokenKind.HashElseIf,
+                    TokenKind.HashElse,
+                    TokenKind.HashEndIf,
+                    TokenKind.HashConst,
+                    TokenKind.HashError
                 )
             ) {
-                chunkTokens.push(advance());
+                let token = advance();
+                if (token) {
+                    chunkTokens.push(token);
+                }
 
                 if (isAtEnd()) {
                     break;
@@ -192,9 +196,13 @@ export class Parser {
             }
         }
 
-        function match(...lexemes: Lexeme[]) {
-            for (let lexeme of lexemes) {
-                if (check(lexeme)) {
+        /**
+         * If the next token is any of the provided tokenKinds, advance and return true.
+         * Otherwise return false
+         */
+        function match(...tokenKinds: TokenKind[]) {
+            for (let tokenKind of tokenKinds) {
+                if (check(tokenKind)) {
                     advance();
                     return true;
                 }
@@ -203,12 +211,12 @@ export class Parser {
             return false;
         }
 
-        function consume(message: string, ...lexemes: Lexeme[]): Token {
-            let foundLexeme = lexemes
-                .map(lexeme => peek().kind === lexeme)
+        function consume(message: string, ...tokenKinds: TokenKind[]): Token {
+            let foundTokenKind = tokenKinds
+                .map(tokenKind => peek().kind === tokenKind)
                 .reduce((foundAny, foundCurrent) => foundAny || foundCurrent, false);
 
-            if (foundLexeme) {
+            if (foundTokenKind) {
                 return advance();
             }
             return emitError(new ParseError(peek(), message));
@@ -221,16 +229,16 @@ export class Parser {
             return previous();
         }
 
-        function check(...lexemes: Lexeme[]) {
+        function check(...tokenKinds: TokenKind[]) {
             if (isAtEnd()) {
                 return false;
             }
 
-            return lexemes.some(lexeme => peek().kind === lexeme);
+            return tokenKinds.some(tokenKind => peek().kind === tokenKind);
         }
 
         function isAtEnd() {
-            return peek().kind === Lexeme.Eof;
+            return peek().kind === TokenKind.Eof;
         }
 
         function peek() {

@@ -1,33 +1,8 @@
 import { BrsType, ValueKind, valueKindToString } from './brsTypes';
-import { Lexeme, Location, Token } from './lexer';
+import { TokenKind, Location, Locatable } from './lexer';
 
 export class BrsError {
     constructor(readonly message: string, readonly location: Location, readonly code: number = 100) {
-    }
-
-    /**
-     * Formats the error into a human-readable string including filename, starting and ending line
-     * and column, and the message associated with the error, e.g.:
-     *
-     * `lorem.brs(1,1-3): Expected '(' after sub name`
-     * ```
-     */
-    public format() {
-        let location = this.location;
-
-        let formattedLocation: string;
-
-        if (location.start.line === location.end.line) {
-            let columns = `${location.start.column}`;
-            if (location.start.column !== location.end.column) {
-                columns += `-${location.end.column}`;
-            }
-            formattedLocation = `${location.file}(${location.start.line},${columns})`;
-        } else {
-            formattedLocation = `${location.file}(${location.start.line},${location.start.column},${location.end.line},${location.end.line})`;
-        }
-
-        return `${formattedLocation}: ${this.message}`;
     }
 }
 
@@ -89,12 +64,12 @@ export function getKind(maybeType: BrsType | ValueKind): ValueKind {
 }
 
 export class ParseError extends BrsError {
-    constructor(token: Token, message: string, code = 1000) {
+    constructor(locatable: Locatable, message: string, code = 1000) {
         let m = message;
-        if (token.kind === Lexeme.Eof) {
+        if ((locatable as any).kind === TokenKind.Eof) {
             m = '(At end of file) ' + message;
         }
 
-        super(m, token.location, code);
+        super(m, locatable.location, code);
     }
 }

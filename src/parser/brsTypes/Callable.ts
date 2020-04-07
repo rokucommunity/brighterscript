@@ -75,7 +75,6 @@ export class FunctionParameter {
     ) { }
     public get location(): Location {
         return {
-            file: this.name.location.file,
             start: this.name.location.start,
             end: this.typeToken ? this.typeToken.location.end : this.name.location.end
         };

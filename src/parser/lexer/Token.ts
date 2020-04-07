@@ -1,4 +1,4 @@
-import { Lexeme } from './Lexeme';
+import { TokenKind } from './TokenKind';
 import { BrsType } from '../brsTypes';
 
 /**
@@ -6,7 +6,7 @@ import { BrsType } from '../brsTypes';
  */
 export interface Token {
     /** The type of token this represents. */
-    kind: Lexeme;
+    kind: TokenKind;
     /** The text found in the original BrightScript source, if any. */
     text: string;
     /** True if this token's `text` is a reserved word, otherwise `false`. */
@@ -32,8 +32,14 @@ export interface Location {
      * foo.location.end === { line: 1, column: 3 };
      */
     end: LineAndColumn;
-    /** The name of the file in which this token was found. */
-    file: string;
+}
+
+/**
+ * Any object that has a location
+ */
+export interface Locatable {
+    location: Location;
+    [key: string]: any;
 }
 
 /** A line-column pair. */
@@ -44,9 +50,11 @@ export interface LineAndColumn {
     column: number;
 }
 
-/** Represents an identifier as scanned by the lexer. */
+/**
+ * Represents an identifier as scanned by the lexer.
+ */
 export interface Identifier extends Token {
-    kind: Lexeme.Identifier;
+    kind: TokenKind.Identifier;
 }
 
 /**

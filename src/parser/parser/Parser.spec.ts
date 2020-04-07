@@ -1,14 +1,10 @@
 import { expect } from 'chai';
-import { Lexer } from '../lexer';
+import { Lexer, ReservedWords, Location } from '../lexer';
 import { DottedGetExpression } from './Expression';
 import { Parser } from './Parser';
 import { PrintStatement } from './Statement';
 
 describe('parser', () => {
-    let parser: Parser;
-    beforeEach(() => {
-        parser = new Parser();
-    });
     it('emits empty object when empty token list is provided', () => {
         expect(Parser.parse([])).to.deep.include({
             statements: [],
@@ -16,7 +12,55 @@ describe('parser', () => {
         });
     });
 
+    it('tracks error locations', () => {
+        expect(parse(`
+            sub main()
+                call()a
+            end sub
+        `).errors.map(x => locationToArray(x.location))).to.eql([
+            [3, 22, 3, 23]
+        ]);
+    });
+
     describe('parse', () => {
+        it('unknown function type does not invalidate rest of function', () => {
+            let { statements, errors } = parse(`
+                function log() as UNKNOWN_TYPE
+                end function
+            `);
+            expect(errors.length).to.be.greaterThan(0);
+            expect(statements[0]).to.exist;
+        });
+        it('works with conditionals', () => {
+            expect(parse(`
+                function printNumber()
+                    if true then
+                        print 1
+                    else if true
+                        print 2
+                    end if
+                end function
+            `).errors[0]?.message).not.to.exist;
+        });
+
+        it('supports single-line if statements', () => {
+            expect(parse(`If true Then print "error" : Stop`).errors[0]?.message).to.not.exist;
+        });
+
+        it('works with excess newlines', () => {
+            let { tokens } = Lexer.scan(
+                'function boolToNumber() as string\n\n' +
+                '   if true then\n\n' +
+                '       print 1\n\n' +
+                '   elseif true then\n\n' +
+                '       print 0\n\n' +
+                '   else\n\n' +
+                '       print 1\n\n' +
+                '   end if\n\n' +
+                'end function\n\n'
+            );
+            expect(Parser.parse(tokens).errors[0]?.message).to.not.exist;
+        });
         it('does not invalidate entire file when line ends with a period', () => {
             let { tokens } = Lexer.scan(`
                 sub main()
@@ -24,13 +68,13 @@ describe('parser', () => {
                 end sub
 
             `);
-            let { errors } = parser.parse(tokens) as any;
+            let { errors } = Parser.parse(tokens) as any;
             expect(errors).to.be.lengthOf(1, 'Error count should be 0');
         });
 
         it.skip('allows printing object with trailing period', () => {
             let { tokens } = Lexer.scan(`print a.`);
-            let { statements, errors } = parser.parse(tokens);
+            let { statements, errors } = Parser.parse(tokens);
             let printStatement = statements[0] as PrintStatement;
             expect(errors).to.be.empty;
             expect(printStatement).to.be.instanceof(PrintStatement);
@@ -44,10 +88,10 @@ describe('parser', () => {
                     'line 2
                     'line 3
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
 
-                expect(statements[0].text).to.equal('line 1\nline 2\nline 3');
+                expect(statements[0].text).to.equal(`'line 1\n'line 2\n'line 3`);
             });
 
             it('does not combile comments separated by newlines', () => {
@@ -58,14 +102,14 @@ describe('parser', () => {
 
                     'line 3
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
 
                 expect(statements).to.be.lengthOf(3);
 
-                expect(statements[0].text).to.equal('line 1');
-                expect(statements[1].text).to.equal('line 2');
-                expect(statements[2].text).to.equal('line 3');
+                expect(statements[0].text).to.equal(`'line 1`);
+                expect(statements[1].text).to.equal(`'line 2`);
+                expect(statements[2].text).to.equal(`'line 3`);
             });
 
             it('works after print statement', () => {
@@ -74,10 +118,10 @@ describe('parser', () => {
                         print "hi" 'comment 1
                     end sub
                 `);
-                let { errors, statements } = parser.parse(tokens);
+                let { errors, statements } = Parser.parse(tokens);
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
 
-                expect((statements as any)[0].func.body.statements[1].text).to.equal('comment 1');
+                expect((statements as any)[0].func.body.statements[1].text).to.equal(`'comment 1`);
             });
 
             it('declaration-level', () => {
@@ -87,10 +131,10 @@ describe('parser', () => {
                     end function
                     'comment 2
                 `);
-                let { errors, statements } = parser.parse(tokens);
+                let { errors, statements } = Parser.parse(tokens);
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
-                expect((statements as any)[0].text).to.equal('comment 1');
-                expect((statements as any)[2].text).to.equal('comment 2');
+                expect((statements as any)[0].text).to.equal(`'comment 1`);
+                expect((statements as any)[2].text).to.equal(`'comment 2`);
             });
 
             it('works in aa literal as its own statement', () => {
@@ -100,7 +144,7 @@ describe('parser', () => {
                         'comment
                     }
                 `);
-                let { errors } = parser.parse(tokens);
+                let { errors } = Parser.parse(tokens);
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
             });
 
@@ -111,10 +155,10 @@ describe('parser', () => {
                         DoSomething(name) 'comment 1
                     end sub
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Should have zero errors');
 
-                expect(statements[0].func.body.statements[2].text).to.equal('comment 1');
+                expect(statements[0].func.body.statements[2].text).to.equal(`'comment 1`);
             });
 
             it('function', () => {
@@ -125,13 +169,13 @@ describe('parser', () => {
                         'comment 3
                     end function 'comment 4
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Should have zero errors');
 
-                expect(statements[0].func.body.statements[0].text).to.equal('comment 1');
-                expect(statements[0].func.body.statements[1].text).to.equal('comment 2');
-                expect(statements[0].func.body.statements[3].text).to.equal('comment 3');
-                expect(statements[1].text).to.equal('comment 4');
+                expect(statements[0].func.body.statements[0].text).to.equal(`'comment 1`);
+                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 2`);
+                expect(statements[0].func.body.statements[3].text).to.equal(`'comment 3`);
+                expect(statements[1].text).to.equal(`'comment 4`);
             });
 
             it('if statement`', () => {
@@ -152,23 +196,23 @@ describe('parser', () => {
                         end if 'comment 10
                     end function
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Should have zero errors');
                 let ifStmt = statements[0].func.body.statements[0];
 
-                expect(ifStmt.thenBranch.statements[0].text).to.equal('comment 1');
-                expect(ifStmt.thenBranch.statements[1].text).to.equal('comment 2');
-                expect(ifStmt.thenBranch.statements[3].text).to.equal('comment 3');
+                expect(ifStmt.thenBranch.statements[0].text).to.equal(`'comment 1`);
+                expect(ifStmt.thenBranch.statements[1].text).to.equal(`'comment 2`);
+                expect(ifStmt.thenBranch.statements[3].text).to.equal(`'comment 3`);
 
-                expect(ifStmt.elseIfs[0].thenBranch.statements[0].text).to.equal('comment 4');
-                expect(ifStmt.elseIfs[0].thenBranch.statements[1].text).to.equal('comment 5');
-                expect(ifStmt.elseIfs[0].thenBranch.statements[3].text).to.equal('comment 6');
+                expect(ifStmt.elseIfs[0].thenBranch.statements[0].text).to.equal(`'comment 4`);
+                expect(ifStmt.elseIfs[0].thenBranch.statements[1].text).to.equal(`'comment 5`);
+                expect(ifStmt.elseIfs[0].thenBranch.statements[3].text).to.equal(`'comment 6`);
 
-                expect(ifStmt.elseBranch.statements[0].text).to.equal('comment 7');
-                expect(ifStmt.elseBranch.statements[1].text).to.equal('comment 8');
-                expect(ifStmt.elseBranch.statements[3].text).to.equal('comment 9');
+                expect(ifStmt.elseBranch.statements[0].text).to.equal(`'comment 7`);
+                expect(ifStmt.elseBranch.statements[1].text).to.equal(`'comment 8`);
+                expect(ifStmt.elseBranch.statements[3].text).to.equal(`'comment 9`);
 
-                expect(statements[0].func.body.statements[1].text).to.equal('comment 10');
+                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 10`);
 
             });
 
@@ -182,15 +226,15 @@ describe('parser', () => {
                         end while 'comment 4
                     end function
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0];
 
-                expect(stmt.body.statements[0].text).to.equal('comment 1');
-                expect(stmt.body.statements[1].text).to.equal('comment 2');
-                expect(stmt.body.statements[3].text).to.equal('comment 3');
+                expect(stmt.body.statements[0].text).to.equal(`'comment 1`);
+                expect(stmt.body.statements[1].text).to.equal(`'comment 2`);
+                expect(stmt.body.statements[3].text).to.equal(`'comment 3`);
 
-                expect(statements[0].func.body.statements[1].text).to.equal('comment 4');
+                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 4`);
             });
 
             it('for', () => {
@@ -203,15 +247,15 @@ describe('parser', () => {
                         end for 'comment 4
                     end function
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0];
 
-                expect(stmt.body.statements[0].text).to.equal('comment 1');
-                expect(stmt.body.statements[1].text).to.equal('comment 2');
-                expect(stmt.body.statements[3].text).to.equal('comment 3');
+                expect(stmt.body.statements[0].text).to.equal(`'comment 1`);
+                expect(stmt.body.statements[1].text).to.equal(`'comment 2`);
+                expect(stmt.body.statements[3].text).to.equal(`'comment 3`);
 
-                expect(statements[0].func.body.statements[1].text).to.equal('comment 4');
+                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 4`);
             });
 
             it('for each', () => {
@@ -224,15 +268,15 @@ describe('parser', () => {
                         end for 'comment 4
                     end function
                 `);
-                let { errors, statements } = parser.parse(tokens) as any;
+                let { errors, statements } = Parser.parse(tokens) as any;
                 expect(errors).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0];
 
-                expect(stmt.body.statements[0].text).to.equal('comment 1');
-                expect(stmt.body.statements[1].text).to.equal('comment 2');
-                expect(stmt.body.statements[3].text).to.equal('comment 3');
+                expect(stmt.body.statements[0].text).to.equal(`'comment 1`);
+                expect(stmt.body.statements[1].text).to.equal(`'comment 2`);
+                expect(stmt.body.statements[3].text).to.equal(`'comment 3`);
 
-                expect(statements[0].func.body.statements[1].text).to.equal('comment 4');
+                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 4`);
             });
 
         });
@@ -266,4 +310,65 @@ describe('parser', () => {
             });
         });
     });
+
+    describe('reservedWords', () => {
+        describe('`then`', () => {
+            it('is not allowed as a local identifier', () => {
+                let { errors } = parse(`
+                    sub main()
+                        then = true
+                    end sub
+                `);
+                expect(errors).to.be.lengthOf(1);
+            });
+            it('is allowed as an AA property name', () => {
+                let { errors } = parse(`
+                    sub main()
+                        person = {
+                            then: true
+                        }
+                        person.then = false
+                        print person.then
+                    end sub
+                `);
+                expect(errors[0]?.message).not.to.exist;
+            });
+        });
+        it('"end" is not allowed as a local identifier', () => {
+            let { errors } = parse(`
+                sub main()
+                    end = true
+                end sub
+            `);
+            expect(errors).to.be.lengthOf(1);
+        });
+        it('none of them can be used as local variables', () => {
+            let reservedWords = new Set(ReservedWords);
+            //remove the rem keyword because it's a comment...won't cause error
+            reservedWords.delete('rem');
+            for (let reservedWord of reservedWords) {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        ${reservedWord} = true
+                    end sub
+                `);
+                let { errors } = Parser.parse(tokens);
+                expect(errors, `assigning to reserved word "${reservedWord}" should have been an error`).to.be.length.greaterThan(0);
+            }
+        });
+    });
 });
+
+function parse(text: string) {
+    let { tokens } = Lexer.scan(text);
+    return Parser.parse(tokens);
+}
+
+export function locationToArray(location: Location) {
+    return [
+        location.start.line,
+        location.start.column,
+        location.end.line,
+        location.end.column
+    ];
+}

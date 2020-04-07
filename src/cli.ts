@@ -35,10 +35,14 @@ if (options.help) {
     console.log(usage);
 } else {
     let builder = new ProgramBuilder();
-    builder.run(<any>options)
-        .then(() => { })
-        .catch((error) => {
-            console.error(error);
+    builder.run(<any>options).then(() => {
+        //if this is a single run (i.e. not watch mode) and there are error diagnostics, return an error code
+        const hasError = !!builder.getDiagnostics().find(x => x.severity === 'error');
+        if (builder.options.watch === false && hasError) {
             process.exit(-1);
-        });
+        }
+    }).catch((error) => {
+        console.error(error);
+        process.exit(-1);
+    });
 }

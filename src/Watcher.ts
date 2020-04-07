@@ -50,7 +50,6 @@ export class Watcher {
             watcher.on(event, callback);
         }
 
-
         //a disconnect function
         return () => {
             for (let watcher of watchers) {

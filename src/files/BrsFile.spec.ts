@@ -115,7 +115,7 @@ describe('BrsFile', () => {
                 } as CommentFlag);
                 await program.validate();
                 //the "unterminated string" error should be filtered out
-                expect(program.getDiagnostics()).to.be.lengthOf(0);
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
             });
 
             it('works for specific codes', async () => {
@@ -233,8 +233,10 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports single-word #elseif and #endif', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        describe('conditional compile', () => {
+
+            it('supports single-word #elseif and #endif', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     #const someFlag = true
                     #if someFlag
@@ -244,11 +246,11 @@ describe('BrsFile', () => {
                     #endif
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
-        });
+                expect(file.getDiagnostics()).to.be.lengthOf(0);
+            });
 
-        it('supports multi-word #else if and #end if', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('supports multi-word #else if and #end if', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     #const someFlag = true
                     #if someFlag
@@ -258,18 +260,19 @@ describe('BrsFile', () => {
                     #end if
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
-        });
+                expect(file.getDiagnostics()).to.be.lengthOf(0);
+            });
 
-        it('does not choke on invalid code inside a false conditional compile', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('does not choke on invalid code inside a false conditional compile', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     #if false
                         non-commented code here should not cause parse errors
                     #end if
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+                expect(file.getDiagnostics()).to.be.lengthOf(0);
+            });
         });
 
         it('supports stop statement', async () => {
@@ -959,8 +962,7 @@ describe('BrsFile', () => {
                     }, end: {
                         column: 4,
                         line: 2
-                    },
-                    file: ''
+                    }
                 },
                 message: 'some lex error',
                 stack: ''
@@ -1491,8 +1493,7 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
         let formatter = null; //new BrightScriptFormatter();
         expected = expected ? expected : source;
         let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, source) as BrsFile;
-        let firstDiagnosticMessage = file.getDiagnostics().length > 0 ? file.getDiagnostics()[0].message : '';
-        expect(file.getDiagnostics()).to.be.lengthOf(0, `Found parse errors: '${firstDiagnosticMessage}'`);
+        expect(file.getDiagnostics()[0]?.message).to.not.exist;
         let transpiled = file.transpile();
 
         let sources = [transpiled.code, expected];

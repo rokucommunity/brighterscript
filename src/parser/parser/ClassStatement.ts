@@ -3,7 +3,7 @@ import { Statement } from './Statement';
 import { FunctionExpression, CallExpression, VariableExpression, DottedGetExpression } from './Expression';
 import { SourceNode } from 'source-map';
 import { TranspileState } from './TranspileState';
-import { Parser } from './Parser';
+import { Parser, ParseMode } from './Parser';
 import util from '../../util';
 
 export class ClassStatement implements Statement {
@@ -33,7 +33,6 @@ export class ClassStatement implements Statement {
 
     get location() {
         return {
-            file: this.classKeyword.location.file,
             start: this.classKeyword.location.start,
             end: this.end.location.end
         };
@@ -98,7 +97,7 @@ export class ClassStatement implements Statement {
                 sub new()
                 end sub
             end class
-        `, 'brighterscript').statements[0] as ClassStatement).members[0] as ClassMethodStatement;
+        `, { mode: ParseMode.brighterscript }).statements[0] as ClassStatement).members[0] as ClassMethodStatement;
         //TODO make locations point to 1,0 (might not matter?)
         return stmt;
     }
@@ -245,7 +244,6 @@ export class ClassMethodStatement implements Statement {
 
     get location() {
         return {
-            file: this.name.location.file,
             start: this.accessModifier ? this.accessModifier.location.start : this.func.location.start,
             end: this.func.location.end
         };
@@ -287,7 +285,6 @@ export class ClassFieldStatement implements Statement {
 
     get location() {
         return {
-            file: this.name.location.file,
             start: this.accessModifier.location.start,
             end: this.type.location.end
         };

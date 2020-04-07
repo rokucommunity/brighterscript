@@ -2,22 +2,17 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { BrsBoolean, Int32 } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser prefix unary expressions', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
 
     it('parses unary \'not\'', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.Equal, '='),
-            token(Lexeme.Not, 'not'),
-            token(Lexeme.True, 'true', BrsBoolean.True),
+            token(TokenKind.Equal, '='),
+            token(TokenKind.Not, 'not'),
+            token(TokenKind.True, 'true', BrsBoolean.True),
             EOF
         ]);
 
@@ -27,15 +22,15 @@ describe('parser prefix unary expressions', () => {
     });
 
     it('parses consecutive unary \'not\'', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.Equal, '='),
-            token(Lexeme.Not, 'not'),
-            token(Lexeme.Not, 'not'),
-            token(Lexeme.Not, 'not'),
-            token(Lexeme.Not, 'not'),
-            token(Lexeme.Not, 'not'),
-            token(Lexeme.True, 'true', BrsBoolean.True),
+            token(TokenKind.Equal, '='),
+            token(TokenKind.Not, 'not'),
+            token(TokenKind.Not, 'not'),
+            token(TokenKind.Not, 'not'),
+            token(TokenKind.Not, 'not'),
+            token(TokenKind.Not, 'not'),
+            token(TokenKind.True, 'true', BrsBoolean.True),
             EOF
         ]);
 
@@ -45,11 +40,11 @@ describe('parser prefix unary expressions', () => {
     });
 
     it('parses unary \'-\'', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.Equal, '='),
-            token(Lexeme.Minus, '-'),
-            token(Lexeme.Integer, '5', new Int32(5)),
+            token(TokenKind.Equal, '='),
+            token(TokenKind.Minus, '-'),
+            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
             EOF
         ]);
 
@@ -59,15 +54,15 @@ describe('parser prefix unary expressions', () => {
     });
 
     it('parses consecutive unary \'-\'', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.Equal, '='),
-            token(Lexeme.Minus, '-'),
-            token(Lexeme.Minus, '-'),
-            token(Lexeme.Minus, '-'),
-            token(Lexeme.Minus, '-'),
-            token(Lexeme.Minus, '-'),
-            token(Lexeme.Integer, '5', new Int32(5)),
+            token(TokenKind.Equal, '='),
+            token(TokenKind.Minus, '-'),
+            token(TokenKind.Minus, '-'),
+            token(TokenKind.Minus, '-'),
+            token(TokenKind.Minus, '-'),
+            token(TokenKind.Minus, '-'),
+            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
             EOF
         ]);
 
@@ -83,9 +78,9 @@ describe('parser prefix unary expressions', () => {
          *  +----------------------
          * 1| _false = not true
          */
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse(<any>[
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: '_false',
                 isReserved: false,
                 location: {
@@ -94,7 +89,7 @@ describe('parser prefix unary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Equal,
+                kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 location: {
@@ -103,7 +98,7 @@ describe('parser prefix unary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Not,
+                kind: TokenKind.Not,
                 text: 'not',
                 isReserved: true,
                 location: {
@@ -112,7 +107,7 @@ describe('parser prefix unary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.True,
+                kind: TokenKind.True,
                 text: 'true',
                 literal: BrsBoolean.True,
                 isReserved: true,
@@ -122,7 +117,7 @@ describe('parser prefix unary expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Eof,
+                kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 location: {
@@ -134,7 +129,7 @@ describe('parser prefix unary expressions', () => {
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].value.location).to.deep.include({
+        expect((statements[0] as any).value.location).to.deep.include({
             start: { line: 1, column: 9 },
             end: { line: 1, column: 17 }
         });

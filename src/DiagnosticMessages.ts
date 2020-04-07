@@ -100,6 +100,10 @@ export let diagnosticMessages = {
     Cannot_use_override_keyword_on_constructor_function_1023: () => ({
         message: 'Override keyword is not allowed on class constructor method',
         code: 1023
+    }),
+    Attempted_to_use_new_keyword_on_a_non_class: () => ({
+        message: 'Attempted to use "new" keyword on a non class',
+        code: 1024
     })
 };
 

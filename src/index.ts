@@ -8,3 +8,5 @@ export { Watcher } from './Watcher';
 export * from './interfaces';
 export * from './LanguageServer';
 export * from './XmlScope';
+export * from './parser/lexer';
+export * from './parser/parser';

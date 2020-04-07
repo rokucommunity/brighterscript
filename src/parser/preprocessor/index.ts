@@ -43,7 +43,7 @@ export class Preprocessor {
 
     /**
      * Pre-processes a set of tokens, evaluating any conditional compilation directives encountered.
-     * @param tokens the set of tokens to process
+     * @param tokens the set of tokens to process. Must not contain any whitespace tokens.
      * @param manifest the data stored in the found manifest file
      * @returns an array of processed tokens representing a subset of the provided ones
      */

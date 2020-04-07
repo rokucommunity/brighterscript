@@ -12,7 +12,9 @@
                 "clear": true
             },
             "script": "build",
-            "problemMatcher": []
+            "problemMatcher": [
+                "$tsc"
+            ]
         },
         {
             "type": "npm",
@@ -23,8 +25,13 @@
         },
         {
             "type": "shell",
-            "label": "test:nocover",
+            "label": "test",
             "command": "npm",
+            "args": [
+                "run",
+                "test:nocover",
+                "--silent"
+            ],
             "group": {
                 "kind": "test",
                 "isDefault": true
@@ -37,11 +44,6 @@
                 "showReuseMessage": true,
                 "clear": true
             },
-            "args": [
-                "run",
-                "test:nocover",
-                "--silent"
-            ],
             "problemMatcher": []
         },
     ]
