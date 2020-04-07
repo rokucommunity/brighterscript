@@ -1361,6 +1361,10 @@ export class Parser {
 
                 //scrap the entire line
                 this.consumeUntil(TokenKind.Colon, TokenKind.Newline, TokenKind.Eof);
+
+                //trash the next token. this prevents an infinite loop. not exactly sure why we need this,
+                //but there's already an error in the file being parsed, so just leave this line here
+                this.advance();
             }
             //trash any newline characters
             while (this.match(TokenKind.Newline)) { }
