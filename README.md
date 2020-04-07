@@ -15,7 +15,7 @@ The goal of this project is to bring new features and syntax enhancements to Rok
 ### npm
 
 ```bash
-npm install brightscript-language -g
+npm install brighterscript -g
 ```
 
 ## Usage

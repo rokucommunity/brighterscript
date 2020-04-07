@@ -5,6 +5,7 @@ jobs:
   ci:
     runs-on: ${{ matrix.os }}
     env:
+      #hardcode the coveralls token...it's not overly important to protect, and github actions won't allow forks to work with coveralls otherwise
       COVERALLS_REPO_TOKEN: "kVPcGJfehOArEQnHb8BT3KS72xbUQCoxI"
     strategy:
       matrix:
