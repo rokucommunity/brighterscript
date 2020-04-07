@@ -435,7 +435,7 @@ export class Parser {
                 let maybeReturnType = valueKindFromString(typeString);
 
                 if (!maybeReturnType) {
-                    throw this.addError(
+                    this.addError(
                         typeToken,
                         `Function return type '${typeString}' is invalid`
                     );
@@ -1532,8 +1532,8 @@ export class Parser {
             } while (this.match(TokenKind.Comma));
         }
 
-        while (this.match(TokenKind.Newline)) {
-        }
+        while (this.match(TokenKind.Newline)) { }
+
         const closingParen = this.consume(
             'Expected \')\' after function call arguments',
             TokenKind.RightParen
