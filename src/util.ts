@@ -287,6 +287,7 @@ export class Util {
         config.deploy = config.deploy === true ? true : false;
         //use default options from rokuDeploy
         config.files = config.files ?? rokuDeploy.getOptions().files;
+        config.ignoreFiles = config.ignoreFiles ?? [];
         config.createPackage = config.createPackage === false ? false : true;
         let rootFolderName = path.basename(process.cwd());
         config.outFile = config.outFile ?? `./out/${rootFolderName}.zip`;

@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import { EventEmitter } from 'events';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
+import * as glob from 'glob';
 import { StandardizedFileEntry } from 'roku-deploy';
 import { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 
@@ -59,6 +60,8 @@ export class Program {
     }
 
     private util = util;
+
+    private ignoreFiles = [];
 
     /**
      * A list of functions that will be used to load file contents.
@@ -176,6 +179,14 @@ export class Program {
     public hasFile(filePath: string) {
         filePath = util.standardizePath(filePath);
         return this.files[filePath] !== undefined;
+    }
+
+    /**
+     * Checks if a filepath is ignored based on config
+     * @param file Path of a file, can be relative
+     */
+    public isIgnored(file) {
+        return !!this.ignoreFiles.find(f => f.endsWith(file));
     }
 
     /**
@@ -368,10 +379,13 @@ export class Program {
      * Traverse the entire project, and validate all scopes
      */
     public async validate() {
+        this.updateIgnoreFiles();
         this.diagnostics = [];
         for (let scopeName in this.scopes) {
             let scope = this.scopes[scopeName];
-            scope.validate();
+            if (!this.isIgnored(scopeName)) {
+                scope.validate();
+            }
         }
 
         //find any files NOT loaded into a scope
@@ -528,6 +542,12 @@ export class Program {
             }
         });
         await Promise.all(promises);
+    }
+
+    protected updateIgnoreFiles() {
+        this.ignoreFiles = this.options.ignoreFiles.flatMap(g => {
+            return glob.sync(g, { cwd: this.options.rootDir, absolute: true });
+        });
     }
 
     public dispose() {

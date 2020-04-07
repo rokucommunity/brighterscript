@@ -40,7 +40,7 @@ export class ProgramBuilder {
         let file: File = this.program.getFileByPathAbsolute(filePathAbsolute);
         if (!file) {
             file = {
-                pkgPath: this.program.getPkgPath(filePathAbsolute),
+                pkgPath: filePathAbsolute,
                 pathAbsolute: filePathAbsolute,
                 getDiagnostics: () => {
                     return [<any>diagnostic];

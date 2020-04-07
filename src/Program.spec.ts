@@ -399,6 +399,28 @@ describe('Program', () => {
             await program.validate();
             expect(program.getDiagnostics().length).to.equal(0);
         });
+
+        it('ignores files for validation', async () => {
+            program = new Program({
+                rootDir: rootDir, ignoreFiles: ['**/lib.brs']
+            });
+            sinon.stub(program as any, 'updateIgnoreFiles').callsFake(() => {
+                (program as any).ignoreFiles = [`${rootDir}/source/ui/lib.brs`];
+            });
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+                    DoSomething()
+                end sub
+            `);
+            await program.addOrReplaceFile({ src: `${rootDir}/source/ui/lib.brs`, dest: 'source/ui/lib.brs' }, `
+                function DoSomething()
+                    print "hello world"
+                    throwAnError()
+                end function
+            `);
+            await program.validate();
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
     });
 
     describe('hasFile', () => {

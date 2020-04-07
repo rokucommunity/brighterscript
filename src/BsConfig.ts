@@ -33,6 +33,12 @@ export interface BsConfig {
     files?: Array<string | { src: string | string[]; dest?: string }>;
 
     /**
+     * List of file globs that will flag files as "ignored" from validation.
+     * Useful for third-party files that shouldn't be modified.
+    */
+    ignoreFiles?: Array<string>;
+
+    /**
      * The path where the output zip file should be placed.
      * @default "./out/package.zip"
      */

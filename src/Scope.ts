@@ -248,7 +248,7 @@ export class Scope {
 
     public validate() {
         //if this scope is already validated, no need to revalidate
-        if (this.isValidated === true) {
+        if (this.isValidated === true || this.program.isIgnored(this.name)) {
             return;
         }
         //validate our parent before we validate ourself
@@ -279,9 +279,11 @@ export class Scope {
         //do many per-file checks
         for (let key in this.files) {
             let scopeFile = this.files[key];
-            this.diagnosticDetectCallsToUnknownFunctions(scopeFile.file, callableContainersByLowerName);
-            this.diagnosticDetectFunctionCallsWithWrongParamCount(scopeFile.file, callableContainersByLowerName);
-            this.diagnosticDetectShadowedLocalVars(scopeFile.file, callableContainersByLowerName);
+            if (!this.program.isIgnored(scopeFile.file.pathAbsolute)) {
+                this.diagnosticDetectCallsToUnknownFunctions(scopeFile.file, callableContainersByLowerName);
+                this.diagnosticDetectFunctionCallsWithWrongParamCount(scopeFile.file, callableContainersByLowerName);
+                this.diagnosticDetectShadowedLocalVars(scopeFile.file, callableContainersByLowerName);
+            }
         }
 
         this.isValidated = false;
