@@ -5,19 +5,13 @@ import { Lexer } from '../../../lexer';
 import { AssignmentStatement, FunctionStatement as BrsFunction } from '../../Statement';
 
 describe('parser library statements', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     it('supports library statements at top of file', () => {
         const { tokens } = Lexer.scan(`
             Library "v30/bslCore.brs"
             sub main()
             end sub
         `);
-        const { errors } = parser.parse(tokens);
+        const { errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         //expect({ errors: errors, statements: statements }).toMatchSnapshot();
     });
@@ -28,7 +22,7 @@ describe('parser library statements', () => {
             sub main()
             end sub
         `);
-        const { errors } = parser.parse(tokens);
+        const { errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         //expect({ errors: errors, statements: statements }).toMatchSnapshot();
     });
@@ -39,7 +33,7 @@ describe('parser library statements', () => {
             end sub
             Library "v30/bslCore.brs"
         `);
-        const { errors } = parser.parse(tokens);
+        const { errors } = Parser.parse(tokens);
         expect(errors.length).to.be.greaterThan(0);
         //expect({ errors: errors, statements: statements }).toMatchSnapshot();
     });
@@ -50,7 +44,7 @@ describe('parser library statements', () => {
                 Library "v30/bslCore.brs"
             end sub
         `);
-        const { errors } = parser.parse(tokens);
+        const { errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(1);
         //expect({ errors: errors, statements: statements }).toMatchSnapshot();
     });
@@ -61,7 +55,7 @@ describe('parser library statements', () => {
             sub main()
             end sub
         `);
-        const { errors } = parser.parse(tokens);
+        const { errors } = Parser.parse(tokens);
         expect(errors.length).to.be.greaterThan(0);
         //expect({ errors: errors, statements: statements }).toMatchSnapshot();
     });
@@ -72,7 +66,7 @@ describe('parser library statements', () => {
                 library = "Gotham City Library"
             end sub
         `);
-        const { statements, errors } = parser.parse(tokens);
+        const { statements, errors } = Parser.parse(tokens) as any;
         //make sure the assignment is present in the function body
         let assignment = statements[0].func.body.statements[0];
         expect(errors).to.be.lengthOf(0);
@@ -89,7 +83,7 @@ describe('parser library statements', () => {
                 }
             end sub
         `);
-        const { statements, errors } = parser.parse(tokens);
+        const { statements, errors } = Parser.parse(tokens) as any;
         //make sure the assignment is present in the function body
         expect(statements[0].func.body.statements[0].value.elements[0].key.value).to.equal(
             'library'
@@ -105,7 +99,7 @@ describe('parser library statements', () => {
                 library = "Your Library"
             end sub
         `);
-        const { statements, errors } = parser.parse(tokens);
+        const { statements, errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(1);
         //function statement should still exist
         expect(statements[statements.length - 1]).to.be.instanceOf(BrsFunction);

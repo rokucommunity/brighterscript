@@ -1,4 +1,4 @@
-import { Token, Identifier, Location, Lexeme } from '../lexer';
+import { Token, Identifier, Location, TokenKind } from '../lexer';
 import { SourceNode } from 'source-map';
 import { Stmt } from '.';
 import { TranspileState, indent, Expression, FunctionExpression } from './Expression';
@@ -23,7 +23,6 @@ export class AssignmentStatement implements Statement {
 
     get location() {
         return {
-            file: this.name.location.file,
             start: this.name.location.start,
             end: this.value.location.end
         };
@@ -52,7 +51,6 @@ export class Block implements Statement {
             : this.startingLocation.start;
 
         return {
-            file: this.startingLocation.file,
             start: this.startingLocation.start,
             end: end
         };
@@ -112,7 +110,6 @@ export class CommentStatement implements Statement, Expression {
 
     get location() {
         return {
-            file: this.comments[0].location.file,
             start: this.comments[0].location.start,
             end: this.comments[this.comments.length - 1].location.end
         };
@@ -130,7 +127,6 @@ export class CommentStatement implements Statement, Expression {
                 result.push(indent(state.blockDepth));
             }
             result.push(
-                `'`,
                 new SourceNode(comment.location.start.line, comment.location.start.column, state.pathAbsolute, comment.text)
             );
             //add newline for all except final comment
@@ -183,7 +179,6 @@ export class FunctionStatement implements Statement {
 
     get location() {
         return {
-            file: this.name.location.file,
             start: this.func.location.start,
             end: this.func.location.end
         };
@@ -232,7 +227,6 @@ export class IfStatement implements Statement {
 
     get location() {
         return {
-            file: this.tokens.if.location.file,
             start: this.tokens.if.location.start,
             end: this.getEndLocation().end
         };
@@ -332,7 +326,6 @@ export class IncrementStatement implements Statement {
 
     get location() {
         return {
-            file: this.value.location.file,
             start: this.value.location.start,
             end: this.operator.location.end
         };
@@ -348,12 +341,12 @@ export class IncrementStatement implements Statement {
 
 /** Used to indent the current `print` position to the next 16-character-width output zone. */
 export interface PrintSeparatorTab extends Token {
-    kind: Lexeme.Comma;
+    kind: TokenKind.Comma;
 }
 
 /** Used to insert a single whitespace character at the current `print` position. */
 export interface PrintSeparatorSpace extends Token {
-    kind: Lexeme.Semicolon;
+    kind: TokenKind.Semicolon;
 }
 
 /**
@@ -378,7 +371,6 @@ export class PrintStatement implements Statement {
             : this.tokens.print.location.end;
 
         return {
-            file: this.tokens.print.location.file,
             start: this.tokens.print.location.start,
             end: end
         };
@@ -415,7 +407,6 @@ export class GotoStatement implements Statement {
 
     get location() {
         return {
-            file: this.tokens.goto.location.file,
             start: this.tokens.goto.location.start,
             end: this.tokens.label.location.end
         };
@@ -440,7 +431,6 @@ export class LabelStatement implements Statement {
 
     get location() {
         return {
-            file: this.tokens.identifier.location.file,
             start: this.tokens.identifier.location.start,
             end: this.tokens.colon.location.end
         };
@@ -465,7 +455,6 @@ export class ReturnStatement implements Statement {
 
     get location() {
         return {
-            file: this.tokens.return.location.file,
             start: this.tokens.return.location.start,
             end: (this.value && this.value.location.end) || this.tokens.return.location.end
         };
@@ -493,7 +482,6 @@ export class EndStatement implements Statement {
 
     get location() {
         return {
-            file: this.tokens.end.location.file,
             start: this.tokens.end.location.start,
             end: this.tokens.end.location.end
         };
@@ -515,7 +503,6 @@ export class StopStatement implements Statement {
 
     get location() {
         return {
-            file: this.tokens.stop.location.file,
             start: this.tokens.stop.location.start,
             end: this.tokens.stop.location.end
         };
@@ -544,7 +531,6 @@ export class ForStatement implements Statement {
 
     get location() {
         return {
-            file: this.tokens.for.location.file,
             start: this.tokens.for.location.start,
             end: this.tokens.endFor.location.end
         };
@@ -609,7 +595,6 @@ export class ForEachStatement implements Statement {
 
     get location() {
         return {
-            file: this.tokens.forEach.location.file,
             start: this.tokens.forEach.location.start,
             end: this.tokens.endFor.location.end
         };
@@ -662,7 +647,6 @@ export class WhileStatement implements Statement {
 
     get location() {
         return {
-            file: this.tokens.while.location.file,
             start: this.tokens.while.location.start,
             end: this.tokens.endWhile.location.end
         };
@@ -706,7 +690,6 @@ export class DottedSetStatement implements Statement {
 
     get location() {
         return {
-            file: this.obj.location.file,
             start: this.obj.location.start,
             end: this.value.location.end
         };
@@ -737,7 +720,6 @@ export class IndexedSetStatement implements Statement {
 
     get location() {
         return {
-            file: this.obj.location.file,
             start: this.obj.location.start,
             end: this.value.location.end
         };
@@ -771,11 +753,8 @@ export class LibraryStatement implements Statement {
 
     get location() {
         return {
-            file: this.tokens.library.location.file,
             start: this.tokens.library.location.start,
-            end: this.tokens.filePath
-                ? this.tokens.filePath.location.end
-                : this.tokens.library.location.end
+            end: this.tokens.filePath ? this.tokens.filePath.location.end : this.tokens.library.location.end
         };
     }
 
@@ -819,7 +798,6 @@ export class ClassStatement implements Statement {
 
     get location() {
         return {
-            file: this.keyword.location.file,
             start: this.keyword.location.start,
             end: this.end.location.end
         };
@@ -839,7 +817,6 @@ export class ClassMethodStatement implements Statement {
 
     get location() {
         return {
-            file: this.name.location.file,
             start: this.accessModifier ? this.accessModifier.location.start : this.func.location.start,
             end: this.func.location.end
         };
@@ -861,7 +838,6 @@ export class ClassFieldStatement implements Statement {
 
     get location() {
         return {
-            file: this.name.location.file,
             start: this.accessModifier.location.start,
             end: this.type.location.end
         };

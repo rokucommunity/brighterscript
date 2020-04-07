@@ -2,25 +2,19 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { Int32 } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser additive expressions', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     it('parses left-associative addition chains', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.Equal, '='),
-            token(Lexeme.Integer, '1', new Int32(1)),
-            token(Lexeme.Plus, '+'),
-            token(Lexeme.Integer, '2', new Int32(2)),
-            token(Lexeme.Plus, '+'),
-            token(Lexeme.Integer, '3', new Int32(3)),
+            token(TokenKind.Equal, '='),
+            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+            token(TokenKind.Plus, '+'),
+            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+            token(TokenKind.Plus, '+'),
+            token(TokenKind.IntegerLiteral, '3', new Int32(3)),
             EOF
         ]);
 
@@ -30,14 +24,14 @@ describe('parser additive expressions', () => {
     });
 
     it('parses left-associative subtraction chains', () => {
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse([
             identifier('_'),
-            token(Lexeme.Equal, '='),
-            token(Lexeme.Integer, '1', new Int32(1)),
-            token(Lexeme.Minus, '-'),
-            token(Lexeme.Integer, '2', new Int32(2)),
-            token(Lexeme.Minus, '-'),
-            token(Lexeme.Integer, '3', new Int32(3)),
+            token(TokenKind.Equal, '='),
+            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+            token(TokenKind.Minus, '-'),
+            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+            token(TokenKind.Minus, '-'),
+            token(TokenKind.IntegerLiteral, '3', new Int32(3)),
             EOF
         ]);
 
@@ -52,9 +46,9 @@ describe('parser additive expressions', () => {
         // ^^ columns ^^
         //
         // _ = 1 + 2 + 3
-        let { statements, errors } = parser.parse([
+        let { statements, errors } = Parser.parse(<any>[
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: '_',
                 isReserved: false,
                 location: {
@@ -63,7 +57,7 @@ describe('parser additive expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Equal,
+                kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
                 location: {
@@ -72,7 +66,7 @@ describe('parser additive expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Integer,
+                kind: TokenKind.IntegerLiteral,
                 text: '1',
                 isReserved: false,
                 literal: new Int32(1),
@@ -82,7 +76,7 @@ describe('parser additive expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Plus,
+                kind: TokenKind.Plus,
                 text: '+',
                 isReserved: false,
                 location: {
@@ -91,7 +85,7 @@ describe('parser additive expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Integer,
+                kind: TokenKind.IntegerLiteral,
                 text: '2',
                 isReserved: false,
                 literal: new Int32(2),
@@ -101,7 +95,7 @@ describe('parser additive expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Plus,
+                kind: TokenKind.Plus,
                 text: '+',
                 isReserved: false,
                 location: {
@@ -110,7 +104,7 @@ describe('parser additive expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Integer,
+                kind: TokenKind.IntegerLiteral,
                 text: '3',
                 isReserved: false,
                 literal: new Int32(3),
@@ -120,7 +114,7 @@ describe('parser additive expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Eof,
+                kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 location: {
@@ -128,9 +122,9 @@ describe('parser additive expressions', () => {
                     end: { line: 1, column: 14 }
                 }
             }
-        ]);
+        ]) as any;
 
-        expect(errors).to.be.lengthOf(0);
+        expect(errors[0]?.message).to.not.exist;
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].value.location).to.deep.include({
             start: { line: 1, column: 4 },

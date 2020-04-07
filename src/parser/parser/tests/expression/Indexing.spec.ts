@@ -2,23 +2,17 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { Int32 } from '../../../brsTypes';
-import { Lexeme } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser indexing', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     describe('one level', () => {
         it('dotted', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
+                token(TokenKind.Equal, '='),
                 identifier('foo'),
-                token(Lexeme.Dot, '.'),
+                token(TokenKind.Dot, '.'),
                 identifier('bar'),
                 EOF
             ]);
@@ -30,13 +24,13 @@ describe('parser indexing', () => {
         });
 
         it('bracketed', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
+                token(TokenKind.Equal, '='),
                 identifier('foo'),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '2', new Int32(2)),
-                token(Lexeme.RightSquare, ']'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
 
@@ -54,9 +48,9 @@ describe('parser indexing', () => {
              * 1| a = foo.bar
              * 2| b = foo[2]
              */
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse(<any>[
                 {
-                    kind: Lexeme.Identifier,
+                    kind: TokenKind.Identifier,
                     text: 'a',
                     isReserved: false,
                     location: {
@@ -65,7 +59,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Equal,
+                    kind: TokenKind.Equal,
                     text: '=',
                     isReserved: false,
                     location: {
@@ -74,7 +68,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Identifier,
+                    kind: TokenKind.Identifier,
                     text: 'foo',
                     isReserved: false,
                     location: {
@@ -83,7 +77,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Dot,
+                    kind: TokenKind.Dot,
                     text: '.',
                     isReserved: false,
                     location: {
@@ -92,7 +86,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Identifier,
+                    kind: TokenKind.Identifier,
                     text: 'bar',
                     isReserved: false,
                     location: {
@@ -101,7 +95,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Newline,
+                    kind: TokenKind.Newline,
                     text: '\n',
                     isReserved: false,
                     location: {
@@ -110,7 +104,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Identifier,
+                    kind: TokenKind.Identifier,
                     text: 'b',
                     isReserved: false,
                     location: {
@@ -119,7 +113,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Equal,
+                    kind: TokenKind.Equal,
                     text: '=',
                     isReserved: false,
                     location: {
@@ -128,7 +122,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Identifier,
+                    kind: TokenKind.Identifier,
                     text: 'bar',
                     isReserved: false,
                     location: {
@@ -137,7 +131,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.LeftSquare,
+                    kind: TokenKind.LeftSquareBracket,
                     text: '[',
                     isReserved: false,
                     location: {
@@ -146,7 +140,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Integer,
+                    kind: TokenKind.IntegerLiteral,
                     text: '2',
                     literal: new Int32(2),
                     isReserved: false,
@@ -156,7 +150,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.RightSquare,
+                    kind: TokenKind.RightSquareBracket,
                     text: ']',
                     isReserved: false,
                     location: {
@@ -165,7 +159,7 @@ describe('parser indexing', () => {
                     }
                 },
                 {
-                    kind: Lexeme.Eof,
+                    kind: TokenKind.Eof,
                     text: '\0',
                     isReserved: false,
                     location: {
@@ -177,16 +171,14 @@ describe('parser indexing', () => {
 
             expect(errors).to.be.lengthOf(0);
             expect(statements).to.be.lengthOf(2);
-            expect(statements.map(s => s.value.location)).to.deep.equal([
+            expect(statements.map(s => (s as any).value.location)).to.deep.equal([
                 {
                     start: { line: 1, column: 4 },
-                    end: { line: 1, column: 11 },
-                    file: undefined
+                    end: { line: 1, column: 11 }
                 },
                 {
                     start: { line: 2, column: 4 },
-                    end: { line: 2, column: 10 },
-                    file: undefined
+                    end: { line: 2, column: 10 }
                 }
             ]);
         });
@@ -194,11 +186,11 @@ describe('parser indexing', () => {
 
     describe('multi-level', () => {
         it('dotted', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
+                token(TokenKind.Equal, '='),
                 identifier('foo'),
-                token(Lexeme.Dot, '.'),
+                token(TokenKind.Dot, '.'),
                 identifier('bar'),
                 EOF
             ]);
@@ -209,19 +201,19 @@ describe('parser indexing', () => {
         });
 
         it('bracketed', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
+                token(TokenKind.Equal, '='),
                 identifier('foo'),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '2', new Int32(2)),
-                token(Lexeme.RightSquare, ']'),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '0', new Int32(0)),
-                token(Lexeme.RightSquare, ']'),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '6', new Int32(6)),
-                token(Lexeme.RightSquare, ']'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.RightSquareBracket, ']'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+                token(TokenKind.RightSquareBracket, ']'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '6', new Int32(6)),
+                token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
 
@@ -231,16 +223,16 @@ describe('parser indexing', () => {
         });
 
         it('mixed', () => {
-            let { statements, errors } = parser.parse([
+            let { statements, errors } = Parser.parse([
                 identifier('_'),
-                token(Lexeme.Equal, '='),
+                token(TokenKind.Equal, '='),
                 identifier('foo'),
-                token(Lexeme.Dot, '.'),
+                token(TokenKind.Dot, '.'),
                 identifier('bar'),
-                token(Lexeme.LeftSquare, '['),
-                token(Lexeme.Integer, '0', new Int32(0)),
-                token(Lexeme.RightSquare, ']'),
-                token(Lexeme.Dot, '.'),
+                token(TokenKind.LeftSquareBracket, '['),
+                token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+                token(TokenKind.RightSquareBracket, ']'),
+                token(TokenKind.Dot, '.'),
                 identifier('baz'),
                 EOF
             ]);

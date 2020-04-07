@@ -2,21 +2,15 @@ import { expect } from 'chai';
 
 import { Parser } from '../..';
 import { BrsString, Int32 } from '../../../brsTypes';
-import { Lexeme, Lexer } from '../../../lexer';
+import { TokenKind, Lexer } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser call expressions', () => {
-    let parser;
-
-    beforeEach(() => {
-        parser = new Parser();
-    });
-
     it('parses named function calls', () => {
-        const { statements, errors } = parser.parse([
+        const { statements, errors } = Parser.parse([
             identifier('RebootSystem'),
-            { kind: Lexeme.LeftParen, text: '(', line: 1 },
-            token(Lexeme.RightParen, ')'),
+            { kind: TokenKind.LeftParen, text: '(', line: 1 },
+            token(TokenKind.RightParen, ')'),
             EOF
         ]);
 
@@ -33,7 +27,7 @@ describe('parser call expressions', () => {
             sub DoThingTwo()
             end sub
         `);
-        const { statements, errors } = parser.parse(tokens);
+        const { statements, errors } = Parser.parse(tokens);
         expect(errors).to.length.greaterThan(0);
         expect(statements).to.be.length.greaterThan(0);
 
@@ -54,7 +48,7 @@ describe('parser call expressions', () => {
             sub DoThingTwo()
             end sub
         `);
-        const { statements, errors } = parser.parse(tokens);
+        const { statements, errors } = Parser.parse(tokens);
         //there should only be 1 error
         expect(errors).to.be.lengthOf(1);
         expect(statements).to.be.length.greaterThan(0);
@@ -64,12 +58,12 @@ describe('parser call expressions', () => {
     });
 
     it('allows closing parentheses on separate line', () => {
-        const { statements, errors } = parser.parse([
+        const { statements, errors } = Parser.parse([
             identifier('RebootSystem'),
-            { kind: Lexeme.LeftParen, text: '(', line: 1 },
-            token(Lexeme.Newline, '\\n'),
-            token(Lexeme.Newline, '\\n'),
-            token(Lexeme.RightParen, ')'),
+            { kind: TokenKind.LeftParen, text: '(', line: 1 },
+            token(TokenKind.Newline, '\\n'),
+            token(TokenKind.Newline, '\\n'),
+            token(TokenKind.RightParen, ')'),
             EOF
         ]);
 
@@ -79,15 +73,15 @@ describe('parser call expressions', () => {
     });
 
     it('accepts arguments', () => {
-        const { statements, errors } = parser.parse([
+        const { statements, errors } = Parser.parse([
             identifier('add'),
-            { kind: Lexeme.LeftParen, text: '(', line: 1 },
-            token(Lexeme.Integer, '1', new Int32(1)),
-            { kind: Lexeme.Comma, text: ',', line: 1 },
-            token(Lexeme.Integer, '2', new Int32(2)),
-            token(Lexeme.RightParen, ')'),
+            { kind: TokenKind.LeftParen, text: '(', line: 1 },
+            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+            { kind: TokenKind.Comma, text: ',', line: 1 },
+            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+            token(TokenKind.RightParen, ')'),
             EOF
-        ]);
+        ]) as any;
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
@@ -102,9 +96,9 @@ describe('parser call expressions', () => {
          *  +----------------------
          * 1| foo("bar", "baz")
          */
-        const { statements, errors } = parser.parse([
+        const { statements, errors } = Parser.parse(<any>[
             {
-                kind: Lexeme.Identifier,
+                kind: TokenKind.Identifier,
                 text: 'foo',
                 isReserved: false,
                 location: {
@@ -113,7 +107,7 @@ describe('parser call expressions', () => {
                 }
             },
             {
-                kind: Lexeme.LeftParen,
+                kind: TokenKind.LeftParen,
                 text: '(',
                 isReserved: false,
                 location: {
@@ -122,7 +116,7 @@ describe('parser call expressions', () => {
                 }
             },
             {
-                kind: Lexeme.String,
+                kind: TokenKind.StringLiteral,
                 text: `"bar"`,
                 literal: new BrsString('bar'),
                 isReserved: false,
@@ -132,7 +126,7 @@ describe('parser call expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Comma,
+                kind: TokenKind.Comma,
                 text: ',',
                 isReserved: false,
                 location: {
@@ -141,7 +135,7 @@ describe('parser call expressions', () => {
                 }
             },
             {
-                kind: Lexeme.String,
+                kind: TokenKind.StringLiteral,
                 text: `"baz"`,
                 literal: new BrsString('baz'),
                 isReserved: false,
@@ -151,7 +145,7 @@ describe('parser call expressions', () => {
                 }
             },
             {
-                kind: Lexeme.RightParen,
+                kind: TokenKind.RightParen,
                 text: ')',
                 isReserved: false,
                 location: {
@@ -160,7 +154,7 @@ describe('parser call expressions', () => {
                 }
             },
             {
-                kind: Lexeme.Eof,
+                kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 location: {

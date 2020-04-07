@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { diagnosticMessages } from '../../DiagnosticMessages';
-import { Lexeme, Lexer } from '../lexer';
-import { Parser } from './Parser';
+import { TokenKind, Lexer } from '../lexer';
+import { Parser, ParseMode } from './Parser';
 import { ClassFieldStatement, ClassStatement } from './Statement';
 
 describe('parser', () => {
@@ -11,8 +11,8 @@ describe('parser', () => {
                 class Person
                 end class
             `);
-            let { errors } = Parser.parse(tokens, 'brightscript');
-            expect(errors[0].code).to.equal(diagnosticMessages.Bs_feature_not_supported_in_brs_files_1019('').code);
+            let { errors } = Parser.parse(tokens, { mode: ParseMode.brightscript });
+            expect(errors[0]?.code).to.equal(diagnosticMessages.Bs_feature_not_supported_in_brs_files_1019('').code);
 
         });
         it('parses empty class', () => {
@@ -20,7 +20,7 @@ describe('parser', () => {
                 class Person
                 end class
             `);
-            let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+            let { statements, errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
             expect(errors).to.be.lengthOf(0);
             expect(statements[0]).instanceof(ClassStatement);
         });
@@ -30,7 +30,7 @@ describe('parser', () => {
                 class
                 end class
             `);
-            let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+            let { statements, errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
             expect(errors).length.to.be.greaterThan(0);
             expect(statements[0]).instanceof(ClassStatement);
         });
@@ -39,7 +39,7 @@ describe('parser', () => {
             let { tokens } = Lexer.scan(`
                 class Person
             `);
-            let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+            let { statements, errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
             expect(errors).length.to.be.greaterThan(0);
             expect(statements[0]).instanceof(ClassStatement);
         });
@@ -51,11 +51,11 @@ describe('parser', () => {
                         public firstName as string
                     end class
                 `);
-                let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+                let { statements, errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
                 expect(errors).to.be.empty;
                 expect(statements[0]).instanceof(ClassStatement);
                 let field = (statements[0] as ClassStatement).members[0] as ClassFieldStatement;
-                expect(field.accessModifier.kind).to.equal(Lexeme.Public);
+                expect(field.accessModifier.kind).to.equal(TokenKind.Public);
                 expect(field.name.text).to.equal('firstName');
                 expect(field.as.text).to.equal('as');
                 expect(field.type.text).to.equal('string');
@@ -67,7 +67,7 @@ describe('parser', () => {
                         firstName
                     end class
                 `);
-                let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+                let { statements, errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
                 expect(errors).to.be.lengthOf(0);
                 let cls = statements[0] as ClassStatement;
                 expect(cls.fields[0].name.text).to.equal('firstName');
@@ -81,7 +81,7 @@ describe('parser', () => {
                         lastName as string
                     end class
                 `);
-                let { statements } = Parser.parse(tokens, 'brighterscript');
+                let { statements } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
                 let cls = statements[0] as ClassStatement;
                 expect(cls.fields[0].name.text).to.equal('firstName');
                 expect(cls.fields[cls.fields.length - 1].name.text).to.equal('lastName');
@@ -93,7 +93,7 @@ describe('parser', () => {
                         middleName as
                     end class
                 `);
-                let { errors, statements } = Parser.parse(tokens, 'brighterscript');
+                let { errors, statements } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
                 expect(errors.length).to.be.greaterThan(0);
                 let cls = statements[0] as ClassStatement;
                 expect(cls.fields[0].name.text).to.equal('middleName');
@@ -106,10 +106,10 @@ describe('parser', () => {
                         firstName as string
                     end class
                 `);
-                let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+                let { statements, errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
                 expect(errors).to.be.lengthOf(0);
                 let cls = statements[0] as ClassStatement;
-                expect(cls.fields[0].accessModifier.kind).to.equal(Lexeme.Public);
+                expect(cls.fields[0].accessModifier.kind).to.equal(TokenKind.Public);
             });
         });
 
@@ -122,7 +122,7 @@ describe('parser', () => {
                         end function
                     end class
                 `);
-                let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+                let { statements, errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
                 expect(errors).to.be.lengthOf(0);
                 let theClass = statements[0] as ClassStatement;
                 expect(theClass).to.be.instanceof(ClassStatement);
@@ -140,7 +140,7 @@ describe('parser', () => {
                         end function
                     end class
                 `);
-                let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+                let { statements, errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
                 expect(errors).to.be.lengthOf(0);
                 let theClass = statements[0] as ClassStatement;
                 let method = theClass.methods[0];
@@ -156,10 +156,10 @@ describe('parser', () => {
                         end function
                     end class
                     `);
-                let { statements, errors } = Parser.parse(tokens, 'brighterscript');
+                let { statements, errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
                 expect(errors).to.be.lengthOf(0);
                 let cls = statements[0] as ClassStatement;
-                expect(cls.methods[0].accessModifier.kind).to.equal(Lexeme.Public);
+                expect(cls.methods[0].accessModifier.kind).to.equal(TokenKind.Public);
             });
 
             it('detects missing function keyword', () => {
@@ -170,7 +170,7 @@ describe('parser', () => {
                         end function
                     end class
                     `);
-                let { errors } = Parser.parse(tokens, 'brighterscript');
+                let { errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
                 expect(errors).to.have.lengthOf(1);
                 expect(errors[0].code).to.equal(diagnosticMessages.Missing_function_sub_keyword_1017('').code);
             });
