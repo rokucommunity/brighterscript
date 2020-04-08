@@ -1,6 +1,6 @@
-import { Range } from 'vscode-languageserver';
+import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 
-import { Context } from './Context';
+import { Scope } from './Scope';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { FunctionScope } from './FunctionScope';
@@ -8,7 +8,7 @@ import { BrsType } from './types/BrsType';
 import { FunctionType } from './types/FunctionType';
 
 export interface Diagnostic {
-    severity: 'hint' | 'information' | 'warning' | 'error';
+    severity: DiagnosticSeverity;
     /**
      * The message for this diagnostic
      */
@@ -17,9 +17,8 @@ export interface Diagnostic {
      * The unique diagnostic code for this type of message
      */
     code: number;
-    location: Range;
+    range: Range;
     file: File;
-
 }
 
 export interface Callable {
@@ -39,8 +38,14 @@ export interface Callable {
      */
     documentation?: string;
     params: CallableParam[];
+    /**
+     * The full range of the function or sub.
+     */
+    range: Range;
+    /**
+     * The range of the name of this callable
+     */
     nameRange?: Range;
-    bodyRange?: Range;
     isDepricated?: boolean;
 }
 
@@ -152,7 +157,7 @@ export enum ValueKind {
  */
 export interface CallableContainer {
     callable: Callable;
-    context: Context;
+    scope: Scope;
 }
 
 export interface CommentFlag {

@@ -1,6 +1,6 @@
 {
   "name": "brighterscript",
-  "version": "0.4.2",
+  "version": "0.4.4",
   "description": "A superset of Roku's BrightScript language.",
   "scripts": {
     "preversion": "npm run build && npm run lint && npm run test",
@@ -83,7 +83,7 @@
     "testdouble": "^3.5.2",
     "ts-mocha": "^7.0.0",
     "ts-node": "^8.3.0",
-    "typescript": "^3.7.2",
+    "typescript": "^3.8.3",
     "vscode-jsonrpc": "^4.0.0"
   },
   "dependencies": {
@@ -101,7 +101,7 @@
     "luxon": "^1.8.3",
     "moment": "^2.23.0",
     "p-settle": "^2.1.0",
-    "roku-deploy": "^3.0.0",
+    "roku-deploy": "^3.0.1",
     "source-map": "^0.7.3",
     "vscode-languageserver": "^5.2.1",
     "vscode-uri": "^1.0.6",

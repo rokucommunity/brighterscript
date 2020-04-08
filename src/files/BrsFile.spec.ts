@@ -1,6 +1,6 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
-import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
 
 import { Callable, CallableArg, CommentFlag, Diagnostic, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
@@ -10,6 +10,8 @@ import { FunctionType } from '../types/FunctionType';
 import { IntegerType } from '../types/IntegerType';
 import { StringType } from '../types/StringType';
 import { BrsFile } from './BrsFile';
+import { SourceMapConsumer } from 'source-map';
+import { TokenKind, Lexer } from '../lexer';
 
 let sinon = sinonImport.createSandbox();
 
@@ -17,6 +19,8 @@ describe('BrsFile', () => {
     let rootDir = process.cwd();
     let program: Program;
     let file: BrsFile;
+    let testTranspile = getTestTranspile(() => [program, rootDir]);
+
     beforeEach(() => {
         program = new Program({ rootDir: rootDir });
         file = new BrsFile('abs', 'rel', program);
@@ -113,7 +117,7 @@ describe('BrsFile', () => {
                 } as CommentFlag);
                 await program.validate();
                 //the "unterminated string" error should be filtered out
-                expect(program.getDiagnostics()).to.be.lengthOf(0);
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
             });
 
             it('works for specific codes', async () => {
@@ -144,13 +148,13 @@ describe('BrsFile', () => {
 
                 expect(program.getDiagnostics()).to.be.lengthOf(3);
                 expect(program.getDiagnostics()[0]).to.deep.include({
-                    location: Range.create(2, 53, 2, 59)
+                    range: Range.create(2, 53, 2, 59)
                 } as Diagnostic);
                 expect(program.getDiagnostics()[1]).to.deep.include({
-                    location: Range.create(2, 60, 2, 66)
+                    range: Range.create(2, 60, 2, 66)
                 } as Diagnostic);
                 expect(program.getDiagnostics()[2]).to.deep.include({
-                    location: Range.create(2, 69, 2, 74)
+                    range: Range.create(2, 69, 2, 74)
                 } as Diagnostic);
             });
 
@@ -190,7 +194,7 @@ describe('BrsFile', () => {
 
                 expect(program.getDiagnostics()).to.be.lengthOf(1);
                 expect(program.getDiagnostics()[0]).to.deep.include({
-                    location: Range.create(5, 24, 5, 35)
+                    range: Range.create(5, 24, 5, 35)
                 } as Diagnostic);
             });
 
@@ -231,8 +235,10 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports single-word #elseif and #endif', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        describe('conditional compile', () => {
+
+            it('supports single-word #elseif and #endif', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     #const someFlag = true
                     #if someFlag
@@ -242,11 +248,11 @@ describe('BrsFile', () => {
                     #endif
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
-        });
+                expect(file.getDiagnostics()).to.be.lengthOf(0);
+            });
 
-        it('supports multi-word #else if and #end if', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('supports multi-word #else if and #end if', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     #const someFlag = true
                     #if someFlag
@@ -256,18 +262,19 @@ describe('BrsFile', () => {
                     #end if
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
-        });
+                expect(file.getDiagnostics()).to.be.lengthOf(0);
+            });
 
-        it('does not choke on invalid code inside a false conditional compile', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('does not choke on invalid code inside a false conditional compile', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     #if false
                         non-commented code here should not cause parse errors
                     #end if
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+                expect(file.getDiagnostics()).to.be.lengthOf(0);
+            });
         });
 
         it('supports stop statement', async () => {
@@ -302,7 +309,7 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports many keywords as object property names', async () => {
+        it.only('supports many keywords as object property names', async () => {
             await file.parse(`
                 sub Main()
                     person = {}
@@ -358,6 +365,12 @@ describe('BrsFile', () => {
                     person.true = true
                     person.type = true
                     person.while = true
+                    person.public = true
+                    person.protected = true
+                    person.private = true
+                    person.class = true
+                    person.override = true
+                    person.new = true
                 end sub
             `);
             expect(file.getDiagnostics()).to.be.lengthOf(0);
@@ -671,7 +684,6 @@ describe('BrsFile', () => {
                 end function
             `);
             expect(file.callables[0]).to.deep.include({
-                bodyRange: Range.create(2, 0, 3, 16),
                 file: file,
                 nameRange: Range.create(1, 25, 1, 36)
             });
@@ -762,7 +774,7 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()[0]).to.deep.include({
                 file: file
             });
-            expect(file.getDiagnostics()[0].location.start.line).to.equal(1);
+            expect(file.getDiagnostics()[0].range.start.line).to.equal(1);
         });
 
         it('supports using the `next` keyword in a for loop', async () => {
@@ -793,7 +805,7 @@ describe('BrsFile', () => {
     });
 
     describe('findCallables', () => {
-        it('finds body range', async () => {
+        it('finds range', async () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
             await file.parse(`
                 sub Sum()
@@ -801,7 +813,7 @@ describe('BrsFile', () => {
                 end sub
             `);
             let callable = file.callables[0];
-            expect(callable.bodyRange).to.eql(Range.create(2, 0, 3, 16));
+            expect(callable.range).to.eql(Range.create(1, 16, 3, 23));
         });
 
         it('finds correct body range even with inner function', async () => {
@@ -815,7 +827,7 @@ describe('BrsFile', () => {
                 end sub
             `);
             let callable = file.callables[0];
-            expect(callable.bodyRange).to.eql(Range.create(2, 0, 6, 16));
+            expect(callable.range).to.eql(Range.create(1, 16, 6, 23));
         });
 
         it('finds callable parameters', async () => {
@@ -950,24 +962,15 @@ describe('BrsFile', () => {
         it('properly maps the location to a Range', () => {
             let file = new BrsFile('', '', program);
             expect(file.standardizeLexParseErrors([<any>{
-                location: {
-                    start: {
-                        column: 0,
-                        line: 1
-                    }, end: {
-                        column: 4,
-                        line: 2
-                    },
-                    file: ''
-                },
+                range: Range.create(0, 0, 1, 4),
                 message: 'some lex error',
                 stack: ''
             }])).to.eql([<Diagnostic>{
                 code: 1000,
                 message: 'some lex error',
-                location: Range.create(0, 0, 1, 4),
+                range: Range.create(0, 0, 1, 4),
                 file: file,
-                severity: 'error'
+                severity: DiagnosticSeverity.Error
             }]);
         });
     });
@@ -1129,8 +1132,8 @@ describe('BrsFile', () => {
             `);
 
             expect(file.functionScopes).to.be.length(2);
-            expect(file.functionScopes[0].bodyRange).to.eql(Range.create(2, 0, 5, 16));
-            expect(file.functionScopes[1].bodyRange).to.eql(Range.create(3, 0, 4, 20));
+            expect(file.functionScopes[0].range).to.eql(Range.create(1, 16, 5, 23));
+            expect(file.functionScopes[1].range).to.eql(Range.create(2, 30, 4, 32));
         });
     });
 
@@ -1218,7 +1221,7 @@ describe('BrsFile', () => {
             expect(hover.contents).to.equal('sub sayMyName() as void');
         });
 
-        it('finds function hover in context scope', async () => {
+        it('finds function hover in scope', async () => {
             let rootDir = process.cwd();
             let program = new Program({
                 rootDir: rootDir
@@ -1330,6 +1333,42 @@ describe('BrsFile', () => {
                     end if
                 end sub
             `, 'trim');
+        });
+
+        it('does not add leading or trailing newlines', async () => {
+            await testTranspile(`function log()\nend function`, undefined, 'none');
+        });
+
+        it('computes correct locations for sourcemap', async () => {
+            let source = `function log(name)\n    firstName = name\nend function`;
+            let tokens = Lexer.scan(source).tokens
+                //remove newlines and EOF
+                .filter(x => x.kind !== TokenKind.Eof && x.kind !== TokenKind.Newline);
+
+            let result = await testTranspile(source, source, 'none');
+            //load the source map
+            await SourceMapConsumer.with(result.map.toString(), null, (consumer) => {
+                let tokenResult = tokens.map(token => ({
+                    kind: token.kind,
+                    start: token.range.start
+                }));
+                let sourcemapResult = tokens.map(token => {
+                    let originalPosition = consumer.originalPositionFor({
+                        //convert token 0-based line to source-map 1-based line for the lookup
+                        line: token.range.start.line + 1,
+                        column: token.range.start.character
+                    });
+                    return {
+                        kind: token.kind,
+                        start: Position.create(
+                            //convert source-map 1-based line to token 0-based line
+                            originalPosition.line - 1,
+                            originalPosition.column
+                        )
+                    };
+                });
+                expect(sourcemapResult).to.eql(tokenResult);
+            });
         });
 
         it('works for function parameters', async () => {
@@ -1480,45 +1519,48 @@ describe('BrsFile', () => {
             `);
         });
 
-        async function testTranspile(source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'trim') {
-            let formatter = null; //new BrightScriptFormatter();
-            expected = expected ? expected : source;
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, source) as BrsFile;
-            let firstDiagnosticMessage = file.getDiagnostics().length > 0 ? file.getDiagnostics()[0].message : '';
-            expect(file.getDiagnostics()).to.be.lengthOf(0, `Found parse errors: '${firstDiagnosticMessage}'`);
-            let transpiled = file.transpile();
-
-            let sources = [transpiled.code, expected];
-            for (let i = 0; i < sources.length; i++) {
-                if (formatType === 'trim') {
-                    let lines = sources[i].split('\n');
-                    //throw out leading newlines
-                    while (lines[0].length === 0) {
-                        lines.splice(0, 1);
-                    }
-                    let trimStartIndex = null;
-                    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                        //if we don't have a starting trim count, compute it
-                        if (!trimStartIndex) {
-                            trimStartIndex = lines[lineIndex].length - lines[lineIndex].trim().length;
-                        }
-                        //only trim the expected file (since that's what we passed in from the test)
-                        if (lines[lineIndex].length > 0 && i === 1) {
-                            lines[lineIndex] = lines[lineIndex].substring(trimStartIndex);
-                        }
-                    }
-                    //trim trailing newlines
-                    while (lines[lines.length - 1].length === 0) {
-                        lines.splice(lines.length - 1);
-                    }
-                    sources[i] = lines.join('\n');
-
-                } else if (formatType === 'format') {
-                    sources[i] = formatter.format(sources[i].trim());
-                }
-            }
-            expect(sources[0]).to.equal(sources[1]);
-            return transpiled;
-        }
     });
 });
+
+export function getTestTranspile(scopeGetter: () => [Program, string]) {
+    return async (source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'trim') => {
+        let [program, rootDir] = scopeGetter();
+        let formatter = null; //new BrightScriptFormatter();
+        expected = expected ? expected : source;
+        let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, source) as BrsFile;
+        expect(file.getDiagnostics()[0]?.message).to.not.exist;
+        let transpiled = file.transpile();
+
+        let sources = [transpiled.code, expected];
+        for (let i = 0; i < sources.length; i++) {
+            if (formatType === 'trim') {
+                let lines = sources[i].split('\n');
+                //throw out leading newlines
+                while (lines[0].length === 0) {
+                    lines.splice(0, 1);
+                }
+                let trimStartIndex = null;
+                for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+                    //if we don't have a starting trim count, compute it
+                    if (!trimStartIndex) {
+                        trimStartIndex = lines[lineIndex].length - lines[lineIndex].trim().length;
+                    }
+                    //only trim the expected file (since that's what we passed in from the test)
+                    if (lines[lineIndex].length > 0 && i === 1) {
+                        lines[lineIndex] = lines[lineIndex].substring(trimStartIndex);
+                    }
+                }
+                //trim trailing newlines
+                while (lines[lines.length - 1].length === 0) {
+                    lines.splice(lines.length - 1);
+                }
+                sources[i] = lines.join('\n');
+
+            } else if (formatType === 'format') {
+                sources[i] = formatter.format(sources[i].trim());
+            }
+        }
+        expect(sources[0]).to.equal(sources[1]);
+        return transpiled;
+    };
+}

@@ -1,9 +1,9 @@
 import { assert, expect } from 'chai';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
-import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
 
-import { Context } from './Context';
+import { Scope } from './Scope';
 import { diagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
@@ -27,12 +27,12 @@ describe('Program', () => {
         sinon.restore();
     });
 
-    describe('platformContext', () => {
+    describe('platformScope', () => {
         it('returns all callables when asked', () => {
-            expect(program.platformContext.getAllCallables().length).to.be.greaterThan(0);
+            expect(program.platformScope.getAllCallables().length).to.be.greaterThan(0);
         });
         it('validate gets called and does nothing', () => {
-            expect(program.platformContext.validate()).to.eql([]);
+            expect(program.platformScope.validate()).to.eql([]);
         });
     });
 
@@ -108,30 +108,30 @@ describe('Program', () => {
             //if we made it to here, nothing exploded, so the test passes
         });
 
-        it('adds files in the source folder to the global context', async () => {
-            expect(program.getContextByName('global')).to.exist;
-            //no files in global context
-            expect(program.getContextByName('global').fileCount).to.equal(0);
+        it('adds files in the source folder to the global scope', async () => {
+            expect(program.getScopeByName('global')).to.exist;
+            //no files in global scope
+            expect(program.getScopeByName('global').fileCount).to.equal(0);
 
             let mainPath = n(`${rootDir}/source/main.brs`);
             //add a new source file
             await program.addOrReplaceFile({ src: mainPath, dest: 'source/main.brs' }, '');
-            //file should be in global context now
-            expect(program.getContextByName('global').getFile(mainPath)).to.exist;
+            //file should be in global scope now
+            expect(program.getScopeByName('global').getFile(mainPath)).to.exist;
 
             //add an unreferenced file from the components folder
             await program.addOrReplaceFile({ src: `${rootDir}/components/component1/component1.brs`, dest: 'components/component1/component1.brs' }, '');
 
-            //global context should have the same number of files
-            expect(program.getContextByName('global').getFile(mainPath)).to.exist;
-            expect(program.getContextByName('global').getFile(`${rootDir}/components/component1/component1.brs`)).not.to.exist;
+            //global scope should have the same number of files
+            expect(program.getScopeByName('global').getFile(mainPath)).to.exist;
+            expect(program.getScopeByName('global').getFile(`${rootDir}/components/component1/component1.brs`)).not.to.exist;
         });
 
         it('normalizes file paths', async () => {
             let filePath = `${rootDir}/source\\main.brs`;
             await program.addOrReplaceFile({ src: filePath, dest: 'source/main.brs' }, '');
 
-            expect(program.getContextByName('global').getFile(filePath)).to.exist;
+            expect(program.getScopeByName('global').getFile(filePath)).to.exist;
 
             //shouldn't throw an exception because it will find the correct path after normalizing the above path and remove it
             try {
@@ -142,7 +142,7 @@ describe('Program', () => {
             }
         });
 
-        it('creates a context for every component xml file', () => {
+        it('creates a scope for every component xml file', () => {
             // let componentPath = path.resolve(`${rootDir}/components/component1.xml`);
             // await program.loadOrReloadFile('components', '')
         });
@@ -188,7 +188,7 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(diagnosticMessages.File_not_referenced_by_any_file_1013().code);
+            expect(diagnostics[0].code).to.equal(diagnosticMessages.fileNotReferencedByAnyOtherFile().code);
         });
         it('does not throw errors on shadowed init functions in components', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `
@@ -221,7 +221,7 @@ describe('Program', () => {
                     sleep(100)
                 end function
             `);
-            //validate the context
+            //validate the scope
             await program.validate();
             let diagnostics = program.getDiagnostics();
             //shouldn't have any errors
@@ -247,8 +247,8 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(diagnosticMessages.Unnecessary_script_import_in_child_from_parent_1009('').code);
-            expect(diagnostics[0].severity).to.equal('warning');
+            expect(diagnostics[0].code).to.equal(diagnosticMessages.unnecessaryScriptImportInChildFromParent('').code);
+            expect(diagnostics[0].severity).to.equal(DiagnosticSeverity.Warning);
         });
 
         it('adds info diag when child component method shadows parent component method', async () => {
@@ -271,7 +271,7 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(diagnosticMessages.Overrides_ancestor_function_1010('', '', '', '').code);
+            expect(diagnostics[0].code).to.equal(diagnosticMessages.overridesAncestorFunction('', '', '', '').code);
         });
 
         it('does not add info diagnostic on shadowed "init" functions', async () => {
@@ -323,14 +323,14 @@ describe('Program', () => {
         });
 
         it('maintains correct callables list', async () => {
-            let initialCallableCount = program.getContextByName('global').getAllCallables().length;
+            let initialCallableCount = program.getScopeByName('global').getAllCallables().length;
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
                 end sub
                 sub DoSomething()
                 end sub
             `);
-            expect(program.getContextByName('global').getAllCallables().length).equals(initialCallableCount + 2);
+            expect(program.getScopeByName('global').getAllCallables().length).equals(initialCallableCount + 2);
             //set the file contents again (resetting the wasProcessed flag)
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
@@ -338,9 +338,9 @@ describe('Program', () => {
                 sub DoSomething()
                 end sub
                 `);
-            expect(program.getContextByName('global').getAllCallables().length).equals(initialCallableCount + 2);
+            expect(program.getScopeByName('global').getAllCallables().length).equals(initialCallableCount + 2);
             program.removeFile(`${rootDir}/source/main.brs`);
-            expect(program.getContextByName('global').getAllCallables().length).equals(initialCallableCount);
+            expect(program.getScopeByName('global').getAllCallables().length).equals(initialCallableCount);
         });
 
         it('resets errors on revalidate', async () => {
@@ -382,7 +382,7 @@ describe('Program', () => {
 
             await program.validate();
             expect(program.getDiagnostics().length).to.equal(1);
-            expect(program.getDiagnostics()[0].code).to.equal(diagnosticMessages.Call_to_unknown_function_1001('', '').code);
+            expect(program.getDiagnostics()[0].code).to.equal(diagnosticMessages.callToUnknownFunction('', '').code);
         });
 
         it('detects methods from another file in a subdirectory', async () => {
@@ -421,7 +421,7 @@ describe('Program', () => {
             expect(callCount).to.equal(1);
         });
 
-        it('links xml contexts based on xml parent-child relationships', async () => {
+        it('links xml scopes based on xml parent-child relationships', async () => {
             await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
@@ -435,7 +435,7 @@ describe('Program', () => {
                 </component>
             `);
 
-            expect(program.getContextByName('components/ChildScene.xml').parentContext.name).to.equal(npkg('components/ParentScene.xml'));
+            expect(program.getScopeByName('components/ChildScene.xml').parentScope.name).to.equal(npkg('components/ParentScene.xml'));
 
             //change the parent's name.
             await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
@@ -444,22 +444,22 @@ describe('Program', () => {
                 </component>
             `);
 
-            //The child context should no longer have the link to the parent context, and should instead point back to platform
-            expect(program.getContextByName('components/ChildScene.xml').parentContext.name).to.equal('platform');
+            //The child scope should no longer have the link to the parent scope, and should instead point back to platform
+            expect(program.getScopeByName('components/ChildScene.xml').parentScope.name).to.equal('platform');
         });
 
-        it('creates a new context for every added component xml', async () => {
+        it('creates a new scope for every added component xml', async () => {
             //we have global callables, so get that initial number
             await program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, '');
-            expect(program.getContextByName(`components/component1.xml`)).to.exist;
+            expect(program.getScopeByName(`components/component1.xml`)).to.exist;
 
             await program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, '');
             await program.addOrReplaceFile({ src: `${rootDir}/components/component2.xml`, dest: 'components/component2.xml' }, '');
-            expect(program.getContextByName(`components/component1.xml`)).to.exist;
-            expect(program.getContextByName(`components/component2.xml`)).to.exist;
+            expect(program.getScopeByName(`components/component1.xml`)).to.exist;
+            expect(program.getScopeByName(`components/component2.xml`)).to.exist;
         });
 
-        it('includes referenced files in xml contexts', async () => {
+        it('includes referenced files in xml scopes', async () => {
             let xmlPath = n(`${rootDir}/components/component1.xml`);
             await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -470,10 +470,10 @@ describe('Program', () => {
             let brsPath = n(`${rootDir}/components/component1.brs`);
             await program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
 
-            let context = program.getContextByName(`components/component1.xml`);
+            let scope = program.getScopeByName(`components/component1.xml`);
             n(`components/component1.xml`);
-            expect(context.getFile(xmlPath).file.pkgPath).to.equal(util.standardizePkgPath(`components/component1.xml`));
-            expect(context.getFile(brsPath).file.pkgPath).to.equal(util.standardizePkgPath(`components/component1.brs`));
+            expect(scope.getFile(xmlPath).file.pkgPath).to.equal(util.standardizePkgPath(`components/component1.xml`));
+            expect(scope.getFile(brsPath).file.pkgPath).to.equal(util.standardizePkgPath(`components/component1.brs`));
         });
 
         it('adds xml file to files map', async () => {
@@ -493,10 +493,9 @@ describe('Program', () => {
             await program.validate();
             expect(program.getDiagnostics().length).to.equal(1);
             expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
+                ...diagnosticMessages.referencedFileDoesNotExist(),
                 file: program.getFileByPathAbsolute(xmlPath),
-                location: Range.create(3, 58, 3, 88),
-                ...diagnosticMessages.Referenced_file_does_not_exist_1004(),
-                severity: 'error'
+                range: Range.create(3, 58, 3, 88)
             });
         });
 
@@ -515,12 +514,12 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(diagnosticMessages.Script_import_case_mismatch_1012('').code);
+            expect(diagnostics[0].code).to.equal(diagnosticMessages.scriptImportCaseMismatch('').code);
         });
     });
 
     describe('reloadFile', () => {
-        it('picks up new files in a context when an xml file is loaded', async () => {
+        it('picks up new files in a scope when an xml file is loaded', async () => {
             program.options.ignoreErrorCodes.push(1013);
             let xmlPath = n(`${rootDir}/components/component1.xml`);
             await program.addOrReplaceFile({ src: xmlPath, dest: 'components/comonent1.xml' }, `
@@ -531,7 +530,7 @@ describe('Program', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
-                message: diagnosticMessages.Referenced_file_does_not_exist_1004().message
+                message: diagnosticMessages.referencedFileDoesNotExist().message
             });
 
             //add the file, the error should go away
@@ -549,7 +548,7 @@ describe('Program', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
-                message: diagnosticMessages.Referenced_file_does_not_exist_1004().message
+                message: diagnosticMessages.referencedFileDoesNotExist().message
             });
         });
 
@@ -566,7 +565,7 @@ describe('Program', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics()).to.be.empty;
-            expect(program.getContextByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
+            expect(program.getScopeByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
         });
 
         it('reloads referenced fles when xml file changes', async () => {
@@ -583,7 +582,7 @@ describe('Program', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics()).to.be.empty;
-            expect(program.getContextByName(xmlFile.pkgPath).getFile(brsPath)).not.to.exist;
+            expect(program.getScopeByName(xmlFile.pkgPath).getFile(brsPath)).not.to.exist;
 
             //reload the xml file contents, adding a new script reference.
             xmlFile = await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
@@ -593,13 +592,13 @@ describe('Program', () => {
                 </component>
             `);
 
-            expect(program.getContextByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
+            expect(program.getScopeByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
 
         });
     });
 
     describe('getCompletions', () => {
-        it('inlcudes platform completions for file with no context', async () => {
+        it('inlcudes platform completions for file with no scope', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'main.brs' }, `
                 function Main()
                     age = 1
@@ -797,7 +796,7 @@ describe('Program', () => {
             //there should be an error when calling DoParentThing, since it doesn't exist on child or parent
             expect(program.getDiagnostics()).to.be.lengthOf(1);
             expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
-                code: diagnosticMessages.Call_to_unknown_function_1001('DoParentThing', '').code
+                code: diagnosticMessages.callToUnknownFunction('DoParentThing', '').code
             });
 
             //add the script into the parent
@@ -820,7 +819,7 @@ describe('Program', () => {
         });
     });
 
-    describe('xml context', () => {
+    describe('xml scope', () => {
         it.skip('does not fail on base components with many children', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub DoSomething()
@@ -847,7 +846,7 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
 
-            let shadowedDiagnositcs = diagnostics.filter((x) => x.code === diagnosticMessages.Overrides_ancestor_function_1010('', '', '', '').code);
+            let shadowedDiagnositcs = diagnostics.filter((x) => x.code === diagnosticMessages.overridesAncestorFunction('', '', '', '').code);
 
             //the children should all have diagnostics about shadowing their parent lib.brs file.
             //If not, then the parent-child attachment was severed somehow
@@ -862,8 +861,8 @@ describe('Program', () => {
                 </component>
             `);
 
-            //the component context should only have the xml file
-            expect(program.getContextByName(xmlFile.pkgPath).fileCount).to.equal(1);
+            //the component scope should only have the xml file
+            expect(program.getScopeByName(xmlFile.pkgPath).fileCount).to.equal(1);
 
             //create the lib file
             let libFile = await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `'comment`);
@@ -875,8 +874,8 @@ describe('Program', () => {
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                 </component>
             `);
-            let ctx = program.getContextByName(xmlFile.pkgPath);
-            //the component context should have the xml file AND the lib file
+            let ctx = program.getScopeByName(xmlFile.pkgPath);
+            //the component scope should have the xml file AND the lib file
             expect(ctx.fileCount).to.equal(2);
             expect(ctx.getFile(xmlFile.pathAbsolute)).to.exist;
             expect(ctx.getFile(libFile.pathAbsolute)).to.exist;
@@ -888,9 +887,9 @@ describe('Program', () => {
                 </component>
             `);
 
-            //the context should again only have the xml file loaded
-            expect(program.getContextByName(xmlFile.pkgPath).fileCount).to.equal(1);
-            expect(program.getContextByName(xmlFile.pkgPath)).to.exist;
+            //the scope should again only have the xml file loaded
+            expect(program.getScopeByName(xmlFile.pkgPath).fileCount).to.equal(1);
+            expect(program.getScopeByName(xmlFile.pkgPath)).to.exist;
         });
     });
 
@@ -935,7 +934,7 @@ describe('Program', () => {
     });
 
     describe('getDiagnostics', () => {
-        it('includes diagnostics from files not included in any context', async () => {
+        it('includes diagnostics from files not included in any scope', async () => {
             let pathAbsolute = util.standardizePath(`${rootDir}/components/a/b/c/main.brs`);
             await program.addOrReplaceFile({ src: pathAbsolute, dest: 'components/a/b/c/main.brs' }, `
                 sub A()
@@ -969,19 +968,19 @@ describe('Program', () => {
             expect(program.getDiagnostics()).to.be.lengthOf(2);
 
             program.options.ignoreErrorCodes = [
-                diagnosticMessages.Expected_a_arguments_but_got_b_1002(0, 0).code
+                diagnosticMessages.mismatchArgumentCount(0, 0).code
             ];
 
             expect(program.getDiagnostics()).to.be.lengthOf(1);
-            expect(program.getDiagnostics()[0].code).to.equal(diagnosticMessages.Call_to_unknown_function_1001('', '').code);
+            expect(program.getDiagnostics()[0].code).to.equal(diagnosticMessages.callToUnknownFunction('', '').code);
         });
     });
 
     describe('getCompletions', () => {
         beforeEach(() => {
             //remove the platform stuff to simplify the tests
-            program.platformContext = new Context('platform', () => false);
-            program.getContextByName('global').attachParentContext(program.platformContext);
+            program.platformScope = new Scope('platform', () => false);
+            program.getScopeByName('global').attachParentScope(program.platformScope);
         });
 
         it('returns all functions in scope', async () => {
