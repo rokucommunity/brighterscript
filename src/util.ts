@@ -178,7 +178,7 @@ export class Util {
                 let err = parseErrors[0];
                 let diagnostic = {
                     severity: 'error',
-                    code: diagnosticMessages.BsConfigJson_has_syntax_errors_1021().code,
+                    code: diagnosticMessages.bsConfigJsonHasSyntaxErrors().code,
                     message: printParseErrorCode(parseErrors[0].error),
                     file: {
                         pathAbsolute: configFilePath

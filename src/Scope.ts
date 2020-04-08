@@ -316,7 +316,7 @@ export class Scope {
                 if (expCall.args.length > maxParams || expCall.args.length < minParams) {
                     let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
                     this.diagnostics.push({
-                        ...diagnosticMessages.Expected_a_arguments_but_got_b_1002(minMaxParamsText, expCallArgCount),
+                        ...diagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
                         location: expCall.nameRange,
                         //TODO detect end of expression call
                         file: file,
@@ -343,7 +343,7 @@ export class Scope {
                     let globalCallable = globalCallableContainer[0];
 
                     this.diagnostics.push({
-                        ...diagnosticMessages.Local_var_shadows_global_function_1011(
+                        ...diagnosticMessages.localVarShadowsGlobalFunction(
                             varDeclaration.name,
                             globalCallable.callable.file.pkgPath
                         ),
@@ -379,7 +379,7 @@ export class Scope {
                 //detect calls to unknown functions
                 if (!knownCallable) {
                     this.diagnostics.push({
-                        ...diagnosticMessages.Call_to_unknown_function_1001(expCall.name, this.name),
+                        ...diagnosticMessages.callToUnknownFunction(expCall.name, this.name),
                         location: expCall.nameRange,
                         file: file,
                         severity: 'error'
@@ -426,7 +426,7 @@ export class Scope {
                     if (lowerName !== 'init') {
                         let shadowedCallable = ancestorNonPlatformCallables[ancestorNonPlatformCallables.length - 1];
                         this.diagnostics.push({
-                            ...diagnosticMessages.Overrides_ancestor_function_1010(
+                            ...diagnosticMessages.overridesAncestorFunction(
                                 container.callable.name,
                                 container.scope.name,
                                 shadowedCallable.callable.file.pkgPath,
@@ -448,7 +448,7 @@ export class Scope {
                     let callable = callableContainer.callable;
 
                     this.diagnostics.push({
-                        ...diagnosticMessages.Duplicate_function_implementation_1003(callable.name, callableContainer.scope.name),
+                        ...diagnosticMessages.duplicateFunctionImplementation(callable.name, callableContainer.scope.name),
                         location: Range.create(
                             callable.nameRange.start.line,
                             callable.nameRange.start.character,

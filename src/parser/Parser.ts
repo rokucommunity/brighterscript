@@ -182,7 +182,7 @@ export class Parser {
      */
     private ensureBrighterScriptMode(featureName: string) {
         if (this.options.mode !== 'brighterscript') {
-            throw this.addDiagnostic(this.peek(), diagnosticMessages.Bs_feature_not_supported_in_brs_files_1019(featureName));
+            throw this.addDiagnostic(this.peek(), diagnosticMessages.bsFeatureNotSupportedInBrsFiles(featureName));
         }
     }
 
@@ -246,7 +246,7 @@ export class Parser {
         this.ensureBrighterScriptMode('class declarations');
         let keyword = this.consume(`Expected 'class' keyword`, TokenKind.Class);
         //get the class name
-        let className = this.consumeContinue(diagnosticMessages.Missing_identifier_after_class_keyword_1016(), TokenKind.Identifier) as Identifier;
+        let className = this.consumeContinue(diagnosticMessages.missingIdentifierAfterClassKeyword(), TokenKind.Identifier) as Identifier;
         //consume newlines (at least one)
         while (this.match(TokenKind.Newline)) {
         }
@@ -335,7 +335,7 @@ export class Parser {
 
             //no field type specified
             if (!valueKindFromString(`${fieldType.text}`) && !this.check(TokenKind.Identifier)) {
-                this.addDiagnostic(this.peek(), diagnosticMessages.Expected_valid_type_to_follow_as_keyword_1018());
+                this.addDiagnostic(this.peek(), diagnosticMessages.expectedValidTypeToFollowAsKeyword());
             }
         }
 
@@ -360,7 +360,7 @@ export class Parser {
             if (this.check(TokenKind.Sub, TokenKind.Function)) {
                 functionType = this.advance();
             } else {
-                this.addDiagnostic(this.peek(), diagnosticMessages.Missing_function_sub_keyword_1017(this.peek().text));
+                this.addDiagnostic(this.peek(), diagnosticMessages.missingCallableKeyword(this.peek().text));
                 functionType = {
                     isReserved: true,
                     kind: TokenKind.Function,

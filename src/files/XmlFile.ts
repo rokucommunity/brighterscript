@@ -111,7 +111,7 @@ export class XmlFile {
                 //component name not defined
                 if (!this.componentName) {
                     this.parseDiagnistics.push({
-                        ...diagnosticMessages.Component_missing_name_attribute_1006(),
+                        ...diagnosticMessages.xmlComponentMissingNameAttribute(),
                         location: Range.create(
                             componentRange.start.line,
                             componentRange.start.character,
@@ -125,7 +125,7 @@ export class XmlFile {
                 //parent component name not defined
                 if (!this.parentName) {
                     this.parseDiagnistics.push({
-                        ...diagnosticMessages.Component_missing_extends_attribute_1007(),
+                        ...diagnosticMessages.xmlComponentMissingExtendsAttribute(),
                         location: Range.create(
                             componentRange.start.line,
                             componentRange.start.character,
@@ -139,7 +139,7 @@ export class XmlFile {
             } else {
                 //the component xml element was not found in the file
                 this.parseDiagnistics.push({
-                    ...diagnosticMessages.Xml_component_missing_component_declaration_1005(),
+                    ...diagnosticMessages.xmlComponentMissingComponentDeclaration(),
                     location: Range.create(
                         0,
                         0,
@@ -159,7 +159,7 @@ export class XmlFile {
                 //add basic xml parse diagnostic errors
                 this.parseDiagnistics.push({
                     message: match[1],
-                    code: diagnosticMessages.Xml_parse_error_1008().code,
+                    code: diagnosticMessages.xmlGenericParseError().code,
                     location: Range.create(
                         lineIndex,
                         columnIndex,

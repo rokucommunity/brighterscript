@@ -383,7 +383,7 @@ export class Program {
                     file: file,
                     location: Range.create(0, 0, 0, Number.MAX_VALUE),
                     severity: 'warning',
-                    ...diagnosticMessages.File_not_referenced_by_any_file_1013()
+                    ...diagnosticMessages.fileNotReferencedByAnyOtherFile()
                 });
             }
         }

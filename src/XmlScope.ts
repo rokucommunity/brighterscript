@@ -139,7 +139,7 @@ export class XmlScope extends Scope {
                         severity: 'warning',
                         file: this.xmlFile,
                         location: Range.create(scriptImport.lineIndex, scriptImport.columnIndexBegin, scriptImport.lineIndex, scriptImport.columnIndexEnd),
-                        ...diagnosticMessages.Unnecessary_script_import_in_child_from_parent_1009(ancestorComponentName)
+                        ...diagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)
                     });
                 }
             }
@@ -178,11 +178,11 @@ export class XmlScope extends Scope {
                 let message: string;
                 let code: number;
                 if (scriptImport.text.trim().length === 0) {
-                    message = diagnosticMessages.Script_src_cannot_be_empty_1015().message;
-                    code = diagnosticMessages.Script_src_cannot_be_empty_1015().code;
+                    message = diagnosticMessages.scriptSrcCannotBeEmpty().message;
+                    code = diagnosticMessages.scriptSrcCannotBeEmpty().code;
                 } else {
-                    message = diagnosticMessages.Referenced_file_does_not_exist_1004().message;
-                    code = diagnosticMessages.Referenced_file_does_not_exist_1004().code;
+                    message = diagnosticMessages.referencedFileDoesNotExist().message;
+                    code = diagnosticMessages.referencedFileDoesNotExist().code;
                 }
 
                 this.diagnostics.push({
@@ -200,7 +200,7 @@ export class XmlScope extends Scope {
                 //if the character casing of the script import path does not match that of the actual path
             } else if (scriptImport.pkgPath !== referencedFile.file.pkgPath) {
                 this.diagnostics.push({
-                    ...diagnosticMessages.Script_import_case_mismatch_1012(referencedFile.file.pkgPath),
+                    ...diagnosticMessages.scriptImportCaseMismatch(referencedFile.file.pkgPath),
                     location: Range.create(
                         scriptImport.lineIndex,
                         scriptImport.columnIndexBegin,

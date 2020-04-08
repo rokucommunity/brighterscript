@@ -249,7 +249,7 @@ export class BrsFile {
      */
     public getIgnores(lines: string[]) {
         //TODO use the comment statements found in the AST for this instead of text search
-        let allCodesExcept1014 = diagnosticCodes.filter((x) => x !== diagnosticMessages.Unknown_diagnostic_code_1014(0).code);
+        let allCodesExcept1014 = diagnosticCodes.filter((x) => x !== diagnosticMessages.unknownDiagnosticCode(0).code);
         this.commentFlags = [];
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             let line = lines[lineIndex];
@@ -304,7 +304,7 @@ export class BrsFile {
                                 //add a warning for unknown codes
                                 if (!diagnosticCodes.includes(codeInt)) {
                                     this.diagnostics.push({
-                                        ...diagnosticMessages.Unknown_diagnostic_code_1014(codeInt),
+                                        ...diagnosticMessages.unknownDiagnosticCode(codeInt),
                                         file: this,
                                         location: Range.create(lineIndex, offset + codeToken.startIndex, lineIndex, offset + codeToken.startIndex + codeToken.text.length),
                                         severity: 'warning'

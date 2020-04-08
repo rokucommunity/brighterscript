@@ -12,7 +12,7 @@ describe('parser', () => {
                 end class
             `);
             let { errors } = Parser.parse(tokens, { mode: ParseMode.brightscript });
-            expect(errors[0]?.code).to.equal(diagnosticMessages.Bs_feature_not_supported_in_brs_files_1019('').code);
+            expect(errors[0]?.code).to.equal(diagnosticMessages.bsFeatureNotSupportedInBrsFiles('').code);
 
         });
         it('parses empty class', () => {
@@ -97,7 +97,7 @@ describe('parser', () => {
                 expect(errors.length).to.be.greaterThan(0);
                 let cls = statements[0] as ClassStatement;
                 expect(cls.fields[0].name.text).to.equal('middleName');
-                expect(errors[0].code).to.equal(diagnosticMessages.Expected_valid_type_to_follow_as_keyword_1018().code);
+                expect(errors[0].code).to.equal(diagnosticMessages.expectedValidTypeToFollowAsKeyword().code);
             });
 
             it('field access modifier defaults to public when omitted', () => {
@@ -172,7 +172,7 @@ describe('parser', () => {
                     `);
                 let { errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
                 expect(errors).to.have.lengthOf(1);
-                expect(errors[0].code).to.equal(diagnosticMessages.Missing_function_sub_keyword_1017('').code);
+                expect(errors[0].code).to.equal(diagnosticMessages.missingCallableKeyword('').code);
             });
         });
     });

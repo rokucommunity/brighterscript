@@ -362,7 +362,7 @@ export class LanguageServer {
                 builder.addDiagnostic(configFilePath, {
                     location: Range.create(0, 0, 0, 0),
                     severity: 'warning',
-                    ...diagnosticMessages.BrsConfigJson_is_depricated_1020()
+                    ...diagnosticMessages.brsConfigJsonIsDepricated()
                 });
                 return this.sendDiagnostics();
             }
