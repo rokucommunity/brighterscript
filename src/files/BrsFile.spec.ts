@@ -10,6 +10,9 @@ import { FunctionType } from '../types/FunctionType';
 import { IntegerType } from '../types/IntegerType';
 import { StringType } from '../types/StringType';
 import { BrsFile } from './BrsFile';
+import { Lexer } from '..';
+import { SourceMapConsumer } from 'source-map';
+import { TokenKind } from '../lexer';
 
 let sinon = sinonImport.createSandbox();
 
@@ -144,13 +147,13 @@ describe('BrsFile', () => {
 
                 expect(program.getDiagnostics()).to.be.lengthOf(3);
                 expect(program.getDiagnostics()[0]).to.deep.include({
-                    location: Range.create(2, 53, 2, 59)
+                    range: Range.create(2, 53, 2, 59)
                 } as Diagnostic);
                 expect(program.getDiagnostics()[1]).to.deep.include({
-                    location: Range.create(2, 60, 2, 66)
+                    range: Range.create(2, 60, 2, 66)
                 } as Diagnostic);
                 expect(program.getDiagnostics()[2]).to.deep.include({
-                    location: Range.create(2, 69, 2, 74)
+                    range: Range.create(2, 69, 2, 74)
                 } as Diagnostic);
             });
 
@@ -190,7 +193,7 @@ describe('BrsFile', () => {
 
                 expect(program.getDiagnostics()).to.be.lengthOf(1);
                 expect(program.getDiagnostics()[0]).to.deep.include({
-                    location: Range.create(5, 24, 5, 35)
+                    range: Range.create(5, 24, 5, 35)
                 } as Diagnostic);
             });
 
@@ -674,7 +677,6 @@ describe('BrsFile', () => {
                 end function
             `);
             expect(file.callables[0]).to.deep.include({
-                bodyRange: Range.create(2, 0, 3, 16),
                 file: file,
                 nameRange: Range.create(1, 25, 1, 36)
             });
@@ -765,7 +767,7 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()[0]).to.deep.include({
                 file: file
             });
-            expect(file.getDiagnostics()[0].location.start.line).to.equal(1);
+            expect(file.getDiagnostics()[0].range.start.line).to.equal(1);
         });
 
         it('supports using the `next` keyword in a for loop', async () => {
@@ -796,7 +798,7 @@ describe('BrsFile', () => {
     });
 
     describe('findCallables', () => {
-        it('finds body range', async () => {
+        it('finds range', async () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
             await file.parse(`
                 sub Sum()
@@ -804,7 +806,7 @@ describe('BrsFile', () => {
                 end sub
             `);
             let callable = file.callables[0];
-            expect(callable.bodyRange).to.eql(Range.create(2, 0, 3, 16));
+            expect(callable.range).to.eql(Range.create(1, 16, 3, 23));
         });
 
         it('finds correct body range even with inner function', async () => {
@@ -818,7 +820,7 @@ describe('BrsFile', () => {
                 end sub
             `);
             let callable = file.callables[0];
-            expect(callable.bodyRange).to.eql(Range.create(2, 0, 6, 16));
+            expect(callable.range).to.eql(Range.create(1, 16, 6, 23));
         });
 
         it('finds callable parameters', async () => {
@@ -953,21 +955,13 @@ describe('BrsFile', () => {
         it('properly maps the location to a Range', () => {
             let file = new BrsFile('', '', program);
             expect(file.standardizeLexParseErrors([<any>{
-                location: {
-                    start: {
-                        column: 0,
-                        line: 1
-                    }, end: {
-                        column: 4,
-                        line: 2
-                    }
-                },
+                range: Range.create(0, 0, 1, 4),
                 message: 'some lex error',
                 stack: ''
             }])).to.eql([<Diagnostic>{
                 code: 1000,
                 message: 'some lex error',
-                location: Range.create(0, 0, 1, 4),
+                range: Range.create(0, 0, 1, 4),
                 file: file,
                 severity: DiagnosticSeverity.Error
             }]);
@@ -1131,8 +1125,8 @@ describe('BrsFile', () => {
             `);
 
             expect(file.functionScopes).to.be.length(2);
-            expect(file.functionScopes[0].bodyRange).to.eql(Range.create(2, 0, 5, 16));
-            expect(file.functionScopes[1].bodyRange).to.eql(Range.create(3, 0, 4, 20));
+            expect(file.functionScopes[0].range).to.eql(Range.create(1, 16, 5, 23));
+            expect(file.functionScopes[1].range).to.eql(Range.create(2, 30, 4, 32));
         });
     });
 
@@ -1332,6 +1326,42 @@ describe('BrsFile', () => {
                     end if
                 end sub
             `, 'trim');
+        });
+
+        it('does not add leading or trailing newlines', async () => {
+            await testTranspile(`function log()\nend function`, undefined, 'none');
+        });
+
+        it('computes correct locations for sourcemap', async () => {
+            let source = `function log(name)\n    firstName = name\nend function`;
+            let tokens = Lexer.scan(source).tokens
+                //remove newlines and EOF
+                .filter(x => x.kind !== TokenKind.Eof && x.kind !== TokenKind.Newline);
+
+            let result = await testTranspile(source, source, 'none');
+            //load the source map
+            await SourceMapConsumer.with(result.map.toString(), null, (consumer) => {
+                let tokenResult = tokens.map(token => ({
+                    kind: token.kind,
+                    start: token.range.start
+                }));
+                let sourcemapResult = tokens.map(token => {
+                    let originalPosition = consumer.originalPositionFor({
+                        //convert token 0-based line to source-map 1-based line for the lookup
+                        line: token.range.start.line + 1,
+                        column: token.range.start.character
+                    });
+                    return {
+                        kind: token.kind,
+                        start: Position.create(
+                            //convert source-map 1-based line to token 0-based line
+                            originalPosition.line - 1,
+                            originalPosition.column
+                        )
+                    };
+                });
+                expect(sourcemapResult).to.eql(tokenResult);
+            });
         });
 
         it('works for function parameters', async () => {

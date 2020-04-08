@@ -1,12 +1,17 @@
-import { Token, Identifier, Location, TokenKind } from '../lexer';
+import { Token, Identifier, TokenKind } from '../lexer';
 import { SourceNode } from 'source-map';
 import { TranspileState, indent, Expression, FunctionExpression } from './Expression';
 import { util } from '../util';
+import { Range } from 'vscode-languageserver';
 
-/** A BrightScript statement */
+/**
+ * A BrightScript statement
+ */
 export interface Statement {
-    /** The starting and ending location of the expression. */
-    location: Location;
+    /**
+     *  The starting and ending location of the statement.
+     **/
+    range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string>;
 }
@@ -18,20 +23,17 @@ export class AssignmentStatement implements Statement {
         },
         readonly name: Identifier,
         readonly value: Expression
-    ) { }
-
-    get location() {
-        return {
-            start: this.name.location.start,
-            end: this.value.location.end
-        };
+    ) {
+        this.range = Range.create(this.name.range.start, this.value.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pathAbsolute, this.name.text),
+            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text),
             ' ',
-            new SourceNode(this.tokens.equals.location.start.line, this.tokens.equals.location.start.column, state.pathAbsolute, '='),
+            new SourceNode(this.tokens.equals.range.start.line + 1, this.tokens.equals.range.start.character, state.pathAbsolute, '='),
             ' ',
             ...this.value.transpile(state)
         ];
@@ -41,19 +43,17 @@ export class AssignmentStatement implements Statement {
 export class Block implements Statement {
     constructor(
         readonly statements: Statement[],
-        readonly startingLocation: Location
-    ) { }
-
-    get location() {
-        let end = this.statements.length
-            ? this.statements[this.statements.length - 1].location.end
-            : this.startingLocation.start;
-
-        return {
-            start: this.startingLocation.start,
-            end: end
-        };
+        readonly startingRange: Range
+    ) {
+        this.range = Range.create(
+            this.startingRange.start,
+            this.statements.length
+                ? this.statements[this.statements.length - 1].range.end
+                : this.startingRange.start
+        );
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         state.blockDepth++;
@@ -91,11 +91,11 @@ export class Block implements Statement {
 export class ExpressionStatement implements Statement {
     constructor(
         readonly expression: Expression
-    ) { }
-
-    get location() {
-        return this.expression.location;
+    ) {
+        this.range = this.expression.range;
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return this.expression.transpile(state);
@@ -105,14 +105,14 @@ export class ExpressionStatement implements Statement {
 export class CommentStatement implements Statement, Expression {
     constructor(
         public comments: Token[]
-    ) { }
-
-    get location() {
-        return {
-            start: this.comments[0].location.start,
-            end: this.comments[this.comments.length - 1].location.end
-        };
+    ) {
+        this.range = Range.create(
+            this.comments[0].range.start,
+            this.comments[this.comments.length - 1].range.end
+        );
     }
+
+    public range: Range;
 
     get text() {
         return this.comments.map(x => x.text).join('\n');
@@ -126,7 +126,7 @@ export class CommentStatement implements Statement, Expression {
                 result.push(indent(state.blockDepth));
             }
             result.push(
-                new SourceNode(comment.location.start.line, comment.location.start.column, state.pathAbsolute, comment.text)
+                new SourceNode(comment.range.start.line + 1, comment.range.start.character, state.pathAbsolute, comment.text)
             );
             //add newline for all except final comment
             if (i < this.comments.length - 1) {
@@ -142,15 +142,15 @@ export class ExitForStatement implements Statement {
         readonly tokens: {
             exitFor: Token;
         }
-    ) { }
-
-    get location() {
-        return this.tokens.exitFor.location;
+    ) {
+        this.range = this.tokens.exitFor.range;
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         return [
-            new SourceNode(this.tokens.exitFor.location.start.line, this.tokens.exitFor.location.start.column, state.pathAbsolute, 'exit for')
+            new SourceNode(this.tokens.exitFor.range.start.line + 1, this.tokens.exitFor.range.start.character, state.pathAbsolute, 'exit for')
         ];
     }
 }
@@ -160,28 +160,28 @@ export class ExitWhileStatement implements Statement {
         readonly tokens: {
             exitWhile: Token;
         }
-    ) { }
-
-    get location() {
-        return this.tokens.exitWhile.location;
+    ) {
+        this.range = this.tokens.exitWhile.range;
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         return [
-            new SourceNode(this.tokens.exitWhile.location.start.line, this.tokens.exitWhile.location.start.column, state.pathAbsolute, 'exit while')
+            new SourceNode(this.tokens.exitWhile.range.start.line + 1, this.tokens.exitWhile.range.start.character, state.pathAbsolute, 'exit while')
         ];
     }
 }
 
 export class FunctionStatement implements Statement {
-    constructor(readonly name: Identifier, readonly func: FunctionExpression) { }
-
-    get location() {
-        return {
-            start: this.func.location.start,
-            end: this.func.location.end
-        };
+    constructor(
+        readonly name: Identifier,
+        readonly func: FunctionExpression
+    ) {
+        this.range = this.func.range;
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return this.func.transpile(state, this.name);
@@ -210,31 +210,27 @@ export class IfStatement implements Statement {
         readonly thenBranch: Block,
         readonly elseIfs: ElseIf[],
         readonly elseBranch?: Block
-    ) { }
-
-    private getEndLocation(): Location {
-        if (this.tokens.endIf) {
-            return this.tokens.endIf.location;
-        } else if (this.elseBranch) {
-            return this.elseBranch.location;
-        } else if (this.elseIfs.length) {
-            return this.elseIfs[this.elseIfs.length - 1].thenBranch.location;
-        } else {
-            return this.thenBranch.location;
-        }
+    ) {
+        this.range = Range.create(this.tokens.if.range.start, this.getEndPosition().end);
     }
+    public readonly range: Range;
 
-    get location() {
-        return {
-            start: this.tokens.if.location.start,
-            end: this.getEndLocation().end
-        };
+    private getEndPosition() {
+        if (this.tokens.endIf) {
+            return this.tokens.endIf.range;
+        } else if (this.elseBranch) {
+            return this.elseBranch.range;
+        } else if (this.elseIfs.length) {
+            return this.elseIfs[this.elseIfs.length - 1].thenBranch.range;
+        } else {
+            return this.thenBranch.range;
+        }
     }
 
     transpile(state: TranspileState) {
         let results = [];
         //if   (already indented by block)
-        results.push(new SourceNode(this.tokens.if.location.start.line, this.tokens.if.location.start.column, state.pathAbsolute, 'if'));
+        results.push(new SourceNode(this.tokens.if.range.start.line + 1, this.tokens.if.range.start.character, state.pathAbsolute, 'if'));
         results.push(' ');
         //conditions
         results.push(...this.condition.transpile(state));
@@ -242,7 +238,7 @@ export class IfStatement implements Statement {
         //then
         if (this.tokens.then) {
             results.push(
-                new SourceNode(this.tokens.then.location.start.line, this.tokens.then.location.start.column, state.pathAbsolute, 'then')
+                new SourceNode(this.tokens.then.range.start.line + 1, this.tokens.then.range.start.character, state.pathAbsolute, 'then')
             );
         } else {
             results.push('then');
@@ -261,7 +257,7 @@ export class IfStatement implements Statement {
             //elseif
             results.push(
                 indent(state.blockDepth),
-                new SourceNode(elseif.elseIfToken.location.start.line, elseif.elseIfToken.location.start.column, state.pathAbsolute, 'else if'),
+                new SourceNode(elseif.elseIfToken.range.start.line + 1, elseif.elseIfToken.range.start.character, state.pathAbsolute, 'else if'),
                 ' '
             );
 
@@ -271,7 +267,7 @@ export class IfStatement implements Statement {
             results.push(' ');
             if (elseif.thenToken) {
                 results.push(
-                    new SourceNode(elseif.thenToken.location.start.line, elseif.thenToken.location.start.column, state.pathAbsolute, 'then')
+                    new SourceNode(elseif.thenToken.range.start.line + 1, elseif.thenToken.range.start.character, state.pathAbsolute, 'then')
                 );
             } else {
                 results.push('then');
@@ -293,7 +289,7 @@ export class IfStatement implements Statement {
             //else
             results.push(
                 indent(state.blockDepth),
-                new SourceNode(this.tokens.else.location.start.line, this.tokens.else.location.start.column, state.pathAbsolute, 'else')
+                new SourceNode(this.tokens.else.range.start.line + 1, this.tokens.else.range.start.character, state.pathAbsolute, 'else')
             );
 
             //then body
@@ -310,7 +306,7 @@ export class IfStatement implements Statement {
         results.push(indent(state.blockDepth));
         if (this.tokens.endIf) {
             results.push(
-                new SourceNode(this.tokens.endIf.location.start.line, this.tokens.endIf.location.start.column, state.pathAbsolute, 'end if')
+                new SourceNode(this.tokens.endIf.range.start.line + 1, this.tokens.endIf.range.start.character, state.pathAbsolute, 'end if')
             );
         } else {
             results.push('end if');
@@ -321,19 +317,20 @@ export class IfStatement implements Statement {
 }
 
 export class IncrementStatement implements Statement {
-    constructor(readonly value: Expression, readonly operator: Token) { }
-
-    get location() {
-        return {
-            start: this.value.location.start,
-            end: this.operator.location.end
-        };
+    constructor(
+        readonly value: Expression,
+        readonly operator: Token
+    ) {
+        this.range = Range.create(this.value.range.start, this.operator.range.end);
     }
+
+    public readonly range: Range;
+
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         return [
             ...this.value.transpile(state),
-            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, state.pathAbsolute, this.operator.text)
+            new SourceNode(this.operator.range.start.line + 1, this.operator.range.start.character, state.pathAbsolute, this.operator.text)
         ];
     }
 }
@@ -362,22 +359,20 @@ export class PrintStatement implements Statement {
             print: Token;
         },
         readonly expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>
-    ) { }
-
-    get location() {
-        let end = this.expressions.length
-            ? this.expressions[this.expressions.length - 1].location.end
-            : this.tokens.print.location.end;
-
-        return {
-            start: this.tokens.print.location.start,
-            end: end
-        };
+    ) {
+        this.range = Range.create(
+            this.tokens.print.range.start,
+            this.expressions.length
+                ? this.expressions[this.expressions.length - 1].range.end
+                : this.tokens.print.range.end
+        );
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         let result = [
-            new SourceNode(this.tokens.print.location.start.line, this.tokens.print.location.start.column, state.pathAbsolute, 'print'),
+            new SourceNode(this.tokens.print.range.start.line + 1, this.tokens.print.range.start.character, state.pathAbsolute, 'print'),
             ' '
         ];
         for (let i = 0; i < this.expressions.length; i++) {
@@ -402,20 +397,17 @@ export class GotoStatement implements Statement {
             goto: Token;
             label: Token;
         }
-    ) { }
-
-    get location() {
-        return {
-            start: this.tokens.goto.location.start,
-            end: this.tokens.label.location.end
-        };
+    ) {
+        this.range = Range.create(this.tokens.goto.range.start, this.tokens.label.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         return [
-            new SourceNode(this.tokens.goto.location.start.line, this.tokens.goto.location.start.column, state.pathAbsolute, 'goto'),
+            new SourceNode(this.tokens.goto.range.start.line + 1, this.tokens.goto.range.start.character, state.pathAbsolute, 'goto'),
             ' ',
-            new SourceNode(this.tokens.label.location.start.line, this.tokens.label.location.start.column, state.pathAbsolute, this.tokens.label.text)
+            new SourceNode(this.tokens.label.range.start.line + 1, this.tokens.label.range.start.character, state.pathAbsolute, this.tokens.label.text)
         ];
     }
 }
@@ -426,19 +418,16 @@ export class LabelStatement implements Statement {
             identifier: Token;
             colon: Token;
         }
-    ) { }
-
-    get location() {
-        return {
-            start: this.tokens.identifier.location.start,
-            end: this.tokens.colon.location.end
-        };
+    ) {
+        this.range = Range.create(this.tokens.identifier.range.start, this.tokens.colon.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         return [
-            new SourceNode(this.tokens.identifier.location.start.line, this.tokens.identifier.location.start.column, state.pathAbsolute, this.tokens.identifier.text),
-            new SourceNode(this.tokens.colon.location.start.line, this.tokens.colon.location.start.column, state.pathAbsolute, ':')
+            new SourceNode(this.tokens.identifier.range.start.line + 1, this.tokens.identifier.range.start.character, state.pathAbsolute, this.tokens.identifier.text),
+            new SourceNode(this.tokens.colon.range.start.line + 1, this.tokens.colon.range.start.character, state.pathAbsolute, ':')
 
         ];
     }
@@ -450,19 +439,19 @@ export class ReturnStatement implements Statement {
             return: Token;
         },
         readonly value?: Expression
-    ) { }
-
-    get location() {
-        return {
-            start: this.tokens.return.location.start,
-            end: (this.value && this.value.location.end) || this.tokens.return.location.end
-        };
+    ) {
+        this.range = Range.create(
+            this.tokens.return.range.start,
+            (this.value && this.value.range.end) || this.tokens.return.range.end
+        );
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.tokens.return.location.start.line, this.tokens.return.location.start.column, state.pathAbsolute, 'return')
+            new SourceNode(this.tokens.return.range.start.line + 1, this.tokens.return.range.start.character, state.pathAbsolute, 'return')
         );
         if (this.value) {
             result.push(' ');
@@ -477,18 +466,15 @@ export class EndStatement implements Statement {
         readonly tokens: {
             end: Token;
         }
-    ) { }
-
-    get location() {
-        return {
-            start: this.tokens.end.location.start,
-            end: this.tokens.end.location.end
-        };
+    ) {
+        this.range = Range.create(this.tokens.end.range.start, this.tokens.end.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.tokens.end.location.start.line, this.tokens.end.location.start.column, state.pathAbsolute, 'end')
+            new SourceNode(this.tokens.end.range.start.line + 1, this.tokens.end.range.start.character, state.pathAbsolute, 'end')
         ];
     }
 }
@@ -498,18 +484,15 @@ export class StopStatement implements Statement {
         readonly tokens: {
             stop: Token;
         }
-    ) { }
-
-    get location() {
-        return {
-            start: this.tokens.stop.location.start,
-            end: this.tokens.stop.location.end
-        };
+    ) {
+        this.range = Range.create(this.tokens.stop.range.start, this.tokens.stop.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.tokens.stop.location.start.line, this.tokens.stop.location.start.column, state.pathAbsolute, 'stop')
+            new SourceNode(this.tokens.stop.range.start.line + 1, this.tokens.stop.range.start.character, state.pathAbsolute, 'stop')
         ];
     }
 }
@@ -526,20 +509,17 @@ export class ForStatement implements Statement {
         readonly finalValue: Expression,
         readonly increment: Expression,
         readonly body: Block
-    ) { }
-
-    get location() {
-        return {
-            start: this.tokens.for.location.start,
-            end: this.tokens.endFor.location.end
-        };
+    ) {
+        this.range = Range.create(this.tokens.for.range.start, this.tokens.endFor.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         let result = [];
         //for
         result.push(
-            new SourceNode(this.tokens.for.location.start.line, this.tokens.for.location.start.column, state.pathAbsolute, 'for'),
+            new SourceNode(this.tokens.for.range.start.line + 1, this.tokens.for.range.start.character, state.pathAbsolute, 'for'),
             ' '
         );
         //i=1
@@ -549,7 +529,7 @@ export class ForStatement implements Statement {
         );
         //to
         result.push(
-            new SourceNode(this.tokens.to.location.start.line, this.tokens.to.location.start.column, state.pathAbsolute, 'to'),
+            new SourceNode(this.tokens.to.range.start.line + 1, this.tokens.to.range.start.character, state.pathAbsolute, 'to'),
             ' '
         );
         //final value
@@ -558,7 +538,7 @@ export class ForStatement implements Statement {
         if (this.tokens.step) {
             result.push(
                 ' ',
-                new SourceNode(this.tokens.step.location.start.line, this.tokens.step.location.start.column, state.pathAbsolute, 'step'),
+                new SourceNode(this.tokens.step.range.start.line + 1, this.tokens.step.range.start.character, state.pathAbsolute, 'step'),
                 ' ',
                 this.increment.transpile(state)
             );
@@ -573,7 +553,7 @@ export class ForStatement implements Statement {
         //end for
         result.push(
             indent(state.blockDepth),
-            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pathAbsolute, 'end for')
+            new SourceNode(this.tokens.endFor.range.start.line + 1, this.tokens.endFor.range.start.character, state.pathAbsolute, 'end for')
         );
 
         return result;
@@ -590,30 +570,27 @@ export class ForEachStatement implements Statement {
         readonly item: Token,
         readonly target: Expression,
         readonly body: Block
-    ) { }
-
-    get location() {
-        return {
-            start: this.tokens.forEach.location.start,
-            end: this.tokens.endFor.location.end
-        };
+    ) {
+        this.range = Range.create(this.tokens.forEach.range.start, this.tokens.endFor.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         let result = [];
         //for each
         result.push(
-            new SourceNode(this.tokens.forEach.location.start.line, this.tokens.forEach.location.start.column, state.pathAbsolute, 'for each'),
+            new SourceNode(this.tokens.forEach.range.start.line + 1, this.tokens.forEach.range.start.character, state.pathAbsolute, 'for each'),
             ' '
         );
         //item
         result.push(
-            new SourceNode(this.tokens.forEach.location.start.line, this.tokens.forEach.location.start.column, state.pathAbsolute, this.item.text),
+            new SourceNode(this.tokens.forEach.range.start.line + 1, this.tokens.forEach.range.start.character, state.pathAbsolute, this.item.text),
             ' '
         );
         //in
         result.push(
-            new SourceNode(this.tokens.in.location.start.line, this.tokens.in.location.start.column, state.pathAbsolute, 'in'),
+            new SourceNode(this.tokens.in.range.start.line + 1, this.tokens.in.range.start.character, state.pathAbsolute, 'in'),
             ' '
         );
         //target
@@ -628,7 +605,7 @@ export class ForEachStatement implements Statement {
         //end for
         result.push(
             indent(state.blockDepth),
-            new SourceNode(this.tokens.endFor.location.start.line, this.tokens.endFor.location.start.column, state.pathAbsolute, 'end for')
+            new SourceNode(this.tokens.endFor.range.start.line + 1, this.tokens.endFor.range.start.character, state.pathAbsolute, 'end for')
         );
         return result;
     }
@@ -642,20 +619,17 @@ export class WhileStatement implements Statement {
         },
         readonly condition: Expression,
         readonly body: Block
-    ) { }
-
-    get location() {
-        return {
-            start: this.tokens.while.location.start,
-            end: this.tokens.endWhile.location.end
-        };
+    ) {
+        this.range = Range.create(this.tokens.while.range.start, this.tokens.endWhile.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         let result = [];
         //while
         result.push(
-            new SourceNode(this.tokens.while.location.start.line, this.tokens.while.location.start.column, state.pathAbsolute, 'while'),
+            new SourceNode(this.tokens.while.range.start.line + 1, this.tokens.while.range.start.character, state.pathAbsolute, 'while'),
             ' '
         );
         //condition
@@ -673,7 +647,7 @@ export class WhileStatement implements Statement {
         //end while
         result.push(
             indent(state.blockDepth),
-            new SourceNode(this.tokens.endWhile.location.start.line, this.tokens.endWhile.location.start.column, state.pathAbsolute, 'end while')
+            new SourceNode(this.tokens.endWhile.range.start.line + 1, this.tokens.endWhile.range.start.character, state.pathAbsolute, 'end while')
         );
 
         return result;
@@ -685,14 +659,11 @@ export class DottedSetStatement implements Statement {
         readonly obj: Expression,
         readonly name: Identifier,
         readonly value: Expression
-    ) { }
-
-    get location() {
-        return {
-            start: this.obj.location.start,
-            end: this.value.location.end
-        };
+    ) {
+        this.range = Range.create(this.obj.range.start, this.value.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
@@ -700,7 +671,7 @@ export class DottedSetStatement implements Statement {
             ...this.obj.transpile(state),
             '.',
             //name
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pathAbsolute, this.name.text),
+            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text),
             ' = ',
             //right-hand-side of assignment
             ...this.value.transpile(state)
@@ -715,25 +686,22 @@ export class IndexedSetStatement implements Statement {
         readonly value: Expression,
         readonly openingSquare: Token,
         readonly closingSquare: Token
-    ) { }
-
-    get location() {
-        return {
-            start: this.obj.location.start,
-            end: this.value.location.end
-        };
+    ) {
+        this.range = Range.create(this.obj.range.start, this.value.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
             //obj
             ...this.obj.transpile(state),
             //   [
-            new SourceNode(this.openingSquare.location.start.line, this.openingSquare.location.start.column, state.pathAbsolute, '['),
+            new SourceNode(this.openingSquare.range.start.line + 1, this.openingSquare.range.start.character, state.pathAbsolute, '['),
             //    index
             ...this.index.transpile(state),
             //         ]
-            new SourceNode(this.closingSquare.location.start.line, this.closingSquare.location.start.column, state.pathAbsolute, ']'),
+            new SourceNode(this.closingSquare.range.start.line + 1, this.closingSquare.range.start.character, state.pathAbsolute, ']'),
             //           =
             ' = ',
             //             value
@@ -748,25 +716,25 @@ export class LibraryStatement implements Statement {
             library: Token;
             filePath: Token | undefined;
         }
-    ) { }
-
-    get location() {
-        return {
-            start: this.tokens.library.location.start,
-            end: this.tokens.filePath ? this.tokens.filePath.location.end : this.tokens.library.location.end
-        };
+    ) {
+        this.range = Range.create(
+            this.tokens.library.range.start,
+            this.tokens.filePath ? this.tokens.filePath.range.end : this.tokens.library.range.end
+        );
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.tokens.library.location.start.line, this.tokens.library.location.start.column, state.pathAbsolute, 'library')
+            new SourceNode(this.tokens.library.range.start.line + 1, this.tokens.library.range.start.character, state.pathAbsolute, 'library')
         );
         //there will be a parse error if file path is missing, but let's prevent a runtime error just in case
         if (this.tokens.filePath) {
             result.push(
                 ' ',
-                new SourceNode(this.tokens.filePath.location.start.line, this.tokens.filePath.location.start.column, state.pathAbsolute, this.tokens.filePath.text)
+                new SourceNode(this.tokens.filePath.range.start.line + 1, this.tokens.filePath.range.start.character, state.pathAbsolute, this.tokens.filePath.text)
             );
         }
         return result;
@@ -790,17 +758,14 @@ export class ClassStatement implements Statement {
                 throw new Error(`Critical error: unknown member type added to class definition ${this.name}`);
             }
         }
+
+        this.range = Range.create(this.keyword.range.start, this.end.range.end);
     }
 
     public methods = [] as ClassMethodStatement[];
     public fields = [] as ClassFieldStatement[];
 
-    get location() {
-        return {
-            start: this.keyword.location.start,
-            end: this.end.location.end
-        };
-    }
+    public readonly range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
@@ -812,14 +777,14 @@ export class ClassMethodStatement implements Statement {
         readonly accessModifier: Token,
         readonly name: Identifier,
         readonly func: FunctionExpression
-    ) { }
-
-    get location() {
-        return {
-            start: this.accessModifier ? this.accessModifier.location.start : this.func.location.start,
-            end: this.func.location.end
-        };
+    ) {
+        this.range = Range.create(
+            this.accessModifier ? this.accessModifier.range.start : this.func.range.start,
+            this.func.range.end
+        );
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
@@ -833,14 +798,14 @@ export class ClassFieldStatement implements Statement {
         readonly name: Identifier,
         readonly as: Token,
         readonly type: Token
-    ) { }
-
-    get location() {
-        return {
-            start: this.accessModifier.location.start,
-            end: this.type.location.end
-        };
+    ) {
+        this.range = Range.create(
+            (this.accessModifier ?? this.name).range.start,
+            (this.type ?? this.as ?? this.name).range.end
+        );
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);

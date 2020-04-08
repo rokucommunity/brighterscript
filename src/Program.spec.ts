@@ -495,7 +495,7 @@ describe('Program', () => {
             expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
                 ...diagnosticMessages.referencedFileDoesNotExist(),
                 file: program.getFileByPathAbsolute(xmlPath),
-                location: Range.create(3, 58, 3, 88)
+                range: Range.create(3, 58, 3, 88)
             });
         });
 

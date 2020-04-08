@@ -1,9 +1,10 @@
-import { Token, Identifier, Location } from '../lexer';
+import { Token, Identifier } from '../lexer';
 import { BrsType, ValueKind, BrsString, FunctionParameter } from '../brsTypes';
 import { Block, CommentStatement } from './Statement';
 import { SourceNode } from 'source-map';
 
 import { util } from '../util';
+import { Range } from 'vscode-languageserver';
 
 export interface TranspileState {
     //the path for this file relative to the root of the output package
@@ -14,14 +15,14 @@ export interface TranspileState {
     //the tree of parents, with the first index being direct parent, and the last index being the furthest removed ancestor.
     //Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
     lineage: Array<{
-        location: Location;
+        range: Range;
     }>;
 }
 
 /** A BrightScript expression */
 export interface Expression {
     /** The starting and ending location of the expression. */
-    location: Location;
+    range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string>;
 }
@@ -31,22 +32,19 @@ export class BinaryExpression implements Expression {
         readonly left: Expression,
         readonly operator: Token,
         readonly right: Expression
-    ) { }
-
-    get location() {
-        return {
-            start: this.left.location.start,
-            end: this.right.location.end
-        };
+    ) {
+        this.range = Range.create(this.left.range.start, this.right.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.left.location.start.line, this.left.location.start.column, state.pathAbsolute, this.left.transpile(state)),
+            new SourceNode(this.left.range.start.line + 1, this.left.range.start.character, state.pathAbsolute, this.left.transpile(state)),
             ' ',
-            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, state.pathAbsolute, this.operator.text),
+            new SourceNode(this.operator.range.start.line + 1, this.operator.range.start.character, state.pathAbsolute, this.operator.text),
             ' ',
-            new SourceNode(this.right.location.start.line, this.right.location.start.column, state.pathAbsolute, this.right.transpile(state))
+            new SourceNode(this.right.range.start.line + 1, this.right.range.start.character, state.pathAbsolute, this.right.transpile(state))
         ];
     }
 }
@@ -59,20 +57,17 @@ export class CallExpression implements Expression {
         readonly openingParen: Token,
         readonly closingParen: Token,
         readonly args: Expression[]
-    ) { }
-
-    get location() {
-        return {
-            start: this.callee.location.start,
-            end: this.closingParen.location.end
-        };
+    ) {
+        this.range = Range.create(this.callee.range.start, this.closingParen.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         let result = [];
         result.push(...this.callee.transpile(state));
         result.push(
-            new SourceNode(this.openingParen.location.start.line, this.openingParen.location.start.column, state.pathAbsolute, '(')
+            new SourceNode(this.openingParen.range.start.line + 1, this.openingParen.range.start.character, state.pathAbsolute, '(')
         );
         for (let i = 0; i < this.args.length; i++) {
             //add comma between args
@@ -83,7 +78,7 @@ export class CallExpression implements Expression {
             result.push(...arg.transpile(state));
         }
         result.push(
-            new SourceNode(this.closingParen.location.start.line, this.closingParen.location.start.column, state.pathAbsolute, ')')
+            new SourceNode(this.closingParen.range.start.line + 1, this.closingParen.range.start.character, state.pathAbsolute, ')')
         );
         return result;
     }
@@ -100,55 +95,59 @@ export class FunctionExpression implements Expression {
         readonly rightParen: Token,
         readonly asToken?: Token,
         readonly returnTypeToken?: Token
-    ) { }
-
-    get location() {
-        return {
-            start: this.functionType ? this.functionType.location.start : this.leftParen.location.start,
-            end: this.end.location.end
-        };
+    ) {
+        this.range = Range.create(
+            this.functionType ? this.functionType.range.start : this.leftParen.range.start,
+            this.end.range.end
+        );
     }
+
+    /**
+     * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
+     * and ending with the last n' in 'end function' or 'b' in 'end sub'
+     */
+    public readonly range: Range;
 
     transpile(state: TranspileState, name?: Identifier) {
         let results = [];
         //'function'|'sub'
         results.push(
-            new SourceNode(this.functionType.location.start.line, this.functionType.location.start.column, state.pathAbsolute, this.functionType.text.toLowerCase())
+            new SourceNode(this.functionType.range.start.line + 1, this.functionType.range.start.character, state.pathAbsolute, this.functionType.text.toLowerCase())
         );
         //functionName?
         if (name) {
             results.push(
                 ' ',
-                new SourceNode(name.location.start.line, name.location.start.column, state.pathAbsolute, name.text)
+                new SourceNode(name.range.start.line + 1, name.range.start.character, state.pathAbsolute, name.text)
             );
         }
         //leftParen
         results.push(
-            new SourceNode(this.leftParen.location.start.line, this.leftParen.location.start.column, state.pathAbsolute, '(')
+            new SourceNode(this.leftParen.range.start.line + 1, this.leftParen.range.start.character, state.pathAbsolute, '(')
         );
         //parameters
         for (let i = 0; i < this.parameters.length; i++) {
             let param = this.parameters[i];
             //add commas
             if (i > 0) {
-                results.push(new SourceNode(null, null, state.pathAbsolute, ', '));
+                results.push(', ');
             }
             //add parameter
             results.push(param.transpile(state));
         }
         //right paren
         results.push(
-            new SourceNode(this.rightParen.location.start.line, this.rightParen.location.start.column, state.pathAbsolute, ')')
+            new SourceNode(this.rightParen.range.start.line + 1, this.rightParen.range.start.character, state.pathAbsolute, ')')
         );
         //as [Type]
         if (this.asToken) {
             results.push(
                 ' ',
                 //as
-                new SourceNode(this.asToken.location.start.line, this.asToken.location.start.column, state.pathAbsolute, 'as'),
+                new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pathAbsolute, 'as'),
                 ' ',
                 //return type
-                new SourceNode(this.returnTypeToken.location.start.line, this.returnTypeToken.location.start.column, state.pathAbsolute, this.returnTypeToken.text.toLowerCase())
+                new SourceNode(this.returnTypeToken.range.start.line + 1, this.returnTypeToken.range.start.character, state.pathAbsolute, this.returnTypeToken.text.toLowerCase())
             );
         }
         state.lineage.unshift(this);
@@ -159,27 +158,27 @@ export class FunctionExpression implements Expression {
         //'end sub'|'end function'
         results.push(
             indent(state.blockDepth),
-            new SourceNode(this.end.location.start.line, this.end.location.start.column, state.pathAbsolute, this.end.text)
+            new SourceNode(this.end.range.start.line + 1, this.end.range.start.character, state.pathAbsolute, this.end.text)
         );
         return results;
     }
 }
 
 export class DottedGetExpression implements Expression {
-    constructor(readonly obj: Expression, readonly name: Identifier) { }
-
-    get location() {
-        return {
-            start: this.obj.location.start,
-            end: this.name.location.end
-        };
+    constructor(
+        readonly obj: Expression,
+        readonly name: Identifier
+    ) {
+        this.range = Range.create(this.obj.range.start, this.name.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
             ...this.obj.transpile(state),
             '.',
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pathAbsolute, this.name.text)
+            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
         ];
     }
 }
@@ -190,21 +189,18 @@ export class IndexedGetExpression implements Expression {
         readonly index: Expression,
         readonly openingSquare: Token,
         readonly closingSquare: Token
-    ) { }
-
-    get location() {
-        return {
-            start: this.obj.location.start,
-            end: this.closingSquare.location.end
-        };
+    ) {
+        this.range = Range.create(this.obj.range.start, this.closingSquare.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
             ...this.obj.transpile(state),
-            new SourceNode(this.openingSquare.location.start.line, this.openingSquare.location.start.column, state.pathAbsolute, '['),
+            new SourceNode(this.openingSquare.range.start.line + 1, this.openingSquare.range.start.character, state.pathAbsolute, '['),
             ...this.index.transpile(state),
-            new SourceNode(this.closingSquare.location.start.line, this.closingSquare.location.start.column, state.pathAbsolute, ']')
+            new SourceNode(this.closingSquare.range.start.line + 1, this.closingSquare.range.start.character, state.pathAbsolute, ']')
         ];
     }
 }
@@ -216,20 +212,17 @@ export class GroupingExpression implements Expression {
             right: Token;
         },
         readonly expression: Expression
-    ) { }
-
-    get location() {
-        return {
-            start: this.tokens.left.location.start,
-            end: this.tokens.right.location.end
-        };
+    ) {
+        this.range = Range.create(this.tokens.left.range.start, this.tokens.right.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.tokens.left.location.start.line, this.tokens.left.location.start.column, state.pathAbsolute, '('),
+            new SourceNode(this.tokens.left.range.start.line + 1, this.tokens.left.range.start.character, state.pathAbsolute, '('),
             ...this.expression.transpile(state),
-            new SourceNode(this.tokens.right.location.start.line, this.tokens.right.location.start.column, state.pathAbsolute, ')')
+            new SourceNode(this.tokens.right.range.start.line + 1, this.tokens.right.range.start.character, state.pathAbsolute, ')')
         ];
     }
 }
@@ -237,30 +230,18 @@ export class GroupingExpression implements Expression {
 export class LiteralExpression implements Expression {
     constructor(
         readonly value: BrsType,
-        readonly _location: Location
-    ) { }
-
-    get location() {
-        return (
-            this._location || {
-                file: '(internal)',
-                start: {
-                    line: -1,
-                    column: -1
-                },
-                end: {
-                    line: -1,
-                    column: -1
-                }
-            }
-        );
+        range: Range
+    ) {
+        this.range = range ?? Range.create(-1, -1, -1, -1);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
             new SourceNode(
-                this._location.start.line,
-                this._location.start.column,
+                this.range.start.line + 1,
+                this.range.start.character,
                 state.pathAbsolute,
                 this.value.kind === ValueKind.String ? `"${this.value.toString()}"` : this.value.toString()
             )
@@ -273,19 +254,16 @@ export class ArrayLiteralExpression implements Expression {
         readonly elements: Array<Expression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
-    ) { }
-
-    get location() {
-        return {
-            start: this.open.location.start,
-            end: this.close.location.end
-        };
+    ) {
+        this.range = Range.create(this.open.range.start, this.close.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pathAbsolute, '[')
+            new SourceNode(this.open.range.start.line + 1, this.open.range.start.character, state.pathAbsolute, '[')
         );
         let hasChildren = this.elements.length > 0;
         state.blockDepth++;
@@ -333,7 +311,7 @@ export class ArrayLiteralExpression implements Expression {
         }
 
         result.push(
-            new SourceNode(this.close.location.start.line, this.close.location.start.column, state.pathAbsolute, ']')
+            new SourceNode(this.close.range.start.line + 1, this.close.range.start.character, state.pathAbsolute, ']')
         );
         return result;
     }
@@ -347,7 +325,7 @@ export interface AAMemberExpression {
     colonToken: Token;
     /** The expression evaluated to determine the member's initial value. */
     value: Expression;
-    location: Location;
+    range: Range;
 }
 
 export class AALiteralExpression implements Expression {
@@ -355,20 +333,17 @@ export class AALiteralExpression implements Expression {
         readonly elements: Array<AAMemberExpression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
-    ) { }
-
-    get location() {
-        return {
-            start: this.open.location.start,
-            end: this.close.location.end
-        };
+    ) {
+        this.range = Range.create(this.open.range.start, this.close.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         let result = [];
         //open curly
         result.push(
-            new SourceNode(this.open.location.start.line, this.open.location.start.column, state.pathAbsolute, this.open.text)
+            new SourceNode(this.open.range.start.line + 1, this.open.range.start.character, state.pathAbsolute, this.open.text)
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
@@ -398,11 +373,11 @@ export class AALiteralExpression implements Expression {
             } else {
                 //key
                 result.push(
-                    new SourceNode(element.keyToken.location.start.line, element.keyToken.location.start.column, state.pathAbsolute, element.keyToken.text)
+                    new SourceNode(element.keyToken.range.start.line + 1, element.keyToken.range.start.character, state.pathAbsolute, element.keyToken.text)
                 );
                 //colon
                 result.push(
-                    new SourceNode(element.colonToken.location.start.line, element.colonToken.location.start.column, state.pathAbsolute, ':'),
+                    new SourceNode(element.colonToken.range.start.line + 1, element.colonToken.range.start.character, state.pathAbsolute, ':'),
                     ' '
                 );
 
@@ -425,7 +400,7 @@ export class AALiteralExpression implements Expression {
 
 
             //if next element is a same-line comment, skip the newline
-            if (nextElement && nextElement instanceof CommentStatement && nextElement.location.start.line === element.location.start.line) {
+            if (nextElement && nextElement instanceof CommentStatement && nextElement.range.start.line === element.range.start.line) {
 
                 //add a newline between statements
             } else {
@@ -440,25 +415,25 @@ export class AALiteralExpression implements Expression {
         }
         //close curly
         result.push(
-            new SourceNode(this.close.location.start.line, this.close.location.start.column, state.pathAbsolute, this.close.text)
+            new SourceNode(this.close.range.start.line + 1, this.close.range.start.character, state.pathAbsolute, this.close.text)
         );
         return result;
     }
 }
 
 export class UnaryExpression implements Expression {
-    constructor(readonly operator: Token, readonly right: Expression) { }
-
-    get location() {
-        return {
-            start: this.operator.location.start,
-            end: this.right.location.end
-        };
+    constructor(
+        readonly operator: Token,
+        readonly right: Expression
+    ) {
+        this.range = Range.create(this.operator.range.start, this.right.range.end);
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.operator.location.start.line, this.operator.location.start.column, state.pathAbsolute, this.operator.text),
+            new SourceNode(this.operator.range.start.line + 1, this.operator.range.start.character, state.pathAbsolute, this.operator.text),
             ' ',
             ...this.right.transpile(state)
         ];
@@ -466,15 +441,15 @@ export class UnaryExpression implements Expression {
 }
 
 export class VariableExpression implements Expression {
-    constructor(readonly name: Identifier) { }
-
-    get location() {
-        return this.name.location;
+    constructor(readonly name: Identifier) {
+        this.range = this.name.range;
     }
+
+    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pathAbsolute, this.name.text)
+            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
         ];
     }
 }

@@ -2,6 +2,7 @@ import { expect } from 'chai';
 
 import { Parser } from '../../parser';
 import { Lexer, DisallowedLocalIdentifiers, TokenKind } from '../../../lexer';
+import { Range } from 'vscode-languageserver';
 
 describe('parser', () => {
     describe('`end` keyword', () => {
@@ -34,10 +35,9 @@ describe('parser', () => {
             let { errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(1);
             //specifically check for the error location, because the identifier location was wrong in the past
-            expect(errors[0].location).to.eql({
-                start: { line: 2, column: 4 },
-                end: { line: 2, column: 8 }
-            });
+            expect(errors[0].range).to.deep.include(
+                Range.create(1, 4, 1, 8)
+            );
             //expect(statements).toMatchSnapshot();
         });
     });

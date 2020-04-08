@@ -137,7 +137,7 @@ export class XmlScope extends Scope {
                     let ancestorComponentName = ancestorScriptImport.sourceFile.componentName;
                     this.diagnostics.push({
                         file: this.xmlFile,
-                        location: Range.create(scriptImport.lineIndex, scriptImport.columnIndexBegin, scriptImport.lineIndex, scriptImport.columnIndexEnd),
+                        range: Range.create(scriptImport.lineIndex, scriptImport.columnIndexBegin, scriptImport.lineIndex, scriptImport.columnIndexEnd),
                         ...diagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)
                     });
                 }
@@ -183,7 +183,7 @@ export class XmlScope extends Scope {
 
                 this.diagnostics.push({
                     ...dInfo,
-                    location: Range.create(
+                    range: Range.create(
                         scriptImport.lineIndex,
                         scriptImport.columnIndexBegin,
                         scriptImport.lineIndex,
@@ -195,7 +195,7 @@ export class XmlScope extends Scope {
             } else if (scriptImport.pkgPath !== referencedFile.file.pkgPath) {
                 this.diagnostics.push({
                     ...diagnosticMessages.scriptImportCaseMismatch(referencedFile.file.pkgPath),
-                    location: Range.create(
+                    range: Range.create(
                         scriptImport.lineIndex,
                         scriptImport.columnIndexBegin,
                         scriptImport.lineIndex,

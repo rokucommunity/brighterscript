@@ -4,6 +4,7 @@ import { Parser } from '../../parser';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { ForEachStatement, VariableExpression } from '../..';
+import { Range } from 'vscode-languageserver';
 
 describe('parser foreach loops', () => {
     it('requires a name and target', () => {
@@ -58,55 +59,40 @@ describe('parser foreach loops', () => {
          *    0   0   0   1   1
          *    0   4   8   2   6
          *  +------------------
-         * 1| for each a in b
-         * 2|   Rnd(a)
-         * 3| end for
+         * 0| for each a in b
+         * 1|   Rnd(a)
+         * 2| end for
          */
         let { statements, errors } = Parser.parse([
             {
                 kind: TokenKind.ForEach,
                 text: 'for each',
                 isReserved: true,
-                location: {
-                    start: { line: 1, column: 0 },
-                    end: { line: 1, column: 8 }
-                }
+                range: Range.create(0, 0, 0, 8)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 9 },
-                    end: { line: 1, column: 10 }
-                }
+                range: Range.create(0, 9, 0, 10)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'in',
                 isReserved: true,
-                location: {
-                    start: { line: 1, column: 11 },
-                    end: { line: 1, column: 13 }
-                }
+                range: Range.create(0, 11, 0, 13)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'b',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 14 },
-                    end: { line: 1, column: 15 }
-                }
+                range: Range.create(0, 14, 0, 15)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 15 },
-                    end: { line: 1, column: 16 }
-                }
+                range: Range.create(0, 15, 0, 16)
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
@@ -118,19 +104,15 @@ describe('parser foreach loops', () => {
                 kind: TokenKind.EndFor,
                 text: 'end for',
                 isReserved: false,
-                location: {
-                    start: { line: 3, column: 0 },
-                    end: { line: 3, column: 7 }
-                }
+                range: Range.create(2, 0, 2, 7)
             },
             EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].location).deep.include({
-            start: { line: 1, column: 0 },
-            end: { line: 3, column: 7 }
-        });
+        expect(statements[0].range).deep.include(
+            Range.create(0, 0, 2, 7)
+        );
     });
 });

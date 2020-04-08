@@ -5,7 +5,8 @@ import { TokenKind } from '.';
 import { BrsString, Double, Float, Int32, Int64 } from '../brsTypes';
 import { Lexer } from './Lexer';
 import { isToken } from './Token';
-import { locationToArray } from '../parser/Parser.spec';
+import { rangeToArray } from '../parser/Parser.spec';
+import { Range } from 'vscode-languageserver';
 
 describe('lexer', () => {
     it('produces a semicolon token', () => {
@@ -67,28 +68,28 @@ describe('lexer', () => {
         ]);
     });
 
-    it('computes location properly both with and without whitespace', () => {
+    it('computes range properly both with and without whitespace', () => {
         let withoutWhitespace = Lexer.scan(`sub Main()\n    bob = true\nend sub`).tokens
-            .map(x => locationToArray(x.location));
+            .map(x => rangeToArray(x.range));
 
         let withWhitespace = Lexer.scan(`sub Main()\n    bob = true\nend sub`).tokens
             //filter out the whitespace...we only care that it was computed during the scan
             .filter(x => x.kind !== TokenKind.Whitespace)
-            .map(x => locationToArray(x.location));
+            .map(x => rangeToArray(x.range));
 
         /*eslint-disable */
         let expectedLocations = [
-            [1, 0, 1, 3],   // sub
-            [1, 4, 1, 8],   // main
-            [1, 8, 1, 9],   // (
-            [1, 9, 1, 10],  // )
-            [1, 10, 1, 11], // \n
-            [2, 4, 2, 7],   // bob
-            [2, 8, 2, 9],   // =
-            [2, 10, 2, 14], // true,
-            [2, 14, 2, 15], // \n
-            [3, 0, 3, 7],   //end sub
-            [3, 7, 3, 8]    //Eof
+            [0, 0, 0, 3],   // sub
+            [0, 4, 0, 8],   // main
+            [0, 8, 0, 9],   // (
+            [0, 9, 0, 10],  // )
+            [0, 10, 0, 11], // \n
+            [1, 4, 1, 7],   // bob
+            [1, 8, 1, 9],   // =
+            [1, 10, 1, 14], // true,
+            [1, 14, 1, 15], // \n
+            [2, 0, 2, 7],   //end sub
+            [2, 7, 2, 8]    //Eof
         ];
         /*eslint-enable*/
 
@@ -153,36 +154,36 @@ describe('lexer', () => {
                 end sub
             `, {
                 includeWhitespace: true
-            }).tokens.map(x => [...locationToArray(x.location), x.text]);
+            }).tokens.map(x => [...rangeToArray(x.range), x.text]);
 
             expect(tokens).to.eql([
-                [1, 0, 1, 1, '\n'],
-                [2, 0, 2, 16, '                '],
-                [2, 16, 2, 19, 'sub'],
-                [2, 19, 2, 20, ' '],
-                [2, 20, 2, 24, 'main'],
-                [2, 24, 2, 25, '('],
-                [2, 25, 2, 26, ')'],
-                [2, 26, 2, 27, ' '],
-                [2, 27, 2, 41, `'first comment`],
-                [2, 41, 2, 42, '\n'],
+                [0, 0, 0, 1, '\n'],
+                [1, 0, 1, 16, '                '],
+                [1, 16, 1, 19, 'sub'],
+                [1, 19, 1, 20, ' '],
+                [1, 20, 1, 24, 'main'],
+                [1, 24, 1, 25, '('],
+                [1, 25, 1, 26, ')'],
+                [1, 26, 1, 27, ' '],
+                [1, 27, 1, 41, `'first comment`],
+                [1, 41, 1, 42, '\n'],
+                [2, 0, 2, 20, '                    '],
+                [2, 20, 2, 21, 'k'],
+                [2, 21, 2, 22, ' '],
+                [2, 22, 2, 23, '='],
+                [2, 23, 2, 24, ' '],
+                [2, 24, 2, 25, '2'],
+                [2, 25, 2, 26, ' '],
+                [2, 26, 2, 42, `' second comment`],
+                [2, 42, 2, 43, '\n'],
                 [3, 0, 3, 20, '                    '],
-                [3, 20, 3, 21, 'k'],
-                [3, 21, 3, 22, ' '],
-                [3, 22, 3, 23, '='],
-                [3, 23, 3, 24, ' '],
-                [3, 24, 3, 25, '2'],
-                [3, 25, 3, 26, ' '],
-                [3, 26, 3, 42, `' second comment`],
-                [3, 42, 3, 43, '\n'],
-                [4, 0, 4, 20, '                    '],
-                [4, 20, 4, 37, 'REM third comment'],
-                [4, 37, 4, 38, '\n'],
-                [5, 0, 5, 16, '                '],
-                [5, 16, 5, 23, 'end sub'],
-                [5, 23, 5, 24, '\n'],
-                [6, 0, 6, 12, '            '],
-                [6, 12, 6, 13, '']//EOF
+                [3, 20, 3, 37, 'REM third comment'],
+                [3, 37, 3, 38, '\n'],
+                [4, 0, 4, 16, '                '],
+                [4, 16, 4, 23, 'end sub'],
+                [4, 23, 4, 24, '\n'],
+                [5, 0, 5, 12, '            '],
+                [5, 12, 5, 13, '']//EOF
             ]);
         });
 
@@ -192,27 +193,29 @@ describe('lexer', () => {
                 REM some comment
             `).tokens.filter(x => ![TokenKind.Newline, TokenKind.Eof].includes(x.kind));
 
-            expect(tokens[0].location).to.eql({
-                start: {
-                    line: 2,
-                    column: 16
-                },
-                end: {
-                    line: 2,
-                    column: 24
-                }
-            });
+            expect(tokens[0].range).to.eql(
+                Range.create(1, 16, 1, 24)
+            );
 
-            expect(tokens[1].location).to.eql({
-                start: {
-                    line: 3,
-                    column: 16
-                },
-                end: {
-                    line: 3,
-                    column: 32
-                }
-            });
+            expect(tokens[1].range).to.eql(
+                Range.create(2, 16, 2, 32)
+            );
+        });
+
+        it('finds correct location for newlines', () => {
+            let tokens = Lexer.scan('sub\nsub\r\nsub\n\n').tokens
+                //ignore the Eof token
+                .filter(x => x.kind !== TokenKind.Eof);
+
+            expect(tokens.map(x => x.range)).to.eql([
+                Range.create(0, 0, 0, 3), // sub
+                Range.create(0, 3, 0, 4), // \n
+                Range.create(1, 0, 1, 3), // sub
+                Range.create(1, 3, 1, 5), // \r\n
+                Range.create(2, 0, 2, 3), // sub
+                Range.create(2, 3, 2, 4), // \n
+                Range.create(3, 0, 3, 1) //  /n
+            ]);
         });
         it('finds correct location for comment after if statement', () => {
             let { tokens } = Lexer.scan(`
@@ -228,16 +231,9 @@ describe('lexer', () => {
             `);
             let comments = tokens.filter(x => x.kind === TokenKind.Comment);
             expect(comments).to.be.lengthOf(1);
-            expect(comments[0].location).to.eql({
-                start: {
-                    line: 9,
-                    column: 27
-                },
-                end: {
-                    line: 9,
-                    column: 35
-                }
-            });
+            expect(comments[0].range).to.eql(
+                Range.create(8, 27, 8, 35)
+            );
         });
         it('ignores everything after `\'`', () => {
             let { tokens } = Lexer.scan('= \' (');
@@ -611,14 +607,14 @@ describe('lexer', () => {
     describe('location tracking', () => {
         it('tracks starting and ending lines', () => {
             let { tokens } = Lexer.scan(`sub foo()\n\n    print "bar"\nend sub`);
-            expect(tokens.map(t => t.location.start.line)).to.deep.equal([1, 1, 1, 1, 1, 2, 3, 3, 3, 4, 4]);
+            expect(tokens.map(t => t.range.start.line)).to.deep.equal([0, 0, 0, 0, 0, 1, 2, 2, 2, 3, 3]);
 
-            expect(tokens.map(t => t.location.end.line)).to.deep.equal([1, 1, 1, 1, 1, 2, 3, 3, 3, 4, 4]);
+            expect(tokens.map(t => t.range.end.line)).to.deep.equal([0, 0, 0, 0, 0, 1, 2, 2, 2, 3, 3]);
         });
 
         it('tracks starting and ending columns', () => {
             let { tokens } = Lexer.scan(`sub foo()\n    print "bar"\nend sub`);
-            expect(tokens.map(t => [t.location.start.column, t.location.end.column])).to.deep.equal([
+            expect(tokens.map(t => [t.range.start.character, t.range.end.character])).to.deep.equal([
                 [0, 3], // sub
                 [4, 7], // foo
                 [7, 8], // (
@@ -678,7 +674,7 @@ describe('lexer', () => {
         ]);
 
         //verify the location of `rem`
-        expect(tokens.map(t => [t.location.start.column, t.location.end.column])).to.eql([
+        expect(tokens.map(t => [t.range.start.character, t.range.end.character])).to.eql([
             [0, 6], // person
             [6, 7], // .
             [7, 10], // rem
@@ -690,19 +686,10 @@ describe('lexer', () => {
 
     describe('isToken', () => {
         it('works', () => {
-            let location = {
-                start: {
-                    line: 1,
-                    column: 1
-                },
-                end: {
-                    line: 1,
-                    column: 2
-                }
-            };
+            let range = Range.create(0, 0, 0, 2);
 
-            expect(isToken({ kind: TokenKind.And, text: 'and', location: location })).is.true;
-            expect(isToken({ text: 'and', location: location })).is.false;
+            expect(isToken({ kind: TokenKind.And, text: 'and', range: range })).is.true;
+            expect(isToken({ text: 'and', range: range })).is.false;
         });
     });
 

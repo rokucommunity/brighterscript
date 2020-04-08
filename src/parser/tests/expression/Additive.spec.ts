@@ -4,6 +4,7 @@ import { Parser } from '../../parser';
 import { Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
+import { Range } from 'vscode-languageserver';
 
 describe('parser additive expressions', () => {
     it('parses left-associative addition chains', () => {
@@ -51,84 +52,59 @@ describe('parser additive expressions', () => {
                 kind: TokenKind.Identifier,
                 text: '_',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 0 },
-                    end: { line: 1, column: 1 }
-                }
+                range: Range.create(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 2 },
-                    end: { line: 1, column: 2 }
-                }
+                range: Range.create(0, 2, 0, 2)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '1',
                 isReserved: false,
                 literal: new Int32(1),
-                location: {
-                    start: { line: 1, column: 4 },
-                    end: { line: 1, column: 5 }
-                }
+                range: Range.create(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.Plus,
                 text: '+',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 6 },
-                    end: { line: 1, column: 7 }
-                }
+                range: Range.create(0, 6, 0, 7)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '2',
                 isReserved: false,
                 literal: new Int32(2),
-                location: {
-                    start: { line: 1, column: 8 },
-                    end: { line: 1, column: 9 }
-                }
+                range: Range.create(0, 8, 0, 9)
             },
             {
                 kind: TokenKind.Plus,
                 text: '+',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 10 },
-                    end: { line: 1, column: 11 }
-                }
+                range: Range.create(0, 10, 0, 11)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '3',
                 isReserved: false,
                 literal: new Int32(3),
-                location: {
-                    start: { line: 1, column: 12 },
-                    end: { line: 1, column: 13 }
-                }
+                range: Range.create(0, 12, 0, 13)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 13 },
-                    end: { line: 1, column: 14 }
-                }
+                range: Range.create(0, 13, 0, 14)
             }
         ]) as any;
 
         expect(errors[0]?.message).to.not.exist;
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].value.location).to.deep.include({
-            start: { line: 1, column: 4 },
-            end: { line: 1, column: 13 }
-        });
+        expect(statements[0].value.range).to.deep.include(
+            Range.create(0, 4, 0, 13)
+        );
     });
 });

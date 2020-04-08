@@ -75,7 +75,7 @@ export class Preprocessor implements CC.Visitor {
             this.addError(
                 new BrsError(
                     `Attempting to re-declare #const with name '${chunk.name.text}'`,
-                    chunk.name.location
+                    chunk.name.range
                 )
             );
         }
@@ -97,7 +97,7 @@ export class Preprocessor implements CC.Visitor {
                 this.addError(
                     new BrsError(
                         `Attempting to create #const alias of '${chunk.value.text}', but no such #const exists`,
-                        chunk.value.location
+                        chunk.value.range
                     )
                 );
                 break;
@@ -105,7 +105,7 @@ export class Preprocessor implements CC.Visitor {
                 this.addError(
                     new BrsError(
                         '#const declarations can only have values of `true`, `false`, or other #const names',
-                        chunk.value.location
+                        chunk.value.range
                     )
                 );
         }
@@ -175,7 +175,7 @@ export class Preprocessor implements CC.Visitor {
                 this.addError(
                     new BrsError(
                         `Attempting to reference undefined #const with name '${token.text}'`,
-                        token.location
+                        token.range
                     )
                 );
                 break;
@@ -183,7 +183,7 @@ export class Preprocessor implements CC.Visitor {
                 this.addError(
                     new BrsError(
                         '#if conditionals can only be `true`, `false`, or other #const names',
-                        token.location
+                        token.range
                     )
                 );
         }

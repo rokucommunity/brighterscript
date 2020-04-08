@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import { Parser } from '../../parser';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
+import { Range } from 'vscode-languageserver';
 
 describe('parser postfix unary expressions', () => {
     it('parses postfix \'++\' for variables', () => {
@@ -103,43 +104,33 @@ describe('parser postfix unary expressions', () => {
          *    0   0   0   1
          *    0   4   8   2
          *  +--------------
-         * 1| someNumber++
+         * 0| someNumber++
          */
         let { statements, errors } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: 'someNumber',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 0 },
-                    end: { line: 1, column: 10 }
-                }
+                range: Range.create(0, 0, 0, 10)
             },
             {
                 kind: TokenKind.PlusPlus,
                 text: '++',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 10 },
-                    end: { line: 1, column: 12 }
-                }
+                range: Range.create(0, 10, 0, 12)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 12 },
-                    end: { line: 1, column: 13 }
-                }
+                range: Range.create(0, 12, 0, 13)
             }
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].location).deep.include({
-            start: { line: 1, column: 0 },
-            end: { line: 1, column: 12 }
-        });
+        expect(statements[0].range).deep.include(
+            Range.create(0, 0, 0, 12)
+        );
     });
 });

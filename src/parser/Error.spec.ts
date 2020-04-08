@@ -2,15 +2,12 @@ import { expect } from 'chai';
 
 import { Int32, ValueKind } from '../brsTypes';
 import { getKind, TypeMismatch } from './Error';
-import { Location } from '../lexer';
+import { Range } from 'vscode-languageserver';
 
 describe('parser error', () => {
-    let location: Location;
+    let range: Range;
     beforeEach(() => {
-        location = {
-            start: { line: 1, column: 0 },
-            end: { line: 1, column: 3 }
-        };
+        range = Range.create(0, 0, 0, 3);
     });
 
     describe('getKind', () => {
@@ -28,27 +25,23 @@ describe('parser error', () => {
                 message: 'TestMismatch',
                 left: {
                     type: ValueKind.Int32,
-                    location: location
+                    range: range
                 },
                 right: {
                     type: ValueKind.String,
-                    location: location
+                    range: range
                 }
             });
             expect(err.message).to.equal('TestMismatch\n    left: Integer\n    right: String');
         });
 
         it('handles missing right item', () => {
-            const location = {
-                start: { line: 1, column: 0 },
-                end: { line: 1, column: 3 },
-                file: 'Test.brs'
-            };
+            const range = Range.create(0, 0, 0, 3);
             const err = new TypeMismatch({
                 message: 'TestMismatch',
                 left: {
                     type: ValueKind.Int32,
-                    location: location
+                    range: range
                 }
             });
             expect(err.message).to.equal('TestMismatch\n    left: Integer');

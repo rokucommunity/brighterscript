@@ -361,7 +361,7 @@ export class LanguageServer {
             if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
                 builder.addDiagnostic(configFilePath, {
                     ...diagnosticMessages.brsConfigJsonIsDepricated(),
-                    location: Range.create(0, 0, 0, 0)
+                    range: Range.create(0, 0, 0, 0)
                 });
                 return this.sendDiagnostics();
             }
@@ -882,8 +882,8 @@ export class LanguageServer {
                 issuesByFile[diagnostic.file.pathAbsolute] = [];
             }
             issuesByFile[diagnostic.file.pathAbsolute].push({
-                severity: util.severityToDiagnostic(diagnostic.severity),
-                range: diagnostic.location,
+                severity: diagnostic.severity,
+                range: diagnostic.range,
                 message: diagnostic.message,
                 code: diagnostic.code,
                 source: 'brs'

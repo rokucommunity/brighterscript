@@ -4,6 +4,7 @@ import { Parser } from '../../parser';
 import { BrsInvalid, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
+import { Range } from 'vscode-languageserver';
 
 describe('parser variable declarations', () => {
     it('allows newlines before assignments', () => {
@@ -85,53 +86,40 @@ describe('parser variable declarations', () => {
          *    0   0   0   1   1
          *    0   4   8   2   6
          *  +------------------
-         * 1| foo = invalid
+         * 0| foo = invalid
          */
         let { statements, errors } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: 'foo',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 0 },
-                    end: { line: 1, column: 3 }
-                }
+                range: Range.create(0, 0, 0, 3)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 4 },
-                    end: { line: 1, column: 5 }
-                }
+                range: Range.create(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.Invalid,
                 text: 'invalid',
                 literal: BrsInvalid.Instance,
                 isReserved: true,
-                location: {
-                    start: { line: 1, column: 6 },
-                    end: { line: 1, column: 13 }
-                }
+                range: Range.create(0, 6, 0, 13)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 13 },
-                    end: { line: 1, column: 14 }
-                }
+                range: Range.create(0, 13, 0, 14)
             }
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].location).to.deep.include({
-            start: { line: 1, column: 0 },
-            end: { line: 1, column: 13 }
-        });
+        expect(statements[0].range).to.deep.include(
+            Range.create(0, 0, 0, 13)
+        );
     });
 });

@@ -317,7 +317,7 @@ export class Scope {
                     let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
                     this.diagnostics.push({
                         ...diagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
-                        location: expCall.nameRange,
+                        range: expCall.nameRange,
                         //TODO detect end of expression call
                         file: file
                     });
@@ -346,7 +346,7 @@ export class Scope {
                             varDeclaration.name,
                             globalCallable.callable.file.pkgPath
                         ),
-                        location: varDeclaration.nameRange,
+                        range: varDeclaration.nameRange,
                         file: file
                     });
                 }
@@ -378,7 +378,7 @@ export class Scope {
                 if (!knownCallable) {
                     this.diagnostics.push({
                         ...diagnosticMessages.callToUnknownFunction(expCall.name, this.name),
-                        location: expCall.nameRange,
+                        range: expCall.nameRange,
                         file: file
                     });
                 }
@@ -430,7 +430,7 @@ export class Scope {
                                 //grab the last item in the list, which should be the closest ancestor's version
                                 shadowedCallable.scope.name
                             ),
-                            location: container.callable.nameRange,
+                            range: container.callable.nameRange,
                             file: container.callable.file
                         });
                     }
@@ -445,7 +445,7 @@ export class Scope {
 
                     this.diagnostics.push({
                         ...diagnosticMessages.duplicateFunctionImplementation(callable.name, callableContainer.scope.name),
-                        location: Range.create(
+                        range: Range.create(
                             callable.nameRange.start.line,
                             callable.nameRange.start.character,
                             callable.nameRange.start.line,

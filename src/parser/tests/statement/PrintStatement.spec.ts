@@ -4,6 +4,7 @@ import { Parser } from '../../parser';
 import { BrsString } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, token } from '../Parser.spec';
+import { Range } from 'vscode-languageserver';
 
 describe('parser print statements', () => {
     it('parses singular print statements', () => {
@@ -71,37 +72,25 @@ describe('parser print statements', () => {
                 kind: TokenKind.Print,
                 text: 'print',
                 isReserved: true,
-                location: {
-                    start: { line: 1, column: 0 },
-                    end: { line: 1, column: 5 }
-                }
+                range: Range.create(0, 0, 1, 5)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
                 literal: new BrsString('foo'),
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 6 },
-                    end: { line: 1, column: 11 }
-                }
+                range: Range.create(0, 6, 0, 11)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 11 },
-                    end: { line: 1, column: 12 }
-                }
+                range: Range.create(0, 11, 0, 12)
             }
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].location).to.deep.include({
-            start: { line: 1, column: 0 },
-            end: { line: 1, column: 11 }
-        });
+        expect(statements[0].range).to.deep.include(Range.create(0, 0, 0, 11));
     });
 });

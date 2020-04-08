@@ -1,8 +1,9 @@
 import { expect } from 'chai';
-import { Lexer, ReservedWords, Location } from '../lexer';
+import { Lexer, ReservedWords } from '../lexer';
 import { DottedGetExpression } from './Expression';
 import { Parser } from './Parser';
 import { PrintStatement } from './Statement';
+import { Range } from 'vscode-languageserver';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -17,8 +18,8 @@ describe('parser', () => {
             sub main()
                 call()a
             end sub
-        `).errors.map(x => locationToArray(x.location))).to.eql([
-            [3, 22, 3, 23]
+        `).errors.map(x => rangeToArray(x.range))).to.eql([
+            [2, 22, 2, 23]
         ]);
     });
 
@@ -364,11 +365,11 @@ function parse(text: string) {
     return Parser.parse(tokens);
 }
 
-export function locationToArray(location: Location) {
+export function rangeToArray(range: Range) {
     return [
-        location.start.line,
-        location.start.column,
-        location.end.line,
-        location.end.column
+        range.start.line,
+        range.start.character,
+        range.end.line,
+        range.end.character
     ];
 }

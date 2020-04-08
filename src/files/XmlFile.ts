@@ -112,7 +112,7 @@ export class XmlFile {
                 if (!this.componentName) {
                     this.parseDiagnistics.push({
                         ...diagnosticMessages.xmlComponentMissingNameAttribute(),
-                        location: Range.create(
+                        range: Range.create(
                             componentRange.start.line,
                             componentRange.start.character,
                             componentRange.start.line,
@@ -125,7 +125,7 @@ export class XmlFile {
                 if (!this.parentName) {
                     this.parseDiagnistics.push({
                         ...diagnosticMessages.xmlComponentMissingExtendsAttribute(),
-                        location: Range.create(
+                        range: Range.create(
                             componentRange.start.line,
                             componentRange.start.character,
                             componentRange.start.line,
@@ -138,7 +138,7 @@ export class XmlFile {
                 //the component xml element was not found in the file
                 this.parseDiagnistics.push({
                     ...diagnosticMessages.xmlComponentMissingComponentDeclaration(),
-                    location: Range.create(
+                    range: Range.create(
                         0,
                         0,
                         0,
@@ -156,7 +156,7 @@ export class XmlFile {
                 //add basic xml parse diagnostic errors
                 this.parseDiagnistics.push({
                     ...diagnosticMessages.xmlGenericParseError(match[1]),
-                    location: Range.create(
+                    range: Range.create(
                         lineIndex,
                         columnIndex,
                         lineIndex,

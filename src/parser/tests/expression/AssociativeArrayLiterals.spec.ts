@@ -4,6 +4,7 @@ import { Parser } from '../../parser';
 import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
+import { Range } from 'vscode-languageserver';
 
 describe('parser associative array literals', () => {
     describe('empty associative arrays', () => {
@@ -202,130 +203,89 @@ describe('parser associative array literals', () => {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 0 },
-                    end: { line: 1, column: 1 }
-                }
+                range: Range.create(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 2 },
-                    end: { line: 1, column: 3 }
-                }
+                range: Range.create(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.LeftCurlyBrace,
                 text: '{',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 4 },
-                    end: { line: 1, column: 5 }
-                }
+                range: Range.create(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.RightCurlyBrace,
                 text: '}',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 8 },
-                    end: { line: 1, column: 9 }
-                }
+                range: Range.create(0, 8, 0, 9)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 9 },
-                    end: { line: 1, column: 10 }
-                }
+                range: Range.create(0, 9, 0, 10)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                location: {
-                    start: { line: 2, column: 0 },
-                    end: { line: 2, column: 1 }
-                }
+                range: Range.create(1, 0, 1, 1)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'b',
                 isReserved: false,
-                location: {
-                    start: { line: 3, column: 0 },
-                    end: { line: 3, column: 1 }
-                }
+                range: Range.create(2, 0, 2, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                location: {
-                    start: { line: 3, column: 2 },
-                    end: { line: 3, column: 3 }
-                }
+                range: Range.create(2, 2, 2, 3)
             },
             {
                 kind: TokenKind.LeftCurlyBrace,
                 text: '{',
                 isReserved: false,
-                location: {
-                    start: { line: 3, column: 4 },
-                    end: { line: 3, column: 5 }
-                }
+                range: Range.create(2, 4, 2, 5)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                location: {
-                    start: { line: 4, column: 0 },
-                    end: { line: 4, column: 1 }
-                }
+                range: Range.create(3, 0, 3, 1)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                location: {
-                    start: { line: 5, column: 0 },
-                    end: { line: 5, column: 1 }
-                }
+                range: Range.create(4, 0, 4, 1)
             },
             {
                 kind: TokenKind.RightCurlyBrace,
                 text: '}',
                 isReserved: false,
-                location: {
-                    start: { line: 6, column: 0 },
-                    end: { line: 6, column: 1 }
-                }
+                range: Range.create(5, 0, 5, 1)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                location: {
-                    start: { line: 6, column: 1 },
-                    end: { line: 6, column: 2 }
-                }
+                range: Range.create(5, 1, 5, 2)
             }
         ]) as any;
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(2);
-        expect(statements[0].value.location).to.deep.include({
-            start: { line: 1, column: 4 },
-            end: { line: 1, column: 9 }
-        });
-        expect(statements[1].value.location).to.deep.include({
-            start: { line: 3, column: 4 },
-            end: { line: 6, column: 1 }
-        });
+        expect(statements[0].value.range).to.deep.include(
+            Range.create(0, 4, 0, 9)
+        );
+        expect(statements[1].value.range).to.deep.include(
+            Range.create(2, 4, 5, 1)
+        );
     });
 });

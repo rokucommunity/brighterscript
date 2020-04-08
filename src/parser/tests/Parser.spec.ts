@@ -1,4 +1,5 @@
-import { TokenKind, Location, ReservedWords } from '../../lexer';
+import { TokenKind, ReservedWords, Token } from '../../lexer';
+import { Range } from 'vscode-languageserver';
 
 /* A set of utilities to be used while writing tests for the BRS parser. */
 
@@ -9,16 +10,13 @@ import { TokenKind, Location, ReservedWords } from '../../lexer';
  * @param {*} [literal] the literal value that the produced token should contain, if any
  * @returns {object} a token of `kind` representing `text` with value `literal`.
  */
-export function token(kind, text?, literal?) {
+export function token(kind, text?, literal?): Token {
     return {
         kind: kind,
         text: text,
         isReserved: ReservedWords.has((text || '').toLowerCase()),
         literal: literal,
-        location: <Location>{
-            start: { line: -9, column: -9 },
-            end: { line: -9, column: -9 }
-        }
+        range: Range.create(-9, -9, -9, -9)
     };
 }
 

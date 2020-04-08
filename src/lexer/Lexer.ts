@@ -1,11 +1,12 @@
 import { EventEmitter } from 'events';
 
 import { TokenKind, ReservedWords, Keywords } from './TokenKind';
-import { Token, Location } from './Token';
+import { Token } from './Token';
 import { BrsError } from '../parser/Error';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 
 import { BrsType, BrsString, Int32, Int64, Float, Double } from '../brsTypes/index';
+import { Range } from 'vscode-languageserver';
 
 export class Lexer {
     /** Allows consumers to observe errors as they're detected. */
@@ -22,7 +23,7 @@ export class Lexer {
     private current: number;
 
     /**
-     * The one-indexed line number being parsed.
+     * The zero-indexed line number being parsed.
      */
     private line: number;
 
@@ -77,7 +78,7 @@ export class Lexer {
         this.options = this.sanitizeOptions(options);
         this.start = 0;
         this.current = 0;
-        this.line = 1;
+        this.line = 0;
         this.column = 0;
         this.tokens = [];
         this.errors = [];
@@ -91,16 +92,7 @@ export class Lexer {
             kind: TokenKind.Eof,
             isReserved: false,
             text: '',
-            location: {
-                start: {
-                    line: this.line,
-                    column: this.column
-                },
-                end: {
-                    line: this.line,
-                    column: this.column + 1
-                }
-            }
+            range: Range.create(this.line, this.column, this.line, this.column + 1)
         });
 
         return this;
@@ -344,7 +336,7 @@ export class Lexer {
                 } else if (isAlpha(c)) {
                     this.identifier();
                 } else {
-                    this.addError(new BrsError(`Unexpected character '${c}'`, this.locationOf(c)));
+                    this.addError(new BrsError(`Unexpected character '${c}'`, this.rangeOf(c)));
                 }
                 break;
         }
@@ -450,7 +442,7 @@ export class Lexer {
                 this.addError(
                     new BrsError(
                         'Unterminated string at end of line',
-                        this.locationOf(this.source.slice(this.start, this.current))
+                        this.rangeOf(this.source.slice(this.start, this.current))
                     )
                 );
                 return;
@@ -464,7 +456,7 @@ export class Lexer {
             this.addError(
                 new BrsError(
                     'Unterminated string at end of file',
-                    this.locationOf(this.source.slice(this.start, this.current))
+                    this.rangeOf(this.source.slice(this.start, this.current))
                 )
             );
             return;
@@ -604,7 +596,7 @@ export class Lexer {
             this.addError(
                 new BrsError(
                     'Fractional hex literals are not supported',
-                    this.locationOf(this.source.slice(this.start, this.current))
+                    this.rangeOf(this.source.slice(this.start, this.current))
                 )
             );
             return;
@@ -801,7 +793,7 @@ export class Lexer {
                 this.addError(
                     new BrsError(
                         `Found unexpected conditional-compilation string '${text}'`,
-                        this.locationOf(this.source.slice(this.start, this.current))
+                        this.rangeOf(this.source.slice(this.start, this.current))
                     )
                 );
         }
@@ -814,12 +806,12 @@ export class Lexer {
      */
     private addToken(kind: TokenKind, literal?: BrsType) {
         let text = this.source.slice(this.start, this.current);
-        let token = {
+        let token: Token = {
             kind: kind,
             text: text,
             isReserved: ReservedWords.has(text.toLowerCase()),
             literal: literal,
-            location: this.locationOf(text)
+            range: this.rangeOf(text)
         };
         this.tokens.push(token);
         return token;
@@ -827,21 +819,16 @@ export class Lexer {
 
     /**
      * Creates a `TokenLocation` at the lexer's current position for the provided `text`.
-     * @param text the text to create a location for
-     * @returns the location of `text` as a `TokenLocation`
+     * @param text the text to create a range for
+     * @returns the range of `text` as a `TokenLocation`
      */
-    private locationOf(text: string): Location {
-        let location = {
-            start: {
-                line: this.line,
-                column: this.column - text.length
-            },
-            end: {
-                line: this.line,
-                column: Math.max(this.column - text.length + 1, this.column)
-            }
-        };
-        return location;
+    private rangeOf(text: string): Range {
+        return Range.create(
+            this.line,
+            this.column - text.length,
+            this.line,
+            Math.max(this.column - text.length + 1, this.column)
+        );
     }
 }
 

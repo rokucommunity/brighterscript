@@ -4,6 +4,7 @@ import { Parser } from '../../parser';
 import { Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
+import { Range } from 'vscode-languageserver';
 
 describe('parser for loops', () => {
     it('accepts a \'step\' clause', () => {
@@ -81,55 +82,43 @@ describe('parser for loops', () => {
          *    0   0   0   1   1
          *    0   4   8   2   6
          *  +------------------
-         * 1| for i = 0 to 10
-         * 2|   Rnd(i)
-         * 3| end for
+         * 0| for i = 0 to 10
+         * 1|   Rnd(i)
+         * 2| end for
          */
         let { statements, errors } = Parser.parse([
             {
                 kind: TokenKind.For,
                 text: 'for',
                 isReserved: true,
-                location: {
-                    start: { line: 1, column: 0 },
-                    end: { line: 1, column: 3 }
-                }
+                range: Range.create(0, 0, 0, 3)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'i',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 4 },
-                    end: { line: 1, column: 5 }
-                }
+                range: Range.create(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 6 },
-                    end: { line: 1, column: 7 }
-                }
+                range: Range.create(0, 6, 0, 7)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
                 literal: new Int32(0),
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 8 },
-                    end: { line: 1, column: 9 }
-                }
+                range: Range.create(0, 8, 0, 9)
             },
             {
                 kind: TokenKind.To,
                 text: 'to',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 10 },
-                    end: { start: 1, column: 12 }
+                range: {
+                    start: { line: 0, column: 10 },
+                    end: { start: 0, column: 12 }
                 }
             },
             {
@@ -137,19 +126,13 @@ describe('parser for loops', () => {
                 text: '10',
                 literal: new Int32(10),
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 13 },
-                    end: { line: 1, column: 15 }
-                }
+                range: Range.create(0, 13, 0, 15)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 15 },
-                    end: { line: 1, column: 16 }
-                }
+                range: Range.create(0, 15, 0, 16)
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
@@ -161,19 +144,15 @@ describe('parser for loops', () => {
                 kind: TokenKind.EndFor,
                 text: 'end for',
                 isReserved: false,
-                location: {
-                    start: { line: 3, column: 0 },
-                    end: { line: 3, column: 8 }
-                }
+                range: Range.create(2, 0, 2, 8)
             },
             EOF
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].location).to.deep.include({
-            start: { line: 1, column: 0 },
-            end: { line: 3, column: 8 }
-        });
+        expect(statements[0].range).to.deep.include(
+            Range.create(0, 0, 2, 8)
+        );
     });
 });
