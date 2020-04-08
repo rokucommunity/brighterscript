@@ -1,9 +1,10 @@
 import { expect } from 'chai';
 
-import { Parser } from '../../parser';
+import { Parser } from '../../Parser';
 import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind, Lexer } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
+import { Range } from 'vscode-languageserver';
 
 describe('parser call expressions', () => {
     it('parses named function calls', () => {
@@ -32,9 +33,9 @@ describe('parser call expressions', () => {
         expect(statements).to.be.length.greaterThan(0);
 
         //ALL of the errors should be on the `DoThin` line
-        let lineNumbers = errors.map(x => x.location.start.line);
+        let lineNumbers = errors.map(x => x.range.start.line);
         for (let lineNumber of lineNumbers) {
-            expect(lineNumber).to.equal(3);
+            expect(lineNumber).to.equal(2);
         }
         //expect(statements).toMatchSnapshot();
     });
@@ -53,7 +54,7 @@ describe('parser call expressions', () => {
         expect(errors).to.be.lengthOf(1);
         expect(statements).to.be.length.greaterThan(0);
         //the error should be BEFORE the `name = "bob"` statement
-        expect(errors[0].location.end.column).to.be.lessThan(25);
+        expect(errors[0].range.end.character).to.be.lessThan(25);
         //expect(statements).toMatchSnapshot();
     });
 
@@ -94,81 +95,59 @@ describe('parser call expressions', () => {
          *    0   0   0   1   1   2
          *    0   4   8   2   6   0
          *  +----------------------
-         * 1| foo("bar", "baz")
+         * 0| foo("bar", "baz")
          */
         const { statements, errors } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: 'foo',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 0 },
-                    end: { line: 1, column: 3 }
-                }
+                range: Range.create(0, 0, 0, 3)
             },
             {
                 kind: TokenKind.LeftParen,
                 text: '(',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 3 },
-                    end: { line: 1, column: 4 }
-                }
+                range: Range.create(0, 3, 0, 4)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"bar"`,
                 literal: new BrsString('bar'),
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 4 },
-                    end: { line: 1, column: 9 }
-                }
+                range: Range.create(0, 4, 0, 9)
             },
             {
                 kind: TokenKind.Comma,
                 text: ',',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 9 },
-                    end: { line: 1, column: 10 }
-                }
+                range: Range.create(0, 9, 0, 10)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"baz"`,
                 literal: new BrsString('baz'),
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 11 },
-                    end: { line: 1, column: 16 }
-                }
+                range: Range.create(0, 11, 0, 16)
             },
             {
                 kind: TokenKind.RightParen,
                 text: ')',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 16 },
-                    end: { line: 1, column: 17 }
-                }
+                range: Range.create(0, 16, 0, 17)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 17 },
-                    end: { line: 1, column: 18 }
-                }
+                range: Range.create(0, 17, 0, 18)
             }
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].location).to.deep.include({
-            start: { line: 1, column: 0 },
-            end: { line: 1, column: 17 }
-        });
+        expect(statements[0].range).to.deep.include(
+            Range.create(0, 0, 0, 17)
+        );
     });
 });

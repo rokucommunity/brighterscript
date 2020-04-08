@@ -1,5 +1,6 @@
 import { TokenKind } from './TokenKind';
 import { BrsType } from '../brsTypes';
+import { Range } from 'vscode-languageserver';
 
 /**
  * Represents a chunk of BrightScript scanned by the lexer.
@@ -14,32 +15,15 @@ export interface Token {
     /** The literal value (using the BRS type system) associated with this token, if any. */
     literal?: BrsType;
     /** Where the token was found. */
-    location: Location;
+    range: Range;
 }
 
-/** Represents the location at which a `Token` was found. */
-export interface Location {
-    /** The line and column at which this token began. */
-    start: LineAndColumn;
-    /**
-     * The line and column at which this token ended.
-     * *NOTE*: The ending column follows the one-past-last convention, to allow direct use with
-     * `String.prototype.substring` and similar.
-     * @example
-     * // For input `foo = 1 + 2`
-     * // (columns): 0   4   8
-     *
-     * foo.location.end === { line: 1, column: 3 };
-     */
-    end: LineAndColumn;
-}
-
-/** A line-column pair. */
-export interface LineAndColumn {
-    /** A *one-indexed* line number. */
-    line: number;
-    /** A *zero-indexed* column number. */
-    column: number;
+/**
+ * Any object that has a range
+ */
+export interface Locatable {
+    range: Range;
+    [key: string]: any;
 }
 
 /**
@@ -55,5 +39,5 @@ export interface Identifier extends Token {
  * @returns `true` is `obj` is a `Token`, otherwise `false`
  */
 export function isToken(obj: Record<string, any>): obj is Token {
-    return !!(obj.kind && obj.text && obj.location);
+    return !!(obj.kind && obj.text && obj.range);
 }

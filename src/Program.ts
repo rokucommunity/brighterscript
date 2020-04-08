@@ -382,7 +382,7 @@ export class Program {
                 this.diagnostics.push({
                     ...diagnosticMessages.fileNotReferencedByAnyOtherFile(),
                     file: file,
-                    location: Range.create(0, 0, 0, Number.MAX_VALUE)
+                    range: Range.create(0, 0, 0, Number.MAX_VALUE)
                 });
             }
         }

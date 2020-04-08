@@ -17,9 +17,8 @@ export interface Diagnostic {
      * The unique diagnostic code for this type of message
      */
     code: number;
-    location: Range;
+    range: Range;
     file: File;
-
 }
 
 export interface Callable {
@@ -39,8 +38,14 @@ export interface Callable {
      */
     documentation?: string;
     params: CallableParam[];
+    /**
+     * The full range of the function or sub.
+     */
+    range: Range;
+    /**
+     * The range of the name of this callable
+     */
     nameRange?: Range;
-    bodyRange?: Range;
     isDepricated?: boolean;
 }
 

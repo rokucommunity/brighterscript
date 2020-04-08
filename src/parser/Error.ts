@@ -1,8 +1,10 @@
-import { BrsType, ValueKind, valueKindToString } from '../brsTypes';
-import { TokenKind, Location, Token } from '../lexer';
+import { Range } from 'vscode-languageserver';
+import { BrsType } from '../types/BrsType';
+import { ValueKind, valueKindToString } from '../brsTypes';
+import { Locatable, TokenKind } from '../lexer';
 
 export class BrsError {
-    constructor(readonly message: string, readonly location: Location, readonly code: number = 100) {
+    constructor(readonly message: string, readonly range: Range, readonly code: number = 100) {
     }
 }
 
@@ -14,16 +16,16 @@ export interface TypeMismatchMetadata {
      */
     message: string;
     /** The value on the left-hand side of a binary operator, or the *only* value for a unary operator. */
-    left: TypeAndLocation;
+    left: TypeAndRange;
     /** The value on the right-hand side of a binary operator. */
-    right?: TypeAndLocation;
+    right?: TypeAndRange;
 }
 
-export interface TypeAndLocation {
+export interface TypeAndRange {
     /** The type of a value involved in a type mismatch. */
     type: BrsType | ValueKind;
     /** The location at which the offending value was resolved. */
-    location: Location;
+    range: Range;
 }
 
 /**
@@ -36,14 +38,14 @@ export class TypeMismatch extends BrsError {
             mismatchMetadata.message,
             `    left: ${valueKindToString(getKind(mismatchMetadata.left.type))}`
         ];
-        let location = mismatchMetadata.left.location;
+        let location = mismatchMetadata.left.range;
 
         if (mismatchMetadata.right) {
             messageLines.push(
                 `    right: ${valueKindToString(getKind(mismatchMetadata.right.type))}`
             );
 
-            location.end = mismatchMetadata.right.location.end;
+            location.end = mismatchMetadata.right.range.end;
         }
 
         super(messageLines.join('\n'), location);
@@ -59,17 +61,17 @@ export function getKind(maybeType: BrsType | ValueKind): ValueKind {
     if (typeof maybeType === 'number') {
         return maybeType;
     } else {
-        return maybeType.kind;
+        return (maybeType as any).kind;
     }
 }
 
 export class ParseError extends BrsError {
-    constructor(token: Token, message: string, code = 1000) {
+    constructor(locatable: Locatable, message: string, code = 1000) {
         let m = message;
-        if (token.kind === TokenKind.Eof) {
+        if ((locatable as any).kind === TokenKind.Eof) {
             m = '(At end of file) ' + message;
         }
 
-        super(m, token.location, code);
+        super(m, locatable.range, code);
     }
 }

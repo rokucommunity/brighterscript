@@ -713,7 +713,6 @@ export let platformCallables = [...mathFunctions, ...runtimeFunctions, ...global
 for (let callable of platformCallables) {
     //give each callable a dummy location
     callable.nameRange = Range.create(0, 0, 0, callable.name.length);
-    callable.bodyRange = Range.create(0, 0, 0, callable.name.length);
 
     //add each parameter to the type
     for (let param of callable.params) {

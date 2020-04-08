@@ -83,7 +83,7 @@
     "testdouble": "^3.5.2",
     "ts-mocha": "^7.0.0",
     "ts-node": "^8.3.0",
-    "typescript": "^3.7.2",
+    "typescript": "^3.8.3",
     "vscode-jsonrpc": "^4.0.0"
   },
   "dependencies": {

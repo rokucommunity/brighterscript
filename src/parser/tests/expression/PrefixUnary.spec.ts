@@ -1,9 +1,10 @@
 import { expect } from 'chai';
 
-import { Parser } from '../../parser';
+import { Parser } from '../../Parser';
 import { BrsBoolean, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
+import { Range } from 'vscode-languageserver';
 
 describe('parser prefix unary expressions', () => {
 
@@ -83,55 +84,39 @@ describe('parser prefix unary expressions', () => {
                 kind: TokenKind.Identifier,
                 text: '_false',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 0 },
-                    end: { line: 1, column: 6 }
-                }
+                range: Range.create(0, 0, 0, 6)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 7 },
-                    end: { line: 1, column: 8 }
-                }
+                range: Range.create(0, 7, 0, 8)
             },
             {
                 kind: TokenKind.Not,
                 text: 'not',
                 isReserved: true,
-                location: {
-                    start: { line: 1, column: 9 },
-                    end: { line: 1, column: 12 }
-                }
+                range: Range.create(0, 9, 0, 12)
             },
             {
                 kind: TokenKind.True,
                 text: 'true',
                 literal: BrsBoolean.True,
                 isReserved: true,
-                location: {
-                    start: { line: 1, column: 13 },
-                    end: { line: 1, column: 17 }
-                }
+                range: Range.create(0, 13, 0, 17)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 17 },
-                    end: { line: 1, column: 18 }
-                }
+                range: Range.create(0, 17, 0, 18)
             }
         ]);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect((statements[0] as any).value.location).to.deep.include({
-            start: { line: 1, column: 9 },
-            end: { line: 1, column: 17 }
-        });
+        expect((statements[0] as any).value.range).to.deep.include(
+            Range.create(0, 9, 0, 17)
+        );
     });
 });

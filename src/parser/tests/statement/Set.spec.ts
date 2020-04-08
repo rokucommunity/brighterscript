@@ -1,9 +1,10 @@
 import { expect } from 'chai';
 
-import { Parser } from '../../parser';
+import { Parser } from '../../Parser';
 import { Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
+import { Range } from 'vscode-languageserver';
 
 describe('parser indexed assignment', () => {
     describe('dotted', () => {
@@ -129,143 +130,98 @@ describe('parser indexed assignment', () => {
          *    0   0   0   1   1
          *    0   4   8   2   6
          *  +------------------
-         * 1| arr[0] = 1
-         * 2| obj.a = 5
+         * 0| arr[0] = 1
+         * 1| obj.a = 5
          */
         let { statements, errors } = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'arr',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 0 },
-                    end: { line: 1, column: 3 }
-                }
+                range: Range.create(0, 0, 0, 3)
             },
             {
                 kind: TokenKind.LeftSquareBracket,
                 text: '[',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 3 },
-                    end: { line: 1, column: 4 }
-                }
+                range: Range.create(0, 3, 0, 4)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
                 literal: new Int32(0),
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 4 },
-                    end: { line: 1, column: 5 }
-                }
+                range: Range.create(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.RightSquareBracket,
                 text: ']',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 5 },
-                    end: { line: 1, column: 6 }
-                }
+                range: Range.create(0, 5, 0, 6)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 7 },
-                    end: { line: 1, column: 8 }
-                }
+                range: Range.create(0, 7, 0, 8)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '1',
                 literal: new Int32(1),
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 9 },
-                    end: { line: 1, column: 10 }
-                }
+                range: Range.create(0, 9, 0, 10)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 10 },
-                    end: { line: 1, column: 11 }
-                }
+                range: Range.create(0, 10, 0, 11)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'obj',
                 isReserved: false,
-                location: {
-                    start: { line: 2, column: 0 },
-                    end: { line: 2, column: 3 }
-                }
+                range: Range.create(1, 0, 1, 3)
             },
             {
                 kind: TokenKind.Dot,
                 text: '.',
                 isReserved: false,
-                location: {
-                    start: { line: 2, column: 3 },
-                    end: { line: 2, column: 4 }
-                }
+                range: Range.create(1, 3, 1, 4)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
-                location: {
-                    start: { line: 2, column: 4 },
-                    end: { line: 2, column: 5 }
-                }
+                range: Range.create(1, 4, 1, 5)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                location: {
-                    start: { line: 2, column: 6 },
-                    end: { line: 2, column: 7 }
-                }
+                range: Range.create(1, 6, 1, 7)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
                 literal: new Int32(5),
                 isReserved: false,
-                location: {
-                    start: { line: 2, column: 8 },
-                    end: { line: 2, column: 9 }
-                }
+                range: Range.create(1, 8, 1, 9)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                location: {
-                    start: { line: 2, column: 10 },
-                    end: { line: 2, column: 11 }
-                }
+                range: Range.create(1, 10, 1, 11)
             }
         ]);
 
         expect(errors).to.be.empty;
         expect(statements).to.be.lengthOf(2);
-        expect(statements.map(s => s.location)).to.deep.equal([
-            {
-                start: { line: 1, column: 0 },
-                end: { line: 1, column: 10 }
-            },
-            {
-                start: { line: 2, column: 0 },
-                end: { line: 2, column: 9 }
-            }
+        expect(statements.map(s => s.range)).to.deep.equal([
+            Range.create(0, 0, 0, 10),
+            Range.create(1, 0, 1, 9)
         ]);
     });
 });

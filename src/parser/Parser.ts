@@ -1,6 +1,18 @@
 import { EventEmitter } from 'events';
 
-import { TokenKind, Token, Identifier, Location, ReservedWords, BlockTerminator, AllowedLocalIdentifiers, AssignmentOperators, DisallowedLocalIdentifiers, AllowedProperties } from '../lexer';
+import {
+    TokenKind,
+    Token,
+    Identifier,
+    ReservedWords,
+    BlockTerminator,
+    AllowedLocalIdentifiers,
+    AssignmentOperators,
+    DisallowedLocalIdentifiers,
+    AllowedProperties,
+    Lexer,
+    Locatable
+} from '../lexer';
 
 import {
     BrsInvalid,
@@ -16,10 +28,6 @@ import {
 import {
     Statement,
     FunctionStatement,
-    ClassStatement,
-    ClassFieldStatement,
-    ClassMemberStatement,
-    ClassMethodStatement,
     CommentStatement,
     PrintSeparatorTab,
     PrintSeparatorSpace,
@@ -47,7 +55,9 @@ import {
 import { diagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
 import { ParseError } from './Error';
-import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression } from './Expression';
+import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression } from './Expression';
+import { Range } from 'vscode-languageserver';
+import { ClassStatement, ClassMemberStatement, ClassMethodStatement, ClassFieldStatement } from './ClassStatement';
 
 export class Parser {
     /** Allows consumers to observe errors as they're detected. */
@@ -85,7 +95,15 @@ export class Parser {
     /**
      * Static wrapper around creating a new parser and parsing a list of tokens
      */
-    public static parse(tokens: Token[], options?: ParseOptions) {
+    public static parse(source: string, options?: ParseOptions): Parser;
+    public static parse(tokens: Token[], options?: ParseOptions): Parser;
+    public static parse(toParse: Token[] | string, options?: ParseOptions): Parser {
+        let tokens: Token[];
+        if (typeof toParse === 'string') {
+            tokens = Lexer.scan(toParse).tokens;
+        } else {
+            tokens = toParse;
+        }
         return new Parser().parse(tokens, options);
     }
 
@@ -161,8 +179,8 @@ export class Parser {
      * @param code - an error code used to uniquely identify this type of error.  Defaults to 1000
      * @returns an error object that can be thrown if the calling code needs to abort parsing
      */
-    private addError(token: Token, message: string, code = 1000) {
-        let err = new ParseError(token, message, code);
+    private addError(locatable: Locatable, message: string, code = 1000) {
+        let err = new ParseError(locatable, message, code);
         this.errors.push(err);
         this.events.emit('err', err);
         return err;
@@ -173,8 +191,9 @@ export class Parser {
      * @param token
      * @param diagnostic
      */
-    private addDiagnostic(token: Token, diagnostic: DiagnosticInfo) {
-        return this.addError(token, diagnostic.message, diagnostic.code);
+
+    private addDiagnostic(locatable: Locatable, diagnostic: DiagnosticInfo) {
+        return this.addError(locatable, diagnostic.message, diagnostic.code);
     }
 
     /**
@@ -191,8 +210,8 @@ export class Parser {
      * @param location
      * @param message
      */
-    private addErrorAtLocation(location: Location, message: string) {
-        this.addError({ location: location } as any, message);
+    private addErrorAtRange(range: Range, message: string) {
+        this.addError({ range: range } as any, message);
     }
 
     private declaration(...additionalTerminators: BlockTerminator[]): Statement | undefined {
@@ -200,7 +219,6 @@ export class Parser {
             // consume any leading newlines
             while (this.match(TokenKind.Newline)) { }
 
-            //TODO implement this in a future commit
             if (this.check(TokenKind.Class)) {
                 return this.classDeclaration();
             }
@@ -244,9 +262,20 @@ export class Parser {
      */
     private classDeclaration(): ClassStatement {
         this.ensureBrighterScriptMode('class declarations');
-        let keyword = this.consume(`Expected 'class' keyword`, TokenKind.Class);
+        let classKeyword = this.consume(`Expected 'class' keyword`, TokenKind.Class);
+        let extendsKeyword: Token;
+        let extendsIdentifier: Identifier;
+
         //get the class name
         let className = this.consumeContinue(diagnosticMessages.missingIdentifierAfterClassKeyword(), TokenKind.Identifier) as Identifier;
+
+        //see if the class inherits from parent
+        if (this.peek().text.toLowerCase() === 'extends') {
+            extendsKeyword = this.advance();
+
+            extendsIdentifier = this.consumeContinue(diagnosticMessages.Missing_identifier_after_extends_keyword_1022(), TokenKind.Identifier) as Identifier;
+        }
+
         //consume newlines (at least one)
         while (this.match(TokenKind.Newline)) {
         }
@@ -259,27 +288,26 @@ export class Parser {
                 if (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private)) {
                     //use actual access modifier
                     accessModifier = this.advance();
-                } else {
-                    accessModifier = {
-                        isReserved: false,
-                        kind: TokenKind.Public,
-                        text: 'public',
-                        //zero-length token which indicates derived
-                        location: {
-                            start: this.peek().location.start,
-                            end: this.peek().location.start
-                        }
-                    };
+                }
+
+                let overrideKeyword: Token;
+                if (this.peek().text.toLowerCase() === 'override') {
+                    overrideKeyword = this.advance();
                 }
 
                 //methods (function/sub keyword OR identifier followed by opening paren)
                 if (this.check(TokenKind.Function, TokenKind.Sub) || (this.check(TokenKind.Identifier) && this.checkNext(TokenKind.LeftParen))) {
                     let funcDeclaration = this.functionDeclaration(false);
+                    //if we have an overrides keyword AND this method is called 'new', that's not allowed
+                    if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
+                        this.addDiagnostic(overrideKeyword, diagnosticMessages.Cannot_use_override_keyword_on_constructor_function_1023());
+                    }
                     members.push(
                         new ClassMethodStatement(
                             accessModifier,
                             funcDeclaration.name,
-                            funcDeclaration.func
+                            funcDeclaration.func,
+                            overrideKeyword
                         )
                     );
 
@@ -299,9 +327,7 @@ export class Parser {
         }
 
         //consume trailing newlines
-        while (this.match(TokenKind.Newline)) {
-
-        }
+        while (this.match(TokenKind.Newline)) { }
 
         let endingKeyword = this.advance();
         if (endingKeyword.kind !== TokenKind.EndClass) {
@@ -316,10 +342,12 @@ export class Parser {
         }
 
         const result = new ClassStatement(
-            keyword,
+            classKeyword,
             className,
             members,
-            endingKeyword
+            endingKeyword,
+            extendsKeyword,
+            extendsIdentifier
         );
         return result;
     }
@@ -366,9 +394,9 @@ export class Parser {
                     kind: TokenKind.Function,
                     text: 'function',
                     //zero-length location means derived
-                    location: {
-                        start: this.peek().location.start,
-                        end: this.peek().location.start
+                    range: {
+                        start: this.peek().range.start,
+                        end: this.peek().range.start
                     }
                 };
             }
@@ -392,7 +420,8 @@ export class Parser {
             } else {
                 name = this.consume(
                     `Expected ${functionTypeText} name after '${functionTypeText}'`,
-                    TokenKind.Identifier
+                    TokenKind.Identifier,
+                    ...AllowedProperties
                 ) as Identifier;
                 leftParen = this.consume(
                     `Expected '(' after ${functionTypeText} name`,
@@ -451,7 +480,7 @@ export class Parser {
                             kind: TokenKind.Identifier,
                             text: arg.name.text,
                             isReserved: ReservedWords.has(arg.name.text),
-                            location: arg.location
+                            range: arg.range
                         },
                         `Argument '${arg.name.text}' has no default value, but comes after arguments with default values`
                     );
@@ -562,7 +591,7 @@ export class Parser {
             name,
             {
                 kind: type,
-                location: typeToken ? typeToken.location : StdlibArgument.InternalLocation
+                range: typeToken ? typeToken.range : StdlibArgument.InternalRange
             },
             typeToken,
             defaultValue,
@@ -736,7 +765,7 @@ export class Parser {
             increment = this.expression();
         } else {
             // BrightScript for/to/step loops default to a step of 1 if no `step` is provided
-            increment = new LiteralExpression(new Int32(1), this.peek().location);
+            increment = new LiteralExpression(new Int32(1), this.peek().range);
         }
         while (this.match(TokenKind.Newline)) {
 
@@ -828,7 +857,7 @@ export class Parser {
         //if this comment is on the same line as the previous statement,
         //then this comment should be treated as a single-line comment
         let prev = this.previous();
-        if (prev && prev.location.end.line === this.peek().location.start.line) {
+        if (prev && prev.range.end.line === this.peek().range.start.line) {
             return new CommentStatement([this.advance()]);
         } else {
             let comments = [this.advance()];
@@ -837,7 +866,7 @@ export class Parser {
                 while (this.match(TokenKind.Newline)) { }
 
                 //if this is a comment, and it's the next line down from the previous comment
-                if (this.check(TokenKind.Comment) && comments[comments.length - 1].location.end.line === this.peek().location.start.line - 1) {
+                if (this.check(TokenKind.Comment) && comments[comments.length - 1].range.end.line === this.peek().range.start.line - 1) {
                     comments.push(this.advance());
                 } else {
                     break;
@@ -856,8 +885,8 @@ export class Parser {
 
         //no token following library keyword token
         if (!libStatement.tokens.filePath && this.check(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
-            this.addErrorAtLocation(
-                libStatement.tokens.library.location,
+            this.addErrorAtRange(
+                libStatement.tokens.library.range,
                 `Missing string literal after ${libStatement.tokens.library.text} keyword`
             );
         }
@@ -868,8 +897,8 @@ export class Parser {
         if (invalidTokens.length > 0) {
             //add an error for every invalid token
             for (let invalidToken of invalidTokens) {
-                this.addErrorAtLocation(
-                    invalidToken.location,
+                this.addErrorAtRange(
+                    invalidToken.range,
                     `Found unexpected token '${invalidToken.text}' after library statement`
                 );
             }
@@ -887,8 +916,8 @@ export class Parser {
 
         //libraries must be a root-level statement (i.e. NOT nested inside of functions)
         if (!this.isAtRootLevel() || !isAtTopOfFile) {
-            this.addErrorAtLocation(
-                libStatement.location,
+            this.addErrorAtRange(
+                libStatement.range,
                 'Library statements may only appear at the top of a file'
             );
         }
@@ -900,7 +929,7 @@ export class Parser {
 
     private ifStatement(): IfStatement {
         const ifToken = this.advance();
-        const startingLine = ifToken.location;
+        const startingLine = ifToken.range;
 
         const condition = this.expression();
         let thenBranch: Block;
@@ -1048,7 +1077,7 @@ export class Parser {
                     'Expected a statement to follow \'if ...condition... then\''
                 );
             }
-            thenBranch = new Block([thenStatement], this.peek().location);
+            thenBranch = new Block([thenStatement], this.peek().range);
 
             //add any comment from the same line as the if statement
             if (comment) {
@@ -1074,7 +1103,7 @@ export class Parser {
 
                 elseIfBranches.push({
                     condition: elseIfCondition,
-                    thenBranch: new Block([elseIfThen], this.peek().location),
+                    thenBranch: new Block([elseIfThen], this.peek().range),
                     thenToken: thenToken,
                     elseIfToken: elseIf
                 });
@@ -1085,7 +1114,7 @@ export class Parser {
                 if (!elseStatement) {
                     throw this.addError(this.peek(), `Expected a statement to follow 'else'`);
                 }
-                elseBranch = new Block([elseStatement], this.peek().location);
+                elseBranch = new Block([elseStatement], this.peek().range);
             }
         }
 
@@ -1227,7 +1256,7 @@ export class Parser {
 
         //print statements can be empty, so look for empty print conditions
         if (this.isAtEnd() || this.check(TokenKind.Newline, TokenKind.Colon)) {
-            let emptyStringLiteral = new LiteralExpression(new BrsString(''), printKeyword.location);
+            let emptyStringLiteral = new LiteralExpression(new BrsString(''), printKeyword.range);
             values.push(emptyStringLiteral);
         } else {
             values.push(this.expression());
@@ -1375,7 +1404,7 @@ export class Parser {
             // TODO: Figure out how to handle unterminated blocks well
         }
 
-        return new Block(statements, startingToken.location);
+        return new Block(statements, startingToken.range);
     }
 
     private expression(): Expression {
@@ -1472,6 +1501,10 @@ export class Parser {
     }
 
     private call(): Expression {
+        let newToken: Token;
+        if (this.check(TokenKind.New)) {
+            newToken = this.advance();
+        }
         let expr = this.primary();
 
         while (true) {
@@ -1508,7 +1541,15 @@ export class Parser {
             }
         }
 
-        return expr;
+        if (newToken) {
+            this.ensureBrighterScriptMode('using new keyword to construct a class');
+            if (expr instanceof CallExpression === false) {
+                this.addDiagnostic(expr, diagnosticMessages.Attempted_to_use_new_keyword_on_a_non_class());
+            }
+            return new NewExpression(newToken, expr);
+        } else {
+            return expr;
+        }
     }
 
     private finishCall(openingParen: Token, callee: Expression): Expression {
@@ -1545,11 +1586,11 @@ export class Parser {
     private primary(): Expression {
         switch (true) {
             case this.match(TokenKind.False):
-                return new LiteralExpression(BrsBoolean.False, this.previous().location);
+                return new LiteralExpression(BrsBoolean.False, this.previous().range);
             case this.match(TokenKind.True):
-                return new LiteralExpression(BrsBoolean.True, this.previous().location);
+                return new LiteralExpression(BrsBoolean.True, this.previous().range);
             case this.match(TokenKind.Invalid):
-                return new LiteralExpression(BrsInvalid.Instance, this.previous().location);
+                return new LiteralExpression(BrsInvalid.Instance, this.previous().range);
             case this.match(
                 TokenKind.IntegerLiteral,
                 TokenKind.LongIntegerLiteral,
@@ -1557,7 +1598,7 @@ export class Parser {
                 TokenKind.DoubleLiteral,
                 TokenKind.StringLiteral
             ):
-                return new LiteralExpression(this.previous().literal, this.previous().location);
+                return new LiteralExpression(this.previous().literal, this.previous().range);
             case this.match(TokenKind.Identifier):
                 return new VariableExpression(this.previous() as Identifier);
             case this.match(TokenKind.LeftParen):
@@ -1618,7 +1659,7 @@ export class Parser {
                         colonToken: null as Token,
                         keyToken: null as Token,
                         key: null as BrsString,
-                        location: null as Location
+                        range: null as Range
                     };
                     if (this.check(TokenKind.Identifier, ...AllowedProperties)) {
                         result.keyToken = this.advance();
@@ -1638,7 +1679,7 @@ export class Parser {
                         'Expected \':\' between associative array key and value',
                         TokenKind.Colon
                     );
-                    result.location = util.getLocation(result.keyToken, result.keyToken, result.colonToken);
+                    result.range = util.getRange(result.keyToken, result.colonToken);
                     return result;
                 };
 
@@ -1656,7 +1697,7 @@ export class Parser {
                             keyToken: k.keyToken,
                             colonToken: k.colonToken,
                             value: expr,
-                            location: util.getLocation(k, k, expr)
+                            range: util.getRange(k, expr)
                         });
                     }
 
@@ -1686,7 +1727,7 @@ export class Parser {
                                 keyToken: k.keyToken,
                                 colonToken: k.colonToken,
                                 value: expr,
-                                location: util.getLocation(k, k, expr)
+                                range: util.getRange(k, expr)
                             });
                         }
                     }

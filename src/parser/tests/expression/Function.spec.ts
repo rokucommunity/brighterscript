@@ -1,9 +1,10 @@
 import { expect } from 'chai';
 
-import { Parser } from '../../parser';
+import { Parser } from '../../Parser';
 import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
+import { Range } from 'vscode-languageserver';
 
 describe('parser', () => {
 
@@ -408,90 +409,65 @@ describe('parser', () => {
          *    0   0   0   1   1
          *    0   4   8   2   6
          *  +------------------
-         * 1| _ = sub foo()
-         * 2|
-         * 3| end sub
+         * 0| _ = sub foo()
+         * 1|
+         * 2| end sub
          */
         let { statements, errors } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: '_',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 0 },
-                    end: { line: 1, column: 1 }
-                }
+                range: Range.create(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 2 },
-                    end: { line: 1, column: 3 }
-                }
+                range: Range.create(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.Sub,
                 text: 'sub',
                 isReserved: true,
-                location: {
-                    start: { line: 1, column: 4 },
-                    end: { line: 1, column: 7 }
-                }
+                range: Range.create(0, 4, 0, 7)
             },
             {
                 kind: TokenKind.LeftParen,
                 text: '(',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 11 },
-                    end: { line: 1, column: 12 }
-                }
+                range: Range.create(0, 11, 0, 12)
             },
             {
                 kind: TokenKind.RightParen,
                 text: ')',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 12 },
-                    end: { line: 1, column: 13 }
-                }
+                range: Range.create(0, 12, 0, 13)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                location: {
-                    start: { line: 1, column: 13 },
-                    end: { line: 1, column: 14 }
-                }
+                range: Range.create(0, 13, 0, 14)
             },
             {
                 kind: TokenKind.EndSub,
                 text: 'end sub',
                 isReserved: false,
-                location: {
-                    start: { line: 3, column: 0 },
-                    end: { line: 3, column: 7 }
-                }
+                range: Range.create(2, 0, 2, 7)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                location: {
-                    start: { line: 3, column: 7 },
-                    end: { line: 3, column: 8 }
-                }
+                range: Range.create(2, 7, 2, 8)
             }
         ]) as any;
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
-        expect(statements[0].value.location).to.deep.include({
-            start: { line: 1, column: 4 },
-            end: { line: 3, column: 7 }
-        });
+        expect(statements[0].value.range).to.deep.include(
+            Range.create(0, 4, 2, 7)
+        );
     });
 });

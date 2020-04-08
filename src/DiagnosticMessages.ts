@@ -117,6 +117,46 @@ export let diagnosticMessages = {
         message: `Encountered syntax errors in bsconfig.json: ${message}`,
         code: 1021,
         severity: DiagnosticSeverity.Error
+    }),
+    Missing_identifier_after_extends_keyword_1022: () => ({
+        message: 'Missing identifier after extends keyword',
+        code: 1022,
+        severity: DiagnosticSeverity.Error
+    }),
+    Cannot_use_override_keyword_on_constructor_function_1023: () => ({
+        message: 'Override keyword is not allowed on class constructor method',
+        code: 1023,
+        severity: DiagnosticSeverity.Error
+    }),
+    Attempted_to_use_new_keyword_on_a_non_class: () => ({
+        message: 'Attempted to use "new" keyword on a non class',
+        code: 1024,
+        severity: DiagnosticSeverity.Error
+    }),
+    Method_does_not_exist_on_type: (methodName: string, className: string) => ({
+        message: `Method ${methodName} does not exist on type ${className}`,
+        code: 1025,
+        severity: DiagnosticSeverity.Error
+    }),
+    Duplicate_identifier: (memberName: string) => ({
+        message: `Duplicate identifier "${memberName}"`,
+        code: 1026,
+        severity: DiagnosticSeverity.Error
+    }),
+    Missing_override_keyword: (methodName: string, ancestorClassName: string) => ({
+        message: `Method "${methodName}" has no override keyword but is declared in ancestor class class "${ancestorClassName}"`,
+        code: 1027,
+        severity: DiagnosticSeverity.Error
+    }),
+    Duplicate_class_declaration: (scopeName: string, className: string) => ({
+        message: `Scope "${scopeName}" already contains a class with name "${className}"`,
+        code: 1028,
+        severity: DiagnosticSeverity.Error
+    }),
+    Class_could_not_be_found: (extendsClassName: string, scopeName: string) => ({
+        message: `Class "${extendsClassName}" could not be found when this file is included in scope "${scopeName}"`,
+        code: 1029,
+        severity: DiagnosticSeverity.Error
     })
 };
 

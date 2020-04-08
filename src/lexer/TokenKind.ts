@@ -123,6 +123,8 @@ export enum TokenKind {
     True = 'True',
     Type = 'Type',
     While = 'While',
+
+    //brighterscript keywords
     Class = 'Class',
     EndClass = 'EndClass',
     Namespace = 'Namespace',
@@ -131,6 +133,9 @@ export enum TokenKind {
     Protected = 'Protected',
     Private = 'Private',
     As = 'As',
+    New = 'New',
+    Override = 'Override',
+
 
     //comments
     Comment = 'Comment',
@@ -255,7 +260,9 @@ export const Keywords: { [key: string]: TokenKind } = {
     'end class': TokenKind.EndClass,
     public: TokenKind.Public,
     protected: TokenKind.Protected,
-    private: TokenKind.Private
+    private: TokenKind.Private,
+    new: TokenKind.New,
+    override: TokenKind.Override
 };
 
 /** Set of all keywords that end blocks. */
@@ -339,7 +346,13 @@ export const AllowedProperties = [
     TokenKind.Interface,
     TokenKind.Dynamic,
     TokenKind.Void,
-    TokenKind.As
+    TokenKind.As,
+    TokenKind.Public,
+    TokenKind.Protected,
+    TokenKind.Private,
+    TokenKind.Class,
+    TokenKind.New,
+    TokenKind.Override
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -358,7 +371,13 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Interface,
     TokenKind.Dynamic,
     TokenKind.Void,
-    TokenKind.As
+    TokenKind.As,
+    TokenKind.Public,
+    TokenKind.Protected,
+    TokenKind.Private,
+    TokenKind.Class,
+    TokenKind.New,
+    TokenKind.Override
 ];
 
 /**
@@ -413,9 +432,3 @@ export const DisallowedLocalIdentifiers = new Set(
         'line_num'
     ].map(x => x.toLowerCase())
 );
-
-export enum CommentKind {
-    SingleQuote = 'SingleQuote',
-    Rem = 'Rem',
-    Block = 'Block'
-}

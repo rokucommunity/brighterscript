@@ -97,7 +97,7 @@ describe('XmlFile', () => {
             expect(file.parseDiagnistics).to.be.lengthOf(1);
             expect(file.parseDiagnistics[0]).to.deep.include(<Diagnostic>{
                 message: diagnosticMessages.xmlComponentMissingNameAttribute().message,
-                location: Range.create(2, 16, 2, 26)
+                range: Range.create(2, 16, 2, 26)
             });
         });
 
@@ -111,7 +111,7 @@ describe('XmlFile', () => {
             expect(file.parseDiagnistics).to.be.lengthOf(1);
             expect(file.parseDiagnistics[0]).to.deep.include(<Diagnostic>{
                 code: diagnosticMessages.xmlGenericParseError('Some generic parse error').code,
-                location: Range.create(2, 27, 2, 27)
+                range: Range.create(2, 27, 2, 27)
             });
         });
 

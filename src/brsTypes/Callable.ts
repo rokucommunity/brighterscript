@@ -2,24 +2,26 @@ declare type Interpreter = any;
 import * as Brs from '.';
 import * as Expr from '../parser/Expression';
 declare let Scope: any;
-import { Location, Identifier, Token } from '../lexer';
+import { Identifier, Token } from '../lexer';
 import { SourceNode } from 'source-map';
+import { Range } from 'vscode-languageserver';
+import { TranspileState } from '../parser/TranspileState';
 
 /** An argument to a BrightScript `function` or `sub`. */
 export interface Argument {
     /** Where the argument exists in the parsed source file(s). */
-    readonly location: Location;
+    readonly range: Range;
 
     /** The argument's name. */
     readonly name: {
         text: string;
-        location: Location;
+        range: Range;
     };
 
     /** The type of the argument expected by the BrightScript runtime. */
     readonly type: {
         kind: Brs.ValueKind;
-        location: Location;
+        range: Range;
     };
 
     /** The default value to use for the argument if none is provided. */
@@ -31,7 +33,7 @@ export interface Argument {
  * functions.
  */
 export class StdlibArgument implements Argument {
-    readonly location: Argument['location'];
+    readonly range: Argument['range'];
     readonly name: Argument['name'];
     readonly type: Argument['type'];
     readonly defaultValue: Argument['defaultValue'];
@@ -44,20 +46,16 @@ export class StdlibArgument implements Argument {
      *                     provided at runtime
      */
     constructor(name: string, type: Brs.ValueKind, defaultValue?: Brs.BrsType) {
-        this.location = StdlibArgument.InternalLocation;
-        this.name = { text: name, location: StdlibArgument.InternalLocation };
-        this.type = { kind: type, location: StdlibArgument.InternalLocation };
+        this.range = StdlibArgument.InternalRange;
+        this.name = { text: name, range: StdlibArgument.InternalRange };
+        this.type = { kind: type, range: StdlibArgument.InternalRange };
         if (defaultValue) {
-            this.defaultValue = new Expr.LiteralExpression(defaultValue, StdlibArgument.InternalLocation);
+            this.defaultValue = new Expr.LiteralExpression(defaultValue, StdlibArgument.InternalRange);
         }
     }
 
     /** A fake location exists only within the BRS runtime. */
-    static InternalLocation = {
-        file: '(stdlib)',
-        start: { line: -1, column: -1 },
-        end: { line: -1, column: -1 }
-    };
+    static InternalRange = Range.create(-1, -1, -1, -1);
 }
 
 export class FunctionParameter {
@@ -65,30 +63,30 @@ export class FunctionParameter {
         public name: Identifier,
         public type: {
             kind: Brs.ValueKind;
-            location: Location;
+            range: Range;
         },
         public typeToken?: Token,
         public defaultValue?: Expr.Expression,
         public asToken?: Token
 
     ) { }
-    public get location(): Location {
+    public get range(): Range {
         return {
-            start: this.name.location.start,
-            end: this.typeToken ? this.typeToken.location.end : this.name.location.end
+            start: this.name.range.start,
+            end: this.typeToken ? this.typeToken.range.end : this.name.range.end
         };
     }
 
-    public transpile(state: Expr.TranspileState) {
+    public transpile(state: TranspileState) {
         let result = [
             //name
-            new SourceNode(this.name.location.start.line, this.name.location.start.column, state.pkgPath, this.name.text)
+            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pkgPath, this.name.text)
         ] as any[];
         if (this.asToken) {
             result.push(' ');
-            result.push(new SourceNode(this.asToken.location.start.line, this.asToken.location.start.column, state.pkgPath, 'as'));
+            result.push(new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pkgPath, 'as'));
             result.push(' ');
-            result.push(new SourceNode(this.typeToken.location.start.line, this.typeToken.location.start.column, state.pkgPath, this.typeToken.text));
+            result.push(new SourceNode(this.typeToken.range.start.line + 1, this.typeToken.range.start.character, state.pkgPath, this.typeToken.text));
         }
         if (this.defaultValue) {
             result.push(' = ');

@@ -9,6 +9,7 @@
         "declaration": true,
         "strict": true,
         "strictNullChecks": false,
+        "forceConsistentCasingInFileNames": true,
         "preserveConstEnums": true,
         "downlevelIteration": true,
         "noUnusedLocals": true,

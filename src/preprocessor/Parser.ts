@@ -101,7 +101,7 @@ export class Parser {
          */
         function hashIf(): CC.Chunk | undefined {
             if (match(TokenKind.HashIf)) {
-                let startingLine = previous().location.start.line;
+                let startingLine = previous().range.start.line;
                 let elseChunk: CC.Chunk[] | undefined;
 
                 let ifCondition = advance();

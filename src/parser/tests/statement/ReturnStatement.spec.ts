@@ -1,10 +1,11 @@
 import { expect } from 'chai';
 
-import { Parser } from '../../parser';
+import { Parser } from '../../Parser';
 import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { FunctionStatement } from '../../Statement';
+import { Range } from 'vscode-languageserver';
 
 describe('parser return statements', () => {
     it('parses void returns', () => {
@@ -70,9 +71,9 @@ describe('parser return statements', () => {
          *    0   0   0   1   1
          *    0   4   8   2   6
          *  +------------------
-         * 1| function foo()
-         * 2|   return 5
-         * 3| end function
+         * 0| function foo()
+         * 1|   return 5
+         * 2| end function
          */
         let { statements, errors } = Parser.parse([
             token(TokenKind.Function, 'function'),
@@ -84,20 +85,14 @@ describe('parser return statements', () => {
                 kind: TokenKind.Return,
                 text: 'return',
                 isReserved: true,
-                location: {
-                    start: { line: 2, column: 2 },
-                    end: { line: 2, column: 8 }
-                }
+                range: Range.create(1, 2, 1, 8)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
                 literal: new Int32(5),
                 isReserved: false,
-                location: {
-                    start: { line: 2, column: 9 },
-                    end: { line: 2, column: 10 }
-                }
+                range: Range.create(1, 9, 1, 10)
             },
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.EndFunction, 'end function'),
@@ -105,9 +100,8 @@ describe('parser return statements', () => {
         ]);
 
         expect(errors).to.be.lengthOf(0);
-        expect((statements[0] as FunctionStatement).func.body.statements[0].location).to.deep.include({
-            start: { line: 2, column: 2 },
-            end: { line: 2, column: 10 }
-        });
+        expect((statements[0] as FunctionStatement).func.body.statements[0]?.range).to.exist.and.to.deep.include(
+            Range.create(1, 2, 1, 10)
+        );
     });
 });
