@@ -7,12 +7,12 @@ import { diagnosticCodes, diagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import { Callable, CallableArg, CallableParam, CommentFlag, Diagnostic, FunctionCall } from '../interfaces';
 import { Deferred } from '../deferred';
-import { FunctionParameter } from '../parser/brsTypes';
+import { FunctionParameter } from '../brsTypes';
 import { BrsError, ParseError } from '../parser/Error';
-import { Lexer, Token, TokenKind, Identifier } from '../parser/lexer';
+import { Lexer, Token, TokenKind, Identifier } from '../lexer';
 import { Parser } from '../parser/parser';
-import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression } from '../parser/parser/Expression';
-import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, Statement } from '../parser/parser/Statement';
+import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression } from '../parser/Expression';
+import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, Statement } from '../parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -20,8 +20,8 @@ import { FunctionType } from '../types/FunctionType';
 import { StringType } from '../types/StringType';
 import { VoidType } from '../types/VoidType';
 import util from '../util';
-import { ParseMode } from '../parser/parser/Parser';
-import { getManifest, Preprocessor } from '../parser/preprocessor';
+import { ParseMode } from '../parser/Parser';
+import { getManifest, Preprocessor } from '../preprocessor';
 
 /**
  * Holds all details about this file within the scope of the whole program

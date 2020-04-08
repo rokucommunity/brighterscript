@@ -1,8 +1,8 @@
 import { expect } from 'chai';
 
-import { Int32, ValueKind } from './brsTypes';
+import { Int32, ValueKind } from '../brsTypes';
 import { getKind, TypeMismatch } from './Error';
-import { Location } from './lexer';
+import { Location } from '../lexer';
 
 describe('parser error', () => {
     let location: Location;

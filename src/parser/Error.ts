@@ -1,5 +1,5 @@
-import { BrsType, ValueKind, valueKindToString } from './brsTypes';
-import { TokenKind, Location, Token } from './lexer';
+import { BrsType, ValueKind, valueKindToString } from '../brsTypes';
+import { TokenKind, Location, Token } from '../lexer';
 
 export class BrsError {
     constructor(readonly message: string, readonly location: Location, readonly code: number = 100) {
