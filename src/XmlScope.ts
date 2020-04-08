@@ -1,7 +1,7 @@
 import { Location, Position, Range } from 'vscode-languageserver';
 
 import { Scope } from './Scope';
-import { diagnosticMessages } from './DiagnosticMessages';
+import { diagnosticMessages, DiagnosticInfo } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { FileReference } from './interfaces';
@@ -136,10 +136,9 @@ export class XmlScope extends Scope {
                 if (ancestorScriptImport) {
                     let ancestorComponentName = ancestorScriptImport.sourceFile.componentName;
                     this.diagnostics.push({
-                        severity: 'warning',
                         file: this.xmlFile,
-                        location: Range.create(scriptImport.lineIndex, scriptImport.columnIndexBegin, scriptImport.lineIndex, scriptImport.columnIndexEnd),
-                        ...diagnosticMessages.Unnecessary_script_import_in_child_from_parent_1009(ancestorComponentName)
+                        range: Range.create(scriptImport.lineIndex, scriptImport.columnIndexBegin, scriptImport.lineIndex, scriptImport.columnIndexEnd),
+                        ...diagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)
                     });
                 }
             }
@@ -175,40 +174,34 @@ export class XmlScope extends Scope {
             let referencedFile = this.getFileByRelativePath(scriptImport.pkgPath);
             //if we can't find the file
             if (!referencedFile) {
-                let message: string;
-                let code: number;
+                let dInfo: DiagnosticInfo;
                 if (scriptImport.text.trim().length === 0) {
-                    message = diagnosticMessages.Script_src_cannot_be_empty_1015().message;
-                    code = diagnosticMessages.Script_src_cannot_be_empty_1015().code;
+                    dInfo = diagnosticMessages.scriptSrcCannotBeEmpty();
                 } else {
-                    message = diagnosticMessages.Referenced_file_does_not_exist_1004().message;
-                    code = diagnosticMessages.Referenced_file_does_not_exist_1004().code;
+                    dInfo = diagnosticMessages.referencedFileDoesNotExist();
                 }
 
                 this.diagnostics.push({
-                    message: message,
-                    code: code,
-                    location: Range.create(
+                    ...dInfo,
+                    range: Range.create(
                         scriptImport.lineIndex,
                         scriptImport.columnIndexBegin,
                         scriptImport.lineIndex,
                         scriptImport.columnIndexEnd
                     ),
-                    file: this.xmlFile,
-                    severity: 'error'
+                    file: this.xmlFile
                 });
                 //if the character casing of the script import path does not match that of the actual path
             } else if (scriptImport.pkgPath !== referencedFile.file.pkgPath) {
                 this.diagnostics.push({
-                    ...diagnosticMessages.Script_import_case_mismatch_1012(referencedFile.file.pkgPath),
-                    location: Range.create(
+                    ...diagnosticMessages.scriptImportCaseMismatch(referencedFile.file.pkgPath),
+                    range: Range.create(
                         scriptImport.lineIndex,
                         scriptImport.columnIndexBegin,
                         scriptImport.lineIndex,
                         scriptImport.columnIndexEnd
                     ),
-                    file: this.xmlFile,
-                    severity: 'warning'
+                    file: this.xmlFile
                 });
             }
         }

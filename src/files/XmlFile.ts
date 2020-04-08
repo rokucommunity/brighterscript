@@ -9,7 +9,7 @@ import { FunctionScope } from '../FunctionScope';
 import { Callable, Diagnostic, File, FileReference, FunctionCall } from '../interfaces';
 import { Program } from '../Program';
 import util from '../util';
-import { ClassStatement } from '../parser/parser/ClassStatement';
+import { ClassStatement } from '../parser/ClassStatement';
 
 export class XmlFile {
     constructor(
@@ -115,43 +115,40 @@ export class XmlFile {
                 //component name not defined
                 if (!this.componentName) {
                     this.parseDiagnistics.push({
-                        ...diagnosticMessages.Component_missing_name_attribute_1006(),
-                        location: Range.create(
+                        ...diagnosticMessages.xmlComponentMissingNameAttribute(),
+                        range: Range.create(
                             componentRange.start.line,
                             componentRange.start.character,
                             componentRange.start.line,
                             componentRange.end.character
                         ),
-                        file: this,
-                        severity: 'error'
+                        file: this
                     });
                 }
                 //parent component name not defined
                 if (!this.parentName) {
                     this.parseDiagnistics.push({
-                        ...diagnosticMessages.Component_missing_extends_attribute_1007(),
-                        location: Range.create(
+                        ...diagnosticMessages.xmlComponentMissingExtendsAttribute(),
+                        range: Range.create(
                             componentRange.start.line,
                             componentRange.start.character,
                             componentRange.start.line,
                             componentRange.end.character
                         ),
-                        file: this,
-                        severity: 'error'
+                        file: this
                     });
                 }
             } else {
                 //the component xml element was not found in the file
                 this.parseDiagnistics.push({
-                    ...diagnosticMessages.Xml_component_missing_component_declaration_1005(),
-                    location: Range.create(
+                    ...diagnosticMessages.xmlComponentMissingComponentDeclaration(),
+                    range: Range.create(
                         0,
                         0,
                         0,
                         Number.MAX_VALUE
                     ),
-                    file: this,
-                    severity: 'error'
+                    file: this
                 });
             }
         } catch (e) {
@@ -162,16 +159,14 @@ export class XmlFile {
                 let columnIndex = parseInt(match[3]) - 1;
                 //add basic xml parse diagnostic errors
                 this.parseDiagnistics.push({
-                    message: match[1],
-                    code: diagnosticMessages.Xml_parse_error_1008().code,
-                    location: Range.create(
+                    ...diagnosticMessages.xmlGenericParseError(match[1]),
+                    range: Range.create(
                         lineIndex,
                         columnIndex,
                         lineIndex,
                         columnIndex
                     ),
-                    file: this,
-                    severity: 'error'
+                    file: this
                 });
             }
         }

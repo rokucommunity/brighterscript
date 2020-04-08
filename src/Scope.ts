@@ -7,7 +7,7 @@ import { XmlFile } from './files/XmlFile';
 import { CallableContainer, Diagnostic, File } from './interfaces';
 import { Program } from './Program';
 import util from './util';
-import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from './parser/parser/ClassStatement';
+import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from './parser/ClassStatement';
 
 /**
  * A class to keep track of all declarations within a given scope (like global scope, component scope)
@@ -322,13 +322,7 @@ export class Scope {
                     this.diagnostics.push({
                         ...diagnosticMessages.Class_could_not_be_found(parentClassName, this.name),
                         file: classStatement.file,
-                        location: Range.create(
-                            classStatement.extendsIdentifier.location.start.line - 1,
-                            classStatement.extendsIdentifier.location.start.column,
-                            classStatement.extendsIdentifier.location.start.line - 1,
-                            classStatement.extendsIdentifier.location.end.column
-                        ),
-                        severity: 'error'
+                        range: classStatement.extendsIdentifier.range
                     });
                 }
                 classStatement.parentClass = parentClass;
@@ -348,13 +342,7 @@ export class Scope {
                     this.diagnostics.push({
                         ...diagnosticMessages.Duplicate_identifier(member.name.text),
                         file: classStatement.file,
-                        severity: 'error',
-                        location: Range.create(
-                            member.name.location.start.line - 1,
-                            member.name.location.start.column,
-                            member.name.location.start.line - 1,
-                            member.name.location.end.column
-                        )
+                        range: member.name.range
                     });
                 }
                 if (member instanceof ClassMethodStatement) {
@@ -402,11 +390,10 @@ export class Scope {
                 if (expCall.args.length > maxParams || expCall.args.length < minParams) {
                     let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
                     this.diagnostics.push({
-                        ...diagnosticMessages.Expected_a_arguments_but_got_b_1002(minMaxParamsText, expCallArgCount),
-                        location: expCall.nameRange,
+                        ...diagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
+                        range: expCall.nameRange,
                         //TODO detect end of expression call
-                        file: file,
-                        severity: 'error'
+                        file: file
                     });
                 }
             }
@@ -429,13 +416,12 @@ export class Scope {
                     let globalCallable = globalCallableContainer[0];
 
                     this.diagnostics.push({
-                        ...diagnosticMessages.Local_var_shadows_global_function_1011(
+                        ...diagnosticMessages.localVarShadowsGlobalFunction(
                             varDeclaration.name,
                             globalCallable.callable.file.pkgPath
                         ),
-                        location: varDeclaration.nameRange,
-                        file: file,
-                        severity: 'warning'
+                        range: varDeclaration.nameRange,
+                        file: file
                     });
                 }
             }
@@ -465,10 +451,9 @@ export class Scope {
                 //detect calls to unknown functions
                 if (!knownCallable) {
                     this.diagnostics.push({
-                        ...diagnosticMessages.Call_to_unknown_function_1001(expCall.name, this.name),
-                        location: expCall.nameRange,
-                        file: file,
-                        severity: 'error'
+                        ...diagnosticMessages.callToUnknownFunction(expCall.name, this.name),
+                        range: expCall.nameRange,
+                        file: file
                     });
                 }
             } else {
@@ -512,16 +497,15 @@ export class Scope {
                     if (lowerName !== 'init') {
                         let shadowedCallable = ancestorNonPlatformCallables[ancestorNonPlatformCallables.length - 1];
                         this.diagnostics.push({
-                            ...diagnosticMessages.Overrides_ancestor_function_1010(
+                            ...diagnosticMessages.overridesAncestorFunction(
                                 container.callable.name,
                                 container.scope.name,
                                 shadowedCallable.callable.file.pkgPath,
                                 //grab the last item in the list, which should be the closest ancestor's version
                                 shadowedCallable.scope.name
                             ),
-                            location: container.callable.nameRange,
-                            file: container.callable.file,
-                            severity: 'hint'
+                            range: container.callable.nameRange,
+                            file: container.callable.file
                         });
                     }
                 }
@@ -534,15 +518,14 @@ export class Scope {
                     let callable = callableContainer.callable;
 
                     this.diagnostics.push({
-                        ...diagnosticMessages.Duplicate_function_implementation_1003(callable.name, callableContainer.scope.name),
-                        location: Range.create(
+                        ...diagnosticMessages.duplicateFunctionImplementation(callable.name, callableContainer.scope.name),
+                        range: Range.create(
                             callable.nameRange.start.line,
                             callable.nameRange.start.character,
                             callable.nameRange.start.line,
                             callable.nameRange.end.character
                         ),
-                        file: callable.file,
-                        severity: 'error'
+                        file: callable.file
                     });
                 }
             }

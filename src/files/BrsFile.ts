@@ -7,12 +7,12 @@ import { diagnosticCodes, diagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import { Callable, CallableArg, CallableParam, CommentFlag, Diagnostic, FunctionCall } from '../interfaces';
 import { Deferred } from '../deferred';
-import { FunctionParameter } from '../parser/brsTypes';
+import { FunctionParameter } from '../brsTypes';
 import { BrsError, ParseError } from '../parser/Error';
-import { Lexer, Token, TokenKind, Identifier } from '../parser/lexer';
+import { Lexer, Token, TokenKind, Identifier } from '../lexer';
 import { Parser } from '../parser/parser';
-import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression } from '../parser/parser/Expression';
-import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, Statement } from '../parser/parser/Statement';
+import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression } from '../parser/Expression';
+import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, Statement } from '../parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -20,10 +20,10 @@ import { FunctionType } from '../types/FunctionType';
 import { StringType } from '../types/StringType';
 import { VoidType } from '../types/VoidType';
 import util from '../util';
-import { TranspileState } from '../parser/parser/TranspileState';
-import { ClassStatement } from '../parser/parser/ClassStatement';
-import { ParseMode } from '../parser/parser/Parser';
-import { getManifest, Preprocessor } from '../parser/preprocessor';
+import { TranspileState } from '../parser/TranspileState';
+import { ClassStatement } from '../parser/ClassStatement';
+import { ParseMode } from '../parser/Parser';
+import { getManifest, Preprocessor } from '../preprocessor';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -100,7 +100,7 @@ export class BrsFile {
      */
     private getTokenAt(position: Position) {
         for (let token of this.parser.tokens) {
-            if (util.rangeContains(util.locationToRange(token.location), position)) {
+            if (util.rangeContains(token.range, position)) {
                 return token;
             }
         }
@@ -260,11 +260,9 @@ export class BrsFile {
         let standardizedDiagnostics = [] as Diagnostic[];
         for (let error of errors) {
             let diagnostic = <Diagnostic>{
-                code: 1000,
-                location: util.locationToRange(error.location),
-                file: this,
-                severity: 'error',
-                message: error.message
+                ...diagnosticMessages.genericParserMessage(error.message),
+                range: error.range,
+                file: this
             };
             standardizedDiagnostics.push(diagnostic);
         }
@@ -278,7 +276,7 @@ export class BrsFile {
      */
     public getIgnores(lines: string[]) {
         //TODO use the comment statements found in the AST for this instead of text search
-        let allCodesExcept1014 = diagnosticCodes.filter((x) => x !== diagnosticMessages.Unknown_diagnostic_code_1014(0).code);
+        let allCodesExcept1014 = diagnosticCodes.filter((x) => x !== diagnosticMessages.unknownDiagnosticCode(0).code);
         this.commentFlags = [];
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             let line = lines[lineIndex];
@@ -333,10 +331,9 @@ export class BrsFile {
                                 //add a warning for unknown codes
                                 if (!diagnosticCodes.includes(codeInt)) {
                                     this.diagnostics.push({
-                                        ...diagnosticMessages.Unknown_diagnostic_code_1014(codeInt),
+                                        ...diagnosticMessages.unknownDiagnosticCode(codeInt),
                                         file: this,
-                                        location: Range.create(lineIndex, offset + codeToken.startIndex, lineIndex, offset + codeToken.startIndex + codeToken.text.length),
-                                        severity: 'warning'
+                                        range: Range.create(lineIndex, offset + codeToken.startIndex, lineIndex, offset + codeToken.startIndex + codeToken.text.length)
                                     });
                                 } else {
                                     codes.push(codeInt);
@@ -404,20 +401,11 @@ export class BrsFile {
                 scope.parentScope = parentScope;
             }
 
-            //compute the range of this func
-            scope.bodyRange = util.getBodyRangeForFunc(func);
-            scope.range = Range.create(
-                func.functionType.location.start.line - 1,
-                func.functionType.location.start.column,
-                func.end.location.end.line - 1,
-                func.end.location.end.column
-            );
-
             //add every parameter
             for (let param of func.parameters) {
                 scope.variableDeclarations.push({
-                    nameRange: util.locationToRange(param.name.location),
-                    lineIndex: param.name.location.start.line - 1,
+                    nameRange: param.name.range,
+                    lineIndex: param.name.range.start.line,
                     name: param.name.text,
                     type: util.valueKindToBrsType(param.type.kind)
                 });
@@ -434,16 +422,14 @@ export class BrsFile {
 
         for (let kvp of assignmentStatements) {
             let statement = kvp.value;
-            let nameRange = util.locationToRange(statement.name.location);
-
             //find this statement's function scope
-            let scope = this.getFunctionScopeAtPosition(nameRange.start);
+            let scope = this.getFunctionScopeAtPosition(statement.name.range.start);
 
             //skip variable declarations that are outside of any scope
             if (scope) {
                 scope.variableDeclarations.push({
-                    nameRange: nameRange,
-                    lineIndex: statement.name.location.start.line - 1,
+                    nameRange: statement.name.range,
+                    lineIndex: statement.name.range.start.line,
                     name: statement.name.text,
                     type: this.getBRSTypeFromAssignment(statement, scope)
                 });
@@ -556,11 +542,10 @@ export class BrsFile {
             this.callables.push({
                 isSub: statement.func.functionType.text.toLowerCase() === 'sub',
                 name: statement.name.text,
-                nameRange: util.locationToRange(statement.name.location),
+                nameRange: statement.name.range,
                 file: this,
                 params: params,
-                //the function body starts on the next line (since we can't have one-line functions)
-                bodyRange: util.getBodyRangeForFunc(statement.func),
+                range: statement.func.range,
                 type: functionType
             });
         }
@@ -586,10 +571,10 @@ export class BrsFile {
                     let functionName = (expression.callee as any).name.text;
 
                     //callee is the name of the function being called
-                    let calleeRange = util.locationToRange(expression.callee.location);
+                    let callee = expression.callee as VariableExpression;
 
-                    let columnIndexBegin = calleeRange.start.character;
-                    let columnIndexEnd = calleeRange.end.character;
+                    let columnIndexBegin = callee.range.start.character;
+                    let columnIndexEnd = callee.range.end.character;
 
                     let args = [] as CallableArg[];
                     //TODO convert if stmts to use instanceof instead
@@ -597,7 +582,7 @@ export class BrsFile {
                         //is variable being passed into argument
                         if (arg.name) {
                             args.push({
-                                range: util.locationToRange(arg.location),
+                                range: arg.range,
                                 //TODO - look up the data type of the actual variable
                                 type: new DynamicType(),
                                 text: arg.name.text
@@ -609,7 +594,7 @@ export class BrsFile {
                                 text = arg.value.value.toString();
                             }
                             let callableArg = {
-                                range: util.locationToRange(arg.location),
+                                range: arg.range,
                                 type: util.valueKindToBrsType(arg.value.kind),
                                 text: text
                             };
@@ -620,7 +605,7 @@ export class BrsFile {
                             args.push(callableArg);
                         } else {
                             args.push({
-                                range: util.locationToRange(arg.location),
+                                range: arg.range,
                                 type: new DynamicType(),
                                 //TODO get text from other types of args
                                 text: ''
@@ -628,11 +613,11 @@ export class BrsFile {
                         }
                     }
                     let functionCall: FunctionCall = {
-                        range: util.brsRangeFromPositions(expression.location.start, expression.closingParen.location.end),
-                        functionScope: this.getFunctionScopeAtPosition(Position.create(calleeRange.start.line, calleeRange.start.character)),
+                        range: Range.create(expression.range.start, expression.closingParen.range.end),
+                        functionScope: this.getFunctionScopeAtPosition(Position.create(callee.range.start.line, callee.range.start.character)),
                         file: this,
                         name: functionName,
-                        nameRange: Range.create(calleeRange.start.line, columnIndexBegin, calleeRange.start.line, columnIndexEnd),
+                        nameRange: Range.create(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
                         //TODO keep track of parameters
                         args: args
                     };
@@ -743,12 +728,11 @@ export class BrsFile {
         let tokens = this.parser.tokens;
         for (let i = 0; i < tokens.length; i++) {
             let token = tokens[i];
-            let range = util.locationToRange(token.location);
-            if (util.rangeContains(range, position)) {
+            if (util.rangeContains(token.range, position)) {
                 return token;
             }
             //if the position less than this token range, then this position touches no token,
-            if (util.positionIsGreaterThanRange(position, range) === false) {
+            if (util.positionIsGreaterThanRange(position, token.range) === false) {
                 let t = tokens[i - 1];
                 //return the token or the first token
                 return t ? t : tokens[0];
@@ -794,7 +778,7 @@ export class BrsFile {
                             typeText = `${varDeclaration.name} as ${varDeclaration.type.toString()}`;
                         }
                         return {
-                            range: util.locationToRange(token.location),
+                            range: token.range,
                             //append the variable name to the front for scope
                             contents: typeText
                         };
@@ -810,7 +794,7 @@ export class BrsFile {
                 let callable = scope.getCallableByName(lowerTokenText);
                 if (callable) {
                     return {
-                        range: util.locationToRange(token.location),
+                        range: token.range,
                         contents: callable.type.toString()
                     };
                 }
@@ -829,8 +813,12 @@ export class BrsFile {
             let previousStatement = this.ast[i - 1];
             let nextStatement = this.ast[i + 1];
 
-            //if comment is on same line as prior sibling
-            if (statement instanceof CommentStatement && previousStatement && statement.location.start.line === previousStatement.location.end.line) {
+
+            if (!previousStatement) {
+                //this is the first statement. do nothing related to spacing and newlines
+
+                //if comment is on same line as prior sibling
+            } else if (statement instanceof CommentStatement && previousStatement && statement.range.start.line === previousStatement.range.end.line) {
                 chunks.push(
                     ' '
                 );
@@ -850,9 +838,10 @@ export class BrsFile {
             chunks.push(...statement.transpile(state));
         }
         let programNode = new SourceNode(null, null, this.pathAbsolute, chunks);
-        return programNode.toStringWithSourceMap({
+        let result = programNode.toStringWithSourceMap({
             file: this.pathAbsolute
         });
+        return result;
     }
 
     public dispose() {

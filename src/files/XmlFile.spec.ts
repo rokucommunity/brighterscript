@@ -83,7 +83,7 @@ describe('XmlFile', () => {
             file = new XmlFile('abs', 'rel', null);
             await file.parse('<script type="text/brightscript" uri="ChildScene.brs" />');
             expect(file.parseDiagnistics).to.be.lengthOf(1);
-            expect(file.parseDiagnistics[0].message).to.equal(diagnosticMessages.Xml_component_missing_component_declaration_1005().message);
+            expect(file.parseDiagnistics[0].message).to.equal(diagnosticMessages.xmlComponentMissingComponentDeclaration().message);
         });
 
         it('adds error when component does not declare a name', async () => {
@@ -96,8 +96,8 @@ describe('XmlFile', () => {
             `);
             expect(file.parseDiagnistics).to.be.lengthOf(1);
             expect(file.parseDiagnistics[0]).to.deep.include(<Diagnostic>{
-                message: diagnosticMessages.Component_missing_name_attribute_1006().message,
-                location: Range.create(2, 16, 2, 26)
+                message: diagnosticMessages.xmlComponentMissingNameAttribute().message,
+                range: Range.create(2, 16, 2, 26)
             });
         });
 
@@ -110,8 +110,8 @@ describe('XmlFile', () => {
             `);
             expect(file.parseDiagnistics).to.be.lengthOf(1);
             expect(file.parseDiagnistics[0]).to.deep.include(<Diagnostic>{
-                code: diagnosticMessages.Xml_parse_error_1008().code,
-                location: Range.create(2, 27, 2, 27)
+                code: diagnosticMessages.xmlGenericParseError('Some generic parse error').code,
+                range: Range.create(2, 27, 2, 27)
             });
         });
 

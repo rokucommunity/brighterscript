@@ -5,7 +5,7 @@ import { getTestTranspile } from './BrsFile.spec';
 import { BrsFile } from './BrsFile';
 import { expect } from 'chai';
 import { diagnosticMessages } from '../DiagnosticMessages';
-import { Diagnostic, Range } from 'vscode-languageserver';
+import { Diagnostic, Range, DiagnosticSeverity } from 'vscode-languageserver';
 
 let sinon = sinonImport.createSandbox();
 
@@ -171,7 +171,8 @@ describe('BrsFile BrighterScript classes', () => {
             return {
                 code: x.code,
                 message: x.message,
-                range: x.location
+                range: x.range,
+                severity: DiagnosticSeverity.Error
             };
         });
         expect(diagnostics).to.eql(<Partial<Diagnostic>[]>[{
@@ -217,7 +218,7 @@ describe('BrsFile BrighterScript classes', () => {
         await program.validate();
         expect(program.getDiagnostics()[0]).to.exist.and.to.deep.include({
             ...diagnosticMessages.Class_could_not_be_found('Animal', 'global'),
-            location: Range.create(1, 31, 1, 37)
+            range: Range.create(1, 31, 1, 37)
         });
     });
 });

@@ -8,6 +8,7 @@ import { Diagnostic, File } from './interfaces';
 import { FileResolver, Program } from './Program';
 import util from './util';
 import { Watcher } from './Watcher';
+import { DiagnosticSeverity } from 'vscode-languageserver';
 
 /**
  * A runner class that handles
@@ -213,18 +214,17 @@ export class ProgramBuilder {
             //sort the diagnostics in line and column order
             let sortedDiagnostics = diagnosticsForFile.sort((a, b) => {
                 return (
-                    a.location.start.line - b.location.start.line ||
-                    a.location.start.character - b.location.start.character
+                    a.range.start.line - b.range.start.line ||
+                    a.range.start.character - b.range.start.character
                 );
             });
             let filePath = pathAbsolute;
-            let typeColor = {
-                information: chalk.blue,
-                hint: chalk.green,
-                warning: chalk.yellow,
-                error: chalk.red
+            let typeColor = {} as any;
+            typeColor[DiagnosticSeverity.Information] = chalk.blue;
+            typeColor[DiagnosticSeverity.Hint] = chalk.green;
+            typeColor[DiagnosticSeverity.Warning] = chalk.yellow;
+            typeColor[DiagnosticSeverity.Error] = chalk.red;
 
-            };
             if (this.options && this.options.emitFullPaths !== true) {
                 filePath = path.relative(cwd, filePath);
             }
@@ -233,17 +233,19 @@ export class ProgramBuilder {
             //split the file on newline
             let lines = util.getLines(fileText);
             for (let diagnostic of sortedDiagnostics) {
+                //default the severity to error if undefined
+                let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
                 console.log('');
                 console.log(
                     chalk.cyan(filePath) +
                     ':' +
                     chalk.yellow(
-                        (diagnostic.location.start.line + 1) +
+                        (diagnostic.range.start.line + 1) +
                         ':' +
-                        (diagnostic.location.start.character + 1)
+                        (diagnostic.range.start.character + 1)
                     ) +
                     ' - ' +
-                    typeColor[diagnostic.severity](diagnostic.severity) +
+                    typeColor[severity](DiagnosticSeverity[severity]) +
                     ' ' +
                     chalk.grey('BS' + diagnostic.code) +
                     ': ' +
@@ -252,19 +254,19 @@ export class ProgramBuilder {
                 console.log('');
 
                 //print the line
-                let diagnosticLine = lines[diagnostic.location.start.line];
+                let diagnosticLine = lines[diagnostic.range.start.line];
 
                 //if the squiggly length is longer than the line, concat to end of line
-                let squigglyLength = diagnostic.location.end.character - diagnostic.location.start.character;
-                if (squigglyLength > diagnosticLine.length - diagnostic.location.start.character) {
-                    squigglyLength = diagnosticLine.length - diagnostic.location.end.character;
+                let squigglyLength = diagnostic.range.end.character - diagnostic.range.start.character;
+                if (squigglyLength > diagnosticLine.length - diagnostic.range.start.character) {
+                    squigglyLength = diagnosticLine.length - diagnostic.range.end.character;
                 }
-                let lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.location.start.line + 1).toString()) + ' ') + ' ';
-                let blankLineNumberText = chalk.bgWhite(' ' + chalk.bgWhite((diagnostic.location.start.line + 1).toString()) + ' ') + ' ';
+                let lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
+                let blankLineNumberText = chalk.bgWhite(' ' + chalk.bgWhite((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
                 console.log(lineNumberText + diagnosticLine);
                 console.log(blankLineNumberText +
-                    typeColor[diagnostic.severity](
-                        util.padLeft('', diagnostic.location.start.character, ' ') +
+                    typeColor[severity](
+                        util.padLeft('', diagnostic.range.start.character, ' ') +
                         //print squigglies
                         util.padLeft('', squigglyLength, '~')
                     )

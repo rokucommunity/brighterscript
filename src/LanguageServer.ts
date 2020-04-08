@@ -360,9 +360,8 @@ export class LanguageServer {
             //if we found a depricated brsconfig.json, add a diagnostic warning the user
             if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
                 builder.addDiagnostic(configFilePath, {
-                    location: Range.create(0, 0, 0, 0),
-                    severity: 'warning',
-                    ...diagnosticMessages.BrsConfigJson_is_depricated_1020()
+                    ...diagnosticMessages.brsConfigJsonIsDepricated(),
+                    range: Range.create(0, 0, 0, 0)
                 });
                 return this.sendDiagnostics();
             }
@@ -883,8 +882,8 @@ export class LanguageServer {
                 issuesByFile[diagnostic.file.pathAbsolute] = [];
             }
             issuesByFile[diagnostic.file.pathAbsolute].push({
-                severity: util.severityToDiagnostic(diagnostic.severity),
-                range: diagnostic.location,
+                severity: diagnostic.severity,
+                range: diagnostic.range,
                 message: diagnostic.message,
                 code: diagnostic.code,
                 source: 'brs'

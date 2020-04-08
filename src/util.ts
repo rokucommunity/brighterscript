@@ -5,7 +5,7 @@ import { parse as parseJsonc, ParseError, printParseErrorCode } from 'jsonc-pars
 import * as moment from 'moment';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import { DiagnosticSeverity, Position, Range } from 'vscode-languageserver';
+import { Position, Range } from 'vscode-languageserver';
 import Uri from 'vscode-uri';
 import * as xml2js from 'xml2js';
 
@@ -13,8 +13,6 @@ import { BsConfig } from './BsConfig';
 import { diagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { CallableContainer, Diagnostic, ValueKind } from './interfaces';
-import { Location } from './parser/lexer';
-import { FunctionExpression as ExpressionFunction } from './parser/parser/Expression';
 import { BooleanType } from './types/BooleanType';
 import { BrsType } from './types/BrsType';
 import { DoubleType } from './types/DoubleType';
@@ -132,7 +130,7 @@ export class Util {
         }
     }
 
-    public getLocationFromOffsetLength(text: string, offset: number, length: number) {
+    public getRangeFromOffsetLength(text: string, offset: number, length: number) {
         let lineIndex = 0;
         let colIndex = 0;
         for (let i = 0; i < text.length; i++) {
@@ -177,13 +175,11 @@ export class Util {
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {
-                    severity: 'error',
-                    code: diagnosticMessages.BsConfigJson_has_syntax_errors_1021().code,
-                    message: printParseErrorCode(parseErrors[0].error),
+                    ...diagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
                     file: {
                         pathAbsolute: configFilePath
                     },
-                    location: this.getLocationFromOffsetLength(projectFileContents, err.offset, err.length)
+                    range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
                 } as Diagnostic;
                 throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
@@ -362,37 +358,6 @@ export class Util {
     }
 
     /**
-     * Convert a 1-indexed brs Location to a 0-indexed vscode range
-     * @param location
-     */
-    public locationToRange(location: Location) {
-        return Range.create(
-            //brs error lines are 1-indexed
-            location.start.line - 1,
-            //brs error columns are 0-based
-            location.start.column,
-            location.end.line - 1,
-            location.end.column
-        );
-    }
-
-    /**
-     * Compute the range of a function's body
-     * @param func
-     */
-    public getBodyRangeForFunc(func: ExpressionFunction) {
-        return Range.create(
-            //func body begins at start of line after its declaration
-            func.location.start.line,
-            0,
-            //func body ends right before the `end function|sub` line
-            func.end.location.start.line - 1,
-            //brs location columns are 0-based
-            func.end.location.start.column
-        );
-    }
-
-    /**
      * Given a list of callables, get that as a a dictionary indexed by name.
      * @param callables
      */
@@ -410,24 +375,6 @@ export class Util {
             result[lowerName].push(callableContainer);
         }
         return result;
-    }
-
-    /**
-     *
-     * @param severity
-     */
-    public severityToDiagnostic(severity: 'hint' | 'information' | 'warning' | 'error') {
-        switch (severity) {
-            case 'hint':
-                return DiagnosticSeverity.Hint;
-            case 'information':
-                return DiagnosticSeverity.Information;
-            case 'warning':
-                return DiagnosticSeverity.Warning;
-            case 'error':
-            default:
-                return DiagnosticSeverity.Error;
-        }
     }
 
     /**
@@ -672,7 +619,7 @@ export class Util {
         if (diagnostic.file instanceof BrsFile) {
             for (let flag of diagnostic.file.commentFlags) {
                 //this diagnostic is affected by this flag
-                if (this.rangeContains(flag.affectedRange, diagnostic.location.start)) {
+                if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
                     //if the flag acts upon this diagnostic's code
                     if (flag.codes === null || flag.codes.includes(diagnostic.code)) {
                         return true;
@@ -755,20 +702,6 @@ export class Util {
             setTimeout(resolve, milliseconds);
         });
     }
-    /**
-     * The BRS library uses 1-based line indexes, and 0 based column indexes.
-     * However, vscode expects zero-based for everything.
-     * @param start - the location.start object from brs
-     * @param end - the location.end object from brs
-     */
-    public brsRangeFromPositions(start: BrsPosition, end: BrsPosition) {
-        return Range.create(
-            start.line - 1,
-            start.column,
-            end.line - 1,
-            end.column
-        );
-    }
 
     /**
      * Given an array, map and then flatten
@@ -806,18 +739,15 @@ export class Util {
     /**
      * Get a location object back by extracting location information from other objects that contain location
      */
-    public getLocation(fileObj: { location: Location }, startObj: { location: Location }, endObj: { location: Location }): Location {
-        return {
-            start: startObj.location.start,
-            end: endObj.location.end
-        };
+    public getRange(startObj: { range: Range }, endObj: { range: Range }): Range {
+        return Range.create(startObj.range.start, endObj.range.end);
     }
 
     /**
      * If the two items both start on the same line
      */
-    public sameStartLine(first: { location: Location }, second: { location: Location }) {
-        if (first && second && first.location.start.line === second.location.start.line) {
+    public sameStartLine(first: { range: Range }, second: { range: Range }) {
+        if (first && second && first.range.start.line === second.range.start.line) {
             return true;
         } else {
             return false;
@@ -829,38 +759,19 @@ export class Util {
      * @param first
      * @param second
      */
-    public linesTouch(first: { location: Location }, second: { location: Location }) {
+    public linesTouch(first: { range: Range }, second: { range: Range }) {
         if (first && second && (
-            first.location.start.line === second.location.start.line ||
-            first.location.start.line === second.location.end.line ||
-            first.location.end.line === second.location.start.line ||
-            first.location.end.line === second.location.end.line
+            first.range.start.line === second.range.start.line ||
+            first.range.start.line === second.range.end.line ||
+            first.range.end.line === second.range.start.line ||
+            first.range.end.line === second.range.end.line
         )) {
             return true;
         } else {
             return false;
         }
     }
-
-    public getEmptyLocation() {
-        return {
-            start: {
-                line: 1,
-                column: 0
-            },
-            end: {
-                line: 1,
-                column: 0
-            },
-            file: undefined
-        } as Location;
-    }
 }
 
 export let util = new Util();
 export default util;
-
-interface BrsPosition {
-    line: number;
-    column: number;
-}

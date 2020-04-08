@@ -166,7 +166,7 @@ describe('Scope', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(diagnosticMessages.Local_var_shadows_global_function_1011('', '').code);
+            expect(diagnostics[0].code).to.equal(diagnosticMessages.localVarShadowsGlobalFunction('', '').code);
         });
 
         it('detects duplicate callables', async () => {
@@ -206,7 +206,7 @@ describe('Scope', () => {
             //we should have the "DoA declared more than once" error twice (one for each function named "DoA")
             expect(scope.getDiagnostics().length).to.equal(1);
             expect(scope.getDiagnostics()[0]).to.deep.include({
-                code: diagnosticMessages.Call_to_unknown_function_1001('DoB', '').code
+                code: diagnosticMessages.callToUnknownFunction('DoB', '').code
             });
         });
 
@@ -227,7 +227,7 @@ describe('Scope', () => {
             scope.validate();
             expect(scope.getDiagnostics().length).to.equal(1);
             expect(scope.getDiagnostics()[0]).to.deep.include({
-                code: diagnosticMessages.Call_to_unknown_function_1001('DoC', '').code
+                code: diagnosticMessages.callToUnknownFunction('DoC', '').code
             });
         });
 
@@ -262,7 +262,7 @@ describe('Scope', () => {
             //should have an error
             expect(scope.getDiagnostics().length).to.equal(1);
             expect(scope.getDiagnostics()[0]).to.deep.include({
-                ...diagnosticMessages.Expected_a_arguments_but_got_b_1002(0, 1)
+                ...diagnosticMessages.mismatchArgumentCount(0, 1)
             });
         });
 
@@ -281,7 +281,7 @@ describe('Scope', () => {
             //should have an error
             expect(scope.getDiagnostics().length).to.equal(1);
             expect(scope.getDiagnostics()[0]).to.deep.include({
-                ...diagnosticMessages.Expected_a_arguments_but_got_b_1002(1, 0)
+                ...diagnosticMessages.mismatchArgumentCount(1, 0)
             });
         });
 
@@ -316,7 +316,7 @@ describe('Scope', () => {
             //should have an error
             expect(scope.getDiagnostics().length).to.equal(1);
             expect(scope.getDiagnostics()[0]).to.deep.include({
-                ...diagnosticMessages.Expected_a_arguments_but_got_b_1002('1-2', 0)
+                ...diagnosticMessages.mismatchArgumentCount('1-2', 0)
             });
         });
 
@@ -351,7 +351,7 @@ describe('Scope', () => {
             //should have an error
             expect(scope.getDiagnostics().length).to.equal(1);
             expect(scope.getDiagnostics()[0]).to.deep.include({
-                ...diagnosticMessages.Expected_a_arguments_but_got_b_1002(1, 2)
+                ...diagnosticMessages.mismatchArgumentCount(1, 2)
             });
         });
     });
