@@ -309,7 +309,7 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports many keywords as object property names', async () => {
+        it.only('supports many keywords as object property names', async () => {
             await file.parse(`
                 sub Main()
                     person = {}
