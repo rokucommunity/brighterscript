@@ -110,7 +110,7 @@ describe('XmlFile', () => {
             `);
             expect(file.parseDiagnistics).to.be.lengthOf(1);
             expect(file.parseDiagnistics[0]).to.deep.include(<Diagnostic>{
-                code: diagnosticMessages.xmlGenericParseError().code,
+                code: diagnosticMessages.xmlGenericParseError('Some generic parse error').code,
                 location: Range.create(2, 27, 2, 27)
             });
         });

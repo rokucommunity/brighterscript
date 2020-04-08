@@ -118,8 +118,7 @@ export class XmlFile {
                             componentRange.start.line,
                             componentRange.end.character
                         ),
-                        file: this,
-                        severity: 'error'
+                        file: this
                     });
                 }
                 //parent component name not defined
@@ -132,8 +131,7 @@ export class XmlFile {
                             componentRange.start.line,
                             componentRange.end.character
                         ),
-                        file: this,
-                        severity: 'error'
+                        file: this
                     });
                 }
             } else {
@@ -146,8 +144,7 @@ export class XmlFile {
                         0,
                         Number.MAX_VALUE
                     ),
-                    file: this,
-                    severity: 'error'
+                    file: this
                 });
             }
         } catch (e) {
@@ -158,16 +155,14 @@ export class XmlFile {
                 let columnIndex = parseInt(match[3]) - 1;
                 //add basic xml parse diagnostic errors
                 this.parseDiagnistics.push({
-                    message: match[1],
-                    code: diagnosticMessages.xmlGenericParseError().code,
+                    ...diagnosticMessages.xmlGenericParseError(match[1]),
                     location: Range.create(
                         lineIndex,
                         columnIndex,
                         lineIndex,
                         columnIndex
                     ),
-                    file: this,
-                    severity: 'error'
+                    file: this
                 });
             }
         }

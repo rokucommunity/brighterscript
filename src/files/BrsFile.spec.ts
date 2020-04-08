@@ -1,6 +1,6 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
-import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
 
 import { Callable, CallableArg, CommentFlag, Diagnostic, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
@@ -969,7 +969,7 @@ describe('BrsFile', () => {
                 message: 'some lex error',
                 location: Range.create(0, 0, 1, 4),
                 file: file,
-                severity: 'error'
+                severity: DiagnosticSeverity.Error
             }]);
         });
     });

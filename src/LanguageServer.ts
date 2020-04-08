@@ -360,9 +360,8 @@ export class LanguageServer {
             //if we found a depricated brsconfig.json, add a diagnostic warning the user
             if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
                 builder.addDiagnostic(configFilePath, {
-                    location: Range.create(0, 0, 0, 0),
-                    severity: 'warning',
-                    ...diagnosticMessages.brsConfigJsonIsDepricated()
+                    ...diagnosticMessages.brsConfigJsonIsDepricated(),
+                    location: Range.create(0, 0, 0, 0)
                 });
                 return this.sendDiagnostics();
             }

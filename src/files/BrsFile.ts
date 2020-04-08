@@ -231,11 +231,9 @@ export class BrsFile {
         let standardizedDiagnostics = [] as Diagnostic[];
         for (let error of errors) {
             let diagnostic = <Diagnostic>{
-                code: 1000,
+                ...diagnosticMessages.genericParserMessage(error.message),
                 location: util.locationToRange(error.location),
-                file: this,
-                severity: 'error',
-                message: error.message
+                file: this
             };
             standardizedDiagnostics.push(diagnostic);
         }
@@ -306,8 +304,7 @@ export class BrsFile {
                                     this.diagnostics.push({
                                         ...diagnosticMessages.unknownDiagnosticCode(codeInt),
                                         file: this,
-                                        location: Range.create(lineIndex, offset + codeToken.startIndex, lineIndex, offset + codeToken.startIndex + codeToken.text.length),
-                                        severity: 'warning'
+                                        location: Range.create(lineIndex, offset + codeToken.startIndex, lineIndex, offset + codeToken.startIndex + codeToken.text.length)
                                     });
                                 } else {
                                     codes.push(codeInt);

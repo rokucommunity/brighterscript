@@ -319,8 +319,7 @@ export class Scope {
                         ...diagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
                         location: expCall.nameRange,
                         //TODO detect end of expression call
-                        file: file,
-                        severity: 'error'
+                        file: file
                     });
                 }
             }
@@ -348,8 +347,7 @@ export class Scope {
                             globalCallable.callable.file.pkgPath
                         ),
                         location: varDeclaration.nameRange,
-                        file: file,
-                        severity: 'warning'
+                        file: file
                     });
                 }
             }
@@ -381,8 +379,7 @@ export class Scope {
                     this.diagnostics.push({
                         ...diagnosticMessages.callToUnknownFunction(expCall.name, this.name),
                         location: expCall.nameRange,
-                        file: file,
-                        severity: 'error'
+                        file: file
                     });
                 }
             } else {
@@ -434,8 +431,7 @@ export class Scope {
                                 shadowedCallable.scope.name
                             ),
                             location: container.callable.nameRange,
-                            file: container.callable.file,
-                            severity: 'hint'
+                            file: container.callable.file
                         });
                     }
                 }
@@ -455,8 +451,7 @@ export class Scope {
                             callable.nameRange.start.line,
                             callable.nameRange.end.character
                         ),
-                        file: callable.file,
-                        severity: 'error'
+                        file: callable.file
                     });
                 }
             }

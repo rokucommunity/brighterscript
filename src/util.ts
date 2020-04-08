@@ -177,9 +177,7 @@ export class Util {
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {
-                    severity: 'error',
-                    code: diagnosticMessages.bsConfigJsonHasSyntaxErrors().code,
-                    message: printParseErrorCode(parseErrors[0].error),
+                    ...diagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
                     file: {
                         pathAbsolute: configFilePath
                     },
@@ -410,24 +408,6 @@ export class Util {
             result[lowerName].push(callableContainer);
         }
         return result;
-    }
-
-    /**
-     *
-     * @param severity
-     */
-    public severityToDiagnostic(severity: 'hint' | 'information' | 'warning' | 'error') {
-        switch (severity) {
-            case 'hint':
-                return DiagnosticSeverity.Hint;
-            case 'information':
-                return DiagnosticSeverity.Information;
-            case 'warning':
-                return DiagnosticSeverity.Warning;
-            case 'error':
-            default:
-                return DiagnosticSeverity.Error;
-        }
     }
 
     /**

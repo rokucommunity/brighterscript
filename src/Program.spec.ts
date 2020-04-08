@@ -1,7 +1,7 @@
 import { assert, expect } from 'chai';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
-import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
 
 import { Scope } from './Scope';
 import { diagnosticMessages } from './DiagnosticMessages';
@@ -248,7 +248,7 @@ describe('Program', () => {
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
             expect(diagnostics[0].code).to.equal(diagnosticMessages.unnecessaryScriptImportInChildFromParent('').code);
-            expect(diagnostics[0].severity).to.equal('warning');
+            expect(diagnostics[0].severity).to.equal(DiagnosticSeverity.Warning);
         });
 
         it('adds info diag when child component method shadows parent component method', async () => {
@@ -493,10 +493,9 @@ describe('Program', () => {
             await program.validate();
             expect(program.getDiagnostics().length).to.equal(1);
             expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
-                file: program.getFileByPathAbsolute(xmlPath),
-                location: Range.create(3, 58, 3, 88),
                 ...diagnosticMessages.referencedFileDoesNotExist(),
-                severity: 'error'
+                file: program.getFileByPathAbsolute(xmlPath),
+                location: Range.create(3, 58, 3, 88)
             });
         });
 

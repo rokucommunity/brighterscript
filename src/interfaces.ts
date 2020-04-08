@@ -1,4 +1,4 @@
-import { Range } from 'vscode-languageserver';
+import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 
 import { Scope } from './Scope';
 import { BrsFile } from './files/BrsFile';
@@ -8,7 +8,7 @@ import { BrsType } from './types/BrsType';
 import { FunctionType } from './types/FunctionType';
 
 export interface Diagnostic {
-    severity: 'hint' | 'information' | 'warning' | 'error';
+    severity: DiagnosticSeverity;
     /**
      * The message for this diagnostic
      */

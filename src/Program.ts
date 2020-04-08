@@ -380,10 +380,9 @@ export class Program {
             if (!this.fileIsIncludedInAnyScope(file)) {
                 //the file is not loaded in any scope
                 this.diagnostics.push({
+                    ...diagnosticMessages.fileNotReferencedByAnyOtherFile(),
                     file: file,
-                    location: Range.create(0, 0, 0, Number.MAX_VALUE),
-                    severity: 'warning',
-                    ...diagnosticMessages.fileNotReferencedByAnyOtherFile()
+                    location: Range.create(0, 0, 0, Number.MAX_VALUE)
                 });
             }
         }

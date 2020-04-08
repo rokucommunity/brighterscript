@@ -44,7 +44,7 @@ import {
     GotoStatement,
     StopStatement
 } from './Statement';
-import { diagnosticMessages, DiagnosticMessage } from '../DiagnosticMessages';
+import { diagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
 import { ParseError } from './Error';
 import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression } from './Expression';
@@ -173,7 +173,7 @@ export class Parser {
      * @param token
      * @param diagnostic
      */
-    private addDiagnostic(token: Token, diagnostic: DiagnosticMessage) {
+    private addDiagnostic(token: Token, diagnostic: DiagnosticInfo) {
         return this.addError(token, diagnostic.message, diagnostic.code);
     }
 
@@ -1743,7 +1743,7 @@ export class Parser {
         return result;
     }
 
-    private consume(errorMessage: string | DiagnosticMessage, ...tokenKinds: TokenKind[]): Token {
+    private consume(errorMessage: string | DiagnosticInfo, ...tokenKinds: TokenKind[]): Token {
         let diagnostic = typeof errorMessage === 'string' ? { message: errorMessage, code: 1000 } : errorMessage;
         let foundTokenKind = tokenKinds
             .map(tokenKind => this.peek().kind === tokenKind)
@@ -1760,7 +1760,7 @@ export class Parser {
      * @param message
      * @param tokenKinds
      */
-    private consumeContinue(diagnostic: DiagnosticMessage, ...tokenKinds: TokenKind[]): Token | undefined {
+    private consumeContinue(diagnostic: DiagnosticInfo, ...tokenKinds: TokenKind[]): Token | undefined {
         try {
             return this.consume(diagnostic, ...tokenKinds);
         } catch (e) {

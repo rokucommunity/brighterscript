@@ -3,6 +3,7 @@ import * as commandLineArgs from 'command-line-args';
 import * as commandLineUsage from 'command-line-usage';
 
 import { ProgramBuilder } from './ProgramBuilder';
+import { DiagnosticSeverity } from 'vscode-languageserver';
 
 let args = [
     { name: 'project', type: String, description: 'Path to a bsconfig.json project file.' },
@@ -37,7 +38,7 @@ if (options.help) {
     let builder = new ProgramBuilder();
     builder.run(<any>options).then(() => {
         //if this is a single run (i.e. not watch mode) and there are error diagnostics, return an error code
-        const hasError = !!builder.getDiagnostics().find(x => x.severity === 'error');
+        const hasError = !!builder.getDiagnostics().find(x => x.severity === DiagnosticSeverity.Error);
         if (builder.options.watch === false && hasError) {
             process.exit(-1);
         }
