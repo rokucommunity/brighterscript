@@ -309,7 +309,7 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports many keywords as object property names', async () => {
+        it.only('supports many keywords as object property names', async () => {
             await file.parse(`
                 sub Main()
                     person = {}
@@ -365,6 +365,12 @@ describe('BrsFile', () => {
                     person.true = true
                     person.type = true
                     person.while = true
+                    person.public = true
+                    person.protected = true
+                    person.private = true
+                    person.class = true
+                    person.override = true
+                    person.new = true
                 end sub
             `);
             expect(file.getDiagnostics()).to.be.lengthOf(0);
