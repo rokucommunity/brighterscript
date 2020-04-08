@@ -439,7 +439,7 @@ export class Util {
     }
 
     /**
-     * Given an absollute path to a source file, and a target path,
+     * Given an absolute path to a source file, and a target path,
      * compute the pkg path for the target relative to the source file's location
      * @param containingFilePathAbsolute
      * @param targetPath

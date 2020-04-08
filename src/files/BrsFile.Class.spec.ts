@@ -4,6 +4,8 @@ import { Program } from '../Program';
 import { getTestTranspile } from './BrsFile.spec';
 import { BrsFile } from './BrsFile';
 import { expect } from 'chai';
+import { diagnosticMessages } from '../DiagnosticMessages';
+import { Diagnostic, Range } from 'vscode-languageserver';
 
 let sinon = sinonImport.createSandbox();
 
@@ -132,6 +134,90 @@ describe('BrsFile BrighterScript classes', () => {
                     a = Animal("donald")
                 end sub
             `);
+        });
+    });
+
+    it.skip('detects calls to unknown m methods', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            class Animal
+                sub new()
+                    m.methodThatDoesNotExist()
+                end sub
+            end class
+        `) as BrsFile);
+        expect(
+            program.getDiagnostics()[0]?.message
+        ).to.equal(
+            diagnosticMessages.Method_does_not_exist_on_type('methodThatDoesNotExist', 'Animal')
+        );
+    });
+
+    it('detects duplicate member names', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            class Animal
+                public name
+                public name
+                public sub name()
+                end sub
+                public sub age()
+                end sub
+                public sub age()
+                end sub
+                public age
+            end class
+        `) as BrsFile);
+        await program.validate();
+        let diagnostics = program.getDiagnostics().map(x => {
+            return {
+                code: x.code,
+                message: x.message,
+                range: x.location
+            };
+        });
+        expect(diagnostics).to.eql(<Partial<Diagnostic>[]>[{
+            ...diagnosticMessages.Duplicate_identifier('name'),
+            range: Range.create(3, 23, 3, 27)
+        }, {
+            ...diagnosticMessages.Duplicate_identifier('name'),
+            range: Range.create(4, 27, 4, 31)
+        }, {
+            ...diagnosticMessages.Duplicate_identifier('age'),
+            range: Range.create(8, 27, 8, 30)
+        }, {
+            ...diagnosticMessages.Duplicate_identifier('age'),
+            range: Range.create(10, 23, 10, 26)
+        }]);
+    });
+
+    it.skip('detects overridden methods without override keyword', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            class Animal
+                sub speak()
+                end sub
+            end class
+            class Duck
+                sub speak()
+                end sub
+            end class
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]).to.exist.and.to.include({
+            ...diagnosticMessages.Missing_override_keyword('speak', 'Animal'),
+            location: Range.create(6, 20, 6, 25)
+        });
+    });
+
+    it('detects extending unknown parent class', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            class Duck extends Animal
+                sub speak()
+                end sub
+            end class
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]).to.exist.and.to.deep.include({
+            ...diagnosticMessages.Class_could_not_be_found('Animal', 'global'),
+            location: Range.create(1, 31, 1, 37)
         });
     });
 });

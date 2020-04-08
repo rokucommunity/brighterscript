@@ -9,6 +9,7 @@ import { FunctionScope } from '../FunctionScope';
 import { Callable, Diagnostic, File, FileReference, FunctionCall } from '../interfaces';
 import { Program } from '../Program';
 import util from '../util';
+import { ClassStatement } from '../parser/parser/ClassStatement';
 
 export class XmlFile {
     constructor(
@@ -52,6 +53,9 @@ export class XmlFile {
     public functionCalls = [] as FunctionCall[];
 
     public functionScopes = [] as FunctionScope[];
+
+    //TODO implement the xml CDATA parsing which would populate this list
+    public classStatements = [] as ClassStatement[];
 
     /**
      * The name of the component that this component extends

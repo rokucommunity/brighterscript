@@ -7,6 +7,7 @@ import { XmlFile } from './files/XmlFile';
 import { CallableContainer, Diagnostic, File } from './interfaces';
 import { Program } from './Program';
 import util from './util';
+import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from './parser/parser/ClassStatement';
 
 /**
  * A class to keep track of all declarations within a given scope (like global scope, component scope)
@@ -276,6 +277,9 @@ export class Scope {
         //find all duplicate function declarations
         this.diagnosticFindDuplicateFunctionDeclarations(callableContainersByLowerName);
 
+        //enforce a series of checks on the bodies of class methods
+        this.diagnosticValidateClassMethods();
+
         //do many per-file checks
         for (let key in this.files) {
             let scopeFile = this.files[key];
@@ -285,6 +289,88 @@ export class Scope {
         }
 
         this.isValidated = false;
+    }
+
+    private diagnosticValidateClassMethods() {
+        type AugmentedClassStatement = ClassStatement & {
+            file: BrsFile | XmlFile;
+            parentClass: AugmentedClassStatement;
+        };
+
+        //find every class in this scope
+        let classes = {} as { [lowerName: string]: AugmentedClassStatement };
+
+        for (let key in this.files) {
+            let file = this.files[key];
+
+            for (let x of file.file.classStatements) {
+                let classStatement = x as AugmentedClassStatement;
+                classes[classStatement.name.text.toLowerCase()] = classStatement;
+                classStatement.file = file.file;
+            }
+        }
+
+        //link all classes with their parents
+        for (let key in classes) {
+            let classStatement = classes[key];
+            let parentClassName = classStatement.extendsIdentifier?.text;
+            if (parentClassName) {
+                let parentClass = classes[parentClassName.toLowerCase()];
+
+                //detect unknown parent class
+                if (!parentClass) {
+                    this.diagnostics.push({
+                        ...diagnosticMessages.Class_could_not_be_found(parentClassName, this.name),
+                        file: classStatement.file,
+                        location: Range.create(
+                            classStatement.extendsIdentifier.location.start.line - 1,
+                            classStatement.extendsIdentifier.location.start.column,
+                            classStatement.extendsIdentifier.location.start.line - 1,
+                            classStatement.extendsIdentifier.location.end.column
+                        ),
+                        severity: 'error'
+                    });
+                }
+                classStatement.parentClass = parentClass;
+            }
+        }
+
+        for (let key in classes) {
+            let classStatement = classes[key];
+            let methods = {};
+            let fields = {};
+
+            for (let member of classStatement.members) {
+                let lowerName = member.name.text.toLowerCase();
+
+                //catch duplicate member names
+                if (methods[lowerName] || fields[lowerName]) {
+                    this.diagnostics.push({
+                        ...diagnosticMessages.Duplicate_identifier(member.name.text),
+                        file: classStatement.file,
+                        severity: 'error',
+                        location: Range.create(
+                            member.name.location.start.line - 1,
+                            member.name.location.start.column,
+                            member.name.location.start.line - 1,
+                            member.name.location.end.column
+                        )
+                    });
+                }
+                if (member instanceof ClassMethodStatement) {
+                    methods[lowerName] = member;
+
+                } else if (member instanceof ClassFieldStatement) {
+                    fields[lowerName] = member;
+                }
+            }
+        }
+
+        //unlink all classes from their parents so it doesn't mess up the next scope
+        for (let key in classes) {
+            let classStatement = classes[key];
+            delete classStatement.parentClass;
+        }
     }
 
     /**

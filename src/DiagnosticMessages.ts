@@ -104,6 +104,26 @@ export let diagnosticMessages = {
     Attempted_to_use_new_keyword_on_a_non_class: () => ({
         message: 'Attempted to use "new" keyword on a non class',
         code: 1024
+    }),
+    Method_does_not_exist_on_type: (methodName: string, className: string) => ({
+        message: `Method ${methodName} does not exist on type ${className}`,
+        code: 1025
+    }),
+    Duplicate_identifier: (memberName: string) => ({
+        message: `Duplicate identifier "${memberName}"`,
+        code: 1026
+    }),
+    Missing_override_keyword: (methodName: string, ancestorClassName: string) => ({
+        message: `Method "${methodName}" has no override keyword but is declared in ancestor class class "${ancestorClassName}"`,
+        code: 1027
+    }),
+    Duplicate_class_declaration: (scopeName: string, className: string) => ({
+        message: `Scope "${scopeName}" already contains a class with name "${className}"`,
+        code: 1028
+    }),
+    Class_could_not_be_found: (extendsClassName: string, scopeName: string) => ({
+        message: `Class "${extendsClassName}" could not be found when this file is included in scope "${scopeName}"`,
+        code: 1029
     })
 };
 

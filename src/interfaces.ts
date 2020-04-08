@@ -19,7 +19,6 @@ export interface Diagnostic {
     code: number;
     location: Range;
     file: File;
-
 }
 
 export interface Callable {

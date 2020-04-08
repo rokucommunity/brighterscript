@@ -70,7 +70,7 @@ export class ClassStatement implements Statement {
         return myIndex - 1;
     }
 
-    private getParentClass(state: TranspileState, classStatement: ClassStatement) {
+    public getParentClass(state: TranspileState, classStatement: ClassStatement) {
         let stmt = classStatement;
         if (stmt.extendsIdentifier) {
             return state.file.getClassByName(stmt.extendsIdentifier.text);
@@ -284,9 +284,17 @@ export class ClassFieldStatement implements Statement {
     }
 
     get location() {
+        let endToken: Token;
+        if (this.type) {
+            endToken = this.type;
+        } else if (this.as) {
+            endToken = this.as;
+        } else {
+            endToken = this.name;
+        }
         return {
             start: this.accessModifier.location.start,
-            end: this.type.location.end
+            end: endToken.location.end
         };
     }
 
