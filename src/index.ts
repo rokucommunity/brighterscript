@@ -9,4 +9,4 @@ export * from './interfaces';
 export * from './LanguageServer';
 export * from './XmlScope';
 export * from './lexer';
-export * from './parser/parser';
+export * from './parser/Parser';

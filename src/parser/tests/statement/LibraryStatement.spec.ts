@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { Parser } from '../../parser';
+import { Parser } from '../../Parser';
 import { Lexer } from '../../../lexer';
 import { AssignmentStatement, FunctionStatement as BrsFunction } from '../../Statement';
 

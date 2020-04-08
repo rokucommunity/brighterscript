@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { Parser } from '../../parser';
+import { Parser } from '../../Parser';
 import { Lexer, DisallowedLocalIdentifiers, TokenKind } from '../../../lexer';
 import { Range } from 'vscode-languageserver';
 

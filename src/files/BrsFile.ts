@@ -10,7 +10,7 @@ import { Deferred } from '../deferred';
 import { FunctionParameter } from '../brsTypes';
 import { BrsError, ParseError } from '../parser/Error';
 import { Lexer, Token, TokenKind, Identifier } from '../lexer';
-import { Parser } from '../parser/parser';
+import { Parser, ParseMode } from '../parser';
 import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression } from '../parser/Expression';
 import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, Statement } from '../parser/Statement';
 import { Program } from '../Program';
@@ -22,7 +22,6 @@ import { VoidType } from '../types/VoidType';
 import util from '../util';
 import { TranspileState } from '../parser/TranspileState';
 import { ClassStatement } from '../parser/ClassStatement';
-import { ParseMode } from '../parser/Parser';
 import { getManifest, Preprocessor } from '../preprocessor';
 
 /**

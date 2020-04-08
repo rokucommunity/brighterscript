@@ -1,6 +1,18 @@
 import { EventEmitter } from 'events';
 
-import { TokenKind, Token, Identifier, ReservedWords, BlockTerminator, AllowedLocalIdentifiers, AssignmentOperators, DisallowedLocalIdentifiers, AllowedProperties, Lexer, Locatable } from '../lexer';
+import {
+    TokenKind,
+    Token,
+    Identifier,
+    ReservedWords,
+    BlockTerminator,
+    AllowedLocalIdentifiers,
+    AssignmentOperators,
+    DisallowedLocalIdentifiers,
+    AllowedProperties,
+    Lexer,
+    Locatable
+} from '../lexer';
 
 import {
     BrsInvalid,

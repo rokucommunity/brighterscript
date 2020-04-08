@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { Parser } from '../../parser';
+import { Parser } from '../../Parser';
 import { BrsBoolean, BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';

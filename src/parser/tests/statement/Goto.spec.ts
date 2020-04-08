@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { Parser } from '../../parser';
+import { Parser } from '../../Parser';
 import { TokenKind, Lexer } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
