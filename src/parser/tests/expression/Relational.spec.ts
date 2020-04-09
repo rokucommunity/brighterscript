@@ -9,7 +9,7 @@ describe('parser', () => {
 
     describe('relational expressions', () => {
         it('parses less-than expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.IntegerLiteral, '5', new Int32(5)),
@@ -24,7 +24,7 @@ describe('parser', () => {
         });
 
         it('parses less-than-or-equal-to expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.IntegerLiteral, '5', new Int32(5)),
@@ -40,7 +40,7 @@ describe('parser', () => {
         });
 
         it('parses greater-than expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.IntegerLiteral, '5', new Int32(5)),
@@ -56,7 +56,7 @@ describe('parser', () => {
         });
 
         it('parses greater-than-or-equal-to expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.IntegerLiteral, '5', new Int32(5)),
@@ -71,7 +71,7 @@ describe('parser', () => {
         });
 
         it('parses equality expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.IntegerLiteral, '5', new Int32(5)),
@@ -87,7 +87,7 @@ describe('parser', () => {
         });
 
         it('parses inequality expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.IntegerLiteral, '5', new Int32(5)),

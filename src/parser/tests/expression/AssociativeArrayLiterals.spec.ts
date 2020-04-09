@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser associative array literals', () => {
     describe('empty associative arrays', () => {
         it('on one line', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftCurlyBrace, '{'),
@@ -23,7 +23,7 @@ describe('parser associative array literals', () => {
         });
 
         it('on multiple lines', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftCurlyBrace, '{'),
@@ -45,7 +45,7 @@ describe('parser associative array literals', () => {
 
     describe('filled arrays', () => {
         it('on one line', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftCurlyBrace, '{'),
@@ -70,7 +70,7 @@ describe('parser associative array literals', () => {
         });
 
         it('on multiple lines with commas', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftCurlyBrace, '{'),
@@ -99,7 +99,7 @@ describe('parser associative array literals', () => {
         });
 
         it('on multiple lines without commas', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftCurlyBrace, '{'),
@@ -127,7 +127,7 @@ describe('parser associative array literals', () => {
     });
 
     it('allows separating properties with colons', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.Sub, 'sub'),
             identifier('main'),
             token(TokenKind.LeftParen, '('),
@@ -158,7 +158,7 @@ describe('parser associative array literals', () => {
     });
 
     it('allows a mix of quoted and unquoted keys', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.LeftCurlyBrace, '{'),

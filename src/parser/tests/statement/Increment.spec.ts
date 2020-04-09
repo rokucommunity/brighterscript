@@ -7,7 +7,7 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser postfix unary expressions', () => {
     it('parses postfix \'++\' for variables', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('foo'),
             token(TokenKind.PlusPlus, '++'),
             EOF
@@ -20,7 +20,7 @@ describe('parser postfix unary expressions', () => {
     });
 
     it('parses postfix \'--\' for dotted get expressions', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('obj'),
             token(TokenKind.Dot, '.'),
             identifier('property'),
@@ -35,7 +35,7 @@ describe('parser postfix unary expressions', () => {
     });
 
     it('parses postfix \'++\' for indexed get expressions', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('obj'),
             token(TokenKind.LeftSquareBracket, '['),
             identifier('property'),
@@ -51,7 +51,7 @@ describe('parser postfix unary expressions', () => {
     });
 
     it('disallows consecutive postfix operators', () => {
-        let { errors } = Parser.parse([
+        let { diagnostics: errors } = Parser.parse([
             identifier('foo'),
             token(TokenKind.PlusPlus, '++'),
             token(TokenKind.PlusPlus, '++'),
@@ -65,7 +65,7 @@ describe('parser postfix unary expressions', () => {
     });
 
     it('disallows postfix \'--\' for function call results', () => {
-        let { errors } = Parser.parse([
+        let { diagnostics: errors } = Parser.parse([
             identifier('func'),
             token(TokenKind.LeftParen, '('),
             token(TokenKind.RightParen, ')'),
@@ -80,7 +80,7 @@ describe('parser postfix unary expressions', () => {
     });
 
     it('allows \'++\' at the end of a function', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.Sub, 'sub'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -106,7 +106,7 @@ describe('parser postfix unary expressions', () => {
          *  +--------------
          * 0| someNumber++
          */
-        let { statements, errors } = Parser.parse(<any>[
+        let { statements, diagnostics: errors } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: 'someNumber',

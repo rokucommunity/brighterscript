@@ -9,7 +9,7 @@ describe('parser', () => {
 
     describe('multiplicative expressions', () => {
         it('parses left-associative multiplication chains', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.FloatLiteral, '3.0', new Float(3.0)),
@@ -26,7 +26,7 @@ describe('parser', () => {
         });
 
         it('parses left-associative division chains', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.FloatLiteral, '7.0', new Float(7.0)),
@@ -43,7 +43,7 @@ describe('parser', () => {
         });
 
         it('parses left-associative modulo chains', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.FloatLiteral, '7.0', new Float(7.0)),
@@ -60,7 +60,7 @@ describe('parser', () => {
         });
 
         it('parses left-associative integer-division chains', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.FloatLiteral, '32.5', new Float(32.5)),

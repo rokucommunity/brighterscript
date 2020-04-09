@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser prefix unary expressions', () => {
 
     it('parses unary \'not\'', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Not, 'not'),
@@ -23,7 +23,7 @@ describe('parser prefix unary expressions', () => {
     });
 
     it('parses consecutive unary \'not\'', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Not, 'not'),
@@ -41,7 +41,7 @@ describe('parser prefix unary expressions', () => {
     });
 
     it('parses unary \'-\'', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Minus, '-'),
@@ -55,7 +55,7 @@ describe('parser prefix unary expressions', () => {
     });
 
     it('parses consecutive unary \'-\'', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Minus, '-'),
@@ -79,7 +79,7 @@ describe('parser prefix unary expressions', () => {
          *  +----------------------
          * 1| _false = not true
          */
-        let { statements, errors } = Parser.parse(<any>[
+        let { statements, diagnostics: errors } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: '_false',

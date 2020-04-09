@@ -160,7 +160,7 @@ export class BrsFile {
             mode: this.extension === 'brs' ? ParseMode.brightscript : ParseMode.brighterscript
         });
 
-        let errors = [...lexResult.errors, ...<any>parseResult.errors, ...<any>preprocessorResults.errors];
+        let errors = [...lexResult.errors, ...<any>parseResult.diagnostics, ...<any>preprocessorResults.errors];
 
         //convert the brs library's errors into our format
         this.diagnostics.push(...this.standardizeLexParseErrors(errors));

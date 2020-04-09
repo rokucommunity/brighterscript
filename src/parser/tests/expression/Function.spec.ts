@@ -10,7 +10,7 @@ describe('parser', () => {
 
     describe('function expressions', () => {
         it('parses minimal empty function expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -27,7 +27,7 @@ describe('parser', () => {
         });
 
         it('parses colon-separated function declarations', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -47,7 +47,7 @@ describe('parser', () => {
         });
 
         it('parses non-empty function expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -67,7 +67,7 @@ describe('parser', () => {
         });
 
         it('parses functions with implicit-dynamic arguments', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -87,7 +87,7 @@ describe('parser', () => {
         });
 
         it('parses functions with typed arguments', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -115,7 +115,7 @@ describe('parser', () => {
         });
 
         it('parses functions with default argument expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -149,7 +149,7 @@ describe('parser', () => {
         });
 
         it('parses functions with typed arguments and default expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -182,7 +182,7 @@ describe('parser', () => {
         });
 
         it('parses return types', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -203,7 +203,7 @@ describe('parser', () => {
 
     describe('sub expressions', () => {
         it('parses minimal sub expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Sub, 'sub'),
@@ -220,7 +220,7 @@ describe('parser', () => {
         });
 
         it('parses non-empty sub expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Sub, 'sub'),
@@ -240,7 +240,7 @@ describe('parser', () => {
         });
 
         it('parses subs with implicit-dynamic arguments', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'sub'),
@@ -260,7 +260,7 @@ describe('parser', () => {
         });
 
         it('parses subs with typed arguments', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'sub'),
@@ -288,7 +288,7 @@ describe('parser', () => {
         });
 
         it('parses subs with default argument expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Sub, 'sub'),
@@ -322,7 +322,7 @@ describe('parser', () => {
         });
 
         it('parses subs with typed arguments and default expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Sub, 'sub'),
@@ -357,7 +357,7 @@ describe('parser', () => {
 
     describe('usage', () => {
         it('allows sub expressions in call arguments', () => {
-            const { statements, errors } = Parser.parse([
+            const { statements, diagnostics: errors } = Parser.parse([
                 identifier('acceptsCallback'),
                 token(TokenKind.LeftParen, '('),
                 token(TokenKind.Newline, '\\n'),
@@ -382,7 +382,7 @@ describe('parser', () => {
         });
 
         it('allows function expressions in assignment RHS', () => {
-            const { statements, errors } = Parser.parse([
+            const { statements, diagnostics: errors } = Parser.parse([
                 identifier('anonymousFunction'),
                 token(TokenKind.Equal, '='),
 

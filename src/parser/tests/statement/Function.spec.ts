@@ -18,7 +18,7 @@ describe('parser', () => {
 
                 end sub
             `);
-            let { statements, errors } = Parser.parse(tokens);
+            let { statements, diagnostics: errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(1);
             expect(statements).to.length.greaterThan(0);
 
@@ -26,7 +26,7 @@ describe('parser', () => {
         });
 
         it('parses minimal empty function declarations', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.Function, 'function'),
                 identifier('foo'),
                 token(TokenKind.LeftParen, '('),
@@ -43,7 +43,7 @@ describe('parser', () => {
         });
 
         it('parses non-empty function declarations', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.Function, 'function'),
                 identifier('foo'),
                 token(TokenKind.LeftParen, '('),
@@ -63,7 +63,7 @@ describe('parser', () => {
         });
 
         it('parses functions with implicit-dynamic arguments', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.Function, 'function'),
                 identifier('add2'),
                 token(TokenKind.LeftParen, '('),
@@ -83,7 +83,7 @@ describe('parser', () => {
         });
 
         it('parses functions with typed arguments', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.Function, 'function'),
                 identifier('repeat'),
                 token(TokenKind.LeftParen, '('),
@@ -107,7 +107,7 @@ describe('parser', () => {
         });
 
         it('parses functions with default argument expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.Function, 'function'),
                 identifier('add'),
                 token(TokenKind.LeftParen, '('),
@@ -141,7 +141,7 @@ describe('parser', () => {
         });
 
         it('parses functions with typed arguments and default expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.Function, 'function'),
                 identifier('add'),
                 token(TokenKind.LeftParen, '('),
@@ -174,7 +174,7 @@ describe('parser', () => {
         });
 
         it('parses return types', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.Function, 'function'),
                 identifier('foo'),
                 token(TokenKind.LeftParen, '('),
@@ -210,7 +210,7 @@ describe('parser', () => {
                     return 1
                 end function
             `);
-            const { statements, errors } = Parser.parse(tokens);
+            const { statements, diagnostics: errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(4);
             expect(statements).to.length.greaterThan(0);
 
@@ -229,7 +229,7 @@ describe('parser', () => {
 
                 end sub
             `);
-            let { statements, errors } = Parser.parse(tokens);
+            let { statements, diagnostics: errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(1);
             expect(statements).to.length.greaterThan(0);
 
@@ -237,7 +237,7 @@ describe('parser', () => {
         });
 
         it('parses minimal sub declarations', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.Sub, 'sub'),
                 identifier('bar'),
                 token(TokenKind.LeftParen, '('),
@@ -254,7 +254,7 @@ describe('parser', () => {
         });
 
         it('parses non-empty sub declarations', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.Sub, 'sub'),
                 identifier('foo'),
                 token(TokenKind.LeftParen, '('),
@@ -274,7 +274,7 @@ describe('parser', () => {
         });
 
         it('parses subs with implicit-dynamic arguments', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.Function, 'sub'),
                 identifier('add2'),
                 token(TokenKind.LeftParen, '('),
@@ -294,7 +294,7 @@ describe('parser', () => {
         });
 
         it('parses subs with typed arguments', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.Function, 'sub'),
                 identifier('repeat'),
                 token(TokenKind.LeftParen, '('),
@@ -318,7 +318,7 @@ describe('parser', () => {
         });
 
         it('parses subs with default argument expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.Sub, 'sub'),
                 identifier('add'),
                 token(TokenKind.LeftParen, '('),
@@ -351,7 +351,7 @@ describe('parser', () => {
         });
 
         it('parses subs with typed arguments and default expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.Sub, 'sub'),
                 identifier('add'),
                 token(TokenKind.LeftParen, '('),
@@ -396,7 +396,7 @@ describe('parser', () => {
                 sub DoubleSub#()
                 end sub
             `);
-            const { statements, errors } = Parser.parse(tokens);
+            const { statements, diagnostics: errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(4);
             expect(statements).to.length.greaterThan(0);
             //expect({ errors, statements }).toMatchSnapshot();

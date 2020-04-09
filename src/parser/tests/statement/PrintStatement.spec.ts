@@ -8,7 +8,7 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser print statements', () => {
     it('parses singular print statements', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.Print),
             token(TokenKind.StringLiteral, 'Hello, world'),
             EOF
@@ -21,7 +21,7 @@ describe('parser print statements', () => {
     });
 
     it('supports empty print', () => {
-        let { statements, errors } = Parser.parse([token(TokenKind.Print), EOF]);
+        let { statements, diagnostics: errors } = Parser.parse([token(TokenKind.Print), EOF]);
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
@@ -29,7 +29,7 @@ describe('parser print statements', () => {
     });
 
     it('parses print lists with no separator', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.Print),
             token(TokenKind.StringLiteral, 'Foo', new BrsString('Foo')),
             token(TokenKind.StringLiteral, 'bar', new BrsString('bar')),
@@ -44,7 +44,7 @@ describe('parser print statements', () => {
     });
 
     it('parses print lists with separators', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.Print),
             token(TokenKind.StringLiteral, 'Foo', new BrsString('Foo')),
             token(TokenKind.Semicolon),
@@ -67,7 +67,7 @@ describe('parser print statements', () => {
          *  +--------------
          * 1| print "foo"
          */
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             {
                 kind: TokenKind.Print,
                 text: 'print',

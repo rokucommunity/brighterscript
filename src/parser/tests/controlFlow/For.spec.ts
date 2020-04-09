@@ -58,7 +58,7 @@ describe('parser for loops', () => {
     });
 
     it('allows \'next\' to terminate loop', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
@@ -86,7 +86,7 @@ describe('parser for loops', () => {
          * 1|   Rnd(i)
          * 2| end for
          */
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             {
                 kind: TokenKind.For,
                 text: 'for',

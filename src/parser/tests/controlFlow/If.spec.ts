@@ -17,7 +17,7 @@ describe('parser if statements', () => {
                 font = m.fonts.reg.GetDefaultFont()
             end if
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
@@ -31,7 +31,7 @@ describe('parser if statements', () => {
                 ' empty line or line with just a comment causes crash
             end if
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
 
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
@@ -41,7 +41,7 @@ describe('parser if statements', () => {
         let { tokens } = Lexer.scan(`
             if true then m.top.visible = true else m.top.visible = false
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
 
         if (errors.length > 0) {
             console.log(errors);
@@ -54,7 +54,7 @@ describe('parser if statements', () => {
 
     describe('single-line if', () => {
         it('parses if only', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.If, 'if'),
                 token(TokenKind.IntegerLiteral, '1', new Int32(1)),
                 token(TokenKind.Less, '<'),
@@ -73,7 +73,7 @@ describe('parser if statements', () => {
         });
 
         it('parses if-else', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.If, 'if'),
                 token(TokenKind.IntegerLiteral, '1', new Int32(1)),
                 token(TokenKind.Less, '<'),
@@ -96,7 +96,7 @@ describe('parser if statements', () => {
         });
 
         it('parses if-elseif-else', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.If, 'if'),
                 token(TokenKind.IntegerLiteral, '1', new Int32(1)),
                 token(TokenKind.Less, '<'),
@@ -127,7 +127,7 @@ describe('parser if statements', () => {
         });
 
         it('allows \'then\' to be skipped', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 token(TokenKind.If, 'if'),
                 token(TokenKind.IntegerLiteral, '1', new Int32(1)),
                 token(TokenKind.Less, '<'),
@@ -165,7 +165,7 @@ describe('parser if statements', () => {
                     bar = true
                 end if
             `);
-            let { statements, errors } = Parser.parse(tokens);
+            let { statements, diagnostics: errors } = Parser.parse(tokens);
 
             expect(errors).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
@@ -182,7 +182,7 @@ describe('parser if statements', () => {
                     bar = false
                 end if
             `);
-            let { statements, errors } = Parser.parse(tokens);
+            let { statements, diagnostics: errors } = Parser.parse(tokens);
 
             expect(errors).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
@@ -201,7 +201,7 @@ describe('parser if statements', () => {
                     foo = false
                 end if
             `);
-            let { statements, errors } = Parser.parse(tokens);
+            let { statements, diagnostics: errors } = Parser.parse(tokens);
 
             expect(errors).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
@@ -220,7 +220,7 @@ describe('parser if statements', () => {
                     foo = false
                 end if
             `);
-            let { statements, errors } = Parser.parse(tokens);
+            let { statements, diagnostics: errors } = Parser.parse(tokens);
 
             expect(errors).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
@@ -261,7 +261,7 @@ describe('parser if statements', () => {
                 end if
             end sub
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
@@ -271,7 +271,7 @@ describe('parser if statements', () => {
         let { tokens } = Lexer.scan(`
             if 1 < 2: return true: end if
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
@@ -282,7 +282,7 @@ describe('parser if statements', () => {
         let { tokens } = Lexer.scan(`
             if 1 < 2 return true : end if
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.length.greaterThan(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
@@ -293,7 +293,7 @@ describe('parser if statements', () => {
         let { tokens } = Lexer.scan(`
             if 1 < 2 : return true end if
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.length.greaterThan(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
@@ -304,7 +304,7 @@ describe('parser if statements', () => {
         let { tokens } = Lexer.scan(`
             if 1 < 2 : return true: else return false end if
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.length.greaterThan(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
@@ -315,7 +315,7 @@ describe('parser if statements', () => {
         let { tokens } = Lexer.scan(`
             if 1 < 2: return true
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.length.greaterThan(0);
         expect(statements).to.be.lengthOf(0);
         //expect(statements).toMatchSnapshot();
@@ -328,7 +328,7 @@ describe('parser if statements', () => {
                 if true : return true
             end function
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(1);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
@@ -339,7 +339,7 @@ describe('parser if statements', () => {
             if 1 < 2: return true
             end if
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
@@ -349,7 +349,7 @@ describe('parser if statements', () => {
         let { tokens } = Lexer.scan(`
             if false : print "true" : end if
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
@@ -359,7 +359,7 @@ describe('parser if statements', () => {
         let { tokens } = Lexer.scan(`
             if true: print "8 worked": else if true: print "not run": else: print "not run": end if
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
@@ -369,7 +369,7 @@ describe('parser if statements', () => {
         let { tokens } = Lexer.scan(`
             if true then : test = sub() : print "yes" : end sub : end if
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();

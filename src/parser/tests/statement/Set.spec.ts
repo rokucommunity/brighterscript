@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser indexed assignment', () => {
     describe('dotted', () => {
         it('assigns anonymous functions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('foo'),
                 token(TokenKind.Dot, '.'),
                 identifier('bar'),
@@ -29,7 +29,7 @@ describe('parser indexed assignment', () => {
         });
 
         it('assigns boolean expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('foo'),
                 token(TokenKind.Dot, '.'),
                 identifier('bar'),
@@ -48,7 +48,7 @@ describe('parser indexed assignment', () => {
         });
 
         it('assignment operator', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('foo'),
                 token(TokenKind.Dot, '.'),
                 identifier('bar'),
@@ -67,7 +67,7 @@ describe('parser indexed assignment', () => {
 
     describe('bracketed', () => {
         it('assigns anonymous functions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('someArray'),
                 token(TokenKind.LeftSquareBracket, '['),
                 token(TokenKind.IntegerLiteral, '0', new Int32(0)),
@@ -88,7 +88,7 @@ describe('parser indexed assignment', () => {
         });
 
         it('assigns boolean expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('someArray'),
                 token(TokenKind.LeftSquareBracket, '['),
                 token(TokenKind.IntegerLiteral, '0', new Int32(0)),
@@ -108,7 +108,7 @@ describe('parser indexed assignment', () => {
         });
 
         it('assignment operator', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('someArray'),
                 token(TokenKind.LeftSquareBracket, '['),
                 token(TokenKind.IntegerLiteral, '0', new Int32(0)),
@@ -133,7 +133,7 @@ describe('parser indexed assignment', () => {
          * 0| arr[0] = 1
          * 1| obj.a = 5
          */
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'arr',

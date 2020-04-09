@@ -6,7 +6,7 @@ import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser goto statements', () => {
     it('parses standalone statement properly', () => {
-        let { errors } = Parser.parse([
+        let { diagnostics: errors } = Parser.parse([
             token(TokenKind.Goto, 'goto'),
             identifier('SomeLabel'),
             EOF
@@ -16,7 +16,7 @@ describe('parser goto statements', () => {
     });
 
     it('detects labels', () => {
-        let { errors } = Parser.parse([
+        let { diagnostics: errors } = Parser.parse([
             identifier('SomeLabel'),
             token(TokenKind.Colon, ':'),
             EOF
@@ -33,7 +33,7 @@ describe('parser goto statements', () => {
                 myLabel:
             end sub
         `);
-        let { errors } = Parser.parse(tokens);
+        let { diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         //expect(statements).toMatchSnapshot();
     });

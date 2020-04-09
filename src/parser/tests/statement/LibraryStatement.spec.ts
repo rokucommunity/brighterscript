@@ -11,7 +11,7 @@ describe('parser library statements', () => {
             sub main()
             end sub
         `);
-        const { errors } = Parser.parse(tokens);
+        const { diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         //expect({ errors: errors, statements: statements }).toMatchSnapshot();
     });
@@ -22,7 +22,7 @@ describe('parser library statements', () => {
             sub main()
             end sub
         `);
-        const { errors } = Parser.parse(tokens);
+        const { diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         //expect({ errors: errors, statements: statements }).toMatchSnapshot();
     });
@@ -33,7 +33,7 @@ describe('parser library statements', () => {
             end sub
             Library "v30/bslCore.brs"
         `);
-        const { errors } = Parser.parse(tokens);
+        const { diagnostics: errors } = Parser.parse(tokens);
         expect(errors.length).to.be.greaterThan(0);
         //expect({ errors: errors, statements: statements }).toMatchSnapshot();
     });
@@ -44,7 +44,7 @@ describe('parser library statements', () => {
                 Library "v30/bslCore.brs"
             end sub
         `);
-        const { errors } = Parser.parse(tokens);
+        const { diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(1);
         //expect({ errors: errors, statements: statements }).toMatchSnapshot();
     });
@@ -55,7 +55,7 @@ describe('parser library statements', () => {
             sub main()
             end sub
         `);
-        const { errors } = Parser.parse(tokens);
+        const { diagnostics: errors } = Parser.parse(tokens);
         expect(errors.length).to.be.greaterThan(0);
         //expect({ errors: errors, statements: statements }).toMatchSnapshot();
     });
@@ -99,7 +99,7 @@ describe('parser library statements', () => {
                 library = "Your Library"
             end sub
         `);
-        const { statements, errors } = Parser.parse(tokens);
+        const { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(1);
         //function statement should still exist
         expect(statements[statements.length - 1]).to.be.instanceOf(BrsFunction);

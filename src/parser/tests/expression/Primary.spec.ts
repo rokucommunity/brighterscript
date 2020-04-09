@@ -10,7 +10,7 @@ describe('parser primary expressions', () => {
 
     it('parses numeric literals', () => {
         let equals = token(TokenKind.Equal, '=');
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('_'),
             equals,
             token(TokenKind.IntegerLiteral, '5', new Int32(5)),
@@ -23,7 +23,7 @@ describe('parser primary expressions', () => {
 
     it('parses string literals', () => {
         let equals = token(TokenKind.Equal, '=');
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('_'),
             equals,
             token(TokenKind.StringLiteral, 'hello', new BrsString('hello')),
@@ -36,7 +36,7 @@ describe('parser primary expressions', () => {
     });
 
     it('parses expressions in parentheses', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.IntegerLiteral, '1', new Int32(1)),

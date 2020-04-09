@@ -8,7 +8,7 @@ import { EOF, identifier, token } from '../Parser.spec';
 describe('parser', () => {
     describe('exponential expressions', () => {
         it('parses exponential operators', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.IntegerLiteral, '2', new Int32(2)),
@@ -23,7 +23,7 @@ describe('parser', () => {
         });
 
         it('parses repeated exponential operators as left-associative', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.IntegerLiteral, '2', new Int32(2)),

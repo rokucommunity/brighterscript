@@ -12,7 +12,7 @@ describe('parser', () => {
                     end
                 end sub
             `);
-            let { errors } = Parser.parse(tokens);
+            let { diagnostics: errors } = Parser.parse(tokens);
             expect(errors[0]?.message).to.not.exist;
             //expect(statements).toMatchSnapshot();
         });
@@ -24,7 +24,7 @@ describe('parser', () => {
                     }
                 end sub
             `);
-            let { errors } = Parser.parse(tokens);
+            let { diagnostics: errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(0);
             //expect(statements).toMatchSnapshot();
         });
@@ -32,7 +32,7 @@ describe('parser', () => {
         it('is not allowed as a standalone variable', () => {
             //this test depends on token locations, so use the lexer to generate those locations.
             let { tokens } = Lexer.scan(`sub Main()\n    else = true\nend sub`);
-            let { errors } = Parser.parse(tokens);
+            let { diagnostics: errors } = Parser.parse(tokens);
             expect(errors).to.be.lengthOf(1);
             //specifically check for the error location, because the identifier location was wrong in the past
             expect(errors[0].range).to.deep.include(
@@ -55,7 +55,7 @@ describe('parser', () => {
                 string = true
             end sub
         `);
-        let { errors } = Parser.parse(tokens);
+        let { diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         //expect(statements).toMatchSnapshot();
     });
@@ -73,7 +73,7 @@ describe('parser', () => {
                     ${disallowedIdentifier} = true
                 end sub
             `);
-            let { statements, errors } = Parser.parse(tokens);
+            let { statements, diagnostics: errors } = Parser.parse(tokens);
             if (errors.length === 0) {
                 console.log(DisallowedLocalIdentifiers);
                 throw new Error(`'${disallowedIdentifier}' cannot be used as an identifier, but was not detected as an error`);
@@ -98,7 +98,7 @@ describe('parser', () => {
                 Dynamic = true
             end sub
         `);
-        let { errors } = Parser.parse(tokens);
+        let { diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.be.lengthOf(0);
         // expect(statementList).toMatchSnapshot();
     });
@@ -172,7 +172,7 @@ describe('parser', () => {
                 obj.${kind} = false
                 theValue = obj.${kind}
             `);
-            let { errors } = Parser.parse(tokens);
+            let { diagnostics: errors } = Parser.parse(tokens);
             if (errors.length > 0) {
                 throw new Error(
                     `Using "${kind}" as object property. Expected no errors, but received: ${JSON.stringify(errors)}`);
@@ -241,7 +241,7 @@ describe('parser', () => {
                 person.while = true
             end sub
         `);
-        let { errors } = Parser.parse(tokens);
+        let { diagnostics: errors } = Parser.parse(tokens);
         expect(JSON.stringify(errors[0])).not.to.exist;
         expect(errors).to.be.lengthOf(0);
         //expect(statements).toMatchSnapshot();
@@ -284,7 +284,7 @@ describe('parser', () => {
                 }
             end function
         `);
-        let { statements, errors } = Parser.parse(tokens);
+        let { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors[0]?.message).not.to.exist;
         expect((statements[0] as any).func.body.statements[0].value.elements[0].keyToken.text).to.equal('"has-second-layer"');
         expect((statements[0] as any).func.body.statements[0].value.elements[0].key.value).to.equal('has-second-layer');

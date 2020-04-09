@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser boolean expressions', () => {
 
     it('parses boolean ANDs', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.True, 'true', BrsBoolean.True),
@@ -24,7 +24,7 @@ describe('parser boolean expressions', () => {
     });
 
     it('parses boolean ORs', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.True, 'true', BrsBoolean.True),

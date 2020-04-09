@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser array literals', () => {
     describe('empty arrays', () => {
         it('on one line', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -23,7 +23,7 @@ describe('parser array literals', () => {
         });
 
         it('on multiple lines', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -45,7 +45,7 @@ describe('parser array literals', () => {
 
     describe('filled arrays', () => {
         it('on one line', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -64,7 +64,7 @@ describe('parser array literals', () => {
         });
 
         it('on multiple lines with commas', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -87,7 +87,7 @@ describe('parser array literals', () => {
         });
 
         it('on multiple lines without commas', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -110,7 +110,7 @@ describe('parser array literals', () => {
 
     describe('contents', () => {
         it('can contain primitives', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -129,7 +129,7 @@ describe('parser array literals', () => {
         });
 
         it('can contain other arrays', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -158,7 +158,7 @@ describe('parser array literals', () => {
         });
 
         it('can contain expressions', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),

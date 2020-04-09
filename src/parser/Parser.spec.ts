@@ -18,14 +18,14 @@ describe('parser', () => {
             sub main()
                 call()a
             end sub
-        `).errors.map(x => rangeToArray(x.range))).to.eql([
+        `).diagnostics.map(x => rangeToArray(x.range))).to.eql([
             [2, 22, 2, 23]
         ]);
     });
 
     describe('parse', () => {
         it('unknown function type does not invalidate rest of function', () => {
-            let { statements, errors } = parse(`
+            let { statements, diagnostics: errors } = parse(`
                 function log() as UNKNOWN_TYPE
                 end function
             `);
@@ -41,11 +41,11 @@ describe('parser', () => {
                         print 2
                     end if
                 end function
-            `).errors[0]?.message).not.to.exist;
+            `).diagnostics[0]?.message).not.to.exist;
         });
 
         it('supports single-line if statements', () => {
-            expect(parse(`If true Then print "error" : Stop`).errors[0]?.message).to.not.exist;
+            expect(parse(`If true Then print "error" : Stop`).diagnostics[0]?.message).to.not.exist;
         });
 
         it('works with excess newlines', () => {
@@ -60,7 +60,7 @@ describe('parser', () => {
                 '   end if\n\n' +
                 'end function\n\n'
             );
-            expect(Parser.parse(tokens).errors[0]?.message).to.not.exist;
+            expect(Parser.parse(tokens).diagnostics[0]?.message).to.not.exist;
         });
         it('does not invalidate entire file when line ends with a period', () => {
             let { tokens } = Lexer.scan(`
@@ -75,7 +75,7 @@ describe('parser', () => {
 
         it.skip('allows printing object with trailing period', () => {
             let { tokens } = Lexer.scan(`print a.`);
-            let { statements, errors } = Parser.parse(tokens);
+            let { statements, diagnostics: errors } = Parser.parse(tokens);
             let printStatement = statements[0] as PrintStatement;
             expect(errors).to.be.empty;
             expect(printStatement).to.be.instanceof(PrintStatement);
@@ -119,7 +119,7 @@ describe('parser', () => {
                         print "hi" 'comment 1
                     end sub
                 `);
-                let { errors, statements } = Parser.parse(tokens);
+                let { diagnostics: errors, statements } = Parser.parse(tokens);
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
 
                 expect((statements as any)[0].func.body.statements[1].text).to.equal(`'comment 1`);
@@ -132,7 +132,7 @@ describe('parser', () => {
                     end function
                     'comment 2
                 `);
-                let { errors, statements } = Parser.parse(tokens);
+                let { diagnostics: errors, statements } = Parser.parse(tokens);
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
                 expect((statements as any)[0].text).to.equal(`'comment 1`);
                 expect((statements as any)[2].text).to.equal(`'comment 2`);
@@ -145,7 +145,7 @@ describe('parser', () => {
                         'comment
                     }
                 `);
-                let { errors } = Parser.parse(tokens);
+                let { diagnostics: errors } = Parser.parse(tokens);
                 expect(errors).to.be.lengthOf(0, 'Error count should be 0');
             });
 
@@ -283,39 +283,10 @@ describe('parser', () => {
         });
     });
 
-    describe('events', () => {
-        it('emits events', () => {
-            let parser = new Parser();
-            let count = 0;
-            let handler = parser.onError(() => {
-                count++;
-            });
-            parser.parse(Lexer.scan('function').tokens);
-            parser.parse(Lexer.scan('function').tokens);
-            expect(count).to.equal(2);
-            //disposing the listener stops new counts
-            handler.dispose();
-            parser.parse(Lexer.scan('function').tokens);
-            expect(count).to.equal(2);
-        });
-        describe('onErrorOnce', () => {
-            it('stops emitting after first error', () => {
-                let parser = new Parser();
-                let count = 0;
-                parser.onErrorOnce(() => {
-                    count++;
-                });
-                parser.parse(Lexer.scan('function').tokens);
-                parser.parse(Lexer.scan('function').tokens);
-                expect(count).to.equal(1);
-            });
-        });
-    });
-
     describe('reservedWords', () => {
         describe('`then`', () => {
             it('is not allowed as a local identifier', () => {
-                let { errors } = parse(`
+                let { diagnostics: errors } = parse(`
                     sub main()
                         then = true
                     end sub
@@ -323,7 +294,7 @@ describe('parser', () => {
                 expect(errors).to.be.lengthOf(1);
             });
             it('is allowed as an AA property name', () => {
-                let { errors } = parse(`
+                let { diagnostics: errors } = parse(`
                     sub main()
                         person = {
                             then: true
@@ -336,7 +307,7 @@ describe('parser', () => {
             });
         });
         it('"end" is not allowed as a local identifier', () => {
-            let { errors } = parse(`
+            let { diagnostics: errors } = parse(`
                 sub main()
                     end = true
                 end sub
@@ -353,7 +324,7 @@ describe('parser', () => {
                         ${reservedWord} = true
                     end sub
                 `);
-                let { errors } = Parser.parse(tokens);
+                let { diagnostics: errors } = Parser.parse(tokens);
                 expect(errors, `assigning to reserved word "${reservedWord}" should have been an error`).to.be.length.greaterThan(0);
             }
         });

@@ -8,7 +8,7 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser additive expressions', () => {
     it('parses left-associative addition chains', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.IntegerLiteral, '1', new Int32(1)),
@@ -25,7 +25,7 @@ describe('parser additive expressions', () => {
     });
 
     it('parses left-associative subtraction chains', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.IntegerLiteral, '1', new Int32(1)),

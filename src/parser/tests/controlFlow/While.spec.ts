@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser while statements', () => {
 
     it('while without exit', () => {
-        const { statements, errors } = Parser.parse([
+        const { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.While, 'while'),
             token(TokenKind.True, 'true', BrsBoolean.True),
             token(TokenKind.Newline, '\n'),
@@ -26,7 +26,7 @@ describe('parser while statements', () => {
     });
 
     it('while with exit', () => {
-        const { statements, errors } = Parser.parse([
+        const { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.While, 'while'),
             token(TokenKind.True, 'true', BrsBoolean.True),
             token(TokenKind.Newline, '\n'),
@@ -53,7 +53,7 @@ describe('parser while statements', () => {
          * 1|   Rnd(0)
          * 2| end while
          */
-        const { statements, errors } = Parser.parse([
+        const { statements, diagnostics: errors } = Parser.parse([
             {
                 kind: TokenKind.While,
                 text: 'while',

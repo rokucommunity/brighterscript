@@ -8,7 +8,7 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser foreach loops', () => {
     it('requires a name and target', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.ForEach, 'for each'),
             identifier('word'),
             identifier('in'),
@@ -35,7 +35,7 @@ describe('parser foreach loops', () => {
     });
 
     it('allows \'next\' to terminate loop', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.ForEach, 'for each'),
             identifier('word'),
             identifier('in'),
@@ -63,7 +63,7 @@ describe('parser foreach loops', () => {
          * 1|   Rnd(a)
          * 2| end for
          */
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             {
                 kind: TokenKind.ForEach,
                 text: 'for each',

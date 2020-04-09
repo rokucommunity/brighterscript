@@ -54,9 +54,8 @@ import {
 } from './Statement';
 import { diagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
-import { ParseError } from './Error';
 import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression } from './Expression';
-import { Range } from 'vscode-languageserver';
+import { Range, Diagnostic } from 'vscode-languageserver';
 import { ClassStatement, ClassMemberStatement, ClassMethodStatement, ClassFieldStatement } from './ClassStatement';
 
 export class Parser {
@@ -80,7 +79,7 @@ export class Parser {
     /**
      * The list of errors found during the parse process
      */
-    public errors: ParseError[];
+    public diagnostics: Diagnostic[];
 
     /**
      * The depth of the calls to function declarations. Helps some checks know if they are at the root or not.
@@ -117,7 +116,7 @@ export class Parser {
         this.options = this.sanitizeParseOptions(options);
         this.current = 0;
         this.statements = [];
-        this.errors = [];
+        this.diagnostics = [];
         this.functionDeclarationLevel = 0;
 
         if (this.tokens.length > 0) {
@@ -151,67 +150,15 @@ export class Parser {
     }
 
     /**
-     * Convenience function to subscribe to the `err` events emitted by `parser.events`.
-     * @param errorHandler the function to call for every Parser error emitted after subscribing
-     * @returns an object with a `dispose` function, used to unsubscribe from errors
-     */
-    public onError(errorHandler: (err: ParseError) => void) {
-        this.events.on('err', errorHandler);
-        return {
-            dispose: () => {
-                this.events.removeListener('err', errorHandler);
-            }
-        };
-    }
-
-    /**
-     * Convenience function to subscribe to a single `err` event emitted by `parser.events`.
-     * @param errorHandler the function to call for the first Parser error emitted after subscribing
-     */
-    public onErrorOnce(errorHandler: (err: ParseError) => void) {
-        this.events.once('err', errorHandler);
-    }
-
-    /**
-     * Add an error to the parse results.
-     * @param token - the token where the error occurred
-     * @param message - the message for this error
-     * @param code - an error code used to uniquely identify this type of error.  Defaults to 1000
-     * @returns an error object that can be thrown if the calling code needs to abort parsing
-     */
-    private addError(locatable: Locatable, message: string, code = 1000) {
-        let err = new ParseError(locatable, message, code);
-        this.errors.push(err);
-        this.events.emit('err', err);
-        return err;
-    }
-
-    /**
-     * Wrapper around addError that extracts the properties from a diagnostic object
-     * @param token
-     * @param diagnostic
-     */
-
-    private addDiagnostic(locatable: Locatable, diagnostic: DiagnosticInfo) {
-        return this.addError(locatable, diagnostic.message, diagnostic.code);
-    }
-
-    /**
      * Throws an error if the input file type is not BrighterScript
      */
-    private ensureBrighterScriptMode(featureName: string) {
+    private warnIfNotBrighterScriptMode(featureName: string) {
         if (this.options.mode !== 'brighterscript') {
-            throw this.addDiagnostic(this.peek(), diagnosticMessages.bsFeatureNotSupportedInBrsFiles(featureName));
+            let diagnostic = {
+                ...diagnosticMessages.bsFeatureNotSupportedInBrsFiles(featureName)
+            } as Diagnostic;
+            this.diagnostics.push(diagnostic);
         }
-    }
-
-    /**
-     * Add an error at the given location.
-     * @param location
-     * @param message
-     */
-    private addErrorAtRange(range: Range, message: string) {
-        this.addError({ range: range } as any, message);
     }
 
     private declaration(...additionalTerminators: BlockTerminator[]): Statement | undefined {
@@ -261,7 +208,7 @@ export class Parser {
      * A BrighterScript class declaration
      */
     private classDeclaration(): ClassStatement {
-        this.ensureBrighterScriptMode('class declarations');
+        this.warnIfNotBrighterScriptMode('class declarations');
         let classKeyword = this.consume(`Expected 'class' keyword`, TokenKind.Class);
         let extendsKeyword: Token;
         let extendsIdentifier: Identifier;
@@ -273,7 +220,7 @@ export class Parser {
         if (this.peek().text.toLowerCase() === 'extends') {
             extendsKeyword = this.advance();
 
-            extendsIdentifier = this.consumeContinue(diagnosticMessages.Missing_identifier_after_extends_keyword_1022(), TokenKind.Identifier) as Identifier;
+            extendsIdentifier = this.consumeContinue(diagnosticMessages.missingIdentifierAfterExtendsKeyword(), TokenKind.Identifier) as Identifier;
         }
 
         //consume newlines (at least one)
@@ -300,7 +247,10 @@ export class Parser {
                     let funcDeclaration = this.functionDeclaration(false);
                     //if we have an overrides keyword AND this method is called 'new', that's not allowed
                     if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
-                        this.addDiagnostic(overrideKeyword, diagnosticMessages.Cannot_use_override_keyword_on_constructor_function_1023());
+                        this.diagnostics.push({
+                            ...diagnosticMessages.cannotUseOverrideKeywordOnConstructorFunction(),
+                            range: overrideKeyword.range
+                        });
                     }
                     members.push(
                         new ClassMethodStatement(
@@ -331,10 +281,10 @@ export class Parser {
 
         let endingKeyword = this.advance();
         if (endingKeyword.kind !== TokenKind.EndClass) {
-            this.addError(
-                endingKeyword,
-                `Expected 'end class' to terminate class block`
-            );
+            this.diagnostics.push({
+                ...diagnosticMessages.expectedEndClassToErminateClassBlock(),
+                range: endingKeyword.range
+            });
         }
         //consume any trailing newlines
         while (this.match(TokenKind.Newline)) {
@@ -388,7 +338,10 @@ export class Parser {
             if (this.check(TokenKind.Sub, TokenKind.Function)) {
                 functionType = this.advance();
             } else {
-                this.addDiagnostic(this.peek(), diagnosticMessages.missingCallableKeyword(this.peek().text));
+                this.diagnostics.push({
+                    ...diagnosticMessages.missingCallableKeyword(this.peek().text),
+                    range: this.peek().range
+                });
                 functionType = {
                     isReserved: true,
                     kind: TokenKind.Function,
@@ -414,17 +367,17 @@ export class Parser {
 
             if (isAnonymous) {
                 leftParen = this.consume(
-                    `Expected '(' after ${functionTypeText}`,
+                    diagnosticMessages.expectedLeftParenAfterCallable(functionTypeText),
                     TokenKind.LeftParen
                 );
             } else {
                 name = this.consume(
-                    `Expected ${functionTypeText} name after '${functionTypeText}'`,
+                    diagnosticMessages.expectedNameAfterCallableKeyword(functionTypeText),
                     TokenKind.Identifier,
                     ...AllowedProperties
                 ) as Identifier;
                 leftParen = this.consume(
-                    `Expected '(' after ${functionTypeText} name`,
+                    diagnosticMessages.expectedLeftParenAfterCallableName(functionTypeText),
                     TokenKind.LeftParen
                 );
 
@@ -432,10 +385,10 @@ export class Parser {
                 let lastChar = name.text[name.text.length - 1];
                 if (['$', '%', '!', '#', '&'].includes(lastChar)) {
                     //don't throw this error; let the parser continue
-                    this.addError(
-                        name,
-                        `Function name '${name.text}' cannot end with type designator '${lastChar}'`
-                    );
+                    this.diagnostics.push({
+                        ...diagnosticMessages.functionNameCannotEndWithTypeDesignator(functionTypeText, name.text, lastChar),
+                        range: name.range
+                    });
                 }
             }
 
@@ -964,7 +917,7 @@ export class Parser {
 
             //keep track of the current error count, because if the then branch fails,
             //we will trash them in favor of a single error on if
-            let errorsLengthBeforeBlock = this.errors.length;
+            let errorsLengthBeforeBlock = this.diagnostics.length;
 
             // we're parsing a multi-line ("block") form of the BrightScript if/then/else and must find
             // a trailing "end if"
@@ -974,7 +927,7 @@ export class Parser {
                 //throw out any new errors created as a result of a `then` block parse failure.
                 //the block() function will discard the current line, so any discarded errors will
                 //resurface if they are legitimate, and not a result of a malformed if statement
-                this.errors.splice(errorsLengthBeforeBlock, this.errors.length - errorsLengthBeforeBlock);
+                this.diagnostics.splice(errorsLengthBeforeBlock, this.diagnostics.length - errorsLengthBeforeBlock);
 
                 //this whole if statement is bogus...add error to the if token and hard-fail
                 throw this.addError(
@@ -1542,7 +1495,7 @@ export class Parser {
         }
 
         if (newToken) {
-            this.ensureBrighterScriptMode('using new keyword to construct a class');
+            this.warnIfNotBrighterScriptMode('using new keyword to construct a class');
             if (expr instanceof CallExpression === false) {
                 this.addDiagnostic(expr, diagnosticMessages.Attempted_to_use_new_keyword_on_a_non_class());
             }
@@ -1784,8 +1737,7 @@ export class Parser {
         return result;
     }
 
-    private consume(errorMessage: string | DiagnosticInfo, ...tokenKinds: TokenKind[]): Token {
-        let diagnostic = typeof errorMessage === 'string' ? { message: errorMessage, code: 1000 } : errorMessage;
+    private consume(diagnosticInfo: DiagnosticInfo, ...tokenKinds: TokenKind[]): Token {
         let foundTokenKind = tokenKinds
             .map(tokenKind => this.peek().kind === tokenKind)
             .reduce((foundAny, foundCurrent) => foundAny || foundCurrent, false);
@@ -1793,7 +1745,12 @@ export class Parser {
         if (foundTokenKind) {
             return this.advance();
         }
-        throw this.addError(this.peek(), diagnostic.message, diagnostic.code);
+        this.diagnostics.push({
+            ...diagnosticInfo,
+            range: this.peek().range
+        });
+        //TODO can we enhance the parser to always recover instead of throwing?
+        throw new Error(diagnosticInfo.message);
     }
 
     /**

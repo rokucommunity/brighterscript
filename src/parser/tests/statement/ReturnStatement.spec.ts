@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser return statements', () => {
     it('parses void returns', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -27,7 +27,7 @@ describe('parser return statements', () => {
     });
 
     it('parses literal returns', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -46,7 +46,7 @@ describe('parser return statements', () => {
     });
 
     it('parses expression returns', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -75,7 +75,7 @@ describe('parser return statements', () => {
          * 1|   return 5
          * 2| end function
          */
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),

@@ -6,6 +6,32 @@ import { DiagnosticSeverity } from 'vscode-languageserver';
  * An object that keeps track of all possible error messages.
  */
 export let diagnosticMessages = {
+
+    expectedLeftParenAfterCallable: (callableType: string) => ({
+        message: `Expected '(' after ${callableType}`,
+        code: 1,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedNameAfterCallableKeyword: (callableType: string) => ({
+        message: `Expected ${callableType} name after '${callableType}' keyword`,
+        code: 2,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedLeftParenAfterCallableName: (callableType: string) => ({
+        message: `Expected '(' after ${callableType} name`,
+        code: 3,
+        severity: DiagnosticSeverity.Error
+    }),
+    functionNameCannotEndWithTypeDesignator: (callableType: string, callableName: string, designator: string) => ({
+        message: `${callableType} name '${callableName}' cannot end with type designator "${designator}"`
+        code: 3,
+        severity: DiagnosticSeverity.Error
+    }),
+    // expectedEndClassToErminateClassBlock: () => ({
+    //     message: `Expected "end class" to terminate class block`,
+    //     code: 1,
+    //     severity: DiagnosticSeverity.Error
+    // }),
     //this one won't be used much, we just need a catchall object for the code since we pass through the message from the parser
     genericParserMessage: (message: string) => ({
         message: message,
@@ -13,7 +39,7 @@ export let diagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     callToUnknownFunction: (name: string, scopeName: string) => ({
-        message: `Cannot find function with name '${name}' when this file is included in scope "${scopeName}".`,
+        message: `Cannot find function with name "${name}" when this file is included in scope "${scopeName}".`,
         code: 1001,
         severity: DiagnosticSeverity.Error
     }),
@@ -118,12 +144,12 @@ export let diagnosticMessages = {
         code: 1021,
         severity: DiagnosticSeverity.Error
     }),
-    Missing_identifier_after_extends_keyword_1022: () => ({
+    missingIdentifierAfterExtendsKeyword: () => ({
         message: 'Missing identifier after extends keyword',
         code: 1022,
         severity: DiagnosticSeverity.Error
     }),
-    Cannot_use_override_keyword_on_constructor_function_1023: () => ({
+    cannotUseOverrideKeywordOnConstructorFunction: () => ({
         message: 'Override keyword is not allowed on class constructor method',
         code: 1023,
         severity: DiagnosticSeverity.Error

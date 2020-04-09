@@ -8,7 +8,7 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser call expressions', () => {
     it('parses named function calls', () => {
-        const { statements, errors } = Parser.parse([
+        const { statements, diagnostics: errors } = Parser.parse([
             identifier('RebootSystem'),
             { kind: TokenKind.LeftParen, text: '(', line: 1 },
             token(TokenKind.RightParen, ')'),
@@ -28,7 +28,7 @@ describe('parser call expressions', () => {
             sub DoThingTwo()
             end sub
         `);
-        const { statements, errors } = Parser.parse(tokens);
+        const { statements, diagnostics: errors } = Parser.parse(tokens);
         expect(errors).to.length.greaterThan(0);
         expect(statements).to.be.length.greaterThan(0);
 
@@ -49,7 +49,7 @@ describe('parser call expressions', () => {
             sub DoThingTwo()
             end sub
         `);
-        const { statements, errors } = Parser.parse(tokens);
+        const { statements, diagnostics: errors } = Parser.parse(tokens);
         //there should only be 1 error
         expect(errors).to.be.lengthOf(1);
         expect(statements).to.be.length.greaterThan(0);
@@ -59,7 +59,7 @@ describe('parser call expressions', () => {
     });
 
     it('allows closing parentheses on separate line', () => {
-        const { statements, errors } = Parser.parse([
+        const { statements, diagnostics: errors } = Parser.parse([
             identifier('RebootSystem'),
             { kind: TokenKind.LeftParen, text: '(', line: 1 },
             token(TokenKind.Newline, '\\n'),
@@ -97,7 +97,7 @@ describe('parser call expressions', () => {
          *  +----------------------
          * 0| foo("bar", "baz")
          */
-        const { statements, errors } = Parser.parse(<any>[
+        const { statements, diagnostics: errors } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: 'foo',

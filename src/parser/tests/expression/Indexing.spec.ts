@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser indexing', () => {
     describe('one level', () => {
         it('dotted', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -25,7 +25,7 @@ describe('parser indexing', () => {
         });
 
         it('bracketed', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -49,7 +49,7 @@ describe('parser indexing', () => {
              * 0| a = foo.bar
              * 1| b = foo[2]
              */
-            let { statements, errors } = Parser.parse(<any>[
+            let { statements, diagnostics: errors } = Parser.parse(<any>[
                 {
                     kind: TokenKind.Identifier,
                     text: 'a',
@@ -142,7 +142,7 @@ describe('parser indexing', () => {
 
     describe('multi-level', () => {
         it('dotted', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -157,7 +157,7 @@ describe('parser indexing', () => {
         });
 
         it('bracketed', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -179,7 +179,7 @@ describe('parser indexing', () => {
         });
 
         it('mixed', () => {
-            let { statements, errors } = Parser.parse([
+            let { statements, diagnostics: errors } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),

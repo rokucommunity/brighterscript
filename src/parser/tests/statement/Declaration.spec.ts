@@ -8,7 +8,7 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser variable declarations', () => {
     it('allows newlines before assignments', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             token(TokenKind.Newline),
             token(TokenKind.Newline),
             token(TokenKind.Newline),
@@ -24,7 +24,7 @@ describe('parser variable declarations', () => {
     });
 
     it('allows newlines after assignments', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('hasNewlines'),
             token(TokenKind.Equal),
             token(TokenKind.True),
@@ -38,7 +38,7 @@ describe('parser variable declarations', () => {
     });
 
     it('parses literal value assignments', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('foo'),
             token(TokenKind.Equal),
             token(TokenKind.IntegerLiteral, '5', new Int32(5)),
@@ -52,7 +52,7 @@ describe('parser variable declarations', () => {
     });
 
     it('parses evaluated value assignments', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('bar'),
             token(TokenKind.Equal),
             token(TokenKind.IntegerLiteral, '5', new Int32(5)),
@@ -68,7 +68,7 @@ describe('parser variable declarations', () => {
     });
 
     it('parses variable aliasing', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics: errors } = Parser.parse([
             identifier('baz'),
             token(TokenKind.Equal),
             identifier('foo'),
@@ -88,7 +88,7 @@ describe('parser variable declarations', () => {
          *  +------------------
          * 0| foo = invalid
          */
-        let { statements, errors } = Parser.parse(<any>[
+        let { statements, diagnostics: errors } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: 'foo',
