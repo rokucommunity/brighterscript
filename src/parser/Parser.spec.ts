@@ -9,7 +9,7 @@ describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
         expect(Parser.parse([])).to.deep.include({
             statements: [],
-            errors: []
+            diagnostics: []
         });
     });
 
@@ -25,11 +25,11 @@ describe('parser', () => {
 
     describe('parse', () => {
         it('unknown function type does not invalidate rest of function', () => {
-            let { statements, diagnostics: errors } = parse(`
+            let { statements, diagnostics } = parse(`
                 function log() as UNKNOWN_TYPE
                 end function
             `);
-            expect(errors.length).to.be.greaterThan(0);
+            expect(diagnostics.length).to.be.greaterThan(0);
             expect(statements[0]).to.exist;
         });
         it('works with conditionals', () => {
@@ -69,15 +69,15 @@ describe('parser', () => {
                 end sub
 
             `);
-            let { errors } = Parser.parse(tokens) as any;
-            expect(errors).to.be.lengthOf(1, 'Error count should be 0');
+            let { diagnostics } = Parser.parse(tokens) as any;
+            expect(diagnostics).to.be.lengthOf(1, 'Error count should be 0');
         });
 
         it.skip('allows printing object with trailing period', () => {
             let { tokens } = Lexer.scan(`print a.`);
-            let { statements, diagnostics: errors } = Parser.parse(tokens);
+            let { statements, diagnostics } = Parser.parse(tokens);
             let printStatement = statements[0] as PrintStatement;
-            expect(errors).to.be.empty;
+            expect(diagnostics).to.be.empty;
             expect(printStatement).to.be.instanceof(PrintStatement);
             expect(printStatement.expressions[0]).to.be.instanceof(DottedGetExpression);
         });
@@ -89,8 +89,8 @@ describe('parser', () => {
                     'line 2
                     'line 3
                 `);
-                let { errors, statements } = Parser.parse(tokens) as any;
-                expect(errors).to.be.lengthOf(0, 'Error count should be 0');
+                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
 
                 expect(statements[0].text).to.equal(`'line 1\n'line 2\n'line 3`);
             });
@@ -103,8 +103,8 @@ describe('parser', () => {
 
                     'line 3
                 `);
-                let { errors, statements } = Parser.parse(tokens) as any;
-                expect(errors).to.be.lengthOf(0, 'Error count should be 0');
+                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
 
                 expect(statements).to.be.lengthOf(3);
 
@@ -119,8 +119,8 @@ describe('parser', () => {
                         print "hi" 'comment 1
                     end sub
                 `);
-                let { diagnostics: errors, statements } = Parser.parse(tokens);
-                expect(errors).to.be.lengthOf(0, 'Error count should be 0');
+                let { diagnostics, statements } = Parser.parse(tokens);
+                expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
 
                 expect((statements as any)[0].func.body.statements[1].text).to.equal(`'comment 1`);
             });
@@ -132,8 +132,8 @@ describe('parser', () => {
                     end function
                     'comment 2
                 `);
-                let { diagnostics: errors, statements } = Parser.parse(tokens);
-                expect(errors).to.be.lengthOf(0, 'Error count should be 0');
+                let { diagnostics, statements } = Parser.parse(tokens);
+                expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
                 expect((statements as any)[0].text).to.equal(`'comment 1`);
                 expect((statements as any)[2].text).to.equal(`'comment 2`);
             });
@@ -145,8 +145,8 @@ describe('parser', () => {
                         'comment
                     }
                 `);
-                let { diagnostics: errors } = Parser.parse(tokens);
-                expect(errors).to.be.lengthOf(0, 'Error count should be 0');
+                let { diagnostics } = Parser.parse(tokens);
+                expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
             });
 
             it('parses after function call', () => {
@@ -156,8 +156,8 @@ describe('parser', () => {
                         DoSomething(name) 'comment 1
                     end sub
                 `);
-                let { errors, statements } = Parser.parse(tokens) as any;
-                expect(errors).to.be.lengthOf(0, 'Should have zero errors');
+                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                expect(diagnostics).to.be.lengthOf(0, 'Should have zero diagnostics');
 
                 expect(statements[0].func.body.statements[2].text).to.equal(`'comment 1`);
             });
@@ -170,8 +170,8 @@ describe('parser', () => {
                         'comment 3
                     end function 'comment 4
                 `);
-                let { errors, statements } = Parser.parse(tokens) as any;
-                expect(errors).to.be.lengthOf(0, 'Should have zero errors');
+                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                expect(diagnostics).to.be.lengthOf(0, 'Should have zero diagnostics');
 
                 expect(statements[0].func.body.statements[0].text).to.equal(`'comment 1`);
                 expect(statements[0].func.body.statements[1].text).to.equal(`'comment 2`);
@@ -197,8 +197,8 @@ describe('parser', () => {
                         end if 'comment 10
                     end function
                 `);
-                let { errors, statements } = Parser.parse(tokens) as any;
-                expect(errors).to.be.lengthOf(0, 'Should have zero errors');
+                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                expect(diagnostics).to.be.lengthOf(0, 'Should have zero diagnostics');
                 let ifStmt = statements[0].func.body.statements[0];
 
                 expect(ifStmt.thenBranch.statements[0].text).to.equal(`'comment 1`);
@@ -227,8 +227,8 @@ describe('parser', () => {
                         end while 'comment 4
                     end function
                 `);
-                let { errors, statements } = Parser.parse(tokens) as any;
-                expect(errors).to.be.lengthOf(0, 'Error count should be zero');
+                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                expect(diagnostics).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0];
 
                 expect(stmt.body.statements[0].text).to.equal(`'comment 1`);
@@ -248,8 +248,8 @@ describe('parser', () => {
                         end for 'comment 4
                     end function
                 `);
-                let { errors, statements } = Parser.parse(tokens) as any;
-                expect(errors).to.be.lengthOf(0, 'Error count should be zero');
+                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                expect(diagnostics).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0];
 
                 expect(stmt.body.statements[0].text).to.equal(`'comment 1`);
@@ -269,8 +269,8 @@ describe('parser', () => {
                         end for 'comment 4
                     end function
                 `);
-                let { errors, statements } = Parser.parse(tokens) as any;
-                expect(errors).to.be.lengthOf(0, 'Error count should be zero');
+                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                expect(diagnostics).to.be.lengthOf(0, 'Error count should be zero');
                 let stmt = statements[0].func.body.statements[0];
 
                 expect(stmt.body.statements[0].text).to.equal(`'comment 1`);
@@ -286,15 +286,15 @@ describe('parser', () => {
     describe('reservedWords', () => {
         describe('`then`', () => {
             it('is not allowed as a local identifier', () => {
-                let { diagnostics: errors } = parse(`
+                let { diagnostics } = parse(`
                     sub main()
                         then = true
                     end sub
                 `);
-                expect(errors).to.be.lengthOf(1);
+                expect(diagnostics).to.be.lengthOf(1);
             });
             it('is allowed as an AA property name', () => {
-                let { diagnostics: errors } = parse(`
+                let { diagnostics } = parse(`
                     sub main()
                         person = {
                             then: true
@@ -303,16 +303,16 @@ describe('parser', () => {
                         print person.then
                     end sub
                 `);
-                expect(errors[0]?.message).not.to.exist;
+                expect(diagnostics[0]?.message).not.to.exist;
             });
         });
         it('"end" is not allowed as a local identifier', () => {
-            let { diagnostics: errors } = parse(`
+            let { diagnostics } = parse(`
                 sub main()
                     end = true
                 end sub
             `);
-            expect(errors).to.be.lengthOf(1);
+            expect(diagnostics).to.be.lengthOf(1);
         });
         it('none of them can be used as local variables', () => {
             let reservedWords = new Set(ReservedWords);
@@ -324,8 +324,8 @@ describe('parser', () => {
                         ${reservedWord} = true
                     end sub
                 `);
-                let { diagnostics: errors } = Parser.parse(tokens);
-                expect(errors, `assigning to reserved word "${reservedWord}" should have been an error`).to.be.length.greaterThan(0);
+                let { diagnostics } = Parser.parse(tokens);
+                expect(diagnostics, `assigning to reserved word "${reservedWord}" should have been an error`).to.be.length.greaterThan(0);
             }
         });
     });

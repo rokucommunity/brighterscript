@@ -7,7 +7,7 @@ import { CompletionItem, Location, Position, Range } from 'vscode-languageserver
 
 import { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
-import { diagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { Diagnostic, File } from './interfaces';
@@ -380,7 +380,7 @@ export class Program {
             if (!this.fileIsIncludedInAnyScope(file)) {
                 //the file is not loaded in any scope
                 this.diagnostics.push({
-                    ...diagnosticMessages.fileNotReferencedByAnyOtherFile(),
+                    ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
                     file: file,
                     range: Range.create(0, 0, 0, Number.MAX_VALUE)
                 });

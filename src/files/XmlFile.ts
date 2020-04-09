@@ -4,7 +4,7 @@ import { CodeWithSourceMap } from 'source-map';
 import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
 
 import { Deferred } from '../deferred';
-import { diagnosticMessages } from '../DiagnosticMessages';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import { Callable, Diagnostic, File, FileReference, FunctionCall } from '../interfaces';
 import { Program } from '../Program';
@@ -115,7 +115,7 @@ export class XmlFile {
                 //component name not defined
                 if (!this.componentName) {
                     this.parseDiagnistics.push({
-                        ...diagnosticMessages.xmlComponentMissingNameAttribute(),
+                        ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
                         range: Range.create(
                             componentRange.start.line,
                             componentRange.start.character,
@@ -128,7 +128,7 @@ export class XmlFile {
                 //parent component name not defined
                 if (!this.parentName) {
                     this.parseDiagnistics.push({
-                        ...diagnosticMessages.xmlComponentMissingExtendsAttribute(),
+                        ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
                         range: Range.create(
                             componentRange.start.line,
                             componentRange.start.character,
@@ -141,7 +141,7 @@ export class XmlFile {
             } else {
                 //the component xml element was not found in the file
                 this.parseDiagnistics.push({
-                    ...diagnosticMessages.xmlComponentMissingComponentDeclaration(),
+                    ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
                     range: Range.create(
                         0,
                         0,
@@ -159,7 +159,7 @@ export class XmlFile {
                 let columnIndex = parseInt(match[3]) - 1;
                 //add basic xml parse diagnostic errors
                 this.parseDiagnistics.push({
-                    ...diagnosticMessages.xmlGenericParseError(match[1]),
+                    ...DiagnosticMessages.xmlGenericParseError(match[1]),
                     range: Range.create(
                         lineIndex,
                         columnIndex,

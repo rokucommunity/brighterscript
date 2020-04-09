@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser array literals', () => {
     describe('empty arrays', () => {
         it('on one line', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -17,13 +17,13 @@ describe('parser array literals', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -37,7 +37,7 @@ describe('parser array literals', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
@@ -45,7 +45,7 @@ describe('parser array literals', () => {
 
     describe('filled arrays', () => {
         it('on one line', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -58,13 +58,13 @@ describe('parser array literals', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines with commas', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -81,13 +81,13 @@ describe('parser array literals', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines without commas', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -102,7 +102,7 @@ describe('parser array literals', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
@@ -110,7 +110,7 @@ describe('parser array literals', () => {
 
     describe('contents', () => {
         it('can contain primitives', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -123,13 +123,13 @@ describe('parser array literals', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
 
         it('can contain other arrays', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -152,13 +152,13 @@ describe('parser array literals', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
 
         it('can contain expressions', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -172,7 +172,7 @@ describe('parser array literals', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
@@ -190,7 +190,7 @@ describe('parser array literals', () => {
          * 4|
          * 5| ]
          */
-        let { statements, errors } = Parser.parse(<any>[
+        let { statements, diagnostics } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
@@ -271,7 +271,7 @@ describe('parser array literals', () => {
             }
         ]) as any;
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(2);
         expect(statements[0].value.range).deep.include(
             Range.create(0, 4, 0, 9)

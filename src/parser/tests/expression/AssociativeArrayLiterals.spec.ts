@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser associative array literals', () => {
     describe('empty associative arrays', () => {
         it('on one line', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftCurlyBrace, '{'),
@@ -17,13 +17,13 @@ describe('parser associative array literals', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftCurlyBrace, '{'),
@@ -37,7 +37,7 @@ describe('parser associative array literals', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
@@ -45,7 +45,7 @@ describe('parser associative array literals', () => {
 
     describe('filled arrays', () => {
         it('on one line', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftCurlyBrace, '{'),
@@ -64,13 +64,13 @@ describe('parser associative array literals', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines with commas', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftCurlyBrace, '{'),
@@ -93,13 +93,13 @@ describe('parser associative array literals', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines without commas', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftCurlyBrace, '{'),
@@ -120,14 +120,14 @@ describe('parser associative array literals', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
     });
 
     it('allows separating properties with colons', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Sub, 'sub'),
             identifier('main'),
             token(TokenKind.LeftParen, '('),
@@ -152,13 +152,13 @@ describe('parser associative array literals', () => {
             token(TokenKind.EndSub, 'end sub'),
             EOF
         ]);
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
 
     it('allows a mix of quoted and unquoted keys', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.LeftCurlyBrace, '{'),
@@ -181,7 +181,7 @@ describe('parser associative array literals', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
@@ -198,7 +198,7 @@ describe('parser associative array literals', () => {
          * 5|
          * 6| }
          */
-        let { statements, errors } = Parser.parse(<any>[
+        let { statements, diagnostics } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
@@ -279,7 +279,7 @@ describe('parser associative array literals', () => {
             }
         ]) as any;
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(2);
         expect(statements[0].value.range).to.deep.include(
             Range.create(0, 4, 0, 9)

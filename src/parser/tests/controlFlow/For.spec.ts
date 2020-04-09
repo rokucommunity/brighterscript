@@ -8,7 +8,7 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser for loops', () => {
     it('accepts a \'step\' clause', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
@@ -24,7 +24,7 @@ describe('parser for loops', () => {
             EOF
         ]) as any;
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         expect(statements[0]).to.exist;
         expect(statements[0].increment).to.exist;
@@ -34,7 +34,7 @@ describe('parser for loops', () => {
     });
 
     it('defaults a missing \'step\' clause to \'1\'', () => {
-        let { statements, errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
@@ -48,7 +48,7 @@ describe('parser for loops', () => {
             EOF
         ]) as any;
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         expect(statements[0]).to.exist;
         expect(statements[0].increment).to.exist;
@@ -58,7 +58,7 @@ describe('parser for loops', () => {
     });
 
     it('allows \'next\' to terminate loop', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
@@ -72,7 +72,7 @@ describe('parser for loops', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
@@ -86,7 +86,7 @@ describe('parser for loops', () => {
          * 1|   Rnd(i)
          * 2| end for
          */
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.For,
                 text: 'for',
@@ -149,7 +149,7 @@ describe('parser for loops', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].range).to.deep.include(
             Range.create(0, 0, 2, 8)

@@ -10,33 +10,33 @@ describe('parser primary expressions', () => {
 
     it('parses numeric literals', () => {
         let equals = token(TokenKind.Equal, '=');
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             equals,
             token(TokenKind.IntegerLiteral, '5', new Int32(5)),
             EOF
         ]);
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.have.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
 
     it('parses string literals', () => {
         let equals = token(TokenKind.Equal, '=');
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             equals,
             token(TokenKind.StringLiteral, 'hello', new BrsString('hello')),
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.have.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
 
     it('parses expressions in parentheses', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.IntegerLiteral, '1', new Int32(1)),
@@ -49,7 +49,7 @@ describe('parser primary expressions', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.have.length.greaterThan(0);
 
         //expect(statements).toMatchSnapshot();
@@ -64,7 +64,7 @@ describe('parser primary expressions', () => {
          * 1| b = "foo"
          * 2| c = ( 0 )
          */
-        let { statements, errors } = Parser.parse(<any>[
+        let { statements, diagnostics } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
@@ -154,7 +154,7 @@ describe('parser primary expressions', () => {
             }
         ]) as any;
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(3);
         expect(statements[0].value.range).to.deep.include(
             Range.create(0, 4, 0, 5)

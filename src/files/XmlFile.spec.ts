@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as sinonImport from 'sinon';
 import { CompletionItem, CompletionItemKind, Position, Range } from 'vscode-languageserver';
 
-import { diagnosticMessages } from '../DiagnosticMessages';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Diagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
@@ -83,7 +83,7 @@ describe('XmlFile', () => {
             file = new XmlFile('abs', 'rel', null);
             await file.parse('<script type="text/brightscript" uri="ChildScene.brs" />');
             expect(file.parseDiagnistics).to.be.lengthOf(1);
-            expect(file.parseDiagnistics[0].message).to.equal(diagnosticMessages.xmlComponentMissingComponentDeclaration().message);
+            expect(file.parseDiagnistics[0].message).to.equal(DiagnosticMessages.xmlComponentMissingComponentDeclaration().message);
         });
 
         it('adds error when component does not declare a name', async () => {
@@ -96,7 +96,7 @@ describe('XmlFile', () => {
             `);
             expect(file.parseDiagnistics).to.be.lengthOf(1);
             expect(file.parseDiagnistics[0]).to.deep.include(<Diagnostic>{
-                message: diagnosticMessages.xmlComponentMissingNameAttribute().message,
+                message: DiagnosticMessages.xmlComponentMissingNameAttribute().message,
                 range: Range.create(2, 16, 2, 26)
             });
         });
@@ -110,7 +110,7 @@ describe('XmlFile', () => {
             `);
             expect(file.parseDiagnistics).to.be.lengthOf(1);
             expect(file.parseDiagnistics[0]).to.deep.include(<Diagnostic>{
-                code: diagnosticMessages.xmlGenericParseError('Some generic parse error').code,
+                code: DiagnosticMessages.xmlGenericParseError('Some generic parse error').code,
                 range: Range.create(2, 27, 2, 27)
             });
         });

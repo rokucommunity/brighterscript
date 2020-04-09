@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import { CompletionItem, CompletionItemKind, Location, Position, Range } from 'vscode-languageserver';
 
-import { diagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { CallableContainer, Diagnostic, File } from './interfaces';
@@ -320,7 +320,7 @@ export class Scope {
                 //detect unknown parent class
                 if (!parentClass) {
                     this.diagnostics.push({
-                        ...diagnosticMessages.Class_could_not_be_found(parentClassName, this.name),
+                        ...DiagnosticMessages.classCouldNotBeFound(parentClassName, this.name),
                         file: classStatement.file,
                         range: classStatement.extendsIdentifier.range
                     });
@@ -340,7 +340,7 @@ export class Scope {
                 //catch duplicate member names
                 if (methods[lowerName] || fields[lowerName]) {
                     this.diagnostics.push({
-                        ...diagnosticMessages.Duplicate_identifier(member.name.text),
+                        ...DiagnosticMessages.duplicateIdentifier(member.name.text),
                         file: classStatement.file,
                         range: member.name.range
                     });
@@ -390,7 +390,7 @@ export class Scope {
                 if (expCall.args.length > maxParams || expCall.args.length < minParams) {
                     let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
                     this.diagnostics.push({
-                        ...diagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
+                        ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
                         range: expCall.nameRange,
                         //TODO detect end of expression call
                         file: file
@@ -416,7 +416,7 @@ export class Scope {
                     let globalCallable = globalCallableContainer[0];
 
                     this.diagnostics.push({
-                        ...diagnosticMessages.localVarShadowsGlobalFunction(
+                        ...DiagnosticMessages.localVarShadowsGlobalFunction(
                             varDeclaration.name,
                             globalCallable.callable.file.pkgPath
                         ),
@@ -451,7 +451,7 @@ export class Scope {
                 //detect calls to unknown functions
                 if (!knownCallable) {
                     this.diagnostics.push({
-                        ...diagnosticMessages.callToUnknownFunction(expCall.name, this.name),
+                        ...DiagnosticMessages.callToUnknownFunction(expCall.name, this.name),
                         range: expCall.nameRange,
                         file: file
                     });
@@ -497,7 +497,7 @@ export class Scope {
                     if (lowerName !== 'init') {
                         let shadowedCallable = ancestorNonPlatformCallables[ancestorNonPlatformCallables.length - 1];
                         this.diagnostics.push({
-                            ...diagnosticMessages.overridesAncestorFunction(
+                            ...DiagnosticMessages.overridesAncestorFunction(
                                 container.callable.name,
                                 container.scope.name,
                                 shadowedCallable.callable.file.pkgPath,
@@ -518,7 +518,7 @@ export class Scope {
                     let callable = callableContainer.callable;
 
                     this.diagnostics.push({
-                        ...diagnosticMessages.duplicateFunctionImplementation(callable.name, callableContainer.scope.name),
+                        ...DiagnosticMessages.duplicateFunctionImplementation(callable.name, callableContainer.scope.name),
                         range: Range.create(
                             callable.nameRange.start.line,
                             callable.nameRange.start.character,

@@ -10,7 +10,7 @@ import Uri from 'vscode-uri';
 import * as xml2js from 'xml2js';
 
 import { BsConfig } from './BsConfig';
-import { diagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { CallableContainer, Diagnostic, ValueKind } from './interfaces';
 import { BooleanType } from './types/BooleanType';
@@ -175,7 +175,7 @@ export class Util {
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {
-                    ...diagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
+                    ...DiagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
                     file: {
                         pathAbsolute: configFilePath
                     },

@@ -3,7 +3,7 @@ import { SourceNode } from 'source-map';
 import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
 
 import { Scope } from '../Scope';
-import { diagnosticCodes, diagnosticMessages } from '../DiagnosticMessages';
+import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import { Callable, CallableArg, CallableParam, CommentFlag, Diagnostic, FunctionCall } from '../interfaces';
 import { Deferred } from '../deferred';
@@ -259,7 +259,7 @@ export class BrsFile {
         let standardizedDiagnostics = [] as Diagnostic[];
         for (let error of errors) {
             let diagnostic = <Diagnostic>{
-                ...diagnosticMessages.genericParserMessage(error.message),
+                ...DiagnosticMessages.genericParserMessage(error.message),
                 range: error.range,
                 file: this
             };
@@ -275,7 +275,7 @@ export class BrsFile {
      */
     public getIgnores(lines: string[]) {
         //TODO use the comment statements found in the AST for this instead of text search
-        let allCodesExcept1014 = diagnosticCodes.filter((x) => x !== diagnosticMessages.unknownDiagnosticCode(0).code);
+        let allCodesExcept1014 = diagnosticCodes.filter((x) => x !== DiagnosticMessages.unknownDiagnosticCode(0).code);
         this.commentFlags = [];
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             let line = lines[lineIndex];
@@ -330,7 +330,7 @@ export class BrsFile {
                                 //add a warning for unknown codes
                                 if (!diagnosticCodes.includes(codeInt)) {
                                     this.diagnostics.push({
-                                        ...diagnosticMessages.unknownDiagnosticCode(codeInt),
+                                        ...DiagnosticMessages.unknownDiagnosticCode(codeInt),
                                         file: this,
                                         range: Range.create(lineIndex, offset + codeToken.startIndex, lineIndex, offset + codeToken.startIndex + codeToken.text.length)
                                     });

@@ -4,7 +4,7 @@ import { Program } from '../Program';
 import { getTestTranspile } from './BrsFile.spec';
 import { BrsFile } from './BrsFile';
 import { expect } from 'chai';
-import { diagnosticMessages } from '../DiagnosticMessages';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Diagnostic, Range, DiagnosticSeverity } from 'vscode-languageserver';
 
 let sinon = sinonImport.createSandbox();
@@ -148,7 +148,7 @@ describe('BrsFile BrighterScript classes', () => {
         expect(
             program.getDiagnostics()[0]?.message
         ).to.equal(
-            diagnosticMessages.Method_does_not_exist_on_type('methodThatDoesNotExist', 'Animal')
+            DiagnosticMessages.methodDoesNotExistOnType('methodThatDoesNotExist', 'Animal')
         );
     });
 
@@ -176,16 +176,16 @@ describe('BrsFile BrighterScript classes', () => {
             };
         });
         expect(diagnostics).to.eql(<Partial<Diagnostic>[]>[{
-            ...diagnosticMessages.Duplicate_identifier('name'),
+            ...DiagnosticMessages.duplicateIdentifier('name'),
             range: Range.create(3, 23, 3, 27)
         }, {
-            ...diagnosticMessages.Duplicate_identifier('name'),
+            ...DiagnosticMessages.duplicateIdentifier('name'),
             range: Range.create(4, 27, 4, 31)
         }, {
-            ...diagnosticMessages.Duplicate_identifier('age'),
+            ...DiagnosticMessages.duplicateIdentifier('age'),
             range: Range.create(8, 27, 8, 30)
         }, {
-            ...diagnosticMessages.Duplicate_identifier('age'),
+            ...DiagnosticMessages.duplicateIdentifier('age'),
             range: Range.create(10, 23, 10, 26)
         }]);
     });
@@ -203,7 +203,7 @@ describe('BrsFile BrighterScript classes', () => {
         `) as BrsFile);
         await program.validate();
         expect(program.getDiagnostics()[0]).to.exist.and.to.include({
-            ...diagnosticMessages.Missing_override_keyword('speak', 'Animal'),
+            ...DiagnosticMessages.missingOverrideKeyword('speak', 'Animal'),
             location: Range.create(6, 20, 6, 25)
         });
     });
@@ -217,7 +217,7 @@ describe('BrsFile BrighterScript classes', () => {
         `) as BrsFile);
         await program.validate();
         expect(program.getDiagnostics()[0]).to.exist.and.to.deep.include({
-            ...diagnosticMessages.Class_could_not_be_found('Animal', 'global'),
+            ...DiagnosticMessages.classCouldNotBeFound('Animal', 'global'),
             range: Range.create(1, 31, 1, 37)
         });
     });

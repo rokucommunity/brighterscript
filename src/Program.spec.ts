@@ -4,7 +4,7 @@ import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
 
 import { Scope } from './Scope';
-import { diagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { Diagnostic } from './interfaces';
@@ -188,7 +188,7 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(diagnosticMessages.fileNotReferencedByAnyOtherFile().code);
+            expect(diagnostics[0].code).to.equal(DiagnosticMessages.fileNotReferencedByAnyOtherFile().code);
         });
         it('does not throw errors on shadowed init functions in components', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `
@@ -247,7 +247,7 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(diagnosticMessages.unnecessaryScriptImportInChildFromParent('').code);
+            expect(diagnostics[0].code).to.equal(DiagnosticMessages.unnecessaryScriptImportInChildFromParent('').code);
             expect(diagnostics[0].severity).to.equal(DiagnosticSeverity.Warning);
         });
 
@@ -271,7 +271,7 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(diagnosticMessages.overridesAncestorFunction('', '', '', '').code);
+            expect(diagnostics[0].code).to.equal(DiagnosticMessages.overridesAncestorFunction('', '', '', '').code);
         });
 
         it('does not add info diagnostic on shadowed "init" functions', async () => {
@@ -382,7 +382,7 @@ describe('Program', () => {
 
             await program.validate();
             expect(program.getDiagnostics().length).to.equal(1);
-            expect(program.getDiagnostics()[0].code).to.equal(diagnosticMessages.callToUnknownFunction('', '').code);
+            expect(program.getDiagnostics()[0].code).to.equal(DiagnosticMessages.callToUnknownFunction('', '').code);
         });
 
         it('detects methods from another file in a subdirectory', async () => {
@@ -493,7 +493,7 @@ describe('Program', () => {
             await program.validate();
             expect(program.getDiagnostics().length).to.equal(1);
             expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
-                ...diagnosticMessages.referencedFileDoesNotExist(),
+                ...DiagnosticMessages.referencedFileDoesNotExist(),
                 file: program.getFileByPathAbsolute(xmlPath),
                 range: Range.create(3, 58, 3, 88)
             });
@@ -514,7 +514,7 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(diagnosticMessages.scriptImportCaseMismatch('').code);
+            expect(diagnostics[0].code).to.equal(DiagnosticMessages.scriptImportCaseMismatch('').code);
         });
     });
 
@@ -530,7 +530,7 @@ describe('Program', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
-                message: diagnosticMessages.referencedFileDoesNotExist().message
+                message: DiagnosticMessages.referencedFileDoesNotExist().message
             });
 
             //add the file, the error should go away
@@ -548,7 +548,7 @@ describe('Program', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
-                message: diagnosticMessages.referencedFileDoesNotExist().message
+                message: DiagnosticMessages.referencedFileDoesNotExist().message
             });
         });
 
@@ -796,7 +796,7 @@ describe('Program', () => {
             //there should be an error when calling DoParentThing, since it doesn't exist on child or parent
             expect(program.getDiagnostics()).to.be.lengthOf(1);
             expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
-                code: diagnosticMessages.callToUnknownFunction('DoParentThing', '').code
+                code: DiagnosticMessages.callToUnknownFunction('DoParentThing', '').code
             });
 
             //add the script into the parent
@@ -846,7 +846,7 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
 
-            let shadowedDiagnositcs = diagnostics.filter((x) => x.code === diagnosticMessages.overridesAncestorFunction('', '', '', '').code);
+            let shadowedDiagnositcs = diagnostics.filter((x) => x.code === DiagnosticMessages.overridesAncestorFunction('', '', '', '').code);
 
             //the children should all have diagnostics about shadowing their parent lib.brs file.
             //If not, then the parent-child attachment was severed somehow
@@ -968,11 +968,11 @@ describe('Program', () => {
             expect(program.getDiagnostics()).to.be.lengthOf(2);
 
             program.options.ignoreErrorCodes = [
-                diagnosticMessages.mismatchArgumentCount(0, 0).code
+                DiagnosticMessages.mismatchArgumentCount(0, 0).code
             ];
 
             expect(program.getDiagnostics()).to.be.lengthOf(1);
-            expect(program.getDiagnostics()[0].code).to.equal(diagnosticMessages.callToUnknownFunction('', '').code);
+            expect(program.getDiagnostics()[0].code).to.equal(DiagnosticMessages.callToUnknownFunction('', '').code);
         });
     });
 

@@ -6,14 +6,14 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser', () => {
     describe('`end` keyword', () => {
-        it('does not produce errors', () => {
+        it('does not produce diagnostics', () => {
             let { tokens } = Lexer.scan(`
                 sub Main()
                     end
                 end sub
             `);
-            let { diagnostics: errors } = Parser.parse(tokens);
-            expect(errors[0]?.message).to.not.exist;
+            let { diagnostics } = Parser.parse(tokens);
+            expect(diagnostics[0]?.message).to.not.exist;
             //expect(statements).toMatchSnapshot();
         });
         it('can be used as a property name on objects', () => {
@@ -24,18 +24,18 @@ describe('parser', () => {
                     }
                 end sub
             `);
-            let { diagnostics: errors } = Parser.parse(tokens);
-            expect(errors).to.be.lengthOf(0);
+            let { diagnostics } = Parser.parse(tokens);
+            expect(diagnostics).to.be.lengthOf(0);
             //expect(statements).toMatchSnapshot();
         });
 
         it('is not allowed as a standalone variable', () => {
             //this test depends on token locations, so use the lexer to generate those locations.
             let { tokens } = Lexer.scan(`sub Main()\n    else = true\nend sub`);
-            let { diagnostics: errors } = Parser.parse(tokens);
-            expect(errors).to.be.lengthOf(1);
+            let { diagnostics } = Parser.parse(tokens);
+            expect(diagnostics).to.be.lengthOf(1);
             //specifically check for the error location, because the identifier location was wrong in the past
-            expect(errors[0].range).to.deep.include(
+            expect(diagnostics[0].range).to.deep.include(
                 Range.create(1, 4, 1, 8)
             );
             //expect(statements).toMatchSnapshot();
@@ -55,8 +55,8 @@ describe('parser', () => {
                 string = true
             end sub
         `);
-        let { diagnostics: errors } = Parser.parse(tokens);
-        expect(errors).to.be.lengthOf(0);
+        let { diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(0);
         //expect(statements).toMatchSnapshot();
     });
 
@@ -73,8 +73,8 @@ describe('parser', () => {
                     ${disallowedIdentifier} = true
                 end sub
             `);
-            let { statements, diagnostics: errors } = Parser.parse(tokens);
-            if (errors.length === 0) {
+            let { statements, diagnostics } = Parser.parse(tokens);
+            if (diagnostics.length === 0) {
                 console.log(DisallowedLocalIdentifiers);
                 throw new Error(`'${disallowedIdentifier}' cannot be used as an identifier, but was not detected as an error`);
             }
@@ -98,8 +98,8 @@ describe('parser', () => {
                 Dynamic = true
             end sub
         `);
-        let { diagnostics: errors } = Parser.parse(tokens);
-        expect(errors).to.be.lengthOf(0);
+        let { diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(0);
         // expect(statementList).toMatchSnapshot();
     });
 
@@ -172,12 +172,12 @@ describe('parser', () => {
                 obj.${kind} = false
                 theValue = obj.${kind}
             `);
-            let { diagnostics: errors } = Parser.parse(tokens);
-            if (errors.length > 0) {
+            let { diagnostics } = Parser.parse(tokens);
+            if (diagnostics.length > 0) {
                 throw new Error(
-                    `Using "${kind}" as object property. Expected no errors, but received: ${JSON.stringify(errors)}`);
+                    `Using "${kind}" as object property. Expected no diagnostics, but received: ${JSON.stringify(diagnostics)}`);
             }
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
         }
     });
 
@@ -241,9 +241,9 @@ describe('parser', () => {
                 person.while = true
             end sub
         `);
-        let { diagnostics: errors } = Parser.parse(tokens);
-        expect(JSON.stringify(errors[0])).not.to.exist;
-        expect(errors).to.be.lengthOf(0);
+        let { diagnostics } = Parser.parse(tokens);
+        expect(JSON.stringify(diagnostics[0])).not.to.exist;
+        expect(diagnostics).to.be.lengthOf(0);
         //expect(statements).toMatchSnapshot();
     });
 
@@ -263,8 +263,8 @@ describe('parser', () => {
             end function
             `
         );
-        let { errors, statements } = Parser.parse(tokens) as any;
-        expect(errors).to.be.lengthOf(0, 'Error count should be 0');
+        let { diagnostics, statements } = Parser.parse(tokens) as any;
+        expect(diagnostics).to.exist.and.be.lengthOf(0, 'Error count should be 0');
         expect(statements[0].func.body.statements[0].value.elements[0].text).to.equal('rem: 1');
         expect(statements[0].func.body.statements[1].value.elements[1].text).to.equal('rem: 2');
         expect(statements[0].func.body.statements[2].value.elements[0].text).to.equal('rem: 3: name: "bob"');
@@ -284,8 +284,8 @@ describe('parser', () => {
                 }
             end function
         `);
-        let { statements, diagnostics: errors } = Parser.parse(tokens);
-        expect(errors[0]?.message).not.to.exist;
+        let { statements, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics[0]?.message).not.to.exist;
         expect((statements[0] as any).func.body.statements[0].value.elements[0].keyToken.text).to.equal('"has-second-layer"');
         expect((statements[0] as any).func.body.statements[0].value.elements[0].key.value).to.equal('has-second-layer');
     });

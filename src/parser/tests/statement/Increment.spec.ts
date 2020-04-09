@@ -4,6 +4,7 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
 describe('parser postfix unary expressions', () => {
     it('parses postfix \'++\' for variables', () => {
@@ -75,7 +76,7 @@ describe('parser postfix unary expressions', () => {
 
         expect(errors).to.be.lengthOf(1);
         expect(errors[0]).to.deep.include({
-            message: 'Increment/decrement operators are not allowed on the result of a function call'
+            ...DiagnosticMessages.incrementDecrementOperatorsAreNotAllowedAsResultOfFunctionCall()
         });
     });
 

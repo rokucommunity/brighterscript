@@ -8,7 +8,7 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser additive expressions', () => {
     it('parses left-associative addition chains', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.IntegerLiteral, '1', new Int32(1)),
@@ -19,13 +19,13 @@ describe('parser additive expressions', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
 
     it('parses left-associative subtraction chains', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.IntegerLiteral, '1', new Int32(1)),
@@ -36,7 +36,7 @@ describe('parser additive expressions', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
@@ -47,7 +47,7 @@ describe('parser additive expressions', () => {
         // ^^ columns ^^
         //
         // _ = 1 + 2 + 3
-        let { statements, errors } = Parser.parse(<any>[
+        let { statements, diagnostics } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: '_',
@@ -101,7 +101,7 @@ describe('parser additive expressions', () => {
             }
         ]) as any;
 
-        expect(errors[0]?.message).to.not.exist;
+        expect(diagnostics[0]?.message).to.not.exist;
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].value.range).to.deep.include(
             Range.create(0, 4, 0, 13)

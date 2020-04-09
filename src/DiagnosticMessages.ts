@@ -1,37 +1,13 @@
 /* eslint-disable camelcase */
 
-import { DiagnosticSeverity } from 'vscode-languageserver';
+import { DiagnosticSeverity, Position } from 'vscode-languageserver';
+import { CallExpression } from './parser';
+import { TokenKind } from './lexer/TokenKind';
 
 /**
  * An object that keeps track of all possible error messages.
  */
-export let diagnosticMessages = {
-
-    expectedLeftParenAfterCallable: (callableType: string) => ({
-        message: `Expected '(' after ${callableType}`,
-        code: 1,
-        severity: DiagnosticSeverity.Error
-    }),
-    expectedNameAfterCallableKeyword: (callableType: string) => ({
-        message: `Expected ${callableType} name after '${callableType}' keyword`,
-        code: 2,
-        severity: DiagnosticSeverity.Error
-    }),
-    expectedLeftParenAfterCallableName: (callableType: string) => ({
-        message: `Expected '(' after ${callableType} name`,
-        code: 3,
-        severity: DiagnosticSeverity.Error
-    }),
-    functionNameCannotEndWithTypeDesignator: (callableType: string, callableName: string, designator: string) => ({
-        message: `${callableType} name '${callableName}' cannot end with type designator "${designator}"`
-        code: 3,
-        severity: DiagnosticSeverity.Error
-    }),
-    // expectedEndClassToErminateClassBlock: () => ({
-    //     message: `Expected "end class" to terminate class block`,
-    //     code: 1,
-    //     severity: DiagnosticSeverity.Error
-    // }),
+export let DiagnosticMessages = {
     //this one won't be used much, we just need a catchall object for the code since we pass through the message from the parser
     genericParserMessage: (message: string) => ({
         message: message,
@@ -39,7 +15,7 @@ export let diagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     callToUnknownFunction: (name: string, scopeName: string) => ({
-        message: `Cannot find function with name "${name}" when this file is included in scope "${scopeName}".`,
+        message: `Cannot find function with name '${name}' when this file is included in scope '${scopeName}'`,
         code: 1001,
         severity: DiagnosticSeverity.Error
     }),
@@ -49,7 +25,7 @@ export let diagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     duplicateFunctionImplementation: (functionName: string, scopeName: string) => ({
-        message: `Duplicate function implementation for "${functionName}" when this file is included in scope "${scopeName}".`,
+        message: `Duplicate function implementation for '${functionName}' when this file is included in scope '${scopeName}'.`,
         code: 1003,
         severity: DiagnosticSeverity.Error
     }),
@@ -80,22 +56,22 @@ export let diagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     unnecessaryScriptImportInChildFromParent: (parentComponentName: string) => ({
-        message: `Unnecessary script import: Script is already imported in ancestor component "${parentComponentName}".`,
+        message: `Unnecessary script import: Script is already imported in ancestor component '${parentComponentName}'.`,
         code: 1009,
         severity: DiagnosticSeverity.Warning
     }),
     overridesAncestorFunction: (callableName: string, currentScopeName: string, parentFilePath: string, parentScopeName: string) => ({
-        message: `Function "${callableName}" included in "${currentScopeName}" overrides function in "${parentFilePath}" included in "${parentScopeName}".`,
+        message: `Function '${callableName}' included in '${currentScopeName}' overrides function in '${parentFilePath}' included in '${parentScopeName}'.`,
         code: 1010,
         severity: DiagnosticSeverity.Hint
     }),
     localVarShadowsGlobalFunction: (localName: string, globalLocation: string) => ({
-        message: `Local var "${localName}" has same name as global function in "${globalLocation}" and will never be called.`,
+        message: `Local var '${localName}' has same name as global function in '${globalLocation}' and will never be called.`,
         code: 1011,
         severity: DiagnosticSeverity.Warning
     }),
     scriptImportCaseMismatch: (correctFilePath: string) => ({
-        message: `Script import path does not match casing of actual file path "${correctFilePath}".`,
+        message: `Script import path does not match casing of actual file path '${correctFilePath}'.`,
         code: 1012,
         severity: DiagnosticSeverity.Warning
     }),
@@ -130,12 +106,12 @@ export let diagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     bsFeatureNotSupportedInBrsFiles: (featureName) => ({
-        message: `BrighterScript feature ${featureName} is not supported in BrightScript files`,
+        message: `BrighterScript feature '${featureName}' is not supported in standard BrightScript files`,
         code: 1019,
         severity: DiagnosticSeverity.Error
     }),
     brsConfigJsonIsDepricated: () => ({
-        message: `brsconfig.json is depricated. Please rename to 'bsconfig.json'`,
+        message: `'brsconfig.json' is depricated. Please rename to 'bsconfig.json'`,
         code: 1020,
         severity: DiagnosticSeverity.Warning
     }),
@@ -154,41 +130,304 @@ export let diagnosticMessages = {
         code: 1023,
         severity: DiagnosticSeverity.Error
     }),
-    Attempted_to_use_new_keyword_on_a_non_class: () => ({
+    attemptedToUseNewKeywordOnNonClass: () => ({
         message: 'Attempted to use "new" keyword on a non class',
         code: 1024,
         severity: DiagnosticSeverity.Error
     }),
-    Method_does_not_exist_on_type: (methodName: string, className: string) => ({
-        message: `Method ${methodName} does not exist on type ${className}`,
+    methodDoesNotExistOnType: (methodName: string, className: string) => ({
+        message: `Method '${methodName}' does not exist on type '${className}'`,
         code: 1025,
         severity: DiagnosticSeverity.Error
     }),
-    Duplicate_identifier: (memberName: string) => ({
-        message: `Duplicate identifier "${memberName}"`,
+    duplicateIdentifier: (memberName: string) => ({
+        message: `Duplicate identifier '${memberName}'`,
         code: 1026,
         severity: DiagnosticSeverity.Error
     }),
-    Missing_override_keyword: (methodName: string, ancestorClassName: string) => ({
-        message: `Method "${methodName}" has no override keyword but is declared in ancestor class class "${ancestorClassName}"`,
+    missingOverrideKeyword: (methodName: string, ancestorClassName: string) => ({
+        message: `Method '${methodName}' has no override keyword but is declared in ancestor class class '${ancestorClassName}'`,
         code: 1027,
         severity: DiagnosticSeverity.Error
     }),
-    Duplicate_class_declaration: (scopeName: string, className: string) => ({
-        message: `Scope "${scopeName}" already contains a class with name "${className}"`,
+    duplicateClassDeclaration: (scopeName: string, className: string) => ({
+        message: `Scope '${scopeName}' already contains a class with name '${className}'`,
         code: 1028,
         severity: DiagnosticSeverity.Error
     }),
-    Class_could_not_be_found: (extendsClassName: string, scopeName: string) => ({
-        message: `Class "${extendsClassName}" could not be found when this file is included in scope "${scopeName}"`,
+    classCouldNotBeFound: (extendsClassName: string, scopeName: string) => ({
+        message: `Class '${extendsClassName}' could not be found when this file is included in scope '${scopeName}'`,
         code: 1029,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedClassFieldIdentifier: () => ({
+        message: `Expected identifier in class body`,
+        code: 1030,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedEndClassToTerminateClassBlock: () => ({
+        message: `Expected 'end class' to terminate class block`,
+        code: 1031,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedClassKeyword: () => ({
+        message: `Expected 'class' keyword`,
+        code: 1032,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedLeftParenAfterCallable: (callableType: string) => ({
+        message: `Expected '(' after ${callableType}`,
+        code: 1033,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedNameAfterCallableKeyword: (callableType: string) => ({
+        message: `Expected ${callableType} name after '${callableType}' keyword`,
+        code: 1034,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedLeftParenAfterCallableName: (callableType: string) => ({
+        message: `Expected '(' after ${callableType} name`,
+        code: 1035,
+        severity: DiagnosticSeverity.Error
+    }),
+    tooManyArguments: () => ({
+        message: `Cannot have more than ${CallExpression.MaximumArguments} parameters`,
+        code: 1036,
+        severity: DiagnosticSeverity.Error
+    }),
+    invalidFunctionReturnType: (typeText: string) => ({
+        message: `Function return type '${typeText}' is invalid`,
+        code: 1037,
+        severity: DiagnosticSeverity.Error
+    }),
+    requiredParameterMayNotFollowOptionalParameter: (parameterName: string) => ({
+        message: `Required parameter '${parameterName}' must be declared before any optional parameters`,
+        code: 1038,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedNewlineOrColonAfterCallableSignature: (callableType: string) => ({
+        message: `Expected newline or ':' after ${callableType} signature`,
+        code: 1039,
+        severity: DiagnosticSeverity.Error
+    }),
+    functionNameCannotEndWithTypeDesignator: (callableType: string, name: string, designator: string) => ({
+        message: `${callableType} name '${name}' cannot end with type designator '${designator}'`,
+        code: 1040,
+        severity: DiagnosticSeverity.Error
+    }),
+    callableBlockMissingEndKeyword: (callableType: string) => ({
+        message: `Expected 'end ${callableType}' to terminate ${callableType} block`,
+        code: 1041,
+        severity: DiagnosticSeverity.Error
+    }),
+    mismatchedEndCallableKeyword: (expectedCallableType: string, actualCallableType: string) => ({
+        message: `Expected 'end ${expectedCallableType}' to terminate ${expectedCallableType} block but found 'end ${actualCallableType}' instead.`,
+        code: 1042,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedParameterNameButFound: (text: string) => ({
+        message: `Expected parameter name, but found '${text ?? ''}'`,
+        code: 1043,
+        severity: DiagnosticSeverity.Error
+    }),
+    functionParameterTypeIsInvalid: (parameterName: string, typeText: string) => ({
+        message: `Function parameter '${parameterName}' is of invalid type '${parameterName}'`,
+        code: 1044,
+        severity: DiagnosticSeverity.Error
+    }),
+    cannotUseReservedWordAsIdentifier: (name: string) => ({
+        message: `Cannot use reserved word '${name}' as an identifier`,
+        code: 1045,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedOperatorAfterIdentifier: (operators: TokenKind[], name: string) => {
+        operators = Array.isArray(operators) ? operators : [];
+        return {
+            message: `Expected operator ('${operators.join(`', '`)}') after idenfifier '${name}'`,
+            code: 1046,
+            severity: DiagnosticSeverity.Error
+        };
+    },
+    expectedNewlineOrColonAfterAssignment: () => ({
+        message: `Expected newline or ':' after assignment`,
+        code: 1047,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedNewlineAfterWhileCondition: () => ({
+        message: `Expected newline after while condition`,
+        code: 1048,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedEndWhileToTerminateWhileLoop: () => ({
+        message: `Expected 'end while' to terminate while loop`,
+        code: 1049,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedNewlineAfterExitWhile: () => ({
+        message: `Expected newline after 'exit while'`,
+        code: 1050,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedEndForOrNextToTerminateForLoop: () => ({
+        message: `Expected 'end for' or 'next' to terminate 'for' loop`,
+        code: 1051,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedInAfterForEach: (name: string) => ({
+        message: `Expected 'in' after 'for each ${name}'`,
+        code: 1052,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedExpressionAfterForEachIn: () => ({
+        message: `Expected expression after 'in' keyword from 'for each' statement`,
+        code: 1053,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedNewlineAfterExitFor: () => ({
+        message: `Expected newline after 'exit for'`,
+        code: 1054,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedStringLiteralAfterLibraryKeyword: () => ({
+        message: `Missing string literal after 'library' keyword`,
+        code: 1055,
+        severity: DiagnosticSeverity.Error
+    }),
+    foundUnexpectedTokenAfterLibraryStatement: () => ({
+        message: `Found unexpected token after library statement`,
+        code: 1056,
+        severity: DiagnosticSeverity.Error
+    }),
+    libraryStatementMustBeAtTopOfFile: () => ({
+        message: `Library statements may only appear at the top of a file`,
+        code: 1057,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedEndIfElseIfOrElseToTerminateThenBlock: () => ({
+        message: `Expected 'end if', 'else if', or 'else' to terminate 'then' block`,
+        code: 1058,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedColonToPreceedEndIf: () => ({
+        message: `Expected ':' to preceed 'end if'`,
+        code: 1059,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedEndIfToCloseIfStatement: (startingPosition: Position) => ({
+        message: `Expected 'end if' to close 'if' statement started at ${startingPosition?.line + 1}:${startingPosition?.character + 1}`,
+        code: 1060,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedStatementToFollowConditionalCondition: (conditionType: string) => ({
+        message: `Expected a statement to follow '${conditionType?.toLowerCase()} ...condition... then'`,
+        code: 1061,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedStatementToFollowElse: () => ({
+        message: `Expected a statement to follow 'else'`,
+        code: 1062,
+        severity: DiagnosticSeverity.Error
+    }),
+    consecutiveIncrementDecrementOperatorsAreNotAllowed: () => ({
+        message: `Consecutive increment/decrement operators are not allowed`,
+        code: 1063,
+        severity: DiagnosticSeverity.Error
+    }),
+    incrementDecrementOperatorsAreNotAllowedAsResultOfFunctionCall: () => ({
+        message: ``,
+        code: 1064,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedNewlineOrColonAfterExpressionStatement: () => ({
+        message: `Expected newline or ':' after expression statement`,
+        code: 1065,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedStatementOrFunctionCallButReceivedExpression: () => ({
+        message: ``,
+        code: 1066,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedNewlineOrColonAfterIndexedSetStatement: () => ({
+        message: `Expected newline or ':' after indexed set statement`,
+        code: 1067,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedNewlineOrColonAfterDottedSetStatement: () => ({
+        message: `Expected newline or ':' after dotted set statement`,
+        code: 1068,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedNewlineOrColonAfterPrintedValues: () => ({
+        message: `Expected newline or ':' after printed values`,
+        code: 1069,
+        severity: DiagnosticSeverity.Error
+    }),
+    labelsMustBeDeclaredOnTheirOwnLine: () => ({
+        message: `Labels must be declared on their own line`,
+        code: 1070,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedLabelIdentifierAfterGotoKeyword: () => ({
+        message: `Expected label identifier after 'goto' keyword`,
+        code: 1071,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedRightSquareBraceAfterArrayOrObjectIndex: () => ({
+        message: `Expected ']' after array or object index`,
+        code: 1072,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedPropertyNameAfterPeriod: () => ({
+        message: `Expected property name after '.'`,
+        code: 1073,
+        severity: DiagnosticSeverity.Error
+    }),
+    cannotHaveMoreThanMaxFunctionArguments: (max: number) => ({
+        message: `Cannot have more than ${max} arguments`,
+        code: 1074,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedRightParenAfterFunctionCallArguments: () => ({
+        message: `Expected ')' after function call arguments`,
+        code: 1075,
+        severity: DiagnosticSeverity.Error
+    }),
+    unmatchedLeftParenAfterExpression: () => ({
+        message: `Unmatched '(': expected ')' after expression`,
+        code: 1076,
+        severity: DiagnosticSeverity.Error
+    }),
+    unmatchedLeftSquareBraceAfterArrayLiteral: () => ({
+        message: `Unmatched '[': expected ']' after array literal`,
+        code: 1077,
+        severity: DiagnosticSeverity.Error
+    }),
+    unexpectedAAKey: () => ({
+        message: `Expected identifier or string as associative array key`,
+        code: 1078,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedColonBetweenAAKeyAndvalue: () => ({
+        message: `Expected ':' between associative array key and value`,
+        code: 1079,
+        severity: DiagnosticSeverity.Error
+    }),
+    unmatchedLeftCurlyAfterAALiteral: () => ({
+        message: `Unmatched '{': expected '}' after associative array literal`,
+        code: 1080,
+        severity: DiagnosticSeverity.Error
+    }),
+    foundUnexpectedToken: (text: string) => ({
+        message: `Found unexpected token '${text}'`,
+        code: 1081,
         severity: DiagnosticSeverity.Error
     })
 };
 
 let allCodes = [] as number[];
-for (let key in diagnosticMessages) {
-    allCodes.push(diagnosticMessages[key]().code);
+for (let key in DiagnosticMessages) {
+    allCodes.push(DiagnosticMessages[key]().code);
 }
 
 export let diagnosticCodes = allCodes;

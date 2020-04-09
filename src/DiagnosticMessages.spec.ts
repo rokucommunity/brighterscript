@@ -1,12 +1,12 @@
 import { expect } from 'chai';
 
-import { diagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticMessages } from './DiagnosticMessages';
 
 describe('DiagnosticMessages', () => {
     it('has unique code for each message', () => {
         let codes = {};
-        for (let key in diagnosticMessages) {
-            let func = diagnosticMessages[key];
+        for (let key in DiagnosticMessages) {
+            let func = DiagnosticMessages[key];
             let obj = func('', '', '', '', '', '', '', '', '');
             //if another message already has this code
             if (!codes[obj.code]) {

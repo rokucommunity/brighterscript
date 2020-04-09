@@ -5,7 +5,7 @@ import * as sinonImport from 'sinon';
 import { Position } from 'vscode-languageserver';
 
 import { Scope } from './Scope';
-import { diagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { Program } from './Program';
 import util from './util';
@@ -166,7 +166,7 @@ describe('Scope', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(diagnosticMessages.localVarShadowsGlobalFunction('', '').code);
+            expect(diagnostics[0].code).to.equal(DiagnosticMessages.localVarShadowsGlobalFunction('', '').code);
         });
 
         it('detects duplicate callables', async () => {
@@ -206,7 +206,7 @@ describe('Scope', () => {
             //we should have the "DoA declared more than once" error twice (one for each function named "DoA")
             expect(scope.getDiagnostics().length).to.equal(1);
             expect(scope.getDiagnostics()[0]).to.deep.include({
-                code: diagnosticMessages.callToUnknownFunction('DoB', '').code
+                code: DiagnosticMessages.callToUnknownFunction('DoB', '').code
             });
         });
 
@@ -227,7 +227,7 @@ describe('Scope', () => {
             scope.validate();
             expect(scope.getDiagnostics().length).to.equal(1);
             expect(scope.getDiagnostics()[0]).to.deep.include({
-                code: diagnosticMessages.callToUnknownFunction('DoC', '').code
+                code: DiagnosticMessages.callToUnknownFunction('DoC', '').code
             });
         });
 
@@ -262,7 +262,7 @@ describe('Scope', () => {
             //should have an error
             expect(scope.getDiagnostics().length).to.equal(1);
             expect(scope.getDiagnostics()[0]).to.deep.include({
-                ...diagnosticMessages.mismatchArgumentCount(0, 1)
+                ...DiagnosticMessages.mismatchArgumentCount(0, 1)
             });
         });
 
@@ -281,7 +281,7 @@ describe('Scope', () => {
             //should have an error
             expect(scope.getDiagnostics().length).to.equal(1);
             expect(scope.getDiagnostics()[0]).to.deep.include({
-                ...diagnosticMessages.mismatchArgumentCount(1, 0)
+                ...DiagnosticMessages.mismatchArgumentCount(1, 0)
             });
         });
 
@@ -316,7 +316,7 @@ describe('Scope', () => {
             //should have an error
             expect(scope.getDiagnostics().length).to.equal(1);
             expect(scope.getDiagnostics()[0]).to.deep.include({
-                ...diagnosticMessages.mismatchArgumentCount('1-2', 0)
+                ...DiagnosticMessages.mismatchArgumentCount('1-2', 0)
             });
         });
 
@@ -351,7 +351,7 @@ describe('Scope', () => {
             //should have an error
             expect(scope.getDiagnostics().length).to.equal(1);
             expect(scope.getDiagnostics()[0]).to.deep.include({
-                ...diagnosticMessages.mismatchArgumentCount(1, 2)
+                ...DiagnosticMessages.mismatchArgumentCount(1, 2)
             });
         });
     });

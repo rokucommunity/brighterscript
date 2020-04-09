@@ -1,7 +1,7 @@
 import { Location, Position, Range } from 'vscode-languageserver';
 
 import { Scope } from './Scope';
-import { diagnosticMessages, DiagnosticInfo } from './DiagnosticMessages';
+import { DiagnosticInfo, DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { FileReference } from './interfaces';
@@ -138,7 +138,7 @@ export class XmlScope extends Scope {
                     this.diagnostics.push({
                         file: this.xmlFile,
                         range: Range.create(scriptImport.lineIndex, scriptImport.columnIndexBegin, scriptImport.lineIndex, scriptImport.columnIndexEnd),
-                        ...diagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)
+                        ...DiagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)
                     });
                 }
             }
@@ -176,9 +176,9 @@ export class XmlScope extends Scope {
             if (!referencedFile) {
                 let dInfo: DiagnosticInfo;
                 if (scriptImport.text.trim().length === 0) {
-                    dInfo = diagnosticMessages.scriptSrcCannotBeEmpty();
+                    dInfo = DiagnosticMessages.scriptSrcCannotBeEmpty();
                 } else {
-                    dInfo = diagnosticMessages.referencedFileDoesNotExist();
+                    dInfo = DiagnosticMessages.referencedFileDoesNotExist();
                 }
 
                 this.diagnostics.push({
@@ -194,7 +194,7 @@ export class XmlScope extends Scope {
                 //if the character casing of the script import path does not match that of the actual path
             } else if (scriptImport.pkgPath !== referencedFile.file.pkgPath) {
                 this.diagnostics.push({
-                    ...diagnosticMessages.scriptImportCaseMismatch(referencedFile.file.pkgPath),
+                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.file.pkgPath),
                     range: Range.create(
                         scriptImport.lineIndex,
                         scriptImport.columnIndexBegin,

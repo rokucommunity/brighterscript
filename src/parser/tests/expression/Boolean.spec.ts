@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser boolean expressions', () => {
 
     it('parses boolean ANDs', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.True, 'true', BrsBoolean.True),
@@ -18,13 +18,13 @@ describe('parser boolean expressions', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
 
     it('parses boolean ORs', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.True, 'true', BrsBoolean.True),
@@ -33,7 +33,7 @@ describe('parser boolean expressions', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
@@ -45,7 +45,7 @@ describe('parser boolean expressions', () => {
          *  +----------------------
          * 0| a = true and false
          */
-        let { statements, errors } = Parser.parse(<any>[
+        let { statements, diagnostics } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
@@ -86,7 +86,7 @@ describe('parser boolean expressions', () => {
             }
         ]) as any;
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].value.range).deep.include(
             Range.create(0, 4, 0, 18)

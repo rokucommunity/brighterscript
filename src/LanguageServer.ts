@@ -24,7 +24,7 @@ import Uri from 'vscode-uri';
 
 import { BsConfig } from './BsConfig';
 import { Deferred } from './deferred';
-import { diagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import util from './util';
 
@@ -360,7 +360,7 @@ export class LanguageServer {
             //if we found a depricated brsconfig.json, add a diagnostic warning the user
             if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
                 builder.addDiagnostic(configFilePath, {
-                    ...diagnosticMessages.brsConfigJsonIsDepricated(),
+                    ...DiagnosticMessages.brsConfigJsonIsDepricated(),
                     range: Range.create(0, 0, 0, 0)
                 });
                 return this.sendDiagnostics();

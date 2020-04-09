@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { diagnosticMessages } from '../DiagnosticMessages';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 import { TokenKind, Lexer } from '../lexer';
 import { Parser, ParseMode } from './Parser';
 import { ClassFieldStatement, ClassStatement } from './ClassStatement';
@@ -13,7 +13,7 @@ describe('parser class', () => {
                 end class
             `);
         let { diagnostics: errors } = Parser.parse(tokens, { mode: ParseMode.brightscript });
-        expect(errors[0]?.code).to.equal(diagnosticMessages.bsFeatureNotSupportedInBrsFiles('').code);
+        expect(errors[0]?.code).to.equal(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('').code);
 
     });
     it('parses empty class', () => {
@@ -33,7 +33,7 @@ describe('parser class', () => {
             `);
         let { statements, diagnostics: errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
         expect(errors).length.to.be.greaterThan(0);
-        expect(errors[0].code).to.equal(diagnosticMessages.missingIdentifierAfterClassKeyword().code);
+        expect(errors[0].code).to.equal(DiagnosticMessages.missingIdentifierAfterClassKeyword().code);
         expect(statements[0]).instanceof(ClassStatement);
     });
 
@@ -99,7 +99,7 @@ describe('parser class', () => {
             expect(errors.length).to.be.greaterThan(0);
             let cls = statements[0] as ClassStatement;
             expect(cls.fields[0].name.text).to.equal('middleName');
-            expect(errors[0].code).to.equal(diagnosticMessages.expectedValidTypeToFollowAsKeyword().code);
+            expect(errors[0].code).to.equal(DiagnosticMessages.expectedValidTypeToFollowAsKeyword().code);
         });
 
         it('field access modifier defaults to undefined when omitted', () => {
@@ -174,7 +174,7 @@ describe('parser class', () => {
                     `);
             let { diagnostics: errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
             expect(errors).to.have.lengthOf(1);
-            expect(errors[0].code).to.equal(diagnosticMessages.missingCallableKeyword('').code);
+            expect(errors[0].code).to.equal(DiagnosticMessages.missingCallableKeyword('').code);
         });
     });
 
@@ -208,7 +208,7 @@ describe('parser class', () => {
             end class
         `);
         let { diagnostics: errors } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
-        expect(errors[0].code).to.equal(diagnosticMessages.missingIdentifierAfterExtendsKeyword().code);
+        expect(errors[0].code).to.equal(DiagnosticMessages.missingIdentifierAfterExtendsKeyword().code);
     });
 
     describe('new keyword', () => {
