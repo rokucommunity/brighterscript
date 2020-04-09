@@ -1,17 +1,12 @@
-import { EventEmitter } from 'events';
-
 import { TokenKind, ReservedWords, Keywords } from './TokenKind';
 import { Token } from './Token';
-import { BrsError } from '../parser/Error';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 
 import { BrsType, BrsString, Int32, Int64, Float, Double } from '../brsTypes/index';
-import { Range } from 'vscode-languageserver';
+import { Range, Diagnostic } from 'vscode-languageserver';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 
 export class Lexer {
-    /** Allows consumers to observe errors as they're detected. */
-    readonly events = new EventEmitter();
-
     /**
      * The zero-indexed position at which the token under consideration begins.
      */
@@ -45,7 +40,7 @@ export class Lexer {
     /**
      * The errors produced from `source.`
      */
-    public errors: BrsError[];
+    public diagnostics: Diagnostic[];
 
     /**
      * The options used to scan this file
@@ -81,7 +76,7 @@ export class Lexer {
         this.line = 0;
         this.column = 0;
         this.tokens = [];
-        this.errors = [];
+        this.diagnostics = [];
 
         while (!this.isAtEnd()) {
             this.start = this.current;
@@ -106,33 +101,6 @@ export class Lexer {
             includeWhitespace: false,
             ...options
         } as ScanOptions;
-    }
-
-    /**
-     * Convenience function to subscribe to the `err` events emitted by `lexer.events`.
-     * @param errorHandler the function to call for every Lexer error emitted after subscribing
-     * @returns an object with a `dispose` function, used to unsubscribe from errors
-     */
-    public onError(errorHandler: (err: BrsError) => void) {
-        this.events.on('err', errorHandler);
-        return {
-            dispose: () => {
-                this.events.removeListener('err', errorHandler);
-            }
-        };
-    }
-
-    /**
-     * Convenience function to subscribe to a single `err` event emitted by `lexer.events`.
-     * @param errorHandler the function to call for the first Lexer error emitted after subscribing
-     */
-    public onErrorOnce(errorHandler: (err: BrsError) => void) {
-        this.events.once('err', errorHandler);
-    }
-
-    private addError(err: BrsError) {
-        this.errors.push(err);
-        this.events.emit('err', err);
     }
 
     /**
@@ -336,7 +304,10 @@ export class Lexer {
                 } else if (isAlpha(c)) {
                     this.identifier();
                 } else {
-                    this.addError(new BrsError(`Unexpected character '${c}'`, this.rangeOf(c)));
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.unexpectedCharacter(c),
+                        range: this.rangeOf(c)
+                    });
                 }
                 break;
         }
@@ -439,12 +410,10 @@ export class Lexer {
 
             if (this.peekNext() === '\n') {
                 // BrightScript doesn't support multi-line strings
-                this.addError(
-                    new BrsError(
-                        'Unterminated string at end of line',
-                        this.rangeOf(this.source.slice(this.start, this.current))
-                    )
-                );
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unterminatedStringAtEndOfLine(),
+                    range: this.rangeOf(this.source.slice(this.start, this.current))
+                });
                 return;
             }
 
@@ -453,12 +422,10 @@ export class Lexer {
 
         if (this.isAtEnd()) {
             // terminating a string with EOF is also not allowed
-            this.addError(
-                new BrsError(
-                    'Unterminated string at end of file',
-                    this.rangeOf(this.source.slice(this.start, this.current))
-                )
-            );
+            this.diagnostics.push({
+                ...DiagnosticMessages.unterminatedStringAtEndOfFile(),
+                range: this.rangeOf(this.source.slice(this.start, this.current))
+            });
             return;
         }
 
@@ -593,12 +560,10 @@ export class Lexer {
         // fractional hex literals aren't valid
         if (this.peek() === '.' && isHexDigit(this.peekNext())) {
             this.advance(); // consume the "."
-            this.addError(
-                new BrsError(
-                    'Fractional hex literals are not supported',
-                    this.rangeOf(this.source.slice(this.start, this.current))
-                )
-            );
+            this.diagnostics.push({
+                ...DiagnosticMessages.fractionalHexLiteralsAreNotSupported(),
+                range: this.rangeOf(this.source.slice(this.start, this.current))
+            });
             return;
         }
 
@@ -790,12 +755,10 @@ export class Lexer {
                 this.start = this.current;
                 return;
             default:
-                this.addError(
-                    new BrsError(
-                        `Found unexpected conditional-compilation string '${text}'`,
-                        this.rangeOf(this.source.slice(this.start, this.current))
-                    )
-                );
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unexpectedConditionalCompilationString(),
+                    range: this.rangeOf(this.source.slice(this.start, this.current))
+                });
         }
     }
 

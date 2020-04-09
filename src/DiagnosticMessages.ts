@@ -422,6 +422,59 @@ export let DiagnosticMessages = {
         message: `Found unexpected token '${text}'`,
         code: 1081,
         severity: DiagnosticSeverity.Error
+    }),
+    /**
+     * Used in the lexer anytime we encounter an unsupported character
+     */
+    unexpectedCharacter: (text: string) => ({
+        message: `Unexpected character '${text}' (char code ${text.charCodeAt(0)})`,
+        code: 1082,
+        severity: DiagnosticSeverity.Error
+    }),
+    unterminatedStringAtEndOfLine: () => ({
+        message: `Unterminated string at end of line`,
+        code: 1083,
+        severity: DiagnosticSeverity.Error
+    }),
+    unterminatedStringAtEndOfFile: () => ({
+        message: `Unterminated string at end of file`,
+        code: 1084,
+        severity: DiagnosticSeverity.Error
+    }),
+    fractionalHexLiteralsAreNotSupported: () => ({
+        message: `Fractional hex literals are not supported`,
+        code: 1085,
+        severity: DiagnosticSeverity.Error
+    }),
+    unexpectedConditionalCompilationString: () => ({
+        message: `Unexpected conditional-compilation string`,
+        code: 1086,
+        severity: DiagnosticSeverity.Error
+    }),
+    duplicateConstDeclaration: (originalPosition: Position) => ({
+        message: `A #const with this name was already declared at ${originalPosition?.line + 1}:${originalPosition?.character + 1}`,
+        code: 1087,
+        severity: DiagnosticSeverity.Error
+    }),
+    constAliasDoesNotExist: (name: string) => ({
+        message: `Attempting to create #const alias of '${name}', but no such #const exists`,
+        code: 1088,
+        severity: DiagnosticSeverity.Error
+    }),
+    invalidHashConstValue: () => ({
+        message: '#const declarations can only have values of `true`, `false`, or other #const names',
+        code: 1089,
+        severity: DiagnosticSeverity.Error
+    }),
+    referencedConstDoesNotExist: () => ({
+        message: `Referenced #const does not exist`,
+        code: 1090,
+        severity: DiagnosticSeverity.Error
+    }),
+    invalidHashIfValue: () => ({
+        message: `#if conditionals can only be 'true', 'false', or other #const names`,
+        code: 1091,
+        severity: DiagnosticSeverity.Error
     })
 };
 
