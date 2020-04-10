@@ -6,7 +6,7 @@ import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vsco
 import { Deferred } from '../deferred';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import { Callable, Diagnostic, File, FileReference, FunctionCall } from '../interfaces';
+import { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
 import { Program } from '../Program';
 import util from '../util';
 import { ClassStatement } from '../parser/ClassStatement';
@@ -44,7 +44,7 @@ export class XmlFile {
      */
     public fileRange: Range;
 
-    public parseDiagnistics = [] as Diagnostic[];
+    public parseDiagnistics = [] as BsDiagnostic[];
 
     //TODO implement the xml CDATA parsing, which would populate this list
     public callables = [] as Callable[];

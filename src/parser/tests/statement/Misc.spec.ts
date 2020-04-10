@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { Lexer, DisallowedLocalIdentifiers, TokenKind } from '../../../lexer';
+import { Lexer, DisallowedLocalIdentifiersText, TokenKind } from '../../../lexer';
 import { Range } from 'vscode-languageserver';
 
 describe('parser', () => {
@@ -62,7 +62,7 @@ describe('parser', () => {
 
     it('most reserved words are not allowed as local var identifiers', () => {
         let statementList = [];
-        DisallowedLocalIdentifiers.forEach((disallowedIdentifier) => {
+        DisallowedLocalIdentifiersText.forEach((disallowedIdentifier) => {
             //skip REM because that will force the line into comment mode
             if (disallowedIdentifier.toLowerCase() === 'rem') {
                 return;
@@ -75,7 +75,7 @@ describe('parser', () => {
             `);
             let { statements, diagnostics } = Parser.parse(tokens);
             if (diagnostics.length === 0) {
-                console.log(DisallowedLocalIdentifiers);
+                console.log(DisallowedLocalIdentifiersText);
                 throw new Error(`'${disallowedIdentifier}' cannot be used as an identifier, but was not detected as an error`);
             }
             statementList.push(statements);

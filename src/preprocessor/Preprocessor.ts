@@ -1,17 +1,9 @@
-import { EventEmitter } from 'events';
-
 import { TokenKind, Token } from '../lexer';
 import * as CC from './Chunk';
 import { Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-
-/** The results of a Preprocessor's filtering pass. */
-export interface FilterResults {
-    /** The tokens remaining after preprocessing. */
-    processedTokens: Token[];
-    /** The encountered during preprocessing. */
-    diagnostics: Diagnostic[];
-}
+import { PreprocessorParser } from './PreprocessorParser';
+import { Manifest, getBsConst } from './Manifest';
 
 /**
  * A simple pre-processor that executes BrightScript's conditional compilation directives by
@@ -20,21 +12,10 @@ export interface FilterResults {
 export class Preprocessor implements CC.Visitor {
     private constants = new Map<string, boolean>();
 
-    /** Allows consumers to observe errors as they're detected. */
-    public readonly events = new EventEmitter();
-
     /** The set of errors encountered when pre-processing conditional compilation directives. */
     public diagnostics = [] as Diagnostic[];
 
-    /**
-     * Emits an error via this processor's `events` property, then throws it.
-     * @param diagnostic the ParseError to emit then throw
-     */
-    private addError(diagnostic: Diagnostic) {
-        this.diagnostics.push(diagnostic);
-        this.events.emit('err', diagnostic);
-        return diagnostic;
-    }
+    public processedTokens: Token[];
 
     /**
      * Filters the tokens contained within a set of chunks based on a set of constants.
@@ -43,18 +24,48 @@ export class Preprocessor implements CC.Visitor {
      * @returns an object containing an array of `errors` and an array of `processedTokens` filtered by conditional
      *          compilation directives included within
      */
-    public filter(chunks: ReadonlyArray<CC.Chunk>, bsConst?: Map<string, boolean>): FilterResults {
-        this.constants = new Map(bsConst);
-        return {
-            processedTokens: chunks
-                .map(chunk => chunk.accept(this))
-                .reduce(
-                    (allTokens: Token[], chunkTokens: Token[]) => [...allTokens, ...chunkTokens],
-                    []
-                ),
-            diagnostics: this.diagnostics
-        };
+    public process(tokens: Token[], manifest: Manifest) {
+        this.processedTokens = [];
+        let parser = PreprocessorParser.parse(tokens);
+        //absorb the parser's diagnostic messages
+        this.diagnostics.push(...parser.diagnostics);
+
+        //if we found diagnostics, quit now
+        if (parser.diagnostics.length > 0) {
+            return this;
+        }
+        let bsConst = getBsConst(manifest);
+        this.filter(parser.chunks, bsConst);
+        return this;
     }
+
+    public filter(chunks: ReadonlyArray<CC.Chunk>, bsConst?: Map<string, boolean>) {
+        this.constants = new Map(bsConst);
+
+        this.processedTokens = chunks
+            .map(chunk => chunk.accept(this))
+            .reduce(
+                (allTokens: Token[], chunkTokens: Token[]) => [
+                    ...allTokens,
+                    ...chunkTokens
+                ], []
+            );
+        return this;
+    }
+
+    public static process(tokens: Token[], manifest: Manifest) {
+        return new Preprocessor().process(tokens, manifest);
+    }
+
+    /**
+     * Emits an error via this processor's `events` property, then throws it.
+     * @param diagnostic the ParseError to emit then throw
+     */
+    private addError(diagnostic: Diagnostic) {
+        this.diagnostics.push(diagnostic);
+        return diagnostic;
+    }
+
 
     /**
      * Handles a simple chunk of BrightScript tokens by returning the tokens contained within.

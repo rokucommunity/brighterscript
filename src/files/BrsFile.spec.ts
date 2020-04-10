@@ -12,6 +12,7 @@ import { StringType } from '../types/StringType';
 import { BrsFile } from './BrsFile';
 import { SourceMapConsumer } from 'source-map';
 import { TokenKind, Lexer } from '../lexer';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 
 let sinon = sinonImport.createSandbox();
 
@@ -274,6 +275,54 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 expect(file.getDiagnostics()).to.be.lengthOf(0);
+            });
+
+            it('detects syntax error in #if', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                    sub main()
+                        #if true1
+                            print "true"
+                        #end if
+                    end sub
+                `);
+                expect(file.getDiagnostics()[0]).to.exist.and.deep.include({
+                    ...DiagnosticMessages.invalidHashConstValue
+                });
+            });
+
+            it('detects syntax error in #const', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                    sub main()
+                        #if %
+                            print "true"
+                        #end if
+                    end sub
+                `);
+                expect(file.getDiagnostics()[0]).to.exist.and.deep.include({
+                    ...DiagnosticMessages.unexpectedCharacter('%')
+                });
+            });
+
+            it('detects #const name using reserved word', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                    sub main()
+                        #const function = true
+                    end sub
+                `);
+                expect(file.getDiagnostics()[0]).to.exist.and.deep.include({
+                    ...DiagnosticMessages.constNameCannotBeReservedWord()
+                });
+            });
+
+            it('detects syntax error in #const', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                    sub main()
+                        #const someConst = 123
+                    end sub
+                `);
+                expect(file.getDiagnostics()[0]).to.exist.and.deep.include({
+                    ...DiagnosticMessages.invalidHashConstValue()
+                });
             });
         });
 

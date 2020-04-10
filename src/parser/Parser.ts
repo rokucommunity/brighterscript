@@ -5,7 +5,7 @@ import {
     BlockTerminator,
     AllowedLocalIdentifiers,
     AssignmentOperators,
-    DisallowedLocalIdentifiers,
+    DisallowedLocalIdentifiersText,
     AllowedProperties,
     Lexer
 } from '../lexer';
@@ -562,7 +562,7 @@ export class Parser {
     private assignment(...additionalterminators: TokenKind[]): AssignmentStatement {
         let name = this.advance() as Identifier;
         //add diagnostic if name is a reserved word that cannot be used as an identifier
-        if (DisallowedLocalIdentifiers.has(name.text.toLowerCase())) {
+        if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
             this.diagnostics.push({
                 ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(name.text),
                 range: name.range

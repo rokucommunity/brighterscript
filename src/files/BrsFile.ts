@@ -21,7 +21,8 @@ import { VoidType } from '../types/VoidType';
 import util from '../util';
 import { TranspileState } from '../parser/TranspileState';
 import { ClassStatement } from '../parser/ClassStatement';
-import { getManifest, Preprocessor } from '../preprocessor';
+import { getManifest } from '../preprocessor/Manifest';
+import { Preprocessor } from '../preprocessor/Preprocessor';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -128,34 +129,32 @@ export class BrsFile {
         //remove all code inside false-resolved conditional compilation statements
         let manifest = await getManifest(this.program.rootDir);
         let preprocessor = new Preprocessor();
-        let preprocessedTokens: Token[];
 
-        let handle;
         //currently the preprocessor throws exceptions on syntax errors...so we need to catch it
         try {
-            handle = preprocessor.onError((diagnostic) => {
-                this.diagnostics.push(diagnostic as BsDiagnostic);
-            });
-            preprocessedTokens = <any>preprocessor.preprocess(lexer.tokens, manifest).processedTokens;
+            preprocessor.process(lexer.tokens, manifest);
         } catch (error) {
-            preprocessedTokens = lexer.tokens;
             //if the thrown error is DIFFERENT than any errors from the preprocessor, add that error to the list as well
             if (this.diagnostics.find((x) => x === error) === undefined) {
                 this.diagnostics.push(error);
             }
         }
-        //dispose of the onError event listener
-        if (handle) {
-            handle.dispose();
-        }
 
-        this.parser = Parser.parse(preprocessedTokens, {
+        //if the preprocessor generated tokens, use them.
+        let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
+
+        this.parser = Parser.parse(tokens, {
             mode: this.extension === 'brs' ? ParseMode.brightscript : ParseMode.brighterscript
         });
 
-        this.diagnostics.push(...lexer.diagnostics as BsDiagnostic[], ...this.parser.diagnostics as BsDiagnostic[]);
+        //absorb all lexing/preprocessing/parsing diagnostics
+        this.diagnostics.push(
+            ...lexer.diagnostics as BsDiagnostic[],
+            ...preprocessor.diagnostics as BsDiagnostic[],
+            ...this.parser.diagnostics as BsDiagnostic[]
+        );
 
-        //associate this file with every diagnostic
+        //attach this file to every diagnostic
         for (let diagnostic of this.diagnostics) {
             diagnostic.file = this;
         }

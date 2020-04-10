@@ -480,6 +480,26 @@ export let DiagnosticMessages = {
         message: `#error ${message}`,
         code: 1092,
         severity: DiagnosticSeverity.Error
+    }),
+    expectedEqualAfterConstName: () => ({
+        message: `Expected '=' after #const`,
+        code: 1093,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedHashElseIfToCloseHashIf: (startingLine: number) => ({
+        message: `Expected '#else if' to close '#if' conditional compilation statement starting on line ${startingLine}`,
+        code: 1094,
+        severity: DiagnosticSeverity.Error
+    }),
+    constNameCannotBeReservedWord: () => ({
+        message: `#const name cannot be a reserved word`,
+        code: 1095,
+        severity: DiagnosticSeverity.Error
+    }),
+    expectedIdentifierAfterConstKeyword: () => ({
+        message: `Expected identifier after '#const' keyword`,
+        code: 1096,
+        severity: DiagnosticSeverity.Error
     })
 };
 
