@@ -1,8 +1,5 @@
-import * as fs from 'fs';
+import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import { promisify } from 'util';
-
-const readFile = promisify(fs.readFile);
 
 /** The set of possible value types in a `manifest` file's `key=value` pair. */
 export type ManifestValue = number | string | boolean;
@@ -22,27 +19,10 @@ export async function getManifest(rootDir: string): Promise<Manifest> {
 
     let contents: string;
     try {
-        contents = await readFile(manifestPath, 'utf-8');
+        contents = await fsExtra.readFile(manifestPath, 'utf-8');
     } catch (err) {
         return new Map();
     }
-    return parseManifest(contents);
-}
-
-/**
- * A synchronous version of `getManifest`.
- * @param rootDir the root directory in which a `manifest` file is expected
- * @returns a map of string to JavaScript number, string, or boolean, representing the manifest
- *          file's contents
- */
-export function getManifestSync(rootDir: string): Manifest {
-    let manifestPath = path.join(rootDir, 'manifest');
-
-    if (!fs.existsSync(manifestPath)) {
-        return new Map();
-    }
-
-    let contents = fs.readFileSync(manifestPath, 'utf-8');
     return parseManifest(contents);
 }
 
@@ -70,7 +50,7 @@ export function parseManifest(contents: string) {
             if (equals === -1) {
                 throw new Error(
                     `[manifest:${index +
-                        1}] No '=' detected.  Manifest attributes must be of the form 'key=value'.`
+                    1}] No '=' detected.  Manifest attributes must be of the form 'key=value'.`
                 );
             }
             return [line.slice(0, equals), line.slice(equals + 1)];
