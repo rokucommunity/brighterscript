@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.5.0] - 2020-04-10
+### Added
+ - several new diagnostics for conditional compiles. Some of them allow the parser to recover and continue. 
+ - experimental class transpile support. There is still no intellisense for classes yet though.
+### Changed
+   - All errors are now stored as vscode-languageserver `Diagnostic` objects instead of a custom error structure.
+   - Token, AST node, and diagnostic locations are now stored as `Range` objects, which use zero-based lines instead of the previous one-based line numbers. 
+   - All parser diagnostics have been broken out into their own error codes, removing the use of error code 1000 for a generic catch-all. That code still exists and will hold runtime errors from the parser.
+### Fixed
+ - bug in parser that was flagging the new class keywords (`new`, `class`, `public`, `protected`, `private`, `override`) as parse errors. These are now allowed as both local variables and property names.
+
+
+
 ## [0.4.4] - 2020-04-04
 ### Fixed
  - bug in the ProgramBuilder that would terminate the program on first run if an error diagnostic was found, even when in watch mode.
@@ -95,8 +108,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-[0.4.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.4...v0.4.5
-[0.4.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.3...v0.4.4
+[0.5.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.4...v0.5.0
+[0.4.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.3...v0.4.4
+[0.4.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.2...v0.4.3
+[0.4.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.1...v0.4.2
 [0.4.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.0...v0.4.1
 [0.4.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.3.1...v0.4.0
 [0.3.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.3.0...v0.3.1
