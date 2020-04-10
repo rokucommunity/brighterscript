@@ -4,7 +4,7 @@ import * as sinonImport from 'sinon';
 import { CompletionItem, CompletionItemKind, Position, Range } from 'vscode-languageserver';
 
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { Diagnostic, FileReference } from '../interfaces';
+import { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
@@ -95,7 +95,7 @@ describe('XmlFile', () => {
                 </component>
             `);
             expect(file.parseDiagnistics).to.be.lengthOf(1);
-            expect(file.parseDiagnistics[0]).to.deep.include(<Diagnostic>{
+            expect(file.parseDiagnistics[0]).to.deep.include(<BsDiagnostic>{
                 message: DiagnosticMessages.xmlComponentMissingNameAttribute().message,
                 range: Range.create(2, 16, 2, 26)
             });
@@ -109,7 +109,7 @@ describe('XmlFile', () => {
                 </component>
             `);
             expect(file.parseDiagnistics).to.be.lengthOf(1);
-            expect(file.parseDiagnistics[0]).to.deep.include(<Diagnostic>{
+            expect(file.parseDiagnistics[0]).to.deep.include(<BsDiagnostic>{
                 code: DiagnosticMessages.xmlGenericParseError('Some generic parse error').code,
                 range: Range.create(2, 27, 2, 27)
             });

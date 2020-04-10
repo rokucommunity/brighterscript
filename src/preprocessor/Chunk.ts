@@ -1,14 +1,15 @@
 import { Token } from '../lexer';
+import { Range } from 'vscode-languageserver';
 
 /**
  * A set of operations that must be implemented to properly handle conditional compilation chunks.
  *
  */
 export interface Visitor {
-    visitBrightScript(chunk: BrightScript): Token[];
-    visitDeclaration(chunk: Declaration): Token[];
-    visitIf(chunk: If): Token[];
-    visitError(chunk: Error): never;
+    visitBrightScript(chunk: BrightScriptChunk): Token[];
+    visitDeclaration(chunk: DeclarationChunk): Token[];
+    visitIf(chunk: HashIfStatement): Token[];
+    visitError(chunk: ErrorChunk): never;
 }
 
 /**
@@ -20,8 +21,8 @@ export interface Chunk {
 }
 
 /** A series of BrightScript tokens that will be parsed and interpreted directly. */
-export class BrightScript implements Chunk {
-    constructor(readonly tokens: Token[]) {}
+export class BrightScriptChunk implements Chunk {
+    constructor(readonly tokens: Token[]) { }
 
     accept(visitor: Visitor) {
         return visitor.visitBrightScript(this);
@@ -37,8 +38,8 @@ export class BrightScript implements Chunk {
  * @example
  * #const foo = true
  */
-export class Declaration implements Chunk {
-    constructor(readonly name: Token, readonly value: Token) {}
+export class DeclarationChunk implements Chunk {
+    constructor(readonly name: Token, readonly value: Token) { }
 
     accept(visitor: Visitor) {
         return visitor.visitDeclaration(this);
@@ -49,7 +50,7 @@ export class Declaration implements Chunk {
  * The combination of a conditional compilation value (or identifier) and the chunk to include if
  * `condition` evaluates to `true`.
  */
-export interface HashElseIf {
+export interface HashElseIfStatement {
     condition: Token;
     thenChunks: Chunk[];
 }
@@ -67,13 +68,13 @@ export interface HashElseIf {
  *     otherwise("compile this!")
  * #end if
  */
-export class If implements Chunk {
+export class HashIfStatement implements Chunk {
     constructor(
         readonly condition: Token,
         readonly thenChunks: Chunk[],
-        readonly elseIfs: HashElseIf[],
+        readonly elseIfs: HashElseIfStatement[],
         readonly elseChunks?: Chunk[]
-    ) {}
+    ) { }
 
     accept(visitor: Visitor) {
         return visitor.visitIf(this);
@@ -86,8 +87,17 @@ export class If implements Chunk {
  * @example
  * #error Some message describing the error goes here.
  */
-export class Error implements Chunk {
-    constructor(readonly hashError: Token, readonly message: string) {}
+export class ErrorChunk implements Chunk {
+    constructor(
+        readonly hashError: Token,
+        readonly message: Token
+    ) {
+        this.range = Range.create(
+            this.hashError.range.start,
+            (this.message ?? this.hashError).range.end
+        );
+    }
+    public readonly range: Range;
 
     accept(visitor: Visitor) {
         return visitor.visitError(this);

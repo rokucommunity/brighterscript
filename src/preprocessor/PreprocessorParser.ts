@@ -4,17 +4,18 @@ import { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import * as CC from './Chunk';
 import { ParseError } from '../parser/Error';
+import { Diagnostic } from 'vscode-languageserver';
 
 /** The results of a chunk-parser's parsing pass. */
 export interface ChunkParserResult {
     /** The chunks produced by the chunk-parser. */
     chunks: ReadonlyArray<CC.Chunk>;
     /** The errors encountered by the chunk-parser. */
-    errors: ReadonlyArray<ParseError>;
+    diagnostics: Diagnostic[];
 }
 
 /** * Parses `Tokens` into chunks of tokens, excluding conditional compilation directives. */
-export class Parser {
+export class PreprocessorParser {
     readonly events = new EventEmitter();
 
     /**
@@ -28,27 +29,27 @@ export class Parser {
     parse(toParse: ReadonlyArray<Token>): ChunkParserResult {
         let current = 0;
         let tokens = toParse;
-        let errors: ParseError[] = [];
+        let diagnostics = [] as Diagnostic[];
 
         /**
          * Emits an error via this parser's `events` property, then throws it.
-         * @param err the ParseError to emit then throw
+         * @param diagnostic the ParseError to emit then throw
          */
-        const emitError = (err: ParseError): never => {
-            errors.push(err);
-            this.events.emit('err', err);
-            throw err; // eslint-disable-line @typescript-eslint/no-throw-literal
+        const emitError = (diagnostic: Diagnostic): never => {
+            diagnostics.push(diagnostic);
+            this.events.emit('err', diagnostic);
+            throw diagnostic; // eslint-disable-line @typescript-eslint/no-throw-literal
         };
 
         try {
             return {
                 chunks: nChunks(),
-                errors: errors
+                diagnostics: diagnostics
             };
         } catch (conditionalCompilationError) {
             return {
                 chunks: [],
-                errors: errors
+                diagnostics: diagnostics
             };
         }
 
@@ -88,7 +89,7 @@ export class Parser {
                 let value = advance();
                 //consume trailing newlines
                 while (match(TokenKind.Newline)) { }
-                return new CC.Declaration(name, value);
+                return new CC.DeclarationChunk(name, value);
             }
 
             return hashIf();
@@ -109,7 +110,7 @@ export class Parser {
 
                 let thenChunk = nChunks();
 
-                let elseIfs: CC.HashElseIf[] = [];
+                let elseIfs: CC.HashElseIfStatement[] = [];
 
                 while (match(TokenKind.HashElseIf)) {
                     let condition = advance();
@@ -133,7 +134,7 @@ export class Parser {
                 );
                 match(TokenKind.Newline);
 
-                return new CC.If(ifCondition, thenChunk, elseIfs, elseChunk);
+                return new CC.HashIfStatement(ifCondition, thenChunk, elseIfs, elseChunk);
             }
 
             return hashError();
@@ -148,7 +149,7 @@ export class Parser {
             if (check(TokenKind.HashError)) {
                 let hashErr = advance();
                 let message = advance();
-                return new CC.Error(hashErr, message.text || '');
+                return new CC.ErrorChunk(hashErr, message);
             }
 
             return brightScriptChunk();
@@ -159,7 +160,7 @@ export class Parser {
          * @returns a chunk of plain BrightScript if any is detected, otherwise `undefined` to indicate
          *          that no non-conditional compilation directives were found.
          */
-        function brightScriptChunk(): CC.BrightScript | undefined {
+        function brightScriptChunk(): CC.BrightScriptChunk | undefined {
             let chunkTokens: Token[] = [];
             while (
                 !check(
@@ -182,15 +183,15 @@ export class Parser {
             }
 
             if (chunkTokens.length > 0) {
-                return new CC.BrightScript(chunkTokens);
+                return new CC.BrightScriptChunk(chunkTokens);
             } else {
                 return undefined;
             }
         }
 
-        function eof(): CC.BrightScript | undefined {
+        function eof(): CC.BrightScriptChunk | undefined {
             if (isAtEnd()) {
-                return new CC.BrightScript([peek()]);
+                return new CC.BrightScriptChunk([peek()]);
             } else {
                 return undefined;
             }

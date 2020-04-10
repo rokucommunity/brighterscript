@@ -10,7 +10,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import { Diagnostic, File } from './interfaces';
+import { BsDiagnostic, File } from './interfaces';
 import { platformFile } from './platformCallables';
 import { util } from './util';
 import { XmlScope } from './XmlScope';
@@ -100,7 +100,7 @@ export class Program {
      * A set of diagnostics. This does not include any of the scope diagnostics.
      * Should only be set from `this.validate()`
      */
-    private diagnostics = [] as Diagnostic[];
+    private diagnostics = [] as BsDiagnostic[];
 
     /**
      * Get a list of all files that are inlcuded in the project but are not referenced
@@ -143,7 +143,7 @@ export class Program {
             ];
         }
 
-        let finalDiagnostics = [] as Diagnostic[];
+        let finalDiagnostics = [] as BsDiagnostic[];
 
         for (let diagnostic of diagnostics) {
             if (
@@ -152,7 +152,7 @@ export class Program {
                 !finalDiagnostics.includes(diagnostic) &&
 
                 //skip any specified error codes
-                !this.options.ignoreErrorCodes?.includes(diagnostic.code)
+                !this.options.ignoreErrorCodes?.includes(diagnostic.code as number)
             ) {
                 //add the diagnostic to the final list
                 finalDiagnostics.push(diagnostic);

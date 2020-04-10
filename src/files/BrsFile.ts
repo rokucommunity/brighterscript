@@ -5,10 +5,9 @@ import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vsco
 import { Scope } from '../Scope';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import { Callable, CallableArg, CallableParam, CommentFlag, Diagnostic, FunctionCall } from '../interfaces';
+import { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic } from '../interfaces';
 import { Deferred } from '../deferred';
 import { FunctionParameter } from '../brsTypes';
-import { BrsError, ParseError } from '../parser/Error';
 import { Lexer, Token, TokenKind, Identifier } from '../lexer';
 import { Parser, ParseMode } from '../parser';
 import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression } from '../parser/Expression';
@@ -67,7 +66,7 @@ export class BrsFile {
         return Promise.all([this.finishedLoadingDeferred.promise, this.parseDeferred.promise]);
     }
 
-    private diagnostics = [] as Diagnostic[];
+    private diagnostics = [] as BsDiagnostic[];
 
     public getDiagnostics() {
         return [...this.diagnostics];
@@ -121,51 +120,49 @@ export class BrsFile {
 
         this.getIgnores(lines);
 
-        let lexResult = Lexer.scan(fileContents, {
+        //tokenize the input file
+        let lexer = Lexer.scan(fileContents, {
             includeWhitespace: false
         });
 
         //remove all code inside false-resolved conditional compilation statements
         let manifest = await getManifest(this.program.rootDir);
         let preprocessor = new Preprocessor();
-        let preprocessorResults = {
-            errors: [] as Array<BrsError | ParseError>,
-            processedTokens: []
-        };
-        let preprocessorWasSuccessful: boolean;
+        let preprocessedTokens: Token[];
+
         let handle;
         //currently the preprocessor throws exceptions on syntax errors...so we need to catch it
         try {
-            handle = preprocessor.onError((err) => {
-                preprocessorResults.errors.push(err);
+            handle = preprocessor.onError((diagnostic) => {
+                this.diagnostics.push(diagnostic as BsDiagnostic);
             });
-            preprocessorResults = <any>preprocessor.preprocess(lexResult.tokens, manifest);
-            preprocessorWasSuccessful = true;
-        } catch (e) {
-            preprocessorWasSuccessful = false;
+            preprocessedTokens = <any>preprocessor.preprocess(lexer.tokens, manifest).processedTokens;
+        } catch (error) {
+            preprocessedTokens = lexer.tokens;
             //if the thrown error is DIFFERENT than any errors from the preprocessor, add that error to the list as well
-            if (preprocessorResults.errors.find((ex) => ex === e) === undefined) {
-                preprocessorResults.errors.push(e);
+            if (this.diagnostics.find((x) => x === error) === undefined) {
+                this.diagnostics.push(error);
             }
         }
         //dispose of the onError event listener
         if (handle) {
             handle.dispose();
         }
-        //TODO have brs change the type of `processedTokens` to not be readonly array
-        let preprocessedTokens = preprocessorWasSuccessful ? (preprocessorResults.processedTokens as any) : lexResult.tokens;
 
-        this.parser = new Parser();
-        let parseResult = this.parser.parse(preprocessedTokens, {
+        this.parser = Parser.parse(preprocessedTokens, {
             mode: this.extension === 'brs' ? ParseMode.brightscript : ParseMode.brighterscript
         });
 
-        let errors = [...lexResult.errors, ...<any>parseResult.diagnostics, ...<any>preprocessorResults.errors];
+        this.diagnostics.push(...lexer.diagnostics as BsDiagnostic[], ...this.parser.diagnostics as BsDiagnostic[]);
+
+        //associate this file with every diagnostic
+        for (let diagnostic of this.diagnostics) {
+            diagnostic.file = this;
+        }
 
         //convert the brs library's errors into our format
-        this.diagnostics.push(...this.standardizeLexParseErrors(errors));
 
-        this.ast = <any>parseResult.statements;
+        this.ast = this.parser.statements;
 
         //extract all callables from this file
         this.findCallables();
@@ -254,20 +251,6 @@ export class BrsFile {
     }
 
     public propertyNameCompletions = [] as CompletionItem[];
-
-    public standardizeLexParseErrors(errors: ParseError[]) {
-        let standardizedDiagnostics = [] as Diagnostic[];
-        for (let error of errors) {
-            let diagnostic = <Diagnostic>{
-                ...DiagnosticMessages.genericParserMessage(error.message),
-                range: error.range,
-                file: this
-            };
-            standardizedDiagnostics.push(diagnostic);
-        }
-
-        return standardizedDiagnostics;
-    }
 
     /**
      * Find all comment flags in the source code. These enable or disable diagnostic messages.

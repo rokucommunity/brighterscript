@@ -12,7 +12,7 @@ import * as xml2js from 'xml2js';
 import { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
-import { CallableContainer, Diagnostic, ValueKind } from './interfaces';
+import { CallableContainer, ValueKind, BsDiagnostic } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { BrsType } from './types/BrsType';
 import { DoubleType } from './types/DoubleType';
@@ -180,7 +180,7 @@ export class Util {
                         pathAbsolute: configFilePath
                     },
                     range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
-                } as Diagnostic;
+                } as BsDiagnostic;
                 throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
 
@@ -614,14 +614,14 @@ export class Util {
      * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
      * @param diagnostic
      */
-    public diagnosticIsSuppressed(diagnostic: Diagnostic) {
+    public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
         //for now, we only support suppressing brs file diagnostics
         if (diagnostic.file instanceof BrsFile) {
             for (let flag of diagnostic.file.commentFlags) {
                 //this diagnostic is affected by this flag
                 if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
                     //if the flag acts upon this diagnostic's code
-                    if (flag.codes === null || flag.codes.includes(diagnostic.code)) {
+                    if (flag.codes === null || flag.codes.includes(diagnostic.code as number)) {
                         return true;
                     }
                 }

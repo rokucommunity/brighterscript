@@ -7,7 +7,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import { Diagnostic } from './interfaces';
+import { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
 import util from './util';
 let n = util.standardizePath.bind(util);
@@ -492,7 +492,7 @@ describe('Program', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics().length).to.equal(1);
-            expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
+            expect(program.getDiagnostics()[0]).to.deep.include(<BsDiagnostic>{
                 ...DiagnosticMessages.referencedFileDoesNotExist(),
                 file: program.getFileByPathAbsolute(xmlPath),
                 range: Range.create(3, 58, 3, 88)
@@ -529,7 +529,7 @@ describe('Program', () => {
                 </component>
             `);
             await program.validate();
-            expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
+            expect(program.getDiagnostics()[0]).to.deep.include(<BsDiagnostic>{
                 message: DiagnosticMessages.referencedFileDoesNotExist().message
             });
 
@@ -547,7 +547,7 @@ describe('Program', () => {
                 </component>
             `);
             await program.validate();
-            expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
+            expect(program.getDiagnostics()[0]).to.deep.include(<BsDiagnostic>{
                 message: DiagnosticMessages.referencedFileDoesNotExist().message
             });
         });
@@ -795,7 +795,7 @@ describe('Program', () => {
 
             //there should be an error when calling DoParentThing, since it doesn't exist on child or parent
             expect(program.getDiagnostics()).to.be.lengthOf(1);
-            expect(program.getDiagnostics()[0]).to.deep.include(<Diagnostic>{
+            expect(program.getDiagnostics()[0]).to.deep.include(<BsDiagnostic>{
                 code: DiagnosticMessages.callToUnknownFunction('DoParentThing', '').code
             });
 

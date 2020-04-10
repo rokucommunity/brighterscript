@@ -427,7 +427,7 @@ export let DiagnosticMessages = {
      * Used in the lexer anytime we encounter an unsupported character
      */
     unexpectedCharacter: (text: string) => ({
-        message: `Unexpected character '${text}' (char code ${text.charCodeAt(0)})`,
+        message: `Unexpected character '${text}' (char code ${text?.charCodeAt(0)})`,
         code: 1082,
         severity: DiagnosticSeverity.Error
     }),
@@ -451,8 +451,8 @@ export let DiagnosticMessages = {
         code: 1086,
         severity: DiagnosticSeverity.Error
     }),
-    duplicateConstDeclaration: (originalPosition: Position) => ({
-        message: `A #const with this name was already declared at ${originalPosition?.line + 1}:${originalPosition?.character + 1}`,
+    duplicateConstDeclaration: (name: string) => ({
+        message: `Attempting to redeclare #const with name '${name}'`,
         code: 1087,
         severity: DiagnosticSeverity.Error
     }),
@@ -474,6 +474,11 @@ export let DiagnosticMessages = {
     invalidHashIfValue: () => ({
         message: `#if conditionals can only be 'true', 'false', or other #const names`,
         code: 1091,
+        severity: DiagnosticSeverity.Error
+    }),
+    hashError: (message: string) => ({
+        message: `#error ${message}`,
+        code: 1092,
         severity: DiagnosticSeverity.Error
     })
 };

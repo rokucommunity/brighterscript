@@ -1,15 +1,16 @@
 import { EventEmitter } from 'events';
 
-import { BrsError, ParseError } from '../parser/Error';
 import { TokenKind, Token } from '../lexer';
 import * as CC from './Chunk';
+import { Diagnostic } from 'vscode-languageserver';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 
 /** The results of a Preprocessor's filtering pass. */
 export interface FilterResults {
     /** The tokens remaining after preprocessing. */
     processedTokens: Token[];
     /** The encountered during preprocessing. */
-    errors: ReadonlyArray<BrsError>;
+    diagnostics: Diagnostic[];
 }
 
 /**
@@ -23,16 +24,16 @@ export class Preprocessor implements CC.Visitor {
     public readonly events = new EventEmitter();
 
     /** The set of errors encountered when pre-processing conditional compilation directives. */
-    public errors: ParseError[] = [];
+    public diagnostics = [] as Diagnostic[];
 
     /**
      * Emits an error via this processor's `events` property, then throws it.
-     * @param err the ParseError to emit then throw
+     * @param diagnostic the ParseError to emit then throw
      */
-    private addError(err: BrsError) {
-        this.errors.push(err);
-        this.events.emit('err', err);
-        return err;
+    private addError(diagnostic: Diagnostic) {
+        this.diagnostics.push(diagnostic);
+        this.events.emit('err', diagnostic);
+        return diagnostic;
     }
 
     /**
@@ -42,7 +43,7 @@ export class Preprocessor implements CC.Visitor {
      * @returns an object containing an array of `errors` and an array of `processedTokens` filtered by conditional
      *          compilation directives included within
      */
-    public filter(chunks: ReadonlyArray<CC.Chunk>, bsConst: Map<string, boolean>): FilterResults {
+    public filter(chunks: ReadonlyArray<CC.Chunk>, bsConst?: Map<string, boolean>): FilterResults {
         this.constants = new Map(bsConst);
         return {
             processedTokens: chunks
@@ -51,7 +52,7 @@ export class Preprocessor implements CC.Visitor {
                     (allTokens: Token[], chunkTokens: Token[]) => [...allTokens, ...chunkTokens],
                     []
                 ),
-            errors: this.errors
+            diagnostics: this.diagnostics
         };
     }
 
@@ -60,7 +61,7 @@ export class Preprocessor implements CC.Visitor {
      * @param chunk the chunk to extract tokens from
      * @returns the array of tokens contained within `chunk`
      */
-    public visitBrightScript(chunk: CC.BrightScript) {
+    public visitBrightScript(chunk: CC.BrightScriptChunk) {
         return chunk.tokens;
     }
 
@@ -70,14 +71,12 @@ export class Preprocessor implements CC.Visitor {
      * @param chunk the `#const` directive, including the name and variable to use for the constant
      * @returns an empty array, since `#const` directives are always removed from the evaluated script.
      */
-    public visitDeclaration(chunk: CC.Declaration) {
+    public visitDeclaration(chunk: CC.DeclarationChunk) {
         if (this.constants.has(chunk.name.text)) {
-            this.addError(
-                new BrsError(
-                    `Attempting to re-declare #const with name '${chunk.name.text}'`,
-                    chunk.name.range
-                )
-            );
+            this.addError({
+                ...DiagnosticMessages.duplicateConstDeclaration(chunk.name.text),
+                range: chunk.name.range
+            });
         }
 
         let value;
@@ -94,20 +93,16 @@ export class Preprocessor implements CC.Visitor {
                     break;
                 }
 
-                this.addError(
-                    new BrsError(
-                        `Attempting to create #const alias of '${chunk.value.text}', but no such #const exists`,
-                        chunk.value.range
-                    )
-                );
+                this.addError({
+                    ...DiagnosticMessages.constAliasDoesNotExist(chunk.value.text),
+                    range: chunk.value.range
+                });
                 break;
             default:
-                this.addError(
-                    new BrsError(
-                        '#const declarations can only have values of `true`, `false`, or other #const names',
-                        chunk.value.range
-                    )
-                );
+                this.addError({
+                    ...DiagnosticMessages.invalidHashConstValue(),
+                    range: chunk.value.range
+                });
         }
 
         this.constants.set(chunk.name.text, value);
@@ -120,8 +115,11 @@ export class Preprocessor implements CC.Visitor {
      * @param chunk the error to report to users
      * @throws a JavaScript error with the provided message
      */
-    public visitError(chunk: CC.Error): never {
-        throw this.addError(new ParseError(chunk.hashError, chunk.message));
+    public visitError(chunk: CC.ErrorChunk): never {
+        throw this.addError({
+            ...DiagnosticMessages.hashError(chunk.message.text),
+            range: chunk.range
+        });
     }
 
     /**
@@ -129,7 +127,7 @@ export class Preprocessor implements CC.Visitor {
      * @param chunk the `#if` directive, any `#else if` or `#else` directives, and their associated BrightScript chunks.
      * @returns an array of tokens to include in the final executed script.
      */
-    public visitIf(chunk: CC.If): Token[] {
+    public visitIf(chunk: CC.HashIfStatement): Token[] {
         if (this.evaluateCondition(chunk.condition)) {
             return chunk.thenChunks
                 .map(chunk => chunk.accept(this))
@@ -169,23 +167,18 @@ export class Preprocessor implements CC.Visitor {
                 return false;
             case TokenKind.Identifier:
                 if (this.constants.has(token.text)) {
-                    return this.constants.get(token.text);
+                    return !!this.constants.get(token.text);
                 }
-
-                this.addError(
-                    new BrsError(
-                        `Attempting to reference undefined #const with name '${token.text}'`,
-                        token.range
-                    )
-                );
+                this.addError({
+                    ...DiagnosticMessages.referencedConstDoesNotExist(),
+                    range: token.range
+                });
                 break;
             default:
-                this.addError(
-                    new BrsError(
-                        '#if conditionals can only be `true`, `false`, or other #const names',
-                        token.range
-                    )
-                );
+                this.addError({
+                    ...DiagnosticMessages.invalidHashIfValue(),
+                    range: token.range
+                });
         }
     }
 }

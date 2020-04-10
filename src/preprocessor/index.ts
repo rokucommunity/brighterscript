@@ -4,11 +4,12 @@ import { BrsError, ParseError } from '../parser/Error';
 import { Token } from '../lexer/Token';
 import * as Chunk from './Chunk';
 import { getBsConst, Manifest } from './Manifest';
-import { Parser } from './Parser';
+import { PreprocessorParser } from './PreprocessorParser';
 import { FilterResults, Preprocessor as InternalPreprocessor } from './Preprocessor';
+import { Diagnostic } from 'vscode-languageserver';
 
 export class Preprocessor {
-    private parser = new Parser();
+    private parser = new PreprocessorParser();
     private preprocessor = new InternalPreprocessor();
 
     public readonly events = new EventEmitter();
@@ -18,7 +19,7 @@ export class Preprocessor {
      * @param errorHandler the function to call for every preprocessing error emitted after subscribing
      * @returns an object with a `dispose` function, used to unsubscribe from errors
      */
-    public onError(errorHandler: (err: BrsError | ParseError) => void) {
+    public onError(errorHandler: (diagnostic: Diagnostic) => void) {
         this.events.on('err', errorHandler);
         return {
             dispose: () => {
@@ -49,10 +50,10 @@ export class Preprocessor {
      */
     public preprocess(tokens: ReadonlyArray<Token>, manifest: Manifest): FilterResults {
         let parserResults = this.parser.parse(tokens);
-        if (parserResults.errors.length > 0) {
+        if (parserResults.diagnostics.length > 0) {
             return {
                 processedTokens: [],
-                errors: parserResults.errors
+                diagnostics: parserResults.diagnostics
             };
         }
 
@@ -61,5 +62,5 @@ export class Preprocessor {
 }
 
 export { Chunk };
-export { Parser } from './Parser';
+export { PreprocessorParser as Parser } from './PreprocessorParser';
 export { getManifest, getManifestSync, getBsConst, Manifest } from './Manifest';

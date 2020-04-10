@@ -1,4 +1,4 @@
-import { Range, DiagnosticSeverity } from 'vscode-languageserver';
+import { Range, Diagnostic } from 'vscode-languageserver';
 
 import { Scope } from './Scope';
 import { BrsFile } from './files/BrsFile';
@@ -7,17 +7,7 @@ import { FunctionScope } from './FunctionScope';
 import { BrsType } from './types/BrsType';
 import { FunctionType } from './types/FunctionType';
 
-export interface Diagnostic {
-    severity: DiagnosticSeverity;
-    /**
-     * The message for this diagnostic
-     */
-    message: string;
-    /**
-     * The unique diagnostic code for this type of message
-     */
-    code: number;
-    range: Range;
+export interface BsDiagnostic extends Diagnostic {
     file: File;
 }
 
@@ -119,7 +109,7 @@ export interface File {
      */
     pkgPath: string;
     pathAbsolute: string;
-    getDiagnostics(): Diagnostic[];
+    getDiagnostics(): BsDiagnostic[];
 }
 
 export interface VariableDeclaration {

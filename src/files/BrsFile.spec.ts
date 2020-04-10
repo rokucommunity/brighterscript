@@ -1,8 +1,8 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
-import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 
-import { Callable, CallableArg, CommentFlag, Diagnostic, VariableDeclaration } from '../interfaces';
+import { Callable, CallableArg, CommentFlag, BsDiagnostic, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
@@ -123,18 +123,18 @@ describe('BrsFile', () => {
             it('works for specific codes', async () => {
                 let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
-                        'bs:disable-next-line: 1000, 1001
+                        'bs:disable-next-line: 1083, 1001
                         name = "bob
                     end sub
                 `) as BrsFile;
                 expect(file.commentFlags[0]).to.exist;
                 expect(file.commentFlags[0]).to.deep.include({
-                    codes: [1000, 1001],
+                    codes: [1083, 1001],
                     range: Range.create(2, 24, 2, 57),
                     affectedRange: Range.create(3, 0, 3, 35)
                 } as CommentFlag);
                 //the "unterminated string" error should be filtered out
-                expect(program.getDiagnostics()).to.be.lengthOf(0);
+                expect(program.getDiagnostics()[0]?.message).to.not.exist;
             });
 
             it('adds diagnostics for unknown diagnostic codes', async () => {
@@ -149,13 +149,13 @@ describe('BrsFile', () => {
                 expect(program.getDiagnostics()).to.be.lengthOf(3);
                 expect(program.getDiagnostics()[0]).to.deep.include({
                     range: Range.create(2, 53, 2, 59)
-                } as Diagnostic);
+                } as BsDiagnostic);
                 expect(program.getDiagnostics()[1]).to.deep.include({
                     range: Range.create(2, 60, 2, 66)
-                } as Diagnostic);
+                } as BsDiagnostic);
                 expect(program.getDiagnostics()[2]).to.deep.include({
                     range: Range.create(2, 69, 2, 74)
-                } as Diagnostic);
+                } as BsDiagnostic);
             });
 
         });
@@ -195,7 +195,7 @@ describe('BrsFile', () => {
                 expect(program.getDiagnostics()).to.be.lengthOf(1);
                 expect(program.getDiagnostics()[0]).to.deep.include({
                     range: Range.create(5, 24, 5, 35)
-                } as Diagnostic);
+                } as BsDiagnostic);
             });
 
             it('handles the erraneous `stop` keyword', async () => {
@@ -239,40 +239,40 @@ describe('BrsFile', () => {
 
             it('supports single-word #elseif and #endif', async () => {
                 let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub main()
-                    #const someFlag = true
-                    #if someFlag
-                        'code to execute when someFlag is true
-                    #elseif someFlag
-                        'code to execute when anotherFlag is true
-                    #endif
-                end sub
-            `);
+                    sub main()
+                        #const someFlag = true
+                        #if someFlag
+                            'code to execute when someFlag is true
+                        #elseif someFlag
+                            'code to execute when anotherFlag is true
+                        #endif
+                    end sub
+                `);
                 expect(file.getDiagnostics()).to.be.lengthOf(0);
             });
 
             it('supports multi-word #else if and #end if', async () => {
                 let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub main()
-                    #const someFlag = true
-                    #if someFlag
-                        'code to execute when someFlag is true
-                    #else if someFlag
-                        'code to execute when anotherFlag is true
-                    #end if
-                end sub
-            `);
+                    sub main()
+                        #const someFlag = true
+                        #if someFlag
+                            'code to execute when someFlag is true
+                        #else if someFlag
+                            'code to execute when anotherFlag is true
+                        #end if
+                    end sub
+                `);
                 expect(file.getDiagnostics()).to.be.lengthOf(0);
             });
 
             it('does not choke on invalid code inside a false conditional compile', async () => {
                 let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub main()
-                    #if false
-                        non-commented code here should not cause parse errors
-                    #end if
-                end sub
-            `);
+                    sub main()
+                        #if false
+                            non-commented code here should not cause parse errors
+                        #end if
+                    end sub
+                `);
                 expect(file.getDiagnostics()).to.be.lengthOf(0);
             });
         });
@@ -955,23 +955,6 @@ describe('BrsFile', () => {
                 type: new DynamicType(),
                 text: 'isAlive'
             });
-        });
-    });
-
-    describe('standardizeLexParserErrors', () => {
-        it('properly maps the location to a Range', () => {
-            let file = new BrsFile('', '', program);
-            expect(file.standardizeLexParseErrors([<any>{
-                range: Range.create(0, 0, 1, 4),
-                message: 'some lex error',
-                stack: ''
-            }])).to.eql([<Diagnostic>{
-                code: 1000,
-                message: 'some lex error',
-                range: Range.create(0, 0, 1, 4),
-                file: file,
-                severity: DiagnosticSeverity.Error
-            }]);
         });
     });
 

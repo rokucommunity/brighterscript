@@ -1,5 +1,4 @@
 import { expect } from 'chai';
-import * as sinon from 'sinon';
 
 import { TokenKind } from '.';
 import { BrsString, Double, Float, Int32, Int64 } from '../brsTypes';
@@ -15,8 +14,8 @@ describe('lexer', () => {
     });
 
     it('emits error on unknown character type', () => {
-        let { errors } = Lexer.scan('\0');
-        expect(errors).to.be.lengthOf(1);
+        let { diagnostics } = Lexer.scan('\0');
+        expect(diagnostics).to.be.lengthOf(1);
     });
 
     it('includes an end-of-file marker', () => {
@@ -332,15 +331,15 @@ describe('lexer', () => {
         });
 
         it('produces an error for unterminated strings', () => {
-            let { errors } = Lexer.scan(`"unterminated!`);
-            expect(errors.map(err => err.message)).to.deep.equal([
+            let { diagnostics } = Lexer.scan(`"unterminated!`);
+            expect(diagnostics.map(err => err.message)).to.deep.equal([
                 'Unterminated string at end of file'
             ]);
         });
 
         it('disallows multiline strings', () => {
-            let { errors } = Lexer.scan(`"multi-line\n\n`);
-            expect(errors.map(err => err.message)).to.deep.equal([
+            let { diagnostics } = Lexer.scan(`"multi-line\n\n`);
+            expect(diagnostics.map(err => err.message)).to.deep.equal([
                 'Unterminated string at end of line'
             ]);
         });
@@ -588,7 +587,7 @@ describe('lexer', () => {
             ]);
         });
 
-        it('reads forced compilation errors with messages', () => {
+        it('reads forced compilation diagnostics with messages', () => {
             let { tokens } = Lexer.scan('#error a message goes here\n', {
                 includeWhitespace: true
             });
@@ -690,36 +689,6 @@ describe('lexer', () => {
 
             expect(isToken({ kind: TokenKind.And, text: 'and', range: range })).is.true;
             expect(isToken({ text: 'and', range: range })).is.false;
-        });
-    });
-
-    describe('onError', () => {
-        it('works', () => {
-            let lexer = new Lexer();
-            let spy = sinon.spy();
-            let obj = lexer.onError(spy);
-            expect(spy.getCalls()).to.be.lengthOf(0);
-            lexer.events.emit('err', new Error('fake error'));
-            expect(spy.getCalls()).to.be.lengthOf(1);
-            lexer.events.emit('err', new Error('fake error'));
-            expect(spy.getCalls()).to.be.lengthOf(2);
-            obj.dispose();
-
-            lexer.events.emit('err', new Error('fake error'));
-            expect(spy.getCalls()).to.be.lengthOf(2);
-        });
-    });
-
-    describe('onErrorOnce', () => {
-        it('works', () => {
-            let lexer = new Lexer();
-            let spy = sinon.spy();
-            lexer.onErrorOnce(spy);
-            expect(spy.getCalls()).to.be.lengthOf(0);
-            lexer.events.emit('err', new Error('fake error'));
-            expect(spy.getCalls()).to.be.lengthOf(1);
-            lexer.events.emit('err', new Error('fake error'));
-            expect(spy.getCalls()).to.be.lengthOf(1);
         });
     });
 

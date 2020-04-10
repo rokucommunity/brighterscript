@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
 
 import { BsConfig } from './BsConfig';
-import { Diagnostic, File } from './interfaces';
+import { BsDiagnostic, File } from './interfaces';
 import { FileResolver, Program } from './Program';
 import util from './util';
 import { Watcher } from './Watcher';
@@ -35,9 +35,9 @@ export class ProgramBuilder {
     /**
      * A list of diagnostics that are always added to the `getDiagnostics()` call.
      */
-    private staticDiagnostics = [] as Diagnostic[];
+    private staticDiagnostics = [] as BsDiagnostic[];
 
-    public addDiagnostic(filePathAbsolute: string, diagnostic: Partial<Diagnostic>) {
+    public addDiagnostic(filePathAbsolute: string, diagnostic: Partial<BsDiagnostic>) {
         let file: File = this.program.getFileByPathAbsolute(filePathAbsolute);
         if (!file) {
             file = {
@@ -68,7 +68,7 @@ export class ProgramBuilder {
             this.options = await util.normalizeAndResolveConfig(options);
         } catch (e) {
             if (e?.file && e.message && e.code) {
-                let err = e as Diagnostic;
+                let err = e as BsDiagnostic;
                 this.staticDiagnostics.push(err);
             } else {
                 //if this is not a diagnostic, something else is wrong...
@@ -198,7 +198,7 @@ export class ProgramBuilder {
         let diagnostics = this.getDiagnostics();
 
         //group the diagnostics by file
-        let diagnosticsByFile = {} as { [pathAbsolute: string]: Diagnostic[] };
+        let diagnosticsByFile = {} as { [pathAbsolute: string]: BsDiagnostic[] };
         for (let diagnostic of diagnostics) {
             if (!diagnosticsByFile[diagnostic.file.pathAbsolute]) {
                 diagnosticsByFile[diagnostic.file.pathAbsolute] = [];

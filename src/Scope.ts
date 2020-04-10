@@ -4,7 +4,7 @@ import { CompletionItem, CompletionItemKind, Location, Position, Range } from 'v
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import { CallableContainer, Diagnostic, File } from './interfaces';
+import { CallableContainer, BsDiagnostic, File } from './interfaces';
 import { Program } from './Program';
 import util from './util';
 import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from './parser/ClassStatement';
@@ -125,13 +125,13 @@ export class Scope {
      * call this sparingly.
      */
     public getDiagnostics() {
-        let diagnosticLists = [this.diagnostics] as Diagnostic[][];
+        let diagnosticLists = [this.diagnostics] as BsDiagnostic[][];
         //add diagnostics from every referenced file
         for (let filePath in this.files) {
             let ctxFile = this.files[filePath];
             diagnosticLists.push(ctxFile.file.getDiagnostics());
         }
-        let allDiagnostics = Array.prototype.concat.apply([], diagnosticLists) as Diagnostic[];
+        let allDiagnostics = Array.prototype.concat.apply([], diagnosticLists) as BsDiagnostic[];
 
         let filteredDiagnostics = allDiagnostics.filter((x) => {
             return !util.diagnosticIsSuppressed(x);
@@ -145,7 +145,7 @@ export class Scope {
     /**
      * The list of diagnostics found specifically for this scope. Individual file diagnostics are stored on the files themselves.
      */
-    protected diagnostics = [] as Diagnostic[];
+    protected diagnostics = [] as BsDiagnostic[];
 
     /**
      * Get the list of callables available in this scope (either declared in this scope or in a parent scope)
