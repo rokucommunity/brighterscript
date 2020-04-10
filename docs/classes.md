@@ -78,13 +78,13 @@ end sub
 <details>
   <summary>View the transpiled BrightScript code</summary>
   
-```vb
+```brightscript
 function __Animal_Build()
     instance = {}
     instance.new = sub(name as string)
         m.Name = name
     end sub
-    instance.name = invalid,
+    instance.name = invalid
     instance.move = sub(distanceInMeters as integer)
         print m.name + " moved " + distanceInMeters.ToStr() + " meters"
     end sub
@@ -115,7 +115,8 @@ function __BabyDuck_Build()
     instance = __Duck_Build()
     instance.super1_move = instance.move
     instance.move = sub(distanceInMeters as integer)
-        instance.super1_move(distanceInMeters)
+        m.super1_move(distanceInMeters)
+        print "Fell over...I'm still new at this"
     end sub
     return instance
 end function
