@@ -24,6 +24,14 @@ describe('parser', () => {
     });
 
     describe('parse', () => {
+        it('allows global function names with same as token to be called', () => {
+            expect(parse(`
+                sub main()
+                    print string(123)
+                end sub
+            `).diagnostics[0]?.message).not.to.exist;
+        });
+
         it('supports @ symbol between names', () => {
             let parser = parse(`
                 sub main()

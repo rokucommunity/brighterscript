@@ -1626,7 +1626,7 @@ export class Parser {
                 TokenKind.StringLiteral
             ):
                 return new LiteralExpression(this.previous().literal, this.previous().range);
-            case this.match(TokenKind.Identifier):
+            case this.match(TokenKind.Identifier, ...AllowedLocalIdentifiers):
                 return new VariableExpression(this.previous() as Identifier);
             case this.match(TokenKind.LeftParen):
                 let left = this.previous();
