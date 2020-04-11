@@ -6,9 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.5.2] - 2020-04-11
+### Changed
+ - downgrade diagnostic issue 1007 from an error to a warning, and updated the message to "Component is mising "extends" attribute and will automatically extend "Group" by default" (#53)
+ - Prevent xml files found outside of the `pkg:/components` folder from being parsed and validated.  (#51)
+ - allow empty `elseif` and `else` blocks. (#48)
+
+
+
 ## [0.5.1] - 2020-04-10
 ### Changed
- - upgraded to [roku-deploy@3.0.2](https://www.npmjs.com/package/roku-debug/v/0.3.4) which fixed a file copy bug in subdirectories of symlinked folders
+ - upgraded to [roku-deploy@3.0.2](https://www.npmjs.com/package/roku-debug/v/0.3.4) which fixed a file copy bug in subdirectories of symlinked folders (fixes #41)
 
 
 
@@ -114,6 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.5.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.1...v0.5.2
 [0.5.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.0...v0.5.1
 [0.5.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.4...v0.5.0
 [0.4.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.3...v0.4.4
