@@ -8,6 +8,10 @@ import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
 
 describe('lexer', () => {
+    it('produces an at symbol token', () => {
+        let { tokens } = Lexer.scan('@');
+        expect(tokens[0].kind).to.equal(TokenKind.At);
+    });
     it('produces a semicolon token', () => {
         let { tokens } = Lexer.scan(';');
         expect(tokens[0].kind).to.equal(TokenKind.Semicolon);

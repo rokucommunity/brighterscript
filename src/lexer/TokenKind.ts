@@ -67,6 +67,7 @@ export enum TokenKind {
     Comma = 'Comma', // ,
     Colon = 'Colon', // :
     Semicolon = 'Semicolon', // ;
+    At = 'At', // @
 
     // conditional compilation
     HashIf = 'HashIf', // #if

@@ -171,6 +171,26 @@ export class DottedGetExpression implements Expression {
     }
 }
 
+export class XmlAttributeGetExpression implements Expression {
+    constructor(
+        readonly obj: Expression,
+        readonly name: Identifier,
+        readonly at: Token
+    ) {
+        this.range = Range.create(this.obj.range.start, this.name.range.end);
+    }
+
+    public readonly range: Range;
+
+    transpile(state: TranspileState) {
+        return [
+            ...this.obj.transpile(state),
+            '@',
+            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
+        ];
+    }
+}
+
 export class IndexedGetExpression implements Expression {
     constructor(
         readonly obj: Expression,

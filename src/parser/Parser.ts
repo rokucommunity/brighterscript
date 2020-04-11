@@ -50,7 +50,7 @@ import {
 } from './Statement';
 import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
-import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression } from './Expression';
+import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression, XmlAttributeGetExpression } from './Expression';
 import { Range, Diagnostic } from 'vscode-languageserver';
 import { ClassStatement, ClassMemberStatement, ClassMethodStatement, ClassFieldStatement } from './ClassStatement';
 
@@ -1543,7 +1543,20 @@ export class Parser {
                 // force it into an identifier so the AST makes some sense
                 name.kind = TokenKind.Identifier;
 
-                expr = new DottedGetExpression(expr, name as Identifier);
+            } else if (this.check(TokenKind.At)) {
+                let dot = this.advance();
+                let name = this.consume(
+                    DiagnosticMessages.expectedAttributeNameAfterAtSymbol(),
+                    TokenKind.Identifier,
+                    ...AllowedProperties
+                );
+
+                // force it into an identifier so the AST makes some sense
+                name.kind = TokenKind.Identifier;
+
+                expr = new XmlAttributeGetExpression(expr, name as Identifier, dot);
+                //only allow a single `@` expression
+                break;
             } else {
                 break;
             }

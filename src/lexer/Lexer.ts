@@ -141,6 +141,9 @@ export class Lexer {
             case ',':
                 this.addToken(TokenKind.Comma);
                 break;
+            case '@':
+                this.addToken(TokenKind.At);
+                break;
             case '.':
                 // this might be a float/double literal, because decimals without a leading 0
                 // are allowed

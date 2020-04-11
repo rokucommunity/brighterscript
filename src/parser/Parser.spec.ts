@@ -1,8 +1,8 @@
 import { expect } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
-import { DottedGetExpression } from './Expression';
+import { DottedGetExpression, XmlAttributeGetExpression } from './Expression';
 import { Parser } from './Parser';
-import { PrintStatement } from './Statement';
+import { PrintStatement, AssignmentStatement, FunctionStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 
 describe('parser', () => {
@@ -24,6 +24,38 @@ describe('parser', () => {
     });
 
     describe('parse', () => {
+        it('supports @ symbol between names', () => {
+            let parser = parse(`
+                sub main()
+                    firstName = personXml@firstName
+                    age = personXml.firstChild@age
+                end sub
+            `);
+            expect(parser.diagnostics[0]?.message).to.not.exist;
+
+            let statements = (parser.statements[0] as FunctionStatement).func.body.statements as AssignmentStatement[];
+            let first = statements[0].value as XmlAttributeGetExpression;
+            expect(first).to.be.instanceof(XmlAttributeGetExpression);
+            expect(first.name.text).to.equal('firstName');
+            expect(first.at.text).to.equal('@');
+            expect((first.obj as any).name.text).to.equal('personXml');
+
+            let second = statements[1].value as XmlAttributeGetExpression;
+            expect(second).to.be.instanceof(XmlAttributeGetExpression);
+            expect(second.name.text).to.equal('age');
+            expect(second.at.text).to.equal('@');
+            expect((second.obj as any).name.text).to.equal('firstChild');
+        });
+
+        it('does not allow chaining of @ symbols', () => {
+            let parser = parse(`
+                sub main()
+                    personXml = invalid
+                    name = personXml@name@age@shoeSize
+                end sub
+            `);
+            expect(parser.diagnostics).not.to.be.empty;
+        });
         it('unknown function type does not invalidate rest of function', () => {
             let { statements, diagnostics } = parse(`
                 function log() as UNKNOWN_TYPE

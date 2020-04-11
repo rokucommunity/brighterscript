@@ -500,6 +500,11 @@ export let DiagnosticMessages = {
         message: `Expected identifier after '#const' keyword`,
         code: 1096,
         severity: DiagnosticSeverity.Error
+    }),
+    expectedAttributeNameAfterAtSymbol: () => ({
+        message: `Expected xml attribute name after '@'`,
+        code: 1097,
+        severity: DiagnosticSeverity.Error
     })
 };
 
