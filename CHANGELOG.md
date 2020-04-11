@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.2] - 2020-04-11
 ### Changed
  - downgrade diagnostic issue 1007 from an error to a warning, and updated the message to "Component is mising "extends" attribute and will automatically extend "Group" by default" (#53)
- - Prevent xml files found outside of the `pkg:/components` folder from being parsed and validated.  (#51)
+### Fixed
+ - Prevent xml files found outside of the `pkg:/components` folder from being parsed and validated. (#51)
  - allow empty `elseif` and `else` blocks. (#48)
 
 
