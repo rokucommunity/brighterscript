@@ -155,7 +155,8 @@ export class FunctionExpression implements Expression {
 export class DottedGetExpression implements Expression {
     constructor(
         readonly obj: Expression,
-        readonly name: Identifier
+        readonly name: Identifier,
+        readonly dot: Token
     ) {
         this.range = Range.create(this.obj.range.start, this.name.range.end);
     }

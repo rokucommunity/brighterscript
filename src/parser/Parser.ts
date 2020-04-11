@@ -401,19 +401,19 @@ export class Parser {
                 }
             }
 
-            let args: FunctionParameter[] = [];
+            let params: FunctionParameter[] = [];
             let asToken: Token;
             let typeToken: Token;
             if (!this.check(TokenKind.RightParen)) {
                 do {
-                    if (args.length >= CallExpression.MaximumArguments) {
+                    if (params.length >= CallExpression.MaximumArguments) {
                         this.diagnostics.push({
-                            ...DiagnosticMessages.tooManyArguments(),
+                            ...DiagnosticMessages.tooManyCallableParameters(params.length, CallExpression.MaximumArguments),
                             range: this.peek().range
                         });
                     }
 
-                    args.push(this.functionParameter());
+                    params.push(this.functionParameter());
                 } while (this.match(TokenKind.Comma));
             }
             let rightParen = this.advance();
@@ -435,7 +435,7 @@ export class Parser {
                 returnType = maybeReturnType;
             }
 
-            args.reduce((haveFoundOptional: boolean, arg: Argument) => {
+            params.reduce((haveFoundOptional: boolean, arg: Argument) => {
                 if (haveFoundOptional && !arg.defaultValue) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(arg.name.text),
@@ -484,7 +484,7 @@ export class Parser {
             }
 
             let func = new FunctionExpression(
-                args,
+                params,
                 returnType,
                 body,
                 functionType,
@@ -1533,7 +1533,8 @@ export class Parser {
                 );
 
                 expr = new IndexedGetExpression(expr, index, openingSquare, closingSquare);
-            } else if (this.match(TokenKind.Dot)) {
+            } else if (this.check(TokenKind.Dot)) {
+                let dot = this.advance();
                 let name = this.consume(
                     DiagnosticMessages.expectedPropertyNameAfterPeriod(),
                     TokenKind.Identifier,
@@ -1543,6 +1544,7 @@ export class Parser {
                 // force it into an identifier so the AST makes some sense
                 name.kind = TokenKind.Identifier;
 
+                expr = new DottedGetExpression(expr, name as Identifier, dot);
             } else if (this.check(TokenKind.At)) {
                 let dot = this.advance();
                 let name = this.consume(
@@ -1589,7 +1591,7 @@ export class Parser {
 
                 if (args.length >= CallExpression.MaximumArguments) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.cannotHaveMoreThanMaxFunctionArguments(CallExpression.MaximumArguments),
+                        ...DiagnosticMessages.tooManyCallableArguments(args.length, CallExpression.MaximumArguments),
                         range: this.peek().range
                     });
                     throw this.lastDiagnosticAsError();

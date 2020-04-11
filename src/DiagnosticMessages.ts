@@ -1,7 +1,6 @@
 /* eslint-disable camelcase */
 
 import { DiagnosticSeverity, Position } from 'vscode-languageserver';
-import { CallExpression } from './parser';
 import { TokenKind } from './lexer/TokenKind';
 
 /**
@@ -190,9 +189,9 @@ export let DiagnosticMessages = {
         code: 1035,
         severity: DiagnosticSeverity.Error
     }),
-    tooManyArguments: () => ({
-        message: `Cannot have more than ${CallExpression.MaximumArguments} parameters`,
-        code: 1036,
+    tooManyCallableParameters: (actual: number, max: number) => ({
+        message: `Cannot have more than ${max} parameters but found ${actual})`,
+        code: 1098,
         severity: DiagnosticSeverity.Error
     }),
     invalidFunctionReturnType: (typeText: string) => ({
@@ -383,8 +382,8 @@ export let DiagnosticMessages = {
         code: 1073,
         severity: DiagnosticSeverity.Error
     }),
-    cannotHaveMoreThanMaxFunctionArguments: (max: number) => ({
-        message: `Cannot have more than ${max} arguments`,
+    tooManyCallableArguments: (actual: number, max: number) => ({
+        message: `Cannot have more than ${max} arguments but found ${actual}`,
         code: 1074,
         severity: DiagnosticSeverity.Error
     }),
