@@ -45,9 +45,9 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     xmlComponentMissingExtendsAttribute: () => ({
-        message: `Component must have an extends attribute.`,
+        message: `Component is mising "extends" attribute and will automatically extend "Group" by default`,
         code: 1007,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Warning
     }),
     xmlGenericParseError: (message: string) => ({
         //generic catchall xml parse error

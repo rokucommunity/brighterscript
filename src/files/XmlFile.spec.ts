@@ -1,7 +1,7 @@
 import { assert, expect } from 'chai';
 import * as path from 'path';
 import * as sinonImport from 'sinon';
-import { CompletionItem, CompletionItemKind, Position, Range } from 'vscode-languageserver';
+import { CompletionItem, CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
 
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { BsDiagnostic, FileReference } from '../interfaces';
@@ -272,6 +272,19 @@ describe('XmlFile', () => {
                 <component name="ChildScene">
                 </component>
             `);
+        });
+
+        it('adds warning when no "extends" attribute is found', async () => {
+            file = new XmlFile('abs', 'rel', null);
+            await file.parse(`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene">
+                </component>
+            `);
+            expect(file.getDiagnostics()[0]).to.include({
+                severity: DiagnosticSeverity.Warning,
+                message: DiagnosticMessages.xmlComponentMissingExtendsAttribute().message
+            });
         });
     });
 });
