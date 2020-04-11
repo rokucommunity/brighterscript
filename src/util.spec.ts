@@ -128,6 +128,7 @@ describe('util', () => {
             delete vfs[parentDirBsConfigPath];
             expect(await util.findClosestConfigFile(brsFilePath)).to.equal(parentDirBrsConfigPath);
         });
+
     });
 
     describe('normalizeConfig', () => {
@@ -156,6 +157,24 @@ describe('util', () => {
             expect(config.outFile).to.equal(path.join(rootConfigDir, 'testProjects', 'customOutDir', 'pkg1.zip'));
             expect(config.rootDir).to.equal(path.join(rootConfigDir, 'testProjects', 'core'));
             expect(config.watch).to.equal(true);
+        });
+
+        it('overrides parent files array with child files array', async () => {
+            //the parent file
+            let extendsConfigPath = path.join(rootConfigDir, 'testProjects', 'parent.bsconfig.json');
+            vfs[extendsConfigPath] = `{
+                "files": ["base.brs"]
+            }`;
+
+            //the project file
+            vfs[rootConfigPath] = `{
+                "extends": "testProjects/parent.bsconfig.json",
+                "files": ["child.brs"]
+            }`;
+
+            let config = await util.normalizeAndResolveConfig({ project: rootConfigPath });
+
+            expect(config.files).to.eql(['child.brs']);
         });
 
         it('catches circular dependencies', async () => {
