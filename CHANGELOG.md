@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.5.1] - 2020-04-10
+### Changed
+ - upgraded to [roku-deploy@3.0.2](https://www.npmjs.com/package/roku-debug/v/0.3.4) which fixed a file copy bug in subdirectories of symlinked folders
+
+
+
 ## [0.5.0] - 2020-04-10
 ### Added
  - several new diagnostics for conditional compiles. Some of them allow the parser to recover and continue. 
@@ -108,6 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.5.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.0...v0.5.1
 [0.5.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.4...v0.5.0
 [0.4.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.3...v0.4.4
 [0.4.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.2...v0.4.3
