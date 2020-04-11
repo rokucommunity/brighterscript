@@ -6,6 +6,54 @@ import { TokenKind, Lexer } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser if statements', () => {
+    it('allows empty if blocks', () => {
+        let { tokens } = Lexer.scan(`
+            if true then
+                
+            else if true then
+                stop
+            else
+                stop
+            end if
+        `);
+        let { statements, diagnostics } = Parser.parse(tokens);
+
+        expect(diagnostics[0]?.message).not.to.exist;
+        expect(statements).to.be.length.greaterThan(0);
+    });
+
+    it('allows empty elseif blocks', () => {
+        let { tokens } = Lexer.scan(`
+            if true then
+                stop
+            else if true then
+
+            else
+                stop
+            end if
+        `);
+        let { statements, diagnostics } = Parser.parse(tokens);
+
+        expect(diagnostics[0]?.message).not.to.exist;
+        expect(statements).to.be.length.greaterThan(0);
+    });
+
+    it('allows empty else blocks', () => {
+        let { tokens } = Lexer.scan(`
+            if true then
+                stop
+            else if true then
+                stop
+            else
+                
+            end if
+        `);
+        let { statements, diagnostics } = Parser.parse(tokens);
+
+        expect(diagnostics[0]?.message).not.to.exist;
+        expect(statements).to.be.length.greaterThan(0);
+    });
+
     it('single-line if next to else or endif', () => {
         let { tokens } = Lexer.scan(`
             if type(component.TextAttrs.font) = "roString"

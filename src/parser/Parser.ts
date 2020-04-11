@@ -994,7 +994,8 @@ export class Parser {
                     this.advance();
                 }
 
-                this.match(TokenKind.Newline);
+                while (this.match(TokenKind.Newline)) { }
+
                 let elseIfThen = this.block(TokenKind.EndIf, TokenKind.Else, TokenKind.ElseIf);
                 if (!elseIfThen) {
                     this.diagnostics.push({
@@ -1023,7 +1024,8 @@ export class Parser {
                     this.advance();
                 }
 
-                this.match(TokenKind.Newline);
+                while (this.match(TokenKind.Newline)) { }
+
                 elseBranch = this.block(TokenKind.EndIf);
                 endIfToken = this.advance(); // skip past "end if"
 
