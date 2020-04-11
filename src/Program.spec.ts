@@ -9,7 +9,7 @@ import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
-import util from './util';
+import { util } from './util';
 let n = util.standardizePath.bind(util);
 let npkg = util.standardizePkgPath.bind(util);
 
@@ -100,6 +100,28 @@ describe('Program', () => {
             });
         });
 
+        it('only parses xml files as components when file is found within the "components" folder', async () => {
+            expect(Object.keys(program.files).length).to.equal(0);
+
+            await program.addOrReplaceFile({
+                src: n(`${rootDir}/components/comp1.xml`),
+                dest: util.pathSepNormalize(`components/comp1.xml`)
+            }, '');
+            expect(Object.keys(program.files).length).to.equal(1);
+
+            await program.addOrReplaceFile({
+                src: n(`${rootDir}/notComponents/comp1.xml`),
+                dest: util.pathSepNormalize(`notComponents/comp1.xml`)
+            }, '');
+            expect(Object.keys(program.files).length).to.equal(1);
+
+            await program.addOrReplaceFile({
+                src: n(`${rootDir}/componentsExtra/comp1.xml`),
+                dest: util.pathSepNormalize(`componentsExtra/comp1.xml`)
+            }, '');
+            expect(Object.keys(program.files).length).to.equal(1);
+        });
+
         it('works with different cwd', async () => {
             let projectDir = n(`${testProjectsPath}/project2`);
             let program = new Program({ cwd: projectDir });
@@ -147,6 +169,7 @@ describe('Program', () => {
             // await program.loadOrReloadFile('components', '')
         });
     });
+
     describe('validate', () => {
         it('does not produce duplicate parse errors for different component scopes', async () => {
             //add a file with a parse error

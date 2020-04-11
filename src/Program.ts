@@ -235,7 +235,6 @@ export class Program {
                 return fileContents;
             }
         };
-
         //get the extension of the file
         if (fileExtension === '.brs' || fileExtension === '.bs') {
             let brsFile = new BrsFile(pathAbsolute, pkgPath, this);
@@ -244,7 +243,13 @@ export class Program {
             this.files[pathAbsolute] = brsFile;
             await brsFile.parse(await getFileContents());
             file = brsFile;
-        } else if (fileExtension === '.xml') {
+
+        } else if (
+            //is xml file
+            fileExtension === '.xml' &&
+            //resides in the components folder (Roku will only parse xml files in the components folder)
+            pkgPath.toLowerCase().startsWith(util.pathSepNormalize(`components/`))
+        ) {
             let xmlFile = new XmlFile(pathAbsolute, pkgPath, this);
             //add the file to the program
             this.files[pathAbsolute] = xmlFile;
