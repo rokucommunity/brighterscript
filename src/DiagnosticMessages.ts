@@ -144,8 +144,8 @@ export let DiagnosticMessages = {
         code: 1026,
         severity: DiagnosticSeverity.Error
     }),
-    missingOverrideKeyword: (methodName: string, ancestorClassName: string) => ({
-        message: `Method '${methodName}' has no override keyword but is declared in ancestor class class '${ancestorClassName}'`,
+    missingOverrideKeyword: (ancestorClassName: string) => ({
+        message: `Method has no override keyword but is declared in ancestor class '${ancestorClassName}'`,
         code: 1027,
         severity: DiagnosticSeverity.Error
     }),
@@ -506,8 +506,13 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     memberAlreadyExistsInParentClass: (memberType: string, parentClassName: string) => ({
-        message: `A ${memberType} with this name already exists in inherited class "${parentClassName}"`,
+        message: `A ${memberType} with this name already exists in inherited class '${parentClassName}'`,
         code: 1098,
+        severity: DiagnosticSeverity.Error
+    }),
+    classChildMemberDifferentMemberTypeThanAncestor: (memberType: string, parentMemberType: string, parentClassName: string) => ({
+        message: `Class member is a ${memberType} here but a ${parentMemberType} in ancestor class '${parentClassName}'`,
+        code: 1099,
         severity: DiagnosticSeverity.Error
     })
 };

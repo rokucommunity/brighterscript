@@ -190,37 +190,55 @@ describe('BrsFile BrighterScript classes', () => {
         }]);
     });
 
-    it.skip('detects overridden property name in child class', async () => {
+    it('detects mismatched member type in child class', async () => {
         (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             class Animal
                 public name
             end class
-            class Duck
+            class Duck extends Animal
+                public function name()
+                    return "Donald"
+                end function
+            end class
+        `) as BrsFile);
+        await program.validate();
+        expect(
+            program.getDiagnostics().map(x => x.message).sort()[0]
+        ).to.eql(
+            DiagnosticMessages.classChildMemberDifferentMemberTypeThanAncestor('method', 'field', 'Animal').message
+        );
+    });
+
+    it('detects overridden property name in child class', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            class Animal
+                public name
+            end class
+            class Duck extends Animal
                 public name
             end class
         `) as BrsFile);
         await program.validate();
         let diagnostics = program.getDiagnostics().map(x => x.message);
         expect(diagnostics).to.eql([
-            DiagnosticMessages.memberAlreadyExistsInParentClass('property', 'Animal').message
+            DiagnosticMessages.memberAlreadyExistsInParentClass('field', 'Animal').message
         ]);
     });
 
-    it.skip('detects overridden methods without override keyword', async () => {
+    it('detects overridden methods without override keyword', async () => {
         (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             class Animal
                 sub speak()
                 end sub
             end class
-            class Duck
+            class Duck extends Animal
                 sub speak()
                 end sub
             end class
         `) as BrsFile);
         await program.validate();
         expect(program.getDiagnostics()[0]).to.exist.and.to.include({
-            ...DiagnosticMessages.missingOverrideKeyword('speak', 'Animal'),
-            location: Range.create(6, 20, 6, 25)
+            ...DiagnosticMessages.missingOverrideKeyword('Animal')
         });
     });
 

@@ -41,14 +41,48 @@ export class BsClassValidator {
                     });
                 }
 
-                //handle collisions in parent
-                let ancestorClass = classStatement.parentClass;
-                while (ancestorClass) {
-                    //if the ancestor has the same named field as
-                    if (ancestorClass.memberMap[lowerMemberName]) {
+                let memberType = member instanceof ClassFieldStatement ? 'field' : 'method';
+                let ancestorAndMember = this.getAncestorMember(classStatement, lowerMemberName);
+                if (ancestorAndMember) {
+                    let ancestorMemberType = ancestorAndMember.member instanceof ClassFieldStatement ? 'field' : 'method';
+
+                    //mismatched member type (field/method in child, opposite in parent)
+                    if (memberType !== ancestorMemberType) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.classChildMemberDifferentMemberTypeThanAncestor(
+                                memberType,
+                                ancestorMemberType,
+                                ancestorAndMember.classStatement.name.text
+                            ),
+                            file: classStatement.file,
+                            range: member.range
+                        });
                     }
-                    ancestorClass = classStatement.parentClass;
+
+                    //child field has same name as parent
+                    if (member instanceof ClassFieldStatement) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.memberAlreadyExistsInParentClass(
+                                memberType,
+                                ancestorAndMember.classStatement.name.text
+                            ),
+                            file: classStatement.file,
+                            range: member.range
+                        });
+                    }
+
+                    //child method missing the override keyword
+                    if (member instanceof ClassMethodStatement && !member.overrides) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.missingOverrideKeyword(
+                                ancestorAndMember.classStatement.name.text
+                            ),
+                            file: classStatement.file,
+                            range: member.range
+                        });
+                    }
                 }
+
                 if (member instanceof ClassMethodStatement) {
                     methods[lowerMemberName] = member;
 
@@ -56,6 +90,24 @@ export class BsClassValidator {
                     fields[lowerMemberName] = member;
                 }
             }
+        }
+    }
+
+    /**
+     * Get the closest member with the specified name (case-insensitive)
+     */
+    private getAncestorMember(classStatement: AugmentedClassStatement, memberName: string) {
+        let lowerMemberName = memberName.toLowerCase();
+        let ancestor = classStatement.parentClass;
+        while (ancestor) {
+            let member = ancestor.memberMap[lowerMemberName];
+            if (member) {
+                return {
+                    member: member,
+                    classStatement: ancestor
+                };
+            }
+            ancestor = classStatement.parentClass;
         }
     }
 
