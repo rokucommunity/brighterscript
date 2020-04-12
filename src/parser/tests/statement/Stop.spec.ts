@@ -6,7 +6,7 @@ import { EOF, token } from '../Parser.spec';
 
 describe('stop statement', () => {
     it('cannot be used as a local variable', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Stop, 'stop'),
             token(TokenKind.Equal, '='),
             token(TokenKind.True, 'true'),
@@ -14,15 +14,15 @@ describe('stop statement', () => {
         ]);
 
         //should be an error
-        expect(errors).to.be.lengthOf(1);
+        expect(diagnostics).to.be.lengthOf(1);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
         // //expect(statements).toMatchSnapshot();
     });
 
     it('is valid as a statement', () => {
-        let { diagnostics: errors } = Parser.parse([token(TokenKind.Stop, 'stop'), EOF]);
-        expect(errors[0]).to.be.undefined;
+        let { diagnostics } = Parser.parse([token(TokenKind.Stop, 'stop'), EOF]);
+        expect(diagnostics[0]).to.be.undefined;
         // //expect(statements).toMatchSnapshot();
     });
 
@@ -35,8 +35,8 @@ describe('stop statement', () => {
                 theObject.stop = true
             end sub
         `);
-        let { diagnostics: errors } = Parser.parse(tokens);
-        expect(errors.length).to.equal(0);
+        let { diagnostics } = Parser.parse(tokens);
+        expect(diagnostics.length).to.equal(0);
         // //expect(statements).toMatchSnapshot();
     });
 });

@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser indexing', () => {
     describe('one level', () => {
         it('dotted', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -18,14 +18,14 @@ describe('parser indexing', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
             //expect(statements).toMatchSnapshot();
         });
 
         it('bracketed', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -35,7 +35,7 @@ describe('parser indexing', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
             //expect(statements).toMatchSnapshot();
@@ -49,7 +49,7 @@ describe('parser indexing', () => {
              * 0| a = foo.bar
              * 1| b = foo[2]
              */
-            let { statements, diagnostics: errors } = Parser.parse(<any>[
+            let { statements, diagnostics } = Parser.parse(<any>[
                 {
                     kind: TokenKind.Identifier,
                     text: 'a',
@@ -131,7 +131,7 @@ describe('parser indexing', () => {
                 }
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.lengthOf(2);
             expect(statements.map(s => (s as any).value.range)).to.deep.equal([
                 Range.create(0, 4, 0, 11),
@@ -142,7 +142,7 @@ describe('parser indexing', () => {
 
     describe('multi-level', () => {
         it('dotted', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -151,13 +151,13 @@ describe('parser indexing', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
 
         it('bracketed', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -173,13 +173,13 @@ describe('parser indexing', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });
 
         it('mixed', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
@@ -193,7 +193,7 @@ describe('parser indexing', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.lengthOf(0);
+            expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
             //expect(statements).toMatchSnapshot();
         });

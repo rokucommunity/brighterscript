@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser prefix unary expressions', () => {
 
     it('parses unary \'not\'', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Not, 'not'),
@@ -17,13 +17,13 @@ describe('parser prefix unary expressions', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
 
     it('parses consecutive unary \'not\'', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Not, 'not'),
@@ -35,13 +35,13 @@ describe('parser prefix unary expressions', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
 
     it('parses unary \'-\'', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Minus, '-'),
@@ -49,13 +49,13 @@ describe('parser prefix unary expressions', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
 
     it('parses consecutive unary \'-\'', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Minus, '-'),
@@ -67,7 +67,7 @@ describe('parser prefix unary expressions', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
@@ -79,7 +79,7 @@ describe('parser prefix unary expressions', () => {
          *  +----------------------
          * 1| _false = not true
          */
-        let { statements, diagnostics: errors } = Parser.parse(<any>[
+        let { statements, diagnostics } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: '_false',
@@ -113,7 +113,7 @@ describe('parser prefix unary expressions', () => {
             }
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect((statements[0] as any).value.range).to.deep.include(
             Range.create(0, 9, 0, 17)

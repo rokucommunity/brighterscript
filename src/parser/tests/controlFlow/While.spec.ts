@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser while statements', () => {
 
     it('while without exit', () => {
-        const { statements, diagnostics: errors } = Parser.parse([
+        const { statements, diagnostics } = Parser.parse([
             token(TokenKind.While, 'while'),
             token(TokenKind.True, 'true', BrsBoolean.True),
             token(TokenKind.Newline, '\n'),
@@ -20,13 +20,13 @@ describe('parser while statements', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
 
     it('while with exit', () => {
-        const { statements, diagnostics: errors } = Parser.parse([
+        const { statements, diagnostics } = Parser.parse([
             token(TokenKind.While, 'while'),
             token(TokenKind.True, 'true', BrsBoolean.True),
             token(TokenKind.Newline, '\n'),
@@ -39,7 +39,7 @@ describe('parser while statements', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
     });
@@ -53,7 +53,7 @@ describe('parser while statements', () => {
          * 1|   Rnd(0)
          * 2| end while
          */
-        const { statements, diagnostics: errors } = Parser.parse([
+        const { statements, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.While,
                 text: 'while',
@@ -88,7 +88,7 @@ describe('parser while statements', () => {
             EOF
         ]);
 
-        expect(errors[0]?.message).not.to.exist;
+        expect(diagnostics[0]?.message).not.to.exist;
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].range).deep.include(
             Range.create(0, 0, 2, 9)

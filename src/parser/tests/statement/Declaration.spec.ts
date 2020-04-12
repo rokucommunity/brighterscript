@@ -8,7 +8,7 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser variable declarations', () => {
     it('allows newlines before assignments', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Newline),
             token(TokenKind.Newline),
             token(TokenKind.Newline),
@@ -18,13 +18,13 @@ describe('parser variable declarations', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
     });
 
     it('allows newlines after assignments', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('hasNewlines'),
             token(TokenKind.Equal),
             token(TokenKind.True),
@@ -32,27 +32,27 @@ describe('parser variable declarations', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
     });
 
     it('parses literal value assignments', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('foo'),
             token(TokenKind.Equal),
             token(TokenKind.IntegerLiteral, '5', new Int32(5)),
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
         //expect(statements).toMatchSnapshot();
     });
 
     it('parses evaluated value assignments', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('bar'),
             token(TokenKind.Equal),
             token(TokenKind.IntegerLiteral, '5', new Int32(5)),
@@ -61,21 +61,21 @@ describe('parser variable declarations', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
         //expect(statements).toMatchSnapshot();
     });
 
     it('parses variable aliasing', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('baz'),
             token(TokenKind.Equal),
             identifier('foo'),
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
         //expect(statements).toMatchSnapshot();
@@ -88,7 +88,7 @@ describe('parser variable declarations', () => {
          *  +------------------
          * 0| foo = invalid
          */
-        let { statements, diagnostics: errors } = Parser.parse(<any>[
+        let { statements, diagnostics } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: 'foo',
@@ -116,7 +116,7 @@ describe('parser variable declarations', () => {
             }
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].range).to.deep.include(
             Range.create(0, 0, 0, 13)

@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser return statements', () => {
     it('parses void returns', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -21,13 +21,13 @@ describe('parser return statements', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.ok;
         // //expect(statements).toMatchSnapshot();
     });
 
     it('parses literal returns', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -40,13 +40,13 @@ describe('parser return statements', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.ok;
         // //expect(statements).toMatchSnapshot();
     });
 
     it('parses expression returns', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -61,7 +61,7 @@ describe('parser return statements', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.ok;
         // //expect(statements).toMatchSnapshot();
     });
@@ -75,7 +75,7 @@ describe('parser return statements', () => {
          * 1|   return 5
          * 2| end function
          */
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -99,7 +99,7 @@ describe('parser return statements', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect((statements[0] as FunctionStatement).func.body.statements[0]?.range).to.exist.and.to.deep.include(
             Range.create(1, 2, 1, 10)
         );

@@ -6,22 +6,22 @@ import { EOF, identifier, token } from '../Parser.spec';
 
 describe('parser goto statements', () => {
     it('parses standalone statement properly', () => {
-        let { diagnostics: errors } = Parser.parse([
+        let { diagnostics } = Parser.parse([
             token(TokenKind.Goto, 'goto'),
             identifier('SomeLabel'),
             EOF
         ]);
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         //expect({ errors, statements }).toMatchSnapshot();
     });
 
     it('detects labels', () => {
-        let { diagnostics: errors } = Parser.parse([
+        let { diagnostics } = Parser.parse([
             identifier('SomeLabel'),
             token(TokenKind.Colon, ':'),
             EOF
         ]);
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         //expect(statements).toMatchSnapshot();
     });
 
@@ -33,8 +33,8 @@ describe('parser goto statements', () => {
                 myLabel:
             end sub
         `);
-        let { diagnostics: errors } = Parser.parse(tokens);
-        expect(errors).to.be.lengthOf(0);
+        let { diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(0);
         //expect(statements).toMatchSnapshot();
     });
 });

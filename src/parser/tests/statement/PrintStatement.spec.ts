@@ -8,28 +8,28 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser print statements', () => {
     it('parses singular print statements', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Print),
             token(TokenKind.StringLiteral, 'Hello, world'),
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
         //expect(statements).toMatchSnapshot();
     });
 
     it('supports empty print', () => {
-        let { statements, diagnostics: errors } = Parser.parse([token(TokenKind.Print), EOF]);
-        expect(errors).to.be.lengthOf(0);
+        let { statements, diagnostics } = Parser.parse([token(TokenKind.Print), EOF]);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
         //expect(statements).toMatchSnapshot();
     });
 
     it('parses print lists with no separator', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Print),
             token(TokenKind.StringLiteral, 'Foo', new BrsString('Foo')),
             token(TokenKind.StringLiteral, 'bar', new BrsString('bar')),
@@ -37,14 +37,14 @@ describe('parser print statements', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
         //expect(statements).toMatchSnapshot();
     });
 
     it('parses print lists with separators', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Print),
             token(TokenKind.StringLiteral, 'Foo', new BrsString('Foo')),
             token(TokenKind.Semicolon),
@@ -54,7 +54,7 @@ describe('parser print statements', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
         //expect(statements).toMatchSnapshot();
@@ -67,7 +67,7 @@ describe('parser print statements', () => {
          *  +--------------
          * 1| print "foo"
          */
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.Print,
                 text: 'print',
@@ -89,7 +89,7 @@ describe('parser print statements', () => {
             }
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].range).to.deep.include(Range.create(0, 0, 0, 11));
     });

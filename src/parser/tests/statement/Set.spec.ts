@@ -9,7 +9,7 @@ import { Range } from 'vscode-languageserver';
 describe('parser indexed assignment', () => {
     describe('dotted', () => {
         it('assigns anonymous functions', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('foo'),
                 token(TokenKind.Dot, '.'),
                 identifier('bar'),
@@ -22,14 +22,14 @@ describe('parser indexed assignment', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.empty;
+            expect(diagnostics).to.be.empty;
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
             // //expect(statements).toMatchSnapshot();
         });
 
         it('assigns boolean expressions', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('foo'),
                 token(TokenKind.Dot, '.'),
                 identifier('bar'),
@@ -41,14 +41,14 @@ describe('parser indexed assignment', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.empty;
+            expect(diagnostics).to.be.empty;
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
             // //expect(statements).toMatchSnapshot();
         });
 
         it('assignment operator', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('foo'),
                 token(TokenKind.Dot, '.'),
                 identifier('bar'),
@@ -58,7 +58,7 @@ describe('parser indexed assignment', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.empty;
+            expect(diagnostics).to.be.empty;
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
             // //expect(statements).toMatchSnapshot();
@@ -67,7 +67,7 @@ describe('parser indexed assignment', () => {
 
     describe('bracketed', () => {
         it('assigns anonymous functions', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('someArray'),
                 token(TokenKind.LeftSquareBracket, '['),
                 token(TokenKind.IntegerLiteral, '0', new Int32(0)),
@@ -81,14 +81,14 @@ describe('parser indexed assignment', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.empty;
+            expect(diagnostics).to.be.empty;
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
             // //expect(statements).toMatchSnapshot();
         });
 
         it('assigns boolean expressions', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('someArray'),
                 token(TokenKind.LeftSquareBracket, '['),
                 token(TokenKind.IntegerLiteral, '0', new Int32(0)),
@@ -101,14 +101,14 @@ describe('parser indexed assignment', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.empty;
+            expect(diagnostics).to.be.empty;
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
             // //expect(statements).toMatchSnapshot();
         });
 
         it('assignment operator', () => {
-            let { statements, diagnostics: errors } = Parser.parse([
+            let { statements, diagnostics } = Parser.parse([
                 identifier('someArray'),
                 token(TokenKind.LeftSquareBracket, '['),
                 token(TokenKind.IntegerLiteral, '0', new Int32(0)),
@@ -118,7 +118,7 @@ describe('parser indexed assignment', () => {
                 EOF
             ]);
 
-            expect(errors).to.be.empty;
+            expect(diagnostics).to.be.empty;
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
             // //expect(statements).toMatchSnapshot();
@@ -133,7 +133,7 @@ describe('parser indexed assignment', () => {
          * 0| arr[0] = 1
          * 1| obj.a = 5
          */
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'arr',
@@ -217,7 +217,7 @@ describe('parser indexed assignment', () => {
             }
         ]);
 
-        expect(errors).to.be.empty;
+        expect(diagnostics).to.be.empty;
         expect(statements).to.be.lengthOf(2);
         expect(statements.map(s => s.range)).to.deep.equal([
             Range.create(0, 0, 0, 10),

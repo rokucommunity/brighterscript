@@ -8,7 +8,7 @@ import { Range } from 'vscode-languageserver';
 
 describe('parser foreach loops', () => {
     it('requires a name and target', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.ForEach, 'for each'),
             identifier('word'),
             identifier('in'),
@@ -21,7 +21,7 @@ describe('parser foreach loops', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
 
         let forEach = statements[0] as any;
@@ -35,7 +35,7 @@ describe('parser foreach loops', () => {
     });
 
     it('allows \'next\' to terminate loop', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.ForEach, 'for each'),
             identifier('word'),
             identifier('in'),
@@ -48,7 +48,7 @@ describe('parser foreach loops', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).to.be.length.greaterThan(0);
         //expect(statements).toMatchSnapshot();
@@ -63,7 +63,7 @@ describe('parser foreach loops', () => {
          * 1|   Rnd(a)
          * 2| end for
          */
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.ForEach,
                 text: 'for each',
@@ -109,7 +109,7 @@ describe('parser foreach loops', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].range).deep.include(
             Range.create(0, 0, 2, 7)

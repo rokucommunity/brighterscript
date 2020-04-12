@@ -8,20 +8,20 @@ import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
 describe('parser postfix unary expressions', () => {
     it('parses postfix \'++\' for variables', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('foo'),
             token(TokenKind.PlusPlus, '++'),
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
         //expect(statements).toMatchSnapshot();
     });
 
     it('parses postfix \'--\' for dotted get expressions', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('obj'),
             token(TokenKind.Dot, '.'),
             identifier('property'),
@@ -29,14 +29,14 @@ describe('parser postfix unary expressions', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
         //expect(statements).toMatchSnapshot();
     });
 
     it('parses postfix \'++\' for indexed get expressions', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             identifier('obj'),
             token(TokenKind.LeftSquareBracket, '['),
             identifier('property'),
@@ -45,28 +45,28 @@ describe('parser postfix unary expressions', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
         //expect(statements).toMatchSnapshot();
     });
 
     it('disallows consecutive postfix operators', () => {
-        let { diagnostics: errors } = Parser.parse([
+        let { diagnostics } = Parser.parse([
             identifier('foo'),
             token(TokenKind.PlusPlus, '++'),
             token(TokenKind.PlusPlus, '++'),
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(1);
-        expect(errors[0]).deep.include({
+        expect(diagnostics).to.be.lengthOf(1);
+        expect(diagnostics[0]).deep.include({
             message: 'Consecutive increment/decrement operators are not allowed'
         });
     });
 
     it('disallows postfix \'--\' for function call results', () => {
-        let { diagnostics: errors } = Parser.parse([
+        let { diagnostics } = Parser.parse([
             identifier('func'),
             token(TokenKind.LeftParen, '('),
             token(TokenKind.RightParen, ')'),
@@ -74,14 +74,14 @@ describe('parser postfix unary expressions', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(1);
-        expect(errors[0]).to.deep.include({
+        expect(diagnostics).to.be.lengthOf(1);
+        expect(diagnostics[0]).to.deep.include({
             ...DiagnosticMessages.incrementDecrementOperatorsAreNotAllowedAsResultOfFunctionCall()
         });
     });
 
     it('allows \'++\' at the end of a function', () => {
-        let { statements, diagnostics: errors } = Parser.parse([
+        let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Sub, 'sub'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -94,7 +94,7 @@ describe('parser postfix unary expressions', () => {
             EOF
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
         //expect(statements).toMatchSnapshot();
@@ -107,7 +107,7 @@ describe('parser postfix unary expressions', () => {
          *  +--------------
          * 0| someNumber++
          */
-        let { statements, diagnostics: errors } = Parser.parse(<any>[
+        let { statements, diagnostics } = Parser.parse(<any>[
             {
                 kind: TokenKind.Identifier,
                 text: 'someNumber',
@@ -128,7 +128,7 @@ describe('parser postfix unary expressions', () => {
             }
         ]);
 
-        expect(errors).to.be.lengthOf(0);
+        expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].range).deep.include(
             Range.create(0, 0, 0, 12)
