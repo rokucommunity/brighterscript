@@ -191,7 +191,7 @@ export let DiagnosticMessages = {
     }),
     tooManyCallableParameters: (actual: number, max: number) => ({
         message: `Cannot have more than ${max} parameters but found ${actual})`,
-        code: 1098,
+        code: 1036,
         severity: DiagnosticSeverity.Error
     }),
     invalidFunctionReturnType: (typeText: string) => ({
