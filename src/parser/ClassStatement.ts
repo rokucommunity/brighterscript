@@ -26,11 +26,13 @@ export class ClassStatement implements Statement {
             } else {
                 throw new Error(`Critical error: unknown member type added to class definition ${this.name}`);
             }
+            this.memberMap[member?.name?.text.toLowerCase()] = member;
         }
 
         this.range = Range.create(this.classKeyword.range.start, this.end.range.end);
     }
 
+    public memberMap = {} as { [memberName: string]: ClassMemberStatement };
     public methods = [] as ClassMethodStatement[];
     public fields = [] as ClassFieldStatement[];
 

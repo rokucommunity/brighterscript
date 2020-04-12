@@ -504,6 +504,11 @@ export let DiagnosticMessages = {
         message: `Expected xml attribute name after '@'`,
         code: 1097,
         severity: DiagnosticSeverity.Error
+    }),
+    memberAlreadyExistsInParentClass: (memberType: string, parentClassName: string) => ({
+        message: `A ${memberType} with this name already exists in inherited class "${parentClassName}"`,
+        code: 1098,
+        severity: DiagnosticSeverity.Error
     })
 };
 

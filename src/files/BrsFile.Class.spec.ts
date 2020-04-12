@@ -190,6 +190,22 @@ describe('BrsFile BrighterScript classes', () => {
         }]);
     });
 
+    it.skip('detects overridden property name in child class', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            class Animal
+                public name
+            end class
+            class Duck
+                public name
+            end class
+        `) as BrsFile);
+        await program.validate();
+        let diagnostics = program.getDiagnostics().map(x => x.message);
+        expect(diagnostics).to.eql([
+            DiagnosticMessages.memberAlreadyExistsInParentClass('property', 'Animal').message
+        ]);
+    });
+
     it.skip('detects overridden methods without override keyword', async () => {
         (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             class Animal

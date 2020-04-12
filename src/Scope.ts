@@ -7,7 +7,7 @@ import { XmlFile } from './files/XmlFile';
 import { CallableContainer, BsDiagnostic, File } from './interfaces';
 import { Program } from './Program';
 import util from './util';
-import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from './parser/ClassStatement';
+import { BsClassValidator } from './validators/ClassValidator';
 
 /**
  * A class to keep track of all declarations within a given scope (like global scope, component scope)
@@ -30,6 +30,11 @@ export class Scope {
     protected program: Program;
 
     protected programHandles = [] as Array<() => void>;
+
+    /**
+     * The list of diagnostics found specifically for this scope. Individual file diagnostics are stored on the files themselves.
+     */
+    protected diagnostics = [] as BsDiagnostic[];
 
     /**
      * Attach the scope to a program. This allows the scope to monitor file adds, changes, and removals, and respond accordingly
@@ -110,7 +115,7 @@ export class Scope {
         return this.matcher(file) === true;
     }
 
-    private files = {} as { [filePath: string]: ScopeFile };
+    public files = {} as { [filePath: string]: ScopeFile };
 
     public get fileCount() {
         return Object.keys(this.files).length;
@@ -141,11 +146,6 @@ export class Scope {
 
         return filteredDiagnostics;
     }
-
-    /**
-     * The list of diagnostics found specifically for this scope. Individual file diagnostics are stored on the files themselves.
-     */
-    protected diagnostics = [] as BsDiagnostic[];
 
     /**
      * Get the list of callables available in this scope (either declared in this scope or in a parent scope)
@@ -278,7 +278,7 @@ export class Scope {
         this.diagnosticFindDuplicateFunctionDeclarations(callableContainersByLowerName);
 
         //enforce a series of checks on the bodies of class methods
-        this.diagnosticValidateClassMethods();
+        this.validateClasses();
 
         //do many per-file checks
         for (let key in this.files) {
@@ -291,74 +291,10 @@ export class Scope {
         this.isValidated = false;
     }
 
-    private diagnosticValidateClassMethods() {
-        type AugmentedClassStatement = ClassStatement & {
-            file: BrsFile | XmlFile;
-            parentClass: AugmentedClassStatement;
-        };
-
-        //find every class in this scope
-        let classes = {} as { [lowerName: string]: AugmentedClassStatement };
-
-        for (let key in this.files) {
-            let file = this.files[key];
-
-            for (let x of file.file.classStatements) {
-                let classStatement = x as AugmentedClassStatement;
-                classes[classStatement.name.text.toLowerCase()] = classStatement;
-                classStatement.file = file.file;
-            }
-        }
-
-        //link all classes with their parents
-        for (let key in classes) {
-            let classStatement = classes[key];
-            let parentClassName = classStatement.extendsIdentifier?.text;
-            if (parentClassName) {
-                let parentClass = classes[parentClassName.toLowerCase()];
-
-                //detect unknown parent class
-                if (!parentClass) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.classCouldNotBeFound(parentClassName, this.name),
-                        file: classStatement.file,
-                        range: classStatement.extendsIdentifier.range
-                    });
-                }
-                classStatement.parentClass = parentClass;
-            }
-        }
-
-        for (let key in classes) {
-            let classStatement = classes[key];
-            let methods = {};
-            let fields = {};
-
-            for (let member of classStatement.members) {
-                let lowerName = member.name.text.toLowerCase();
-
-                //catch duplicate member names
-                if (methods[lowerName] || fields[lowerName]) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.duplicateIdentifier(member.name.text),
-                        file: classStatement.file,
-                        range: member.name.range
-                    });
-                }
-                if (member instanceof ClassMethodStatement) {
-                    methods[lowerName] = member;
-
-                } else if (member instanceof ClassFieldStatement) {
-                    fields[lowerName] = member;
-                }
-            }
-        }
-
-        //unlink all classes from their parents so it doesn't mess up the next scope
-        for (let key in classes) {
-            let classStatement = classes[key];
-            delete classStatement.parentClass;
-        }
+    private validateClasses() {
+        let validator = new BsClassValidator();
+        validator.validate(this);
+        this.diagnostics.push(...validator.diagnostics);
     }
 
     /**
