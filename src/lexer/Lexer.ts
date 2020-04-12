@@ -242,10 +242,10 @@ export class Lexer {
                         switch (this.peek()) {
                             case '=':
                                 this.advance();
-                                this.addToken(TokenKind.LessLessEqual);
+                                this.addToken(TokenKind.LeftShiftEqual);
                                 break;
                             default:
-                                this.addToken(TokenKind.LessLess);
+                                this.addToken(TokenKind.LeftShift);
                                 break;
                         }
                         break;
@@ -269,10 +269,10 @@ export class Lexer {
                         switch (this.peek()) {
                             case '=':
                                 this.advance();
-                                this.addToken(TokenKind.GreaterGreaterEqual);
+                                this.addToken(TokenKind.RightShiftEqual);
                                 break;
                             default:
-                                this.addToken(TokenKind.GreaterGreater);
+                                this.addToken(TokenKind.RightShift);
                                 break;
                         }
                         break;

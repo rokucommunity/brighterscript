@@ -288,9 +288,9 @@ describe('lexer', () => {
         it('reads bitshift operators', () => {
             let { tokens } = Lexer.scan('<< >> <<');
             expect(tokens.map(t => t.kind)).to.deep.equal([
-                TokenKind.LessLess,
-                TokenKind.GreaterGreater,
-                TokenKind.LessLess,
+                TokenKind.LeftShift,
+                TokenKind.RightShift,
+                TokenKind.LeftShift,
                 TokenKind.Eof
             ]);
             expect(tokens.filter(t => !!t.literal).length).to.equal(0);
@@ -299,8 +299,8 @@ describe('lexer', () => {
         it('reads bitshift assignment operators', () => {
             let { tokens } = Lexer.scan('<<= >>=');
             expect(tokens.map(t => t.kind)).to.deep.equal([
-                TokenKind.LessLessEqual,
-                TokenKind.GreaterGreaterEqual,
+                TokenKind.LeftShiftEqual,
+                TokenKind.RightShiftEqual,
                 TokenKind.Eof
             ]);
             expect(tokens.filter(t => !!t.literal).length).to.equal(0);

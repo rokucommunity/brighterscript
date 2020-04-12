@@ -21,8 +21,8 @@ export enum TokenKind {
     MinusMinus = 'MinusMinus', // --
 
     // bitshift
-    LessLess = 'LessLess', // <<
-    GreaterGreater = 'GreaterGreater', // >>
+    LeftShift = 'LeftShift', // <<
+    RightShift = 'RightShift', // >>
 
     // assignment operators
     MinusEqual = 'MinusEqual', // -=
@@ -30,8 +30,8 @@ export enum TokenKind {
     StarEqual = 'StarEqual', // *=
     ForwardslashEqual = 'ForwardslashEqual', // /=
     BackslashEqual = 'BackslashEqual', // \=
-    LessLessEqual = 'LessLessEqual', // <<=
-    GreaterGreaterEqual = 'GreaterGreaterEqual', // >>=
+    LeftShiftEqual = 'LeftShiftEqual', // <<=
+    RightShiftEqual = 'RightShiftEqual', // >>=
 
     // comparators
     Less = 'Less', // <
@@ -285,8 +285,8 @@ export const AssignmentOperators = [
     TokenKind.StarEqual,
     TokenKind.ForwardslashEqual,
     TokenKind.BackslashEqual,
-    TokenKind.LessLessEqual,
-    TokenKind.GreaterGreaterEqual
+    TokenKind.LeftShiftEqual,
+    TokenKind.RightShiftEqual
 ];
 
 /** List of TokenKinds that are permitted as property names. */
