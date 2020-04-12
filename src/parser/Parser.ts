@@ -1477,7 +1477,14 @@ export class Parser {
     private multiplicative(): Expression {
         let expr = this.exponential();
 
-        while (this.match(TokenKind.Forwardslash, TokenKind.Backslash, TokenKind.Star, TokenKind.Mod)) {
+        while (this.match(
+            TokenKind.Forwardslash,
+            TokenKind.Backslash,
+            TokenKind.Star,
+            TokenKind.Mod,
+            TokenKind.LeftShift,
+            TokenKind.RightShift
+        )) {
             let operator = this.previous();
             let right = this.exponential();
             expr = new BinaryExpression(expr, operator, right);

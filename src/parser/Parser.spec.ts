@@ -24,6 +24,22 @@ describe('parser', () => {
     });
 
     describe('parse', () => {
+        it('supports << operator', () => {
+            expect(parse(`
+                sub main()
+                    print ((r << 24) + (g << 16) + (b << 8) + a)
+                end sub
+            `).diagnostics[0]?.message).not.to.exist;
+        });
+
+        it('supports >> operator', () => {
+            expect(parse(`
+                sub main()
+                    print ((r >> 24) + (g >> 16) + (b >> 8) + a)
+                end sub
+            `).diagnostics[0]?.message).not.to.exist;
+        });
+
         it('allows global function names with same as token to be called', () => {
             expect(parse(`
                 sub main()
