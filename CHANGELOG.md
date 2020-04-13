@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.5.3]
+### Added
+ - syntax support for the xml attribute operator (`node@someAttr`) (#34)
+ - syntax support for bitshift operators (`<<` and `>>`) (#50)
+ - several extra validation checks for class statements
+### Fixed
+ - syntax bug that was showing parse errors for known global method names (such as `string()`) (#49)
+
+
+
 ## [0.5.2] - 2020-04-11
 ### Changed
  - downgrade diagnostic issue 1007 from an error to a warning, and updated the message to "Component is mising "extends" attribute and will automatically extend "Group" by default" (#53)
@@ -123,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.5.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.2...v0.5.3
 [0.5.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.1...v0.5.2
 [0.5.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.0...v0.5.1
 [0.5.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.4...v0.5.0
