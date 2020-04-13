@@ -137,6 +137,25 @@ describe('BrsFile BrighterScript classes', () => {
         });
     });
 
+    it('detects missing call to super', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            class Animal
+                sub new()
+                end sub
+            end class
+            class Duck extends Animal
+                sub new()
+                end sub
+            end class
+        `) as BrsFile);
+        await program.validate();
+        expect(
+            program.getDiagnostics()[0]?.message
+        ).to.equal(
+            DiagnosticMessages.classConstructorMissingSuperCall().message
+        );
+    });
+
     it.skip('detects calls to unknown m methods', async () => {
         (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             class Animal
@@ -145,6 +164,7 @@ describe('BrsFile BrighterScript classes', () => {
                 end sub
             end class
         `) as BrsFile);
+        await program.validate();
         expect(
             program.getDiagnostics()[0]?.message
         ).to.equal(

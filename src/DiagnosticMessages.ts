@@ -514,6 +514,16 @@ export let DiagnosticMessages = {
         message: `Class member is a ${memberType} here but a ${parentMemberType} in ancestor class '${parentClassName}'`,
         code: 1099,
         severity: DiagnosticSeverity.Error
+    }),
+    classConstructorMissingSuperCall: () => ({
+        message: `Missing "super()" call in class constructor method.`,
+        code: 1100,
+        severity: DiagnosticSeverity.Error
+    }),
+    classConstructorSuperMustBeFirstStatement: () => ({
+        message: `A call to 'super()' must be the first statement in this constructor method.`,
+        code: 1101,
+        severity: DiagnosticSeverity.Error
     })
 };
 

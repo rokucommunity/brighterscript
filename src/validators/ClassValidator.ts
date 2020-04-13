@@ -4,6 +4,7 @@ import { XmlFile } from '../files/XmlFile';
 import { BrsFile } from '../files/BrsFile';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { BsDiagnostic } from '..';
+import { CallExpression, VariableExpression } from '../parser';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -18,9 +19,54 @@ export class BsClassValidator {
         this.findClasses();
         this.linkClassesWithParents();
         this.validateMemberCollisions();
-
+        this.verifyChildConstructor();
 
         this.cleanUp();
+    }
+
+    private verifyChildConstructor() {
+        for (let key in this.classes) {
+            let classStatement = this.classes[key];
+            let newMethod = classStatement.memberMap.new;
+            let ancestorNewMethod = this.getAncestorMember(classStatement, 'new');
+
+            if (
+                //this class has a "new method"
+                newMethod &&
+                //this class has a parent class
+                classStatement.parentClass &&
+                //this class's ancestors have a "new" method
+                ancestorNewMethod
+            ) {
+                //verify there's a `super()` as the first statement in this member's "new" method
+                let firstStatement = (newMethod as ClassMethodStatement).func?.body?.statements[0] as CallExpression;
+
+                //if the first statement isn't a call
+                if (firstStatement instanceof CallExpression === false) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.classConstructorMissingSuperCall(),
+                        file: classStatement.file,
+                        range: newMethod.range
+                    });
+
+                    //if the first statement's left-hand-side callee isn't a variable
+                } else if (firstStatement.callee instanceof VariableExpression === false) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.classConstructorSuperMustBeFirstStatement(),
+                        file: classStatement.file,
+                        range: firstStatement.range
+                    });
+
+                    //if the method is not called "super"
+                } else if ((firstStatement.callee as VariableExpression).name.text.toLowerCase() !== 'super') {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.classConstructorSuperMustBeFirstStatement(),
+                        file: classStatement.file,
+                        range: firstStatement.range
+                    });
+                }
+            }
+        }
     }
 
     private validateMemberCollisions() {
@@ -72,7 +118,14 @@ export class BsClassValidator {
                     }
 
                     //child method missing the override keyword
-                    if (member instanceof ClassMethodStatement && !member.overrides) {
+                    if (
+                        //is a method
+                        member instanceof ClassMethodStatement &&
+                        //does not have an override keyword
+                        !member.overrides &&
+                        //is not the constructur function
+                        member.name.text.toLowerCase() !== 'new'
+                    ) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.missingOverrideKeyword(
                                 ancestorAndMember.classStatement.name.text
@@ -107,7 +160,7 @@ export class BsClassValidator {
                     classStatement: ancestor
                 };
             }
-            ancestor = classStatement.parentClass;
+            ancestor = ancestor.parentClass;
         }
     }
 
