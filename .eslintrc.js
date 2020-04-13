@@ -75,6 +75,7 @@ module.exports = {
         'curly': 'error',
         'default-case': 'off',
         'dot-location': 'off',
+        'dot-notation': 'off',
         'func-style': 'off',
         'function-call-argument-newline': 'off',
         'function-paren-newline': 'off',

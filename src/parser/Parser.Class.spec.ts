@@ -56,7 +56,7 @@ describe('parser class', () => {
             let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
             expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(ClassStatement);
-            let field = (statements[0] as ClassStatement).members[0] as ClassFieldStatement;
+            let field = (statements[0] as ClassStatement).body[0] as ClassFieldStatement;
             expect(field.accessModifier.kind).to.equal(TokenKind.Public);
             expect(field.name.text).to.equal('firstName');
             expect(field.as.text).to.equal('as');
@@ -176,6 +176,21 @@ describe('parser class', () => {
             expect(diagnostics).to.have.lengthOf(1);
             expect(diagnostics[0].code).to.equal(DiagnosticMessages.missingCallableKeyword('').code);
         });
+    });
+
+    it('supports comments in various locations', () => {
+        let { diagnostics } = Parser.parse(`
+            'comment
+            class Animal 'comment
+                'comment
+                sub new() 'comment
+                    'comment
+                end sub 'comment
+                'comment
+            end class 'comment
+        `, { mode: ParseMode.brighterscript });
+
+        expect(diagnostics[0]?.message).to.not.exist;
     });
 
     it('recognizes the "extends" keyword', () => {

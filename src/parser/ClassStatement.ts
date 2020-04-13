@@ -12,21 +12,20 @@ export class ClassStatement implements Statement {
     constructor(
         readonly classKeyword: Token,
         readonly name: Identifier,
-        readonly members: ClassMemberStatement[],
+        public body: Statement[],
         readonly end: Token,
         readonly extendsKeyword?: Token,
         readonly extendsIdentifier?: Identifier
     ) {
-        this.members = this.members ?? [];
-        for (let member of this.members) {
-            if (member instanceof ClassMethodStatement) {
-                this.methods.push(member);
-            } else if (member instanceof ClassFieldStatement) {
-                this.fields.push(member);
-            } else {
-                throw new Error(`Critical error: unknown member type added to class definition ${this.name}`);
+        this.body = this.body ?? [];
+        for (let statement of this.body) {
+            if (statement instanceof ClassMethodStatement) {
+                this.methods.push(statement);
+                this.memberMap[statement?.name?.text.toLowerCase()] = statement;
+            } else if (statement instanceof ClassFieldStatement) {
+                this.fields.push(statement);
+                this.memberMap[statement?.name?.text.toLowerCase()] = statement;
             }
-            this.memberMap[member?.name?.text.toLowerCase()] = member;
         }
 
         this.range = Range.create(this.classKeyword.range.start, this.end.range.end);
@@ -85,7 +84,8 @@ export class ClassStatement implements Statement {
      * Get the constructor function for this class (if exists), or undefined if not exist
      */
     private getConstructorFunction() {
-        for (let member of this.members) {
+        for (let key in this.memberMap) {
+            let member = this.memberMap[key];
             if (member.name?.text?.toLowerCase() === 'new') {
                 return member as ClassMethodStatement;
             }
@@ -97,8 +97,8 @@ export class ClassStatement implements Statement {
                 sub new()
                 end sub
             end class
-        `, { mode: ParseMode.brighterscript }).statements[0] as ClassStatement).members[0] as ClassMethodStatement;
-        //TODO make locations point to 1,0 (might not matter?)
+        `, { mode: ParseMode.brighterscript }).statements[0] as ClassStatement).memberMap['new'] as ClassMethodStatement;
+        //TODO make locations point to 0,0 (might not matter?)
         return stmt;
     }
 
@@ -130,32 +130,31 @@ export class ClassStatement implements Statement {
 
         //create empty `new` function if class is missing it (simplifies transpile logic)
         if (!this.getConstructorFunction()) {
-            this.members.push(
-                this.getEmptyNewFunction()
-            );
+            this.memberMap['new'] = this.getEmptyNewFunction();
+            this.body = [this.memberMap['new'], ...this.body];
         }
 
-        for (let member of this.members) {
+        for (let statement of this.body) {
             //fields
-            if (member instanceof ClassFieldStatement) {
+            if (statement instanceof ClassFieldStatement) {
                 // add and initialize all fields to null
                 result.push(
-                    `instance.${member.name.text} = invalid`,
+                    `instance.${statement.name.text} = invalid`,
                     state.newline()
                 );
 
                 //methods
-            } else if (member instanceof ClassMethodStatement) {
+            } else if (statement instanceof ClassMethodStatement) {
 
                 //store overridden parent methods as super{parentIndex}_{methodName}
                 if (
                     //is override method
-                    member.overrides ||
+                    statement.overrides ||
                     //is constructor function in child class
-                    (member.name.text.toLowerCase() === 'new' && parentClass)
+                    (statement.name.text.toLowerCase() === 'new' && parentClass)
                 ) {
                     result.push(
-                        `instance.super${parentClassIndex}_${member.name.text} = instance.${member.name.text}`,
+                        `instance.super${parentClassIndex}_${statement.name.text} = instance.${statement.name.text}`,
                         state.newline(),
                         state.indent()
                     );
@@ -164,12 +163,15 @@ export class ClassStatement implements Statement {
                 result.push(`instance.`);
                 state.classStatement = this;
                 result.push(
-                    state.sourceNode(member.name, member.name.text),
+                    state.sourceNode(statement.name, statement.name.text),
                     ' = ',
-                    ...member.transpile(state),
+                    ...statement.transpile(state),
                     '\n'
                 );
                 delete state.classStatement;
+            } else {
+                //other random statements (probably just comments)
+                result.push(...statement.transpile(state));
             }
             result.push(state.indent());
         }

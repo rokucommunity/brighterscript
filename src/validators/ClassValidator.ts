@@ -1,5 +1,5 @@
 import { Scope } from '../Scope';
-import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from '../parser/ClassStatement';
+import { ClassStatement, ClassMethodStatement, ClassFieldStatement, ClassMemberStatement } from '../parser/ClassStatement';
 import { XmlFile } from '../files/XmlFile';
 import { BrsFile } from '../files/BrsFile';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -75,72 +75,75 @@ export class BsClassValidator {
             let methods = {};
             let fields = {};
 
-            for (let member of classStatement.members) {
-                let lowerMemberName = member.name.text.toLowerCase();
+            for (let statement of classStatement.body) {
+                if (statement instanceof ClassMethodStatement || statement instanceof ClassFieldStatement) {
+                    let member = statement;
+                    let lowerMemberName = member.name.text.toLowerCase();
 
-                //catch duplicate member names on same class
-                if (methods[lowerMemberName] || fields[lowerMemberName]) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.duplicateIdentifier(member.name.text),
-                        file: classStatement.file,
-                        range: member.name.range
-                    });
-                }
-
-                let memberType = member instanceof ClassFieldStatement ? 'field' : 'method';
-                let ancestorAndMember = this.getAncestorMember(classStatement, lowerMemberName);
-                if (ancestorAndMember) {
-                    let ancestorMemberType = ancestorAndMember.member instanceof ClassFieldStatement ? 'field' : 'method';
-
-                    //mismatched member type (field/method in child, opposite in parent)
-                    if (memberType !== ancestorMemberType) {
+                    //catch duplicate member names on same class
+                    if (methods[lowerMemberName] || fields[lowerMemberName]) {
                         this.diagnostics.push({
-                            ...DiagnosticMessages.classChildMemberDifferentMemberTypeThanAncestor(
-                                memberType,
-                                ancestorMemberType,
-                                ancestorAndMember.classStatement.name.text
-                            ),
+                            ...DiagnosticMessages.duplicateIdentifier(member.name.text),
                             file: classStatement.file,
-                            range: member.range
+                            range: member.name.range
                         });
                     }
 
-                    //child field has same name as parent
-                    if (member instanceof ClassFieldStatement) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.memberAlreadyExistsInParentClass(
-                                memberType,
-                                ancestorAndMember.classStatement.name.text
-                            ),
-                            file: classStatement.file,
-                            range: member.range
-                        });
+                    let memberType = member instanceof ClassFieldStatement ? 'field' : 'method';
+                    let ancestorAndMember = this.getAncestorMember(classStatement, lowerMemberName);
+                    if (ancestorAndMember) {
+                        let ancestorMemberType = ancestorAndMember.member instanceof ClassFieldStatement ? 'field' : 'method';
+
+                        //mismatched member type (field/method in child, opposite in parent)
+                        if (memberType !== ancestorMemberType) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.classChildMemberDifferentMemberTypeThanAncestor(
+                                    memberType,
+                                    ancestorMemberType,
+                                    ancestorAndMember.classStatement.name.text
+                                ),
+                                file: classStatement.file,
+                                range: member.range
+                            });
+                        }
+
+                        //child field has same name as parent
+                        if (member instanceof ClassFieldStatement) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.memberAlreadyExistsInParentClass(
+                                    memberType,
+                                    ancestorAndMember.classStatement.name.text
+                                ),
+                                file: classStatement.file,
+                                range: member.range
+                            });
+                        }
+
+                        //child method missing the override keyword
+                        if (
+                            //is a method
+                            member instanceof ClassMethodStatement &&
+                            //does not have an override keyword
+                            !member.overrides &&
+                            //is not the constructur function
+                            member.name.text.toLowerCase() !== 'new'
+                        ) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.missingOverrideKeyword(
+                                    ancestorAndMember.classStatement.name.text
+                                ),
+                                file: classStatement.file,
+                                range: member.range
+                            });
+                        }
                     }
 
-                    //child method missing the override keyword
-                    if (
-                        //is a method
-                        member instanceof ClassMethodStatement &&
-                        //does not have an override keyword
-                        !member.overrides &&
-                        //is not the constructur function
-                        member.name.text.toLowerCase() !== 'new'
-                    ) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.missingOverrideKeyword(
-                                ancestorAndMember.classStatement.name.text
-                            ),
-                            file: classStatement.file,
-                            range: member.range
-                        });
+                    if (member instanceof ClassMethodStatement) {
+                        methods[lowerMemberName] = member;
+
+                    } else if (member instanceof ClassFieldStatement) {
+                        fields[lowerMemberName] = member;
                     }
-                }
-
-                if (member instanceof ClassMethodStatement) {
-                    methods[lowerMemberName] = member;
-
-                } else if (member instanceof ClassFieldStatement) {
-                    fields[lowerMemberName] = member;
                 }
             }
         }

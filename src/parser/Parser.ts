@@ -52,7 +52,7 @@ import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
 import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression, XmlAttributeGetExpression } from './Expression';
 import { Range, Diagnostic } from 'vscode-languageserver';
-import { ClassStatement, ClassMemberStatement, ClassMethodStatement, ClassFieldStatement } from './ClassStatement';
+import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from './ClassStatement';
 
 export class Parser {
     /**
@@ -225,14 +225,19 @@ export class Parser {
 
             extendsIdentifier = this.tryConsume(DiagnosticMessages.missingIdentifierAfterExtendsKeyword(), TokenKind.Identifier) as Identifier;
         }
+        let body = [] as Statement[];
+
+        //consume any trailing comments on the class declaration line
+        if (this.check(TokenKind.Comment)) {
+            body.push(this.commentStatement());
+        }
 
         //consume newlines (at least one)
         while (this.match(TokenKind.Newline)) {
         }
 
-        let members = [] as ClassMemberStatement[];
         //gather up all class members (Fields, Methods)
-        while (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Identifier)) {
+        while (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Identifier, TokenKind.Comment)) {
             try {
                 let accessModifier: Token;
                 if (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private)) {
@@ -255,7 +260,7 @@ export class Parser {
                             range: overrideKeyword.range
                         });
                     }
-                    members.push(
+                    body.push(
                         new ClassMethodStatement(
                             accessModifier,
                             funcDeclaration.name,
@@ -266,8 +271,14 @@ export class Parser {
 
                     //fields
                 } else if (this.check(TokenKind.Identifier)) {
-                    members.push(
+                    body.push(
                         this.classFieldDeclaration(accessModifier)
+                    );
+
+                    //comments
+                } else if (this.check(TokenKind.Comment)) {
+                    body.push(
+                        this.commentStatement()
                     );
                 }
             } catch (e) {
@@ -297,7 +308,7 @@ export class Parser {
         const result = new ClassStatement(
             classKeyword,
             className,
-            members,
+            body,
             endingKeyword,
             extendsKeyword,
             extendsIdentifier
