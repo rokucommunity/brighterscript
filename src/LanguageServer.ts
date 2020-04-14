@@ -634,7 +634,7 @@ export class LanguageServer {
         {
             let workspacesToReload = [] as Workspace[];
             //get the file paths as a string array
-            let filePaths = params.changes.map((x) => x.uri);
+            let filePaths = changes.map((x) => x.pathAbsolute);
 
             for (let workspace of workspaces) {
                 if (workspace.configFilePath && filePaths.includes(workspace.configFilePath)) {

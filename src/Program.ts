@@ -145,7 +145,11 @@ export class Program {
         }
 
         //filter out diagnostics based on our diagnostic filters
-        let finalDiagnostics = this.diagnosticFilterer.filter(this.options, diagnostics);
+        let finalDiagnostics = this.diagnosticFilterer.filter({
+            ...this.options,
+            //pass the computed `rootDir` (because options sometimes is missing rootDir)
+            rootDir: this.rootDir
+        }, diagnostics);
         return finalDiagnostics;
     }
 

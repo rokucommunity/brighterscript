@@ -957,6 +957,13 @@ describe('Program', () => {
     });
 
     describe('getDiagnostics', () => {
+        it('passes computed `rootDir` when not set in options', () => {
+            let spy = sinon.spy((program as any).diagnosticFilterer, 'filter');
+            program.options.rootDir = 'not_real_rootdir';
+            program.rootDir = 'real_rootdir';
+            program.getDiagnostics();
+            expect(spy.getCalls()[0].args[0].rootDir).to.equal('real_rootdir');
+        });
         it('includes diagnostics from files not included in any scope', async () => {
             let pathAbsolute = util.standardizePath(`${rootDir}/components/a/b/c/main.brs`);
             await program.addOrReplaceFile({ src: pathAbsolute, dest: 'components/a/b/c/main.brs' }, `
