@@ -14,6 +14,7 @@ import { BsDiagnostic, File } from './interfaces';
 import { platformFile } from './platformCallables';
 import { util } from './util';
 import { XmlScope } from './XmlScope';
+import { DiagnosticFilterer } from './DiagnosticFilterer';
 
 export class Program {
     constructor(
@@ -57,6 +58,8 @@ export class Program {
             return contents;
         });
     }
+
+    private diagnosticFilterer = new DiagnosticFilterer();
 
     private util = util;
 
@@ -128,37 +131,21 @@ export class Program {
         //get the diagnostics from all scopes
         for (let scopeName in this.scopes) {
             let scope = this.scopes[scopeName];
-            diagnostics = [
-                ...diagnostics,
+            diagnostics.push(
                 ...scope.getDiagnostics()
-            ];
+            );
         }
 
         //get the diagnostics from all unreferenced files
         let unreferencedFiles = this.getUnreferencedFiles();
         for (let file of unreferencedFiles) {
-            diagnostics = [
-                ...diagnostics,
+            diagnostics.push(
                 ...file.getDiagnostics()
-            ];
+            );
         }
 
-        let finalDiagnostics = [] as BsDiagnostic[];
-
-        for (let diagnostic of diagnostics) {
-            if (
-                //skip duplicate diagnostics (by reference).
-                //This skips file parse diagnostics when multiple scopes include same file
-                !finalDiagnostics.includes(diagnostic) &&
-
-                //skip any specified error codes
-                !this.options.ignoreErrorCodes?.includes(diagnostic.code as number)
-            ) {
-                //add the diagnostic to the final list
-                finalDiagnostics.push(diagnostic);
-            }
-        }
-
+        //filter out diagnostics based on our diagnostic filters
+        let finalDiagnostics = this.diagnosticFilterer.filter(this.options, diagnostics);
         return finalDiagnostics;
     }
 

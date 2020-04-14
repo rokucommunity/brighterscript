@@ -99,6 +99,7 @@
     "jsonc-parser": "^2.1.1",
     "long": "^3.2.0",
     "luxon": "^1.8.3",
+    "minimatch": "^3.0.4",
     "moment": "^2.23.0",
     "p-settle": "^2.1.0",
     "roku-deploy": "^3.0.2",

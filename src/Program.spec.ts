@@ -990,7 +990,7 @@ describe('Program', () => {
             await program.validate();
             expect(program.getDiagnostics()).to.be.lengthOf(2);
 
-            program.options.ignoreErrorCodes = [
+            program.options.diagnosticFilters = [
                 DiagnosticMessages.mismatchArgumentCount(0, 0).code
             ];
 
