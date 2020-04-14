@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.5.4]
+### Fixed
+ - Syntax bug that wasn't allowing period before indexed get expression (example: `prop.["key"]`) (#58)
+ - Syntax bug preventing comments from being used in various locations within a class
+
+
+
 ## [0.5.3]
 ### Added
  - syntax support for the xml attribute operator (`node@someAttr`) (#34)
@@ -133,6 +140,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.5.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.3...v0.5.4
 [0.5.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.2...v0.5.3
 [0.5.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.1...v0.5.2
 [0.5.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.0...v0.5.1
