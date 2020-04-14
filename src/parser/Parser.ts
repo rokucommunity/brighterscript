@@ -1526,6 +1526,21 @@ export class Parser {
         return this.call();
     }
 
+    private indexedGet(expr: Expression) {
+        let openingSquare = this.previous();
+        while (this.match(TokenKind.Newline)) { }
+
+        let index = this.expression();
+
+        while (this.match(TokenKind.Newline)) { }
+        let closingSquare = this.consume(
+            DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex(),
+            TokenKind.RightSquareBracket
+        );
+
+        return new IndexedGetExpression(expr, index, openingSquare, closingSquare);
+    }
+
     private call(): Expression {
         let newToken: Token;
         if (this.check(TokenKind.New)) {
@@ -1537,32 +1552,23 @@ export class Parser {
             if (this.match(TokenKind.LeftParen)) {
                 expr = this.finishCall(this.previous(), expr);
             } else if (this.match(TokenKind.LeftSquareBracket)) {
-                let openingSquare = this.previous();
-                while (this.match(TokenKind.Newline)) { }
+                expr = this.indexedGet(expr);
+            } else if (this.match(TokenKind.Dot)) {
+                if (this.match(TokenKind.LeftSquareBracket)) {
+                    expr = this.indexedGet(expr);
+                } else {
+                    let dot = this.previous();
+                    let name = this.consume(
+                        DiagnosticMessages.expectedPropertyNameAfterPeriod(),
+                        TokenKind.Identifier,
+                        ...AllowedProperties
+                    );
 
-                let index = this.expression();
+                    // force it into an identifier so the AST makes some sense
+                    name.kind = TokenKind.Identifier;
 
-                while (this.match(TokenKind.Newline)) {
-
+                    expr = new DottedGetExpression(expr, name as Identifier, dot);
                 }
-                let closingSquare = this.consume(
-                    DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex(),
-                    TokenKind.RightSquareBracket
-                );
-
-                expr = new IndexedGetExpression(expr, index, openingSquare, closingSquare);
-            } else if (this.check(TokenKind.Dot)) {
-                let dot = this.advance();
-                let name = this.consume(
-                    DiagnosticMessages.expectedPropertyNameAfterPeriod(),
-                    TokenKind.Identifier,
-                    ...AllowedProperties
-                );
-
-                // force it into an identifier so the AST makes some sense
-                name.kind = TokenKind.Identifier;
-
-                expr = new DottedGetExpression(expr, name as Identifier, dot);
             } else if (this.check(TokenKind.At)) {
                 let dot = this.advance();
                 let name = this.consume(
