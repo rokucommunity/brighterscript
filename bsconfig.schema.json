@@ -142,9 +142,6 @@
                     {
                         "type": "object",
                         "description": "A file path relative to rootDir, an absolute path, or a file glob pointing to file(s) you wish to filter diagnostics from.",
-                        "required": [
-                            "src"
-                        ],
                         "properties": {
                             "src": {
                                 "type": "string",
