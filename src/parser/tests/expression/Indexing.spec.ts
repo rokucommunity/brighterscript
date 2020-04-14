@@ -5,6 +5,8 @@ import { Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
+import { AssignmentStatement } from '../../Statement';
 
 describe('parser indexing', () => {
     describe('one level', () => {
@@ -39,6 +41,46 @@ describe('parser indexing', () => {
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
             //expect(statements).toMatchSnapshot();
+        });
+
+        describe('dotted and bracketed', () => {
+            it('single dot', () => {
+                let { statements, diagnostics } = Parser.parse([
+                    identifier('_'),
+                    token(TokenKind.Equal, '='),
+                    identifier('foo'),
+                    token(TokenKind.Dot, '.'),
+                    token(TokenKind.LeftSquareBracket, '['),
+                    token(TokenKind.Integer, '2', new Int32(2)),
+                    token(TokenKind.RightSquareBracket, ']'),
+                    EOF
+                ]);
+
+                expect(diagnostics).to.be.empty;
+                expect(statements[0]).to.be.instanceof(AssignmentStatement);
+            });
+
+            it('multiple dots', () => {
+                let { diagnostics } = Parser.parse([
+                    identifier('_'),
+                    token(TokenKind.Equal, '='),
+                    identifier('foo'),
+                    token(TokenKind.Dot, '.'),
+                    token(TokenKind.Dot, '.'),
+                    token(TokenKind.Dot, '.'),
+                    token(TokenKind.LeftSquareBracket, '['),
+                    token(TokenKind.Integer, '2', new Int32(2)),
+                    token(TokenKind.RightSquareBracket, ']'),
+                    EOF
+                ]);
+
+                expect(diagnostics.length).to.equal(1);
+                expect(
+                    diagnostics[0]?.message
+                ).to.exist.and.to.equal(
+                    DiagnosticMessages.expectedPropertyNameAfterPeriod().message
+                );
+            });
         });
 
         it('location tracking', () => {
