@@ -106,9 +106,18 @@ These are the options available in the `bsconfig.json` file.
 
  - **password**: `string` - The password to use when deploying to a roku device.
 
- - **ignoreErrorCodes**: `number[]` - A list of error codes that the compiler should NOT emit, even if encountered. 
-
  - **emitFullPaths**: `boolean` -  Emit full paths to files when printing diagnostics to the console. Defaults to false
+
+ - **diagnosticFilters**: `Array<string | number | {src: string; codes: number[]}` - A list of filters used to hide diagnostics. 
+   - A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed.
+   - A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
+   - An object can also be provided to filter specific diagnostic codes for a file pattern. For example, 
+        ```jsonc
+        "diagnosticFilters": [{
+            "src": "vendor/**/*",
+            "codes": [1000, 1011] //ignore these specific codes from vendor libraries 
+        }]
+        ```
 
 
 ## Ignore errors and warnings on a per-line basis

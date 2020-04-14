@@ -112,6 +112,8 @@
         "ignoreErrorCodes": {
             "description": "A list of error codes the compiler should NOT emit, even if encountered.",
             "type": "array",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated. Use `diagnosticFilters` instead.",
             "items": {
                 "anyOf": [
                     {
