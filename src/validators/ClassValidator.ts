@@ -1,5 +1,5 @@
 import { Scope } from '../Scope';
-import { ClassStatement, ClassMethodStatement, ClassFieldStatement, ClassMemberStatement } from '../parser/ClassStatement';
+import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from '../parser/ClassStatement';
 import { XmlFile } from '../files/XmlFile';
 import { BrsFile } from '../files/BrsFile';
 import { DiagnosticMessages } from '../DiagnosticMessages';
