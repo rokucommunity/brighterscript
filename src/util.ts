@@ -288,10 +288,38 @@ export class Util {
         config.outFile = config.outFile ?? `./out/${rootFolderName}.zip`;
         config.username = config.username ?? 'rokudev';
         config.watch = config.watch === true ? true : false;
-        config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
         config.emitFullPaths = config.emitFullPaths === true ? true : false;
         config.retainStagingFolder = config.retainStagingFolder === true ? true : false;
         config.copyToStaging = config.copyToStaging === false ? false : true;
+        this.standardizeDiagnosticFilters(config);
+        return config;
+    }
+
+    public standardizeDiagnosticFilters(config: BsConfig) {
+        config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
+        config.diagnosticFilters = config.diagnosticFilters ?? [];
+        for (let i = 0; i < config.diagnosticFilters.length; i++) {
+            let filter: any = config.diagnosticFilters[i];
+            if (typeof filter === 'number') {
+                config.ignoreErrorCodes.push(filter);
+                //remove this filter and back up the loop once
+                config.diagnosticFilters.splice(i, 1);
+                i--;
+            } else if (typeof filter === 'string') {
+                config.diagnosticFilters[i] = {
+                    src: filter,
+                    codes: []
+                };
+            }
+            if (typeof filter === 'object' && !filter?.codes) {
+                filter.codes = [];
+            }
+            if (!filter?.src) {
+                config.ignoreErrorCodes.push(...(filter.codes ?? []));
+                config.diagnosticFilters.splice(i, 1);
+                i--;
+            }
+        }
         return config;
     }
 

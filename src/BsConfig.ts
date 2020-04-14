@@ -94,4 +94,8 @@ export interface BsConfig {
      * Emit full paths to files when printing diagnostics to the console. Defaults to false
      */
     emitFullPaths?: boolean;
+    /**
+     * A list of filters used to exclude diagnostics from the output
+     */
+    diagnosticFilters?: Array<number | string | { src: string; codes: number[] } | { src: string } | { codes: number[] }>;
 }

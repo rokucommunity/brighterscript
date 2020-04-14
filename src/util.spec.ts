@@ -201,6 +201,43 @@ describe('util', () => {
         });
     });
 
+    describe('standardizeDiagnosticFilters', () => {
+        it('handles standard diagnostic filters', () => {
+            expect(
+                util.standardizeDiagnosticFilters({
+                    diagnosticFilters: [{ src: 'file.brs', codes: [1, 2, 3] }]
+                }).diagnosticFilters
+            ).to.eql([{ src: 'file.brs', codes: [1, 2, 3] }]);
+        });
+
+        it('handles string-only diagnostic filter object', () => {
+            expect(
+                util.standardizeDiagnosticFilters({
+                    diagnosticFilters: [{ src: 'file.brs' }]
+                }).diagnosticFilters
+            ).to.eql([{ src: 'file.brs', codes: [] }]);
+        });
+
+        it('handles code-only diagnostic filter object', () => {
+            expect(
+                util.standardizeDiagnosticFilters({
+                    diagnosticFilters: [{ codes: [1, 2, 3] }]
+                })
+            ).to.deep.include({
+                diagnosticFilters: [],
+                ignoreErrorCodes: [1, 2, 3]
+            });
+        });
+
+        it('handles string diagnostic filter', () => {
+            expect(
+                util.standardizeDiagnosticFilters({
+                    diagnosticFilters: ['file.brs']
+                }).diagnosticFilters
+            ).to.eql([{ src: 'file.brs', codes: [] }]);
+        });
+    });
+
     describe('stringFormat', () => {
         it('handles out-of-order replacements', () => {
             expect(util.stringFormat('{1}{0}', 'b', 'a')).to.equal('ab');

@@ -30,7 +30,8 @@
                 "images/**/*.*"
             ],
             "items": {
-                "anyOf": [{
+                "anyOf": [
+                    {
                         "type": "string",
                         "description": "A file path or file glob"
                     },
@@ -38,7 +39,8 @@
                         "type": "object",
                         "properties": {
                             "src": {
-                                "anyOf": [{
+                                "anyOf": [
+                                    {
                                         "type": "string",
                                         "description": "A file path or glob pattern of source file(s)"
                                     },
@@ -111,16 +113,59 @@
             "description": "A list of error codes the compiler should NOT emit, even if encountered.",
             "type": "array",
             "items": {
-                "anyOf": [{
-                    "type": "number",
-                    "description": "A BrighterScript error code that will be ignored during compile"
-                }]
+                "anyOf": [
+                    {
+                        "type": "number",
+                        "description": "A BrighterScript error code that will be ignored during compile"
+                    }
+                ]
             }
         },
         "emitFullPaths": {
-            "description": " Emit full paths to files when printing diagnostics to the console.",
+            "description": "Emit full paths to files when printing diagnostics to the console.",
             "type": "boolean",
             "default": false
+        },
+        "diagnosticFilters": {
+            "description": "A collection of filters used to hide diagnostics for certain files",
+            "type": "array",
+            "items": {
+                "anyOf": [
+                    {
+                        "type": "number",
+                        "description": "The code of a diagnostic that should be filtered from all files"
+                    },
+                    {
+                        "type": "string",
+                        "description": "A file path relative to rootDir, an absolute path, or a file glob pointing to file(s) you wish to filter diagnostics from."
+                    },
+                    {
+                        "type": "object",
+                        "description": "A file path relative to rootDir, an absolute path, or a file glob pointing to file(s) you wish to filter diagnostics from.",
+                        "required": [
+                            "src"
+                        ],
+                        "properties": {
+                            "src": {
+                                "type": "string",
+                                "description": "A file path relative to rootDir, an absolute path, or a file glob pointing to file(s) you wish to filter diagnostics from."
+                            },
+                            "codes": {
+                                "type": "array",
+                                "description": "A list of codes of diagnostics that should be filtered out from the files matched in 'src'`. If omitted, all error codes are used",
+                                "items": {
+                                    "anyOf": [
+                                        {
+                                            "type": "number",
+                                            "description": "A code of diagnostics that should be filtered out from the files matched in 'src'"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
         }
     }
 }
