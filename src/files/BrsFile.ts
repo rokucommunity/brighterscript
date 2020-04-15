@@ -146,7 +146,7 @@ export class BrsFile {
         let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
 
         this.parser = Parser.parse(tokens, {
-            mode: this.extension === 'brs' ? ParseMode.brightscript : ParseMode.brighterscript
+            mode: this.extension === 'brs' ? ParseMode.Brightscript : ParseMode.Brighterscript
         });
 
         //absorb all lexing/preprocessing/parsing diagnostics

@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
 import { DottedGetExpression, XmlAttributeGetExpression } from './Expression';
-import { Parser } from './Parser';
+import { Parser, ParseMode } from './Parser';
 import { PrintStatement, AssignmentStatement, FunctionStatement, NamespaceStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -32,7 +32,7 @@ describe('parser', () => {
                         namespace Name.Space
                         end namespace
                     end sub
-                `).diagnostics[0]?.message).to.equal(
+                `, ParseMode.Brighterscript).diagnostics[0]?.message).to.equal(
                     DiagnosticMessages.keywordMustBeDeclaredAtRootLevel('namespace').message
                 );
             });
@@ -41,7 +41,7 @@ describe('parser', () => {
                     parse(`
                         namespace Name.Space
                         end namespace
-                    `);
+                    `, ParseMode.Brighterscript);
                 expect(diagnostics[0]?.message).not.to.exist;
                 expect(statements[0]).to.be.instanceof(NamespaceStatement);
             });
@@ -52,7 +52,7 @@ describe('parser', () => {
                             sub main()
                             end sub
                         end namespace
-                    `);
+                    `, ParseMode.Brighterscript);
                 expect(diagnostics[0]?.message).not.to.exist;
                 expect(statements[0]).to.be.instanceof(NamespaceStatement);
                 expect((statements[0] as NamespaceStatement).body.statements[0]).to.be.instanceof(FunctionStatement);
@@ -70,7 +70,7 @@ describe('parser', () => {
 
                             'comment
                         end namespace 'comment
-                    `);
+                    `, ParseMode.Brighterscript);
                 expect(diagnostics[0]?.message).not.to.exist;
             });
 
@@ -79,7 +79,7 @@ describe('parser', () => {
                     parse(`
                         namespace
                         end namespace
-                    `);
+                    `, ParseMode.Brighterscript);
                 expect(diagnostics[0]?.message).to.equal(
                     DiagnosticMessages.expectedIdentifierAfterKeyword('namespace').message
                 );
@@ -90,7 +90,7 @@ describe('parser', () => {
                     namespace Name.Space
                         sub main()
                         end sub
-                `);
+                `, ParseMode.Brighterscript);
                 expect(parser.ast.statements[0]).to.be.instanceof(NamespaceStatement);
 
                 expect(parser.diagnostics[0]?.message).to.equal(
@@ -98,6 +98,16 @@ describe('parser', () => {
                 );
 
                 expect((parser.ast.statements[0] as NamespaceStatement)?.body?.statements[0]).to.be.instanceof(FunctionStatement);
+            });
+
+            it('adds diagnostic when encountering namespace in brightscript mode', () => {
+                let parser = Parser.parse(`
+                    namespace Name.Space
+                    end namespace
+                `);
+                expect(parser.diagnostics[0]?.message).to.equal(
+                    DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('namespace').message
+                );
             });
         });
 
@@ -464,9 +474,11 @@ describe('parser', () => {
     });
 });
 
-function parse(text: string) {
+function parse(text: string, mode?: ParseMode) {
     let { tokens } = Lexer.scan(text);
-    return Parser.parse(tokens);
+    return Parser.parse(tokens, {
+        mode: mode
+    });
 }
 
 export function rangeToArray(range: Range) {

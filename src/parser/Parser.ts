@@ -173,7 +173,7 @@ export class Parser {
      * Throws an error if the input file type is not BrighterScript
      */
     private warnIfNotBrighterScriptMode(featureName: string) {
-        if (this.options.mode !== 'brighterscript') {
+        if (this.options.mode !== ParseMode.Brighterscript) {
             let diagnostic = {
                 ...DiagnosticMessages.bsFeatureNotSupportedInBrsFiles(featureName)
             } as Diagnostic;
@@ -912,6 +912,7 @@ export class Parser {
     }
 
     private namespaceStatement(): NamespaceStatement | undefined {
+        this.warnIfNotBrighterScriptMode('namespace');
         let keyword = this.advance();
 
         if (!this.isAtRootLevel()) {
@@ -2058,8 +2059,8 @@ export class Parser {
 }
 
 export enum ParseMode {
-    brightscript = 'brightscript',
-    brighterscript = 'brighterscript'
+    Brightscript = 'Brightscript',
+    Brighterscript = 'Brighterscript'
 }
 
 export interface ParseOptions {
