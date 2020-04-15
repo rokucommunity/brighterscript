@@ -89,8 +89,8 @@ export let DiagnosticMessages = {
         code: 1015,
         severity: DiagnosticSeverity.Error
     }),
-    missingIdentifierAfterClassKeyword: () => ({
-        message: `Expected identifier after 'class' keyword`,
+    expectedIdentifierAfterKeyword: (keywordText: string) => ({
+        message: `Expected identifier after '${keywordText}' keyword`,
         code: 1016,
         severity: DiagnosticSeverity.Error
     }),
@@ -164,8 +164,8 @@ export let DiagnosticMessages = {
         code: 1030,
         severity: DiagnosticSeverity.Error
     }),
-    expectedEndClassToTerminateClassBlock: () => ({
-        message: `Expected 'end class' to terminate class block`,
+    ____UNUSED: () => ({
+        message: ``,
         code: 1031,
         severity: DiagnosticSeverity.Error
     }),
@@ -257,8 +257,8 @@ export let DiagnosticMessages = {
         code: 1048,
         severity: DiagnosticSeverity.Error
     }),
-    expectedEndWhileToTerminateWhileLoop: () => ({
-        message: `Expected 'end while' to terminate while loop`,
+    couldNotFindMatchingEndKeyword: (keyword: string) => ({
+        message: `Could not find matching 'end ${keyword}'`,
         code: 1049,
         severity: DiagnosticSeverity.Error
     }),
@@ -292,13 +292,13 @@ export let DiagnosticMessages = {
         code: 1055,
         severity: DiagnosticSeverity.Error
     }),
-    foundUnexpectedTokenAfterLibraryStatement: () => ({
-        message: `Found unexpected token after library statement`,
+    keywordMustBeDeclaredAtRootLevel: (keyword: string) => ({
+        message: `${keyword} must be declared at the root level`,
         code: 1056,
         severity: DiagnosticSeverity.Error
     }),
-    libraryStatementMustBeAtTopOfFile: () => ({
-        message: `Library statements may only appear at the top of a file`,
+    libraryStatementMustBeDeclaredAtTopOfFile: () => ({
+        message: `Library statements must be declared at the top of the file`,
         code: 1057,
         severity: DiagnosticSeverity.Error
     }),
@@ -343,7 +343,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     expectedStatementOrFunctionCallButReceivedExpression: () => ({
-        message: ``,
+        message: `Expected statement or function call but instead found expression`,
         code: 1066,
         severity: DiagnosticSeverity.Error
     }),
@@ -495,8 +495,8 @@ export let DiagnosticMessages = {
         code: 1095,
         severity: DiagnosticSeverity.Error
     }),
-    expectedIdentifierAfterConstKeyword: () => ({
-        message: `Expected identifier after '#const' keyword`,
+    expectedIdentifier: () => ({
+        message: `Expected identifier`,
         code: 1096,
         severity: DiagnosticSeverity.Error
     }),

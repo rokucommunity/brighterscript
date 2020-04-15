@@ -717,6 +717,33 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
+        it('adds error for library statements NOT at top of file', async () => {
+            await file.parse(`
+                sub main()
+                end sub
+                Library "v30/bslCore.brs"
+            `);
+            expect(
+                file.getDiagnostics().map(x => x.message)
+            ).to.eql([
+                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile().message
+            ]);
+            //expect({ diagnostics: diagnostics, statements: statements }).toMatchSnapshot();
+        });
+
+        it('adds error for library statements inside of function body', async () => {
+            await file.parse(`
+                sub main()
+                    Library "v30/bslCore.brs"
+                end sub
+            `);
+            expect(
+                file.getDiagnostics().map(x => x.message)
+            ).to.eql([
+                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile().message
+            ]);
+        });
+
         it('supports colons as separators in associative array properties', async () => {
             await file.parse(`
                 sub Main()

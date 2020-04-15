@@ -8,6 +8,16 @@ import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
 
 describe('lexer', () => {
+    it('recognizes namespace keywords', () => {
+        let { tokens } = Lexer.scan('namespace end namespace endnamespace end   namespace');
+        expect(tokens.map(x => x.kind)).to.eql([
+            TokenKind.Namespace,
+            TokenKind.EndNamespace,
+            TokenKind.EndNamespace,
+            TokenKind.EndNamespace,
+            TokenKind.Eof
+        ]);
+    });
     it('produces an at symbol token', () => {
         let { tokens } = Lexer.scan('@');
         expect(tokens[0].kind).to.equal(TokenKind.At);

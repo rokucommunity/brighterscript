@@ -2,8 +2,9 @@ import { expect } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
 import { DottedGetExpression, XmlAttributeGetExpression } from './Expression';
 import { Parser } from './Parser';
-import { PrintStatement, AssignmentStatement, FunctionStatement } from './Statement';
+import { PrintStatement, AssignmentStatement, FunctionStatement, NamespaceStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -24,6 +25,82 @@ describe('parser', () => {
     });
 
     describe('parse', () => {
+        describe('namespace', () => {
+            it('catches namespaces declared not at root level', () => {
+                expect(parse(`
+                    sub main()
+                        namespace Name.Space
+                        end namespace
+                    end sub
+                `).diagnostics[0]?.message).to.equal(
+                    DiagnosticMessages.keywordMustBeDeclaredAtRootLevel('namespace').message
+                );
+            });
+            it('parses empty namespace', () => {
+                let { statements, diagnostics } =
+                    parse(`
+                        namespace Name.Space
+                        end namespace
+                    `);
+                expect(diagnostics[0]?.message).not.to.exist;
+                expect(statements[0]).to.be.instanceof(NamespaceStatement);
+            });
+            it('includes body', () => {
+                let { statements, diagnostics } =
+                    parse(`
+                        namespace Name.Space
+                            sub main()
+                            end sub
+                        end namespace
+                    `);
+                expect(diagnostics[0]?.message).not.to.exist;
+                expect(statements[0]).to.be.instanceof(NamespaceStatement);
+                expect((statements[0] as NamespaceStatement).body.statements[0]).to.be.instanceof(FunctionStatement);
+            });
+            it('supports comments and newlines', () => {
+                let { diagnostics } =
+                    parse(`
+                        namespace Name.Space 'comment
+
+                        'comment
+
+                            sub main() 'comment
+                            end sub 'comment
+                            'comment
+
+                            'comment
+                        end namespace 'comment
+                    `);
+                expect(diagnostics[0]?.message).not.to.exist;
+            });
+
+            it('catches missing name', () => {
+                let { diagnostics } =
+                    parse(`
+                        namespace
+                        end namespace
+                    `);
+                expect(diagnostics[0]?.message).to.equal(
+                    DiagnosticMessages.expectedIdentifierAfterKeyword('namespace').message
+                );
+            });
+
+            it('recovers after missing `end namespace`', () => {
+                let parser = parse(`
+                    namespace Name.Space
+                        sub main()
+                        end sub
+                `);
+                expect(parser.ast.statements[0]).to.be.instanceof(NamespaceStatement);
+
+                expect(parser.diagnostics[0]?.message).to.equal(
+                    DiagnosticMessages.couldNotFindMatchingEndKeyword('namespace').message
+                );
+
+                expect((parser.ast.statements[0] as NamespaceStatement)?.body?.statements[0]).to.be.instanceof(FunctionStatement);
+            });
+        });
+
         it('supports << operator', () => {
             expect(parse(`
                 sub main()

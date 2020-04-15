@@ -68,7 +68,7 @@ export class PreprocessorParser {
     private hashConst(): CC.Chunk | undefined {
         if (this.match(TokenKind.HashConst)) {
             let name = this.consume(
-                DiagnosticMessages.expectedIdentifierAfterConstKeyword(),
+                DiagnosticMessages.expectedIdentifierAfterKeyword('#const'),
                 TokenKind.Identifier,
                 //look for any alphanumeric token, we will throw out the bad ones in the next check
                 ...AllowedLocalIdentifiers,

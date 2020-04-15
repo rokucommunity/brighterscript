@@ -33,7 +33,7 @@ describe('parser class', () => {
             `);
         let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.brighterscript });
         expect(diagnostics).length.to.be.greaterThan(0);
-        expect(diagnostics[0].code).to.equal(DiagnosticMessages.missingIdentifierAfterClassKeyword().code);
+        expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifierAfterKeyword('class').code);
         expect(statements[0]).instanceof(ClassStatement);
     });
 

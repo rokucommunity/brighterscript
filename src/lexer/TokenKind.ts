@@ -263,7 +263,10 @@ export const Keywords: { [key: string]: TokenKind } = {
     protected: TokenKind.Protected,
     private: TokenKind.Private,
     new: TokenKind.New,
-    override: TokenKind.Override
+    override: TokenKind.Override,
+    namespace: TokenKind.Namespace,
+    endnamespace: TokenKind.EndNamespace,
+    'end namespace': TokenKind.EndNamespace
 };
 
 /** Set of all keywords that end blocks. */
@@ -275,7 +278,8 @@ export type BlockTerminator =
     | TokenKind.EndIf
     | TokenKind.EndWhile
     | TokenKind.EndSub
-    | TokenKind.EndFunction;
+    | TokenKind.EndFunction
+    | TokenKind.EndNamespace;
 
 /** The set of operators valid for use in assignment statements. */
 export const AssignmentOperators = [
@@ -353,7 +357,9 @@ export const AllowedProperties = [
     TokenKind.Private,
     TokenKind.Class,
     TokenKind.New,
-    TokenKind.Override
+    TokenKind.Override,
+    TokenKind.Namespace,
+    TokenKind.EndNamespace
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -378,7 +384,9 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Private,
     TokenKind.Class,
     TokenKind.New,
-    TokenKind.Override
+    TokenKind.Override,
+    TokenKind.Namespace,
+    TokenKind.EndNamespace
 ];
 
 /**

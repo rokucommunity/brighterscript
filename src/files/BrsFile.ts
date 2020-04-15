@@ -11,7 +11,7 @@ import { FunctionParameter } from '../brsTypes';
 import { Lexer, Token, TokenKind, Identifier } from '../lexer';
 import { Parser, ParseMode } from '../parser';
 import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression } from '../parser/Expression';
-import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, Statement } from '../parser/Statement';
+import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, NamespaceStatement } from '../parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -83,6 +83,8 @@ export class BrsFile {
 
     public classStatements = [] as ClassStatement[];
 
+    public namespaceStatements = [] as NamespaceStatement[];
+
     /**
      * Does this file need to be transpiled?
      */
@@ -91,7 +93,7 @@ export class BrsFile {
     /**
      * The AST for this file
      */
-    private ast = [] as Statement[];
+    private ast: Body;
 
     /**
      * Get the token at the specified position
@@ -154,20 +156,13 @@ export class BrsFile {
             ...this.parser.diagnostics as BsDiagnostic[]
         );
 
-        //attach this file to every diagnostic
-        for (let diagnostic of this.diagnostics) {
-            diagnostic.file = this;
-        }
-
-        //convert the brs library's errors into our format
-
-        this.ast = this.parser.statements;
+        this.ast = this.parser.ast;
 
         //extract all callables from this file
         this.findCallables();
 
         //traverse the ast and find all functions and create a scope object
-        this.createFunctionScopes(this.ast);
+        this.createFunctionScopes();
 
         //find all places where a sub/function is being called
         this.findFunctionCalls();
@@ -177,14 +172,58 @@ export class BrsFile {
 
         this.findClassStatements();
 
+        this.findNamespaces();
+
+        this.ensureLibraryCallsAreAtTopOfFile();
+
+        //attach this file to every diagnostic
+        for (let diagnostic of this.diagnostics) {
+            diagnostic.file = this;
+        }
+
         this.parseDeferred.resolve();
     }
+
+    private findNamespaces() {
+        this.namespaceStatements = this.findAllInstances(NamespaceStatement).map(x => x.value);
+    }
+
+    public ensureLibraryCallsAreAtTopOfFile() {
+        let topOfFileLibraryStatements = [] as LibraryStatement[];
+
+        for (let stmt of this.ast.statements) {
+            //skip comments
+            if (stmt instanceof CommentStatement) {
+                continue;
+            }
+            //if we found a non-library statement, this statement is not at the top of the file
+            if (stmt instanceof LibraryStatement) {
+                topOfFileLibraryStatements.push(stmt);
+            } else {
+                //break out of the loop, we found all of our library statements
+                break;
+            }
+        }
+        let libraryStatementSearchResults = this.findAllInstances(LibraryStatement);
+        for (let result of libraryStatementSearchResults) {
+            //if this statement is not one of the top-of-file statements,
+            //then add a diagnostic explaining that it is invalid
+            if (!topOfFileLibraryStatements.includes(result.value)) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile(),
+                    range: result.value.range,
+                    file: this
+                });
+            }
+        }
+    }
+
 
     /**
      * Loop through all of the class statements and add them to `this.classStatements`
      */
     public findClassStatements() {
-        for (let stmt of this.ast) {
+        for (let stmt of this.ast.statements) {
             if (stmt instanceof ClassStatement) {
                 this.classStatements.push(stmt);
             }
@@ -203,16 +242,23 @@ export class BrsFile {
         }
     }
 
+    /**
+     * Dig through the AST and find all properties that match the predicate
+     */
+    private findAllInstances<T extends new (...args: any) => any>(instanceType: T) {
+        return util.findAllDeep<InstanceType<T>>(this.ast.statements, (item) => item instanceof (instanceType as any));
+    }
+
     public findPropertyNameCompletions() {
         //Find every identifier in the whole file
-        let identifiers = util.findAllDeep<Identifier>(this.ast, (x) => {
+        let identifiers = util.findAllDeep<Identifier>(this.ast.statements, (x) => {
             return x && x.kind === TokenKind.Identifier;
         });
 
         this.propertyNameCompletions = [];
         let names = {};
         for (let identifier of identifiers) {
-            let ancestors = this.getAncestors(this.ast, identifier.key);
+            let ancestors = this.getAncestors(identifier.key);
             let parent = ancestors[ancestors.length - 1];
 
             let isObjectProperty = !!ancestors.find(x => (x instanceof DottedGetExpression) || (x instanceof AALiteralExpression));
@@ -352,16 +398,16 @@ export class BrsFile {
     /**
      * Create a scope for every function in this file
      */
-    private createFunctionScopes(statements: any) {
+    private createFunctionScopes() {
         //find every function
-        let functions = util.findAllDeep<FunctionExpression>(this.ast, (x) => x instanceof FunctionExpression);
+        let functions = this.findAllInstances(FunctionExpression);
 
         //create a functionScope for every function
         for (let kvp of functions) {
             let func = kvp.value;
             let scope = new FunctionScope(func);
 
-            let ancestors = this.getAncestors(statements, kvp.key);
+            let ancestors = this.getAncestors(kvp.key);
 
             let parentFunc: FunctionExpression;
             //find parent function, and add this scope to it if found
@@ -399,7 +445,7 @@ export class BrsFile {
         }
 
         //find every variable assignment in the whole file
-        let assignmentStatements = util.findAllDeep<AssignmentStatement>(this.ast, (x) => x instanceof AssignmentStatement);
+        let assignmentStatements = this.findAllInstances(AssignmentStatement);
 
         for (let kvp of assignmentStatements) {
             let statement = kvp.value;
@@ -423,12 +469,12 @@ export class BrsFile {
      * @param statements
      * @param key
      */
-    private getAncestors(statements: any[], key: string) {
+    private getAncestors(key: string) {
         let parts = key.split('.');
         //throw out the last part (because that's the "child")
         parts.pop();
 
-        let current = statements;
+        let current = this.ast.statements;
         let ancestors = [];
         for (let part of parts) {
             current = current[part];
@@ -494,7 +540,7 @@ export class BrsFile {
 
     private findCallables() {
         this.callables = [];
-        for (let statement of this.ast as any) {
+        for (let statement of this.ast.statements) {
             if (!(statement instanceof FunctionStatement)) {
                 continue;
             }
@@ -536,7 +582,7 @@ export class BrsFile {
         this.functionCalls = [];
 
         //for now, just dig into top-level function declarations.
-        for (let statement of this.ast as any) {
+        for (let statement of this.ast.statements as any) {
             if (!statement.func) {
                 continue;
             }
@@ -788,37 +834,7 @@ export class BrsFile {
      */
     public transpile() {
         const state = new TranspileState(this);
-        let chunks = [] as Array<string | SourceNode>;
-        for (let i = 0; i < this.ast.length; i++) {
-            let statement = this.ast[i];
-            let previousStatement = this.ast[i - 1];
-            let nextStatement = this.ast[i + 1];
-
-
-            if (!previousStatement) {
-                //this is the first statement. do nothing related to spacing and newlines
-
-                //if comment is on same line as prior sibling
-            } else if (statement instanceof CommentStatement && previousStatement && statement.range.start.line === previousStatement.range.end.line) {
-                chunks.push(
-                    ' '
-                );
-
-                //add double newline if this is a comment, and next is a function
-            } else if (statement instanceof CommentStatement && nextStatement && nextStatement instanceof FunctionStatement) {
-                chunks.push('\n\n');
-
-                //add double newline if is function not preceeded by a comment
-            } else if (statement instanceof FunctionStatement && previousStatement && !(previousStatement instanceof CommentStatement)) {
-                chunks.push('\n\n');
-            } else {
-                //separate statements by a single newline
-                chunks.push('\n');
-            }
-
-            chunks.push(...statement.transpile(state));
-        }
-        let programNode = new SourceNode(null, null, this.pathAbsolute, chunks);
+        let programNode = new SourceNode(null, null, this.pathAbsolute, this.ast.transpile(state));
         let result = programNode.toStringWithSourceMap({
             file: this.pathAbsolute
         });
