@@ -52,7 +52,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-            `);
+            `, undefined, 'main.bs');
         });
 
         it('registers the constructor and properly handles its parameters', async () => {
@@ -73,7 +73,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(name, age)
                     return instance
                 end function
-            `);
+            `, undefined, 'main.bs');
         });
 
         it('properly handles child class constructor override and super calls', async () => {
@@ -115,11 +115,11 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(name, age)
                     return instance
                 end function
-            `);
+            `, undefined, 'main.bs');
         });
 
         it('new keyword transpiles correctly', async () => {
-            await addFile('source/Animal.brs', ` 
+            await addFile('source/Animal.bs', ` 
                 class Animal
                     sub new(name as string)
                     end sub
@@ -133,7 +133,7 @@ describe('BrsFile BrighterScript classes', () => {
                 sub main()
                     a = Animal("donald")
                 end sub
-            `);
+            `, undefined, 'main.bs');
         });
     });
 
@@ -173,7 +173,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('detects duplicate member names', async () => {
-        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 public name
                 public name
@@ -211,7 +211,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('detects mismatched member type in child class', async () => {
-        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 public name
             end class
@@ -230,7 +230,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('detects overridden property name in child class', async () => {
-        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 public name
             end class

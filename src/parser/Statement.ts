@@ -1,9 +1,10 @@
 import { Token, Identifier, TokenKind } from '../lexer';
 import { SourceNode } from 'source-map';
-import { Expression, FunctionExpression } from './Expression';
+import { Expression, FunctionExpression, NamespaceNameExpression } from './Expression';
 import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
+import { ParseMode } from './Parser';
 
 /**
  * A BrightScript statement
@@ -226,12 +227,27 @@ export class ExitWhileStatement implements Statement {
 export class FunctionStatement implements Statement {
     constructor(
         readonly name: Identifier,
-        readonly func: FunctionExpression
+        readonly func: FunctionExpression,
+        readonly namespaceName: NamespaceNameExpression
     ) {
         this.range = this.func.range;
     }
 
     public readonly range: Range;
+
+    /**
+     * Get the name of this expression based on the parse mode
+     */
+    public getName(parseMode: ParseMode) {
+        if (this.namespaceName) {
+            let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            let namespaceName = this.namespaceName.getName(parseMode);
+            return namespaceName + delimiter + this.name.text;
+        } else {
+            return this.name.text;
+        }
+    }
+
 
     transpile(state: TranspileState) {
         return this.func.transpile(state, this.name);
@@ -795,14 +811,22 @@ export class NamespaceStatement implements Statement {
     constructor(
         public keyword: Token,
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
-        public name: Expression,
+        public name: NamespaceNameExpression,
         public body: Body,
         public endKeyword: Token
     ) {
-        this.range = Range.create(keyword.range.start, name.range.end);
     }
 
-    public range: Range;
+    public get range() {
+        return Range.create(
+            this.keyword.range.start,
+            (this.endKeyword ?? this.body ?? this.name ?? this.keyword).range.end
+        );
+    }
+
+    public getName(parseMode: ParseMode) {
+        return this.name.getName(parseMode);
+    }
 
     transpile(state: TranspileState): string[] {
         throw new Error('transpile not implemetned for namespace');

@@ -469,17 +469,15 @@ export class Util {
 
     /**
      * Find all properties in an object that match the predicate.
-     * @param obj
-     * @param predicate
-     * @param parentKey
      */
-    public findAllDeep<T>(obj: any, predicate: (value: any) => boolean | undefined, parentKey?: string) {
-        let result = [] as Array<{ key: string; value: T }>;
+    public findAllDeep<T>(obj: any, predicate: (value: any) => boolean | undefined, parentKey?: string, ancestors?: any[]) {
+        let result = [] as Array<{ key: string; value: T; ancestors: any[] }>;
 
         //base case. If this object maches, keep it as a result
         if (predicate(obj) === true) {
             result.push({
                 key: parentKey,
+                ancestors: ancestors,
                 value: obj
             });
         }
@@ -490,7 +488,15 @@ export class Util {
                 let value = obj[key];
                 let fullKey = parentKey ? parentKey + '.' + key : key;
                 if (typeof value === 'object') {
-                    result = [...result, ...this.findAllDeep<T>(value, predicate, fullKey)];
+                    result = [...result, ...this.findAllDeep<T>(
+                        value,
+                        predicate,
+                        fullKey,
+                        [
+                            ...(ancestors ?? []),
+                            obj
+                        ]
+                    )];
                 }
             }
         }

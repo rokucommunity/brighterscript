@@ -8,6 +8,7 @@ import { CallableContainer, BsDiagnostic, File } from './interfaces';
 import { Program } from './Program';
 import util from './util';
 import { BsClassValidator } from './validators/ClassValidator';
+import { NamespaceStatement, ParseMode, Statement } from './parser';
 
 /**
  * A class to keep track of all declarations within a given scope (like global scope, component scope)
@@ -190,6 +191,56 @@ export class Scope {
                     scope: this
                 });
             }
+        }
+        return result;
+    }
+
+    /**
+     * Builds a tree of namespace objects
+     */
+    public getNamespaceInfo() {
+        let namespaces = this.getNamespaceStatements();
+        let byFullName = {} as { [namespaceName: string]: NamespaceContainer };
+        for (let namespace of namespaces) {
+            //TODO should we handle non-brighterscript?
+            let name = namespace.name.getName(ParseMode.BrighterScript);
+            let nameParts = name.split('.');
+
+            let loopName = null;
+            //ensure each namespace section is represented in the results
+            //(so if the namespace name is A.B.C, this will make an entry for "A", an entry for "A.B", and an entry for "A.B.C"
+            for (let part of nameParts) {
+                loopName = loopName === null ? part : `${loopName}.${part}`;
+                byFullName[loopName] = byFullName[loopName] ?? {
+                    fullName: name,
+                    lastPartName: part,
+                    namespaces: {},
+                    statements: []
+                };
+            }
+            byFullName[name].statements.push(...namespace.body.statements);
+        }
+
+        //associate child namespaces with their parents
+        for (let key in byFullName) {
+            let ns = byFullName[key];
+            let parts = ns.fullName.split('.');
+
+            if (parts.length > 1) {
+                //remove the last part
+                parts.pop();
+                let parentName = parts.join('.');
+                byFullName[parentName].namespaces[ns.lastPartName] = ns;
+            }
+        }
+        return byFullName;
+    }
+
+    public getNamespaceStatements() {
+        let result = [] as NamespaceStatement[];
+        for (let filePath in this.files) {
+            let file = this.files[filePath];
+            result.push(...file.file.namespaceStatements);
         }
         return result;
     }
@@ -503,12 +554,18 @@ export class Scope {
     /**
      * Get all callables as completionItems
      */
-    public getCallablesAsCompletions() {
+    public getCallablesAsCompletions(parseMode: ParseMode) {
         let completions = [] as CompletionItem[];
         let callables = this.getAllCallables();
+
+        if (parseMode === ParseMode.BrighterScript) {
+            //throw out the namespaced callables (they will be handled by another method)
+            callables = callables.filter(x => x.callable.hasNamespace === false);
+        }
+
         for (let callableContainer of callables) {
             completions.push({
-                label: callableContainer.callable.name,
+                label: callableContainer.callable.getName(parseMode),
                 kind: CompletionItemKind.Function,
                 detail: callableContainer.callable.shortDescription,
                 documentation: callableContainer.callable.documentation ? { kind: 'markdown', value: callableContainer.callable.documentation } : undefined
@@ -543,4 +600,12 @@ class ScopeFile {
         public file: BrsFile | XmlFile
     ) {
     }
+}
+
+
+interface NamespaceContainer {
+    fullName: string;
+    lastPartName: string;
+    statements: Statement[];
+    namespaces: { [name: string]: NamespaceContainer };
 }

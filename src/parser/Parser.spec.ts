@@ -32,7 +32,7 @@ describe('parser', () => {
                         namespace Name.Space
                         end namespace
                     end sub
-                `, ParseMode.Brighterscript).diagnostics[0]?.message).to.equal(
+                `, ParseMode.BrighterScript).diagnostics[0]?.message).to.equal(
                     DiagnosticMessages.keywordMustBeDeclaredAtRootLevel('namespace').message
                 );
             });
@@ -41,7 +41,7 @@ describe('parser', () => {
                     parse(`
                         namespace Name.Space
                         end namespace
-                    `, ParseMode.Brighterscript);
+                    `, ParseMode.BrighterScript);
                 expect(diagnostics[0]?.message).not.to.exist;
                 expect(statements[0]).to.be.instanceof(NamespaceStatement);
             });
@@ -52,7 +52,7 @@ describe('parser', () => {
                             sub main()
                             end sub
                         end namespace
-                    `, ParseMode.Brighterscript);
+                    `, ParseMode.BrighterScript);
                 expect(diagnostics[0]?.message).not.to.exist;
                 expect(statements[0]).to.be.instanceof(NamespaceStatement);
                 expect((statements[0] as NamespaceStatement).body.statements[0]).to.be.instanceof(FunctionStatement);
@@ -70,7 +70,7 @@ describe('parser', () => {
 
                             'comment
                         end namespace 'comment
-                    `, ParseMode.Brighterscript);
+                    `, ParseMode.BrighterScript);
                 expect(diagnostics[0]?.message).not.to.exist;
             });
 
@@ -79,7 +79,7 @@ describe('parser', () => {
                     parse(`
                         namespace
                         end namespace
-                    `, ParseMode.Brighterscript);
+                    `, ParseMode.BrighterScript);
                 expect(diagnostics[0]?.message).to.equal(
                     DiagnosticMessages.expectedIdentifierAfterKeyword('namespace').message
                 );
@@ -90,7 +90,7 @@ describe('parser', () => {
                     namespace Name.Space
                         sub main()
                         end sub
-                `, ParseMode.Brighterscript);
+                `, ParseMode.BrighterScript);
                 expect(parser.ast.statements[0]).to.be.instanceof(NamespaceStatement);
 
                 expect(parser.diagnostics[0]?.message).to.equal(

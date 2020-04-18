@@ -97,7 +97,7 @@ export class ClassStatement implements Statement {
                 sub new()
                 end sub
             end class
-        `, { mode: ParseMode.Brighterscript }).statements[0] as ClassStatement).memberMap['new'] as ClassMethodStatement;
+        `, { mode: ParseMode.BrighterScript }).statements[0] as ClassStatement).memberMap['new'] as ClassMethodStatement;
         //TODO make locations point to 0,0 (might not matter?)
         return stmt;
     }

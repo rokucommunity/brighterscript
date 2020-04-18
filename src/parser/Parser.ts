@@ -52,7 +52,7 @@ import {
 } from './Statement';
 import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
-import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression, XmlAttributeGetExpression } from './Expression';
+import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression, XmlAttributeGetExpression, NamespaceNameExpression } from './Expression';
 import { Range, Diagnostic } from 'vscode-languageserver';
 import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from './ClassStatement';
 
@@ -173,9 +173,10 @@ export class Parser {
      * Throws an error if the input file type is not BrighterScript
      */
     private warnIfNotBrighterScriptMode(featureName: string) {
-        if (this.options.mode !== ParseMode.Brighterscript) {
+        if (this.options.mode !== ParseMode.BrighterScript) {
             let diagnostic = {
-                ...DiagnosticMessages.bsFeatureNotSupportedInBrsFiles(featureName)
+                ...DiagnosticMessages.bsFeatureNotSupportedInBrsFiles(featureName),
+                range: this.peek().range
             } as Diagnostic;
             this.diagnostics.push(diagnostic);
         }
@@ -548,7 +549,7 @@ export class Parser {
                 // expect to handle their own trailing whitespace
                 while (this.match(TokenKind.Newline)) {
                 }
-                return new FunctionStatement(name, func);
+                return new FunctionStatement(name, func, this.currentNamespaceName);
             }
         } finally {
             this.namespaceAndFunctionDepth--;
@@ -911,6 +912,12 @@ export class Parser {
         }
     }
 
+    /**
+     * When a namespace has been started, this gets set. When it's done, this gets unset.
+     * It is useful for passing the namespace into certain statements that need it
+     */
+    private currentNamespaceName: NamespaceNameExpression;
+
     private namespaceStatement(): NamespaceStatement | undefined {
         this.warnIfNotBrighterScriptMode('namespace');
         let keyword = this.advance();
@@ -923,11 +930,17 @@ export class Parser {
         }
         this.namespaceAndFunctionDepth++;
 
-        let name = this.getNamespaceNameAsExpression();
+        let name = this.getNamespaceName();
+
+        //set the current namespace name
+        this.currentNamespaceName = name;
 
         this.globalTerminators.push([TokenKind.EndNamespace]);
         let body = this.body();
         this.globalTerminators.pop();
+
+        //unset the current namespace name
+        this.currentNamespaceName = undefined;
 
         let endKeyword: Token;
         if (this.check(TokenKind.EndNamespace)) {
@@ -944,14 +957,13 @@ export class Parser {
         while (this.match(TokenKind.Newline)) { }
 
         this.namespaceAndFunctionDepth--;
-
         return new NamespaceStatement(keyword, name, body, endKeyword);
     }
 
     /**
      * Get an expression from a set of variables following a namespace keyword.
      */
-    private getNamespaceNameAsExpression() {
+    private getNamespaceName() {
         //namespaces may have identifiers separated by periods
         let firstIdentifier = this.consume(
             DiagnosticMessages.expectedIdentifierAfterKeyword('namespace'),
@@ -959,12 +971,12 @@ export class Parser {
             ...AllowedLocalIdentifiers
         ) as Identifier;
 
-        let expr: Expression;
+        let expr: DottedGetExpression | VariableExpression;
 
         if (firstIdentifier) {
             // force it into an identifier so the AST makes some sense
             firstIdentifier.kind = TokenKind.Identifier;
-            expr = new VariableExpression(firstIdentifier) as Expression;
+            expr = new VariableExpression(firstIdentifier);
 
             //consume multiple dot identifiers (i.e. `Name.Space.Can.Have.Many.Parts`)
             while (this.check(TokenKind.Dot)) {
@@ -993,7 +1005,7 @@ export class Parser {
         //the only thing allowed after a namespace declaration is a comment or a newline
         this.flagUntil(TokenKind.Comment, TokenKind.Newline);
 
-        return expr;
+        return new NamespaceNameExpression(expr);
     }
 
     /**
@@ -2059,13 +2071,13 @@ export class Parser {
 }
 
 export enum ParseMode {
-    Brightscript = 'Brightscript',
-    Brighterscript = 'Brighterscript'
+    BrightScript = 'BrightScript',
+    BrighterScript = 'BrighterScript'
 }
 
 export interface ParseOptions {
     /**
-     * The parse mode. When in 'brightscript' mode, no brighterscript syntax is allowed, and will emit diagnostics.
+     * The parse mode. When in 'BrightScript' mode, no BrighterScript syntax is allowed, and will emit diagnostics.
      */
     mode: ParseMode;
 }

@@ -265,9 +265,9 @@ describe('util', () => {
             let dad = new Person('dad', grandpa);
             let me = new Person('me', dad);
             let people = util.findAllDeep(me, (x) => x instanceof Person);
-            expect(people[0]).to.eql({ key: undefined, value: me });
-            expect(people[1]).to.eql({ key: 'parent', value: dad });
-            expect(people[2]).to.eql({ key: 'parent.parent', value: grandpa });
+            expect(people[0]).to.deep.include({ key: undefined, value: me });
+            expect(people[1]).to.deep.include({ key: 'parent', value: dad });
+            expect(people[2]).to.deep.include({ key: 'parent.parent', value: grandpa });
         });
 
         it('finds properties in arrays', () => {

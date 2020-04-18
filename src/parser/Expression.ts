@@ -6,6 +6,7 @@ import { SourceNode } from 'source-map';
 import { Range } from 'vscode-languageserver';
 import util from '../util';
 import { TranspileState } from './TranspileState';
+import { ParseMode } from './Parser';
 
 /** A BrightScript expression */
 export interface Expression {
@@ -149,6 +150,45 @@ export class FunctionExpression implements Expression {
             new SourceNode(this.end.range.start.line + 1, this.end.range.start.character, state.pathAbsolute, this.end.text)
         );
         return results;
+    }
+}
+
+export class NamespaceNameExpression implements Expression {
+    constructor(
+        //if this is a `DottedGetExpression`, it must be comprised only of `VariableExpression`s
+        readonly expression: DottedGetExpression | VariableExpression
+    ) {
+        this.range = expression.range;
+    }
+    range: Range;
+
+    transpile(state: TranspileState): string[] {
+        throw new Error('not implemented');
+    }
+
+    public getNameParts() {
+        let parts = [] as string[];
+        if (this.expression instanceof VariableExpression) {
+            parts.push(this.expression.name.text);
+        } else {
+            let expr = this.expression;
+
+            parts.push(expr.name.text);
+
+            while (expr instanceof VariableExpression === false) {
+                expr = expr.obj as DottedGetExpression;
+                parts.unshift(expr.name.text);
+            }
+        }
+        return parts;
+    }
+
+    getName(parseMode: ParseMode) {
+        if (parseMode === ParseMode.BrighterScript) {
+            return this.getNameParts().join('.');
+        } else {
+            return this.getNameParts().join('_');
+        }
     }
 }
 

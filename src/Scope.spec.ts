@@ -9,6 +9,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { Program } from './Program';
 import util from './util';
+import { ParseMode } from './parser/Parser';
 let n = path.normalize;
 
 describe('Scope', () => {
@@ -426,7 +427,7 @@ describe('Scope', () => {
 
     describe('getCallablesAsCompletions', () => {
         it('returns documentation when possible', () => {
-            let completions = program.platformScope.getCallablesAsCompletions();
+            let completions = program.platformScope.getCallablesAsCompletions(ParseMode.BrightScript);
             expect(completions.filter(x => !!x.documentation)).to.have.length.greaterThan(0);
         });
     });

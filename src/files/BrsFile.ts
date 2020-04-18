@@ -8,7 +8,7 @@ import { FunctionScope } from '../FunctionScope';
 import { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic } from '../interfaces';
 import { Deferred } from '../deferred';
 import { FunctionParameter } from '../brsTypes';
-import { Lexer, Token, TokenKind, Identifier } from '../lexer';
+import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers } from '../lexer';
 import { Parser, ParseMode } from '../parser';
 import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression } from '../parser/Expression';
 import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, NamespaceStatement } from '../parser/Statement';
@@ -146,7 +146,7 @@ export class BrsFile {
         let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
 
         this.parser = Parser.parse(tokens, {
-            mode: this.extension === 'brs' ? ParseMode.Brightscript : ParseMode.Brighterscript
+            mode: this.extension === '.brs' ? ParseMode.BrightScript : ParseMode.BrighterScript
         });
 
         //absorb all lexing/preprocessing/parsing diagnostics
@@ -539,11 +539,8 @@ export class BrsFile {
     }
 
     private findCallables() {
-        this.callables = [];
-        for (let statement of this.ast.statements) {
-            if (!(statement instanceof FunctionStatement)) {
-                continue;
-            }
+        let functionStatements = this.findAllInstances(FunctionStatement).map(x => x.value);
+        for (let statement of functionStatements) {
 
             let functionType = new FunctionType(util.valueKindToBrsType(statement.func.returns));
             functionType.setName(statement.name.text);
@@ -573,7 +570,9 @@ export class BrsFile {
                 file: this,
                 params: params,
                 range: statement.func.range,
-                type: functionType
+                type: functionType,
+                getName: statement.getName.bind(statement),
+                hasNamespace: !!statement.namespaceName
             });
         }
     }
@@ -681,9 +680,11 @@ export class BrsFile {
      */
     public async getCompletions(position: Position, scope?: Scope): Promise<CompletionItem[]> {
         let result = [] as CompletionItem[];
+        let parseMode = this.getParseMode();
 
         //wait for the file to finish processing
         await this.isReady();
+        //a map of lower-case names of all added options
         let names = {};
 
         //determine if cursor is inside a function
@@ -701,30 +702,131 @@ export class BrsFile {
 
         //is next to a period (or an identifier that is next to a period). include the property names
         if (this.isPositionNextToDot(position)) {
-            result.push(...scope.getPropertyNameCompletions());
+            let namespaceCompletions = this.getNamespaceCompletions(currentToken, parseMode, scope);
+            //if the text to the left of the dot is a part of a known namespace, complete with additional namespace information
+            if (namespaceCompletions.length > 0) {
+                result.push(...namespaceCompletions);
+            } else {
+                result.push(...scope.getPropertyNameCompletions());
+            }
 
             //is NOT next to period
         } else {
             //include the global callables
-            result.push(...scope.getCallablesAsCompletions());
+            result.push(...scope.getCallablesAsCompletions(parseMode));
 
             //include local variables
             let variables = functionScope.variableDeclarations;
             for (let variable of variables) {
                 //skip duplicate variable names
-                if (names[variable.name]) {
+                if (names[variable.name.toLowerCase()]) {
                     continue;
                 }
-                names[variable.name] = true;
+                names[variable.name.toLowerCase()] = true;
                 result.push({
                     label: variable.name,
                     kind: variable.type instanceof FunctionType ? CompletionItemKind.Function : CompletionItemKind.Variable
                 });
             }
+
+            if (parseMode === ParseMode.BrighterScript) {
+                //include the first part of namespaces
+                let namespaces = scope.getNamespaceStatements();
+                for (let stmt of namespaces) {
+                    let firstPart = stmt.name.getNameParts().shift();
+                    //skip duplicate namespace names
+                    if (names[firstPart.toLowerCase()]) {
+                        continue;
+                    }
+                    names[firstPart.toLowerCase()] = true;
+                    result.push({
+                        label: firstPart,
+                        kind: CompletionItemKind.Module
+                    });
+                }
+            }
+        }
+        return result;
+    }
+
+    private getNamespaceCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope) {
+        let completionName = this.getPartialVariableName(currentToken);
+        //remove any trailing identifer and then any trailing dot, to give us the
+        //name of its immediate parent namespace
+        let closestParentNamespaceName = completionName.replace(/\.([a-z0-9_]*)?$/gi, '');
+
+        let namespaces = scope.getNamespaceInfo();
+
+        let result = [] as CompletionItem[];
+        for (let key in namespaces) {
+            let namespace = namespaces[key];
+            //completionName = "NameA."
+            //completionName = "NameA.Na
+            //NameA
+            //NameA.NameB
+            //NameA.NameB.NameC
+            if (namespace.fullName.toLowerCase() === closestParentNamespaceName.toLowerCase()) {
+                //add all of this namespace's immediate child namespaces
+                for (let childKey in namespace.namespaces) {
+                    result.push({
+                        label: namespace.namespaces[childKey].lastPartName,
+                        kind: CompletionItemKind.Module
+                    });
+                }
+
+                //add function and class statement completions
+                for (let stmt of namespace.statements) {
+                    if (stmt instanceof ClassStatement) {
+                        result.push({
+                            label: stmt.name.text,
+                            kind: CompletionItemKind.Class
+                        });
+                    } else if (stmt instanceof FunctionStatement) {
+                        result.push({
+                            label: stmt.name.text,
+                            kind: CompletionItemKind.Function
+                        });
+                    }
+
+                }
+
+            }
         }
 
         return result;
     }
+    /**
+     * Given a current token, walk
+     */
+    private getPartialVariableName(currentToken: Token) {
+        let identifierAndDotKinds = [TokenKind.Identifier, ...AllowedLocalIdentifiers, TokenKind.Dot];
+
+        //consume tokens backwards until we find someting other than a dot or an identifier
+        let tokens = [];
+        for (let i = this.parser.tokens.indexOf(currentToken); i >= 0; i--) {
+            currentToken = this.parser.tokens[i];
+            if (identifierAndDotKinds.includes(currentToken.kind)) {
+                tokens.unshift(currentToken.text);
+            } else {
+                break;
+            }
+        }
+
+        //if we found name and dot tokens, join them together to make the namespace name
+        if (tokens.length > 0) {
+            return tokens.join('');
+        } else {
+            return undefined;
+        }
+    }
+
+    /**
+     * Determine if this file is a brighterscript file
+     */
+    private getParseMode() {
+        return this.pathAbsolute.toLowerCase().endsWith('.bs') ? ParseMode.BrighterScript : ParseMode.BrightScript;
+    }
+
     private isPositionNextToDot(position: Position) {
         let closestToken = this.getClosestToken(position);
         let previousToken = this.getPreviousToken(closestToken);

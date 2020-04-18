@@ -13,6 +13,7 @@ import { BrsFile } from './BrsFile';
 import { SourceMapConsumer } from 'source-map';
 import { TokenKind, Lexer } from '../lexer';
 import { DiagnosticMessages } from '../DiagnosticMessages';
+import { StandardizedFileEntry } from 'roku-deploy';
 
 let sinon = sinonImport.createSandbox();
 
@@ -35,6 +36,23 @@ describe('BrsFile', () => {
         expect(new BrsFile(`${rootDir}/source/main.brs`, 'source/main.brs', program).needsTranspiled).to.be.false;
         //BrighterScript
         expect(new BrsFile(`${rootDir}/source/main.bs`, 'source/main.bs', program).needsTranspiled).to.be.true;
+    });
+
+    describe('getPartialVariableName', () => {
+        let entry = {
+            src: `${rootDir}/source/lib.brs`,
+            dest: `source/lib.brs`
+        } as StandardizedFileEntry;
+
+        it('creates proper tokens', async () => {
+            let file = (await program.addOrReplaceFile(entry, `call(ModuleA.ModuleB.ModuleC.`) as any);
+            expect(file.getPartialVariableName(file.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
+            expect(file.getPartialVariableName(file.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
+            expect(file.getPartialVariableName(file.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
+            expect(file.getPartialVariableName(file.parser.tokens[4])).to.equal('ModuleA.ModuleB');
+            expect(file.getPartialVariableName(file.parser.tokens[3])).to.equal('ModuleA.');
+            expect(file.getPartialVariableName(file.parser.tokens[2])).to.equal('ModuleA');
+        });
     });
 
     describe('getCompletions', () => {
@@ -1582,11 +1600,11 @@ describe('BrsFile', () => {
 });
 
 export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return async (source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'trim') => {
+    return async (source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'trim', fileName = 'main.brs') => {
         let [program, rootDir] = scopeGetter();
         let formatter = null; //new BrightScriptFormatter();
         expected = expected ? expected : source;
-        let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, source) as BrsFile;
+        let file = await program.addOrReplaceFile({ src: `${rootDir}/source/${fileName}`, dest: `source/${fileName}` }, source) as BrsFile;
         expect(file.getDiagnostics()[0]?.message).to.not.exist;
         let transpiled = file.transpile();
 

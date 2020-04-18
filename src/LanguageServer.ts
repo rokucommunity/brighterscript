@@ -18,7 +18,8 @@ import {
     ServerCapabilities,
     TextDocument,
     TextDocumentPositionParams,
-    TextDocuments
+    TextDocuments,
+    Position
 } from 'vscode-languageserver';
 import Uri from 'vscode-uri';
 
@@ -86,7 +87,9 @@ export class LanguageServer {
         });
 
         // This handler provides the initial list of the completion items.
-        this.connection.onCompletion(this.onCompletion.bind(this));
+        this.connection.onCompletion(async (params: TextDocumentPositionParams) => {
+            return this.onCompletion(params.textDocument.uri, params.position);
+        });
 
         // This handler resolves additional information for the item selected in
         // the completion list.
@@ -141,7 +144,9 @@ export class LanguageServer {
                 textDocumentSync: this.documents.syncKind,
                 // Tell the client that the server supports code completion
                 completionProvider: {
-                    resolveProvider: true
+                    resolveProvider: true,
+                    //anytime the user types a period, auto-show the completion results
+                    triggerCharacters: ['.']
                 },
                 definitionProvider: true,
                 hoverProvider: true
@@ -446,11 +451,11 @@ export class LanguageServer {
      * Provide a list of completion items based on the current cursor position
      * @param textDocumentPosition
      */
-    private async onCompletion(textDocumentPosition: TextDocumentPositionParams) {
+    private async onCompletion(uri: string, position: Position) {
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
 
-        let filePath = util.uriToPath(textDocumentPosition.textDocument.uri);
+        let filePath = util.uriToPath(uri);
 
         let workspaceCompletionPromises = [] as Array<Promise<CompletionItem[]>>;
         let workspaces = this.getWorkspaces();
@@ -459,7 +464,7 @@ export class LanguageServer {
             //if this workspace has the file in question, get its completions
             if (workspace.builder.program.hasFile(filePath)) {
                 workspaceCompletionPromises.push(
-                    workspace.builder.program.getCompletions(filePath, textDocumentPosition.position)
+                    workspace.builder.program.getCompletions(filePath, position)
                 );
             }
         }
@@ -469,7 +474,9 @@ export class LanguageServer {
             .concat(...await Promise.all(workspaceCompletionPromises))
             //throw out falsey values
             .filter(x => !!x);
-
+        for (let completion of completions) {
+            completion.commitCharacters = ['.'];
+        }
         return completions;
     }
 
