@@ -164,8 +164,8 @@ export let DiagnosticMessages = {
         code: 1030,
         severity: DiagnosticSeverity.Error
     }),
-    ____UNUSED: () => ({
-        message: ``,
+    expressionIsNotConstructable: (expressionType: string) => ({
+        message: `Cannot use the 'new' keyword here because '${expressionType}' is not a constructable type`,
         code: 1031,
         severity: DiagnosticSeverity.Error
     }),

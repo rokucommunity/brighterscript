@@ -169,7 +169,7 @@ export class Scope {
         let lowerName = name.toLowerCase();
         let callables = this.getAllCallables();
         for (let callable of callables) {
-            if (callable.callable.name.toLowerCase() === lowerName) {
+            if (callable.callable.getName(ParseMode.BrighterScript).toLowerCase() === lowerName) {
                 return callable.callable;
             }
         }

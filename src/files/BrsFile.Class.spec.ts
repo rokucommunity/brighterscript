@@ -138,6 +138,22 @@ describe('BrsFile BrighterScript classes', () => {
         });
     });
 
+    it('detects using `new` keyword on non-classes', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            sub quack()
+            end sub
+            sub main()
+                duck = new quack()
+            end sub
+        `) as BrsFile);
+        await program.validate();
+        expect(
+            program.getDiagnostics()[0]?.message
+        ).to.equal(
+            DiagnosticMessages.expressionIsNotConstructable('sub').message
+        );
+    });
+
     it('detects missing call to super', async () => {
         (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             class Animal

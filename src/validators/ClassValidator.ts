@@ -32,14 +32,22 @@ export class BsClassValidator {
     /**
      * Given a class name optionally prefixed with a namespace name, find the class that matches
      */
-    private getClassByName(className: string, namespaceName: string) {
-        //is namespace-prefixed
-        if (className?.includes('.')) {
-            return this.classes[className.toLowerCase()];
-        } else if (namespaceName?.length > 0) {
-            return this.classes[`${namespaceName}.${className}`.toLowerCase()];
+    private getClassByName(className: string, namespaceName?: string) {
+        let fullName = this.getFullName(className, namespaceName);
+        return this.classes[fullName.toLowerCase()];
+    }
+
+    /**
+     * Given the class name text, return a namespace-prefixed name.
+     * If the name already has a period in it, or the namespaceName was not provided, return the class name as is.
+     * If the name does not have a period, and a namespaceName was provided, return the class name prepended
+     * by the namespace name
+     */
+    private getFullName(className: string, namespaceName?: string) {
+        if (className.includes('.') === false && namespaceName) {
+            return `${namespaceName}.${className}`;
         } else {
-            return this.classes[className.toLowerCase()];
+            return className;
         }
     }
 
@@ -55,12 +63,27 @@ export class BsClassValidator {
                 className,
                 newExpression.namespaceName?.getName(ParseMode.BrighterScript)
             );
+
             if (!newableClass) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.classCouldNotBeFound(className, this.scope.name),
-                    file: newExpression.file,
-                    range: newExpression.className.range
-                });
+                //try and find functions with this name.
+                let fullName = this.getFullName(className, newExpression.namespaceName?.getName(ParseMode.BrighterScript));
+                let callable = this.scope.getCallableByName(fullName);
+                //if we found a callable with this name, the user used a "new" keyword in front of a function. add error
+                if (callable) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.expressionIsNotConstructable(callable.isSub ? 'sub' : 'function'),
+                        file: newExpression.file,
+                        range: newExpression.className.range
+                    });
+
+                    //could not find a class with this name
+                } else {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.classCouldNotBeFound(className, this.scope.name),
+                        file: newExpression.file,
+                        range: newExpression.className.range
+                    });
+                }
             }
         }
     }
