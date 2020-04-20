@@ -82,7 +82,7 @@ export class BsClassValidator {
                             URI.file(nonNamespaceClass.file.pathAbsolute).toString(),
                             nonNamespaceClass.name.range
                         ),
-                        message: ''
+                        message: 'Original class declared here'
                     }]
                 });
             }

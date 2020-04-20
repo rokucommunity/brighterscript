@@ -28,6 +28,7 @@ import { Deferred } from './deferred';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import util from './util';
+import { BsDiagnostic } from './interfaces';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
@@ -879,9 +880,9 @@ export class LanguageServer {
             }
         }
 
-        let diagnostics = Array.prototype.concat.apply([],
+        let diagnostics = Array.prototype.concat.apply([] as BsDiagnostic[],
             workspaces.map((x) => x.builder.getDiagnostics())
-        );
+        ) as BsDiagnostic[];
 
         for (let diagnostic of diagnostics) {
             //certain diagnostics are attached to non-tracked files, so create those buckets dynamically
@@ -892,6 +893,7 @@ export class LanguageServer {
                 severity: diagnostic.severity,
                 range: diagnostic.range,
                 message: diagnostic.message,
+                relatedInformation: diagnostic.relatedInformation,
                 code: diagnostic.code,
                 source: 'brs'
             });

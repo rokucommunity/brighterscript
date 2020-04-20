@@ -39,7 +39,7 @@ export class DiagnosticFilterer {
      */
     private getDiagnostics() {
         //combine all remaining diagnostics
-        let finalDiagnostics = [];
+        let finalDiagnostics = [] as BsDiagnostic[];
         for (let key in this.byFile) {
             let fileDiagnostics = this.byFile[key];
             for (let diagnostic of fileDiagnostics) {
