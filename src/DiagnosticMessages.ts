@@ -129,8 +129,8 @@ export let DiagnosticMessages = {
         code: 1023,
         severity: DiagnosticSeverity.Error
     }),
-    attemptedToUseNewKeywordOnNonClass: () => ({
-        message: 'Attempted to use "new" keyword on a non class',
+    ______UNUSED: () => ({
+        message: '',
         code: 1024,
         severity: DiagnosticSeverity.Error
     }),
@@ -154,8 +154,8 @@ export let DiagnosticMessages = {
         code: 1028,
         severity: DiagnosticSeverity.Error
     }),
-    classCouldNotBeFound: (extendsClassName: string, scopeName: string) => ({
-        message: `Class '${extendsClassName}' could not be found when this file is included in scope '${scopeName}'`,
+    classCouldNotBeFound: (className: string, scopeName: string) => ({
+        message: `Class '${className}' could not be found when this file is included in scope '${scopeName}'`,
         code: 1029,
         severity: DiagnosticSeverity.Error
     }),

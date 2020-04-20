@@ -10,7 +10,7 @@ import { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../in
 import { Program } from '../Program';
 import util from '../util';
 import { ClassStatement } from '../parser/ClassStatement';
-import { NamespaceStatement } from '../parser';
+import { NamespaceStatement, NewExpression } from '../parser';
 
 export class XmlFile {
     constructor(
@@ -59,6 +59,8 @@ export class XmlFile {
     public classStatements = [] as ClassStatement[];
 
     public namespaceStatements = [] as NamespaceStatement[];
+
+    public newExpressions = [] as NewExpression[];
 
     /**
      * The name of the component that this component extends

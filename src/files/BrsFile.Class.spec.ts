@@ -277,7 +277,7 @@ describe('BrsFile BrighterScript classes', () => {
         });
     });
 
-    it.skip('accounts for namespace name', async () => {
+    it('catches newable class without namespace name', async () => {
         (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             namespace NameA.NameB
                 class Duck
@@ -289,7 +289,23 @@ describe('BrsFile BrighterScript classes', () => {
             end sub
         `) as BrsFile);
         await program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.equal('');
+        expect(program.getDiagnostics()[0]?.message).to.equal(
+            DiagnosticMessages.classCouldNotBeFound('Duck', 'global').message
+        );
+    });
+
+    it('supports newable class namespace inference', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            namespace NameA.NameB
+                class Duck
+                end class
+                sub main()
+                    d = new Duck()
+                end sub
+            end namespace
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).not.to.exist;
     });
 
     it('catches extending unknown namespaced class', async () => {

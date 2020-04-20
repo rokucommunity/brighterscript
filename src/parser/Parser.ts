@@ -260,6 +260,8 @@ export class Parser {
             extendsKeyword = this.advance();
 
             parentClassName = this.getNamespacedVariableNameExpression();
+            //the only thing allowed after a class declaration is a comment or a newline
+            this.flagUntil(TokenKind.Comment, TokenKind.Newline);
         }
         let body = [] as Statement[];
 
@@ -932,6 +934,8 @@ export class Parser {
         this.namespaceAndFunctionDepth++;
 
         let name = this.getNamespacedVariableNameExpression();
+        //the only thing allowed after a namespace declaration is a comment or a newline
+        this.flagUntil(TokenKind.Comment, TokenKind.Newline);
 
         //set the current namespace name
         this.currentNamespaceName = name;
@@ -1002,10 +1006,6 @@ export class Parser {
                 expr = new DottedGetExpression(expr, identifier, dot);
             }
         }
-
-        //the only thing allowed after a namespace declaration is a comment or a newline
-        this.flagUntil(TokenKind.Comment, TokenKind.Newline);
-
         return new NamespacedVariableNameExpression(expr);
     }
 
@@ -1674,10 +1674,22 @@ export class Parser {
         return new IndexedGetExpression(expr, index, openingSquare, closingSquare);
     }
 
+    private newExpression() {
+        this.warnIfNotBrighterScriptMode(`using 'new' keyword to construct a class`);
+        let newToken = this.advance();
+
+        let nameExpr = this.getNamespacedVariableNameExpression();
+        let leftParen = this.consume(
+            DiagnosticMessages.foundUnexpectedToken(this.peek().text),
+            TokenKind.LeftParen
+        );
+        let call = this.finishCall(leftParen, nameExpr);
+        return new NewExpression(newToken, call);
+    }
+
     private call(): Expression {
-        let newToken: Token;
         if (this.check(TokenKind.New)) {
-            newToken = this.advance();
+            return this.newExpression();
         }
         let expr = this.primary();
 
@@ -1720,31 +1732,17 @@ export class Parser {
                 break;
             }
         }
-
-        if (newToken) {
-            this.warnIfNotBrighterScriptMode(`using 'new' keyword to construct a class`);
-            if (expr instanceof CallExpression === false) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.attemptedToUseNewKeywordOnNonClass(),
-                    range: expr.range
-                });
-            }
-            return new NewExpression(newToken, expr);
-        } else {
-            return expr;
-        }
+        return expr;
     }
 
-    private finishCall(openingParen: Token, callee: Expression): Expression {
+    private finishCall(openingParen: Token, callee: Expression) {
         let args = [] as Expression[];
         while (this.match(TokenKind.Newline)) {
         }
 
         if (!this.check(TokenKind.RightParen)) {
             do {
-                while (this.match(TokenKind.Newline)) {
-
-                }
+                while (this.match(TokenKind.Newline)) { }
 
                 if (args.length >= CallExpression.MaximumArguments) {
                     this.diagnostics.push({
@@ -1764,7 +1762,7 @@ export class Parser {
             TokenKind.RightParen
         );
 
-        return new CallExpression(callee, openingParen, closingParen, args);
+        return new CallExpression(callee, openingParen, closingParen, args, this.currentNamespaceName);
     }
 
     private primary(): Expression {

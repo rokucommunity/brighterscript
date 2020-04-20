@@ -10,7 +10,7 @@ import { Deferred } from '../deferred';
 import { FunctionParameter } from '../brsTypes';
 import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers } from '../lexer';
 import { Parser, ParseMode } from '../parser';
-import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression } from '../parser/Expression';
+import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, NewExpression } from '../parser/Expression';
 import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, NamespaceStatement } from '../parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
@@ -84,6 +84,8 @@ export class BrsFile {
     public classStatements = [] as ClassStatement[];
 
     public namespaceStatements = [] as NamespaceStatement[];
+
+    public newExpressions = [] as NewExpression[];
 
     /**
      * Does this file need to be transpiled?
@@ -174,6 +176,8 @@ export class BrsFile {
 
         this.findNamespaces();
 
+        this.findNewExpressions();
+
         this.ensureLibraryCallsAreAtTopOfFile();
 
         //attach this file to every diagnostic
@@ -182,6 +186,10 @@ export class BrsFile {
         }
 
         this.parseDeferred.resolve();
+    }
+
+    private findNewExpressions() {
+        this.newExpressions = this.findAllInstances(NewExpression).map(x => x.value);
     }
 
     private findNamespaces() {

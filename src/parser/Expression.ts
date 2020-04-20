@@ -45,7 +45,8 @@ export class CallExpression implements Expression {
         readonly callee: Expression,
         readonly openingParen: Token,
         readonly closingParen: Token,
-        readonly args: Expression[]
+        readonly args: Expression[],
+        readonly namespaceName: NamespacedVariableNameExpression
     ) {
         this.range = Range.create(this.callee.range.start, this.closingParen.range.end);
     }
@@ -162,8 +163,15 @@ export class NamespacedVariableNameExpression implements Expression {
     }
     range: Range;
 
-    transpile(state: TranspileState): string[] {
-        throw new Error('not implemented');
+    transpile(state: TranspileState) {
+        return [
+            new SourceNode(
+                this.range.start.line + 1,
+                this.range.start.character,
+                state.pathAbsolute,
+                this.getName(ParseMode.BrightScript)
+            )
+        ];
     }
 
     public getNameParts() {
@@ -507,17 +515,35 @@ export class VariableExpression implements Expression {
     }
 }
 
+/**
+ * This expression transpiles and acts exactly like a CallExpression,
+ * except we need to uniquely identify these statements so we can
+ * do more type checking.
+ */
 export class NewExpression implements Expression {
     constructor(
         readonly newKeyword: Token,
-        readonly expression: Expression
+        readonly call: CallExpression
     ) {
-        this.range = Range.create(this.newKeyword.range.start, this.expression.range.end);
+        this.range = Range.create(this.newKeyword.range.start, this.call.range.end);
+    }
+
+    /**
+     * The name of the class to initialize (with optional namespace prefixed)
+     */
+    public get className() {
+        //the parser guarantees the callee of a new statement's call object will be
+        //a NamespacedVariableNameExpression
+        return this.call.callee as NamespacedVariableNameExpression;
+    }
+
+    public get namespaceName() {
+        return this.call.namespaceName;
     }
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
-        return this.expression.transpile(state);
+    public transpile(state: TranspileState) {
+        return this.call.transpile(state);
     }
 }

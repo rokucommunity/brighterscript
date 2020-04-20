@@ -8,7 +8,7 @@ import { CallableContainer, BsDiagnostic, File } from './interfaces';
 import { Program } from './Program';
 import util from './util';
 import { BsClassValidator } from './validators/ClassValidator';
-import { NamespaceStatement, ParseMode, Statement } from './parser';
+import { NamespaceStatement, ParseMode, Statement, NewExpression } from './parser';
 
 /**
  * A class to keep track of all declarations within a given scope (like global scope, component scope)
@@ -342,6 +342,19 @@ export class Scope {
         this.isValidated = false;
     }
 
+    public getNewExpressions() {
+        let result = [] as AugmentedNewExpression[];
+        for (let key in this.files) {
+            let file = this.files[key].file;
+            let expressions = file.newExpressions as AugmentedNewExpression[];
+            for (let expression of expressions) {
+                expression.file = file;
+                result.push(expression);
+            }
+        }
+        return result;
+    }
+
     private validateClasses() {
         let validator = new BsClassValidator();
         validator.validate(this);
@@ -608,4 +621,8 @@ interface NamespaceContainer {
     lastPartName: string;
     statements: Statement[];
     namespaces: { [name: string]: NamespaceContainer };
+}
+
+interface AugmentedNewExpression extends NewExpression {
+    file: BrsFile | XmlFile;
 }

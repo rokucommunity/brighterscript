@@ -24,8 +24,45 @@ export class BsClassValidator {
         this.linkClassesWithParents();
         this.validateMemberCollisions();
         this.verifyChildConstructor();
+        this.verifyNewStatements();
 
         this.cleanUp();
+    }
+
+    /**
+     * Given a class name optionally prefixed with a namespace name, find the class that matches
+     */
+    private getClassByName(className: string, namespaceName: string) {
+        //is namespace-prefixed
+        if (className?.includes('.')) {
+            return this.classes[className.toLowerCase()];
+        } else if (namespaceName?.length > 0) {
+            return this.classes[`${namespaceName}.${className}`.toLowerCase()];
+        } else {
+            return this.classes[className.toLowerCase()];
+        }
+    }
+
+    /**
+     * Find all "new" statements in the program,
+     * and make sure we can find a class with that name
+     */
+    private verifyNewStatements() {
+        let newExpressions = this.scope.getNewExpressions();
+        for (let newExpression of newExpressions) {
+            let className = newExpression.className.getName(ParseMode.BrighterScript);
+            let newableClass = this.getClassByName(
+                className,
+                newExpression.namespaceName?.getName(ParseMode.BrighterScript)
+            );
+            if (!newableClass) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.classCouldNotBeFound(className, this.scope.name),
+                    file: newExpression.file,
+                    range: newExpression.className.range
+                });
+            }
+        }
     }
 
     private findNamespaceNonNamespaceCollisions() {
@@ -250,11 +287,16 @@ export class BsClassValidator {
                 let relativeName: string;
                 let absoluteName: string;
 
-                //if the parent class name was namespaced in the declaration of this class
+                //if the parent class name was namespaced in the declaration of this class,
+                //compute the relative name of the parent class and the absolute name of the parent class
                 if (parentClassName.indexOf('.') > 0) {
                     absoluteName = parentClassName;
                     let parts = parentClassName.split('.');
                     relativeName = parts[parts.length - 1];
+
+                    //the parent class name was NOT namespaced.
+                    //compute the relative name of the parent class and prepend the current class's namespace
+                    //to the beginning of the parent class's name
                 } else {
                     if (classStatement.namespaceName) {
                         absoluteName = `${classStatement.namespaceName.getName(ParseMode.BrighterScript)}.${parentClassName}`;
