@@ -6,6 +6,7 @@ import { BrsFile } from './BrsFile';
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Diagnostic, Range, DiagnosticSeverity } from 'vscode-languageserver';
+import { ParseMode } from '../parser/Parser';
 
 let sinon = sinonImport.createSandbox();
 
@@ -32,7 +33,7 @@ describe('BrsFile BrighterScript classes', () => {
             class Duck
             end class
         `) as BrsFile);
-        expect(file.classStatements.map(x => x.name.text).sort()).to.eql(['Animal', 'Duck']);
+        expect(file.classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
     });
 
     describe('transpile', () => {
@@ -275,4 +276,89 @@ describe('BrsFile BrighterScript classes', () => {
             range: Range.create(1, 31, 1, 37)
         });
     });
+
+    it.skip('accounts for namespace name', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            namespace NameA.NameB
+                class Duck
+                end class
+            end namespace
+            sub main()
+                ' this should be an error because the proper name is NameA.NameB.Duck"
+                d = new Duck()
+            end sub
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.equal('');
+    });
+
+    it('catches extending unknown namespaced class', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            namespace NameA.NameB
+                class Animal
+                end class
+                class Duck extends NameA.NameB.Animal1
+                end class
+            end namespace
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.equal(
+            DiagnosticMessages.classCouldNotBeFound('NameA.NameB.Animal1', 'global').message
+        );
+    });
+
+    it('supports omitting namespace prefix for items in same namespace', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            namespace NameA.NameB
+                class Animal
+                end class
+                class Duck extends Animal
+                end class
+            end namespace
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).not.to.exist;
+    });
+
+    it('catches duplicate root-level class declarations', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            class Animal
+            end class
+            class Animal
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.equal(
+            DiagnosticMessages.duplicateClassDeclaration('global', 'Animal').message
+        );
+    });
+
+    it('catches duplicate namespace-level class declarations', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            namespace NameA.NameB
+                class Animal
+                end class
+                class Animal
+            end namespace
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.equal(
+            DiagnosticMessages.duplicateClassDeclaration('global', 'NameA.NameB.Animal').message
+        );
+    });
+
+    it('catches namespaced class name which is the same as a global class', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            namespace NameA.NameB
+                class Animal
+                end class
+            end namespace
+            class Animal
+            end class
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.equal(
+            DiagnosticMessages.namespacedClassCannotShareNamewithNonNamespacedClass('Animal').message
+        );
+    });
+
 });

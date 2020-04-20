@@ -4,7 +4,10 @@ import { XmlFile } from '../files/XmlFile';
 import { BrsFile } from '../files/BrsFile';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { BsDiagnostic } from '..';
-import { CallExpression, VariableExpression } from '../parser';
+import { CallExpression, VariableExpression, ParseMode } from '../parser';
+import { Location } from 'vscode-languageserver';
+import URI from 'vscode-uri';
+import util from '../util';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -17,11 +20,36 @@ export class BsClassValidator {
         this.classes = {};
 
         this.findClasses();
+        this.findNamespaceNonNamespaceCollisions();
         this.linkClassesWithParents();
         this.validateMemberCollisions();
         this.verifyChildConstructor();
 
         this.cleanUp();
+    }
+
+    private findNamespaceNonNamespaceCollisions() {
+        for (let name in this.classes) {
+            let classStatement = this.classes[name];
+            //catch namespace class collision with global class
+            let nonNamespaceClass = this.classes[util.getTextAfterFinalDot(name).toLowerCase()];
+            if (classStatement.namespaceName && nonNamespaceClass) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.namespacedClassCannotShareNamewithNonNamespacedClass(
+                        nonNamespaceClass.name.text
+                    ),
+                    file: classStatement.file,
+                    range: classStatement.name.range,
+                    relatedInformation: [{
+                        location: Location.create(
+                            URI.file(nonNamespaceClass.file.pathAbsolute).toString(),
+                            nonNamespaceClass.name.range
+                        ),
+                        message: ''
+                    }]
+                });
+            }
+        }
     }
 
     private verifyChildConstructor() {
@@ -100,7 +128,7 @@ export class BsClassValidator {
                                 ...DiagnosticMessages.classChildMemberDifferentMemberTypeThanAncestor(
                                     memberType,
                                     ancestorMemberType,
-                                    ancestorAndMember.classStatement.name.text
+                                    ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
                                 file: classStatement.file,
                                 range: member.range
@@ -112,7 +140,7 @@ export class BsClassValidator {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.memberAlreadyExistsInParentClass(
                                     memberType,
-                                    ancestorAndMember.classStatement.name.text
+                                    ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
                                 file: classStatement.file,
                                 range: member.range
@@ -130,7 +158,7 @@ export class BsClassValidator {
                         ) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.missingOverrideKeyword(
-                                    ancestorAndMember.classStatement.name.text
+                                    ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
                                 file: classStatement.file,
                                 range: member.range
@@ -184,8 +212,31 @@ export class BsClassValidator {
 
             for (let x of file.file.classStatements) {
                 let classStatement = x as AugmentedClassStatement;
-                this.classes[classStatement.name.text.toLowerCase()] = classStatement;
-                classStatement.file = file.file;
+                let name = classStatement.getName(ParseMode.BrighterScript);
+                let lowerName = name.toLowerCase();
+                //see if this class was already defined
+                let alreadyDefinedClass = this.classes[lowerName];
+
+                //if we don't already have this class, register it
+                if (!alreadyDefinedClass) {
+                    this.classes[lowerName] = classStatement;
+                    classStatement.file = file.file;
+
+                    //add a diagnostic about this class already existing
+                } else {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.duplicateClassDeclaration(this.scope.name, name),
+                        file: file.file,
+                        range: classStatement.name.range,
+                        relatedInformation: [{
+                            location: Location.create(
+                                URI.file(alreadyDefinedClass.file.pathAbsolute).toString(),
+                                this.classes[lowerName].range
+                            ),
+                            message: ''
+                        }]
+                    });
+                }
             }
         }
     }
@@ -194,16 +245,43 @@ export class BsClassValidator {
         //link all classes with their parents
         for (let key in this.classes) {
             let classStatement = this.classes[key];
-            let parentClassName = classStatement.extendsIdentifier?.text;
+            let parentClassName = classStatement.parentClassName?.getName(ParseMode.BrighterScript);
             if (parentClassName) {
-                let parentClass = this.classes[parentClassName.toLowerCase()];
+                let relativeName: string;
+                let absoluteName: string;
 
-                //detect unknown parent class
-                if (!parentClass) {
+                //if the parent class name was namespaced in the declaration of this class
+                if (parentClassName.indexOf('.') > 0) {
+                    absoluteName = parentClassName;
+                    let parts = parentClassName.split('.');
+                    relativeName = parts[parts.length - 1];
+                } else {
+                    if (classStatement.namespaceName) {
+                        absoluteName = `${classStatement.namespaceName.getName(ParseMode.BrighterScript)}.${parentClassName}`;
+                    } else {
+                        absoluteName = parentClassName;
+                    }
+                    relativeName = parentClassName;
+                }
+
+                let relativeParent = this.classes[relativeName.toLowerCase()];
+                let absoluteParent = this.classes[absoluteName.toLowerCase()];
+
+                let parentClass: AugmentedClassStatement;
+                //if we found a relative parent class
+                if (relativeParent) {
+                    parentClass = relativeParent;
+
+                    //we found an absolute parent class
+                } else if (absoluteParent) {
+                    parentClass = absoluteParent;
+
+                    //couldn't find the parent class
+                } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.classCouldNotBeFound(parentClassName, this.scope.name),
                         file: classStatement.file,
-                        range: classStatement.extendsIdentifier.range
+                        range: classStatement.parentClassName.range
                     });
                 }
                 classStatement.parentClass = parentClass;

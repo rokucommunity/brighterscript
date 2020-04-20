@@ -52,7 +52,7 @@ import {
 } from './Statement';
 import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
-import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression, XmlAttributeGetExpression, NamespaceNameExpression } from './Expression';
+import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression, XmlAttributeGetExpression, NamespacedVariableNameExpression } from './Expression';
 import { Range, Diagnostic } from 'vscode-languageserver';
 import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from './ClassStatement';
 
@@ -250,7 +250,7 @@ export class Parser {
             TokenKind.Class
         );
         let extendsKeyword: Token;
-        let extendsIdentifier: Identifier;
+        let parentClassName: NamespacedVariableNameExpression;
 
         //get the class name
         let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier) as Identifier;
@@ -259,7 +259,7 @@ export class Parser {
         if (this.peek().text.toLowerCase() === 'extends') {
             extendsKeyword = this.advance();
 
-            extendsIdentifier = this.tryConsume(DiagnosticMessages.missingIdentifierAfterExtendsKeyword(), TokenKind.Identifier) as Identifier;
+            parentClassName = this.getNamespacedVariableNameExpression();
         }
         let body = [] as Statement[];
 
@@ -347,7 +347,8 @@ export class Parser {
             body,
             endingKeyword,
             extendsKeyword,
-            extendsIdentifier
+            parentClassName,
+            this.currentNamespaceName
         );
         return result;
     }
@@ -916,7 +917,7 @@ export class Parser {
      * When a namespace has been started, this gets set. When it's done, this gets unset.
      * It is useful for passing the namespace into certain statements that need it
      */
-    private currentNamespaceName: NamespaceNameExpression;
+    private currentNamespaceName: NamespacedVariableNameExpression;
 
     private namespaceStatement(): NamespaceStatement | undefined {
         this.warnIfNotBrighterScriptMode('namespace');
@@ -930,7 +931,7 @@ export class Parser {
         }
         this.namespaceAndFunctionDepth++;
 
-        let name = this.getNamespaceName();
+        let name = this.getNamespacedVariableNameExpression();
 
         //set the current namespace name
         this.currentNamespaceName = name;
@@ -961,12 +962,11 @@ export class Parser {
     }
 
     /**
-     * Get an expression from a set of variables following a namespace keyword.
+     * Get an expression with identifiers separated by periods. Useful for namespaces and class extends
      */
-    private getNamespaceName() {
-        //namespaces may have identifiers separated by periods
+    private getNamespacedVariableNameExpression() {
         let firstIdentifier = this.consume(
-            DiagnosticMessages.expectedIdentifierAfterKeyword('namespace'),
+            DiagnosticMessages.expectedIdentifierAfterKeyword(this.previous().text),
             TokenKind.Identifier,
             ...AllowedLocalIdentifiers
         ) as Identifier;
@@ -1002,10 +1002,11 @@ export class Parser {
                 expr = new DottedGetExpression(expr, identifier, dot);
             }
         }
+
         //the only thing allowed after a namespace declaration is a comment or a newline
         this.flagUntil(TokenKind.Comment, TokenKind.Newline);
 
-        return new NamespaceNameExpression(expr);
+        return new NamespacedVariableNameExpression(expr);
     }
 
     /**

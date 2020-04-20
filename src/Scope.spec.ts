@@ -139,6 +139,21 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
+        it('does not mark same-named-functions in different namespaces as an error', async () => {
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: '/source/main.bs' }, `
+                namespace NameA
+                    sub alert()
+                    end sub
+                end namespace
+                namespace NameB
+                    sub alert()
+                    end sub
+                end namespace
+            `);
+            await program.validate();
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.lengthOf(0);
+        });
         it('resolves local-variable function calls', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: '/source/main.brs' }, `
                 sub DoSomething()

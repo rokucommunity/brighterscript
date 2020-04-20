@@ -208,7 +208,7 @@ describe('parser class', () => {
         expect(diagnostics[0]?.message).to.not.exist;
         let stmt = (statements[1] as ClassStatement);
         expect(stmt.extendsKeyword.text).to.equal('extends');
-        expect(stmt.extendsIdentifier.text).to.equal('Person');
+        expect(stmt.parentClassName.getName(ParseMode.BrighterScript)).to.equal('Person');
     });
 
     it('catches missing identifier after "extends" keyword', () => {
@@ -223,7 +223,7 @@ describe('parser class', () => {
             end class
         `);
         let { diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-        expect(diagnostics[0].code).to.equal(DiagnosticMessages.missingIdentifierAfterExtendsKeyword().code);
+        expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifierAfterKeyword('extends').code);
     });
 
     describe('new keyword', () => {

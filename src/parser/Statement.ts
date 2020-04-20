@@ -1,6 +1,6 @@
 import { Token, Identifier, TokenKind } from '../lexer';
 import { SourceNode } from 'source-map';
-import { Expression, FunctionExpression, NamespaceNameExpression } from './Expression';
+import { Expression, FunctionExpression, NamespacedVariableNameExpression } from './Expression';
 import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
@@ -228,7 +228,7 @@ export class FunctionStatement implements Statement {
     constructor(
         readonly name: Identifier,
         readonly func: FunctionExpression,
-        readonly namespaceName: NamespaceNameExpression
+        readonly namespaceName: NamespacedVariableNameExpression
     ) {
         this.range = this.func.range;
     }
@@ -811,7 +811,7 @@ export class NamespaceStatement implements Statement {
     constructor(
         public keyword: Token,
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
-        public name: NamespaceNameExpression,
+        public name: NamespacedVariableNameExpression,
         public body: Body,
         public endKeyword: Token
     ) {

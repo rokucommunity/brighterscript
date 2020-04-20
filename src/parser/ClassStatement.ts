@@ -1,6 +1,6 @@
 import { Token, Identifier } from '../lexer';
 import { Statement } from './Statement';
-import { FunctionExpression, CallExpression, VariableExpression, DottedGetExpression } from './Expression';
+import { FunctionExpression, CallExpression, VariableExpression, DottedGetExpression, NamespacedVariableNameExpression } from './Expression';
 import { SourceNode } from 'source-map';
 import { TranspileState } from './TranspileState';
 import { Parser, ParseMode } from './Parser';
@@ -11,11 +11,15 @@ export class ClassStatement implements Statement {
 
     constructor(
         readonly classKeyword: Token,
+        /**
+         * The name of the class (without namespace prefix)
+         */
         readonly name: Identifier,
         public body: Statement[],
         readonly end: Token,
         readonly extendsKeyword?: Token,
-        readonly extendsIdentifier?: Identifier
+        readonly parentClassName?: NamespacedVariableNameExpression,
+        readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         this.body = this.body ?? [];
         for (let statement of this.body) {
@@ -31,9 +35,20 @@ export class ClassStatement implements Statement {
         this.range = Range.create(this.classKeyword.range.start, this.end.range.end);
     }
 
+    public getName(parseMode: ParseMode) {
+        if (this.namespaceName) {
+            let namespaceName = this.namespaceName.getName(parseMode);
+            let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            return namespaceName + separator + this.name.text;
+        } else {
+            return this.name.text;
+        }
+    }
+
     public memberMap = {} as { [memberName: string]: ClassMemberStatement };
     public methods = [] as ClassMethodStatement[];
     public fields = [] as ClassFieldStatement[];
+
 
     public readonly range: Range;
 
@@ -59,8 +74,8 @@ export class ClassStatement implements Statement {
         let myIndex = 0;
         let stmt = this as ClassStatement;
         while (stmt) {
-            if (stmt.extendsIdentifier) {
-                stmt = state.file.getClassByName(stmt.extendsIdentifier.text);
+            if (stmt.parentClassName) {
+                stmt = state.file.getClassByName(stmt.parentClassName.getName(ParseMode.BrighterScript));
                 myIndex++;
             } else {
                 break;
@@ -71,8 +86,8 @@ export class ClassStatement implements Statement {
 
     public getParentClass(state: TranspileState, classStatement: ClassStatement) {
         let stmt = classStatement;
-        if (stmt.extendsIdentifier) {
-            return state.file.getClassByName(stmt.extendsIdentifier.text);
+        if (stmt.parentClassName) {
+            return state.file.getClassByName(stmt.parentClassName.getName(ParseMode.BrighterScript));
         }
     }
 
@@ -112,9 +127,9 @@ export class ClassStatement implements Statement {
         result.push('instance = ');
 
         //construct parent class or empty object
-        if (this.extendsIdentifier) {
+        if (this.parentClassName) {
             result.push(
-                this.getBuilderName(this.extendsIdentifier.text),
+                this.getBuilderName(this.parentClassName.getName(ParseMode.BrightScript)),
                 '()'
             );
         } else {

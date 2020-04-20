@@ -639,7 +639,7 @@ describe('Program', () => {
             expect(completions).not.to.include('NameA.NameB.NameC.DoSomething');
         });
 
-        it.skip('should resolves completions for namespaces with next namespace part for brighterscript file', async () => {
+        it('should resolves completions for namespaces with next namespace part for brighterscript file', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
                 namespace NameA.NameB.NameC
                     sub DoSomething()
@@ -932,7 +932,7 @@ describe('Program', () => {
     });
 
     describe('xml scope', () => {
-        it.skip('does not fail on base components with many children', async () => {
+        it('does not fail on base components with many children', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub DoSomething()
                 end sub

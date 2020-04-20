@@ -223,20 +223,16 @@ export class BrsFile {
      * Loop through all of the class statements and add them to `this.classStatements`
      */
     public findClassStatements() {
-        for (let stmt of this.ast.statements) {
-            if (stmt instanceof ClassStatement) {
-                this.classStatements.push(stmt);
-            }
-        }
+        this.classStatements = this.findAllInstances(ClassStatement).map(x => x.value);
     }
 
     /**
-     * Find a class by its name.
+     * Find a class by its full namespace-prefixed name.
      * Returns undefined if not found.
      */
     public getClassByName(className: string) {
         for (let stmt of this.classStatements) {
-            if (stmt.name.text === className) {
+            if (stmt.getName(ParseMode.BrighterScript) === className) {
                 return stmt;
             }
         }
@@ -750,6 +746,11 @@ export class BrsFile {
     }
 
     private getNamespaceCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope) {
+        //BrightScript does not support namespaces, so return an empty list in that case
+        if (parseMode === ParseMode.BrightScript) {
+            return [];
+        }
+
         let completionName = this.getPartialVariableName(currentToken);
         //remove any trailing identifer and then any trailing dot, to give us the
         //name of its immediate parent namespace

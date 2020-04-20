@@ -212,7 +212,7 @@ export class Scope {
             for (let part of nameParts) {
                 loopName = loopName === null ? part : `${loopName}.${part}`;
                 byFullName[loopName] = byFullName[loopName] ?? {
-                    fullName: name,
+                    fullName: loopName,
                     lastPartName: part,
                     namespaces: {},
                     statements: []

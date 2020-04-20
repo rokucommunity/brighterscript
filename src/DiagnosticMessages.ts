@@ -119,8 +119,8 @@ export let DiagnosticMessages = {
         code: 1021,
         severity: DiagnosticSeverity.Error
     }),
-    missingIdentifierAfterExtendsKeyword: () => ({
-        message: 'Missing identifier after extends keyword',
+    namespacedClassCannotShareNamewithNonNamespacedClass: (nonNamespacedClassName: string) => ({
+        message: `Namespaced class cannot have the same name as a non-namespaced class '${nonNamespacedClassName}'`,
         code: 1022,
         severity: DiagnosticSeverity.Error
     }),

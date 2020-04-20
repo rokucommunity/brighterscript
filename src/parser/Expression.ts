@@ -153,7 +153,7 @@ export class FunctionExpression implements Expression {
     }
 }
 
-export class NamespaceNameExpression implements Expression {
+export class NamespacedVariableNameExpression implements Expression {
     constructor(
         //if this is a `DottedGetExpression`, it must be comprised only of `VariableExpression`s
         readonly expression: DottedGetExpression | VariableExpression
@@ -495,6 +495,10 @@ export class VariableExpression implements Expression {
     }
 
     public readonly range: Range;
+
+    public getName(parseMode: ParseMode) {
+        return parseMode === ParseMode.BrightScript ? this.name.text : this.name.text;
+    }
 
     transpile(state: TranspileState) {
         return [
