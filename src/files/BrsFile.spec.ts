@@ -706,7 +706,7 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it.skip('supports bitshift assignment operators on object properties accessed by array syntax', async () => {
+        it('supports bitshift assignment operators on object properties accessed by array syntax', async () => {
             await file.parse(`
                     function Main()
                         m.x = 1
@@ -718,7 +718,7 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it.skip('supports weird period AA accessor', async () => {
+        it('supports weird period AA accessor', async () => {
             await file.parse(`
                 function Main()
                     m._uuid = "123"
@@ -1236,7 +1236,7 @@ describe('BrsFile', () => {
         });
 
         //ignore this for now...it's not a huge deal
-        it.skip('does not match on keywords or data types', async () => {
+        it('does not match on keywords or data types', async () => {
             let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                 end sub
@@ -1244,9 +1244,9 @@ describe('BrsFile', () => {
                 end sub
             `);
             //hover over the `as`
-            expect(file.getHover(Position.create(1, 31))).not.to.exist;
+            expect(await file.getHover(Position.create(1, 31))).not.to.exist;
             //hover over the `string`
-            expect(file.getHover(Position.create(1, 36))).not.to.exist;
+            expect(await file.getHover(Position.create(1, 36))).not.to.exist;
         });
 
         it('finds declared function', async () => {
