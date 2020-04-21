@@ -3,4 +3,5 @@ BrighterScript is a superset of Roku's BrightScript language. Its goal is to pro
 
 See the following pages for more information
 
-[Classes](classes.md)
+ - [Classes](classes.md)
+ - [Namespaces](namespaces.md)
