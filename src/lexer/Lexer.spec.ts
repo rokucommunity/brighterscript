@@ -18,6 +18,10 @@ describe('lexer', () => {
             TokenKind.Eof
         ]);
     });
+    it('recognizes library token', () => {
+        let { tokens } = Lexer.scan('library');
+        expect(tokens[0].kind).to.eql(TokenKind.Library);
+    });
     it('produces an at symbol token', () => {
         let { tokens } = Lexer.scan('@');
         expect(tokens[0].kind).to.equal(TokenKind.At);

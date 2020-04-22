@@ -125,6 +125,9 @@ export enum TokenKind {
     Type = 'Type',
     While = 'While',
 
+    //misc
+    Library = 'Library',
+
     //brighterscript keywords
     Class = 'Class',
     EndClass = 'EndClass',
@@ -256,6 +259,7 @@ export const Keywords: { [key: string]: TokenKind } = {
     to: TokenKind.To,
     true: TokenKind.True,
     while: TokenKind.While,
+    library: TokenKind.Library,
     class: TokenKind.Class,
     endclass: TokenKind.EndClass,
     'end class': TokenKind.EndClass,
@@ -340,6 +344,7 @@ export const AllowedProperties = [
     TokenKind.True,
     TokenKind.Type,
     TokenKind.While,
+    TokenKind.Library,
     TokenKind.Void,
     TokenKind.Boolean,
     TokenKind.Integer,
@@ -379,6 +384,7 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Dynamic,
     TokenKind.Void,
     TokenKind.As,
+    TokenKind.Library,
     TokenKind.Public,
     TokenKind.Protected,
     TokenKind.Private,

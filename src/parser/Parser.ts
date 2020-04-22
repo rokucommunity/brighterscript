@@ -647,15 +647,15 @@ export class Parser {
     }
 
     private checkLibrary() {
-        let isLibraryIdentifier = this.check(TokenKind.Identifier) && this.peek().text.toLowerCase() === 'library';
+        let isLibraryToken = this.check(TokenKind.Library);
 
         //if we are at the top level, any line that starts with "library" should be considered a library statement
-        if (this.isAtRootLevel() && isLibraryIdentifier) {
+        if (this.isAtRootLevel() && isLibraryToken) {
             return true;
 
             //not at root level, library statements are all invalid here, but try to detect if the tokens look
             //like a library statement (and let the libraryStatement function handle emitting the diagnostics)
-        } else if (isLibraryIdentifier && this.checkNext(TokenKind.StringLiteral)) {
+        } else if (isLibraryToken && this.checkNext(TokenKind.StringLiteral)) {
             return true;
 
             //definitely not a library statement
