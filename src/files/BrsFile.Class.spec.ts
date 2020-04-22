@@ -37,6 +37,41 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     describe('transpile', () => {
+        it('works with namespaces', async () => {
+            await testTranspile(`
+                namespace Birds.WaterFowl
+                    class Duck
+                    end class
+                    class BabyDuck extends Duck
+                    end class
+                end namespace
+            `, `
+                function __Birds_WaterFowl_Duck_builder()
+                    instance = {}
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                function Birds_WaterFowl_Duck()
+                    instance = __Birds_WaterFowl_Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __Birds_WaterFowl_BabyDuck_builder()
+                    instance = __Birds_WaterFowl_Duck_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                function Birds_WaterFowl_BabyDuck()
+                    instance = __Birds_WaterFowl_BabyDuck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, undefined, 'main.bs');
+        });
+
         it('works for simple  class', async () => {
             await testTranspile(`
                 class Duck

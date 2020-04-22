@@ -237,11 +237,45 @@ export class BrsFile {
     /**
      * Find a class by its full namespace-prefixed name.
      * Returns undefined if not found.
+     * @param namespaceName - the namespace to resolve relative classes from.
      */
-    public getClassByName(className: string) {
-        for (let stmt of this.classStatements) {
-            if (stmt.getName(ParseMode.BrighterScript) === className) {
-                return stmt;
+    public getClassByName(className: string, namespaceName?: string) {
+        let scopes = this.program.getScopesForFile(this);
+        let lowerClassName = className.toLowerCase();
+
+        //if the class is namespace-prefixed, look only for this exact name
+        if (className.includes('.')) {
+            for (let scope of scopes) {
+                let cls = scope.classLookup[lowerClassName];
+                if (cls) {
+                    return cls;
+                }
+            }
+
+            //we have a class name without a namespace prefix.
+        } else {
+            let globalClass: ClassStatement;
+            let namespacedClass: ClassStatement;
+            for (let scope of scopes) {
+                //get the global class if it exists
+                let possibleGlobalClass = scope.classLookup[lowerClassName];
+                if (possibleGlobalClass && !globalClass) {
+                    globalClass = possibleGlobalClass;
+                }
+                if (namespaceName) {
+                    let possibleNamespacedClass = scope.classLookup[namespaceName.toLowerCase() + '.' + lowerClassName];
+                    if (possibleNamespacedClass) {
+                        namespacedClass = possibleNamespacedClass;
+                        break;
+                    }
+                }
+
+            }
+
+            if (namespacedClass) {
+                return namespacedClass;
+            } else if (globalClass) {
+                return globalClass;
             }
         }
     }
@@ -895,8 +929,8 @@ export class BrsFile {
             }
         }
         return false;
-
     }
+
     /**
      * Get the token closest to the position. if no token is found, the previous token is returned
      * @param position

@@ -34,8 +34,9 @@ export class Scope {
     public set isValidated(value) {
         this._isValidated = value;
 
-        //clear out the namespace lookup (it'll get generated on demand the first time it's needed
+        //clear out various lookups (they'll get regenerated on demand the first time requested)
         delete this._namespaceLookup;
+        delete this._classLookup;
     }
     private _isValidated: boolean;
 
@@ -55,6 +56,18 @@ export class Scope {
         return this._namespaceLookup;
     }
     private _namespaceLookup = {} as { [lowerNamespaceName: string]: NamespaceContainer };
+
+    /**
+     * A dictionary of all classes in this scope. This includes namespaced classes always with their full name.
+     * The key is stored in lower case
+     */
+    public get classLookup() {
+        if (!this._classLookup) {
+            this._classLookup = this.buildClassLookup();
+        }
+        return this._classLookup;
+    }
+    private _classLookup = {} as { [lowerClassName: string]: ClassStatement };
 
 
     /**
@@ -288,6 +301,17 @@ export class Scope {
             }
         }
         return namespaceLookup;
+    }
+
+    private buildClassLookup() {
+        let lookup = {} as { [lowerName: string]: ClassStatement };
+        for (let key in this.files) {
+            let file = this.files[key];
+            for (let cls of file.file.classStatements) {
+                lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
+            }
+        }
+        return lookup;
     }
 
     public getNamespaceStatements() {

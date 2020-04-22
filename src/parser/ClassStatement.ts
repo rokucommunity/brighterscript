@@ -87,7 +87,7 @@ export class ClassStatement implements Statement {
     public getParentClass(state: TranspileState, classStatement: ClassStatement) {
         let stmt = classStatement;
         if (stmt.parentClassName) {
-            return state.file.getClassByName(stmt.parentClassName.getName(ParseMode.BrighterScript));
+            return state.file.getClassByName(stmt.parentClassName.getName(ParseMode.BrighterScript), this.namespaceName?.getName(ParseMode.BrighterScript));
         }
     }
 
@@ -119,17 +119,22 @@ export class ClassStatement implements Statement {
 
     private getTranspiledBuilder(state: TranspileState) {
         let result = [];
-        result.push(`function ${this.getBuilderName(this.name.text)}()\n`);
+        result.push(`function ${this.getBuilderName(this.getName(ParseMode.BrightScript))}()\n`);
         state.blockDepth++;
         //indent
         result.push(state.indent());
         //create the instance
         result.push('instance = ');
 
+        let parentClass: ClassStatement;
+
         //construct parent class or empty object
         if (this.parentClassName) {
+            parentClass = this.getParentClass(state, this);
+            let parentClassName = parentClass?.getName(ParseMode.BrightScript) ??
+                `__UnknownParentClass__${this.parentClassName.getName(ParseMode.BrighterScript)}`;
             result.push(
-                this.getBuilderName(this.parentClassName.getName(ParseMode.BrightScript)),
+                this.getBuilderName(parentClassName),
                 '()'
             );
         } else {
@@ -140,7 +145,6 @@ export class ClassStatement implements Statement {
             state.newline(),
             state.indent()
         );
-        let parentClass = this.getParentClass(state, this);
         let parentClassIndex = this.getParentClassIndex(state);
 
         //create empty `new` function if class is missing it (simplifies transpile logic)
@@ -202,7 +206,7 @@ export class ClassStatement implements Statement {
         const constructorFunction = this.getConstructorFunction();
         const constructorParams = constructorFunction ? constructorFunction.func.parameters : [];
 
-        result.push(`function ${this.name.text}(`);
+        result.push(`function ${this.getName(ParseMode.BrightScript)}(`);
         let i = 0;
         for (let param of constructorParams) {
             if (i > 0) {
@@ -220,7 +224,7 @@ export class ClassStatement implements Statement {
 
         state.blockDepth++;
         result.push(state.indent());
-        result.push(`instance = ${this.getBuilderName(this.name.text)}()\n`);
+        result.push(`instance = ${this.getBuilderName(this.getName(ParseMode.BrightScript))}()\n`);
 
         result.push(state.indent());
         result.push(`instance.new(`);
