@@ -8,7 +8,8 @@ import { CallableContainer, BsDiagnostic, File } from './interfaces';
 import { Program } from './Program';
 import util from './util';
 import { BsClassValidator } from './validators/ClassValidator';
-import { NamespaceStatement, ParseMode, Statement, NewExpression } from './parser';
+import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement } from './parser';
+import { ClassStatement } from './parser/ClassStatement';
 
 /**
  * A class to keep track of all declarations within a given scope (like global scope, component scope)
@@ -20,17 +21,41 @@ export class Scope {
     ) {
         //allow unlimited listeners
         this.emitter.setMaxListeners(0);
+        this.isValidated = false;
     }
 
     /**
      * Indicates whether this scope needs to be validated.
      * Will be true when first constructed, or anytime one of its watched files is added, changed, or removed
      */
-    public isValidated = true;
+    public get isValidated() {
+        return this._isValidated;
+    }
+    public set isValidated(value) {
+        this._isValidated = value;
+
+        //clear out the namespace lookup (it'll get generated on demand the first time it's needed
+        delete this._namespaceLookup;
+    }
+    private _isValidated: boolean;
 
     protected program: Program;
 
     protected programHandles = [] as Array<() => void>;
+
+    /**
+     * A dictionary of namespaces, indexed by the lower case full name of each namespace.
+     * If a namespace is declared as "NameA.NameB.NameC", there will be 3 entries in this dictionary,
+     * "namea", "namea.nameb", "namea.nameb.namec"
+     */
+    public get namespaceLookup() {
+        if (!this._namespaceLookup) {
+            this._namespaceLookup = this.buildNamespaceLookup();
+        }
+        return this._namespaceLookup;
+    }
+    private _namespaceLookup = {} as { [lowerNamespaceName: string]: NamespaceContainer };
+
 
     /**
      * The list of diagnostics found specifically for this scope. Individual file diagnostics are stored on the files themselves.
@@ -91,6 +116,24 @@ export class Scope {
         if (!this.parentScope.isValidated) {
             this.isValidated = false;
         }
+    }
+
+    /**
+     * Does this scope know about the given namespace name?
+     * @param namespaceName - the name of the namespace (i.e. "NameA", or "NameA.NameB", etc...)
+     */
+    public isKnownNamespace(namespaceName: string) {
+        let namespaceNameLower = namespaceName.toLowerCase();
+        for (let key in this.files) {
+            let file = this.files[key];
+            for (let namespace of file.file.namespaceStatements) {
+                let loopNamespaceNameLower = namespace.name.toLowerCase();
+                if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public detachParent() {
@@ -198,12 +241,12 @@ export class Scope {
     /**
      * Builds a tree of namespace objects
      */
-    public getNamespaceInfo() {
+    public buildNamespaceLookup() {
         let namespaces = this.getNamespaceStatements();
-        let byFullName = {} as { [namespaceName: string]: NamespaceContainer };
+        let namespaceLookup = {} as { [namespaceName: string]: NamespaceContainer };
         for (let namespace of namespaces) {
             //TODO should we handle non-brighterscript?
-            let name = namespace.name.getName(ParseMode.BrighterScript);
+            let name = namespace.nameExpression.getName(ParseMode.BrighterScript);
             let nameParts = name.split('.');
 
             let loopName = null;
@@ -211,29 +254,40 @@ export class Scope {
             //(so if the namespace name is A.B.C, this will make an entry for "A", an entry for "A.B", and an entry for "A.B.C"
             for (let part of nameParts) {
                 loopName = loopName === null ? part : `${loopName}.${part}`;
-                byFullName[loopName] = byFullName[loopName] ?? {
+                let lowerLoopName = loopName.toLowerCase();
+                namespaceLookup[lowerLoopName] = namespaceLookup[lowerLoopName] ?? {
                     fullName: loopName,
                     lastPartName: part,
                     namespaces: {},
+                    classeStatements: {},
+                    functionStatements: {},
                     statements: []
                 };
             }
-            byFullName[name].statements.push(...namespace.body.statements);
+            let ns = namespaceLookup[name.toLowerCase()];
+            ns.statements.push(...namespace.body.statements);
+            for (let statement of namespace.body.statements) {
+                if (statement instanceof ClassStatement) {
+                    ns.classeStatements[statement.name.text.toLowerCase()] = statement;
+                } else if (statement instanceof FunctionStatement) {
+                    ns.functionStatements[statement.name.text.toLowerCase()] = statement;
+                }
+            }
         }
 
         //associate child namespaces with their parents
-        for (let key in byFullName) {
-            let ns = byFullName[key];
+        for (let key in namespaceLookup) {
+            let ns = namespaceLookup[key];
             let parts = ns.fullName.split('.');
 
             if (parts.length > 1) {
                 //remove the last part
                 parts.pop();
                 let parentName = parts.join('.');
-                byFullName[parentName].namespaces[ns.lastPartName] = ns;
+                namespaceLookup[parentName.toLowerCase()].namespaces[ns.lastPartName.toLowerCase()] = ns;
             }
         }
-        return byFullName;
+        return namespaceLookup;
     }
 
     public getNamespaceStatements() {
@@ -303,6 +357,7 @@ export class Scope {
         if (this.isValidated === true) {
             return;
         }
+
         //validate our parent before we validate ourself
         if (this.parentScope && this.parentScope.isValidated === false) {
             this.parentScope.validate();
@@ -620,6 +675,8 @@ interface NamespaceContainer {
     fullName: string;
     lastPartName: string;
     statements: Statement[];
+    classeStatements: { [lowerClassName: string]: ClassStatement };
+    functionStatements: { [lowerFunctionName: string]: FunctionStatement };
     namespaces: { [name: string]: NamespaceContainer };
 }
 

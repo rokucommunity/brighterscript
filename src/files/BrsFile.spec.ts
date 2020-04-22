@@ -1354,6 +1354,51 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('transpiles namespaced functions', async () => {
+            await testTranspile(`
+                namespace NameA
+                    sub alert()
+                    end sub
+                end namespace
+                namespace NameA.NameB
+                    sub alert()
+                    end sub
+                end namespace
+            `, `
+                sub NameA_alert()
+                end sub
+                sub NameA_NameB_alert()
+                end sub
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('transpiles calls to fully-qualified namespaced functions', async () => {
+            await testTranspile(`
+                namespace NameA
+                    sub alert()
+                    end sub
+                end namespace
+                namespace NameA.NameB
+                    sub alert()
+                    end sub
+                end namespace
+                sub main()
+                    NameA.alert()
+                    NameA.NameB.alert()
+                end sub
+            `, `
+                sub NameA_alert()
+                end sub
+                sub NameA_NameB_alert()
+                end sub
+
+                sub main()
+                    NameA_alert()
+                    NameA_NameB_alert()
+                end sub
+            `, 'trim', 'source/main.bs');
+        });
+
         it('keeps end-of-line comments with their line', async () => {
             await testTranspile(`
                 function DoSomething() 'comment 1
@@ -1605,6 +1650,7 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
         let formatter = null; //new BrightScriptFormatter();
         expected = expected ? expected : source;
         let file = await program.addOrReplaceFile({ src: `${rootDir}/source/${fileName}`, dest: `source/${fileName}` }, source) as BrsFile;
+        await program.validate();
         expect(file.getDiagnostics()[0]?.message).to.not.exist;
         let transpiled = file.transpile();
 

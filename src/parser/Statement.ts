@@ -250,7 +250,13 @@ export class FunctionStatement implements Statement {
 
 
     transpile(state: TranspileState) {
-        return this.func.transpile(state, this.name);
+        //create a fake token using the full transpiled name
+        let nameToken = {
+            ...this.name,
+            text: this.getName(ParseMode.BrightScript)
+        };
+
+        return this.func.transpile(state, nameToken);
     }
 }
 
@@ -811,24 +817,31 @@ export class NamespaceStatement implements Statement {
     constructor(
         public keyword: Token,
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
-        public name: NamespacedVariableNameExpression,
+        public nameExpression: NamespacedVariableNameExpression,
         public body: Body,
         public endKeyword: Token
     ) {
+        this.name = this.nameExpression.getName(ParseMode.BrighterScript);
     }
+
+    /**
+     * The string name for this namespace
+     */
+    public name: string;
 
     public get range() {
         return Range.create(
             this.keyword.range.start,
-            (this.endKeyword ?? this.body ?? this.name ?? this.keyword).range.end
+            (this.endKeyword ?? this.body ?? this.nameExpression ?? this.keyword).range.end
         );
     }
 
     public getName(parseMode: ParseMode) {
-        return this.name.getName(parseMode);
+        return this.nameExpression.getName(parseMode);
     }
 
-    transpile(state: TranspileState): string[] {
-        throw new Error('transpile not implemetned for namespace');
+    transpile(state: TranspileState) {
+        //namespaces don't actually have any real content, so just transpile their bodies
+        return this.body.transpile(state);
     }
 }

@@ -55,7 +55,27 @@ export class CallExpression implements Expression {
 
     transpile(state: TranspileState) {
         let result = [];
-        result.push(...this.callee.transpile(state));
+
+        //if the callee starts with a namespace name, transpile the name
+        if (state.file.calleeStartsWithNamespace(this.callee)) {
+            result.push(
+                ...new NamespacedVariableNameExpression(this.callee as DottedGetExpression | VariableExpression).transpile(state)
+            );
+            //if the callee is the name of a known namespace function
+        } else if (state.file.calleeIsKnownNamespaceFunction(this.callee, this.namespaceName?.getName(ParseMode.BrighterScript))) {
+            result.push(
+                new SourceNode(
+                    this.callee.range.start.line + 1,
+                    this.callee.range.start.character,
+                    state.pathAbsolute,
+                    `${this.namespaceName.getName(ParseMode.BrightScript)}_${(this.callee as VariableExpression).getName(ParseMode.BrightScript)}`
+                )
+            );
+
+            //transpile the callee normally
+        } else {
+            result.push(...this.callee.transpile(state));
+        }
         result.push(
             new SourceNode(this.openingParen.range.start.line + 1, this.openingParen.range.start.character, state.pathAbsolute, '(')
         );

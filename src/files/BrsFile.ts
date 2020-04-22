@@ -10,7 +10,7 @@ import { Deferred } from '../deferred';
 import { FunctionParameter } from '../brsTypes';
 import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers } from '../lexer';
 import { Parser, ParseMode } from '../parser';
-import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, NewExpression } from '../parser/Expression';
+import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, NewExpression, Expression } from '../parser/Expression';
 import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, NamespaceStatement } from '../parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
@@ -737,7 +737,7 @@ export class BrsFile {
                 //include the first part of namespaces
                 let namespaces = scope.getNamespaceStatements();
                 for (let stmt of namespaces) {
-                    let firstPart = stmt.name.getNameParts().shift();
+                    let firstPart = stmt.nameExpression.getNameParts().shift();
                     //skip duplicate namespace names
                     if (names[firstPart.toLowerCase()]) {
                         continue;
@@ -764,11 +764,10 @@ export class BrsFile {
         //name of its immediate parent namespace
         let closestParentNamespaceName = completionName.replace(/\.([a-z0-9_]*)?$/gi, '');
 
-        let namespaces = scope.getNamespaceInfo();
-
+        let namespaceLookup = scope.namespaceLookup;
         let result = [] as CompletionItem[];
-        for (let key in namespaces) {
-            let namespace = namespaces[key];
+        for (let key in namespaceLookup) {
+            let namespace = namespaceLookup[key.toLowerCase()];
             //completionName = "NameA."
             //completionName = "NameA.Na
             //NameA
@@ -857,6 +856,47 @@ export class BrsFile {
         return this.parser.tokens[idx - 1];
     }
 
+    /**
+     * Find the first scope that has a namespace with this name.
+     * Returns false if no namespace was found with that name
+     */
+    public calleeStartsWithNamespace(callee: Expression) {
+        let left = callee as any;
+        while (left instanceof DottedGetExpression) {
+            left = left.obj;
+        }
+
+        if (left instanceof VariableExpression) {
+            let lowerName = left.name.text.toLowerCase();
+            //find the first scope that contains this namespace
+            let scopes = this.program.getScopesForFile(this);
+            for (let scope of scopes) {
+                if (scope.namespaceLookup[lowerName]) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Determine if the callee (i.e. function name) is a known function declared on the given namespace.
+     */
+    public calleeIsKnownNamespaceFunction(callee: Expression, namespaceName: string) {
+        //if we have a variable and a namespace
+        if (callee instanceof VariableExpression && namespaceName) {
+            let lowerCalleeName = callee.name.text.toLowerCase();
+            let scopes = this.program.getScopesForFile(this);
+            for (let scope of scopes) {
+                let namespace = scope.namespaceLookup[lowerCalleeName];
+                if (namespace.classeStatements[lowerCalleeName]) {
+                    return true;
+                }
+            }
+        }
+        return false;
+
+    }
     /**
      * Get the token closest to the position. if no token is found, the previous token is returned
      * @param position
