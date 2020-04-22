@@ -845,3 +845,30 @@ export class NamespaceStatement implements Statement {
         return this.body.transpile(state);
     }
 }
+
+export class ImportStatement implements Statement {
+    constructor(
+        readonly importToken: Token,
+        readonly filePath: Token
+    ) {
+        this.range = Range.create(
+            importToken.range.start,
+            (filePath ?? importToken).range.end
+        );
+    }
+
+    public range: Range;
+
+    transpile(state: TranspileState) {
+        //The xml files are responsible for adding the additional script imports, but
+        //add the import statement as a comment just for debugging purposes
+        return [
+            new SourceNode(
+                this.range.start.line + 1,
+                this.range.start.character,
+                state.file.pathAbsolute,
+                `'${this.importToken.text} "${this.filePath.text}"`
+            )
+        ];
+    }
+}

@@ -11,7 +11,7 @@ import { FunctionParameter } from '../brsTypes';
 import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers } from '../lexer';
 import { Parser, ParseMode } from '../parser';
 import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, NewExpression, Expression } from '../parser/Expression';
-import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, NamespaceStatement } from '../parser/Statement';
+import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, NamespaceStatement, ImportStatement } from '../parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -197,7 +197,7 @@ export class BrsFile {
     }
 
     public ensureLibraryCallsAreAtTopOfFile() {
-        let topOfFileLibraryStatements = [] as LibraryStatement[];
+        let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement>;
 
         for (let stmt of this.ast.statements) {
             //skip comments
@@ -205,27 +205,40 @@ export class BrsFile {
                 continue;
             }
             //if we found a non-library statement, this statement is not at the top of the file
-            if (stmt instanceof LibraryStatement) {
-                topOfFileLibraryStatements.push(stmt);
+            if (stmt instanceof LibraryStatement || stmt instanceof ImportStatement) {
+                topOfFileIncludeStatements.push(stmt);
             } else {
                 //break out of the loop, we found all of our library statements
                 break;
             }
         }
-        let libraryStatementSearchResults = this.findAllInstances(LibraryStatement);
-        for (let result of libraryStatementSearchResults) {
+        let includeStatementSearchResults = util.findAllDeep<LibraryStatement | ImportStatement>(this.ast.statements, (item) => {
+            if (item instanceof LibraryStatement || item instanceof ImportStatement) {
+                return true;
+            } else {
+                return false;
+            }
+        });
+        for (let result of includeStatementSearchResults) {
             //if this statement is not one of the top-of-file statements,
             //then add a diagnostic explaining that it is invalid
-            if (!topOfFileLibraryStatements.includes(result.value)) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile(),
-                    range: result.value.range,
-                    file: this
-                });
+            if (!topOfFileIncludeStatements.includes(result.value)) {
+                if (result.value instanceof LibraryStatement) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile(),
+                        range: result.value.range,
+                        file: this
+                    });
+                } else if (result.value instanceof ImportStatement) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile(),
+                        range: result.value.range,
+                        file: this
+                    });
+                }
             }
         }
     }
-
 
     /**
      * Loop through all of the class statements and add them to `this.classStatements`

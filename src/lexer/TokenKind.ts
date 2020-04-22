@@ -139,6 +139,7 @@ export enum TokenKind {
     As = 'As',
     New = 'New',
     Override = 'Override',
+    Import = 'Import',
 
 
     //comments
@@ -270,7 +271,8 @@ export const Keywords: { [key: string]: TokenKind } = {
     override: TokenKind.Override,
     namespace: TokenKind.Namespace,
     endnamespace: TokenKind.EndNamespace,
-    'end namespace': TokenKind.EndNamespace
+    'end namespace': TokenKind.EndNamespace,
+    import: TokenKind.Import
 };
 
 /** Set of all keywords that end blocks. */
@@ -364,7 +366,8 @@ export const AllowedProperties = [
     TokenKind.New,
     TokenKind.Override,
     TokenKind.Namespace,
-    TokenKind.EndNamespace
+    TokenKind.EndNamespace,
+    TokenKind.Import
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -392,7 +395,8 @@ export const AllowedLocalIdentifiers = [
     TokenKind.New,
     TokenKind.Override,
     TokenKind.Namespace,
-    TokenKind.EndNamespace
+    TokenKind.EndNamespace,
+    TokenKind.Import
 ];
 
 /**

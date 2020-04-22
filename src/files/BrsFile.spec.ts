@@ -728,6 +728,19 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
+        it('adds error for library statements NOT at top of file', async () => {
+            await file.parse(`
+                sub main()
+                end sub
+                import "file.brs"
+            `);
+            expect(
+                file.getDiagnostics().map(x => x.message)
+            ).to.eql([
+                DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile().message
+            ]);
+        });
+
         it('supports library imports', async () => {
             await file.parse(`
                 Library "v30/bslCore.brs"

@@ -129,8 +129,8 @@ export let DiagnosticMessages = {
         code: 1023,
         severity: DiagnosticSeverity.Error
     }),
-    ______UNUSED: () => ({
-        message: '',
+    importStatementMustBeDeclaredAtTopOfFile: () => ({
+        message: `'import' statement must be declared at the top of the file`,
         code: 1024,
         severity: DiagnosticSeverity.Error
     }),
@@ -287,8 +287,8 @@ export let DiagnosticMessages = {
         code: 1054,
         severity: DiagnosticSeverity.Error
     }),
-    expectedStringLiteralAfterLibraryKeyword: () => ({
-        message: `Missing string literal after 'library' keyword`,
+    expectedStringLiteralAfterKeyword: (keyword: string) => ({
+        message: `Missing string literal after '${keyword}' keyword`,
         code: 1055,
         severity: DiagnosticSeverity.Error
     }),
@@ -298,7 +298,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     libraryStatementMustBeDeclaredAtTopOfFile: () => ({
-        message: `Library statements must be declared at the top of the file`,
+        message: `'library' statement must be declared at the top of the file`,
         code: 1057,
         severity: DiagnosticSeverity.Error
     }),

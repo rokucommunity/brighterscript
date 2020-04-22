@@ -48,7 +48,8 @@ import {
     GotoStatement,
     StopStatement,
     NamespaceStatement,
-    Body
+    Body,
+    ImportStatement
 } from './Statement';
 import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
@@ -669,6 +670,10 @@ export class Parser {
             return this.libraryStatement();
         }
 
+        if (this.check(TokenKind.Import)) {
+            return this.importStatement();
+        }
+
         if (this.check(TokenKind.Stop)) {
             return this.stopStatement();
         }
@@ -1041,7 +1046,7 @@ export class Parser {
             library: this.advance(),
             //grab the next token only if it's a string
             filePath: this.tryConsume(
-                DiagnosticMessages.expectedStringLiteralAfterLibraryKeyword(),
+                DiagnosticMessages.expectedStringLiteralAfterKeyword('library'),
                 TokenKind.StringLiteral
             )
         });
@@ -1052,6 +1057,25 @@ export class Parser {
         //consume to the next newline, eof, or colon
         while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
         return libStatement;
+    }
+
+    private importStatement() {
+        this.warnIfNotBrighterScriptMode('import statements');
+        let importStatement = new ImportStatement(
+            this.advance(),
+            //grab the next token only if it's a string
+            this.tryConsume(
+                DiagnosticMessages.expectedStringLiteralAfterKeyword('import'),
+                TokenKind.StringLiteral
+            )
+        );
+
+        //consume all tokens until the end of the line
+        this.flagUntil(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon, TokenKind.Comment);
+
+        //consume to the next newline, eof, or colon
+        while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
+        return importStatement;
     }
 
     private ifStatement(): IfStatement {

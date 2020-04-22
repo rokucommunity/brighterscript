@@ -18,6 +18,12 @@ describe('lexer', () => {
             TokenKind.Eof
         ]);
     });
+
+    it('recognizes the import token', () => {
+        let { tokens } = Lexer.scan('import');
+        expect(tokens[0].kind).to.eql(TokenKind.Import);
+    });
+
     it('recognizes library token', () => {
         let { tokens } = Lexer.scan('library');
         expect(tokens[0].kind).to.eql(TokenKind.Library);

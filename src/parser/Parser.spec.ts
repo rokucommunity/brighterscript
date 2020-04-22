@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
 import { DottedGetExpression, XmlAttributeGetExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import { PrintStatement, AssignmentStatement, FunctionStatement, NamespaceStatement } from './Statement';
+import { PrintStatement, AssignmentStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 
@@ -470,6 +470,37 @@ describe('parser', () => {
                 let { diagnostics } = Parser.parse(tokens);
                 expect(diagnostics, `assigning to reserved word "${reservedWord}" should have been an error`).to.be.length.greaterThan(0);
             }
+        });
+    });
+
+    describe('import keyword', () => {
+
+        it('parses without errors', () => {
+            let { statements, diagnostics } = parse(`
+                import "somePath"
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(statements[0]).to.be.instanceof(ImportStatement);
+        });
+
+        it('catches import statements used in brightscript files', () => {
+            let { statements, diagnostics } = parse(`
+                import "somePath"
+            `, ParseMode.BrightScript);
+            expect(diagnostics[0]?.message).to.eql(
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('import statements').message
+            );
+            expect(statements[0]).to.be.instanceof(ImportStatement);
+        });
+
+        it('catchs missing file path', () => {
+            let { statements, diagnostics } = parse(`
+                import 
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).to.equal(
+                DiagnosticMessages.expectedStringLiteralAfterKeyword('import').message
+            );
+            expect(statements[0]).to.be.instanceof(ImportStatement);
         });
     });
 });
