@@ -6,6 +6,7 @@ import { BrsFile } from './BrsFile';
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Diagnostic, Range, DiagnosticSeverity } from 'vscode-languageserver';
+import { ParseMode } from '../parser/Parser';
 
 let sinon = sinonImport.createSandbox();
 
@@ -32,10 +33,45 @@ describe('BrsFile BrighterScript classes', () => {
             class Duck
             end class
         `) as BrsFile);
-        expect(file.classStatements.map(x => x.name.text).sort()).to.eql(['Animal', 'Duck']);
+        expect(file.classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
     });
 
     describe('transpile', () => {
+        it('works with namespaces', async () => {
+            await testTranspile(`
+                namespace Birds.WaterFowl
+                    class Duck
+                    end class
+                    class BabyDuck extends Duck
+                    end class
+                end namespace
+            `, `
+                function __Birds_WaterFowl_Duck_builder()
+                    instance = {}
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                function Birds_WaterFowl_Duck()
+                    instance = __Birds_WaterFowl_Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __Birds_WaterFowl_BabyDuck_builder()
+                    instance = __Birds_WaterFowl_Duck_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                    end sub
+                    return instance
+                end function
+                function Birds_WaterFowl_BabyDuck()
+                    instance = __Birds_WaterFowl_BabyDuck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, undefined, 'main.bs');
+        });
+
         it('works for simple  class', async () => {
             await testTranspile(`
                 class Duck
@@ -52,7 +88,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-            `);
+            `, undefined, 'main.bs');
         });
 
         it('registers the constructor and properly handles its parameters', async () => {
@@ -73,7 +109,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(name, age)
                     return instance
                 end function
-            `);
+            `, undefined, 'main.bs');
         });
 
         it('properly handles child class constructor override and super calls', async () => {
@@ -115,11 +151,11 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(name, age)
                     return instance
                 end function
-            `);
+            `, undefined, 'main.bs');
         });
 
         it('new keyword transpiles correctly', async () => {
-            await addFile('source/Animal.brs', ` 
+            await addFile('source/Animal.bs', ` 
                 class Animal
                     sub new(name as string)
                     end sub
@@ -133,8 +169,24 @@ describe('BrsFile BrighterScript classes', () => {
                 sub main()
                     a = Animal("donald")
                 end sub
-            `);
+            `, undefined, 'main.bs');
         });
+    });
+
+    it('detects using `new` keyword on non-classes', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            sub quack()
+            end sub
+            sub main()
+                duck = new quack()
+            end sub
+        `) as BrsFile);
+        await program.validate();
+        expect(
+            program.getDiagnostics()[0]?.message
+        ).to.equal(
+            DiagnosticMessages.expressionIsNotConstructable('sub').message
+        );
     });
 
     it('detects missing call to super', async () => {
@@ -173,7 +225,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('detects duplicate member names', async () => {
-        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 public name
                 public name
@@ -211,7 +263,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('detects mismatched member type in child class', async () => {
-        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 public name
             end class
@@ -230,7 +282,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('detects overridden property name in child class', async () => {
-        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 public name
             end class
@@ -275,4 +327,105 @@ describe('BrsFile BrighterScript classes', () => {
             range: Range.create(1, 31, 1, 37)
         });
     });
+
+    it('catches newable class without namespace name', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            namespace NameA.NameB
+                class Duck
+                end class
+            end namespace
+            sub main()
+                ' this should be an error because the proper name is NameA.NameB.Duck"
+                d = new Duck()
+            end sub
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.equal(
+            DiagnosticMessages.classCouldNotBeFound('Duck', 'global').message
+        );
+    });
+
+    it('supports newable class namespace inference', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            namespace NameA.NameB
+                class Duck
+                end class
+                sub main()
+                    d = new Duck()
+                end sub
+            end namespace
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).not.to.exist;
+    });
+
+    it('catches extending unknown namespaced class', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            namespace NameA.NameB
+                class Animal
+                end class
+                class Duck extends NameA.NameB.Animal1
+                end class
+            end namespace
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.equal(
+            DiagnosticMessages.classCouldNotBeFound('NameA.NameB.Animal1', 'global').message
+        );
+    });
+
+    it('supports omitting namespace prefix for items in same namespace', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            namespace NameA.NameB
+                class Animal
+                end class
+                class Duck extends Animal
+                end class
+            end namespace
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).not.to.exist;
+    });
+
+    it('catches duplicate root-level class declarations', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            class Animal
+            end class
+            class Animal
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.equal(
+            DiagnosticMessages.duplicateClassDeclaration('global', 'Animal').message
+        );
+    });
+
+    it('catches duplicate namespace-level class declarations', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            namespace NameA.NameB
+                class Animal
+                end class
+                class Animal
+            end namespace
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.equal(
+            DiagnosticMessages.duplicateClassDeclaration('global', 'NameA.NameB.Animal').message
+        );
+    });
+
+    it('catches namespaced class name which is the same as a global class', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            namespace NameA.NameB
+                class Animal
+                end class
+            end namespace
+            class Animal
+            end class
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.equal(
+            DiagnosticMessages.namespacedClassCannotShareNamewithNonNamespacedClass('Animal').message
+        );
+    });
+
 });

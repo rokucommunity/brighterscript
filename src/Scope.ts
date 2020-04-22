@@ -8,6 +8,8 @@ import { CallableContainer, BsDiagnostic, File } from './interfaces';
 import { Program } from './Program';
 import util from './util';
 import { BsClassValidator } from './validators/ClassValidator';
+import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement } from './parser';
+import { ClassStatement } from './parser/ClassStatement';
 
 /**
  * A class to keep track of all declarations within a given scope (like global scope, component scope)
@@ -19,17 +21,54 @@ export class Scope {
     ) {
         //allow unlimited listeners
         this.emitter.setMaxListeners(0);
+        this.isValidated = false;
     }
 
     /**
      * Indicates whether this scope needs to be validated.
      * Will be true when first constructed, or anytime one of its watched files is added, changed, or removed
      */
-    public isValidated = true;
+    public get isValidated() {
+        return this._isValidated;
+    }
+    public set isValidated(value) {
+        this._isValidated = value;
+
+        //clear out various lookups (they'll get regenerated on demand the first time requested)
+        delete this._namespaceLookup;
+        delete this._classLookup;
+    }
+    private _isValidated: boolean;
 
     protected program: Program;
 
     protected programHandles = [] as Array<() => void>;
+
+    /**
+     * A dictionary of namespaces, indexed by the lower case full name of each namespace.
+     * If a namespace is declared as "NameA.NameB.NameC", there will be 3 entries in this dictionary,
+     * "namea", "namea.nameb", "namea.nameb.namec"
+     */
+    public get namespaceLookup() {
+        if (!this._namespaceLookup) {
+            this._namespaceLookup = this.buildNamespaceLookup();
+        }
+        return this._namespaceLookup;
+    }
+    private _namespaceLookup = {} as { [lowerNamespaceName: string]: NamespaceContainer };
+
+    /**
+     * A dictionary of all classes in this scope. This includes namespaced classes always with their full name.
+     * The key is stored in lower case
+     */
+    public get classLookup() {
+        if (!this._classLookup) {
+            this._classLookup = this.buildClassLookup();
+        }
+        return this._classLookup;
+    }
+    private _classLookup = {} as { [lowerClassName: string]: ClassStatement };
+
 
     /**
      * The list of diagnostics found specifically for this scope. Individual file diagnostics are stored on the files themselves.
@@ -90,6 +129,24 @@ export class Scope {
         if (!this.parentScope.isValidated) {
             this.isValidated = false;
         }
+    }
+
+    /**
+     * Does this scope know about the given namespace name?
+     * @param namespaceName - the name of the namespace (i.e. "NameA", or "NameA.NameB", etc...)
+     */
+    public isKnownNamespace(namespaceName: string) {
+        let namespaceNameLower = namespaceName.toLowerCase();
+        for (let key in this.files) {
+            let file = this.files[key];
+            for (let namespace of file.file.namespaceStatements) {
+                let loopNamespaceNameLower = namespace.name.toLowerCase();
+                if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public detachParent() {
@@ -168,7 +225,7 @@ export class Scope {
         let lowerName = name.toLowerCase();
         let callables = this.getAllCallables();
         for (let callable of callables) {
-            if (callable.callable.name.toLowerCase() === lowerName) {
+            if (callable.callable.getName(ParseMode.BrighterScript).toLowerCase() === lowerName) {
                 return callable.callable;
             }
         }
@@ -190,6 +247,78 @@ export class Scope {
                     scope: this
                 });
             }
+        }
+        return result;
+    }
+
+    /**
+     * Builds a tree of namespace objects
+     */
+    public buildNamespaceLookup() {
+        let namespaces = this.getNamespaceStatements();
+        let namespaceLookup = {} as { [namespaceName: string]: NamespaceContainer };
+        for (let namespace of namespaces) {
+            //TODO should we handle non-brighterscript?
+            let name = namespace.nameExpression.getName(ParseMode.BrighterScript);
+            let nameParts = name.split('.');
+
+            let loopName = null;
+            //ensure each namespace section is represented in the results
+            //(so if the namespace name is A.B.C, this will make an entry for "A", an entry for "A.B", and an entry for "A.B.C"
+            for (let part of nameParts) {
+                loopName = loopName === null ? part : `${loopName}.${part}`;
+                let lowerLoopName = loopName.toLowerCase();
+                namespaceLookup[lowerLoopName] = namespaceLookup[lowerLoopName] ?? {
+                    fullName: loopName,
+                    lastPartName: part,
+                    namespaces: {},
+                    classeStatements: {},
+                    functionStatements: {},
+                    statements: []
+                };
+            }
+            let ns = namespaceLookup[name.toLowerCase()];
+            ns.statements.push(...namespace.body.statements);
+            for (let statement of namespace.body.statements) {
+                if (statement instanceof ClassStatement) {
+                    ns.classeStatements[statement.name.text.toLowerCase()] = statement;
+                } else if (statement instanceof FunctionStatement) {
+                    ns.functionStatements[statement.name.text.toLowerCase()] = statement;
+                }
+            }
+        }
+
+        //associate child namespaces with their parents
+        for (let key in namespaceLookup) {
+            let ns = namespaceLookup[key];
+            let parts = ns.fullName.split('.');
+
+            if (parts.length > 1) {
+                //remove the last part
+                parts.pop();
+                let parentName = parts.join('.');
+                namespaceLookup[parentName.toLowerCase()].namespaces[ns.lastPartName.toLowerCase()] = ns;
+            }
+        }
+        return namespaceLookup;
+    }
+
+    private buildClassLookup() {
+        let lookup = {} as { [lowerName: string]: ClassStatement };
+        for (let key in this.files) {
+            let file = this.files[key];
+            for (let cls of file.file.classStatements) {
+                lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
+            }
+        }
+        return lookup;
+    }
+
+    public getNamespaceStatements() {
+        let result = [] as NamespaceStatement[];
+        for (let filePath in this.files) {
+            let file = this.files[filePath];
+            result.push(...file.file.namespaceStatements);
         }
         return result;
     }
@@ -252,6 +381,7 @@ export class Scope {
         if (this.isValidated === true) {
             return;
         }
+
         //validate our parent before we validate ourself
         if (this.parentScope && this.parentScope.isValidated === false) {
             this.parentScope.validate();
@@ -289,6 +419,19 @@ export class Scope {
         }
 
         this.isValidated = false;
+    }
+
+    public getNewExpressions() {
+        let result = [] as AugmentedNewExpression[];
+        for (let key in this.files) {
+            let file = this.files[key].file;
+            let expressions = file.newExpressions as AugmentedNewExpression[];
+            for (let expression of expressions) {
+                expression.file = file;
+                result.push(expression);
+            }
+        }
+        return result;
     }
 
     private validateClasses() {
@@ -503,12 +646,18 @@ export class Scope {
     /**
      * Get all callables as completionItems
      */
-    public getCallablesAsCompletions() {
+    public getCallablesAsCompletions(parseMode: ParseMode) {
         let completions = [] as CompletionItem[];
         let callables = this.getAllCallables();
+
+        if (parseMode === ParseMode.BrighterScript) {
+            //throw out the namespaced callables (they will be handled by another method)
+            callables = callables.filter(x => x.callable.hasNamespace === false);
+        }
+
         for (let callableContainer of callables) {
             completions.push({
-                label: callableContainer.callable.name,
+                label: callableContainer.callable.getName(parseMode),
                 kind: CompletionItemKind.Function,
                 detail: callableContainer.callable.shortDescription,
                 documentation: callableContainer.callable.documentation ? { kind: 'markdown', value: callableContainer.callable.documentation } : undefined
@@ -543,4 +692,18 @@ class ScopeFile {
         public file: BrsFile | XmlFile
     ) {
     }
+}
+
+
+interface NamespaceContainer {
+    fullName: string;
+    lastPartName: string;
+    statements: Statement[];
+    classeStatements: { [lowerClassName: string]: ClassStatement };
+    functionStatements: { [lowerFunctionName: string]: FunctionStatement };
+    namespaces: { [name: string]: NamespaceContainer };
+}
+
+interface AugmentedNewExpression extends NewExpression {
+    file: BrsFile | XmlFile;
 }

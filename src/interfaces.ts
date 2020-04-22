@@ -6,6 +6,7 @@ import { XmlFile } from './files/XmlFile';
 import { FunctionScope } from './FunctionScope';
 import { BrsType } from './types/BrsType';
 import { FunctionType } from './types/FunctionType';
+import { ParseMode } from './parser/Parser';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
@@ -37,6 +38,11 @@ export interface Callable {
      */
     nameRange?: Range;
     isDepricated?: boolean;
+    getName: (parseMode: ParseMode) => string;
+    /**
+     * Indicates whether or not this callable has an associated namespace
+     */
+    hasNamespace: boolean;
 }
 
 export interface FunctionCall {

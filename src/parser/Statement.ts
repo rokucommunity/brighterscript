@@ -1,9 +1,10 @@
 import { Token, Identifier, TokenKind } from '../lexer';
 import { SourceNode } from 'source-map';
-import { Expression, FunctionExpression } from './Expression';
+import { Expression, FunctionExpression, NamespacedVariableNameExpression } from './Expression';
 import { util } from '../util';
-import { Range } from 'vscode-languageserver';
+import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
+import { ParseMode } from './Parser';
 
 /**
  * A BrightScript statement
@@ -16,6 +17,54 @@ export interface Statement {
 
     transpile(state: TranspileState): Array<SourceNode | string>;
 }
+
+export class Body implements Statement {
+    constructor(
+        public statements: Statement[] = []
+    ) {
+    }
+
+    public get range() {
+        return Range.create(
+            this.statements[0]?.range.start ?? Position.create(0, 0),
+            this.statements[this.statements.length - 1]?.range.end ?? Position.create(0, 0)
+        );
+    }
+
+    transpile(state: TranspileState) {
+        let result = [] as Array<string | SourceNode>;
+        for (let i = 0; i < this.statements.length; i++) {
+            let statement = this.statements[i];
+            let previousStatement = this.statements[i - 1];
+            let nextStatement = this.statements[i + 1];
+
+            if (!previousStatement) {
+                //this is the first statement. do nothing related to spacing and newlines
+
+                //if comment is on same line as prior sibling
+            } else if (statement instanceof CommentStatement && previousStatement && statement.range.start.line === previousStatement.range.end.line) {
+                result.push(
+                    ' '
+                );
+
+                //add double newline if this is a comment, and next is a function
+            } else if (statement instanceof CommentStatement && nextStatement && nextStatement instanceof FunctionStatement) {
+                result.push('\n\n');
+
+                //add double newline if is function not preceeded by a comment
+            } else if (statement instanceof FunctionStatement && previousStatement && !(previousStatement instanceof CommentStatement)) {
+                result.push('\n\n');
+            } else {
+                //separate statements by a single newline
+                result.push('\n');
+            }
+
+            result.push(...statement.transpile(state));
+        }
+        return result;
+    }
+}
+
 
 export class AssignmentStatement implements Statement {
     constructor(
@@ -178,15 +227,36 @@ export class ExitWhileStatement implements Statement {
 export class FunctionStatement implements Statement {
     constructor(
         readonly name: Identifier,
-        readonly func: FunctionExpression
+        readonly func: FunctionExpression,
+        readonly namespaceName: NamespacedVariableNameExpression
     ) {
         this.range = this.func.range;
     }
 
     public readonly range: Range;
 
+    /**
+     * Get the name of this expression based on the parse mode
+     */
+    public getName(parseMode: ParseMode) {
+        if (this.namespaceName) {
+            let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            let namespaceName = this.namespaceName.getName(parseMode);
+            return namespaceName + delimiter + this.name.text;
+        } else {
+            return this.name.text;
+        }
+    }
+
+
     transpile(state: TranspileState) {
-        return this.func.transpile(state, this.name);
+        //create a fake token using the full transpiled name
+        let nameToken = {
+            ...this.name,
+            text: this.getName(ParseMode.BrightScript)
+        };
+
+        return this.func.transpile(state, nameToken);
     }
 }
 
@@ -740,5 +810,38 @@ export class LibraryStatement implements Statement {
             );
         }
         return result;
+    }
+}
+
+export class NamespaceStatement implements Statement {
+    constructor(
+        public keyword: Token,
+        //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
+        public nameExpression: NamespacedVariableNameExpression,
+        public body: Body,
+        public endKeyword: Token
+    ) {
+        this.name = this.nameExpression.getName(ParseMode.BrighterScript);
+    }
+
+    /**
+     * The string name for this namespace
+     */
+    public name: string;
+
+    public get range() {
+        return Range.create(
+            this.keyword.range.start,
+            (this.endKeyword ?? this.body ?? this.nameExpression ?? this.keyword).range.end
+        );
+    }
+
+    public getName(parseMode: ParseMode) {
+        return this.nameExpression.getName(parseMode);
+    }
+
+    transpile(state: TranspileState) {
+        //namespaces don't actually have any real content, so just transpile their bodies
+        return this.body.transpile(state);
     }
 }

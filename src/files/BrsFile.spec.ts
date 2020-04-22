@@ -13,6 +13,7 @@ import { BrsFile } from './BrsFile';
 import { SourceMapConsumer } from 'source-map';
 import { TokenKind, Lexer } from '../lexer';
 import { DiagnosticMessages } from '../DiagnosticMessages';
+import { StandardizedFileEntry } from 'roku-deploy';
 
 let sinon = sinonImport.createSandbox();
 
@@ -35,6 +36,23 @@ describe('BrsFile', () => {
         expect(new BrsFile(`${rootDir}/source/main.brs`, 'source/main.brs', program).needsTranspiled).to.be.false;
         //BrighterScript
         expect(new BrsFile(`${rootDir}/source/main.bs`, 'source/main.bs', program).needsTranspiled).to.be.true;
+    });
+
+    describe('getPartialVariableName', () => {
+        let entry = {
+            src: `${rootDir}/source/lib.brs`,
+            dest: `source/lib.brs`
+        } as StandardizedFileEntry;
+
+        it('creates proper tokens', async () => {
+            let file = (await program.addOrReplaceFile(entry, `call(ModuleA.ModuleB.ModuleC.`) as any);
+            expect(file.getPartialVariableName(file.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
+            expect(file.getPartialVariableName(file.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
+            expect(file.getPartialVariableName(file.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
+            expect(file.getPartialVariableName(file.parser.tokens[4])).to.equal('ModuleA.ModuleB');
+            expect(file.getPartialVariableName(file.parser.tokens[3])).to.equal('ModuleA.');
+            expect(file.getPartialVariableName(file.parser.tokens[2])).to.equal('ModuleA');
+        });
     });
 
     describe('getCompletions', () => {
@@ -688,7 +706,7 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it.skip('supports bitshift assignment operators on object properties accessed by array syntax', async () => {
+        it('supports bitshift assignment operators on object properties accessed by array syntax', async () => {
             await file.parse(`
                     function Main()
                         m.x = 1
@@ -700,7 +718,7 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it.skip('supports weird period AA accessor', async () => {
+        it('supports weird period AA accessor', async () => {
             await file.parse(`
                 function Main()
                     m._uuid = "123"
@@ -715,6 +733,33 @@ describe('BrsFile', () => {
                 Library "v30/bslCore.brs"
             `);
             expect(file.getDiagnostics()).to.be.lengthOf(0);
+        });
+
+        it('adds error for library statements NOT at top of file', async () => {
+            await file.parse(`
+                sub main()
+                end sub
+                Library "v30/bslCore.brs"
+            `);
+            expect(
+                file.getDiagnostics().map(x => x.message)
+            ).to.eql([
+                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile().message
+            ]);
+            //expect({ diagnostics: diagnostics, statements: statements }).toMatchSnapshot();
+        });
+
+        it('adds error for library statements inside of function body', async () => {
+            await file.parse(`
+                sub main()
+                    Library "v30/bslCore.brs"
+                end sub
+            `);
+            expect(
+                file.getDiagnostics().map(x => x.message)
+            ).to.eql([
+                DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile().message
+            ]);
         });
 
         it('supports colons as separators in associative array properties', async () => {
@@ -1191,7 +1236,7 @@ describe('BrsFile', () => {
         });
 
         //ignore this for now...it's not a huge deal
-        it.skip('does not match on keywords or data types', async () => {
+        it('does not match on keywords or data types', async () => {
             let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                 end sub
@@ -1199,9 +1244,9 @@ describe('BrsFile', () => {
                 end sub
             `);
             //hover over the `as`
-            expect(file.getHover(Position.create(1, 31))).not.to.exist;
+            expect(await file.getHover(Position.create(1, 31))).not.to.exist;
             //hover over the `string`
-            expect(file.getHover(Position.create(1, 36))).not.to.exist;
+            expect(await file.getHover(Position.create(1, 36))).not.to.exist;
         });
 
         it('finds declared function', async () => {
@@ -1309,6 +1354,51 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('transpiles namespaced functions', async () => {
+            await testTranspile(`
+                namespace NameA
+                    sub alert()
+                    end sub
+                end namespace
+                namespace NameA.NameB
+                    sub alert()
+                    end sub
+                end namespace
+            `, `
+                sub NameA_alert()
+                end sub
+                sub NameA_NameB_alert()
+                end sub
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('transpiles calls to fully-qualified namespaced functions', async () => {
+            await testTranspile(`
+                namespace NameA
+                    sub alert()
+                    end sub
+                end namespace
+                namespace NameA.NameB
+                    sub alert()
+                    end sub
+                end namespace
+                sub main()
+                    NameA.alert()
+                    NameA.NameB.alert()
+                end sub
+            `, `
+                sub NameA_alert()
+                end sub
+                sub NameA_NameB_alert()
+                end sub
+
+                sub main()
+                    NameA_alert()
+                    NameA_NameB_alert()
+                end sub
+            `, 'trim', 'source/main.bs');
+        });
+
         it('keeps end-of-line comments with their line', async () => {
             await testTranspile(`
                 function DoSomething() 'comment 1
@@ -1555,11 +1645,12 @@ describe('BrsFile', () => {
 });
 
 export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return async (source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'trim') => {
+    return async (source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'trim', fileName = 'main.brs') => {
         let [program, rootDir] = scopeGetter();
         let formatter = null; //new BrightScriptFormatter();
         expected = expected ? expected : source;
-        let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, source) as BrsFile;
+        let file = await program.addOrReplaceFile({ src: `${rootDir}/source/${fileName}`, dest: `source/${fileName}` }, source) as BrsFile;
+        await program.validate();
         expect(file.getDiagnostics()[0]?.message).to.not.exist;
         let transpiled = file.transpile();
 

@@ -427,3 +427,16 @@ jill = Person("Jill")
 ```
 </details>
 
+
+## Namespaces
+Classes can also be contained within a namespace. At runtime, all namespace periods are replaced with underscores.
+
+```BrighterScript
+namespace Vertibrates.Birds
+    class Animal
+    end class
+
+    class Duck extends Animal
+    end class
+end namespace
+```

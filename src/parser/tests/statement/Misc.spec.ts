@@ -62,11 +62,7 @@ describe('parser', () => {
 
     it('most reserved words are not allowed as local var identifiers', () => {
         let statementList = [];
-        DisallowedLocalIdentifiersText.forEach((disallowedIdentifier) => {
-            //skip REM because that will force the line into comment mode
-            if (disallowedIdentifier.toLowerCase() === 'rem') {
-                return;
-            }
+        [...DisallowedLocalIdentifiersText].filter(x => x === 'if').forEach((disallowedIdentifier) => {
             //use the lexer to generate tokens because there are many different TokenKind types represented in this list
             let { tokens } = Lexer.scan(`
                 sub main()

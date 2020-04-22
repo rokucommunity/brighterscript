@@ -621,6 +621,95 @@ describe('Program', () => {
     });
 
     describe('getCompletions', () => {
+        it('should include first-level namespace names for brighterscript files', async () => {
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+                namespace NameA.NameB.NameC
+                    sub DoSomething()
+                    end sub
+                end namespace
+                sub main()
+                    
+                end sub
+            `);
+            let completions = (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 23))).map(x => x.label);
+            expect(completions).to.include('NameA');
+            expect(completions).not.to.include('NameB');
+            expect(completions).not.to.include('NameA.NameB');
+            expect(completions).not.to.include('NameA.NameB.NameC');
+            expect(completions).not.to.include('NameA.NameB.NameC.DoSomething');
+        });
+
+        it('resolves completions for namespaces with next namespace part for brighterscript file', async () => {
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+                namespace NameA.NameB.NameC
+                    sub DoSomething()
+                    end sub
+                end namespace
+                sub main()
+                    NameA.
+                end sub
+            `);
+            let completions = (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 26))).map(x => x.label);
+            expect(completions).to.include('NameB');
+            expect(completions).not.to.include('NameA');
+            expect(completions).not.to.include('NameA.NameB');
+            expect(completions).not.to.include('NameA.NameB.NameC');
+            expect(completions).not.to.include('NameA.NameB.NameC.DoSomething');
+        });
+
+        it('finds namespace members for brighterscript file', async () => {
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+                sub main()
+                    NameA.
+                    NameA.NameB.
+                    NameA.NameB.NameC.
+                end sub
+                namespace NameA
+                    sub alertA()
+                    end sub
+                end namespace
+                namespace NameA
+                    sub info()
+                    end sub
+                end namespace
+                namespace NameA.NameB
+                    sub alertB()
+                    end sub
+                end namespace
+                namespace NameA.NameB.NameC
+                    sub alertC()
+                    end sub
+                end namespace
+            `);
+            expect(
+                (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 26))).map(x => x.label).sort()
+            ).to.eql(['NameB', 'alertA', 'info']);
+
+            expect(
+                (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 32))).map(x => x.label).sort()
+            ).to.eql(['NameC', 'alertB']);
+
+            expect(
+                (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 38))).map(x => x.label).sort()
+            ).to.eql(['alertC']);
+        });
+
+        it('should include translated namespace function names for brightscript files', async () => {
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+                namespace NameA.NameB.NameC
+                    sub DoSomething()
+                    end sub
+                end namespace
+            `);
+            await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+                sub test()
+
+                end sub
+            `);
+            let completions = await program.getCompletions(`${rootDir}/source/lib.brs`, Position.create(2, 23));
+            expect(completions.map(x => x.label)).to.include('NameA_NameB_NameC_DoSomething');
+        });
+
         it('inlcudes platform completions for file with no scope', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'main.brs' }, `
                 function Main()
@@ -843,7 +932,7 @@ describe('Program', () => {
     });
 
     describe('xml scope', () => {
-        it.skip('does not fail on base components with many children', async () => {
+        it('does not fail on base components with many children', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub DoSomething()
                 end sub

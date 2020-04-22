@@ -1,6 +1,6 @@
 import { Token, Identifier } from '../lexer';
 import { Statement } from './Statement';
-import { FunctionExpression, CallExpression, VariableExpression, DottedGetExpression } from './Expression';
+import { FunctionExpression, CallExpression, VariableExpression, DottedGetExpression, NamespacedVariableNameExpression } from './Expression';
 import { SourceNode } from 'source-map';
 import { TranspileState } from './TranspileState';
 import { Parser, ParseMode } from './Parser';
@@ -11,11 +11,15 @@ export class ClassStatement implements Statement {
 
     constructor(
         readonly classKeyword: Token,
+        /**
+         * The name of the class (without namespace prefix)
+         */
         readonly name: Identifier,
         public body: Statement[],
         readonly end: Token,
         readonly extendsKeyword?: Token,
-        readonly extendsIdentifier?: Identifier
+        readonly parentClassName?: NamespacedVariableNameExpression,
+        readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         this.body = this.body ?? [];
         for (let statement of this.body) {
@@ -31,9 +35,20 @@ export class ClassStatement implements Statement {
         this.range = Range.create(this.classKeyword.range.start, this.end.range.end);
     }
 
+    public getName(parseMode: ParseMode) {
+        if (this.namespaceName) {
+            let namespaceName = this.namespaceName.getName(parseMode);
+            let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            return namespaceName + separator + this.name.text;
+        } else {
+            return this.name.text;
+        }
+    }
+
     public memberMap = {} as { [memberName: string]: ClassMemberStatement };
     public methods = [] as ClassMethodStatement[];
     public fields = [] as ClassFieldStatement[];
+
 
     public readonly range: Range;
 
@@ -59,8 +74,8 @@ export class ClassStatement implements Statement {
         let myIndex = 0;
         let stmt = this as ClassStatement;
         while (stmt) {
-            if (stmt.extendsIdentifier) {
-                stmt = state.file.getClassByName(stmt.extendsIdentifier.text);
+            if (stmt.parentClassName) {
+                stmt = state.file.getClassByName(stmt.parentClassName.getName(ParseMode.BrighterScript));
                 myIndex++;
             } else {
                 break;
@@ -71,8 +86,8 @@ export class ClassStatement implements Statement {
 
     public getParentClass(state: TranspileState, classStatement: ClassStatement) {
         let stmt = classStatement;
-        if (stmt.extendsIdentifier) {
-            return state.file.getClassByName(stmt.extendsIdentifier.text);
+        if (stmt.parentClassName) {
+            return state.file.getClassByName(stmt.parentClassName.getName(ParseMode.BrighterScript), this.namespaceName?.getName(ParseMode.BrighterScript));
         }
     }
 
@@ -97,24 +112,29 @@ export class ClassStatement implements Statement {
                 sub new()
                 end sub
             end class
-        `, { mode: ParseMode.brighterscript }).statements[0] as ClassStatement).memberMap['new'] as ClassMethodStatement;
+        `, { mode: ParseMode.BrighterScript }).statements[0] as ClassStatement).memberMap['new'] as ClassMethodStatement;
         //TODO make locations point to 0,0 (might not matter?)
         return stmt;
     }
 
     private getTranspiledBuilder(state: TranspileState) {
         let result = [];
-        result.push(`function ${this.getBuilderName(this.name.text)}()\n`);
+        result.push(`function ${this.getBuilderName(this.getName(ParseMode.BrightScript))}()\n`);
         state.blockDepth++;
         //indent
         result.push(state.indent());
         //create the instance
         result.push('instance = ');
 
+        let parentClass: ClassStatement;
+
         //construct parent class or empty object
-        if (this.extendsIdentifier) {
+        if (this.parentClassName) {
+            parentClass = this.getParentClass(state, this);
+            let parentClassName = parentClass?.getName(ParseMode.BrightScript) ??
+                `__UnknownParentClass__${this.parentClassName.getName(ParseMode.BrighterScript)}`;
             result.push(
-                this.getBuilderName(this.extendsIdentifier.text),
+                this.getBuilderName(parentClassName),
                 '()'
             );
         } else {
@@ -125,7 +145,6 @@ export class ClassStatement implements Statement {
             state.newline(),
             state.indent()
         );
-        let parentClass = this.getParentClass(state, this);
         let parentClassIndex = this.getParentClassIndex(state);
 
         //create empty `new` function if class is missing it (simplifies transpile logic)
@@ -187,7 +206,7 @@ export class ClassStatement implements Statement {
         const constructorFunction = this.getConstructorFunction();
         const constructorParams = constructorFunction ? constructorFunction.func.parameters : [];
 
-        result.push(`function ${this.name.text}(`);
+        result.push(`function ${this.getName(ParseMode.BrightScript)}(`);
         let i = 0;
         for (let param of constructorParams) {
             if (i > 0) {
@@ -205,7 +224,7 @@ export class ClassStatement implements Statement {
 
         state.blockDepth++;
         result.push(state.indent());
-        result.push(`instance = ${this.getBuilderName(this.name.text)}()\n`);
+        result.push(`instance = ${this.getBuilderName(this.getName(ParseMode.BrightScript))}()\n`);
 
         result.push(state.indent());
         result.push(`instance.new(`);

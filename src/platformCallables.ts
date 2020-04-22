@@ -722,5 +722,9 @@ for (let callable of platformCallables) {
     //set name in type
     callable.type.setName(callable.name);
 
+    callable.getName = function getName() {
+        return this.name;
+    };
+
 }
 platformFile.callables = platformCallables;

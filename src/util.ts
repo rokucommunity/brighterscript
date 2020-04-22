@@ -26,6 +26,7 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { UninitializedType } from './types/UninitializedType';
 import { VoidType } from './types/VoidType';
+import { ParseMode } from './parser/Parser';
 
 export class Util {
     public log(...args) {
@@ -359,7 +360,7 @@ export class Util {
     }
 
     /**
-     * Given a list of callables, get that as a a dictionary indexed by name.
+     * Given a list of callables as a dictionary indexed by their full name (namespace included, transpiled to underscore-separated.
      * @param callables
      */
     public getCallableContainersByLowerName(callables: CallableContainer[]) {
@@ -367,7 +368,7 @@ export class Util {
         let result = {} as { [name: string]: CallableContainer[] };
 
         for (let callableContainer of callables) {
-            let lowerName = callableContainer.callable.name.toLowerCase();
+            let lowerName = callableContainer.callable.getName(ParseMode.BrightScript).toLowerCase();
 
             //create a new array for this name
             if (result[lowerName] === undefined) {
@@ -469,17 +470,15 @@ export class Util {
 
     /**
      * Find all properties in an object that match the predicate.
-     * @param obj
-     * @param predicate
-     * @param parentKey
      */
-    public findAllDeep<T>(obj: any, predicate: (value: any) => boolean | undefined, parentKey?: string) {
-        let result = [] as Array<{ key: string; value: T }>;
+    public findAllDeep<T>(obj: any, predicate: (value: any) => boolean | undefined, parentKey?: string, ancestors?: any[]) {
+        let result = [] as Array<{ key: string; value: T; ancestors: any[] }>;
 
         //base case. If this object maches, keep it as a result
         if (predicate(obj) === true) {
             result.push({
                 key: parentKey,
+                ancestors: ancestors,
                 value: obj
             });
         }
@@ -490,7 +489,15 @@ export class Util {
                 let value = obj[key];
                 let fullKey = parentKey ? parentKey + '.' + key : key;
                 if (typeof value === 'object') {
-                    result = [...result, ...this.findAllDeep<T>(value, predicate, fullKey)];
+                    result = [...result, ...this.findAllDeep<T>(
+                        value,
+                        predicate,
+                        fullKey,
+                        [
+                            ...(ancestors ?? []),
+                            obj
+                        ]
+                    )];
                 }
             }
         }
@@ -770,6 +777,19 @@ export class Util {
             return true;
         } else {
             return false;
+        }
+    }
+
+    /**
+     * Given text with (or without) dots separating text, get the rightmost word.
+     * (i.e. given "A.B.C", returns "C". or "B" returns "B because there's no dot)
+     */
+    public getTextAfterFinalDot(name: string) {
+        if (name) {
+            let parts = name.split('.');
+            if (parts.length > 0) {
+                return parts[parts.length - 1];
+            }
         }
     }
 }

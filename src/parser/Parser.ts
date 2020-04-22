@@ -46,11 +46,13 @@ import {
     PrintStatement,
     LabelStatement,
     GotoStatement,
-    StopStatement
+    StopStatement,
+    NamespaceStatement,
+    Body
 } from './Statement';
 import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
-import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression, XmlAttributeGetExpression } from './Expression';
+import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression, XmlAttributeGetExpression, NamespacedVariableNameExpression } from './Expression';
 import { Range, Diagnostic } from 'vscode-languageserver';
 import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from './ClassStatement';
 
@@ -68,7 +70,11 @@ export class Parser {
     /**
      * The list of statements for the parsed file
      */
+    public ast: Body;
+
+    //TODO remove this once we have verified all of the tests.
     public statements: Statement[];
+
     /**
      * The list of diagnostics found during the parse process
      */
@@ -77,12 +83,21 @@ export class Parser {
     /**
      * The depth of the calls to function declarations. Helps some checks know if they are at the root or not.
      */
-    private functionDeclarationLevel: number;
+    private namespaceAndFunctionDepth: number;
 
     /**
      * The options used to parse the file
      */
     public options: ParseOptions;
+
+    private globalTerminators = [] as TokenKind[][];
+
+    /**
+     * Get the currently active global terminators
+     */
+    private peekGlobalTerminators() {
+        return this.globalTerminators[this.globalTerminators.length - 1] ?? [];
+    }
 
     /**
      * Static wrapper around creating a new parser and parsing a list of tokens
@@ -108,16 +123,28 @@ export class Parser {
         this.tokens = tokens;
         this.options = this.sanitizeParseOptions(options);
         this.current = 0;
-        this.statements = [];
         this.diagnostics = [];
-        this.functionDeclarationLevel = 0;
+        this.namespaceAndFunctionDepth = 0;
 
+        this.ast = this.body();
+        this.statements = this.ast.statements;
+
+        return this;
+    }
+
+    private body() {
+        let body = new Body([]);
         if (this.tokens.length > 0) {
             try {
-                while (!this.isAtEnd()) {
+                while (
+                    //not at end of tokens
+                    !this.isAtEnd() &&
+                    //the next token is not one of the end terminators
+                    !this.check(...this.peekGlobalTerminators())
+                ) {
                     let dec = this.declaration();
                     if (dec) {
-                        this.statements.push(dec);
+                        body.statements.push(dec);
                     }
                 }
             } catch (parseError) {
@@ -125,7 +152,7 @@ export class Parser {
                 console.error(parseError);
             }
         }
-        return this;
+        return body;
     }
 
     private sanitizeParseOptions(options: ParseOptions) {
@@ -139,16 +166,17 @@ export class Parser {
      * Determine if the parser is currently parsing tokens at the root level.
      */
     private isAtRootLevel() {
-        return this.functionDeclarationLevel === 0;
+        return this.namespaceAndFunctionDepth === 0;
     }
 
     /**
      * Throws an error if the input file type is not BrighterScript
      */
     private warnIfNotBrighterScriptMode(featureName: string) {
-        if (this.options.mode !== 'brighterscript') {
+        if (this.options.mode !== ParseMode.BrighterScript) {
             let diagnostic = {
-                ...DiagnosticMessages.bsFeatureNotSupportedInBrsFiles(featureName)
+                ...DiagnosticMessages.bsFeatureNotSupportedInBrsFiles(featureName),
+                range: this.peek().range
             } as Diagnostic;
             this.diagnostics.push(diagnostic);
         }
@@ -178,6 +206,10 @@ export class Parser {
                 return this.libraryStatement();
             }
 
+            if (this.check(TokenKind.Namespace)) {
+                return this.namespaceStatement();
+            }
+
             // BrightScript is like python, in that variables can be declared without a `var`,
             // `let`, (...) keyword. As such, we must check the token *after* an identifier to figure
             // out what to do with it.
@@ -196,7 +228,11 @@ export class Parser {
                 }
                 return stmt;
             }
-            this.peek();
+
+            //catch certain global terminators to prevent unnecessary lookahead (i.e. like `end namespace`, no need to continue)
+            if (this.check(...this.peekGlobalTerminators())) {
+                return;
+            }
 
             return this.statement(...additionalTerminators);
         } catch (error) {
@@ -214,16 +250,18 @@ export class Parser {
             TokenKind.Class
         );
         let extendsKeyword: Token;
-        let extendsIdentifier: Identifier;
+        let parentClassName: NamespacedVariableNameExpression;
 
         //get the class name
-        let className = this.tryConsume(DiagnosticMessages.missingIdentifierAfterClassKeyword(), TokenKind.Identifier) as Identifier;
+        let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier) as Identifier;
 
         //see if the class inherits from parent
         if (this.peek().text.toLowerCase() === 'extends') {
             extendsKeyword = this.advance();
 
-            extendsIdentifier = this.tryConsume(DiagnosticMessages.missingIdentifierAfterExtendsKeyword(), TokenKind.Identifier) as Identifier;
+            parentClassName = this.getNamespacedVariableNameExpression();
+            //the only thing allowed after a class declaration is a comment or a newline
+            this.flagUntil(TokenKind.Comment, TokenKind.Newline);
         }
         let body = [] as Statement[];
 
@@ -283,7 +321,7 @@ export class Parser {
                 }
             } catch (e) {
                 //throw out any failed members and move on to the next line
-                this.consumeUntil(TokenKind.Newline, TokenKind.Eof);
+                this.flagUntil(TokenKind.Newline, TokenKind.Eof);
             }
 
             //consume trailing newlines
@@ -296,7 +334,7 @@ export class Parser {
         let endingKeyword = this.advance();
         if (endingKeyword.kind !== TokenKind.EndClass) {
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedEndClassToTerminateClassBlock(),
+                ...DiagnosticMessages.couldNotFindMatchingEndKeyword('class'),
                 range: endingKeyword.range
             });
         }
@@ -311,7 +349,8 @@ export class Parser {
             body,
             endingKeyword,
             extendsKeyword,
-            extendsIdentifier
+            parentClassName,
+            this.currentNamespaceName
         );
         return result;
     }
@@ -353,7 +392,7 @@ export class Parser {
     private functionDeclaration(isAnonymous: boolean) {
         try {
             //track depth to help certain statements need to know if they are contained within a function body
-            this.functionDeclarationLevel++;
+            this.namespaceAndFunctionDepth++;
             let functionType: Token;
             if (this.check(TokenKind.Sub, TokenKind.Function)) {
                 functionType = this.advance();
@@ -513,10 +552,10 @@ export class Parser {
                 // expect to handle their own trailing whitespace
                 while (this.match(TokenKind.Newline)) {
                 }
-                return new FunctionStatement(name, func);
+                return new FunctionStatement(name, func, this.currentNamespaceName);
             }
         } finally {
-            this.functionDeclarationLevel--;
+            this.namespaceAndFunctionDepth--;
         }
     }
 
@@ -700,7 +739,7 @@ export class Parser {
         const whileBlock = this.block(TokenKind.EndWhile);
         if (!whileBlock) {
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedEndWhileToTerminateWhileLoop(),
+                ...DiagnosticMessages.couldNotFindMatchingEndKeyword('while'),
                 range: this.peek().range
             });
             throw this.lastDiagnosticAsError();
@@ -876,6 +915,127 @@ export class Parser {
         }
     }
 
+    /**
+     * When a namespace has been started, this gets set. When it's done, this gets unset.
+     * It is useful for passing the namespace into certain statements that need it
+     */
+    private currentNamespaceName: NamespacedVariableNameExpression;
+
+    private namespaceStatement(): NamespaceStatement | undefined {
+        this.warnIfNotBrighterScriptMode('namespace');
+        let keyword = this.advance();
+
+        if (!this.isAtRootLevel()) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.keywordMustBeDeclaredAtRootLevel('namespace'),
+                range: keyword.range
+            });
+        }
+        this.namespaceAndFunctionDepth++;
+
+        let name = this.getNamespacedVariableNameExpression();
+        //the only thing allowed after a namespace declaration is a comment or a newline
+        this.flagUntil(TokenKind.Comment, TokenKind.Newline);
+
+        //set the current namespace name
+        this.currentNamespaceName = name;
+
+        this.globalTerminators.push([TokenKind.EndNamespace]);
+        let body = this.body();
+        this.globalTerminators.pop();
+
+        //unset the current namespace name
+        this.currentNamespaceName = undefined;
+
+        let endKeyword: Token;
+        if (this.check(TokenKind.EndNamespace)) {
+            endKeyword = this.advance();
+        } else {
+            //the `end namespace` keyword is missing. add a diagnostic, but keep parsing
+            this.diagnostics.push({
+                ...DiagnosticMessages.couldNotFindMatchingEndKeyword('namespace'),
+                range: keyword.range
+            });
+        }
+
+        //scrap newlines
+        while (this.match(TokenKind.Newline)) { }
+
+        this.namespaceAndFunctionDepth--;
+        return new NamespaceStatement(keyword, name, body, endKeyword);
+    }
+
+    /**
+     * Get an expression with identifiers separated by periods. Useful for namespaces and class extends
+     */
+    private getNamespacedVariableNameExpression() {
+        let firstIdentifier = this.consume(
+            DiagnosticMessages.expectedIdentifierAfterKeyword(this.previous().text),
+            TokenKind.Identifier,
+            ...AllowedLocalIdentifiers
+        ) as Identifier;
+
+        let expr: DottedGetExpression | VariableExpression;
+
+        if (firstIdentifier) {
+            // force it into an identifier so the AST makes some sense
+            firstIdentifier.kind = TokenKind.Identifier;
+            expr = new VariableExpression(firstIdentifier);
+
+            //consume multiple dot identifiers (i.e. `Name.Space.Can.Have.Many.Parts`)
+            while (this.check(TokenKind.Dot)) {
+                let dot = this.tryConsume(
+                    DiagnosticMessages.foundUnexpectedToken(this.peek().text),
+                    TokenKind.Dot
+                );
+                if (!dot) {
+                    break;
+                }
+                let identifier = this.tryConsume(
+                    DiagnosticMessages.expectedIdentifier(),
+                    TokenKind.Identifier,
+                    ...AllowedLocalIdentifiers,
+                    ...AllowedProperties
+                ) as Identifier;
+                // force it into an identifier so the AST makes some sense
+                identifier.kind = TokenKind.Identifier;
+
+                if (!identifier) {
+                    break;
+                }
+                expr = new DottedGetExpression(expr, identifier, dot);
+            }
+        }
+        return new NamespacedVariableNameExpression(expr);
+    }
+
+    /**
+     * Add an 'unexpected token' diagnostic for any token found between current and the first stopToken found.
+     */
+    private flagUntil(...stopTokens: TokenKind[]) {
+        while (!this.check(...stopTokens)) {
+            let token = this.advance();
+            this.diagnostics.push({
+                ...DiagnosticMessages.foundUnexpectedToken(token.text),
+                range: token.range
+            });
+        }
+    }
+
+    /**
+     * Consume tokens until one of the `stopTokenKinds` is encountered
+     * @param tokenKinds
+     * @return - the list of tokens consumed, EXCLUDING the `stopTokenKind` (you can use `this.peek()` to see which one it was)
+     */
+    private consumeUntil(...stopTokenKinds: TokenKind[]) {
+        let result = [] as Token[];
+        //take tokens until we encounter one of the stopTokenKinds
+        while (!stopTokenKinds.includes(this.peek().kind)) {
+            result.push(this.advance());
+        }
+        return result;
+    }
+
     private libraryStatement(): LibraryStatement | undefined {
         let libStatement = new LibraryStatement({
             library: this.advance(),
@@ -887,35 +1047,8 @@ export class Parser {
         });
 
         //consume all tokens until the end of the line
-        let invalidTokens = this.consumeUntil(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon, TokenKind.Comment);
+        this.flagUntil(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon, TokenKind.Comment);
 
-        if (invalidTokens.length > 0) {
-            //add an error for every invalid token
-            for (let invalidToken of invalidTokens) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.foundUnexpectedTokenAfterLibraryStatement(),
-                    range: invalidToken.range
-                });
-            }
-        }
-
-        //libraries must be at the very top of the file before any other declarations.
-        let isAtTopOfFile = true;
-        for (let loopStatement of this.statements) {
-            //if we found a non-library statement, this statement is not at the top of the file
-            if (!(loopStatement instanceof LibraryStatement) && !(loopStatement instanceof CommentStatement)) {
-                isAtTopOfFile = false;
-                break;
-            }
-        }
-
-        //libraries must be a root-level statement (i.e. NOT nested inside of functions)
-        if (!this.isAtRootLevel() || !isAtTopOfFile) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.libraryStatementMustBeAtTopOfFile(),
-                range: libStatement.range
-            });
-        }
         //consume to the next newline, eof, or colon
         while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
         return libStatement;
@@ -1407,7 +1540,7 @@ export class Parser {
                 //something went wrong. reset to the top of the loop
                 this.current = loopCurrent;
 
-                //scrap the entire line
+                //scrap the entire line (hopefully whatever failed has added a diagnostic)
                 this.consumeUntil(TokenKind.Colon, TokenKind.Newline, TokenKind.Eof);
 
                 //trash the next token. this prevents an infinite loop. not exactly sure why we need this,
@@ -1541,10 +1674,22 @@ export class Parser {
         return new IndexedGetExpression(expr, index, openingSquare, closingSquare);
     }
 
+    private newExpression() {
+        this.warnIfNotBrighterScriptMode(`using 'new' keyword to construct a class`);
+        let newToken = this.advance();
+
+        let nameExpr = this.getNamespacedVariableNameExpression();
+        let leftParen = this.consume(
+            DiagnosticMessages.foundUnexpectedToken(this.peek().text),
+            TokenKind.LeftParen
+        );
+        let call = this.finishCall(leftParen, nameExpr);
+        return new NewExpression(newToken, call);
+    }
+
     private call(): Expression {
-        let newToken: Token;
         if (this.check(TokenKind.New)) {
-            newToken = this.advance();
+            return this.newExpression();
         }
         let expr = this.primary();
 
@@ -1587,31 +1732,17 @@ export class Parser {
                 break;
             }
         }
-
-        if (newToken) {
-            this.warnIfNotBrighterScriptMode(`using 'new' keyword to construct a class`);
-            if (expr instanceof CallExpression === false) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.attemptedToUseNewKeywordOnNonClass(),
-                    range: expr.range
-                });
-            }
-            return new NewExpression(newToken, expr);
-        } else {
-            return expr;
-        }
+        return expr;
     }
 
-    private finishCall(openingParen: Token, callee: Expression): Expression {
+    private finishCall(openingParen: Token, callee: Expression) {
         let args = [] as Expression[];
         while (this.match(TokenKind.Newline)) {
         }
 
         if (!this.check(TokenKind.RightParen)) {
             do {
-                while (this.match(TokenKind.Newline)) {
-
-                }
+                while (this.match(TokenKind.Newline)) { }
 
                 if (args.length >= CallExpression.MaximumArguments) {
                     this.diagnostics.push({
@@ -1631,7 +1762,7 @@ export class Parser {
             TokenKind.RightParen
         );
 
-        return new CallExpression(callee, openingParen, closingParen, args);
+        return new CallExpression(callee, openingParen, closingParen, args, this.currentNamespaceName);
     }
 
     private primary(): Expression {
@@ -1802,11 +1933,18 @@ export class Parser {
             case this.check(TokenKind.Comment):
                 return new CommentStatement([this.advance()]);
             default:
-                this.diagnostics.push({
-                    ...DiagnosticMessages.foundUnexpectedToken(this.peek().text),
-                    range: this.peek().range
-                });
-                throw this.lastDiagnosticAsError();
+                //if we found an expected terminator, don't throw a diagnostic...just return undefined
+                if (this.check(...this.peekGlobalTerminators())) {
+                    //don't throw a diagnostic, just return undefined
+
+                    //something went wrong...throw an error so the upstream processor can scrap this line and move on
+                } else {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.foundUnexpectedToken(this.peek().text),
+                        range: this.peek().range
+                    });
+                    throw this.lastDiagnosticAsError();
+                }
         }
     }
 
@@ -1823,20 +1961,6 @@ export class Parser {
         }
 
         return false;
-    }
-
-    /**
-     * Consume tokens until one of the `stopTokenKinds` is encountered
-     * @param tokenKinds
-     * @return - the list of tokens consumed, EXCLUDING the `stopTokenKind` (you can use `this.peek()` to see which one it was)
-     */
-    private consumeUntil(...stopTokenKinds: TokenKind[]) {
-        let result = [] as Token[];
-        //take tokens until we encounter one of the stopTokenKinds
-        while (!stopTokenKinds.includes(this.peek().kind)) {
-            result.push(this.advance());
-        }
-        return result;
     }
 
     private consume(diagnosticInfo: DiagnosticInfo, ...tokenKinds: TokenKind[]): Token {
@@ -1946,13 +2070,13 @@ export class Parser {
 }
 
 export enum ParseMode {
-    brightscript = 'brightscript',
-    brighterscript = 'brighterscript'
+    BrightScript = 'BrightScript',
+    BrighterScript = 'BrighterScript'
 }
 
 export interface ParseOptions {
     /**
-     * The parse mode. When in 'brightscript' mode, no brighterscript syntax is allowed, and will emit diagnostics.
+     * The parse mode. When in 'BrightScript' mode, no BrighterScript syntax is allowed, and will emit diagnostics.
      */
     mode: ParseMode;
 }

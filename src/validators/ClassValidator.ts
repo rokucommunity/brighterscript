@@ -4,7 +4,10 @@ import { XmlFile } from '../files/XmlFile';
 import { BrsFile } from '../files/BrsFile';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { BsDiagnostic } from '..';
-import { CallExpression, VariableExpression } from '../parser';
+import { CallExpression, VariableExpression, ParseMode } from '../parser';
+import { Location } from 'vscode-languageserver';
+import URI from 'vscode-uri';
+import util from '../util';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -17,11 +20,96 @@ export class BsClassValidator {
         this.classes = {};
 
         this.findClasses();
+        this.findNamespaceNonNamespaceCollisions();
         this.linkClassesWithParents();
         this.validateMemberCollisions();
         this.verifyChildConstructor();
+        this.verifyNewStatements();
 
         this.cleanUp();
+    }
+
+    /**
+     * Given a class name optionally prefixed with a namespace name, find the class that matches
+     */
+    private getClassByName(className: string, namespaceName?: string) {
+        let fullName = this.getFullName(className, namespaceName);
+        return this.classes[fullName.toLowerCase()];
+    }
+
+    /**
+     * Given the class name text, return a namespace-prefixed name.
+     * If the name already has a period in it, or the namespaceName was not provided, return the class name as is.
+     * If the name does not have a period, and a namespaceName was provided, return the class name prepended
+     * by the namespace name
+     */
+    private getFullName(className: string, namespaceName?: string) {
+        if (className.includes('.') === false && namespaceName) {
+            return `${namespaceName}.${className}`;
+        } else {
+            return className;
+        }
+    }
+
+    /**
+     * Find all "new" statements in the program,
+     * and make sure we can find a class with that name
+     */
+    private verifyNewStatements() {
+        let newExpressions = this.scope.getNewExpressions();
+        for (let newExpression of newExpressions) {
+            let className = newExpression.className.getName(ParseMode.BrighterScript);
+            let newableClass = this.getClassByName(
+                className,
+                newExpression.namespaceName?.getName(ParseMode.BrighterScript)
+            );
+
+            if (!newableClass) {
+                //try and find functions with this name.
+                let fullName = this.getFullName(className, newExpression.namespaceName?.getName(ParseMode.BrighterScript));
+                let callable = this.scope.getCallableByName(fullName);
+                //if we found a callable with this name, the user used a "new" keyword in front of a function. add error
+                if (callable) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.expressionIsNotConstructable(callable.isSub ? 'sub' : 'function'),
+                        file: newExpression.file,
+                        range: newExpression.className.range
+                    });
+
+                    //could not find a class with this name
+                } else {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.classCouldNotBeFound(className, this.scope.name),
+                        file: newExpression.file,
+                        range: newExpression.className.range
+                    });
+                }
+            }
+        }
+    }
+
+    private findNamespaceNonNamespaceCollisions() {
+        for (let name in this.classes) {
+            let classStatement = this.classes[name];
+            //catch namespace class collision with global class
+            let nonNamespaceClass = this.classes[util.getTextAfterFinalDot(name).toLowerCase()];
+            if (classStatement.namespaceName && nonNamespaceClass) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.namespacedClassCannotShareNamewithNonNamespacedClass(
+                        nonNamespaceClass.name.text
+                    ),
+                    file: classStatement.file,
+                    range: classStatement.name.range,
+                    relatedInformation: [{
+                        location: Location.create(
+                            URI.file(nonNamespaceClass.file.pathAbsolute).toString(),
+                            nonNamespaceClass.name.range
+                        ),
+                        message: 'Original class declared here'
+                    }]
+                });
+            }
+        }
     }
 
     private verifyChildConstructor() {
@@ -100,7 +188,7 @@ export class BsClassValidator {
                                 ...DiagnosticMessages.classChildMemberDifferentMemberTypeThanAncestor(
                                     memberType,
                                     ancestorMemberType,
-                                    ancestorAndMember.classStatement.name.text
+                                    ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
                                 file: classStatement.file,
                                 range: member.range
@@ -112,7 +200,7 @@ export class BsClassValidator {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.memberAlreadyExistsInParentClass(
                                     memberType,
-                                    ancestorAndMember.classStatement.name.text
+                                    ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
                                 file: classStatement.file,
                                 range: member.range
@@ -130,7 +218,7 @@ export class BsClassValidator {
                         ) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.missingOverrideKeyword(
-                                    ancestorAndMember.classStatement.name.text
+                                    ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
                                 file: classStatement.file,
                                 range: member.range
@@ -184,8 +272,31 @@ export class BsClassValidator {
 
             for (let x of file.file.classStatements) {
                 let classStatement = x as AugmentedClassStatement;
-                this.classes[classStatement.name.text.toLowerCase()] = classStatement;
-                classStatement.file = file.file;
+                let name = classStatement.getName(ParseMode.BrighterScript);
+                let lowerName = name.toLowerCase();
+                //see if this class was already defined
+                let alreadyDefinedClass = this.classes[lowerName];
+
+                //if we don't already have this class, register it
+                if (!alreadyDefinedClass) {
+                    this.classes[lowerName] = classStatement;
+                    classStatement.file = file.file;
+
+                    //add a diagnostic about this class already existing
+                } else {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.duplicateClassDeclaration(this.scope.name, name),
+                        file: file.file,
+                        range: classStatement.name.range,
+                        relatedInformation: [{
+                            location: Location.create(
+                                URI.file(alreadyDefinedClass.file.pathAbsolute).toString(),
+                                this.classes[lowerName].range
+                            ),
+                            message: ''
+                        }]
+                    });
+                }
             }
         }
     }
@@ -194,16 +305,48 @@ export class BsClassValidator {
         //link all classes with their parents
         for (let key in this.classes) {
             let classStatement = this.classes[key];
-            let parentClassName = classStatement.extendsIdentifier?.text;
+            let parentClassName = classStatement.parentClassName?.getName(ParseMode.BrighterScript);
             if (parentClassName) {
-                let parentClass = this.classes[parentClassName.toLowerCase()];
+                let relativeName: string;
+                let absoluteName: string;
 
-                //detect unknown parent class
-                if (!parentClass) {
+                //if the parent class name was namespaced in the declaration of this class,
+                //compute the relative name of the parent class and the absolute name of the parent class
+                if (parentClassName.indexOf('.') > 0) {
+                    absoluteName = parentClassName;
+                    let parts = parentClassName.split('.');
+                    relativeName = parts[parts.length - 1];
+
+                    //the parent class name was NOT namespaced.
+                    //compute the relative name of the parent class and prepend the current class's namespace
+                    //to the beginning of the parent class's name
+                } else {
+                    if (classStatement.namespaceName) {
+                        absoluteName = `${classStatement.namespaceName.getName(ParseMode.BrighterScript)}.${parentClassName}`;
+                    } else {
+                        absoluteName = parentClassName;
+                    }
+                    relativeName = parentClassName;
+                }
+
+                let relativeParent = this.classes[relativeName.toLowerCase()];
+                let absoluteParent = this.classes[absoluteName.toLowerCase()];
+
+                let parentClass: AugmentedClassStatement;
+                //if we found a relative parent class
+                if (relativeParent) {
+                    parentClass = relativeParent;
+
+                    //we found an absolute parent class
+                } else if (absoluteParent) {
+                    parentClass = absoluteParent;
+
+                    //couldn't find the parent class
+                } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.classCouldNotBeFound(parentClassName, this.scope.name),
                         file: classStatement.file,
-                        range: classStatement.extendsIdentifier.range
+                        range: classStatement.parentClassName.range
                     });
                 }
                 classStatement.parentClass = parentClass;

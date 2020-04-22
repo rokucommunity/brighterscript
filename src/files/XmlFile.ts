@@ -10,6 +10,7 @@ import { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../in
 import { Program } from '../Program';
 import util from '../util';
 import { ClassStatement } from '../parser/ClassStatement';
+import { NamespaceStatement, NewExpression } from '../parser';
 
 export class XmlFile {
     constructor(
@@ -56,6 +57,10 @@ export class XmlFile {
 
     //TODO implement the xml CDATA parsing which would populate this list
     public classStatements = [] as ClassStatement[];
+
+    public namespaceStatements = [] as NamespaceStatement[];
+
+    public newExpressions = [] as NewExpression[];
 
     /**
      * The name of the component that this component extends

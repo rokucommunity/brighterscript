@@ -27,28 +27,6 @@ describe('parser library statements', () => {
         //expect({ diagnostics: diagnostics, statements: statements }).toMatchSnapshot();
     });
 
-    it('adds error for library statements NOT at top of file', () => {
-        const { tokens } = Lexer.scan(`
-            sub main()
-            end sub
-            Library "v30/bslCore.brs"
-        `);
-        const { diagnostics } = Parser.parse(tokens);
-        expect(diagnostics.length).to.be.greaterThan(0);
-        //expect({ diagnostics: diagnostics, statements: statements }).toMatchSnapshot();
-    });
-
-    it('adds error for library statements inside of function body', () => {
-        const { tokens } = Lexer.scan(`
-            sub main()
-                Library "v30/bslCore.brs"
-            end sub
-        `);
-        const { diagnostics } = Parser.parse(tokens);
-        expect(diagnostics).to.be.lengthOf(1);
-        //expect({ diagnostics: diagnostics, statements: statements }).toMatchSnapshot();
-    });
-
     it('still parses entire file after invalid library statement', () => {
         const { tokens } = Lexer.scan(`
             library cat dog mouse
