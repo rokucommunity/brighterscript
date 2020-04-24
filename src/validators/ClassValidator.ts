@@ -273,6 +273,10 @@ export class BsClassValidator {
             for (let x of file.file.classStatements) {
                 let classStatement = x as AugmentedClassStatement;
                 let name = classStatement.getName(ParseMode.BrighterScript);
+                //skip this class if it doesn't have a name
+                if (!name) {
+                    continue;
+                }
                 let lowerName = name.toLowerCase();
                 //see if this class was already defined
                 let alreadyDefinedClass = this.classes[lowerName];

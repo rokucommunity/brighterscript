@@ -36,6 +36,14 @@ describe('BrsFile BrighterScript classes', () => {
         expect(file.classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
     });
 
+    it('does not cause errors with incomplete class statement', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            class 
+        `) as BrsFile);
+        await program.validate();
+        //if no exception was thrown, this teste passes
+    });
+
     describe('transpile', () => {
         it('works with namespaces', async () => {
             await testTranspile(`

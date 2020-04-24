@@ -36,12 +36,17 @@ export class ClassStatement implements Statement {
     }
 
     public getName(parseMode: ParseMode) {
-        if (this.namespaceName) {
-            let namespaceName = this.namespaceName.getName(parseMode);
-            let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
-            return namespaceName + separator + this.name.text;
+        if (this.name && this.name.text) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(parseMode);
+                let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
+                return namespaceName + separator + this.name.text;
+            } else {
+                return this.name.text;
+            }
         } else {
-            return this.name.text;
+            //return undefined which will allow outside callers to know that this class doesn't have a name
+            return undefined;
         }
     }
 
