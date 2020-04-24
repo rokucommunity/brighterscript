@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.7.1] - 2020-04-23
+### Fixed
+ - dependency issue: `glob` is required but was not listed as a dependency
+
+
+
 ## [0.7.0] - 2020-04-23
 ### Added
  - basic support for namespaces
@@ -159,6 +165,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.7.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.7.0...v0.7.1
 [0.7.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.6.0...v0.7.0
 [0.6.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.4...v0.6.0
 [0.5.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.3...v0.5.4

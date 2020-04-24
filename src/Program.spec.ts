@@ -657,6 +657,10 @@ describe('Program', () => {
             expect(completions).not.to.include('NameA.NameB.NameC.DoSomething');
         });
 
+        describe('import', ()=>{
+            // it('
+        });
+
         it('finds namespace members for brighterscript file', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
                 sub main()
