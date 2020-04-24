@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.7.0] - 2020-04-23
+### Added
+ - basic support for namespaces
+ - experimental parser support for import statements (no transpile yet)
+### Changed
+ - parser produces TokenKind.Library now instead of an identifier token for library.
+
+
+
 ## [0.6.0] 2020-04-15
 ### Added
  - ability to filter out diagnostics by using the `diagnosticFilters` option in bsconfig
@@ -150,6 +159,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.7.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.6.0...v0.7.0
 [0.6.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.4...v0.6.0
 [0.5.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.3...v0.5.4
 [0.5.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.2...v0.5.3
