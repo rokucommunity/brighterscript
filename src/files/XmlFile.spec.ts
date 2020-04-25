@@ -8,7 +8,9 @@ import { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
-let n = path.normalize;
+import { util } from '../util';
+let n = util.standardizePath.bind(util);
+let npkg = util.standardizePkgPath.bind(util);
 
 describe('XmlFile', () => {
     let rootDir = process.cwd();
@@ -24,6 +26,18 @@ describe('XmlFile', () => {
     });
 
     describe('parse', () => {
+        it('supports importing BrighterScript files', async () => {
+            file = new XmlFile(`${rootDir}/components/custom.xml`, 'components/custom.xml', null);
+            await file.parse(`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="Scene">
+                <script type="text/brightscript" uri="ChildScene.bs" />
+                </component>
+            `);
+            expect(file.ownScriptImports.map(x => x.pkgPath)[0]).to.equal(
+                npkg(`components/ChildScene.bs`)
+            );
+        });
         it('does not include commented-out script imports', async () => {
             file = new XmlFile('abs', 'rel', null);
             await file.parse(`
@@ -48,22 +62,16 @@ describe('XmlFile', () => {
             `);
             expect(file.ownScriptImports).to.be.lengthOf(3);
             expect(file.ownScriptImports[0]).to.deep.include(<FileReference>{
-                lineIndex: 3,
                 text: 'ChildScene1.brs',
-                columnIndexBegin: 58,
-                columnIndexEnd: 73
+                filePathRange: Range.create(3, 58, 3, 73)
             });
             expect(file.ownScriptImports[1]).to.deep.include(<FileReference>{
-                lineIndex: 3,
                 text: 'ChildScene2.brs',
-                columnIndexBegin: 116,
-                columnIndexEnd: 131
+                filePathRange: Range.create(3, 116, 3, 131)
             });
             expect(file.ownScriptImports[2]).to.deep.include(<FileReference>{
-                lineIndex: 3,
                 text: 'ChildScene3.brs',
-                columnIndexBegin: 174,
-                columnIndexEnd: 189
+                filePathRange: Range.create(3, 174, 3, 189)
             });
         });
 
@@ -127,10 +135,8 @@ describe('XmlFile', () => {
             expect(file.ownScriptImports[0]).to.deep.include(<FileReference>{
                 sourceFile: file,
                 text: 'pkg:/components/cmp1.brs',
-                lineIndex: 3,
-                columnIndexBegin: 58,
-                columnIndexEnd: 82,
-                pkgPath: `components${path.sep}cmp1.brs`
+                pkgPath: `components${path.sep}cmp1.brs`,
+                filePathRange: Range.create(3, 58, 3, 82)
             });
         });
 
@@ -183,7 +189,7 @@ describe('XmlFile', () => {
             xmlFile.ownScriptImports.push({
                 pkgPath: `components${path.sep}HeroGrid.brs`,
                 text: '',
-                lineIndex: 1,
+                filePathRange: Range.create(1, 0, 1, 1),
                 sourceFile: xmlFile
             });
             let brsFile = new BrsFile('absolute', `components${path.sep}HEROGRID.brs`, program);
@@ -200,9 +206,7 @@ describe('XmlFile', () => {
             xmlFile.ownScriptImports.push({
                 pkgPath: ``,
                 text: '',
-                lineIndex: 1,
-                columnIndexBegin: 1,
-                columnIndexEnd: 1,
+                filePathRange: Range.create(1, 1, 1, 1),
                 sourceFile: xmlFile
             });
 

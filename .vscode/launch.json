@@ -12,11 +12,6 @@
             "smartStep": false,
             "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
             "args": [
-                "-r",
-                "ts-node/register",
-                // "--log-error",
-                "-r",
-                "source-map-support/register",
                 "${file}"
             ],
             "cwd": "${workspaceRoot}",

@@ -186,11 +186,9 @@ export class XmlFile {
                 let uri = script.$.uri;
                 if (typeof uri === 'string') {
                     scriptImports.push({
+                        filePathRange: null,
                         sourceFile: this,
                         text: uri,
-                        lineIndex: null,
-                        columnIndexBegin: null,
-                        columnIndexEnd: null,
                         pkgPath: util.getPkgPathFromTarget(this.pkgPath, uri)
                     });
                 }
@@ -228,9 +226,7 @@ export class XmlFile {
             for (let scriptImport of scriptImports) {
                 //take and remove the first item from the list
                 let range = uriRanges[scriptImport.text].shift();
-                scriptImport.lineIndex = range.start.line;
-                scriptImport.columnIndexBegin = range.start.character;
-                scriptImport.columnIndexEnd = range.end.character;
+                scriptImport.filePathRange = range;
             }
 
             //add all of these script imports
@@ -262,7 +258,10 @@ export class XmlFile {
      * Get the list of scripts imported by this component and all of its ancestors
      */
     public getAllScriptImports() {
-        let imports = [...this.ownScriptImports] as FileReference[];
+        let imports = [
+            ...this.ownScriptImports,
+            ...this.getCodeImports()
+        ] as FileReference[];
         let file = this as XmlFile;
         while (file.parent) {
             imports = [...imports, ...file.parent.getOwnScriptImports()];
@@ -277,6 +276,33 @@ export class XmlFile {
      */
     public getOwnScriptImports() {
         return this.ownScriptImports;
+    }
+
+    /**
+     * Create a list of all the `import` statements from source files
+     */
+    public getCodeImports() {
+        let processedFileMap = {} as { [pkgPath: string]: boolean };
+        let result = [] as FileReference[];
+        let fileRefStack = [...this.ownScriptImports];
+        while (fileRefStack.length > 0) {
+            //consume a file from the list
+            let fileRef = fileRefStack.pop();
+            let targetFile = this.program.getFileByPkgPath(fileRef.pkgPath);
+            let lowerPkgPath = targetFile.pkgPath.toLowerCase();
+
+            //only process a source file once
+            if (!processedFileMap[lowerPkgPath]) {
+                processedFileMap[lowerPkgPath] = true;
+
+                //add all of the target file's fileRefs to the list
+                result.push(...targetFile.ownScriptImports);
+
+                //add the target file's imports to the stack so they can be evaluated
+                fileRefStack.push(...targetFile.ownScriptImports);
+            }
+        }
+        return result;
     }
 
     /**
@@ -318,10 +344,10 @@ export class XmlFile {
 
     private getScriptImportAtPosition(position: Position) {
         let scriptImport = this.ownScriptImports.find((x) => {
-            return x.lineIndex === position.line &&
+            return x.filePathRange.start.line === position.line &&
                 //column between start and end
-                position.character >= x.columnIndexBegin &&
-                position.character <= x.columnIndexEnd;
+                position.character >= x.filePathRange.start.character &&
+                position.character <= x.filePathRange.end.character;
         });
         return scriptImport;
     }
@@ -340,18 +366,6 @@ export class XmlFile {
                 //not already referenced in this file
                 !currentImports.includes(file.pkgPath)
             ) {
-                //the text range to replace if the user selects this result
-                let range = {
-                    start: {
-                        character: scriptImport.columnIndexBegin,
-                        line: scriptImport.lineIndex
-                    },
-                    end: {
-                        character: scriptImport.columnIndexEnd,
-                        line: scriptImport.lineIndex
-                    }
-                } as Range;
-
                 //add the relative path
                 let relativePath = util.getRelativePath(this.pkgPath, file.pkgPath).replace(/\\/g, '/');
                 let pkgPathStandardized = file.pkgPath.replace(/\\/g, '/');
@@ -363,7 +377,7 @@ export class XmlFile {
                     kind: CompletionItemKind.File,
                     textEdit: {
                         newText: relativePath,
-                        range: range
+                        range: scriptImport.filePathRange
                     }
                 });
 
@@ -374,7 +388,7 @@ export class XmlFile {
                     kind: CompletionItemKind.File,
                     textEdit: {
                         newText: pkgPath,
-                        range: range
+                        range: scriptImport.filePathRange
                     }
                 });
             }

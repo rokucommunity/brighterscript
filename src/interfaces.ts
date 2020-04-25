@@ -92,21 +92,15 @@ export interface FileReference {
     pkgPath: string;
     text: string;
     /**
-     * The XML file that is doing the importing of this file
+     * The source file that is doing the importing of this file
      */
-    sourceFile: XmlFile;
+    sourceFile: XmlFile | BrsFile;
     /**
-     * The index of the line this reference is located at
+     * The full range of this file reference.
+     * Keep in mind that file references can come from xml script tags
+     * as well as bs file import statements
      */
-    lineIndex: number;
-    /**
-     * The start column index of the file reference
-     */
-    columnIndexBegin?: number;
-    /**
-     * The end column index of the file reference
-     */
-    columnIndexEnd?: number;
+    filePathRange: Range;
 }
 
 export interface File {

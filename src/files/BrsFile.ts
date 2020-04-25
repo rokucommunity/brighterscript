@@ -5,7 +5,7 @@ import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vsco
 import { Scope } from '../Scope';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic } from '../interfaces';
+import { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import { Deferred } from '../deferred';
 import { FunctionParameter } from '../brsTypes';
 import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers } from '../lexer';
@@ -86,6 +86,11 @@ export class BrsFile {
     public namespaceStatements = [] as NamespaceStatement[];
 
     public newExpressions = [] as NewExpression[];
+
+    /**
+     * files referenced by import statements
+     */
+    public ownScriptImports = [] as FileReference[];
 
     /**
      * Does this file need to be transpiled?
@@ -178,7 +183,7 @@ export class BrsFile {
 
         this.findNewExpressions();
 
-        this.ensureLibraryCallsAreAtTopOfFile();
+        this.findAndValidateImportAndImportStatements();
 
         //attach this file to every diagnostic
         for (let diagnostic of this.diagnostics) {
@@ -196,7 +201,7 @@ export class BrsFile {
         this.namespaceStatements = this.findAllInstances(NamespaceStatement).map(x => x.value);
     }
 
-    public ensureLibraryCallsAreAtTopOfFile() {
+    public findAndValidateImportAndImportStatements() {
         let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement>;
 
         for (let stmt of this.ast.statements) {
@@ -212,6 +217,8 @@ export class BrsFile {
                 break;
             }
         }
+
+        //find all import and library statements in the entire file
         let includeStatementSearchResults = util.findAllDeep<LibraryStatement | ImportStatement>(this.ast.statements, (item) => {
             if (item instanceof LibraryStatement || item instanceof ImportStatement) {
                 return true;
@@ -219,7 +226,18 @@ export class BrsFile {
                 return false;
             }
         });
+
         for (let result of includeStatementSearchResults) {
+            //register import statements
+            if (result.value instanceof ImportStatement) {
+                this.ownScriptImports.push({
+                    filePathRange: result.value.filePathToken.range,
+                    pkgPath: util.getPkgPathFromTarget(this.pkgPath, result.value.filePath),
+                    sourceFile: this,
+                    text: ''
+                });
+            }
+
             //if this statement is not one of the top-of-file statements,
             //then add a diagnostic explaining that it is invalid
             if (!topOfFileIncludeStatements.includes(result.value)) {

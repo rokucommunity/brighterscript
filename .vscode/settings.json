@@ -14,5 +14,13 @@
         "**/node_modules": true,
         "**/bower_components": true,
         "**/dist": true
+    },
+    "mocha.logVerbose": true,
+    "mocha.files.glob": "src/**/*.ts",
+    "mocha.requires": [
+        "ts-node/register"
+    ],
+    "mocha.env": {
+        "TS_NODE_TYPE_CHECK": false
     }
 }

@@ -852,6 +852,37 @@ describe('Program', () => {
         });
     });
 
+    describe.only('import statements', () => {
+        it('finds function loaded in by import', async () => {
+            //create child component
+            let component = await program.addOrReplaceFile({ src: n(`${rootDir}/components/ChildScene.xml`), dest: 'components/ChildScene.xml' }, `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <script type="text/brightscript" uri="pkg:/source/lib.bs" />
+                </component>
+            `);
+            await program.addOrReplaceFile({ src: n(`${rootDir}/source/lib.bs`), dest: 'source/lib.bs' }, `
+                import "stringOps.bs"
+                function toLower(strVal as string)
+                    return StringToLower(strVal)
+                end function
+            `);
+            await program.addOrReplaceFile({ src: n(`${rootDir}/source/stringOps.bs`), dest: 'source/stringOps.bs' }, `
+                function StringToLower(strVal as string)
+                    return "lower"
+                end function
+            `);
+            await program.validate();
+            expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
+            expect(
+                (component as XmlFile).getAllScriptImports().map(x => x.pkgPath)
+            ).to.eql([
+                npkg(`source/lib.bs`),
+                npkg(`source/stringOps.bs`)
+            ]);
+        });
+    });
+
     describe('xml inheritance', () => {
         it('handles parent-child attach and detach', async () => {
             //create parent component

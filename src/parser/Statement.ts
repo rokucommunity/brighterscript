@@ -849,14 +849,17 @@ export class NamespaceStatement implements Statement {
 export class ImportStatement implements Statement {
     constructor(
         readonly importToken: Token,
-        readonly filePath: Token
+        readonly filePathToken: Token
     ) {
         this.range = Range.create(
             importToken.range.start,
-            (filePath ?? importToken).range.end
+            (filePathToken ?? importToken).range.end
         );
+        if (this.filePathToken) {
+            this.filePath = this.filePathToken.text.replace(/"/g, '');
+        }
     }
-
+    public filePath: string;
     public range: Range;
 
     transpile(state: TranspileState) {
@@ -867,7 +870,7 @@ export class ImportStatement implements Statement {
                 this.range.start.line + 1,
                 this.range.start.character,
                 state.file.pathAbsolute,
-                `'${this.importToken.text} "${this.filePath.text}"`
+                `'${this.importToken.text} "${this.filePathToken.text}"`
             )
         ];
     }
