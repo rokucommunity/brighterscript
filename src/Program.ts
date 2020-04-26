@@ -516,9 +516,11 @@ export class Program {
                 if (await fsExtra.pathExists(outputCodePath)) {
                     throw new Error(`Error while transpiling "${filePath}". A file already exists at "${outputCodePath}" and will not be overwritten.`);
                 }
+
+                let writeMapPromise = result.map ? fsExtra.writeFile(outputCodeMapPath, result.map) : null;
                 await Promise.all([
                     fsExtra.writeFile(outputCodePath, result.code),
-                    fsExtra.writeFile(outputCodeMapPath, result.map)
+                    writeMapPromise
                 ]);
             }
         });

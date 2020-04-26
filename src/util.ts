@@ -104,6 +104,14 @@ export class Util {
     }
 
     /**
+     * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
+     */
+    public getRokuPkgPath(pkgPath: string) {
+        pkgPath = pkgPath.replace('\\', '/');
+        return 'pkg:/' + pkgPath;
+    }
+
+    /**
      * Given a path to a file/directory, replace all path separators with the current system's version.
      * @param filePath
      */

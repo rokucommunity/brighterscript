@@ -852,8 +852,8 @@ describe('Program', () => {
         });
     });
 
-    describe.only('import statements', () => {
-        it('finds function loaded in by import', async () => {
+    describe('import statements', () => {
+        it('finds function loaded in by import multiple levels deep', async () => {
             //create child component
             let component = await program.addOrReplaceFile({ src: n(`${rootDir}/components/ChildScene.xml`), dest: 'components/ChildScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -868,8 +868,14 @@ describe('Program', () => {
                 end function
             `);
             await program.addOrReplaceFile({ src: n(`${rootDir}/source/stringOps.bs`), dest: 'source/stringOps.bs' }, `
+                import "intOps.bs"
                 function StringToLower(strVal as string)
-                    return "lower"
+                    return isInt(strVal)
+                end function
+            `);
+            await program.addOrReplaceFile({ src: n(`${rootDir}/source/intOps.bs`), dest: 'source/intOps.bs' }, `
+                function isInt(strVal as dynamic)
+                    return true
                 end function
             `);
             await program.validate();
@@ -878,8 +884,67 @@ describe('Program', () => {
                 (component as XmlFile).getAllScriptImports().map(x => x.pkgPath)
             ).to.eql([
                 npkg(`source/lib.bs`),
-                npkg(`source/stringOps.bs`)
+                npkg(`source/stringOps.bs`),
+                npkg(`source/intOps.bs`)
             ]);
+        });
+
+        it('supports importing brs files', async () => {
+            //create child component
+            let component = await program.addOrReplaceFile({ src: n(`${rootDir}/components/ChildScene.xml`), dest: 'components/ChildScene.xml' }, `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <script type="text/brightscript" uri="pkg:/source/lib.bs" />
+                </component>
+            `);
+            await program.addOrReplaceFile({ src: n(`${rootDir}/source/lib.bs`), dest: 'source/lib.bs' }, `
+                import "stringOps.brs"
+                function toLower(strVal as string)
+                    return StringToLower(strVal)
+                end function
+            `);
+            await program.addOrReplaceFile({ src: n(`${rootDir}/source/stringOps.brs`), dest: 'source/stringOps.brs' }, `
+                function StringToLower(strVal as string)
+                    return isInt(strVal)
+                end function
+            `);
+            await program.validate();
+            expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
+            expect(
+                (component as XmlFile).getAllScriptImports().map(x => x.pkgPath)
+            ).to.eql([
+                npkg(`source/lib.bs`),
+                npkg(`source/stringOps.brs`)
+            ]);
+        });
+
+        it('adds brs imports to xml file during transpile', async () => {
+            //create child component
+            let component = await program.addOrReplaceFile({ src: n(`${rootDir}/components/ChildScene.xml`), dest: 'components/ChildScene.xml' }, `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <script type="text/brightscript" uri="pkg:/source/lib.bs" />
+                </component>
+            `);
+            await program.addOrReplaceFile({ src: n(`${rootDir}/source/lib.bs`), dest: 'source/lib.bs' }, `
+                import "stringOps.brs"
+                function toLower(strVal as string)
+                    return StringToLower(strVal)
+                end function
+            `);
+            await program.addOrReplaceFile({ src: n(`${rootDir}/source/stringOps.brs`), dest: 'source/stringOps.brs' }, `
+                function StringToLower(strVal as string)
+                    return isInt(strVal)
+                end function
+            `);
+            await program.validate();
+            expect(component.transpile().code).to.equal(`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
+<script type="text/brightscript" uri="pkg:/source/stringOps.brs" />
+                </component>
+            `);
         });
     });
 

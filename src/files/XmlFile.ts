@@ -77,6 +77,9 @@ export class XmlFile {
      */
     public needsTranspiled = false;
 
+    //the lines of the xml file
+    public lines: string[];
+
     /**
      * TODO: do we need this for xml files?
      */
@@ -88,12 +91,12 @@ export class XmlFile {
         }
 
         //split the text into lines
-        let lines = util.getLines(fileContents);
+        this.lines = util.getLines(fileContents);
 
         this.parentNameRange = this.findExtendsPosition(fileContents);
 
         //create a range of the entire file
-        this.fileRange = Range.create(0, 0, lines.length, lines[lines.length - 1].length - 1);
+        this.fileRange = Range.create(0, 0, this.lines.length, this.lines[this.lines.length - 1].length - 1);
 
         let parsedXml;
         try {
@@ -107,8 +110,8 @@ export class XmlFile {
                 let componentRange: Range;
 
                 //find the range for the component element's opening tag
-                for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                    let match = /(.*)(<component)/gi.exec(lines[lineIndex]);
+                for (let lineIndex = 0; lineIndex < this.lines.length; lineIndex++) {
+                    let match = /(.*)(<component)/gi.exec(this.lines[lineIndex]);
                     if (match) {
                         componentRange = Range.create(
                             Position.create(lineIndex, match[1].length),
@@ -196,8 +199,8 @@ export class XmlFile {
 
             //make a lookup of every uri range
             let uriRanges = {} as { [uri: string]: Range[] };
-            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                let line = lines[lineIndex];
+            for (let lineIndex = 0; lineIndex < this.lines.length; lineIndex++) {
+                let line = this.lines[lineIndex];
                 let regex = /(.*?\s+uri\s*=\s*")(.*?)"/gi;
                 let lineIndexOffset = 0;
                 let match: RegExpExecArray;
@@ -474,7 +477,42 @@ export class XmlFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        throw new Error('Transpile is not implemented for XML files');
+        //eventually we want to support sourcemaps and a full xml parser. However, for now just do some string transformations
+        let lines = [...this.lines];
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i];
+            let lowerLine = line.toLowerCase();
+
+            //include any bs import statements
+            if (lowerLine.includes('</component>')) {
+                let codeImports = this.getCodeImports();
+                let newLines = [] as string[];
+
+                for (let codeImport of codeImports) {
+                    newLines.push(
+                        `<script type="text/brightscript" uri="${util.getRokuPkgPath(codeImport.pkgPath)}" />`
+                    );
+                }
+
+                if (newLines.length > 0) {
+                    lines.splice(i, 0, ...newLines);
+                    //bump the loop index by however many items we added
+                    i += newLines.length;
+                }
+            }
+
+            //convert .bs extensions to .brs
+            let idx = line.indexOf('.bs"');
+            if (idx > -1) {
+                lines[i] = line.substring(0, idx) + '.brs' + line.substring(idx + 3);
+            }
+        }
+
+        return {
+            code: lines.join('\n'),
+            //for now, return no map. We'll support this eventually
+            map: undefined
+        };
     }
 
     public dispose() {
