@@ -1,16 +1,14 @@
 import { expect } from 'chai';
 import { EventEmitter } from 'events';
-import * as path from 'path';
 import * as sinonImport from 'sinon';
 import { Position } from 'vscode-languageserver';
-
+import { standardizePath as s } from './util';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { Program } from './Program';
-import util from './util';
 import { ParseMode } from './parser/Parser';
-let n = path.normalize;
+
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -32,7 +30,7 @@ describe('Scope', () => {
         it('correctly listens to program events', () => {
             scope = new Scope('some scope', () => true);
 
-            let file = new BrsFile(util.standardizePath(`${rootDir}/source/file.brs`), n('source/file.brs'), program);
+            let file = new BrsFile(s`${rootDir}/source/file.brs`, s`source/file.brs`, program);
 
             //we're only testing events, so make this emitter look like a program
             let fakeProgram = new EventEmitter();
@@ -79,7 +77,7 @@ describe('Scope', () => {
             const globalScope = program.getScopeByName('global');
             globalScope.attachParentScope(program.platformScope);
 
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: '/source/main.brs' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                 sub Main()
 
                 end sub
@@ -87,7 +85,7 @@ describe('Scope', () => {
                 sub ActionA()
                 end sub
             `);
-            await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: '/source/lib.brs' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/lib.brs`, dest: s`source/lib.brs` }, `
                 sub ActionB()
                 end sub
             `);
@@ -123,7 +121,7 @@ describe('Scope', () => {
         it('removes callables from list', async () => {
             let initCallableCount = scope.getAllCallables().length;
             //add the file
-            let file = new BrsFile(util.standardizePath(`${rootDir}/source/file.brs`), n('source/file.brs'), program);
+            let file = new BrsFile(s`${rootDir}/source/file.brs`, s`source/file.brs`, program);
             await file.parse(`
                 function DoA()
                     print "A"
@@ -140,7 +138,7 @@ describe('Scope', () => {
 
     describe('validate', () => {
         it('does not mark same-named-functions in different namespaces as an error', async () => {
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: '/source/main.bs' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                 namespace NameA
                     sub alert()
                     end sub
@@ -155,7 +153,7 @@ describe('Scope', () => {
             expect(program.getDiagnostics()).to.be.lengthOf(0);
         });
         it('resolves local-variable function calls', async () => {
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: '/source/main.brs' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                 sub DoSomething()
                     sayMyName = function(name as string)
                     end function
@@ -169,7 +167,7 @@ describe('Scope', () => {
         });
 
         it('detects local functions with same name as global', async () => {
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: '/source/main.brs' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                 sub Main()
                     SayHi = sub()
                         print "Hi from inner"

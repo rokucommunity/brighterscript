@@ -2,11 +2,10 @@ import chalk from 'chalk';
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-
 import { BsConfig } from './BsConfig';
 import { BsDiagnostic, File } from './interfaces';
 import { FileResolver, Program } from './Program';
-import util from './util';
+import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 
@@ -130,9 +129,7 @@ export class ProgramBuilder {
 
         //on any file watcher event
         this.watcher.on('all', async (event: string, thePath: string) => { //eslint-disable-line @typescript-eslint/no-misused-promises
-            thePath = util.standardizePath(
-                path.resolve(this.rootDir, thePath)
-            );
+            thePath = s`${path.resolve(this.rootDir, thePath)}`;
             if (event === 'add' || event === 'change') {
                 await this.program.addOrReplaceFile({
                     src: thePath,
@@ -150,7 +147,7 @@ export class ProgramBuilder {
      * Get the rootDir for this program
      */
     public get rootDir() {
-        return util.standardizePath(
+        return s(
             path.resolve(
                 this.program.options.cwd,
                 this.program.options.rootDir ?? this.program.options.cwd

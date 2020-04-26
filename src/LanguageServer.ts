@@ -27,7 +27,7 @@ import { BsConfig } from './BsConfig';
 import { Deferred } from './deferred';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
-import util from './util';
+import { standardizePath as s, util } from './util';
 import { BsDiagnostic } from './interfaces';
 
 export class LanguageServer {
@@ -634,7 +634,7 @@ export class LanguageServer {
         let changes = params.changes.map(x => {
             return {
                 type: x.type,
-                pathAbsolute: util.standardizePath(Uri.parse(x.uri).fsPath)
+                pathAbsolute: s`${Uri.parse(x.uri).fsPath}`
             };
         });
 
@@ -682,7 +682,7 @@ export class LanguageServer {
                 return files.map(x => {
                     return {
                         type: FileChangeType.Created as FileChangeType,
-                        pathAbsolute: util.standardizePath(x)
+                        pathAbsolute: s`${x}`
                     };
                 });
             });

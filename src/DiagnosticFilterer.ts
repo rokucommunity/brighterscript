@@ -1,8 +1,8 @@
 import { BsDiagnostic } from './interfaces';
 import * as path from 'path';
 import * as minimatch from 'minimatch';
-import { util } from './util';
 import { BsConfig } from './BsConfig';
+import { standardizePath as s } from './util';
 
 export class DiagnosticFilterer {
     private byFile: { [filePath: string]: BsDiagnostic[] };
@@ -76,7 +76,7 @@ export class DiagnosticFilterer {
         //if there's a src, match against all files
         if (filter.src) {
             //prepend rootDir to src if the filter is a relative path
-            let src = util.standardizePath(
+            let src = s(
                 path.isAbsolute(filter.src) ? filter.src : `${this.rootDir}/${filter.src}`
             );
 

@@ -9,11 +9,9 @@ import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
-import { util } from './util';
-let n = util.standardizePath.bind(util);
-let npkg = util.standardizePkgPath.bind(util);
+import { standardizePath as s, util } from './util';
 
-let testProjectsPath = n(`${__dirname}/../testProjects`);
+let testProjectsPath = s`${__dirname}/../testProjects`;
 
 let sinon = sinonImport.createSandbox();
 let rootDir = process.cwd();
@@ -44,7 +42,7 @@ describe('Program', () => {
 
                 //resolve lib.brs from memory instead of going to disk
                 program.fileResolvers.push((pathAbsolute) => {
-                    if (pathAbsolute === util.standardizePath(`${rootDir}/source/lib.brs`)) {
+                    if (pathAbsolute === s`${rootDir}/source/lib.brs`) {
                         return `'comment`;
                     }
                 });
@@ -62,7 +60,7 @@ describe('Program', () => {
                 expect(stub.called).to.be.false;
 
                 program.fileResolvers.push((pathAbsolute) => {
-                    if (pathAbsolute === util.standardizePath(`${rootDir}/components/A.xml`)) {
+                    if (pathAbsolute === s`${rootDir}/components/A.xml`) {
                         return `<?xml version="1.0" encoding="utf-8" ?>`;
                     }
                 });
@@ -104,26 +102,26 @@ describe('Program', () => {
             expect(Object.keys(program.files).length).to.equal(0);
 
             await program.addOrReplaceFile({
-                src: n(`${rootDir}/components/comp1.xml`),
+                src: s`${rootDir}/components/comp1.xml`,
                 dest: util.pathSepNormalize(`components/comp1.xml`)
             }, '');
             expect(Object.keys(program.files).length).to.equal(1);
 
             await program.addOrReplaceFile({
-                src: n(`${rootDir}/notComponents/comp1.xml`),
+                src: s`${rootDir}/notComponents/comp1.xml`,
                 dest: util.pathSepNormalize(`notComponents/comp1.xml`)
             }, '');
             expect(Object.keys(program.files).length).to.equal(1);
 
             await program.addOrReplaceFile({
-                src: n(`${rootDir}/componentsExtra/comp1.xml`),
+                src: s`${rootDir}/componentsExtra/comp1.xml`,
                 dest: util.pathSepNormalize(`componentsExtra/comp1.xml`)
             }, '');
             expect(Object.keys(program.files).length).to.equal(1);
         });
 
         it('works with different cwd', async () => {
-            let projectDir = n(`${testProjectsPath}/project2`);
+            let projectDir = s`${testProjectsPath}/project2`;
             let program = new Program({ cwd: projectDir });
             await program.addOrReplaceFile({ src: 'source/lib.brs', dest: 'source/lib.brs' }, 'function main()\n    print "hello world"\nend function');
             // await program.reloadFile('source/lib.brs', `'this is a comment`);
@@ -135,7 +133,7 @@ describe('Program', () => {
             //no files in global scope
             expect(program.getScopeByName('global').fileCount).to.equal(0);
 
-            let mainPath = n(`${rootDir}/source/main.brs`);
+            let mainPath = s`${rootDir}/source/main.brs`;
             //add a new source file
             await program.addOrReplaceFile({ src: mainPath, dest: 'source/main.brs' }, '');
             //file should be in global scope now
@@ -445,23 +443,23 @@ describe('Program', () => {
         });
 
         it('links xml scopes based on xml parent-child relationships', async () => {
-            await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                 </component>
             `);
 
             //create child component
-            await program.addOrReplaceFile({ src: n(`${rootDir}/components/ChildScene.xml`), dest: 'components/ChildScene.xml' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                 </component>
             `);
 
-            expect(program.getScopeByName('components/ChildScene.xml').parentScope.name).to.equal(npkg('components/ParentScene.xml'));
+            expect(program.getScopeByName('components/ChildScene.xml').parentScope.name).to.equal(s`components/ParentScene.xml`);
 
             //change the parent's name.
-            await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="NotParentScene" extends="Scene">
                 </component>
@@ -483,20 +481,20 @@ describe('Program', () => {
         });
 
         it('includes referenced files in xml scopes', async () => {
-            let xmlPath = n(`${rootDir}/components/component1.xml`);
+            let xmlPath = s`${rootDir}/components/component1.xml`;
             await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);
-            let brsPath = n(`${rootDir}/components/component1.brs`);
+            let brsPath = s`${rootDir}/components/component1.brs`;
             await program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
 
             let scope = program.getScopeByName(`components/component1.xml`);
-            n(`components/component1.xml`);
-            expect(scope.getFile(xmlPath).file.pkgPath).to.equal(util.standardizePkgPath(`components/component1.xml`));
-            expect(scope.getFile(brsPath).file.pkgPath).to.equal(util.standardizePkgPath(`components/component1.brs`));
+            s`components/component1.xml`;
+            expect(scope.getFile(xmlPath).file.pkgPath).to.equal(s`components/component1.xml`);
+            expect(scope.getFile(brsPath).file.pkgPath).to.equal(s`components/component1.brs`);
         });
 
         it('adds xml file to files map', async () => {
@@ -523,14 +521,14 @@ describe('Program', () => {
         });
 
         it('adds warning instead of error on mismatched upper/lower case script import', async () => {
-            let xmlPath = n(`${rootDir}/components/component1.xml`);
+            let xmlPath = s`${rootDir}/components/component1.xml`;
             await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);
-            let brsPath = n(`${rootDir}/components/COMPONENT1.brs`);
+            let brsPath = s`${rootDir}/components/COMPONENT1.brs`;
             await program.addOrReplaceFile({ src: brsPath, dest: 'components/COMPONENT1.brs' }, '');
 
             //validate
@@ -544,7 +542,7 @@ describe('Program', () => {
     describe('reloadFile', () => {
         it('picks up new files in a scope when an xml file is loaded', async () => {
             program.options.ignoreErrorCodes.push(1013);
-            let xmlPath = n(`${rootDir}/components/component1.xml`);
+            let xmlPath = s`${rootDir}/components/component1.xml`;
             await program.addOrReplaceFile({ src: xmlPath, dest: 'components/comonent1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
@@ -557,7 +555,7 @@ describe('Program', () => {
             });
 
             //add the file, the error should go away
-            let brsPath = n(`${rootDir}/components/component1.brs`);
+            let brsPath = s`${rootDir}/components/component1.brs`;
             await program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
             await program.validate();
             expect(program.getDiagnostics()).to.be.empty;
@@ -576,10 +574,10 @@ describe('Program', () => {
         });
 
         it('handles when the brs file is added before the component', async () => {
-            let brsPath = n(`${rootDir}/components/component1.brs`);
+            let brsPath = s`${rootDir}/components/component1.brs`;
             await program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
 
-            let xmlPath = n(`${rootDir}/components/component1.xml`);
+            let xmlPath = s`${rootDir}/components/component1.xml`;
             let xmlFile = await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
@@ -593,10 +591,10 @@ describe('Program', () => {
 
         it('reloads referenced fles when xml file changes', async () => {
             program.options.ignoreErrorCodes.push(1013);
-            let brsPath = util.standardizePath(`${rootDir}/components/component1.brs`);
+            let brsPath = s`${rootDir}/components/component1.brs`;
             await program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
 
-            let xmlPath = n(`${rootDir}/components/component1.xml`);
+            let xmlPath = s`${rootDir}/components/component1.xml`;
             let xmlFile = await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
@@ -829,14 +827,14 @@ describe('Program', () => {
         });
 
         it('finds all file paths when initiated on xml uri', async () => {
-            let xmlPath = n(`${rootDir}/components/component1.xml`);
+            let xmlPath = s`${rootDir}/components/component1.xml`;
             await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="" />
                 </component>
             `);
-            let brsPath = n(`${rootDir}/components/component1.brs`);
+            let brsPath = s`${rootDir}/components/component1.brs`;
             await program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
             let completions = await program.getCompletions(xmlPath, Position.create(3, 58));
             expect(completions[0]).to.include({
@@ -855,25 +853,25 @@ describe('Program', () => {
     describe('import statements', () => {
         it('finds function loaded in by import multiple levels deep', async () => {
             //create child component
-            let component = await program.addOrReplaceFile({ src: n(`${rootDir}/components/ChildScene.xml`), dest: 'components/ChildScene.xml' }, `
+            let component = await program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="pkg:/source/lib.bs" />
                 </component>
             `);
-            await program.addOrReplaceFile({ src: n(`${rootDir}/source/lib.bs`), dest: 'source/lib.bs' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `
                 import "stringOps.bs"
                 function toLower(strVal as string)
                     return StringToLower(strVal)
                 end function
             `);
-            await program.addOrReplaceFile({ src: n(`${rootDir}/source/stringOps.bs`), dest: 'source/stringOps.bs' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/stringOps.bs`, dest: 'source/stringOps.bs' }, `
                 import "intOps.bs"
                 function StringToLower(strVal as string)
                     return isInt(strVal)
                 end function
             `);
-            await program.addOrReplaceFile({ src: n(`${rootDir}/source/intOps.bs`), dest: 'source/intOps.bs' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/intOps.bs`, dest: 'source/intOps.bs' }, `
                 function isInt(strVal as dynamic)
                     return true
                 end function
@@ -883,27 +881,27 @@ describe('Program', () => {
             expect(
                 (component as XmlFile).getAllScriptImports().map(x => x.pkgPath)
             ).to.eql([
-                npkg(`source/lib.bs`),
-                npkg(`source/stringOps.bs`),
-                npkg(`source/intOps.bs`)
+                s`source/lib.bs`,
+                s`source/stringOps.bs`,
+                s`source/intOps.bs`
             ]);
         });
 
         it('supports importing brs files', async () => {
             //create child component
-            let component = await program.addOrReplaceFile({ src: n(`${rootDir}/components/ChildScene.xml`), dest: 'components/ChildScene.xml' }, `
+            let component = await program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="pkg:/source/lib.bs" />
                 </component>
             `);
-            await program.addOrReplaceFile({ src: n(`${rootDir}/source/lib.bs`), dest: 'source/lib.bs' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `
                 import "stringOps.brs"
                 function toLower(strVal as string)
                     return StringToLower(strVal)
                 end function
             `);
-            await program.addOrReplaceFile({ src: n(`${rootDir}/source/stringOps.brs`), dest: 'source/stringOps.brs' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/stringOps.brs`, dest: 'source/stringOps.brs' }, `
                 function StringToLower(strVal as string)
                     return isInt(strVal)
                 end function
@@ -913,26 +911,26 @@ describe('Program', () => {
             expect(
                 (component as XmlFile).getAllScriptImports().map(x => x.pkgPath)
             ).to.eql([
-                npkg(`source/lib.bs`),
-                npkg(`source/stringOps.brs`)
+                s`source/lib.bs`,
+                s`source/stringOps.brs`
             ]);
         });
 
         it('adds brs imports to xml file during transpile', async () => {
             //create child component
-            let component = await program.addOrReplaceFile({ src: n(`${rootDir}/components/ChildScene.xml`), dest: 'components/ChildScene.xml' }, `
+            let component = await program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="pkg:/source/lib.bs" />
                 </component>
             `);
-            await program.addOrReplaceFile({ src: n(`${rootDir}/source/lib.bs`), dest: 'source/lib.bs' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `
                 import "stringOps.brs"
                 function toLower(strVal as string)
                     return StringToLower(strVal)
                 end function
             `);
-            await program.addOrReplaceFile({ src: n(`${rootDir}/source/stringOps.brs`), dest: 'source/stringOps.brs' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/stringOps.brs`, dest: 'source/stringOps.brs' }, `
                 function StringToLower(strVal as string)
                     return isInt(strVal)
                 end function
@@ -951,14 +949,14 @@ describe('Program', () => {
     describe('xml inheritance', () => {
         it('handles parent-child attach and detach', async () => {
             //create parent component
-            let parentFile = await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
+            let parentFile = await program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                 </component>
             `);
 
             //create child component
-            let childFile = await program.addOrReplaceFile({ src: n(`${rootDir}/components/ChildScene.xml`), dest: 'components/ChildScene.xml' }, `
+            let childFile = await program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                 </component>
@@ -968,7 +966,7 @@ describe('Program', () => {
             expect((childFile as XmlFile).parent).to.equal(parentFile);
 
             //change the name of the parent
-            parentFile = await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
+            parentFile = await program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="NotParentScene" extends="Scene">
                 </component>
@@ -980,14 +978,14 @@ describe('Program', () => {
 
         it('provides child components with parent functions', async () => {
             //create parent component
-            await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                 </component>
             `);
 
             //create child component
-            await program.addOrReplaceFile({ src: n(`${rootDir}/components/ChildScene.xml`), dest: 'components/ChildScene.xml' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="ChildScene.brs" />
@@ -1008,7 +1006,7 @@ describe('Program', () => {
             });
 
             //add the script into the parent
-            await program.addOrReplaceFile({ src: n(`${rootDir}/components/ParentScene.xml`), dest: 'components/ParentScene.xml' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
                     <script type="text/brightscript" uri="ParentScene.brs" />
@@ -1124,12 +1122,12 @@ describe('Program', () => {
     describe('addOrReplaceFiles', () => {
         it('adds multiple files', async () => {
             expect(Object.keys(program.files).length).to.equal(0);
-            let brsFilePath = n(`${rootDir}/components/comp1.brs`.toLowerCase());
-            let xmlFilePath = n(`${rootDir}/components/comp1.xml`.toLowerCase());
+            let brsFilePath = s`${rootDir}/components/comp1.brs`.toLowerCase();
+            let xmlFilePath = s`${rootDir}/components/comp1.xml`.toLowerCase();
             program.fileResolvers.push((filePath) => {
-                if (filePath.toLowerCase() === n(brsFilePath)) {
+                if (filePath.toLowerCase() === s`${brsFilePath}`) {
                     return `'${filePath}`;
-                } else if (filePath.toLowerCase() === n(xmlFilePath)) {
+                } else if (filePath.toLowerCase() === s`${xmlFilePath}`) {
                     return `<!--${filePath}`;
                 }
             });
@@ -1150,7 +1148,7 @@ describe('Program', () => {
             expect(spy.getCalls()[0].args[0].rootDir).to.equal('real_rootdir');
         });
         it('includes diagnostics from files not included in any scope', async () => {
-            let pathAbsolute = util.standardizePath(`${rootDir}/components/a/b/c/main.brs`);
+            let pathAbsolute = s`${rootDir}/components/a/b/c/main.brs`;
             await program.addOrReplaceFile({ src: pathAbsolute, dest: 'components/a/b/c/main.brs' }, `
                 sub A()
                     "this string is not terminated
@@ -1166,7 +1164,7 @@ describe('Program', () => {
 
         it('it excludes specified error codes', async () => {
             //declare file with two different syntax errors
-            await program.addOrReplaceFile({ src: n(`${rootDir}/source/main.brs`), dest: 'source/main.brs' }, `
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub A()
                     'call with wrong param count
                     B(1,2,3)

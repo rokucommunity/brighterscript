@@ -1,9 +1,8 @@
 import { expect } from 'chai';
-import { util } from './util';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { BsDiagnostic } from './interfaces';
-
-let rootDir = util.standardizePath(`${process.cwd()}/rootDir`);
+import { standardizePath as s } from './util';
+let rootDir = s`${process.cwd()}/rootDir`;
 
 describe('DiagnosticFilterer', () => {
     let filterer: DiagnosticFilterer;
@@ -149,7 +148,7 @@ describe('DiagnosticFilterer', () => {
 function getDiagnostic(code: number, pathAbsolute: string) {
     return {
         file: {
-            pathAbsolute: util.standardizePath(pathAbsolute)
+            pathAbsolute: s`${pathAbsolute}`
         },
         code: code
     } as BsDiagnostic;

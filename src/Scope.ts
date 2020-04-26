@@ -6,10 +6,10 @@ import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { CallableContainer, BsDiagnostic, File } from './interfaces';
 import { Program } from './Program';
-import util from './util';
 import { BsClassValidator } from './validators/ClassValidator';
 import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement } from './parser';
 import { ClassStatement } from './parser/ClassStatement';
+import { standardizePath as s, util } from './util';
 
 /**
  * A class to keep track of all declarations within a given scope (like global scope, component scope)
@@ -178,7 +178,7 @@ export class Scope {
         return Object.keys(this.files).length;
     }
     public getFile(filePath: string) {
-        filePath = util.standardizePath(filePath);
+        filePath = s`${filePath}`;
         return this.files[filePath];
     }
 

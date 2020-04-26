@@ -292,17 +292,21 @@ export class XmlFile {
             //consume a file from the list
             let fileRef = fileRefStack.pop();
             let targetFile = this.program.getFileByPkgPath(fileRef.pkgPath);
-            let lowerPkgPath = targetFile.pkgPath.toLowerCase();
 
-            //only process a source file once
-            if (!processedFileMap[lowerPkgPath]) {
-                processedFileMap[lowerPkgPath] = true;
+            //only add code imports that we can actually find the file for
+            if (targetFile) {
+                let lowerPkgPath = targetFile.pkgPath.toLowerCase();
 
-                //add all of the target file's fileRefs to the list
-                result.push(...targetFile.ownScriptImports);
+                //only process a source file once
+                if (!processedFileMap[lowerPkgPath]) {
+                    processedFileMap[lowerPkgPath] = true;
 
-                //add the target file's imports to the stack so they can be evaluated
-                fileRefStack.push(...targetFile.ownScriptImports);
+                    //add all of the target file's fileRefs to the list
+                    result.push(...targetFile.ownScriptImports);
+
+                    //add the target file's imports to the stack so they can be evaluated
+                    fileRefStack.push(...targetFile.ownScriptImports);
+                }
             }
         }
         return result;
@@ -357,43 +361,45 @@ export class XmlFile {
 
     private getScriptImportCompletions(scriptImport: FileReference) {
         let result = [] as CompletionItem[];
-        //get a list of all scripts currently being imported
-        let currentImports = this.ownScriptImports.map((x) => x.pkgPath);
+        /**
+         * hashtable to prevent duplicate results
+         */
+        let resultPkgPaths = {} as { [lowerPkgPath: string]: boolean };
 
         //restrict to only .brs files
         for (let key in this.program.files) {
             let file = this.program.files[key];
-            if (
-                //is a BrightScript or BrighterScript file
-                (file.extension === '.bs' || file.extension === '.brs') &&
-                //not already referenced in this file
-                !currentImports.includes(file.pkgPath)
-            ) {
+            //is a BrightScript or BrighterScript file
+            if (file.extension === '.bs' || file.extension === '.brs') {
                 //add the relative path
                 let relativePath = util.getRelativePath(this.pkgPath, file.pkgPath).replace(/\\/g, '/');
                 let pkgPathStandardized = file.pkgPath.replace(/\\/g, '/');
                 let pkgPath = `pkg:/${pkgPathStandardized}`;
+                let lowerPkgPath = pkgPath.toLowerCase();
+                if (!resultPkgPaths[lowerPkgPath]) {
+                    resultPkgPaths[lowerPkgPath] = true;
 
-                result.push({
-                    label: relativePath,
-                    detail: file.pathAbsolute,
-                    kind: CompletionItemKind.File,
-                    textEdit: {
-                        newText: relativePath,
-                        range: scriptImport.filePathRange
-                    }
-                });
+                    result.push({
+                        label: relativePath,
+                        detail: file.pathAbsolute,
+                        kind: CompletionItemKind.File,
+                        textEdit: {
+                            newText: relativePath,
+                            range: scriptImport.filePathRange
+                        }
+                    });
 
-                //add the absolute path
-                result.push({
-                    label: pkgPath,
-                    detail: file.pathAbsolute,
-                    kind: CompletionItemKind.File,
-                    textEdit: {
-                        newText: pkgPath,
-                        range: scriptImport.filePathRange
-                    }
-                });
+                    //add the absolute path
+                    result.push({
+                        label: pkgPath,
+                        detail: file.pathAbsolute,
+                        kind: CompletionItemKind.File,
+                        textEdit: {
+                            newText: pkgPath,
+                            range: scriptImport.filePathRange
+                        }
+                    });
+                }
             }
         }
         return result;

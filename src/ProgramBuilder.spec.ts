@@ -1,14 +1,12 @@
 import { expect } from 'chai';
 import * as fsExtra from 'fs-extra';
 import * as sinonImport from 'sinon';
-
 import { Program } from './Program';
 import { ProgramBuilder } from './ProgramBuilder';
-import util from './util';
+import { standardizePath as s, util } from './util';
 
 let sinon = sinonImport.createSandbox();
 let rootDir = process.cwd();
-let n = util.standardizePath.bind(util);
 
 describe('ProgramBuilder', () => {
     afterEach(() => {
@@ -63,9 +61,9 @@ describe('ProgramBuilder', () => {
             //supress the console log statements for the bsconfig parse errors
             sinon.stub(console, 'log').returns(undefined);
             //totally bogus config file
-            setVfsFile(n(`${rootDir}/bsconfig.json`), '{');
+            setVfsFile(s`${rootDir}/bsconfig.json`, '{');
             await builder.run({
-                project: n(`${rootDir}/bsconfig.json`),
+                project: s`${rootDir}/bsconfig.json`,
                 username: 'john'
             });
             expect(builder.program.options.username).to.equal('rokudev');
@@ -96,22 +94,22 @@ describe('ProgramBuilder', () => {
             fsExtra.writeFileSync(`${rootDir}/testProject/source/lib2.brs`, 'sub doSomething()\nprint "lib2"\nend sub');
 
             await builder.run({
-                rootDir: n(`${rootDir}/testProject`),
+                rootDir: s`${rootDir}/testProject`,
                 createPackage: false,
                 deploy: false,
                 copyToStaging: false,
                 //both files should want to be the `source/lib.brs` file...but only the last one should win
                 files: [{
-                    src: n(`${rootDir}/testProject/source/lib1.brs`),
+                    src: s`${rootDir}/testProject/source/lib1.brs`,
                     dest: 'source/lib.brs'
                 }, {
-                    src: n(`${rootDir}/testProject/source/lib2.brs`),
+                    src: s`${rootDir}/testProject/source/lib2.brs`,
                     dest: 'source/lib.brs'
                 }]
             });
             const diagnostics = builder.getDiagnostics();
             expect(diagnostics.map(x => x.message)).to.eql([]);
-            expect(builder.program.getFileByPathAbsolute(n(``)));
+            expect(builder.program.getFileByPathAbsolute(s``));
         });
     });
 });

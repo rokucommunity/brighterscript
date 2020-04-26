@@ -8,9 +8,7 @@ import { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
-import { util } from '../util';
-let n = util.standardizePath.bind(util);
-let npkg = util.standardizePkgPath.bind(util);
+import { standardizePath as s } from '../util';
 
 describe('XmlFile', () => {
     let rootDir = process.cwd();
@@ -35,7 +33,7 @@ describe('XmlFile', () => {
                 </component>
             `);
             expect(file.ownScriptImports.map(x => x.pkgPath)[0]).to.equal(
-                npkg(`components/ChildScene.bs`)
+                s`components/ChildScene.bs`
             );
         });
         it('does not include commented-out script imports', async () => {
@@ -197,19 +195,19 @@ describe('XmlFile', () => {
 
     describe('getCompletions', () => {
         it('formats completion paths with proper slashes', async () => {
-            let scriptPath = n('C:/app/components/component1/component1.brs');
-            program.files[scriptPath] = new BrsFile(scriptPath, n('components/component1/component1.brs'), program);
+            let scriptPath = s`C:/app/components/component1/component1.brs`;
+            program.files[scriptPath] = new BrsFile(scriptPath, s`components/component1/component1.brs`, program);
 
-            let xmlFile = new XmlFile('component.xml', 'relative', <any>program);
+            let xmlFile = new XmlFile(s`${rootDir}/components/component1/component1.xml`, s`components/component1/component1.xml`, <any>program);
             xmlFile.ownScriptImports.push({
-                pkgPath: ``,
-                text: '',
+                pkgPath: s`components/component1/component1..brs`,
+                text: 'component1.brs',
                 filePathRange: Range.create(1, 1, 1, 1),
                 sourceFile: xmlFile
             });
 
             expect((await xmlFile.getCompletions(Position.create(1, 1)))[0]).to.include({
-                label: 'components/component1/component1.brs',
+                label: 'component1.brs',
                 kind: CompletionItemKind.File
             });
 
@@ -247,6 +245,7 @@ describe('XmlFile', () => {
                 text: 'some-import'
             };
             file.ownScriptImports.push(<any>scriptImport);
+            file.program = program;
             expect(file.getAllScriptImports()).to.be.lengthOf(1);
         });
     });

@@ -70,40 +70,6 @@ export class Util {
     }
 
     /**
-     * Make the path absolute, force drive letter to lower case, and replace all separators with the current OS's separators.
-     *
-     * @param thePath
-     */
-    public standardizePath(thePath: string) {
-        if (!thePath) {
-            return thePath;
-        }
-        return this.pathSepNormalize(
-            path.resolve(
-                path.normalize(
-                    this.lowerDrivePath(
-                        thePath
-                    )
-                )
-            )
-        );
-        //for some weird reason, sometimes linux/mac doesn't replace windows slashes with 'nix ones, so do that manually
-    }
-
-    /**
-     * Remove common things from pkgPath
-     * @param pkgPath
-     */
-    public standardizePkgPath(pkgPath: string) {
-        pkgPath = this.pathSepNormalize(pkgPath);
-        //remove any leading file protocol
-        pkgPath = pkgPath.replace(/^\w+:/, '');
-        //remove any leading slash
-        pkgPath = pkgPath.replace(/^[\\/]*/, '');
-        return pkgPath;
-    }
-
-    /**
      * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
      */
     public getRokuPkgPath(pkgPath: string) {
@@ -116,6 +82,9 @@ export class Util {
      * @param filePath
      */
     public pathSepNormalize(filePath: string, separator?: string) {
+        if (!filePath) {
+            return filePath;
+        }
         separator = separator ? separator : path.sep;
         return filePath.replace(/[\\/]+/g, separator);
     }
@@ -583,11 +552,11 @@ export class Util {
     }
 
     /**
-     * Force the drive letter
+     * Force the drive letter to lower case
      * @param fullPath
      */
-    public lowerDrivePath(fullPath: string) {
-        let match = /([a-z]):[\\/]/i.exec(fullPath);
+    public driveLetterToLower(fullPath: string) {
+        let match = /^([a-z]):[\\/]/i.exec(fullPath);
         if (match) {
             let driveText = match[1];
             fullPath = driveText.toLowerCase() + fullPath.substring(1);
@@ -800,6 +769,21 @@ export class Util {
             }
         }
     }
+}
+
+/**
+ * A tagged template literal function for standardizing the path.
+ */
+export function standardizePath(stringParts, ...expressions: any[]) {
+    let result = [];
+    for (let i = 0; i < stringParts.length; i++) {
+        result.push(stringParts[i], expressions[i]);
+    }
+    return util.driveLetterToLower(
+        rokuDeploy.standardizePath(
+            result.join('')
+        )
+    );
 }
 
 export let util = new Util();

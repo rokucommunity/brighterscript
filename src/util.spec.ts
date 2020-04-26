@@ -93,14 +93,17 @@ describe('util', () => {
             expect(util.pathSepNormalize('c:/some\\path', '\\')).to.equal('c:\\some\\path');
             expect(util.pathSepNormalize('c:/some\\path', '/')).to.equal('c:/some/path');
         });
+        it('does not throw when given `undefined`', () => {
+            expect(undefined).to.be.undefined;
+        });
     });
 
     describe('lowerDrivePath', () => {
         it('forces drive letters to lower case', () => {
             //unix slashes
-            expect(util.lowerDrivePath('C:/projects')).to.equal('c:/projects');
+            expect(util.driveLetterToLower('C:/projects')).to.equal('c:/projects');
             //windows slashes
-            expect(util.lowerDrivePath('C:\\projects')).to.equal(('c:\\projects'));
+            expect(util.driveLetterToLower('C:\\projects')).to.equal(('c:\\projects'));
         });
     });
 

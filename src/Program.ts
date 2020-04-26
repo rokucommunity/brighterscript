@@ -12,7 +12,7 @@ import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { BsDiagnostic, File } from './interfaces';
 import { platformFile } from './platformCallables';
-import { util } from './util';
+import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 
@@ -77,7 +77,7 @@ export class Program {
      * This allow the language server to provide file contents directly from memory.
      */
     public async getFileContents(pathAbsolute: string) {
-        pathAbsolute = util.standardizePath(pathAbsolute);
+        pathAbsolute = s`${pathAbsolute}`;
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
             let result = await fileResolver(pathAbsolute);
@@ -165,7 +165,7 @@ export class Program {
      * @param filePath
      */
     public hasFile(filePath: string) {
-        filePath = util.standardizePath(filePath);
+        filePath = s`${filePath}`;
         return this.files[filePath] !== undefined;
     }
 
@@ -192,7 +192,7 @@ export class Program {
     public getScopeByName(scopeName: string) {
         //most scopes are xml file pkg paths. however, the ones that are not are single names like "platform" and "global",
         //so it's safe to run the standardizePkgPath method
-        scopeName = util.standardizePkgPath(scopeName);
+        scopeName = s`${scopeName}`;
         let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName.toLowerCase());
         return this.scopes[key];
     }
@@ -208,8 +208,8 @@ export class Program {
         assert.ok(fileEntry.src, 'fileEntry.src is required');
         assert.ok(fileEntry.dest, 'fileEntry.dest is required');
 
-        let pathAbsolute = util.standardizePath(fileEntry.src);
-        let pkgPath = util.standardizePkgPath(fileEntry.dest);
+        let pathAbsolute = s`${fileEntry.src}`;
+        let pkgPath = s`${fileEntry.dest}`;
 
         //if the file is already loaded, remove it
         if (this.hasFile(pathAbsolute)) {
@@ -303,7 +303,7 @@ export class Program {
      * @param pathAbsolute
      */
     public getFileByPathAbsolute(pathAbsolute: string) {
-        pathAbsolute = util.standardizePath(pathAbsolute);
+        pathAbsolute = s`${pathAbsolute}`;
         for (let filePath in this.files) {
             if (filePath.toLowerCase() === pathAbsolute.toLowerCase()) {
                 return this.files[filePath];
@@ -319,7 +319,7 @@ export class Program {
         pkgPath = util.pathSepNormalize(pkgPath);
         for (let filePath in this.files) {
             let file = this.files[filePath];
-            if (util.standardizePath(file.pkgPath) === util.standardizePath(pkgPath)) {
+            if (s`${file.pkgPath}` === s`${pkgPath}`) {
                 return file;
             }
         }
@@ -340,7 +340,7 @@ export class Program {
      * @param pathAbsolute
      */
     public removeFile(pathAbsolute: string) {
-        pathAbsolute = util.standardizePath(pathAbsolute);
+        pathAbsolute = s`${pathAbsolute}`;
         let file = this.getFile(pathAbsolute);
 
         //notify every scope of this file removal
@@ -402,7 +402,7 @@ export class Program {
      * @param pathAbsolute
      */
     private getFile(pathAbsolute: string) {
-        pathAbsolute = util.standardizePath(pathAbsolute);
+        pathAbsolute = s`${pathAbsolute}`;
         return this.files[pathAbsolute];
     }
 
@@ -499,7 +499,7 @@ export class Program {
             let file = this.files[filePath];
             if (file.needsTranspiled) {
                 let result = file.transpile();
-                let filePathObj = fileEntries.find(x => util.standardizePath(x.src) === util.standardizePath(file.pathAbsolute));
+                let filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
                 if (!filePathObj) {
                     throw new Error(`Cannot find fileMap record in fileMaps for '${file.pathAbsolute}'`);
                 }
@@ -507,7 +507,7 @@ export class Program {
                 //replace the file extension
                 let outputCodePath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
                 //prepend the staging folder path
-                outputCodePath = util.standardizePath(`${stagingFolderPath}/${outputCodePath}`);
+                outputCodePath = s`${stagingFolderPath}/${outputCodePath}`;
                 let outputCodeMapPath = outputCodePath + '.map';
 
                 //make sure the full dir path exists

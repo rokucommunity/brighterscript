@@ -6,8 +6,8 @@ import { DidChangeWatchedFilesParams, FileChangeType, TextDocumentSyncKind } fro
 import { Deferred } from './deferred';
 import { LanguageServer, Workspace } from './LanguageServer';
 import { ProgramBuilder } from './ProgramBuilder';
-import util from './util';
 import * as sinonImport from 'sinon';
+import { standardizePath as s, util } from './util';
 
 let sinon: sinonImport.SinonSandbox;
 beforeEach(() => {
@@ -17,13 +17,12 @@ afterEach(() => {
     sinon.restore();
 });
 
-let n = util.standardizePath.bind(util);
-let rootDir = n(process.cwd());
+let rootDir = s`${process.cwd()}`;
 
 describe('LanguageServer', () => {
     let server: LanguageServer;
     //an any version of the server for easier private testing
-    let s: any;
+    let svr: any;
     let workspaceFolders: Array<{
         uri: string;
         name: string;
@@ -34,23 +33,23 @@ describe('LanguageServer', () => {
 
     beforeEach(() => {
         server = new LanguageServer();
-        s = server;
+        svr = server;
         workspaceFolders = [];
         vfs = {};
         physicalFilePaths = [];
 
         //hijack the file resolver so we can inject in-memory files for our tests
-        let originalResolver = s.documentFileResolver;
-        s.documentFileResolver = (pathAbsolute: string) => {
+        let originalResolver = svr.documentFileResolver;
+        svr.documentFileResolver = (pathAbsolute: string) => {
             if (vfs[pathAbsolute]) {
                 return vfs[pathAbsolute];
             } else {
-                return originalResolver.call(s, pathAbsolute);
+                return originalResolver.call(svr, pathAbsolute);
             }
         };
 
         //mock the connection stuff
-        s.createConnection = () => {
+        svr.createConnection = () => {
             let connection = {
                 onInitialize: () => null,
                 onInitialized: () => null,
@@ -73,7 +72,7 @@ describe('LanguageServer', () => {
             return connection;
         };
 
-        s.documents = {
+        svr.documents = {
             onDidChangeContent: () => null,
             onDidClose: () => null,
             listen: () => null,
@@ -102,22 +101,22 @@ describe('LanguageServer', () => {
         it('never returns undefined', async () => {
             let filePath = `${rootDir}/.tmp/main.brs`;
             writeToFs(filePath, `sub main(): return: end sub`);
-            let firstWorkspace = await s.createStandaloneFileWorkspace(filePath);
-            let secondWorkspace = await s.createStandaloneFileWorkspace(filePath);
+            let firstWorkspace = await svr.createStandaloneFileWorkspace(filePath);
+            let secondWorkspace = await svr.createStandaloneFileWorkspace(filePath);
             expect(firstWorkspace).to.equal(secondWorkspace);
         });
     });
 
     describe('sendDiagnostics', () => {
         it('waits for program to finish loading before sending diagnostics', async () => {
-            s.onInitialize({
+            svr.onInitialize({
                 capabilities: {
                     workspace: {
                         workspaceFolders: true
                     }
                 }
             });
-            expect(s.clientHasWorkspaceFolderCapability).to.be.true;
+            expect(svr.clientHasWorkspaceFolderCapability).to.be.true;
             server.run();
             let deferred = new Deferred();
             let workspace: any = {
@@ -130,7 +129,7 @@ describe('LanguageServer', () => {
             server.workspaces.push(workspace);
 
             //this call should wait for the builder to finish
-            let p = s.sendDiagnostics();
+            let p = svr.sendDiagnostics();
             // await s.createWorkspaces(
             await util.sleep(50);
             //simulate the program being created
@@ -145,15 +144,15 @@ describe('LanguageServer', () => {
 
     describe('createWorkspace', () => {
         it('prevents creating package on first run', async () => {
-            s.connection = s.createConnection();
-            await s.createWorkspace(n(`${rootDir}/TestRokuApp`));
-            expect((s.workspaces[0].builder as ProgramBuilder).program.options.copyToStaging).to.be.false;
+            svr.connection = svr.createConnection();
+            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
+            expect((svr.workspaces[0].builder as ProgramBuilder).program.options.copyToStaging).to.be.false;
         });
     });
 
     describe('onDidChangeWatchedFiles', () => {
-        let workspacePath = n(`${rootDir}/TestRokuApp`);
-        let mainPath = n(`${workspacePath}/source/main.brs`);
+        let workspacePath = s`${rootDir}/TestRokuApp`;
+        let mainPath = s`${workspacePath}/source/main.brs`;
 
         it('picks up new files', async () => {
             workspaceFolders = [{
@@ -161,25 +160,25 @@ describe('LanguageServer', () => {
                 name: 'TestProject'
             }];
 
-            s.run();
-            s.onInitialize({
+            svr.run();
+            svr.onInitialize({
                 capabilities: {
                 }
             });
             writeToFs(mainPath, `sub main(): return: end sub`);
-            await s.onInitialized();
+            await svr.onInitialized();
             expect(server.workspaces[0].builder.program.hasFile(mainPath)).to.be.true;
             //move a file into the directory...the program should detect it
-            let libPath = n(`${workspacePath}/source/lib.brs`);
+            let libPath = s`${workspacePath}/source/lib.brs`;
             writeToFs(libPath, 'sub lib(): return : end sub');
 
-            await s.onDidChangeWatchedFiles({
+            await svr.onDidChangeWatchedFiles({
                 changes: [{
                     uri: getFileProtocolPath(libPath),
                     type: 1 //created
                 },
                 {
-                    uri: getFileProtocolPath(path.join(workspacePath, 'source')),
+                    uri: getFileProtocolPath(s`${workspacePath}/source`),
                     type: 2 //changed
                 }
                     // ,{
@@ -209,7 +208,7 @@ describe('LanguageServer', () => {
                 }
             } as Workspace;
 
-            let mainPath = n(`${rootDir}/source/main.brs`);
+            let mainPath = s`${rootDir}/source/main.brs`;
             // setVfsFile(mainPath, 'sub main()\nend sub');
 
             await server.handleFileChanges(workspace, [{
@@ -219,10 +218,10 @@ describe('LanguageServer', () => {
 
             expect(addOrReplaceFileStub.getCalls()[0].args[0]).to.eql({
                 src: mainPath,
-                dest: util.standardizePkgPath('source/main.brs')
+                dest: s`source/main.brs`
             });
 
-            let libPath = n(`${rootDir}/components/lib.brs`);
+            let libPath = s`${rootDir}/components/lib.brs`;
 
             expect(addOrReplaceFileStub.callCount).to.equal(1);
             await server.handleFileChanges(workspace, [{
@@ -236,10 +235,10 @@ describe('LanguageServer', () => {
 
     describe('onDidChangeWatchedFiles', () => {
         it('converts folder paths into an array of file paths', async () => {
-            s.connection = {
+            svr.connection = {
                 sendNotification: () => { }
             };
-            s.workspaces.push({
+            svr.workspaces.push({
                 builder: {
                     getDiagnostics: () => [],
                     program: {
@@ -250,12 +249,12 @@ describe('LanguageServer', () => {
 
             sinon.stub(util, 'isDirectorySync').returns(true);
             sinon.stub(glob, 'sync').returns([
-                n(`${rootDir}/source/main.brs`),
-                n(`${rootDir}/source/lib.brs`)
+                s`${rootDir}/source/main.brs`,
+                s`${rootDir}/source/lib.brs`
             ]);
             const stub = sinon.stub(server, 'handleFileChanges').returns(Promise.resolve());
 
-            let sourcePath = n(`${rootDir}/source`);
+            let sourcePath = s`${rootDir}/source`;
             await (server as any).onDidChangeWatchedFiles({
                 changes: [{
                     type: FileChangeType.Created,
@@ -267,10 +266,10 @@ describe('LanguageServer', () => {
 
             expect(stub.getCalls()[0].args[1]).to.eql([{
                 type: FileChangeType.Created,
-                pathAbsolute: n(`${rootDir}/source/main.brs`)
+                pathAbsolute: s`${rootDir}/source/main.brs`
             }, {
                 type: FileChangeType.Created,
-                pathAbsolute: n(`${rootDir}/source/lib.brs`)
+                pathAbsolute: s`${rootDir}/source/lib.brs`
             }]);
         });
     });
