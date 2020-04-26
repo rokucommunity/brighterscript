@@ -134,10 +134,10 @@ export class XmlScope extends Scope {
             for (let scriptImport of this.xmlFile.ownScriptImports) {
                 let ancestorScriptImport = lookup[scriptImport.pkgPath];
                 if (ancestorScriptImport) {
-                    let ancestorComponentName = ancestorScriptImport.sourceFile.componentName;
+                    let ancestorComponentName = (ancestorScriptImport.sourceFile as XmlFile).componentName;
                     this.diagnostics.push({
                         file: this.xmlFile,
-                        range: Range.create(scriptImport.lineIndex, scriptImport.columnIndexBegin, scriptImport.lineIndex, scriptImport.columnIndexEnd),
+                        range: scriptImport.filePathRange,
                         ...DiagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)
                     });
                 }
@@ -183,24 +183,14 @@ export class XmlScope extends Scope {
 
                 this.diagnostics.push({
                     ...dInfo,
-                    range: Range.create(
-                        scriptImport.lineIndex,
-                        scriptImport.columnIndexBegin,
-                        scriptImport.lineIndex,
-                        scriptImport.columnIndexEnd
-                    ),
+                    range: scriptImport.filePathRange,
                     file: this.xmlFile
                 });
                 //if the character casing of the script import path does not match that of the actual path
             } else if (scriptImport.pkgPath !== referencedFile.file.pkgPath) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.file.pkgPath),
-                    range: Range.create(
-                        scriptImport.lineIndex,
-                        scriptImport.columnIndexBegin,
-                        scriptImport.lineIndex,
-                        scriptImport.columnIndexEnd
-                    ),
+                    range: scriptImport.filePathRange,
                     file: this.xmlFile
                 });
             }

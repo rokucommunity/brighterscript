@@ -175,11 +175,9 @@ describe('XmlFile', () => {
                 </component>
             `);
             expect(file.ownScriptImports.length).to.equal(1);
-            expect(file.ownScriptImports[0]).to.deep.include({
-                lineIndex: 3,
-                columnIndexBegin: 58,
-                columnIndexEnd: 58
-            });
+            expect(file.ownScriptImports[0]?.filePathRange).to.eql(
+                Range.create(3, 58, 3, 58)
+            );
         });
     });
 
