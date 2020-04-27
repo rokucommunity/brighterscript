@@ -229,7 +229,7 @@ export class BrsFile {
 
         for (let result of includeStatementSearchResults) {
             //register import statements
-            if (result.value instanceof ImportStatement) {
+            if (result.value instanceof ImportStatement && result.value.filePathToken) {
                 this.ownScriptImports.push({
                     filePathRange: result.value.filePathToken.range,
                     pkgPath: util.getPkgPathFromTarget(this.pkgPath, result.value.filePath),

@@ -500,6 +500,8 @@ export class Program {
      * @param sourcePkgPath - the pkgPath of the source that wants to resolve script imports.
      */
     public getScriptImportCompletions(sourcePkgPath: string, scriptImport: FileReference) {
+        let lowerSourcePkgPath = sourcePkgPath.toLowerCase();
+
         let result = [] as CompletionItem[];
         /**
          * hashtable to prevent duplicate results
@@ -509,8 +511,12 @@ export class Program {
         //restrict to only .brs files
         for (let key in this.files) {
             let file = this.files[key];
-            //is a BrightScript or BrighterScript file
-            if (file.extension === '.bs' || file.extension === '.brs') {
+            if (
+                //is a BrightScript or BrighterScript file
+                (file.extension === '.bs' || file.extension === '.brs') &&
+                //this file is not the current file
+                lowerSourcePkgPath !== file.pkgPath.toLowerCase()
+            ) {
                 //add the relative path
                 let relativePath = util.getRelativePath(sourcePkgPath, file.pkgPath).replace(/\\/g, '/');
                 let pkgPathStandardized = file.pkgPath.replace(/\\/g, '/');

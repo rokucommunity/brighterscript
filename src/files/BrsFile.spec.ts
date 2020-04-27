@@ -1366,6 +1366,16 @@ describe('BrsFile', () => {
         });
     });
 
+    it('does not throw when encountering incomplete import statement', async () => {
+        await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            import
+            sub main()
+            end sub
+        `);
+        await program.validate();
+        //this test will throw an exception if something went wrong
+    });
+
     describe('transpile', () => {
         it('transpiles namespaced functions', async () => {
             await testTranspile(`
