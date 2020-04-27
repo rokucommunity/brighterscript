@@ -26,6 +26,20 @@ describe('parser class', () => {
         expect(statements[0]).instanceof(ClassStatement);
     });
 
+    it('bad property does not invalidate next sibling method', () => {
+        let { tokens } = Lexer.scan(`
+                class Person
+                    public firstname =
+                    public sub new()
+                    end sub
+                end class
+            `);
+        let { statements } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+        let classStatement = statements[0] as ClassStatement;
+        expect(classStatement.methods[0]).to.exist;
+        expect(classStatement.methods[0].name.text).to.equal('new');
+    });
+
     it('catches class without name', () => {
         let { tokens } = Lexer.scan(`
                 class
@@ -174,7 +188,7 @@ describe('parser class', () => {
                     `);
             let { diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.have.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(DiagnosticMessages.missingCallableKeyword('').code);
+            expect(diagnostics[0].code).to.equal(DiagnosticMessages.missingCallableKeyword().code);
         });
     });
 

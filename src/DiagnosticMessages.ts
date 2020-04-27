@@ -94,8 +94,8 @@ export let DiagnosticMessages = {
         code: 1016,
         severity: DiagnosticSeverity.Error
     }),
-    missingCallableKeyword: (text: string) => ({
-        message: `Expected 'function' or 'sub' to preceed '${text}'`,
+    missingCallableKeyword: () => ({
+        message: `Expected 'function' or 'sub' to preceed identifier`,
         code: 1017,
         severity: DiagnosticSeverity.Error
     }),
@@ -523,6 +523,11 @@ export let DiagnosticMessages = {
     classConstructorSuperMustBeFirstStatement: () => ({
         message: `A call to 'super()' must be the first statement in this constructor method.`,
         code: 1101,
+        severity: DiagnosticSeverity.Error
+    }),
+    classFieldCannotBeOverridden: () => ({
+        message: `Class field cannot be overridden`,
+        code: 1102,
         severity: DiagnosticSeverity.Error
     })
 };

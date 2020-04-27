@@ -314,6 +314,14 @@ export class Parser {
                         this.classFieldDeclaration(accessModifier)
                     );
 
+                    //class fields cannot be overridden
+                    if (overrideKeyword) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.classFieldCannotBeOverridden(),
+                            range: overrideKeyword.range
+                        });
+                    }
+
                     //comments
                 } else if (this.check(TokenKind.Comment)) {
                     body.push(
@@ -322,6 +330,18 @@ export class Parser {
                 }
             } catch (e) {
                 //throw out any failed members and move on to the next line
+                this.flagUntil(TokenKind.Newline, TokenKind.Eof);
+            }
+
+            if (this.check(TokenKind.Comment)) {
+                body.push(
+                    this.commentStatement()
+                );
+            }
+
+            //if the previous token was NOT a newline, then
+            //there shouldn't be anything else after the method / field declaration, so flag extra stuff
+            if (!this.checkPrevious(TokenKind.Newline)) {
                 this.flagUntil(TokenKind.Newline, TokenKind.Eof);
             }
 
@@ -399,7 +419,7 @@ export class Parser {
                 functionType = this.advance();
             } else {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.missingCallableKeyword(this.peek().text),
+                    ...DiagnosticMessages.missingCallableKeyword(),
                     range: this.peek().range
                 });
                 functionType = {
@@ -2075,6 +2095,8 @@ export class Parser {
             }
 
             switch (this.peek().kind) { //eslint-disable-line @typescript-eslint/switch-exhaustiveness-check
+                case TokenKind.Namespace:
+                case TokenKind.Class:
                 case TokenKind.Function:
                 case TokenKind.Sub:
                 case TokenKind.If:
