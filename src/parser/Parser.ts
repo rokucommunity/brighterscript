@@ -397,14 +397,21 @@ export class Parser {
             }
         }
 
-        //TODO - support class field assignments on construct
-        // var assignment: any;
+        let initialValue: Expression;
+        let equal: Token;
+        //if there is a field initializer
+        if (this.check(TokenKind.Equal)) {
+            equal = this.advance();
+            initialValue = this.expression();
+        }
 
         return new ClassFieldStatement(
             accessModifier,
             name,
             asToken,
-            fieldType
+            fieldType,
+            equal,
+            initialValue
         );
     }
 

@@ -178,6 +178,26 @@ describe('parser class', () => {
             expect(cls.methods[0].accessModifier).to.be.undefined;
         });
 
+        it('supports primative field initializers', () => {
+            let { tokens } = Lexer.scan(`
+                class Person
+                    name = "Bob"
+                    age = 20
+                    isAlive = true
+                    callback = sub()
+                        print "hello"
+                    end sub
+                end class
+            `);
+            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(diagnostics[0]?.message).not.to.exist;
+            let cls = statements[0] as ClassStatement;
+            expect((cls.memberMap['name'] as ClassFieldStatement).initialValue).to.exist;
+            expect((cls.memberMap['age'] as ClassFieldStatement).initialValue).to.exist;
+            expect((cls.memberMap['isalive'] as ClassFieldStatement).initialValue).to.exist;
+            expect((cls.memberMap['callback'] as ClassFieldStatement).initialValue).to.exist;
+        });
+
         it('detects missing function keyword', () => {
             let { tokens } = Lexer.scan(`
                     class Person

@@ -1,6 +1,6 @@
 import { Token, Identifier } from '../lexer';
 import { Statement } from './Statement';
-import { FunctionExpression, CallExpression, VariableExpression, DottedGetExpression, NamespacedVariableNameExpression } from './Expression';
+import { FunctionExpression, CallExpression, VariableExpression, DottedGetExpression, NamespacedVariableNameExpression, Expression } from './Expression';
 import { SourceNode } from 'source-map';
 import { TranspileState } from './TranspileState';
 import { Parser, ParseMode } from './Parser';
@@ -50,7 +50,7 @@ export class ClassStatement implements Statement {
         }
     }
 
-    public memberMap = {} as { [memberName: string]: ClassMemberStatement };
+    public memberMap = {} as { [lowerMemberName: string]: ClassMemberStatement };
     public methods = [] as ClassMethodStatement[];
     public fields = [] as ClassFieldStatement[];
 
@@ -304,11 +304,13 @@ export class ClassFieldStatement implements Statement {
         readonly accessModifier?: Token,
         readonly name?: Identifier,
         readonly as?: Token,
-        readonly type?: Token
+        readonly type?: Token,
+        readonly equal?: Token,
+        readonly initialValue?: Expression
     ) {
         this.range = Range.create(
             (this.accessModifier ?? this.name).range.start,
-            (this.type ?? this.as ?? this.name).range.end
+            (this.initialValue ?? this.type ?? this.as ?? this.name).range.end
         );
     }
 
