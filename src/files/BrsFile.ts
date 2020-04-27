@@ -756,6 +756,12 @@ export class BrsFile {
         //a map of lower-case names of all added options
         let names = {};
 
+        //handle script import completions
+        let scriptImport = util.getScriptImportAtPosition(this.ownScriptImports, position);
+        if (scriptImport) {
+            return this.program.getScriptImportCompletions(this.pkgPath, scriptImport);
+        }
+
         //determine if cursor is inside a function
         let functionScope = this.getFunctionScopeAtPosition(position);
         if (!functionScope) {
@@ -779,7 +785,6 @@ export class BrsFile {
                 result.push(...scope.getPropertyNameCompletions());
             }
 
-            //is NOT next to period
         } else {
             //include the global callables
             result.push(...scope.getCallablesAsCompletions(parseMode));

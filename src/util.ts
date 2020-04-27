@@ -6,13 +6,13 @@ import * as moment from 'moment';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
 import { Position, Range } from 'vscode-languageserver';
-import Uri from 'vscode-uri';
+import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 
 import { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
-import { CallableContainer, ValueKind, BsDiagnostic } from './interfaces';
+import { CallableContainer, ValueKind, BsDiagnostic, FileReference } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { BrsType } from './types/BrsType';
 import { DoubleType } from './types/DoubleType';
@@ -539,7 +539,7 @@ export class Util {
      * @param uri
      */
     public uriToPath(uri: string) {
-        let parsedPath = Uri.parse(uri).fsPath;
+        let parsedPath = URI.parse(uri).fsPath;
 
         //Uri annoyingly coverts all drive letters to lower case...so this will bring back whatever case it came in as
         let match = /\/\/\/([a-z]:)/i.exec(uri);
@@ -568,7 +568,7 @@ export class Util {
      * Given a file path, convert it to a URI string
      */
     public pathToUri(pathAbsolute: string) {
-        return Uri.file(pathAbsolute).toString();
+        return URI.file(pathAbsolute).toString();
     }
 
     /**
@@ -768,6 +768,19 @@ export class Util {
                 return parts[parts.length - 1];
             }
         }
+    }
+
+    /**
+     * Find a script import that the current position touches, or undefined if not found
+     */
+    public getScriptImportAtPosition(scriptImports: FileReference[], position: Position) {
+        let scriptImport = scriptImports.find((x) => {
+            return x.filePathRange.start.line === position.line &&
+                //column between start and end
+                position.character >= x.filePathRange.start.character &&
+                position.character <= x.filePathRange.end.character;
+        });
+        return scriptImport;
     }
 }
 

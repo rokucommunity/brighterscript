@@ -16,12 +16,13 @@ import {
     ProposedFeatures,
     Range,
     ServerCapabilities,
-    TextDocument,
     TextDocumentPositionParams,
     TextDocuments,
-    Position
+    Position,
+    TextDocumentSyncKind
 } from 'vscode-languageserver';
-import Uri from 'vscode-uri';
+import { URI } from 'vscode-uri';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 
 import { BsConfig } from './BsConfig';
 import { Deferred } from './deferred';
@@ -55,7 +56,7 @@ export class LanguageServer {
      * Create a simple text document manager.
      * The text document manager supports full document sync only
      */
-    private documents = new TextDocuments();
+    private documents = new TextDocuments(TextDocument);
 
     private createConnection() {
         return createConnection(ProposedFeatures.all);
@@ -142,12 +143,13 @@ export class LanguageServer {
         //return the capabilities of the server
         return {
             capabilities: {
-                textDocumentSync: this.documents.syncKind,
+                textDocumentSync: TextDocumentSyncKind.Full,
                 // Tell the client that the server supports code completion
                 completionProvider: {
                     resolveProvider: true,
                     //anytime the user types a period, auto-show the completion results
-                    triggerCharacters: ['.']
+                    triggerCharacters: ['.'],
+                    allCommitCharacters: ['.', '@']
                 },
                 definitionProvider: true,
                 hoverProvider: true
@@ -256,7 +258,7 @@ export class LanguageServer {
      * anytime the program wants to load a file, check with our in-memory document cache first
      */
     private documentFileResolver(pathAbsolute) {
-        let pathUri = Uri.file(pathAbsolute).toString();
+        let pathUri = URI.file(pathAbsolute).toString();
         let document = this.documents.get(pathUri);
         if (document) {
             return document.getText();
@@ -266,9 +268,9 @@ export class LanguageServer {
     private async getConfigFilePath(workspacePath: string) {
         let scopeUri: string;
         if (workspacePath.startsWith('file:')) {
-            scopeUri = Uri.parse(workspacePath).toString();
+            scopeUri = URI.parse(workspacePath).toString();
         } else {
-            scopeUri = Uri.file(workspacePath).toString();
+            scopeUri = URI.file(workspacePath).toString();
         }
         //look for config group called "brightscript"
         let config = await this.connection.workspace.getConfiguration({
@@ -475,9 +477,19 @@ export class LanguageServer {
             .concat(...await Promise.all(workspaceCompletionPromises))
             //throw out falsey values
             .filter(x => !!x);
+
         for (let completion of completions) {
             completion.commitCharacters = ['.'];
         }
+
+        // completions = [{
+        //     label: 'bronley',
+        //     textEdit: {
+        //         newText: 'bronley2',
+        //         range: Range.create(position, position)
+        //     }
+        // }] as CompletionItem[];
+
         return completions;
     }
 
@@ -586,7 +598,7 @@ export class LanguageServer {
         //create standalone workspaces for open files that no longer have a project
         let textDocuments = this.documents.all();
         outer: for (let textDocument of textDocuments) {
-            let filePath = Uri.parse(textDocument.uri).fsPath;
+            let filePath = URI.parse(textDocument.uri).fsPath;
             let workspaces = this.getWorkspaces();
             for (let workspace of workspaces) {
                 let dest = rokuDeploy.getDestPath(
@@ -634,7 +646,7 @@ export class LanguageServer {
         let changes = params.changes.map(x => {
             return {
                 type: x.type,
-                pathAbsolute: s`${Uri.parse(x.uri).fsPath}`
+                pathAbsolute: s`${URI.parse(x.uri).fsPath}`
             };
         });
 
@@ -790,7 +802,7 @@ export class LanguageServer {
     }
 
     private async onDocumentClose(textDocument: TextDocument): Promise<void> {
-        let filePath = Uri.parse(textDocument.uri).fsPath;
+        let filePath = URI.parse(textDocument.uri).fsPath;
         let standaloneFileWorkspace = this.standaloneFileWorkspaces[filePath];
         //if this was a temp file, close it
         if (standaloneFileWorkspace) {
@@ -807,7 +819,7 @@ export class LanguageServer {
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
 
-        let filePath = Uri.parse(textDocument.uri).fsPath;
+        let filePath = URI.parse(textDocument.uri).fsPath;
         let documentText = textDocument.getText();
         let workspaces = this.getWorkspaces();
         try {
@@ -903,7 +915,7 @@ export class LanguageServer {
         for (let filePath in issuesByFile) {
             //TODO filter by only the files that have changed
             this.connection.sendDiagnostics({
-                uri: Uri.file(filePath).toString(),
+                uri: URI.file(filePath).toString(),
                 diagnostics: issuesByFile[filePath]
             });
         }
@@ -913,7 +925,7 @@ export class LanguageServer {
         for (let filePath in this.latestDiagnosticsByFile) {
             if (!currentFilePaths.includes(filePath)) {
                 this.connection.sendDiagnostics({
-                    uri: Uri.file(filePath).toString(),
+                    uri: URI.file(filePath).toString(),
                     diagnostics: []
                 });
             }

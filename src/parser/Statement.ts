@@ -856,7 +856,15 @@ export class ImportStatement implements Statement {
             (filePathToken ?? importToken).range.end
         );
         if (this.filePathToken) {
+            //remove quotes
             this.filePath = this.filePathToken.text.replace(/"/g, '');
+            //adjust the range to exclude the quotes
+            this.filePathToken.range = Range.create(
+                this.filePathToken.range.start.line,
+                this.filePathToken.range.start.character + 1,
+                this.filePathToken.range.end.line,
+                this.filePathToken.range.end.character - 1
+            );
         }
     }
     public filePath: string;

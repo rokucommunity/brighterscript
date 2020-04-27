@@ -3,14 +3,14 @@ import { EventEmitter } from 'events';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import { StandardizedFileEntry } from 'roku-deploy';
-import { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
+import { CompletionItem, Location, Position, Range, CompletionItemKind } from 'vscode-languageserver';
 
 import { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import { BsDiagnostic, File } from './interfaces';
+import { BsDiagnostic, File, FileReference } from './interfaces';
 import { platformFile } from './platformCallables';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
@@ -455,7 +455,7 @@ export class Program {
 
         let result = [] as CompletionItem[];
 
-        //only keep completions common to every completion
+        //only keep completions common to every scope for this file
         let keyCounts = {} as { [key: string]: number };
         for (let completion of allCompletions) {
             let key = `${completion.label}-${completion.kind}`;
@@ -493,6 +493,58 @@ export class Program {
 
         return file.getHover(position);
     }
+
+
+    /**
+     * Get a list of all script imports, relative to the specified pkgPath
+     * @param sourcePkgPath - the pkgPath of the source that wants to resolve script imports.
+     */
+    public getScriptImportCompletions(sourcePkgPath: string, scriptImport: FileReference) {
+        let result = [] as CompletionItem[];
+        /**
+         * hashtable to prevent duplicate results
+         */
+        let resultPkgPaths = {} as { [lowerPkgPath: string]: boolean };
+
+        //restrict to only .brs files
+        for (let key in this.files) {
+            let file = this.files[key];
+            //is a BrightScript or BrighterScript file
+            if (file.extension === '.bs' || file.extension === '.brs') {
+                //add the relative path
+                let relativePath = util.getRelativePath(sourcePkgPath, file.pkgPath).replace(/\\/g, '/');
+                let pkgPathStandardized = file.pkgPath.replace(/\\/g, '/');
+                let filePkgPath = `pkg:/${pkgPathStandardized}`;
+                let lowerFilePkgPath = filePkgPath.toLowerCase();
+                if (!resultPkgPaths[lowerFilePkgPath]) {
+                    resultPkgPaths[lowerFilePkgPath] = true;
+
+                    result.push({
+                        label: relativePath,
+                        detail: file.pathAbsolute,
+                        kind: CompletionItemKind.File,
+                        textEdit: {
+                            newText: relativePath,
+                            range: scriptImport.filePathRange
+                        }
+                    });
+
+                    //add the absolute path
+                    result.push({
+                        label: filePkgPath,
+                        detail: file.pathAbsolute,
+                        kind: CompletionItemKind.File,
+                        textEdit: {
+                            newText: filePkgPath,
+                            range: scriptImport.filePathRange
+                        }
+                    });
+                }
+            }
+        }
+        return result;
+    }
+
 
     public async transpile(fileEntries: StandardizedFileEntry[], stagingFolderPath: string) {
         let promises = Object.keys(this.files).map(async (filePath) => {

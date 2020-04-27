@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import * as path from 'path';
 import { CodeWithSourceMap } from 'source-map';
-import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
+import { CompletionItem, Hover, Position, Range } from 'vscode-languageserver';
 
 import { Deferred } from '../deferred';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -341,68 +341,12 @@ export class XmlFile {
      * @param columnIndex
      */
     public async getCompletions(position: Position): Promise<CompletionItem[]> {
-        let scriptImport = this.getScriptImportAtPosition(position);
+        let scriptImport = util.getScriptImportAtPosition(this.ownScriptImports, position);
         if (scriptImport) {
-            return this.getScriptImportCompletions(scriptImport);
+            return this.program.getScriptImportCompletions(this.pkgPath, scriptImport);
         } else {
             return Promise.resolve([]);
         }
-    }
-
-    private getScriptImportAtPosition(position: Position) {
-        let scriptImport = this.ownScriptImports.find((x) => {
-            return x.filePathRange.start.line === position.line &&
-                //column between start and end
-                position.character >= x.filePathRange.start.character &&
-                position.character <= x.filePathRange.end.character;
-        });
-        return scriptImport;
-    }
-
-    private getScriptImportCompletions(scriptImport: FileReference) {
-        let result = [] as CompletionItem[];
-        /**
-         * hashtable to prevent duplicate results
-         */
-        let resultPkgPaths = {} as { [lowerPkgPath: string]: boolean };
-
-        //restrict to only .brs files
-        for (let key in this.program.files) {
-            let file = this.program.files[key];
-            //is a BrightScript or BrighterScript file
-            if (file.extension === '.bs' || file.extension === '.brs') {
-                //add the relative path
-                let relativePath = util.getRelativePath(this.pkgPath, file.pkgPath).replace(/\\/g, '/');
-                let pkgPathStandardized = file.pkgPath.replace(/\\/g, '/');
-                let pkgPath = `pkg:/${pkgPathStandardized}`;
-                let lowerPkgPath = pkgPath.toLowerCase();
-                if (!resultPkgPaths[lowerPkgPath]) {
-                    resultPkgPaths[lowerPkgPath] = true;
-
-                    result.push({
-                        label: relativePath,
-                        detail: file.pathAbsolute,
-                        kind: CompletionItemKind.File,
-                        textEdit: {
-                            newText: relativePath,
-                            range: scriptImport.filePathRange
-                        }
-                    });
-
-                    //add the absolute path
-                    result.push({
-                        label: pkgPath,
-                        detail: file.pathAbsolute,
-                        kind: CompletionItemKind.File,
-                        textEdit: {
-                            newText: pkgPath,
-                            range: scriptImport.filePathRange
-                        }
-                    });
-                }
-            }
-        }
-        return result;
     }
 
     /**
