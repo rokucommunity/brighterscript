@@ -35,6 +35,13 @@ describe('Program', () => {
     });
 
     describe('addFile', () => {
+        it('does not crash when given a totally bogus file', async () => {
+            await program.addOrReplaceFile({
+                src: `${rootDir}/source/main.brs`,
+                dest: 'source/main.brs'
+            }, `class Animalpublic name as stringpublic function walk()end functionend class`);
+            //if the program didn't get stuck in an infinite loop, this test passes
+        });
         describe('fileResolvers', () => {
             it('loads brs file contents from disk when necessary', async () => {
                 let stub = sinon.stub(util, 'getFileContents').returns(Promise.resolve(''));

@@ -1045,7 +1045,7 @@ export class Parser {
      * Add an 'unexpected token' diagnostic for any token found between current and the first stopToken found.
      */
     private flagUntil(...stopTokens: TokenKind[]) {
-        while (!this.check(...stopTokens)) {
+        while (!this.check(...stopTokens) && !this.isAtEnd()) {
             let token = this.advance();
             this.diagnostics.push({
                 ...DiagnosticMessages.foundUnexpectedToken(token.text),
