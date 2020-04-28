@@ -41,7 +41,26 @@ describe('BrsFile BrighterScript classes', () => {
             class 
         `) as BrsFile);
         await program.validate();
-        //if no exception was thrown, this teste passes
+        //if no exception was thrown, this test passes
+    });
+
+    it('catches child class missing super call in constructor', async () => {
+        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            class Person
+                sub new()
+                end sub
+            end class
+            class Infant extends Person
+                sub new()
+                end sub
+            end class
+        `) as BrsFile);
+        await program.validate();
+        expect(
+            program.getDiagnostics()[0]?.message
+        ).to.equal(
+            DiagnosticMessages.classConstructorMissingSuperCall().message
+        );
     });
 
     describe('transpile', () => {

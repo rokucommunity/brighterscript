@@ -4,7 +4,7 @@ import { XmlFile } from '../files/XmlFile';
 import { BrsFile } from '../files/BrsFile';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { BsDiagnostic } from '..';
-import { CallExpression, VariableExpression, ParseMode } from '../parser';
+import { CallExpression, VariableExpression, ParseMode, ExpressionStatement } from '../parser';
 import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
@@ -127,7 +127,7 @@ export class BsClassValidator {
                 ancestorNewMethod
             ) {
                 //verify there's a `super()` as the first statement in this member's "new" method
-                let firstStatement = (newMethod as ClassMethodStatement).func?.body?.statements[0] as CallExpression;
+                let firstStatement = ((newMethod as ClassMethodStatement).func?.body?.statements[0] as ExpressionStatement)?.expression as CallExpression;
 
                 //if the first statement isn't a call
                 if (firstStatement instanceof CallExpression === false) {
