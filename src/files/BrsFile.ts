@@ -958,8 +958,8 @@ export class BrsFile {
             let lowerCalleeName = callee.name.text.toLowerCase();
             let scopes = this.program.getScopesForFile(this);
             for (let scope of scopes) {
-                let namespace = scope.namespaceLookup[lowerCalleeName];
-                if (namespace.classeStatements[lowerCalleeName]) {
+                let namespace = scope.namespaceLookup[namespaceName.toLowerCase()];
+                if (namespace.classStatements[lowerCalleeName]) {
                     return true;
                 }
             }

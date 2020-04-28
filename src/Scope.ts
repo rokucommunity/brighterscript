@@ -272,7 +272,7 @@ export class Scope {
                     fullName: loopName,
                     lastPartName: part,
                     namespaces: {},
-                    classeStatements: {},
+                    classStatements: {},
                     functionStatements: {},
                     statements: []
                 };
@@ -281,7 +281,7 @@ export class Scope {
             ns.statements.push(...namespace.body.statements);
             for (let statement of namespace.body.statements) {
                 if (statement instanceof ClassStatement) {
-                    ns.classeStatements[statement.name.text.toLowerCase()] = statement;
+                    ns.classStatements[statement.name.text.toLowerCase()] = statement;
                 } else if (statement instanceof FunctionStatement) {
                     ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                 }
@@ -699,7 +699,7 @@ interface NamespaceContainer {
     fullName: string;
     lastPartName: string;
     statements: Statement[];
-    classeStatements: { [lowerClassName: string]: ClassStatement };
+    classStatements: { [lowerClassName: string]: ClassStatement };
     functionStatements: { [lowerFunctionName: string]: FunctionStatement };
     namespaces: { [name: string]: NamespaceContainer };
 }
