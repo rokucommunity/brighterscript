@@ -17,7 +17,7 @@ end class
 
 And here's the transpiled BrightScript code
   
-```vb
+```BrightScript
 function __Animal_Build()
     instance = {}
     instance.name = invalid
@@ -78,7 +78,7 @@ end sub
 <details>
   <summary>View the transpiled BrightScript code</summary>
   
-```brightscript
+```BrightScript
 function __Animal_Build()
     instance = {}
     instance.new = sub(name as string)
@@ -157,7 +157,7 @@ end sub
 <details>
   <summary>View the transpiled BrightScript code</summary>
   
-```vb
+```BrightScript
 function __Duck_Build()
     instance = {}
     instance.new = sub(name as string)
@@ -199,7 +199,7 @@ end sub
 <details>
   <summary>View the transpiled BrightScript code</summary>
   
-```vb
+```BrightScript
 function __Duck_Build
     instance = {}
     instance.new = sub(name as string)
@@ -252,7 +252,7 @@ end sub
 <details>
   <summary>View the transpiled BrightScript code</summary>
   
-```vb
+```BrightScript
 function __Duck_Build
     instance = {}
     return instance
@@ -294,7 +294,7 @@ end class
 <details>
   <summary>View the transpiled BrightScript code</summary>
   
-```vb
+```BrightScript
 function __Duck_Build
     instance = {}
     instance.walk = sub(meters as integer)
@@ -347,7 +347,7 @@ end class
 <details>
   <summary>View the transpiled BrightScript code</summary>
   
-```vb
+```BrightScript
 function Person()
     instance = {}
     'defaults to public
@@ -392,7 +392,7 @@ end class
 <details>
   <summary>View the transpiled BrightScript code</summary>
   
-```vb
+```BrightScript
 function Person()
     instance = {}
 
@@ -411,19 +411,35 @@ end function
 ```
 </details>
 
-## Usage
-In order to use a class, you need to construct one. Based on our person class above, you can create a new person like this:
+## Property initialization
+Like most other object-oriented classes, you can initialze a property with a default value. 
 
 ```vb
-jack = new Person("Jack")
-jill = new Person("Jill")
+class Duck
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
   
-```vb
+```BrightScript
 jack = Person("Jack")
 jill = Person("Jill")
+```
+</details>
+
+
+## Usage
+In order to use a class, you need to construct one. Based on our person class above, you can create a new person like this:
+
+```vb
+donald = new Person("Donald")
+daisy = new Person("Daisy")
+```
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+  
+```BrightScript
+donald = Person("Donald")
+daisy = Person("Daisy")
 ```
 </details>
 
@@ -440,3 +456,10 @@ namespace Vertibrates.Birds
     end class
 end namespace
 ```
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+  
+```BrightScript
+
+```
+</details>

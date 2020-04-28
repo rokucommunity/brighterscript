@@ -14,7 +14,7 @@ end sub
 
 transpiles to
 
-```BrighterScript
+```BrightScript
 function Vertibrates_Birds_GetDucks()
 end function
 sub main()
@@ -50,7 +50,7 @@ end namespace
 <details>
   <summary>View the transpiled BrightScript code</summary>
   
-```vb
+```BrightScript
 function Vertibrates_Birds_GetAllBirds()
     return [
         Vertibrates_Birds_GetDuck(), 
@@ -79,3 +79,11 @@ namespace Vertibrates.Birds
     end sub
 end namespace
 ```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+  
+```BrightScript
+'TODO
+```
+</details>
