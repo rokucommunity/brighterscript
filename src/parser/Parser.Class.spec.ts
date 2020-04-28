@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { TokenKind, Lexer } from '../lexer';
+import { TokenKind, Lexer, AllowedLocalIdentifiers, AllowedProperties } from '../lexer';
 import { Parser, ParseMode } from './Parser';
 import { ClassFieldStatement, ClassStatement } from './ClassStatement';
 import { FunctionStatement, AssignmentStatement } from './Statement';
@@ -14,8 +14,62 @@ describe('parser class', () => {
             `);
         let { diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrightScript });
         expect(diagnostics[0]?.code).to.equal(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('').code);
-
     });
+
+
+    for (let keyword of AllowedProperties) {
+        //skip a few of the class-specific keywords that are not allowed as field/method names
+
+        if ([
+            TokenKind.Function,
+            TokenKind.Rem,
+            TokenKind.Sub,
+            TokenKind.Public,
+            TokenKind.Protected,
+            TokenKind.Private,
+            TokenKind.Override
+        ].includes(keyword)) {
+            continue;
+        }
+        it(`supports ${keyword} as property name`, () => {
+            //test as property
+            let { tokens } = Lexer.scan(`
+                class Person
+                    ${keyword} as string
+                end class
+            `);
+            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(statements[0]).instanceof(ClassStatement);
+        });
+
+        it(`supports ${keyword} as method name`, () => {
+            //test as property
+            let { tokens } = Lexer.scan(`
+                class Person
+                   sub ${keyword}()
+                   end sub
+                end class
+            `);
+            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(statements[0]).instanceof(ClassStatement);
+        });
+    }
+
+    for (let keyword of AllowedLocalIdentifiers) {
+        it(`supports ${keyword} as class name`, () => {
+            //test as property
+            let { tokens } = Lexer.scan(`
+                class ${keyword}
+                end class
+            `);
+            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(statements[0]).instanceof(ClassStatement);
+        });
+    }
+
     it('parses empty class', () => {
         let { tokens } = Lexer.scan(`
                 class Person

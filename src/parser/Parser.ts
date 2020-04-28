@@ -254,7 +254,7 @@ export class Parser {
         let parentClassName: NamespacedVariableNameExpression;
 
         //get the class name
-        let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier) as Identifier;
+        let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier, ...AllowedLocalIdentifiers) as Identifier;
 
         //see if the class inherits from parent
         if (this.peek().text.toLowerCase() === 'extends') {
@@ -276,7 +276,7 @@ export class Parser {
         }
 
         //gather up all class members (Fields, Methods)
-        while (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Identifier, TokenKind.Comment)) {
+        while (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Comment, TokenKind.Identifier, ...AllowedProperties)) {
             try {
                 let accessModifier: Token;
                 if (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private)) {
@@ -290,7 +290,7 @@ export class Parser {
                 }
 
                 //methods (function/sub keyword OR identifier followed by opening paren)
-                if (this.check(TokenKind.Function, TokenKind.Sub) || (this.check(TokenKind.Identifier) && this.checkNext(TokenKind.LeftParen))) {
+                if (this.check(TokenKind.Function, TokenKind.Sub) || (this.check(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
                     let funcDeclaration = this.functionDeclaration(false);
                     //if we have an overrides keyword AND this method is called 'new', that's not allowed
                     if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
@@ -309,7 +309,7 @@ export class Parser {
                     );
 
                     //fields
-                } else if (this.check(TokenKind.Identifier)) {
+                } else if (this.check(TokenKind.Identifier, ...AllowedProperties)) {
                     body.push(
                         this.classFieldDeclaration(accessModifier)
                     );
@@ -379,7 +379,8 @@ export class Parser {
     private classFieldDeclaration(accessModifier: Token | null) {
         let name = this.consume(
             DiagnosticMessages.expectedClassFieldIdentifier(),
-            TokenKind.Identifier
+            TokenKind.Identifier,
+            ...AllowedProperties
         ) as Identifier;
         let asToken: Token;
         let fieldType: Token;
