@@ -66,7 +66,7 @@ export class ClassStatement implements Statement {
             state.indent()
         );
         //make the class assembler (i.e. the public-facing class creator method)
-        result.push(...this.getTranspiledAssembler(state));
+        result.push(...this.getTranspiledClassFunction(state));
         return result;
     }
 
@@ -89,11 +89,22 @@ export class ClassStatement implements Statement {
         return myIndex - 1;
     }
 
-    public getParentClass(state: TranspileState, classStatement: ClassStatement) {
-        let stmt = classStatement;
-        if (stmt.parentClassName) {
-            return state.file.getClassByName(stmt.parentClassName.getName(ParseMode.BrighterScript), this.namespaceName?.getName(ParseMode.BrighterScript));
+    /**
+     * Get all ancestor classes, in closest-to-furthest order (i.e. 0 is parent, 1 is grandparent, etc...).
+     * This will return an empty array if no ancestors were found
+     */
+    public getAncestors(state: TranspileState) {
+        let ancestors = [];
+        let stmt = this as ClassStatement;
+        while (stmt) {
+            if (stmt.parentClassName) {
+                stmt = state.file.getClassByName(stmt.parentClassName.getName(ParseMode.BrighterScript));
+                ancestors.push(stmt);
+            } else {
+                break;
+            }
         }
+        return ancestors;
     }
 
     private getBuilderName(name: string) {
@@ -122,6 +133,24 @@ export class ClassStatement implements Statement {
         return stmt;
     }
 
+    /**
+     * Determine if the specified field was declared in one of the ancestor classes
+     */
+    private isFieldDeclaredByAncestor(fieldName: string, ancestors: ClassStatement[]) {
+        let lowerFieldName = fieldName.toLowerCase();
+        for (let ancestor of ancestors) {
+            if (ancestor.memberMap[lowerFieldName]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The builder is a function that assigns all of the methods and property names to a class instance.
+     * This needs to be a separate function so that child classes can call the builder from their parent
+     * without instantiating the parent constructor at that point in time.
+     */
     private getTranspiledBuilder(state: TranspileState) {
         let result = [];
         result.push(`function ${this.getBuilderName(this.getName(ParseMode.BrightScript))}()\n`);
@@ -131,19 +160,17 @@ export class ClassStatement implements Statement {
         //create the instance
         result.push('instance = ');
 
-        let parentClass: ClassStatement;
+        /**
+         * The lineage of this class. index 0 is a direct parent, index 1 is index 0's parent, etc...
+         */
+        let ancestors = this.getAncestors(state);
 
         //construct parent class or empty object
-        if (this.parentClassName) {
-            parentClass = this.getParentClass(state, this);
-            let parentClassName = parentClass?.getName(ParseMode.BrightScript) ??
-                `__UnknownParentClass__${this.parentClassName.getName(ParseMode.BrighterScript)}`;
-            result.push(
-                this.getBuilderName(parentClassName),
-                '()'
-            );
+        if (ancestors[0]) {
+            let parentClassName = this.parentClassName.getName(ParseMode.BrightScript);
+            result.push(this.getBuilderName(parentClassName), '()');
         } else {
-            //use an empty object
+            //use an empty object.
             result.push('{}');
         }
         result.push(
@@ -159,14 +186,17 @@ export class ClassStatement implements Statement {
         }
 
         for (let statement of this.body) {
-            //fields
+            //is field statement
             if (statement instanceof ClassFieldStatement) {
-                // add and initialize all fields to null
-                result.push(
-                    `instance.${statement.name.text} = invalid`,
-                    state.newline()
-                );
-
+                //not declared in ancestor class
+                if (!this.isFieldDeclaredByAncestor(statement.name.text, ancestors)) {
+                    // add and initialize field to null
+                    result.push(
+                        `instance.${statement.name.text} = invalid`,
+                        state.newline(),
+                        state.indent()
+                    );
+                }
                 //methods
             } else if (statement instanceof ClassMethodStatement) {
 
@@ -175,7 +205,7 @@ export class ClassStatement implements Statement {
                     //is override method
                     statement.overrides ||
                     //is constructor function in child class
-                    (statement.name.text.toLowerCase() === 'new' && parentClass)
+                    (statement.name.text.toLowerCase() === 'new' && ancestors[0])
                 ) {
                     result.push(
                         `instance.super${parentClassIndex}_${statement.name.text} = instance.${statement.name.text}`,
@@ -190,14 +220,17 @@ export class ClassStatement implements Statement {
                     state.sourceNode(statement.name, statement.name.text),
                     ' = ',
                     ...statement.transpile(state),
-                    '\n'
+                    state.newline(),
+                    state.indent()
                 );
                 delete state.classStatement;
             } else {
                 //other random statements (probably just comments)
-                result.push(...statement.transpile(state));
+                result.push(
+                    ...statement.transpile(state),
+                    state.indent()
+                );
             }
-            result.push(state.indent());
         }
         //return the instance
         result.push('return instance\n');
@@ -206,7 +239,13 @@ export class ClassStatement implements Statement {
         result.push(`end function`);
         return result;
     }
-    private getTranspiledAssembler(state: TranspileState) {
+
+    /**
+     * The class function is the function with the same name as the class. This is the function that
+     * consumers should call to create a new instance of that class.
+     * This invokes the builder, gets an instance of the class, then invokes the "new" function on that class.
+     */
+    private getTranspiledClassFunction(state: TranspileState) {
         let result = [];
         const constructorFunction = this.getConstructorFunction();
         const constructorParams = constructorFunction ? constructorFunction.func.parameters : [];
@@ -278,7 +317,7 @@ export class ClassMethodStatement implements Statement {
     transpile(state: TranspileState): Array<SourceNode | string> {
         //TODO - remove type information from these methods because that doesn't work
         //convert the `super` calls into the proper methods
-        util.findAllDeep(this.func.body.statements, (value) => {
+        util.findAllDeep<any>(this.func.body.statements, (value) => {
             //if this is a method call
             if (value instanceof CallExpression) {
                 let parentClassIndex = state.classStatement.getParentClassIndex(state);
@@ -288,8 +327,12 @@ export class ClassMethodStatement implements Statement {
 
                     //this is a super.SomeMethod() call.
                 } else if (value.callee instanceof DottedGetExpression) {
-                    (value.callee.obj as VariableExpression).name.text = 'm';
-                    value.callee.name.text = `super${parentClassIndex}_${value.callee.name.text}`;
+                    let beginningVariable = util.findBeginningVariableExpression(value.callee);
+                    let lowerName = beginningVariable?.getName(ParseMode.BrighterScript).toLowerCase();
+                    if (lowerName === 'super') {
+                        beginningVariable.name.text = 'm';
+                        value.callee.name.text = `super${parentClassIndex}_${value.callee.name.text}`;
+                    }
                 }
             }
             return false;
