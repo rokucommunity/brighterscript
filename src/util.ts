@@ -27,6 +27,7 @@ import { StringType } from './types/StringType';
 import { UninitializedType } from './types/UninitializedType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
+import { DottedGetExpression, VariableExpression } from './parser/Expression';
 
 export class Util {
     public log(...args) {
@@ -446,6 +447,22 @@ export class Util {
     }
 
     /**
+     * Walks left in a DottedGetExpression and returns a VariableExpression if found, or undefined if not found
+     */
+    public findBeginningVariableExpression(dottedGet: DottedGetExpression): VariableExpression | undefined {
+        let left: any = dottedGet;
+        while (left) {
+            if (left instanceof VariableExpression) {
+                return left;
+            } else if (left instanceof DottedGetExpression) {
+                left = left.obj;
+            } else {
+                break;
+            }
+        }
+    }
+
+    /**
      * Find all properties in an object that match the predicate.
      */
     public findAllDeep<T>(obj: any, predicate: (value: any) => boolean | undefined, parentKey?: string, ancestors?: any[]) {
@@ -781,6 +798,20 @@ export class Util {
                 position.character <= x.filePathRange.end.character;
         });
         return scriptImport;
+    }
+
+    /**
+     * Given the class name text, return a namespace-prefixed name.
+     * If the name already has a period in it, or the namespaceName was not provided, return the class name as is.
+     * If the name does not have a period, and a namespaceName was provided, return the class name prepended
+     * by the namespace name
+     */
+    public getFulllyQualifiedClassName(className: string, namespaceName?: string) {
+        if (className.includes('.') === false && namespaceName) {
+            return `${namespaceName}.${className}`;
+        } else {
+            return className;
+        }
     }
 }
 

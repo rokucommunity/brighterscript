@@ -68,9 +68,7 @@ export class Body implements Statement {
 
 export class AssignmentStatement implements Statement {
     constructor(
-        readonly tokens: {
-            equals: Token;
-        },
+        readonly equals: Token,
         readonly name: Identifier,
         readonly value: Expression
     ) {
@@ -83,7 +81,7 @@ export class AssignmentStatement implements Statement {
         return [
             new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text),
             ' ',
-            new SourceNode(this.tokens.equals.range.start.line + 1, this.tokens.equals.range.start.character, state.pathAbsolute, '='),
+            new SourceNode(this.equals.range.start.line + 1, this.equals.range.start.character, state.pathAbsolute, '='),
             ' ',
             ...this.value.transpile(state)
         ];

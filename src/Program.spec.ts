@@ -857,7 +857,7 @@ describe('Program', () => {
         });
     });
 
-    it.only('transpiles namespaces without error', async () => {
+    it('transpiles namespaces without error', async () => {
         let file = await program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `
             namespace Vertibrates.Birds
                 function GetAllBirds()

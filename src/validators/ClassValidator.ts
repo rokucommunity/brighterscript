@@ -33,22 +33,8 @@ export class BsClassValidator {
      * Given a class name optionally prefixed with a namespace name, find the class that matches
      */
     private getClassByName(className: string, namespaceName?: string) {
-        let fullName = this.getFullName(className, namespaceName);
+        let fullName = util.getFulllyQualifiedClassName(className, namespaceName);
         return this.classes[fullName.toLowerCase()];
-    }
-
-    /**
-     * Given the class name text, return a namespace-prefixed name.
-     * If the name already has a period in it, or the namespaceName was not provided, return the class name as is.
-     * If the name does not have a period, and a namespaceName was provided, return the class name prepended
-     * by the namespace name
-     */
-    private getFullName(className: string, namespaceName?: string) {
-        if (className.includes('.') === false && namespaceName) {
-            return `${namespaceName}.${className}`;
-        } else {
-            return className;
-        }
     }
 
     /**
@@ -66,7 +52,7 @@ export class BsClassValidator {
 
             if (!newableClass) {
                 //try and find functions with this name.
-                let fullName = this.getFullName(className, newExpression.namespaceName?.getName(ParseMode.BrighterScript));
+                let fullName = util.getFulllyQualifiedClassName(className, newExpression.namespaceName?.getName(ParseMode.BrighterScript));
                 let callable = this.scope.getCallableByName(fullName);
                 //if we found a callable with this name, the user used a "new" keyword in front of a function. add error
                 if (callable) {

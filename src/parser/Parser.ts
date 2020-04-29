@@ -665,10 +665,10 @@ export class Parser {
         while (this.match(TokenKind.Newline)) { }
 
         if (operator.kind === TokenKind.Equal) {
-            return new AssignmentStatement({ equals: operator }, name, value);
+            return new AssignmentStatement(operator, name, value);
         } else {
             return new AssignmentStatement(
-                { equals: operator },
+                operator,
                 name,
                 new BinaryExpression(new VariableExpression(name), operator, value)
             );

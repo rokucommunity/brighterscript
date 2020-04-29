@@ -63,7 +63,74 @@ describe('BrsFile BrighterScript classes', () => {
         );
     });
 
+    it('access modifier is option for override', async () => {
+        let file = (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            class Animal
+                sub move()
+                end sub
+            end class
+
+            class Duck extends Animal
+                override sub move()
+                end sub
+            end class
+        `) as BrsFile);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        let duckClass = file.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
+        expect(duckClass).to.exist;
+        expect(duckClass.memberMap['move']).to.exist;
+    });
+
     describe('transpile', () => {
+        it('follows correct sequence for property initializers', async () => {
+            await testTranspile(`
+                class Animal
+                    species = "Animal"
+                    sub new()
+                        print "From Animal: " + m.species
+                    end sub
+                end class
+                class Duck extends Animal
+                    species = "Duck"
+                    sub new()
+                        super()
+                        print "From Duck: " + m.species
+                    end sub
+                end class
+            `, `
+                function __Animal_builder()
+                    instance = {}
+                    instance.species = invalid
+                    instance.new = sub()
+                        m.species = "Animal"
+                        print "From Animal: " + m.species
+                    end sub
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __Duck_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                        m.super0_new()
+                        m.species = "Duck"
+                        print "From Duck: " + m.species
+                    end sub
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'main.bs');
+        });
+
         it('works with namespaces', async () => {
             await testTranspile(`
                 namespace Birds.WaterFowl
@@ -197,6 +264,162 @@ describe('BrsFile BrighterScript classes', () => {
                     a = Animal("donald")
                 end sub
             `, undefined, 'main.bs');
+        });
+
+        it('does not screw up local variable references', async () => {
+            await testTranspile(`
+                class Animal
+                    sub new(name as string)
+                        m.name = name
+                    end sub
+                
+                    name as string
+                
+                    sub move(distanceInMeters as integer)
+                        print m.name + " moved " + distanceInMeters.ToStr() + " meters"
+                    end sub
+                end class
+                
+                class Duck extends Animal
+                    override sub move(distanceInMeters as integer)
+                        print "Waddling..."
+                        super.move(distanceInMeters)
+                    end sub
+                end class
+                
+                class BabyDuck extends Duck
+                    override sub move(distanceInMeters as integer)
+                        super.move(distanceInMeters)
+                        print "Fell over...I'm new at this"
+                    end sub
+                end class
+                
+                sub Main()
+                    smokey = new Animal("Smokey")
+                    smokey.move(1) 
+                    '> Bear moved 1 meters
+                
+                    donald = new Duck("Donald")
+                    donald.move(2) 
+                    '> Waddling...\\nDonald moved 2 meters
+                
+                    dewey = new BabyDuck("Dewey")
+                    dewey.move(3) 
+                    '> Waddling...\\nDewey moved 2 meters\\nFell over...I'm new at this
+                end sub
+            `, `
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = sub(name as string)
+                        m.name = name
+                    end sub
+                    instance.name = invalid
+                    instance.move = sub(distanceInMeters as integer)
+                        print m.name + " moved " + distanceInMeters.ToStr() + " meters"
+                    end sub
+                    return instance
+                end function
+                function Animal(name as string)
+                    instance = __Animal_builder()
+                    instance.new(name)
+                    return instance
+                end function
+                function __Duck_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                    end sub
+                    instance.super0_move = instance.move
+                    instance.move = sub(distanceInMeters as integer)
+                        print "Waddling..."
+                        m.super0_move(distanceInMeters)
+                    end sub
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __BabyDuck_builder()
+                    instance = __Duck_builder()
+                    instance.super1_new = instance.new
+                    instance.new = sub()
+                    end sub
+                    instance.super1_move = instance.move
+                    instance.move = sub(distanceInMeters as integer)
+                        m.super1_move(distanceInMeters)
+                        print "Fell over...I'm new at this"
+                    end sub
+                    return instance
+                end function
+                function BabyDuck()
+                    instance = __BabyDuck_builder()
+                    instance.new()
+                    return instance
+                end function
+                
+                sub Main()
+                    smokey = Animal("Smokey")
+                    smokey.move(1)
+                    '> Bear moved 1 meters
+                    donald = Duck("Donald")
+                    donald.move(2)
+                    '> Waddling...\\nDonald moved 2 meters
+                    dewey = BabyDuck("Dewey")
+                    dewey.move(3)
+                    '> Waddling...\\nDewey moved 2 meters\\nFell over...I'm new at this
+                end sub
+            `, 'trim', 'main.bs');
+        });
+
+        it('calculates the proper super index', async () => {
+            await testTranspile(`
+                class Duck
+                    public sub walk(meters as integer)
+                        print "Walked " + meters.ToStr() + " meters"
+                    end sub
+                end class
+                
+                class BabyDuck extends Duck
+                    public override sub walk(meters as integer)
+                        print "Tripped"
+                        super.walk(meters)
+                    end sub
+                end class
+            `, `
+                function __Duck_builder()
+                    instance = {}
+                    instance.new = sub()
+                    end sub
+                    instance.walk = sub(meters as integer)
+                        print "Walked " + meters.ToStr() + " meters"
+                    end sub
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __BabyDuck_builder()
+                    instance = __Duck_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                    end sub
+                    instance.super0_walk = instance.walk
+                    instance.walk = sub(meters as integer)
+                        print "Tripped"
+                        m.super0_walk(meters)
+                    end sub
+                    return instance
+                end function
+                function BabyDuck()
+                    instance = __BabyDuck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'main.bs');
         });
     });
 

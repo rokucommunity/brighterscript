@@ -1,5 +1,5 @@
 import { Token, Identifier } from '../lexer';
-import { Statement } from './Statement';
+import { Statement, AssignmentStatement, ExpressionStatement } from './Statement';
 import { FunctionExpression, CallExpression, VariableExpression, DottedGetExpression, NamespacedVariableNameExpression, Expression } from './Expression';
 import { SourceNode } from 'source-map';
 import { TranspileState } from './TranspileState';
@@ -98,7 +98,11 @@ export class ClassStatement implements Statement {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                stmt = state.file.getClassByName(stmt.parentClassName.getName(ParseMode.BrighterScript));
+                let fullyQualifiedClassName = util.getFulllyQualifiedClassName(
+                    stmt.parentClassName.getName(ParseMode.BrighterScript),
+                    this.namespaceName?.getName(ParseMode.BrighterScript)
+                );
+                stmt = state.file.getClassByName(fullyQualifiedClassName);
                 ancestors.push(stmt);
             } else {
                 break;
@@ -108,6 +112,9 @@ export class ClassStatement implements Statement {
     }
 
     private getBuilderName(name: string) {
+        if (name.includes('.')) {
+            name = name.replace(/\./gi, '_');
+        }
         return `__${name}_builder`;
     }
 
@@ -167,8 +174,11 @@ export class ClassStatement implements Statement {
 
         //construct parent class or empty object
         if (ancestors[0]) {
-            let parentClassName = this.parentClassName.getName(ParseMode.BrightScript);
-            result.push(this.getBuilderName(parentClassName), '()');
+            let fullyQualifiedClassName = util.getFulllyQualifiedClassName(
+                this.parentClassName.getName(ParseMode.BrighterScript),
+                this.namespaceName?.getName(ParseMode.BrighterScript)
+            );
+            result.push(this.getBuilderName(fullyQualifiedClassName), '()');
         } else {
             //use an empty object.
             result.push('{}');
@@ -315,6 +325,7 @@ export class ClassMethodStatement implements Statement {
     public readonly range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string> {
+        this.injectFieldInitializers(state);
         //TODO - remove type information from these methods because that doesn't work
         //convert the `super` calls into the proper methods
         util.findAllDeep<any>(this.func.body.statements, (value) => {
@@ -338,6 +349,34 @@ export class ClassMethodStatement implements Statement {
             return false;
         });
         return this.func.transpile(state);
+    }
+
+    private injectFieldInitializers(state: TranspileState) {
+        let firstStatement = this.func.body.statements[0];
+        let startingIndex = 0;
+        //inject field initializers immediately after a super call
+        if (
+            //is call
+            firstStatement instanceof ExpressionStatement && firstStatement.expression instanceof CallExpression &&
+            //is call to super
+            util.findBeginningVariableExpression(firstStatement?.expression.callee as any).name.text.toLowerCase() === 'super'
+        ) {
+            startingIndex = 1;
+        }
+
+        let newStatements = [] as Statement[];
+        //insert the field initializers in order
+        for (let field of state.classStatement.fields) {
+            //if the field has an initial value
+            if (field.initialValue) {
+                let thisQualifiedName = { ...field.name };
+                thisQualifiedName.text = 'm.' + field.name.text;
+                newStatements.push(
+                    new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue)
+                );
+            }
+        }
+        this.func.body.statements.splice(startingIndex, 0, ...newStatements);
     }
 }
 

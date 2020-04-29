@@ -1674,7 +1674,17 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
         expected = expected ? expected : source;
         let file = await program.addOrReplaceFile({ src: `${rootDir}/source/${fileName}`, dest: `source/${fileName}` }, source) as BrsFile;
         await program.validate();
-        expect(file.getDiagnostics()[0]?.message).to.not.exist;
+        let diagnostics = file.getDiagnostics();
+        if (diagnostics.length > 0) {
+
+            expect(
+                diagnostics[0].range.start.line +
+                ':' +
+                diagnostics[0].range.start.character +
+                ' ' +
+                diagnostics[0]?.message
+            ).to.not.exist;
+        }
         let transpiled = file.transpile();
 
         let sources = [transpiled.code, expected];
