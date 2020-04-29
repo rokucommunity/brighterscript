@@ -14,7 +14,6 @@ import { SourceMapConsumer } from 'source-map';
 import { TokenKind, Lexer } from '../lexer';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { StandardizedFileEntry } from 'roku-deploy';
-import { standardizePath as s } from '../util';
 
 let sinon = sinonImport.createSandbox();
 

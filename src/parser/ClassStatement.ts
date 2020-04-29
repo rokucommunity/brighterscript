@@ -148,7 +148,7 @@ export class ClassStatement implements Statement {
     /**
      * Determine if the specified field was declared in one of the ancestor classes
      */
-    private isFieldDeclaredByAncestor(fieldName: string, ancestors: ClassStatement[]) {
+    public isFieldDeclaredByAncestor(fieldName: string, ancestors: ClassStatement[]) {
         let lowerFieldName = fieldName.toLowerCase();
         for (let ancestor of ancestors) {
             if (ancestor.memberMap[lowerFieldName]) {
