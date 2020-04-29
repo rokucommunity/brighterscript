@@ -12,7 +12,8 @@
     "test:nocover": "mocha",
     "test:watch": "mocha --watch",
     "publish-coverage": "nyc report --reporter=text-lcov | coveralls",
-    "dep-graph": "madge --image graph.svg --extensions ts ./src/parser"
+    "dep-graph": "madge --image graph.svg --extensions ts ./src/parser",
+    "docs": "ts-node scripts/compile-doc-examples.ts"
   },
   "mocha": {
     "spec": "src/**/*.spec.ts",

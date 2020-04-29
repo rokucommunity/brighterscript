@@ -18,16 +18,18 @@ end class
 And here's the transpiled BrightScript code
   
 ```BrightScript
-function __Animal_Build()
+function __Animal_builder()
     instance = {}
-    instance.name = invalid
+    instance.new = sub()
+        m.name = invalid
+    end sub
     instance.walk = function()
     end function
     return instance
 end function
-
 function Animal()
-    instance = __Animal_Build()
+    instance = __Animal_builder()
+    instance.new()
     return instance
 end function
 ```
@@ -37,7 +39,7 @@ Notice that there are two functions created in the transpiled code for the `Anim
 
 ## Inheritance
 In BrighterScript, we can use patterns common to other object-oriented languages such as using inheritance to create a new class based off of an existing class.
-```vb
+```BrighterScript
 class Animal
     sub new(name as string)
         m.name = name
@@ -60,44 +62,50 @@ end class
 class BabyDuck extends Duck
     override sub move(distanceInMeters as integer)
         super.move(distanceInMeters)
-        print "Fell over...I'm still new at this"
+        print "Fell over...I'm new at this"
     end sub
 end class
 
 sub Main()
-    new Animal("Bear").move(1) 
+    smokey = new Animal("Smokey")
+    smokey.move(1) 
     '> Bear moved 1 meters
 
-    new Duck("Donald").move(2) 
+    donald = new Duck("Donald")
+    donald.move(2) 
     '> Waddling...\nDonald moved 2 meters
 
-    new BabyDuck("Dewey").move(3) 
-    '> Waddling...\nDewey moved 2 meters\nFell over...I'm still new at this
+    dewey = new BabyDuck("Dewey")
+    dewey.move(3) 
+    '> Waddling...\nDewey moved 2 meters\nFell over...I'm new at this
 end sub
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
   
 ```BrightScript
-function __Animal_Build()
+function __Animal_builder()
     instance = {}
     instance.new = sub(name as string)
-        m.Name = name
+        m.name = invalid
+        m.name = name
     end sub
-    instance.name = invalid
     instance.move = sub(distanceInMeters as integer)
         print m.name + " moved " + distanceInMeters.ToStr() + " meters"
     end sub
     return instance
 end function
 function Animal(name as string)
-    instance = __Animal_Build()
+    instance = __Animal_builder()
     instance.new(name)
     return instance
 end function
-
-function __Duck_Build()
-    instance =__Animal_Build()
+function __Duck_builder()
+    instance = __Animal_builder()
+    instance.super0_new = instance.new
+    instance.new = sub()
+        m.super0_new()
+    end sub
     instance.super0_move = instance.move
     instance.move = sub(distanceInMeters as integer)
         print "Waddling..."
@@ -105,37 +113,40 @@ function __Duck_Build()
     end sub
     return instance
 end function
-function Duck(name as string)
-    instance = __Duck_Build()
-    instance.new(name)
+function Duck()
+    instance = __Duck_builder()
+    instance.new()
     return instance
 end function
-
-function __BabyDuck_Build()
-    instance = __Duck_Build()
+function __BabyDuck_builder()
+    instance = __Duck_builder()
+    instance.super1_new = instance.new
+    instance.new = sub()
+        m.super1_new()
+    end sub
     instance.super1_move = instance.move
     instance.move = sub(distanceInMeters as integer)
         m.super1_move(distanceInMeters)
-        print "Fell over...I'm still new at this"
+        print "Fell over...I'm new at this"
     end sub
     return instance
 end function
-function BabyDuck(name as string)
-    instance = __BabyDuck_Build()
-    instance.new(name)
+function BabyDuck()
+    instance = __BabyDuck_builder()
+    instance.new()
     return instance
 end function
 
-
 sub Main()
-    Animal("Bear").move(1) 
+    smokey = Animal("Smokey")
+    smokey.move(1)
     '> Bear moved 1 meters
-
-    Duck("Donald").move(2) 
+    donald = Duck("Donald")
+    donald.move(2)
     '> Waddling...\nDonald moved 2 meters
-
-    BabyDuck("Dewey").move(3) 
-    '> Waddling...\nDewey moved 2 meters\nFell over...I'm still new at this
+    dewey = BabyDuck("Dewey")
+    dewey.move(3)
+    '> Waddling...\nDewey moved 2 meters\nFell over...I'm new at this
 end sub
 ```
 </details>
@@ -158,17 +169,17 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
   
 ```BrightScript
-function __Duck_Build()
+function __Duck_builder()
     instance = {}
     instance.new = sub(name as string)
+        m.name = invalid
+        m.end sub = invalid
         m.name = name
     end sub
-    instance.name = invalid
     return instance
 end function
-
 function Duck(name as string)
-    instance = __Duck_Build()
+    instance = __Duck_builder()
     instance.new(name)
     return instance
 end function
@@ -200,34 +211,37 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
   
 ```BrightScript
-function __Duck_Build
+function __Duck_builder()
     instance = {}
     instance.new = sub(name as string)
+        m.name = invalid
         m.name = name
     end sub
-    instance.name = invalid
     return instance
 end function
 function Duck(name as string)
-    instance = __Duck_Build()
+    instance = __Duck_builder()
     instance.new(name)
     return instance
 end function
-
-function __BabyDuck_Build(name as string, age as integer)
-    instance = __Duck_Build()
-    instance.super0_new = m.new
-    instance.new = sub(name as string, age)
+function __BabyDuck_builder()
+    instance = __Duck_builder()
+    instance.super0_new = instance.new
+    instance.new = sub(name as string, age as integer)
+        m.super0_new()
+        m.age = invalid
+        m.end sub = invalid
+        'the first line in this constructor must be a call to super()
         m.super0_new(name)
+        m.age = age
     end sub
-    instance.age = age
+    return instance
 end function
 function BabyDuck(name as string, age as integer)
-    instance = __BabyDuck_Build()
+    instance = __BabyDuck_builder()
     instance.new(name, age)
     return instance
 end function
-
 ```
 </details>
 
@@ -253,21 +267,34 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
   
 ```BrightScript
-function __Duck_Build
+function __Duck_builder()
     instance = {}
+    instance.new = sub()
+    end sub
+    instance.Eat = sub()
+        print "Ate all the food"
+    end sub
     return instance
 end function
-function Duck(name as string)
-    instance = __Duck_Build()
+function Duck()
+    instance = __Duck_builder()
+    instance.new()
     return instance
 end function
-
-function __BabyDuck_Build(name as string, age as integer)
-    instance = __Duck_Build()
-    instance.age = age
+function __BabyDuck_builder()
+    instance = {}
+    instance.new = sub()
+        m.end sub = invalid
+    end sub
+    instance.super-1_Eat = instance.Eat
+    instance.Eat = sub()
+        print "Ate half the food, because I'm a baby duck"
+    end sub
+    return instance
 end function
-function BabyDuck(name as string, age as integer)
-    instance = __BabyDuck_Build()
+function BabyDuck()
+    instance = __BabyDuck_builder()
+    instance.new()
     return instance
 end function
 ```
@@ -295,28 +322,36 @@ end class
   <summary>View the transpiled BrightScript code</summary>
   
 ```BrightScript
-function __Duck_Build
+function __Duck_builder()
     instance = {}
+    instance.new = sub()
+    end sub
     instance.walk = sub(meters as integer)
         print "Walked " + meters.ToStr() + " meters"
     end sub
     return instance
 end function
-function Duck(name as string)
-    instance = __Duck_Build()
+function Duck()
+    instance = __Duck_builder()
+    instance.new()
     return instance
 end function
-
-function __BabyDuck_Build(name as string, age as integer)
-    instance = __Duck_Build()
-    instance.super0_Walk = instance.walk
+function __BabyDuck_builder()
+    instance = __Duck_builder()
+    instance.super0_new = instance.new
+    instance.new = sub()
+        m.super0_new()
+    end sub
+    instance.super0_walk = instance.walk
     instance.walk = sub(meters as integer)
         print "Tripped"
         m.super0_walk(meters)
     end sub
+    return instance
 end function
-function BabyDuck(name as string, age as integer)
-    instance = __BabyDuck_Build()
+function BabyDuck()
+    instance = __BabyDuck_builder()
+    instance.new()
     return instance
 end function
 ```
@@ -348,23 +383,23 @@ end class
   <summary>View the transpiled BrightScript code</summary>
   
 ```BrightScript
-function Person()
+function __Person_builder()
     instance = {}
-    'defaults to public
-    instance.name = invalid,
-    
-    'specified private
-    instance.socialSecurityNumber = invalid
-    
-    'defaults to public
-    instance.getName = function()
+    instance.new = sub()
+        m.name = invalid
+        m.socialSecurityNumber = invalid
+    end sub
+    'defaults to public    'specified private    'defaults to public    instance.getName = function()
         return m.name
     end function
-
-    'specified private
-    instance.setSocialSecurityNumber = sub(value as string)
+    'specified private    instance.setSocialSecurityNumber = sub(value as string)
         m.socialSecurityNumber = value
     end sub
+    return instance
+end function
+function Person()
+    instance = __Person_builder()
+    instance.new()
     return instance
 end function
 ```
@@ -393,19 +428,20 @@ end class
   <summary>View the transpiled BrightScript code</summary>
   
 ```BrightScript
-function Person()
+function __Person_builder()
     instance = {}
-
-    'defaults to type "dynamic"
-    instance.name = invalid
-
-    'infers type "integer"
-    instance.age = 12
-
-    'infers type "integer"
-    instance.getAge = function()
+    instance.new = sub()
+        m.name = invalid
+        m.age = 12
+    end sub
+    'defaults to type "dynamic"    'infers type "integer"    'infers type "integer"    instance.getAge = function()
         return m.age
     end function
+    return instance
+end function
+function Person()
+    instance = __Person_builder()
+    instance.new()
     return instance
 end function
 ```
@@ -421,8 +457,17 @@ class Duck
   <summary>View the transpiled BrightScript code</summary>
   
 ```BrightScript
-jack = Person("Jack")
-jill = Person("Jill")
+function __Duck_builder()
+    instance = {}
+    instance.new = sub()
+    end sub
+    return instance
+end function
+function Duck()
+    instance = __Duck_builder()
+    instance.new()
+    return instance
+end function
 ```
 </details>
 
@@ -460,6 +505,29 @@ end namespace
   <summary>View the transpiled BrightScript code</summary>
   
 ```BrightScript
-
+function __Vertibrates_Birds_Animal_builder()
+    instance = {}
+    instance.new = sub()
+    end sub
+    return instance
+end function
+function Vertibrates_Birds_Animal()
+    instance = __Vertibrates_Birds_Animal_builder()
+    instance.new()
+    return instance
+end function
+function __Vertibrates_Birds_Duck_builder()
+    instance = __Vertibrates_Birds_Animal_builder()
+    instance.super0_new = instance.new
+    instance.new = sub()
+        m.super0_new()
+    end sub
+    return instance
+end function
+function Vertibrates_Birds_Duck()
+    instance = __Vertibrates_Birds_Duck_builder()
+    instance.new()
+    return instance
+end function
 ```
 </details>

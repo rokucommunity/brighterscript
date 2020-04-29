@@ -17,6 +17,7 @@ transpiles to
 ```BrightScript
 function Vertibrates_Birds_GetDucks()
 end function
+
 sub main()
     Vertibrates_Birds_GetDucks()
 end sub
@@ -53,16 +54,16 @@ end namespace
 ```BrightScript
 function Vertibrates_Birds_GetAllBirds()
     return [
-        Vertibrates_Birds_GetDuck(), 
+        Vertibrates_Birds_GetDuck(),
         Vertibrates_Birds_GetGoose()
     ]
-end function   
+end function
 
 function Vertibrates_Birds_GetDuck()
 end function
 
 function Vertibrates_Birds_GetGoose()
-end function 
+end function
 ```
 </details>
 
@@ -84,6 +85,9 @@ end namespace
   <summary>View the transpiled BrightScript code</summary>
   
 ```BrightScript
-'TODO
+sub Quack()
+end sub
+sub Vertibrates_Birds_Quack() ' this will result in a compile error.
+end sub
 ```
 </details>
