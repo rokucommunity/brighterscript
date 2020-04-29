@@ -14,6 +14,7 @@ import { SourceMapConsumer } from 'source-map';
 import { TokenKind, Lexer } from '../lexer';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { StandardizedFileEntry } from 'roku-deploy';
+import { standardizePath as s } from '../util';
 
 let sinon = sinonImport.createSandbox();
 
@@ -1377,6 +1378,39 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+
+        it('relative-referenced namespaced functions get prefixed', async () => {
+            await testTranspile(`
+                namespace Vertibrates.Birds
+                    function GetAllBirds()
+                        return [
+                            GetDuck(), 
+                            GetGoose()
+                        ]
+                    end function
+                
+                    function GetDuck()
+                    end function
+                    
+                    function GetGoose()
+                    end function
+                end namespace
+            `, `
+                function Vertibrates_Birds_GetAllBirds()
+                    return [
+                        Vertibrates_Birds_GetDuck(),
+                        Vertibrates_Birds_GetGoose()
+                    ]
+                end function
+
+                function Vertibrates_Birds_GetDuck()
+                end function
+
+                function Vertibrates_Birds_GetGoose()
+                end function
+            `, 'trim', 'main.bs');
+        });
+
         it('transpiles namespaced functions', async () => {
             await testTranspile(`
                 namespace NameA
@@ -1668,9 +1702,8 @@ describe('BrsFile', () => {
 });
 
 export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return async (source: string, expected?: string, formatType: 'trim' | 'format' | 'none' = 'trim', fileName = 'main.brs') => {
+    return async (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', fileName = 'main.brs') => {
         let [program, rootDir] = scopeGetter();
-        let formatter = null; //new BrightScriptFormatter();
         expected = expected ? expected : source;
         let file = await program.addOrReplaceFile({ src: `${rootDir}/source/${fileName}`, dest: `source/${fileName}` }, source) as BrsFile;
         await program.validate();
@@ -1712,8 +1745,6 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
                 }
                 sources[i] = lines.join('\n');
 
-            } else if (formatType === 'format') {
-                sources[i] = formatter.format(sources[i].trim());
             }
         }
         expect(sources[0]).to.equal(sources[1]);

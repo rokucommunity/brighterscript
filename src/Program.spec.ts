@@ -857,27 +857,6 @@ describe('Program', () => {
         });
     });
 
-    it('transpiles namespaces without error', async () => {
-        let file = await program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `
-            namespace Vertibrates.Birds
-                function GetAllBirds()
-                    return [
-                        GetDuck(), 
-                        GetGoose()
-                    ]
-                end function
-            
-                function GetDuck()
-                end function
-                
-                function GetGoose()
-                end function
-            end namespace
-        `);
-        await program.validate();
-        file.transpile();
-    });
-
     describe('import statements', () => {
         it('finds function loaded in by import multiple levels deep', async () => {
             //create child component
@@ -1298,4 +1277,5 @@ describe('Program', () => {
             expect(labels).to.deep.include({ label: 'count' });
         });
     });
+
 });

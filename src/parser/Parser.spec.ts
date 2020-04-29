@@ -25,7 +25,7 @@ describe('parser', () => {
     });
 
     describe('parse', () => {
-        describe('namespace', () => {
+        describe('namespace', () => { 
             it('catches namespaces declared not at root level', () => {
                 expect(parse(`
                     sub main()
