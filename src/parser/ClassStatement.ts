@@ -1,11 +1,12 @@
-import { Token, Identifier } from '../lexer';
+import { Token, Identifier, TokenKind } from '../lexer';
 import { Statement, AssignmentStatement, ExpressionStatement } from './Statement';
-import { FunctionExpression, CallExpression, VariableExpression, DottedGetExpression, NamespacedVariableNameExpression, Expression } from './Expression';
+import { FunctionExpression, CallExpression, VariableExpression, DottedGetExpression, NamespacedVariableNameExpression, Expression, LiteralExpression } from './Expression';
 import { SourceNode } from 'source-map';
 import { TranspileState } from './TranspileState';
 import { Parser, ParseMode } from './Parser';
 import { Range } from 'vscode-languageserver';
 import util from '../util';
+import { BrsInvalid } from '../brsTypes/BrsType';
 
 export class ClassStatement implements Statement {
 
@@ -87,6 +88,10 @@ export class ClassStatement implements Statement {
             }
         }
         return myIndex - 1;
+    }
+
+    public hasParentClass() {
+        return !!this.parentClassName;
     }
 
     /**
@@ -198,15 +203,9 @@ export class ClassStatement implements Statement {
         for (let statement of this.body) {
             //is field statement
             if (statement instanceof ClassFieldStatement) {
-                //not declared in ancestor class
-                if (!this.isFieldDeclaredByAncestor(statement.name.text, ancestors)) {
-                    // add and initialize field to null
-                    result.push(
-                        `instance.${statement.name.text} = invalid`,
-                        state.newline(),
-                        state.indent()
-                    );
-                }
+                //do nothing with class fields in this situation, they are handled elsewhere
+                continue;
+
                 //methods
             } else if (statement instanceof ClassMethodStatement) {
 
@@ -325,7 +324,10 @@ export class ClassMethodStatement implements Statement {
     public readonly range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string> {
-        this.injectFieldInitializers(state);
+        if (this.name.text.toLowerCase() === 'new') {
+            this.ensureSuperConstructorCall(state);
+            this.injectFieldInitializersForConstructor(state);
+        }
         //TODO - remove type information from these methods because that doesn't work
         //convert the `super` calls into the proper methods
         util.findAllDeep<any>(this.func.body.statements, (value) => {
@@ -351,28 +353,88 @@ export class ClassMethodStatement implements Statement {
         return this.func.transpile(state);
     }
 
-    private injectFieldInitializers(state: TranspileState) {
+    /**
+     * All child classes must call the parent constructor. The type checker will warn users when they don't call it in their own class,
+     * but we still need to call it even if they have omitted it. This injects the super call if it's missing
+     */
+    private ensureSuperConstructorCall(state: TranspileState) {
+        //if this class doesn't extend another class, quit here
+        if (state.classStatement.getAncestors(state).length === 0) {
+            return;
+        }
+
+        //if the first statement is a call to super, quit here
         let firstStatement = this.func.body.statements[0];
-        let startingIndex = 0;
-        //inject field initializers immediately after a super call
         if (
-            //is call
+            //is a call statement
             firstStatement instanceof ExpressionStatement && firstStatement.expression instanceof CallExpression &&
-            //is call to super
+            //is a call to super
             util.findBeginningVariableExpression(firstStatement?.expression.callee as any).name.text.toLowerCase() === 'super'
         ) {
-            startingIndex = 1;
+            return;
         }
+
+        //this is a child class, and the first statement isn't a call to super. Inject one
+        this.func.body.statements.unshift(
+            new ExpressionStatement(
+                new CallExpression(
+                    new VariableExpression({
+                        kind: TokenKind.Identifier,
+                        text: 'super',
+                        isReserved: false,
+                        range: state.classStatement.name.range
+                    }),
+                    {
+                        kind: TokenKind.LeftParen,
+                        text: '(',
+                        isReserved: false,
+                        range: state.classStatement.name.range
+                    },
+                    {
+                        kind: TokenKind.RightParen,
+                        text: ')',
+                        isReserved: false,
+                        range: state.classStatement.name.range
+                    },
+                    [],
+                    null
+                )
+            )
+        );
+    }
+
+    /**
+     * Inject field initializers at the top of the `new` function (after any present `super()` call)
+     */
+    private injectFieldInitializersForConstructor(state: TranspileState) {
+        let startingIndex = state.classStatement.hasParentClass() ? 1 : 0;
 
         let newStatements = [] as Statement[];
         //insert the field initializers in order
         for (let field of state.classStatement.fields) {
-            //if the field has an initial value
+            let thisQualifiedName = { ...field.name };
+            thisQualifiedName.text = 'm.' + field.name.text;
             if (field.initialValue) {
-                let thisQualifiedName = { ...field.name };
-                thisQualifiedName.text = 'm.' + field.name.text;
                 newStatements.push(
                     new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue)
+                );
+            } else {
+                //if there is no initial value, set the initial value to `invalid`
+                newStatements.push(
+                    new AssignmentStatement(
+                        {
+                            kind: TokenKind.Equal,
+                            isReserved: false,
+                            range: field.name.range,
+                            text: '='
+                        },
+                        thisQualifiedName,
+                        new LiteralExpression(
+                            BrsInvalid.Instance,
+                            //set the range to the end of the name so locations don't get broken
+                            Range.create(field.name.range.end, field.name.range.end)
+                        )
+                    )
                 );
             }
         }

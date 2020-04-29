@@ -101,7 +101,6 @@ describe('BrsFile BrighterScript classes', () => {
             `, `
                 function __Animal_builder()
                     instance = {}
-                    instance.species = invalid
                     instance.new = sub()
                         m.species = "Animal"
                         print "From Animal: " + m.species
@@ -131,6 +130,62 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'main.bs');
         });
 
+        it('handles class inheritance inferred constructor calls', async () => {
+            await testTranspile(`
+                class Animal
+                    className = "Animal"
+                end class
+                class Duck extends Animal
+                    className = "Duck"
+                end class
+                class BabyDuck extends Duck
+                    className = "BabyDuck"
+                end class
+            `, `
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = sub()
+                        m.className = "Animal"
+                    end sub
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __Duck_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                        m.super0_new()
+                        m.className = "Duck"
+                    end sub
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+                function __BabyDuck_builder()
+                    instance = __Duck_builder()
+                    instance.super1_new = instance.new
+                    instance.new = sub()
+                        m.super1_new()
+                        m.className = "BabyDuck"
+                    end sub
+                    return instance
+                end function
+                function BabyDuck()
+                    instance = __BabyDuck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, undefined, 'main.bs');
+        });
+
+
         it('works with namespaces', async () => {
             await testTranspile(`
                 namespace Birds.WaterFowl
@@ -155,6 +210,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance = __Birds_WaterFowl_Duck_builder()
                     instance.super0_new = instance.new
                     instance.new = sub()
+                        m.super0_new()
                     end sub
                     return instance
                 end function
@@ -311,9 +367,9 @@ describe('BrsFile BrighterScript classes', () => {
                 function __Animal_builder()
                     instance = {}
                     instance.new = sub(name as string)
+                        m.name = invalid
                         m.name = name
                     end sub
-                    instance.name = invalid
                     instance.move = sub(distanceInMeters as integer)
                         print m.name + " moved " + distanceInMeters.ToStr() + " meters"
                     end sub
@@ -328,6 +384,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
                     instance.new = sub()
+                        m.super0_new()
                     end sub
                     instance.super0_move = instance.move
                     instance.move = sub(distanceInMeters as integer)
@@ -345,6 +402,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance = __Duck_builder()
                     instance.super1_new = instance.new
                     instance.new = sub()
+                        m.super1_new()
                     end sub
                     instance.super1_move = instance.move
                     instance.move = sub(distanceInMeters as integer)
@@ -406,6 +464,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance = __Duck_builder()
                     instance.super0_new = instance.new
                     instance.new = sub()
+                        m.super0_new()
                     end sub
                     instance.super0_walk = instance.walk
                     instance.walk = sub(meters as integer)
