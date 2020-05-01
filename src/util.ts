@@ -272,6 +272,7 @@ export class Util {
         config.copyToStaging = config.copyToStaging === false ? false : true;
         config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
         config.diagnosticFilters = config.diagnosticFilters ?? [];
+        config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
         return config;
     }
 

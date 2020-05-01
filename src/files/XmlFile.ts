@@ -37,7 +37,7 @@ export class XmlFile {
     public ownScriptImports = [] as FileReference[];
 
     public getDiagnostics() {
-        return [...this.parseDiagnistics];
+        return [...this.diagnostics];
     }
 
     /**
@@ -45,7 +45,7 @@ export class XmlFile {
      */
     public fileRange: Range;
 
-    public parseDiagnistics = [] as BsDiagnostic[];
+    public diagnostics = [] as BsDiagnostic[];
 
     //TODO implement the xml CDATA parsing, which would populate this list
     public callables = [] as Callable[];
@@ -122,7 +122,7 @@ export class XmlFile {
                 }
                 //component name not defined
                 if (!this.componentName) {
-                    this.parseDiagnistics.push({
+                    this.diagnostics.push({
                         ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
                         range: Range.create(
                             componentRange.start.line,
@@ -135,7 +135,7 @@ export class XmlFile {
                 }
                 //parent component name not defined
                 if (!this.parentName) {
-                    this.parseDiagnistics.push({
+                    this.diagnostics.push({
                         ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
                         range: Range.create(
                             componentRange.start.line,
@@ -148,7 +148,7 @@ export class XmlFile {
                 }
             } else {
                 //the component xml element was not found in the file
-                this.parseDiagnistics.push({
+                this.diagnostics.push({
                     ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
                     range: Range.create(
                         0,
@@ -166,7 +166,7 @@ export class XmlFile {
                 let lineIndex = parseInt(match[2]);
                 let columnIndex = parseInt(match[3]) - 1;
                 //add basic xml parse diagnostic errors
-                this.parseDiagnistics.push({
+                this.diagnostics.push({
                     ...DiagnosticMessages.xmlGenericParseError(match[1]),
                     range: Range.create(
                         lineIndex,
@@ -260,14 +260,13 @@ export class XmlFile {
     /**
      * Get the list of scripts imported by this component and all of its ancestors
      */
-    public getAllScriptImports() {
+    public getAllFileReferences() {
         let imports = [
-            ...this.ownScriptImports,
-            ...this.getCodeImports()
+            ...this.getOwnFileReferences()
         ] as FileReference[];
         let file = this as XmlFile;
         while (file.parent) {
-            imports = [...imports, ...file.parent.getOwnScriptImports()];
+            imports = [...imports, ...file.parent.getOwnFileReferences()];
             file = file.parent;
         }
         return imports;
@@ -277,8 +276,42 @@ export class XmlFile {
      * Get the list of scripts explicitly imported by this file.
      * This method excludes any ancestor imports
      */
-    public getOwnScriptImports() {
-        return this.ownScriptImports;
+    public getOwnFileReferences() {
+        let result = [
+            ...this.ownScriptImports,
+            ...this.getCodeImports()
+        ];
+        let codebehind = this.getCodebehindFileReference();
+        if (codebehind) {
+            result.push(codebehind);
+        }
+        return result;
+    }
+
+    private getCodebehindFileReference() {
+        //if auto importing of codebehind files is enabled, include the codebehind file if exists
+        if (this.program.options.autoImportComponentScript === true) {
+            let bsCodebehind = this.program.getFileByPkgPath(this.pkgPath.replace(/\.xml$/i, '.bs'));
+            let brsCodebehind = this.program.getFileByPkgPath(this.pkgPath.replace(/\.xml$/i, '.brs'));
+            if (bsCodebehind && brsCodebehind) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.autoImportComponentScriptCollision(),
+                    //the whole line
+                    range: Range.create(0, 0, 0, 999999),
+                    file: this
+                });
+            }
+            //prefer the bs file over brs
+            let codebehind = bsCodebehind ?? brsCodebehind;
+            if (codebehind) {
+                return {
+                    filePathRange: null,
+                    pkgPath: codebehind.pkgPath,
+                    sourceFile: this,
+                    text: codebehind.pkgPath
+                };
+            }
+        }
     }
 
     /**
@@ -287,10 +320,17 @@ export class XmlFile {
     public getCodeImports() {
         let processedFileMap = {} as { [pkgPath: string]: boolean };
         let result = [] as FileReference[];
-        let fileRefStack = [...this.ownScriptImports];
+        let fileRefStack = [
+            ...this.ownScriptImports,
+            this.getCodebehindFileReference()
+        ];
         while (fileRefStack.length > 0) {
             //consume a file from the list
             let fileRef = fileRefStack.pop();
+            //skip invalid/undefined fileRefs
+            if (!fileRef) {
+                continue;
+            }
             let targetFile = this.program.getFileByPkgPath(fileRef.pkgPath);
 
             //only add code imports that we can actually find the file for
@@ -320,8 +360,8 @@ export class XmlFile {
         if (file === this) {
             return true;
         }
-        for (let scriptImport of this.ownScriptImports) {
-            //if the script imports the file
+        let fileReferences = this.getOwnFileReferences();
+        for (let scriptImport of fileReferences) {
             if (scriptImport.pkgPath.toLowerCase() === file.pkgPath.toLowerCase()) {
                 return true;
             }
@@ -333,6 +373,7 @@ export class XmlFile {
             //didn't find any script imports for this file
             return false;
         }
+        return false;
     }
 
     /**

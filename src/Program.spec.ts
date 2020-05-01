@@ -886,7 +886,7 @@ describe('Program', () => {
             await program.validate();
             expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
             expect(
-                (component as XmlFile).getAllScriptImports().map(x => x.pkgPath)
+                (component as XmlFile).getAllFileReferences().map(x => x.pkgPath)
             ).to.eql([
                 s`source/lib.bs`,
                 s`source/stringOps.bs`,
@@ -916,7 +916,7 @@ describe('Program', () => {
             await program.validate();
             expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
             expect(
-                (component as XmlFile).getAllScriptImports().map(x => x.pkgPath)
+                (component as XmlFile).getAllFileReferences().map(x => x.pkgPath)
             ).to.eql([
                 s`source/lib.bs`,
                 s`source/stringOps.brs`
@@ -1028,7 +1028,7 @@ describe('Program', () => {
 
             await program.validate();
             //the error should be gone because the child now has access to the parent script
-            expect(program.getDiagnostics()).to.be.lengthOf(0);
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
     });
 

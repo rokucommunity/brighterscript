@@ -18,7 +18,7 @@ import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { StringType } from '../types/StringType';
 import { VoidType } from '../types/VoidType';
-import util from '../util';
+import { standardizePath as s, util } from '../util';
 import { TranspileState } from '../parser/TranspileState';
 import { ClassStatement } from '../parser/ClassStatement';
 import { getManifest } from '../preprocessor/Manifest';
@@ -36,6 +36,9 @@ export class BrsFile {
         public pkgPath: string,
         public program: Program
     ) {
+        this.pathAbsolute = s`${this.pathAbsolute}`;
+        this.pkgPath = s`${this.pkgPath}`;
+
         this.extension = path.extname(pathAbsolute).toLowerCase();
 
         //all BrighterScript files need to be transpiled

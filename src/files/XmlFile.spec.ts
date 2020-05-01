@@ -88,8 +88,8 @@ describe('XmlFile', () => {
         it('Adds error when no component is declared in xml', async () => {
             file = new XmlFile('abs', 'rel', null);
             await file.parse('<script type="text/brightscript" uri="ChildScene.brs" />');
-            expect(file.parseDiagnistics).to.be.lengthOf(1);
-            expect(file.parseDiagnistics[0].message).to.equal(DiagnosticMessages.xmlComponentMissingComponentDeclaration().message);
+            expect(file.diagnostics).to.be.lengthOf(1);
+            expect(file.diagnostics[0].message).to.equal(DiagnosticMessages.xmlComponentMissingComponentDeclaration().message);
         });
 
         it('adds error when component does not declare a name', async () => {
@@ -100,8 +100,8 @@ describe('XmlFile', () => {
                 <script type="text/brightscript" uri="ChildScene.brs" />
                 </component>
             `);
-            expect(file.parseDiagnistics).to.be.lengthOf(1);
-            expect(file.parseDiagnistics[0]).to.deep.include(<BsDiagnostic>{
+            expect(file.diagnostics).to.be.lengthOf(1);
+            expect(file.diagnostics[0]).to.deep.include(<BsDiagnostic>{
                 message: DiagnosticMessages.xmlComponentMissingNameAttribute().message,
                 range: Range.create(2, 16, 2, 26)
             });
@@ -114,8 +114,8 @@ describe('XmlFile', () => {
                 <component 1extends="ParentScene">
                 </component>
             `);
-            expect(file.parseDiagnistics).to.be.lengthOf(1);
-            expect(file.parseDiagnistics[0]).to.deep.include(<BsDiagnostic>{
+            expect(file.diagnostics).to.be.lengthOf(1);
+            expect(file.diagnostics[0]).to.deep.include(<BsDiagnostic>{
                 code: DiagnosticMessages.xmlGenericParseError('Some generic parse error').code,
                 range: Range.create(2, 27, 2, 27)
             });
@@ -180,16 +180,70 @@ describe('XmlFile', () => {
     });
 
     describe('doesReferenceFile', () => {
-        it('compares case insensitive', () => {
-            let xmlFile = new XmlFile('absolute', 'relative', null);
-            xmlFile.ownScriptImports.push({
-                pkgPath: `components${path.sep}HeroGrid.brs`,
-                text: '',
-                filePathRange: Range.create(1, 0, 1, 1),
-                sourceFile: xmlFile
-            });
-            let brsFile = new BrsFile('absolute', `components${path.sep}HEROGRID.brs`, program);
-            expect(xmlFile.doesReferenceFile(brsFile)).to.be.true;
+        it('compares case insensitive', async () => {
+            let xmlFile = await program.addOrReplaceFile({
+                src: `${rootDir}/components/comp1.xml`,
+                dest: 'components/comp1.xml'
+            }, `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Cmp1" extends="Scene">
+                    <script type="text/brightscript" uri="HeroGrid.brs" />
+                </component>
+            `);
+            let brsFile = await program.addOrReplaceFile({
+                src: `${rootDir}/components/HEROGRID.brs`,
+                dest: `components/HEROGRID.brs`
+            }, ``);
+            expect((xmlFile as XmlFile).doesReferenceFile(brsFile)).to.be.true;
+        });
+    });
+
+    describe('autoImportComponentScript', () => {
+        it('is not enabled by default', async () => {
+            await program.addOrReplaceFile({ src: `${rootDir}/components/comp1.xml`, dest: 'components/comp1.xml' }, `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ParentScene" extends="GrandparentScene">
+                    <script type="text/brightscript" uri="./lib.brs" />
+                </component>
+            `);
+
+            await program.addOrReplaceFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, `
+                function libFunc()
+                end function
+            `);
+
+            await program.addOrReplaceFile({ src: `${rootDir}/components/comp1.bs`, dest: 'components/comp1.bs' }, `
+                function init()
+                    libFunc()
+                end function
+            `);
+
+            await program.validate();
+
+            expect(
+                program.getDiagnostics().map(x => x.message)
+            ).to.include(
+                DiagnosticMessages.fileNotReferencedByAnyOtherFile().message
+            );
+
+            //enable the setting
+            program.options.autoImportComponentScript = true;
+
+            //remove the file and re-add it
+            program.removeFile(`${rootDir}/components/comp1.bs`);
+
+            await program.addOrReplaceFile({ src: `${rootDir}/components/comp1.bs`, dest: 'components/comp1.bs' }, `
+                function init()
+                    libFunc()
+                end function
+            `);
+
+            await program.validate();
+
+            //there should be no errors
+            expect(
+                program.getDiagnostics().map(x => x.message)[0]
+            ).not.to.exist;
         });
     });
 
@@ -246,7 +300,7 @@ describe('XmlFile', () => {
             };
             file.ownScriptImports.push(<any>scriptImport);
             file.program = program;
-            expect(file.getAllScriptImports()).to.be.lengthOf(1);
+            expect(file.getAllFileReferences()).to.be.lengthOf(1);
         });
     });
 

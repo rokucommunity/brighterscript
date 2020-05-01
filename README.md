@@ -118,6 +118,7 @@ These are the options available in the `bsconfig.json` file.
             "codes": [1000, 1011] //ignore these specific codes from vendor libraries 
         }]
         ```
+ - **autoImportComponentScript**: `bool` - BrighterScript only: will automatically import a script at transpile-time for a component with the same name if it exists.
 
 
 ## Ignore errors and warnings on a per-line basis

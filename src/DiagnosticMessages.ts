@@ -529,6 +529,11 @@ export let DiagnosticMessages = {
         message: `Class field cannot be overridden`,
         code: 1102,
         severity: DiagnosticSeverity.Error
+    }),
+    autoImportComponentScriptCollision: () => ({
+        message: `Component script auto-import found '.bs' and '.brs' files with the same name and will import only the '.bs' file`,
+        code: 1103,
+        severity: DiagnosticSeverity.Warning
     })
 };
 

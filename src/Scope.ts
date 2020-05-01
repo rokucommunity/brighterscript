@@ -376,15 +376,15 @@ export class Scope {
         this.emit('invalidated');
     }
 
-    public validate() {
+    public validate(force = false) {
         //if this scope is already validated, no need to revalidate
-        if (this.isValidated === true) {
+        if (this.isValidated === true && !force) {
             return;
         }
 
         //validate our parent before we validate ourself
         if (this.parentScope && this.parentScope.isValidated === false) {
-            this.parentScope.validate();
+            this.parentScope.validate(force);
         }
         //clear the scope's errors list (we will populate them from this method)
         this.diagnostics = [];

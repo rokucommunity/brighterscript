@@ -202,6 +202,14 @@ describe('util', () => {
             let config = await util.normalizeAndResolveConfig({ watch: true });
             expect(config.watch).to.be.true;
         });
+
+        it(`handles default for 'autoImportComponentScript'`, () => {
+            expect(util.normalizeConfig({}).autoImportComponentScript).to.be.false;
+            expect(util.normalizeConfig({ autoImportComponentScript: false }).autoImportComponentScript).to.be.false;
+            expect(util.normalizeConfig({ autoImportComponentScript: <any>1 }).autoImportComponentScript).to.be.false;
+            expect(util.normalizeConfig({ autoImportComponentScript: <any>'true' }).autoImportComponentScript).to.be.false;
+            expect(util.normalizeConfig({ autoImportComponentScript: true }).autoImportComponentScript).to.be.true;
+        });
     });
 
     describe('stringFormat', () => {

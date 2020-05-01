@@ -92,15 +92,16 @@ export interface FileReference {
     pkgPath: string;
     text: string;
     /**
-     * The source file that is doing the importing of this file
+     * The file that is doing the import. Note this is NOT the file the pkgPath points to.
      */
     sourceFile: XmlFile | BrsFile;
     /**
      * The full range of this file reference.
      * Keep in mind that file references can come from xml script tags
-     * as well as bs file import statements
+     * as well as bs file import statements.
+     * If the range is null, then this import is derived so skip any location-based logic
      */
-    filePathRange: Range;
+    filePathRange?: Range;
 }
 
 export interface File {

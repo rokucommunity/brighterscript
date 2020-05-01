@@ -94,8 +94,15 @@ export interface BsConfig {
      * Emit full paths to files when printing diagnostics to the console. Defaults to false
      */
     emitFullPaths?: boolean;
+
     /**
      * A list of filters used to exclude diagnostics from the output
      */
     diagnosticFilters?: Array<number | string | { src: string; codes: number[] } | { src: string } | { codes: number[] }>;
+
+    /**
+     * When enabled, every xml component will search for a .bs or .brs file with the same name
+     * in the same folder, and add it as a script import if found. Disabled by default"
+     */
+    autoImportComponentScript?: boolean;
 }

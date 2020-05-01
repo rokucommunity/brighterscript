@@ -121,7 +121,7 @@ export class XmlScope extends Scope {
     private diagnosticDetectDuplicateAncestorScriptImports() {
         if (this.xmlFile.parent) {
             //build a lookup of pkg paths -> FileReference so we can more easily look up collisions
-            let parentScriptImports = this.xmlFile.parent.getAllScriptImports();
+            let parentScriptImports = this.xmlFile.parent.getAllFileReferences();
             let lookup = {} as { [pkgPath: string]: FileReference };
             for (let parentScriptImport of parentScriptImports) {
                 //keep the first occurance of a pkgPath. Parent imports are first in the array
