@@ -709,7 +709,7 @@ export class Lexer {
                 this.advance();
             } // read the next word
 
-            let twoWords = this.source.slice(this.start, this.current);
+            let twoWords = this.source.slice(this.start, this.current).toLowerCase();
             switch (twoWords.replace(/[\s\t]+/g, ' ')) {
                 case '#else if':
                     this.addToken(TokenKind.HashElseIf);

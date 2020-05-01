@@ -587,8 +587,43 @@ describe('lexer', () => {
         });
 
         it('reads conditional directives', () => {
-            let { tokens } = Lexer.scan('#if #else if #elseif #else #end if #endif');
-            expect(tokens.map(t => t.kind)).to.deep.equal([
+            let { tokens } = Lexer.scan(`
+                #if
+                #else if
+                #elseif
+                #else
+                #end if
+                #endif
+            `, {
+                includeWhitespace: false
+            });
+            expect(
+                tokens.map(t => t.kind).filter(x => x !== TokenKind.Newline)
+            ).to.deep.equal([
+                TokenKind.HashIf,
+                TokenKind.HashElseIf,
+                TokenKind.HashElseIf,
+                TokenKind.HashElse,
+                TokenKind.HashEndIf,
+                TokenKind.HashEndIf,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('reads upper case conditional directives', () => {
+            let { tokens } = Lexer.scan(`
+                #IF
+                #ELSE IF
+                #ELSEIF
+                #ELSE
+                #END IF
+                #ENDIF
+            `, {
+                includeWhitespace: false
+            });
+            expect(
+                tokens.map(t => t.kind).filter(x => x !== TokenKind.Newline)
+            ).to.deep.equal([
                 TokenKind.HashIf,
                 TokenKind.HashElseIf,
                 TokenKind.HashElseIf,

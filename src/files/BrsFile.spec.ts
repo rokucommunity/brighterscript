@@ -256,7 +256,7 @@ describe('BrsFile', () => {
 
         describe('conditional compile', () => {
 
-            it.only('works for upper case keywords', async () => {
+            it('works for upper case keywords', async () => {
                 let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #CONST someFlag = true
