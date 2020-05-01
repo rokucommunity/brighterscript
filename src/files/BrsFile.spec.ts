@@ -256,6 +256,22 @@ describe('BrsFile', () => {
 
         describe('conditional compile', () => {
 
+            it.only('works for upper case keywords', async () => {
+                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                    sub main()
+                        #CONST someFlag = true
+                        #IF someFlag
+                            'code to execute when someFlag is true
+                        #ELSEIF someFlag
+                            'code to execute when anotherFlag is true
+                        #ELSE
+                            'code
+                        #ENDIF
+                    end sub
+                `);
+                expect(file.getDiagnostics()).to.be.lengthOf(0);
+            });
+
             it('supports single-word #elseif and #endif', async () => {
                 let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
