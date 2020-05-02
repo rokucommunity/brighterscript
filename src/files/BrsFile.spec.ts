@@ -11,7 +11,7 @@ import { IntegerType } from '../types/IntegerType';
 import { StringType } from '../types/StringType';
 import { BrsFile } from './BrsFile';
 import { SourceMapConsumer } from 'source-map';
-import { TokenKind, Lexer } from '../lexer';
+import { TokenKind, Lexer, Keywords } from '../lexer';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { StandardizedFileEntry } from 'roku-deploy';
 
@@ -72,6 +72,57 @@ describe('BrsFile', () => {
             let names = result.map(x => x.label);
             expect(names).to.contain('Main');
             expect(names).to.contain('SayHello');
+        });
+
+        it('always includes `m`', async () => {
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+
+                end sub
+            `);
+
+            let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 23));
+            let names = result.map(x => x.label);
+            expect(names).to.contain('m');
+        });
+
+        it('includes all keywordsm`', async () => {
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+                    
+                end sub
+            `);
+
+            let keywords = Object.keys(Keywords).filter(x => !x.includes(' '));
+
+            //inside the function
+            let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 23));
+            let names = result.map(x => x.label);
+            for (let keyword of keywords) {
+                expect(names).to.include(keyword);
+            }
+
+            //outside the function
+            result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(4, 8));
+            names = result.map(x => x.label);
+            for (let keyword of keywords) {
+                expect(names).to.include(keyword);
+            }
+        });
+
+        it('does not provide completions within a comment', async () => {
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main()
+                    'some comment
+                end sub
+            `);
+
+            //inside the function
+            let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 33));
+            expect(result).to.be.lengthOf(0);
         });
 
         it('does not provide duplicate entries for variables', async () => {

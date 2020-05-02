@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## UNRELEASED
+### Changed
+ - intellisense anywhere other than next to a dot now includes keywords (#67)
+
 ### Fixed
  - bug in the lexer that was not treating `constructor` as an identifier (#66)
  - bug when printing diagnostics that would sometimes fail to find the line in question (#68)

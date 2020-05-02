@@ -8,7 +8,7 @@ import { FunctionScope } from '../FunctionScope';
 import { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import { Deferred } from '../deferred';
 import { FunctionParameter } from '../brsTypes';
-import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers } from '../lexer';
+import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
 import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, NewExpression, Expression } from '../parser/Expression';
 import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, NamespaceStatement, ImportStatement } from '../parser/Statement';
@@ -765,17 +765,17 @@ export class BrsFile {
             return this.program.getScriptImportCompletions(this.pkgPath, scriptImport);
         }
 
-        //determine if cursor is inside a function
-        let functionScope = this.getFunctionScopeAtPosition(position);
-        if (!functionScope) {
-            //we aren't in any function scope, so just return an empty list
-            return result;
-        }
-
         //if cursor is within a comment, disable completions
         let currentToken = this.getTokenAt(position);
         if (currentToken && currentToken.kind === TokenKind.Comment) {
             return [];
+        }
+
+        //determine if cursor is inside a function
+        let functionScope = this.getFunctionScopeAtPosition(position);
+        if (!functionScope) {
+            //we aren't in any function scope, so return the keyword completions
+            return KeywordCompletions;
         }
 
         //is next to a period (or an identifier that is next to a period). include the property names
@@ -792,8 +792,18 @@ export class BrsFile {
             //include the global callables
             result.push(...scope.getCallablesAsCompletions(parseMode));
 
+            //add `m` because that's always valid within a function
+            result.push({
+                label: 'm',
+                kind: CompletionItemKind.Variable
+            });
+            names['m'] = true;
+
+            result.push(...KeywordCompletions);
+
             //include local variables
             let variables = functionScope.variableDeclarations;
+
             for (let variable of variables) {
                 //skip duplicate variable names
                 if (names[variable.name.toLowerCase()]) {
@@ -1068,3 +1078,18 @@ export class BrsFile {
     public dispose() {
     }
 }
+
+/**
+ * List of completions for all valid keywords/reserved words.
+ * Build this list once because it won't change for the lifetime of this process
+ */
+export const KeywordCompletions = Object.keys(Keywords)
+    //remove any keywords with whitespace
+    .filter(x => !x.includes(' '))
+    //create completions
+    .map(x => {
+        return {
+            label: x,
+            kind: CompletionItemKind.Keyword
+        } as CompletionItem;
+    });
