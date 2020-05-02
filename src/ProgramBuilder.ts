@@ -250,8 +250,9 @@ export class ProgramBuilder {
                 );
                 console.log('');
 
-                //print the line
-                let diagnosticLine = lines[diagnostic.range.start.line];
+                //Get the line referenced by the diagnostic. if we couldn't find a line,
+                // default to an empty string so it doesn't crash the error printing below
+                let diagnosticLine = lines[diagnostic.range.start.line] ?? '';
 
                 //if the squiggly length is longer than the line, concat to end of line
                 let squigglyLength = diagnostic.range.end.character - diagnostic.range.start.character;
