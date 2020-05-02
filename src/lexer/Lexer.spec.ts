@@ -610,6 +610,11 @@ describe('lexer', () => {
             ]);
         });
 
+        it('treats text "constructor" as an identifier', () => {
+            let lexer = Lexer.scan(`function constructor()\nend function`);
+            expect(lexer.tokens[1].kind).to.equal(TokenKind.Identifier);
+        });
+
         it('reads upper case conditional directives', () => {
             let { tokens } = Lexer.scan(`
                 #IF

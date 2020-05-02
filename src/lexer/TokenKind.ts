@@ -274,6 +274,8 @@ export const Keywords: { [key: string]: TokenKind } = {
     'end namespace': TokenKind.EndNamespace,
     import: TokenKind.Import
 };
+//hide the constructor prototype method because it causes issues
+Keywords.constructor = undefined;
 
 /** Set of all keywords that end blocks. */
 export type BlockTerminator =

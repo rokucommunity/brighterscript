@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## UNRELEASED
+### Fixed
+ - bug in the lexer that was not treating `constructor` as an identifier (#66)
+
+
+
 ## [0.9.1] - 2020-05-01
 ### Fixed
  - bug with upper-case two-word conditional compile tokens (`#ELSE IF` and `#END IF`) (#63)
