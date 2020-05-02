@@ -15,7 +15,6 @@ import { platformFile } from './platformCallables';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
-import { Keywords } from './lexer/TokenKind';
 
 export class Program {
     constructor(
