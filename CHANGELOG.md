@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## UNRELEASED
+## 0.9.2 - 2020-05-02
 ### Changed
  - intellisense anywhere other than next to a dot now includes keywords (#67)
 
@@ -217,6 +217,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.9.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.1...v0.9.2
 [0.9.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.0...v0.9.1
 [0.9.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.8.2...v0.9.0
 [0.8.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.8.1...v0.8.2
