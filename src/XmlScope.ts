@@ -106,12 +106,15 @@ export class XmlScope extends Scope {
     public validate() {
         if (this.isValidated === false) {
             super.validate();
+            this.isValidated = false;
 
             //detect when the child imports a script that its ancestor also imports
             this.diagnosticDetectDuplicateAncestorScriptImports();
 
             //detect script imports to files that are not loaded in this scope
             this.diagnosticValidateScriptImportPaths();
+
+            this.isValidated = true;
         }
     }
 

@@ -418,7 +418,7 @@ export class Scope {
             this.diagnosticDetectShadowedLocalVars(scopeFile.file, callableContainersByLowerName);
         }
 
-        this.isValidated = false;
+        this.isValidated = true;
     }
 
     public getNewExpressions() {

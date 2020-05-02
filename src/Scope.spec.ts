@@ -137,6 +137,28 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
+        it('marks the scope as validated after validation has occurred', async () => {
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+               sub main()
+               end sub
+            `);
+            let lib = await program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
+               sub libFunc()
+               end sub
+            `);
+            expect(program.getScopesForFile(lib)[0].isValidated).to.be.false;
+            await program.validate();
+            expect(program.getScopesForFile(lib)[0].isValidated).to.be.true;
+            lib = await program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
+                sub libFunc()
+                end sub
+            `);
+
+            //scope gets marked as invalidated
+            expect(program.getScopesForFile(lib)[0].isValidated).to.be.false;
+
+        });
+
         it('does not mark same-named-functions in different namespaces as an error', async () => {
             await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                 namespace NameA
