@@ -583,6 +583,22 @@ export class Util {
     }
 
     /**
+     * Determine if two arrays containing primitive values are equal.
+     * This considers order and compares by equality.
+     */
+    public areArraysEqual(arr1: any[], arr2: any[]) {
+        if (arr1.length !== arr2.length) {
+            return false;
+        }
+        for (let i = 0; i < arr1.length; i++) {
+            if (arr1[i] !== arr2[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Given a file path, convert it to a URI string
      */
     public pathToUri(pathAbsolute: string) {
