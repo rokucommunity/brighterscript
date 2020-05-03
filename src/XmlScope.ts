@@ -124,7 +124,7 @@ export class XmlScope extends Scope {
     private diagnosticDetectDuplicateAncestorScriptImports() {
         if (this.xmlFile.parent) {
             //build a lookup of pkg paths -> FileReference so we can more easily look up collisions
-            let parentScriptImports = this.xmlFile.parent.getAllFileReferences();
+            let parentScriptImports = this.xmlFile.getAncestorScriptTagImports();
             let lookup = {} as { [pkgPath: string]: FileReference };
             for (let parentScriptImport of parentScriptImports) {
                 //keep the first occurance of a pkgPath. Parent imports are first in the array
@@ -133,8 +133,8 @@ export class XmlScope extends Scope {
                 }
             }
 
-            //add warning for every import this file shares with an ancestor
-            for (let scriptImport of this.xmlFile.ownScriptImports) {
+            //add warning for every script tag that this file shares with an ancestor
+            for (let scriptImport of this.xmlFile.scriptTagImports) {
                 let ancestorScriptImport = lookup[scriptImport.pkgPath];
                 if (ancestorScriptImport) {
                     let ancestorComponentName = (ancestorScriptImport.sourceFile as XmlFile).componentName;
@@ -173,7 +173,7 @@ export class XmlScope extends Scope {
      */
     private diagnosticValidateScriptImportPaths() {
         //verify every script import
-        for (let scriptImport of this.xmlFile.ownScriptImports) {
+        for (let scriptImport of this.xmlFile.scriptTagImports) {
             let referencedFile = this.getFileByRelativePath(scriptImport.pkgPath);
             //if we can't find the file
             if (!referencedFile) {

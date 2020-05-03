@@ -2,7 +2,6 @@ import { EventEmitter } from 'events';
 import * as path from 'path';
 import { CodeWithSourceMap } from 'source-map';
 import { CompletionItem, Hover, Position, Range } from 'vscode-languageserver';
-
 import { Deferred } from '../deferred';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
@@ -25,7 +24,16 @@ export class XmlFile {
 
         //allow unlimited listeners
         this.emitter.setMaxListeners(0);
+
+        //anytime a dependency changes, clean up some cached values
+        this.subscriptions.push(
+            this.program.dependencyGraph.onchange(this.pkgPath, () => {
+                this._allAvailableScriptImports = undefined;
+            })
+        );
     }
+
+    private subscriptions = [] as Array<() => void>;
 
     public parentNameRange: Range;
 
@@ -34,7 +42,40 @@ export class XmlFile {
      */
     public extension: string;
 
-    public ownScriptImports = [] as FileReference[];
+    /**
+     * The list script imports delcared in the XML of this file.
+     * This excludes parent imports and auto codebehind imports
+     */
+    public scriptTagImports = [] as FileReference[];
+
+    /**
+     * List of all pkgPaths to scripts that this XmlFile depends on that are actually loaded into the program,
+     * coming from:
+     *  - script tags
+     *  - inferred codebehind file
+     *  - import statements from imported scripts or their descendents
+     */
+    public get allScriptImports() {
+        return this.program.dependencyGraph.nodes[this.pkgPath].allDependencies;
+    }
+
+    /**
+     * List of all pkgPaths to scripts that this XmlFile depends on that are actually loaded into the program,
+     * coming from:
+     *  - script tags
+     *  - inferred codebehind file
+     *  - import statements from imported scripts or their descendents
+     */
+    public get allAvailableScriptImports() {
+        if (!this._allAvailableScriptImports) {
+            let allDependencies = this.program.dependencyGraph.nodes[this.pkgPath].allDependencies;
+
+            this._allAvailableScriptImports = this.program.getFilesByPkgPaths(allDependencies).map(x => x.pkgPath);
+
+        }
+        return this._allAvailableScriptImports;
+    }
+    private _allAvailableScriptImports = [] as string[];
 
     public getDiagnostics() {
         return [...this.diagnostics];
@@ -233,7 +274,7 @@ export class XmlFile {
             }
 
             //add all of these script imports
-            this.ownScriptImports = scriptImports;
+            this.scriptTagImports = scriptImports;
         }
 
         this.parseDeferred.resolve();
@@ -258,101 +299,6 @@ export class XmlFile {
     }
 
     /**
-     * Get the list of scripts imported by this component and all of its ancestors
-     */
-    public getAllFileReferences() {
-        let imports = [
-            ...this.getOwnFileReferences()
-        ] as FileReference[];
-        let file = this as XmlFile;
-        while (file.parent) {
-            imports = [...imports, ...file.parent.getOwnFileReferences()];
-            file = file.parent;
-        }
-        return imports;
-    }
-
-    /**
-     * Get the list of scripts explicitly imported by this file.
-     * This method excludes any ancestor imports
-     */
-    public getOwnFileReferences() {
-        let result = [
-            ...this.ownScriptImports,
-            ...this.getCodeImports()
-        ];
-        let codebehind = this.getCodebehindFileReference();
-        if (codebehind) {
-            result.push(codebehind);
-        }
-        return result;
-    }
-
-    private getCodebehindFileReference() {
-        //if auto importing of codebehind files is enabled, include the codebehind file if exists
-        if (this.program.options.autoImportComponentScript === true) {
-            let bsCodebehind = this.program.getFileByPkgPath(this.pkgPath.replace(/\.xml$/i, '.bs'));
-            let brsCodebehind = this.program.getFileByPkgPath(this.pkgPath.replace(/\.xml$/i, '.brs'));
-            if (bsCodebehind && brsCodebehind) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.autoImportComponentScriptCollision(),
-                    //the whole line
-                    range: Range.create(0, 0, 0, 999999),
-                    file: this
-                });
-            }
-            //prefer the bs file over brs
-            let codebehind = bsCodebehind ?? brsCodebehind;
-            if (codebehind) {
-                return {
-                    filePathRange: null,
-                    pkgPath: codebehind.pkgPath,
-                    sourceFile: this,
-                    text: codebehind.pkgPath
-                };
-            }
-        }
-    }
-
-    /**
-     * Create a list of all the `import` statements from source files
-     */
-    public getCodeImports() {
-        let processedFileMap = {} as { [pkgPath: string]: boolean };
-        let result = [] as FileReference[];
-        let fileRefStack = [
-            ...this.ownScriptImports,
-            this.getCodebehindFileReference()
-        ];
-        while (fileRefStack.length > 0) {
-            //consume a file from the list
-            let fileRef = fileRefStack.pop();
-            //skip invalid/undefined fileRefs
-            if (!fileRef) {
-                continue;
-            }
-            let targetFile = this.program.getFileByPkgPath(fileRef.pkgPath);
-
-            //only add code imports that we can actually find the file for
-            if (targetFile) {
-                let lowerPkgPath = targetFile.pkgPath.toLowerCase();
-
-                //only process a source file once
-                if (!processedFileMap[lowerPkgPath]) {
-                    processedFileMap[lowerPkgPath] = true;
-
-                    //add all of the target file's fileRefs to the list
-                    result.push(...targetFile.ownScriptImports);
-
-                    //add the target file's imports to the stack so they can be evaluated
-                    fileRefStack.push(...targetFile.ownScriptImports);
-                }
-            }
-        }
-        return result;
-    }
-
-    /**
      * Determines if this xml file has a reference to the specified file (or if it's itself)
      * @param file
      */
@@ -360,9 +306,9 @@ export class XmlFile {
         if (file === this) {
             return true;
         }
-        let fileReferences = this.getOwnFileReferences();
-        for (let scriptImport of fileReferences) {
-            if (scriptImport.pkgPath.toLowerCase() === file.pkgPath.toLowerCase()) {
+        let allScriptImports = this.allScriptImports;
+        for (let importPkgPath of allScriptImports) {
+            if (importPkgPath.toLowerCase() === file.pkgPath.toLowerCase()) {
                 return true;
             }
         }
@@ -382,7 +328,7 @@ export class XmlFile {
      * @param columnIndex
      */
     public async getCompletions(position: Position): Promise<CompletionItem[]> {
-        let scriptImport = util.getScriptImportAtPosition(this.ownScriptImports, position);
+        let scriptImport = util.getScriptImportAtPosition(this.scriptTagImports, position);
         if (scriptImport) {
             return this.program.getScriptImportCompletions(this.pkgPath, scriptImport);
         } else {
@@ -465,6 +411,55 @@ export class XmlFile {
     }
 
     /**
+     * Walk up the ancestor chain and aggregate all of the script tag imports
+     */
+    public getAncestorScriptTagImports() {
+        let result = [];
+        let parent = this.parent;
+        while (parent) {
+            result.push(...parent.scriptTagImports);
+            parent = parent.parent;
+        }
+        return result;
+    }
+
+    /**
+     * Get the list of script imports that this file needs to include.
+     * It compares the list of imports on this file to those of its parent,
+     * and only includes the ones that are not found on the parent.
+     * If no parent is found, all imports are returned
+     */
+    private getMissingImportsForTranspile() {
+        let ownImports = this.allAvailableScriptImports;
+
+        let parentImports = this.parent?.allAvailableScriptImports ?? [];
+
+        let parentMap = parentImports.reduce((map, pkgPath) => {
+            map[pkgPath] = true;
+            return map;
+        }, {});
+
+        //if the XML already has this import, skip this one
+        let alreadyThereScriptImportMap = this.scriptTagImports.reduce((map, fileReference) => {
+            map[fileReference.pkgPath] = true;
+            return map;
+        }, {});
+
+        let result = [] as string[];
+        for (let ownImport of ownImports) {
+            if (
+                //if the parent doesn't have this import
+                !parentMap[ownImport] &&
+                //the XML doesn't already have a script reference for this
+                !alreadyThereScriptImportMap[ownImport]
+            ) {
+                result.push(ownImport);
+            }
+        }
+        return result;
+    }
+
+    /**
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
@@ -474,14 +469,18 @@ export class XmlFile {
             let line = lines[i];
             let lowerLine = line.toLowerCase();
 
+            let componentLocationIndex = lowerLine.indexOf('</component>');
             //include any bs import statements
-            if (lowerLine.includes('</component>')) {
-                let codeImports = this.getCodeImports();
+            if (componentLocationIndex > -1) {
+                let missingImports = this.getMissingImportsForTranspile();
                 let newLines = [] as string[];
 
-                for (let codeImport of codeImports) {
+                for (let missingImport of missingImports) {
+                    let scriptTag = `<script type="text/brightscript" uri="${util.getRokuPkgPath(missingImport)}" />`;
+                    //indent the script tag
+                    let indent = ''.padStart(componentLocationIndex + 4, ' ');
                     newLines.push(
-                        `<script type="text/brightscript" uri="${util.getRokuPkgPath(codeImport.pkgPath)}" />`
+                        indent + scriptTag
                     );
                 }
 
@@ -508,5 +507,8 @@ export class XmlFile {
 
     public dispose() {
         this.emitter.removeAllListeners();
+        for (let dispose of this.subscriptions) {
+            dispose();
+        }
     }
 }

@@ -886,11 +886,11 @@ describe('Program', () => {
             await program.validate();
             expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
             expect(
-                (component as XmlFile).getAllFileReferences().map(x => x.pkgPath)
+                (component as XmlFile).allAvailableScriptImports.sort()
             ).to.eql([
+                s`source/intOps.bs`,
                 s`source/lib.bs`,
-                s`source/stringOps.bs`,
-                s`source/intOps.bs`
+                s`source/stringOps.bs`
             ]);
         });
 
@@ -916,7 +916,7 @@ describe('Program', () => {
             await program.validate();
             expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
             expect(
-                (component as XmlFile).getAllFileReferences().map(x => x.pkgPath)
+                (component as XmlFile).allAvailableScriptImports
             ).to.eql([
                 s`source/lib.bs`,
                 s`source/stringOps.brs`
@@ -947,7 +947,7 @@ describe('Program', () => {
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
-<script type="text/brightscript" uri="pkg:/source/stringOps.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/stringOps.brs" />
                 </component>
             `);
         });

@@ -15,6 +15,7 @@ import { platformFile } from './platformCallables';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
+import { DependencyGraph } from './DependencyGraph';
 
 export class Program {
     constructor(
@@ -58,6 +59,11 @@ export class Program {
             return contents;
         });
     }
+
+    /**
+     * A graph of all files and their dependencies
+     */
+    public dependencyGraph = new DependencyGraph();
 
     private diagnosticFilterer = new DiagnosticFilterer();
 
@@ -176,9 +182,13 @@ export class Program {
      * @param filePaths
      */
     public async addOrReplaceFiles(fileObjects: Array<StandardizedFileEntry>) {
-        return Promise.all(
-            fileObjects.map(async (fileObject) => this.addOrReplaceFile(fileObject))
-        );
+        let promises = [];
+        for (let fileObject of fileObjects) {
+            promises.push(
+                this.addOrReplaceFile(fileObject)
+            );
+        }
+        return Promise.all(promises);
     }
 
     public getPkgPath(...args: any[]): any { //eslint-disable-line
@@ -235,6 +245,8 @@ export class Program {
             await brsFile.parse(await getFileContents());
             file = brsFile;
 
+            this.dependencyGraph.addOrReplace(brsFile.pkgPath, brsFile.ownScriptImports.map(x => x.pkgPath));
+
         } else if (
             //is xml file
             fileExtension === '.xml' &&
@@ -245,6 +257,21 @@ export class Program {
             //add the file to the program
             this.files[pathAbsolute] = xmlFile;
             await xmlFile.parse(await getFileContents());
+
+            let dependencies = [
+                ...xmlFile.scriptTagImports.map(x => x.pkgPath)
+            ];
+            //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
+            if (this.options.autoImportComponentScript) {
+                dependencies.push(
+                    //add the codebehind file dependencies.
+                    //These are kind of optional, so it doesn't hurt to just add both extension versions
+                    xmlFile.pkgPath.replace(/\.xml$/i, '.bs'),
+                    xmlFile.pkgPath.replace(/\.xml$/i, '.brs')
+                );
+            }
+            this.dependencyGraph.addOrReplace(xmlFile.pkgPath, dependencies);
+
             file = xmlFile;
 
             //create a new scope for this xml file
@@ -312,17 +339,28 @@ export class Program {
     }
 
     /**
+     * Get a list of files for the given pkgPath array.
+     * Missing files are just ignored.
+     */
+    public getFilesByPkgPaths(pkgPaths: string[]) {
+        pkgPaths = pkgPaths.map(x => s`${x}`);
+
+        let result = [] as Array<XmlFile | BrsFile>;
+        for (let filePath in this.files) {
+            let file = this.files[filePath];
+            if (pkgPaths.includes(s`${file.pkgPath}`)) {
+                result.push(file);
+            }
+        }
+        return result;
+    }
+
+    /**
      * Get a file with the specified pkg path.
      * If not found, return undefined
      */
     public getFileByPkgPath(pkgPath: string) {
-        pkgPath = util.pathSepNormalize(pkgPath);
-        for (let filePath in this.files) {
-            let file = this.files[filePath];
-            if (s`${file.pkgPath}` === s`${pkgPath}`) {
-                return file;
-            }
-        }
+        return this.getFilesByPkgPaths([pkgPath])[0];
     }
 
     /**
@@ -342,22 +380,26 @@ export class Program {
     public removeFile(pathAbsolute: string) {
         pathAbsolute = s`${pathAbsolute}`;
         let file = this.getFile(pathAbsolute);
+        if (file) {
 
-        //notify every scope of this file removal
-        for (let scopeName in this.scopes) {
-            let scope = this.scopes[scopeName];
-            scope.removeFile(file);
-        }
+            //notify every scope of this file removal
+            for (let scopeName in this.scopes) {
+                let scope = this.scopes[scopeName];
+                scope.removeFile(file);
+            }
 
-        //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
-        let scope = this.scopes[file.pkgPath];
-        if (scope) {
-            scope.dispose();
-            delete this.scopes[file.pkgPath];
+            //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
+            let scope = this.scopes[file.pkgPath];
+            if (scope) {
+                scope.dispose();
+                delete this.scopes[file.pkgPath];
+            }
+            //remove the file from the program
+            delete this.files[pathAbsolute];
+            this.emit('file-removed', file);
+
+            this.dependencyGraph.remove(file.pkgPath);
         }
-        //remove the file from the program
-        delete this.files[pathAbsolute];
-        this.emit('file-removed', file);
     }
 
     /**

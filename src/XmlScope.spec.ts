@@ -1,24 +1,24 @@
 import { assert, expect } from 'chai';
-import * as path from 'path';
 import { Position } from 'vscode-languageserver';
 
 import { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
-import util from './util';
 import { XmlScope } from './XmlScope';
-
-let n = path.normalize;
+import { standardizePath as s, util } from './util';
 let rootDir = 'C:/projects/RokuApp';
 
 describe('XmlScope', () => {
     let xmlFile: XmlFile;
     let scope: XmlScope;
     let program: Program;
-    let xmlFilePath = n(`${rootDir}/components/component.xml`);
-    beforeEach(() => {
+    let xmlFilePath = s`${rootDir}/components/component.xml`;
+    beforeEach(async () => {
 
         program = new Program({ rootDir: rootDir });
-        xmlFile = new XmlFile(xmlFilePath, n('components/component.xml'), program);
+        xmlFile = await program.addOrReplaceFile({
+            src: xmlFilePath,
+            dest: 'components/component.xml'
+        }, '') as XmlFile;
         scope = new XmlScope(xmlFile);
         scope.attachProgram(program);
 
@@ -42,8 +42,11 @@ describe('XmlScope', () => {
     });
 
     describe('constructor', () => {
-        it('listens for attach/detach parent events', () => {
-            let parentXmlFile = new XmlFile(n(`${rootDir}/components/parent.xml`), n('components/parent.xml'), program);
+        it('listens for attach/detach parent events', async () => {
+            let parentXmlFile = await program.addOrReplaceFile({
+                src: `${rootDir}/components/parent.xml`,
+                dest: `components/parent.xml`
+            }, '') as XmlFile;
             let parentScope = new XmlScope(parentXmlFile);
             (program as any).scopes[parentScope.name] = parentScope;
 

@@ -25,56 +25,58 @@ describe('XmlFile', () => {
 
     describe('parse', () => {
         it('supports importing BrighterScript files', async () => {
-            file = new XmlFile(`${rootDir}/components/custom.xml`, 'components/custom.xml', null);
-            await file.parse(`
+            file = await program.addOrReplaceFile({ src: `${rootDir}/components/custom.xml`, dest: 'components/custom.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="Scene">
-                <script type="text/brightscript" uri="ChildScene.bs" />
+                    <script type="text/brightscript" uri="ChildScene.bs" />
                 </component>
-            `);
-            expect(file.ownScriptImports.map(x => x.pkgPath)[0]).to.equal(
+            `) as any;
+            expect(file.scriptTagImports.map(x => x.pkgPath)[0]).to.equal(
                 s`components/ChildScene.bs`
             );
         });
         it('does not include commented-out script imports', async () => {
-            file = new XmlFile('abs', 'rel', null);
-            await file.parse(`
+            file = await program.addOrReplaceFile({ src: `${rootDir}/components/custom.xml`, dest: 'components/custom.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="Scene">
-                <script type="text/brightscript" uri="ChildScene.brs" />
-                <!--
+                    <script type="text/brightscript" uri="ChildScene.brs" />
+                    <!--
                         <script type="text/brightscript" uri="ChildScene.brs" />
                     -->
                 </component>
-            `);
-            expect(file.ownScriptImports).to.be.lengthOf(1);
+            `) as any;
+            expect(
+                file.scriptTagImports?.[0]?.pkgPath
+            ).to.eql(
+                s`components/ChildScene.brs`
+            );
         });
 
         it('finds scripts when more than one per line', async () => {
-            file = new XmlFile('abs', 'rel', null);
+            file = new XmlFile('abs', 'rel', program);
             await file.parse(`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="Scene">
                     <script type="text/brightscript" uri="ChildScene1.brs" /> <script type="text/brightscript" uri="ChildScene2.brs" /> <script type="text/brightscript" uri="ChildScene3.brs" />
                 </component>
             `);
-            expect(file.ownScriptImports).to.be.lengthOf(3);
-            expect(file.ownScriptImports[0]).to.deep.include(<FileReference>{
+            expect(file.scriptTagImports).to.be.lengthOf(3);
+            expect(file.scriptTagImports[0]).to.deep.include(<FileReference>{
                 text: 'ChildScene1.brs',
                 filePathRange: Range.create(3, 58, 3, 73)
             });
-            expect(file.ownScriptImports[1]).to.deep.include(<FileReference>{
+            expect(file.scriptTagImports[1]).to.deep.include(<FileReference>{
                 text: 'ChildScene2.brs',
                 filePathRange: Range.create(3, 116, 3, 131)
             });
-            expect(file.ownScriptImports[2]).to.deep.include(<FileReference>{
+            expect(file.scriptTagImports[2]).to.deep.include(<FileReference>{
                 text: 'ChildScene3.brs',
                 filePathRange: Range.create(3, 174, 3, 189)
             });
         });
 
         it('finds component names', async () => {
-            file = new XmlFile('abs', 'rel', null);
+            file = new XmlFile('abs', 'rel', program);
             await file.parse(`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
@@ -86,14 +88,14 @@ describe('XmlFile', () => {
         });
 
         it('Adds error when no component is declared in xml', async () => {
-            file = new XmlFile('abs', 'rel', null);
+            file = new XmlFile('abs', 'rel', program);
             await file.parse('<script type="text/brightscript" uri="ChildScene.brs" />');
             expect(file.diagnostics).to.be.lengthOf(1);
             expect(file.diagnostics[0].message).to.equal(DiagnosticMessages.xmlComponentMissingComponentDeclaration().message);
         });
 
         it('adds error when component does not declare a name', async () => {
-            file = new XmlFile('abs', 'rel', null);
+            file = new XmlFile('abs', 'rel', program);
             await file.parse(`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component extends="ParentScene">
@@ -108,7 +110,7 @@ describe('XmlFile', () => {
         });
 
         it('catches xml parse errors', async () => {
-            file = new XmlFile('abs', 'rel', null);
+            file = new XmlFile('abs', 'rel', program);
             await file.parse(`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component 1extends="ParentScene">
@@ -122,15 +124,15 @@ describe('XmlFile', () => {
         });
 
         it('finds script imports', async () => {
-            file = new XmlFile('abspath/components/cmp1.xml', 'components/cmp1.xml', null);
+            file = new XmlFile('abspath/components/cmp1.xml', 'components/cmp1.xml', program);
             await file.parse(`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Cmp1" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/cmp1.brs" />
                 </component>
             `);
-            expect(file.ownScriptImports.length).to.equal(1);
-            expect(file.ownScriptImports[0]).to.deep.include(<FileReference>{
+            expect(file.scriptTagImports.length).to.equal(1);
+            expect(file.scriptTagImports[0]).to.deep.include(<FileReference>{
                 sourceFile: file,
                 text: 'pkg:/components/cmp1.brs',
                 pkgPath: `components${path.sep}cmp1.brs`,
@@ -139,7 +141,7 @@ describe('XmlFile', () => {
         });
 
         it('throws an error if the file has already been parsed', async () => {
-            file = new XmlFile('abspath', 'relpath', null);
+            file = new XmlFile('abspath', 'relpath', program);
             await file.parse('a comment');
             try {
                 await file.parse(`'a new comment`);
@@ -150,30 +152,34 @@ describe('XmlFile', () => {
         });
 
         it('resolves relative paths', async () => {
-            file = new XmlFile('abspath/components/cmp1.xml', 'components/cmp1.xml', null);
-            await file.parse(`
+            file = await program.addOrReplaceFile({
+                src: `${rootDir}/components/comp1.xml`,
+                dest: 'components/comp1.xml'
+            }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Cmp1" extends="Scene">
                     <script type="text/brightscript" uri="cmp1.brs" />
                 </component>
-            `);
-            expect(file.ownScriptImports.length).to.equal(1);
-            expect(file.ownScriptImports[0]).to.deep.include(<FileReference>{
+            `) as any;
+            expect(file.scriptTagImports.length).to.equal(1);
+            expect(file.scriptTagImports[0]).to.deep.include(<FileReference>{
                 text: 'cmp1.brs',
                 pkgPath: `components${path.sep}cmp1.brs`
             });
         });
 
         it('finds correct position for empty uri in script tag', async () => {
-            file = new XmlFile('abspath/components/cmp1.xml', 'components/cmp1.xml', null);
-            await file.parse(`
+            file = await program.addOrReplaceFile({
+                src: `${rootDir}/components/comp1.xml`,
+                dest: 'components/comp1.xml'
+            }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Cmp1" extends="Scene">
                     <script type="text/brightscript" uri="" />
                 </component>
-            `);
-            expect(file.ownScriptImports.length).to.equal(1);
-            expect(file.ownScriptImports[0]?.filePathRange).to.eql(
+            `) as any;
+            expect(file.scriptTagImports.length).to.equal(1);
+            expect(file.scriptTagImports[0]?.filePathRange).to.eql(
                 Range.create(3, 58, 3, 58)
             );
         });
@@ -225,12 +231,24 @@ describe('XmlFile', () => {
             ).to.include(
                 DiagnosticMessages.fileNotReferencedByAnyOtherFile().message
             );
+        });
 
-            //enable the setting
-            program.options.autoImportComponentScript = true;
+        it('is not enabled by default', async () => {
+            program = new Program({
+                rootDir: rootDir,
+                autoImportComponentScript: true
+            });
+            await program.addOrReplaceFile({ src: `${rootDir}/components/comp1.xml`, dest: 'components/comp1.xml' }, `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ParentScene" extends="GrandparentScene">
+                    <script type="text/brightscript" uri="./lib.brs" />
+                </component>
+            `);
 
-            //remove the file and re-add it
-            program.removeFile(`${rootDir}/components/comp1.bs`);
+            await program.addOrReplaceFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, `
+                function libFunc()
+                end function
+            `);
 
             await program.addOrReplaceFile({ src: `${rootDir}/components/comp1.bs`, dest: 'components/comp1.bs' }, `
                 function init()
@@ -253,7 +271,7 @@ describe('XmlFile', () => {
             program.files[scriptPath] = new BrsFile(scriptPath, s`components/component1/component1.brs`, program);
 
             let xmlFile = new XmlFile(s`${rootDir}/components/component1/component1.xml`, s`components/component1/component1.xml`, <any>program);
-            xmlFile.ownScriptImports.push({
+            xmlFile.scriptTagImports.push({
                 pkgPath: s`components/component1/component1..brs`,
                 text: 'component1.brs',
                 filePathRange: Range.create(1, 1, 1, 1),
@@ -272,8 +290,7 @@ describe('XmlFile', () => {
         });
 
         it('returns empty set when out of range', async () => {
-            file = new XmlFile('abs', 'rel', null);
-            await file.parse('');
+            await program.addOrReplaceFile({ src: `${rootDir}/components/Component1.brs`, dest: 'components/component1.brs' }, ``);
             expect(await file.getCompletions(Position.create(99, 99))).to.be.empty;
         });
 
@@ -293,14 +310,19 @@ describe('XmlFile', () => {
     });
 
     describe('getAllScriptImports', () => {
-        it('returns own imports', () => {
-            file = new XmlFile('file.xml', 'file.xml', null);
-            let scriptImport = {
-                text: 'some-import'
-            };
-            file.ownScriptImports.push(<any>scriptImport);
-            file.program = program;
-            expect(file.getAllFileReferences()).to.be.lengthOf(1);
+        it('returns own imports', async () => {
+            file = await program.addOrReplaceFile({
+                src: `${rootDir}/components/comp1.xml`,
+                dest: `components/comp1.xml`
+            }, `  
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="BaseScene">
+                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
+                </component>
+            `) as any;
+            expect(file.allScriptImports).to.eql([
+                s`source/lib.brs`
+            ]);
         });
     });
 
@@ -330,12 +352,18 @@ describe('XmlFile', () => {
         });
 
         it('adds warning when no "extends" attribute is found', async () => {
-            file = new XmlFile('abs', 'rel', null);
-            await file.parse(`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene">
-                </component>
-            `);
+            file = await program.addOrReplaceFile(
+                {
+                    src: `${rootDir}/components/comp1.xml`,
+                    dest: `components/comp1.xml`
+                },
+                `
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="ChildScene">
+                    </component>
+                `
+            ) as any;
+
             expect(file.getDiagnostics()[0]).to.include({
                 severity: DiagnosticSeverity.Warning,
                 message: DiagnosticMessages.xmlComponentMissingExtendsAttribute().message

@@ -2,7 +2,7 @@ import { DependencyGraph } from './DependencyGraph';
 import * as sinon from 'sinon';
 import { expect } from 'chai';
 
-describe.only('DependencyGraph', () => {
+describe('DependencyGraph', () => {
     let graph: DependencyGraph;
     let onchange;
     beforeEach(() => {
