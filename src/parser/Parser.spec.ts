@@ -25,6 +25,12 @@ describe('parser', () => {
     });
 
     describe('parse', () => {
+        it('supports using "interface" as parameter name', () => {
+            expect(parse(`
+                sub main(interface as object)
+                end sub
+            `, ParseMode.BrighterScript).diagnostics[0]?.message).not.to.exist;
+        });
         describe('namespace', () => {
             it('catches namespaces declared not at root level', () => {
                 expect(parse(`

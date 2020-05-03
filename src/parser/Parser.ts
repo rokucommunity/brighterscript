@@ -589,7 +589,7 @@ export class Parser {
     }
 
     private functionParameter(): FunctionParameter {
-        if (!this.check(TokenKind.Identifier)) {
+        if (!this.check(TokenKind.Identifier, ...AllowedLocalIdentifiers)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedParameterNameButFound(this.peek().text),
                 range: this.peek().range
@@ -598,6 +598,9 @@ export class Parser {
         }
 
         let name = this.advance() as Identifier;
+        // force the name into an identifier so the AST makes some sense
+        name.kind = TokenKind.Identifier;
+
         let type: ValueKind = ValueKind.Dynamic;
         let typeToken: Token | undefined;
         let defaultValue;
