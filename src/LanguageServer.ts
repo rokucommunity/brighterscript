@@ -415,7 +415,11 @@ export class LanguageServer {
             watch: false,
             createPackage: false,
             deploy: false,
-            copyToStaging: false
+            copyToStaging: false,
+            diagnosticFilters: [
+                //hide the "file not referenced by any other file" error..that's expected in a standalone file.
+                1013
+            ]
         }).catch((err) => {
             console.error(err);
         });
