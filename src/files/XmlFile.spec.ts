@@ -9,12 +9,15 @@ import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
+import { getTestTranspile } from './BrsFile.spec';
 
 describe('XmlFile', () => {
     let rootDir = process.cwd();
     let program: Program;
     let sinon = sinonImport.createSandbox();
     let file: XmlFile;
+    let testTranspile = getTestTranspile(() => [program, rootDir]);
+
     beforeEach(() => {
         program = new Program({ rootDir: rootDir });
         file = new XmlFile(`${rootDir}/components/MainComponent.xml`, 'components/MainComponent.xml', program);
@@ -340,6 +343,27 @@ describe('XmlFile', () => {
                 severity: DiagnosticSeverity.Warning,
                 message: DiagnosticMessages.xmlComponentMissingExtendsAttribute().message
             });
+        });
+    });
+
+    describe('transpile', () => {
+        it.only('changes file extensions to brs from bs', async () => {
+            await program.addOrReplaceFile({
+                src: `${rootDir}/components/SimpleScene.bs`,
+                dest: `components/SimpleScene.bs`
+            }, '');
+
+            await testTranspile(`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script type="text/brighterscript" uri="SimpleScene.bs"/>
+                </component>
+            `, `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script type="text/brightscript" uri="SimpleScene.brs"/>
+                </component>
+            `, 'none', 'SimpleScene.xml');
         });
     });
 });

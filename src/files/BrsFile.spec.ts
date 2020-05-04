@@ -1771,7 +1771,7 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
     return async (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', fileName = 'main.brs') => {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
-        let file = await program.addOrReplaceFile({ src: `${rootDir}/source/${fileName}`, dest: `source/${fileName}` }, source) as BrsFile;
+        let file = await program.addOrReplaceFile({ src: `${rootDir}/components/${fileName}`, dest: `components/${fileName}` }, source) as BrsFile;
         await program.validate();
         let diagnostics = file.getDiagnostics();
         if (diagnostics.length > 0) {

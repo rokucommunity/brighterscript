@@ -496,7 +496,10 @@ export class XmlFile {
             let idx = line.indexOf('.bs"');
             if (idx > -1) {
                 lines[i] = line.substring(0, idx) + '.brs' + line.substring(idx + 3);
+
             }
+            //convert "text/brighterscript" to "text/brightscript"
+            lines[i] = lines[i].replace(`"text/brighterscript"`, `"text/brightscript"`);
         }
 
         return {
