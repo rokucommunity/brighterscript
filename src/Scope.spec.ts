@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { EventEmitter } from 'events';
 import * as sinonImport from 'sinon';
-import { Position } from 'vscode-languageserver';
+import { Position, Range } from 'vscode-languageserver';
 import { standardizePath as s } from './util';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -188,21 +188,123 @@ describe('Scope', () => {
             expect(program.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('detects local functions with same name as global', async () => {
-            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
-                sub Main()
-                    SayHi = sub()
-                        print "Hi from inner"
+        describe('function shadowing', () => {
+            it('warns when local var function has same name as stdlib function', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                    sub main()
+                        str = function(p)
+                            return "override"
+                        end function
+                        print str(12345) 'prints "12345" (i.e. our local function is never used)
                     end sub
-                end sub
-                sub SayHi()
-                    print "Hi from outer"
-                end sub
-            `);
-            await program.validate();
-            let diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(DiagnosticMessages.localVarShadowsGlobalFunction('', '').code);
+                `);
+                await program.validate();
+                let diagnostics = program.getDiagnostics().map(x => {
+                    return {
+                        message: x.message,
+                        range: x.range
+                    };
+                });
+                expect(diagnostics[0]).to.exist.and.to.eql({
+                    message: DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib').message,
+                    range: Range.create(2, 24, 2, 27)
+                });
+            });
+
+            it('warns when local var has same name as built-in function', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                    sub main()
+                        str = 12345
+                        print str ' prints "12345" (i.e. our local variable is allowed to shadow the built-in function name)
+                    end sub
+                `);
+                await program.validate();
+                let diagnostics = program.getDiagnostics();
+                expect(diagnostics[0]?.message).not.to.exist;
+            });
+
+            it('warns when local var has same name as built-in function', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                    sub main()
+                        str = 6789
+                        print str(12345) ' prints "12345" (i.e. our local variable did not override the callable global function)
+                    end sub
+                `);
+                await program.validate();
+                let diagnostics = program.getDiagnostics();
+                expect(diagnostics[0]?.message).not.to.exist;
+            });
+
+            it('detects local function with same name as scope function', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                    sub main()
+                        getHello = function()
+                            return "override"
+                        end function
+                        print getHello() 'prints "hello" (i.e. our local variable is never called)
+                    end sub
+                    
+                    function getHello()
+                        return "hello"
+                    end function
+                `);
+                await program.validate();
+                let diagnostics = program.getDiagnostics().map(x => {
+                    return {
+                        message: x.message,
+                        range: x.range
+                    };
+                });
+                expect(diagnostics[0]).to.exist.and.to.eql({
+                    message: DiagnosticMessages.localVarFunctionShadowsParentFunction('scope').message,
+                    range: Range.create(2, 24, 2, 32)
+                });
+            });
+
+            it('detects local function with same name as scope function', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                    sub main()
+                        getHello = "override"
+                        print getHello ' prints <Function: gethello> (i.e. local variable override does NOT work for same-scope-defined methods)
+                    end sub
+                    function getHello()
+                        return "hello"
+                    end function
+                `);
+                await program.validate();
+                let diagnostics = program.getDiagnostics().map(x => {
+                    return {
+                        message: x.message,
+                        range: x.range
+                    };
+                });
+                expect(diagnostics[0]).to.exist.and.to.eql({
+                    message: DiagnosticMessages.localVarShadowedByScopedFunction().message,
+                    range: Range.create(2, 24, 2, 32)
+                });
+            });
+
+            it('detects scope function with same name as built-in function', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                    sub main()
+                        print str(12345) ' prints 12345 (i.e. our str() function below is ignored)
+                    end sub
+                    function str(num)
+                        return "override"
+                    end function
+                `);
+                await program.validate();
+                let diagnostics = program.getDiagnostics().map(x => {
+                    return {
+                        message: x.message,
+                        range: x.range
+                    };
+                });
+                expect(diagnostics[0]).to.exist.and.to.eql({
+                    message: DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction().message,
+                    range: Range.create(4, 29, 4, 32)
+                });
+            });
         });
 
         it('detects duplicate callables', async () => {
