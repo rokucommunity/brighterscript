@@ -329,6 +329,93 @@ describe('XmlFile', () => {
         });
     });
 
+    it('invalidates dependent scopes on change', async () => {
+        let xmlFile = await program.addOrReplaceFile({
+            src: `${rootDir}/components/comp1.xml`,
+            dest: `components/comp1.xml`
+        }, `  
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="BaseScene">
+                <script type="text/brightscript" uri="pkg:/source/lib.bs" />
+            </component>
+        `) as any as XmlFile;
+        await program.validate();
+        let scope = program.getScopesForFile(xmlFile)[0];
+        //scope should be validated
+        expect(scope.isValidated);
+
+        //add lib1
+        await program.addOrReplaceFile({
+            src: `${rootDir}/source/lib.bs`,
+            dest: `source/lib.bs`
+        }, ``);
+        //adding a dependent file should have invalidated the scope
+        expect(scope.isValidated).to.be.false;
+        await program.validate();
+        expect(scope.isValidated).to.be.true;
+
+        //update lib1 to include an import
+        await program.addOrReplaceFile({
+            src: `${rootDir}/source/lib.bs`,
+            dest: `source/lib.bs`
+        }, `
+            import "lib2.bs"
+        `);
+
+        //scope should have been invalidated again
+        expect(scope.isValidated).to.be.false;
+        await program.validate();
+        expect(scope.isValidated).to.be.true;
+
+        //add the lib2 imported from lib
+        await program.addOrReplaceFile({
+            src: `${rootDir}/source/lib2.bs`,
+            dest: `source/lib2.bs`
+        }, ``);
+
+        //scope should have been invalidated again because of chained dependency
+        expect(scope.isValidated).to.be.false;
+        await program.validate();
+        expect(scope.isValidated).to.be.true;
+
+        program.removeFile(`${rootDir}/source/lib.bs`);
+        expect(scope.isValidated).to.be.false;
+    });
+
+    it('does not invalidate unrelated scopes on change', async () => {
+        let xmlFile1 = await program.addOrReplaceFile({
+            src: `${rootDir}/components/comp1.xml`,
+            dest: `components/comp1.xml`
+        }, `  
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene1" extends="BaseScene">
+                <script type="text/brightscript" uri="pkg:/source/lib.brs" />
+            </component>
+        `) as any as XmlFile;
+
+        let xmlFile2 = await program.addOrReplaceFile({
+            src: `${rootDir}/components/comp2.xml`,
+            dest: `components/comp2.xml`
+        }, `  
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene2" extends="BaseScene">
+            </component>
+        `) as any as XmlFile;
+
+        await program.validate();
+        //scope should be validated
+        expect(program.getScopesForFile(xmlFile1)[0].isValidated).to.be.true;
+        expect(program.getScopesForFile(xmlFile2)[0].isValidated).to.be.true;
+
+        //add the lib file
+        await program.addOrReplaceFile({
+            src: `${rootDir}/source/lib.brs`,
+            dest: `source/lib.brs`
+        }, ``);
+        expect(program.getScopesForFile(xmlFile1)[0].isValidated).to.be.false;
+        expect(program.getScopesForFile(xmlFile2)[0].isValidated).to.be.true;
+    });
+
     describe('findExtendsPosition', () => {
         it('works for single-line', () => {
             expect(file.findExtendsPosition(`
