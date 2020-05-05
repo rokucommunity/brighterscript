@@ -6,14 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## Unreleased
+## [0.9.4] - 2020-05-05
+### Changed
 ### Fixed
+ - bug that was not properly transpiling brighterscript script tags in xml components.
  - several performance issues introduced in v0.8.2. 
  - Replace `type="text/brighterscript"` with `type="text/brightscript"` in xml script imports during transpile. ([#73](https://github.com/rokucommunity/brighterscript/issues/73))
 
 
 
-## 0.9.3 - 2020-05-04
+## [0.9.3] - 2020-05-04
 ### Changed
  - do not show BRS1013 for standalone files ([#72](https://github.com/rokucommunity/brighterscript/issues/72))
  - BS1011 (same name as global function) is no longer shown for local variables that are not of type `function` ([#70](https://github.com/rokucommunity/brighterscript/issues/70))
@@ -22,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## 0.9.2 - 2020-05-02
+## [0.9.2] - 2020-05-02
 ### Changed
  - intellisense anywhere other than next to a dot now includes keywords (#67)
 
@@ -234,6 +236,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.9.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.3...v0.9.4
 [0.9.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.2...v0.9.3
 [0.9.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.1...v0.9.2
 [0.9.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.0...v0.9.1
