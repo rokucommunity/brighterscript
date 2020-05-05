@@ -584,10 +584,16 @@ export class Util {
      * @param fullPath
      */
     public driveLetterToLower(fullPath: string) {
-        let match = /^([a-z]):[\\/]/i.exec(fullPath);
-        if (match) {
-            let driveText = match[1];
-            fullPath = driveText.toLowerCase() + fullPath.substring(1);
+        if (fullPath) {
+            let firstCharCode = fullPath.charCodeAt(0);
+            if (
+                //is upper case A-Z
+                firstCharCode >= 65 && firstCharCode <= 90 &&
+                //next char is colon
+                fullPath[1] === ':'
+            ) {
+                fullPath = fullPath[0].toLowerCase() + fullPath.substring(1);
+            }
         }
         return fullPath;
     }
