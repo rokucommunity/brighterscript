@@ -70,7 +70,8 @@ export class AssignmentStatement implements Statement {
     constructor(
         readonly equals: Token,
         readonly name: Identifier,
-        readonly value: Expression
+        readonly value: Expression,
+        readonly containingFunction: FunctionExpression
     ) {
         this.range = Range.create(this.name.range.start, this.value.range.end);
     }

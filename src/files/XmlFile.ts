@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'eventemitter3';
 import * as path from 'path';
 import { CodeWithSourceMap } from 'source-map';
 import { CompletionItem, Hover, Position, Range } from 'vscode-languageserver';
@@ -8,8 +8,7 @@ import { FunctionScope } from '../FunctionScope';
 import { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
 import { Program } from '../Program';
 import util from '../util';
-import { ClassStatement } from '../parser/ClassStatement';
-import { NamespaceStatement, NewExpression } from '../parser';
+import { Parser } from '../parser/Parser';
 
 export class XmlFile {
     constructor(
@@ -21,9 +20,6 @@ export class XmlFile {
         public program: Program
     ) {
         this.extension = path.extname(pathAbsolute).toLowerCase();
-
-        //allow unlimited listeners
-        this.emitter.setMaxListeners(0);
 
         //anytime a dependency changes, clean up some cached values
         this.subscriptions.push(
@@ -88,6 +84,9 @@ export class XmlFile {
 
     public diagnostics = [] as BsDiagnostic[];
 
+    //TODO implement parsing
+    public parser = new Parser();
+
     //TODO implement the xml CDATA parsing, which would populate this list
     public callables = [] as Callable[];
 
@@ -95,13 +94,6 @@ export class XmlFile {
     public functionCalls = [] as FunctionCall[];
 
     public functionScopes = [] as FunctionScope[];
-
-    //TODO implement the xml CDATA parsing which would populate this list
-    public classStatements = [] as ClassStatement[];
-
-    public namespaceStatements = [] as NamespaceStatement[];
-
-    public newExpressions = [] as NewExpression[];
 
     /**
      * The name of the component that this component extends
@@ -126,11 +118,12 @@ export class XmlFile {
      */
     public propertyNameCompletions = [] as CompletionItem[];
 
+    private uriRangeRegex = /(.*?\s+uri\s*=\s*")(.*?)"/g;
+
     public async parse(fileContents: string) {
         if (this.parseDeferred.isCompleted) {
             throw new Error(`File was already processed. Create a new file instead. ${this.pathAbsolute}`);
         }
-
         //split the text into lines
         this.lines = util.getLines(fileContents);
 
@@ -142,7 +135,6 @@ export class XmlFile {
         let parsedXml;
         try {
             parsedXml = await util.parseXml(fileContents);
-
             if (parsedXml?.component) {
                 if (parsedXml.component.$) {
                     this.componentName = parsedXml.component.$.name;
@@ -152,11 +144,11 @@ export class XmlFile {
 
                 //find the range for the component element's opening tag
                 for (let lineIndex = 0; lineIndex < this.lines.length; lineIndex++) {
-                    let match = /(.*)(<component)/gi.exec(this.lines[lineIndex]);
-                    if (match) {
+                    let idx = this.lines[lineIndex].indexOf('<component');
+                    if (idx > -1) {
                         componentRange = Range.create(
-                            Position.create(lineIndex, match[1].length),
-                            Position.create(lineIndex, match[0].length)
+                            Position.create(lineIndex, idx),
+                            Position.create(lineIndex, idx + 10)
                         );
                         break;
                     }
@@ -242,10 +234,12 @@ export class XmlFile {
             let uriRanges = {} as { [uri: string]: Range[] };
             for (let lineIndex = 0; lineIndex < this.lines.length; lineIndex++) {
                 let line = this.lines[lineIndex];
-                let regex = /(.*?\s+uri\s*=\s*")(.*?)"/gi;
+                //reset the regex
+                this.uriRangeRegex.lastIndex = 0;
+
                 let lineIndexOffset = 0;
                 let match: RegExpExecArray;
-                while (match = regex.exec(line)) { //eslint-disable-line no-cond-assign
+                while (match = this.uriRangeRegex.exec(line)) { //eslint-disable-line no-cond-assign
                     let preUriContent = match[1];
                     let uri = match[2];
                     if (!uriRanges[uri]) {
@@ -495,7 +489,10 @@ export class XmlFile {
             let idx = line.indexOf('.bs"');
             if (idx > -1) {
                 lines[i] = line.substring(0, idx) + '.brs' + line.substring(idx + 3);
+
             }
+            //convert "text/brighterscript" to "text/brightscript"
+            lines[i] = lines[i].replace(`"text/brighterscript"`, `"text/brightscript"`);
         }
 
         return {

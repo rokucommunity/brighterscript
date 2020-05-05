@@ -33,7 +33,7 @@ describe('BrsFile BrighterScript classes', () => {
             class Duck
             end class
         `) as BrsFile);
-        expect(file.classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
+        expect(file.parser.classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
     });
 
     it('does not cause errors with incomplete class statement', async () => {
@@ -77,7 +77,7 @@ describe('BrsFile BrighterScript classes', () => {
         `) as BrsFile);
         await program.validate();
         expect(program.getDiagnostics()[0]?.message).not.to.exist;
-        let duckClass = file.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
+        let duckClass = file.parser.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
         expect(duckClass).to.exist;
         expect(duckClass.memberMap['move']).to.exist;
     });
@@ -127,7 +127,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-            `, 'trim', 'main.bs');
+            `, 'trim', 'source/main.bs');
         });
 
         it('handles class inheritance inferred constructor calls', async () => {
@@ -182,7 +182,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-            `, undefined, 'main.bs');
+            `, undefined, 'source/main.bs');
         });
 
 
@@ -219,7 +219,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-            `, undefined, 'main.bs');
+            `, undefined, 'source/main.bs');
         });
 
         it('works for simple  class', async () => {
@@ -238,7 +238,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-            `, undefined, 'main.bs');
+            `, undefined, 'source/main.bs');
         });
 
         it('registers the constructor and properly handles its parameters', async () => {
@@ -259,7 +259,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(name, age)
                     return instance
                 end function
-            `, undefined, 'main.bs');
+            `, undefined, 'source/main.bs');
         });
 
         it('properly handles child class constructor override and super calls', async () => {
@@ -301,7 +301,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(name, age)
                     return instance
                 end function
-            `, undefined, 'main.bs');
+            `, undefined, 'source/main.bs');
         });
 
         it('new keyword transpiles correctly', async () => {
@@ -319,7 +319,7 @@ describe('BrsFile BrighterScript classes', () => {
                 sub main()
                     a = Animal("donald")
                 end sub
-            `, undefined, 'main.bs');
+            `, undefined, 'source/main.bs');
         });
 
         it('does not screw up local variable references', async () => {
@@ -428,7 +428,7 @@ describe('BrsFile BrighterScript classes', () => {
                     dewey.move(3)
                     '> Waddling...\\nDewey moved 2 meters\\nFell over...I'm new at this
                 end sub
-            `, 'trim', 'main.bs');
+            `, 'trim', 'source/main.bs');
         });
 
         it('calculates the proper super index', async () => {
@@ -478,7 +478,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-            `, 'trim', 'main.bs');
+            `, 'trim', 'source/main.bs');
         });
     });
 

@@ -64,8 +64,8 @@ export let DiagnosticMessages = {
         code: 1010,
         severity: DiagnosticSeverity.Hint
     }),
-    localVarShadowsGlobalFunction: (localName: string, globalLocation: string) => ({
-        message: `Local var '${localName}' has same name as global function in '${globalLocation}' and will never be called.`,
+    localVarFunctionShadowsParentFunction: (scopeName: 'stdlib' | 'scope') => ({
+        message: `Local variable function has same name as ${scopeName} function and will never be called.`,
         code: 1011,
         severity: DiagnosticSeverity.Warning
     }),
@@ -533,6 +533,16 @@ export let DiagnosticMessages = {
     autoImportComponentScriptCollision: () => ({
         message: `Component script auto-import found '.bs' and '.brs' files with the same name and will import only the '.bs' file`,
         code: 1103,
+        severity: DiagnosticSeverity.Warning
+    }),
+    localVarShadowedByScopedFunction: () => ({
+        message: `Local var has same name as scoped function and will not be accessible`,
+        code: 1104,
+        severity: DiagnosticSeverity.Warning
+    }),
+    scopeFunctionShadowedByBuiltInFunction: () => ({
+        message: `Scope function has same name as built-in function and will not be accessible`,
+        code: 1105,
         severity: DiagnosticSeverity.Warning
     })
 };

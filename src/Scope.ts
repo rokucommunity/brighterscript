@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'eventemitter3';
 import { CompletionItem, CompletionItemKind, Location, Position, Range } from 'vscode-languageserver';
 
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -10,6 +10,8 @@ import { BsClassValidator } from './validators/ClassValidator';
 import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement } from './parser';
 import { ClassStatement } from './parser/ClassStatement';
 import { standardizePath as s, util } from './util';
+import { platformCallableMap } from './platformCallables';
+import { FunctionType } from './types/FunctionType';
 
 /**
  * A class to keep track of all declarations within a given scope (like global scope, component scope)
@@ -19,8 +21,6 @@ export class Scope {
         public name: string,
         private matcher: (file: File) => boolean | void
     ) {
-        //allow unlimited listeners
-        this.emitter.setMaxListeners(0);
         this.isValidated = false;
     }
 
@@ -139,7 +139,7 @@ export class Scope {
         let namespaceNameLower = namespaceName.toLowerCase();
         for (let key in this.files) {
             let file = this.files[key];
-            for (let namespace of file.file.namespaceStatements) {
+            for (let namespace of file.file.parser.namespaceStatements) {
                 let loopNamespaceNameLower = namespace.name.toLowerCase();
                 if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
                     return true;
@@ -307,7 +307,7 @@ export class Scope {
         let lookup = {} as { [lowerName: string]: ClassStatement };
         for (let key in this.files) {
             let file = this.files[key];
-            for (let cls of file.file.classStatements) {
+            for (let cls of file.file.parser.classStatements) {
                 lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
             }
         }
@@ -318,7 +318,7 @@ export class Scope {
         let result = [] as NamespaceStatement[];
         for (let filePath in this.files) {
             let file = this.files[filePath];
-            result.push(...file.file.namespaceStatements);
+            result.push(...file.file.parser.namespaceStatements);
         }
         return result;
     }
@@ -402,10 +402,10 @@ export class Scope {
         });
 
         //get a list of all callables, indexed by their lower case names
-        let callableContainersByLowerName = util.getCallableContainersByLowerName(callables);
+        let callableContainerMap = util.getCallableContainersByLowerName(callables);
 
         //find all duplicate function declarations
-        this.diagnosticFindDuplicateFunctionDeclarations(callableContainersByLowerName);
+        this.diagnosticFindDuplicateFunctionDeclarations(callableContainerMap);
 
         //enforce a series of checks on the bodies of class methods
         this.validateClasses();
@@ -413,19 +413,35 @@ export class Scope {
         //do many per-file checks
         for (let key in this.files) {
             let scopeFile = this.files[key];
-            this.diagnosticDetectCallsToUnknownFunctions(scopeFile.file, callableContainersByLowerName);
-            this.diagnosticDetectFunctionCallsWithWrongParamCount(scopeFile.file, callableContainersByLowerName);
-            this.diagnosticDetectShadowedLocalVars(scopeFile.file, callableContainersByLowerName);
+            this.diagnosticDetectCallsToUnknownFunctions(scopeFile.file, callableContainerMap);
+            this.diagnosticDetectFunctionCallsWithWrongParamCount(scopeFile.file, callableContainerMap);
+            this.diagnosticDetectShadowedLocalVars(scopeFile.file, callableContainerMap);
+            this.diagnosticDetectFunctionCollisions(scopeFile.file);
         }
 
         this.isValidated = true;
+    }
+
+    /**
+     * Find function declarations with the same name as a stdlib function
+     */
+    private diagnosticDetectFunctionCollisions(file: BrsFile | XmlFile) {
+        for (let func of file.callables) {
+            if (platformCallableMap[func.name.toLowerCase()]) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction(),
+                    range: func.nameRange,
+                    file: file
+                });
+            }
+        }
     }
 
     public getNewExpressions() {
         let result = [] as AugmentedNewExpression[];
         for (let key in this.files) {
             let file = this.files[key].file;
-            let expressions = file.newExpressions as AugmentedNewExpression[];
+            let expressions = file.parser.newExpressions as AugmentedNewExpression[];
             for (let expression of expressions) {
                 expression.file = file;
                 result.push(expression);
@@ -482,23 +498,50 @@ export class Scope {
     /**
      * Detect local variables (function scope) that have the same name as scope calls
      * @param file
-     * @param callablesByLowerName
+     * @param callableContainerMap
      */
-    private diagnosticDetectShadowedLocalVars(file: BrsFile | XmlFile, callablesByLowerName: { [lowerName: string]: CallableContainer[] }) {
+    private diagnosticDetectShadowedLocalVars(file: BrsFile | XmlFile, callableContainerMap: { [lowerName: string]: CallableContainer[] }) {
         //loop through every function scope
         for (let scope of file.functionScopes) {
             //every var declaration in this scope
             for (let varDeclaration of scope.variableDeclarations) {
-                let globalCallableContainer = callablesByLowerName[varDeclaration.name.toLowerCase()];
-                //if we found a collision
-                if (globalCallableContainer && globalCallableContainer.length > 0) {
-                    let globalCallable = globalCallableContainer[0];
+                let lowerVarName = varDeclaration.name.toLowerCase();
 
+                //if the var is a function
+                if (varDeclaration.type instanceof FunctionType) {
+                    //local var function with same name as stdlib function
+                    if (
+                        //has same name as stdlib
+                        platformCallableMap[lowerVarName]
+                    ) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
+                            range: varDeclaration.nameRange,
+                            file: file
+                        });
+
+                        //this check needs to come after the stdlib one, because the stdlib functions are included
+                        //in the scope function list
+                    } else if (
+                        //has same name as scope function
+                        callableContainerMap[lowerVarName]
+                    ) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
+                            range: varDeclaration.nameRange,
+                            file: file
+                        });
+                    }
+
+                    //var is not a function
+                } else if (
+                    //is same name as a callable
+                    callableContainerMap[lowerVarName] &&
+                    //is NOT a callable from stdlib (because non-function local vars can have same name as stdlib names)
+                    !platformCallableMap[lowerVarName]
+                ) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.localVarShadowsGlobalFunction(
-                            varDeclaration.name,
-                            globalCallable.callable.file.pkgPath
-                        ),
+                        ...DiagnosticMessages.localVarShadowedByScopedFunction(),
                         range: varDeclaration.nameRange,
                         file: file
                     });

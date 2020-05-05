@@ -1474,7 +1474,7 @@ describe('BrsFile', () => {
 
                 function Vertibrates_Birds_GetGoose()
                 end function
-            `, 'trim', 'main.bs');
+            `, 'trim', 'source/main.bs');
         });
 
         it('transpiles namespaced functions', async () => {
@@ -1768,10 +1768,10 @@ describe('BrsFile', () => {
 });
 
 export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return async (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', fileName = 'main.brs') => {
+    return async (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.brs') => {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
-        let file = await program.addOrReplaceFile({ src: `${rootDir}/source/${fileName}`, dest: `source/${fileName}` }, source) as BrsFile;
+        let file = await program.addOrReplaceFile({ src: `${rootDir}/${pkgPath}`, dest: pkgPath }, source) as BrsFile;
         await program.validate();
         let diagnostics = file.getDiagnostics();
         if (diagnostics.length > 0) {

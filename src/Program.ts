@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'eventemitter3';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import { StandardizedFileEntry } from 'roku-deploy';
@@ -24,9 +24,6 @@ export class Program {
          */
         public options: BsConfig
     ) {
-        //allow unlimited listeners
-        this.emitter.setMaxListeners(0);
-
         this.options = util.normalizeConfig(options);
 
         //normalize the root dir path

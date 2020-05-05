@@ -728,3 +728,12 @@ for (let callable of platformCallables) {
 
 }
 platformFile.callables = platformCallables;
+
+/**
+ * A map of all built-in function names. We use this extensively in scope validation
+ * so keep a single copy in memory to improve performance
+ */
+export const platformCallableMap = platformCallables.reduce((map, x) => {
+    map[x.name.toLowerCase()] = x;
+    return map;
+}, {});

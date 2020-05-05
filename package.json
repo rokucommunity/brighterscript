@@ -1,6 +1,6 @@
 {
   "name": "brighterscript",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "A superset of Roku's BrightScript language.",
   "scripts": {
     "preversion": "npm run build && npm run lint && npm run test",
@@ -32,7 +32,7 @@
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "bin": {
-    "bsc": "dist/cli.js"
+    "bsc2": "dist/cli.js"
   },
   "repository": {
     "type": "git",

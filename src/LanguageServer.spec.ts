@@ -105,6 +105,15 @@ describe('LanguageServer', () => {
             let secondWorkspace = await svr.createStandaloneFileWorkspace(filePath);
             expect(firstWorkspace).to.equal(secondWorkspace);
         });
+
+        it('filters out certain diagnostics', async () => {
+            let filePath = `${rootDir}/.tmp/main.brs`;
+            writeToFs(filePath, `sub main(): return: end sub`);
+            let firstWorkspace: Workspace = await svr.createStandaloneFileWorkspace(filePath);
+            expect(
+                firstWorkspace.builder.program.getDiagnostics().map(x => x.message).sort()
+            ).to.eql([]);
+        });
     });
 
     describe('sendDiagnostics', () => {
