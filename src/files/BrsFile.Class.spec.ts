@@ -33,7 +33,7 @@ describe('BrsFile BrighterScript classes', () => {
             class Duck
             end class
         `) as BrsFile);
-        expect(file.classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
+        expect(file.parser.classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
     });
 
     it('does not cause errors with incomplete class statement', async () => {
@@ -77,7 +77,7 @@ describe('BrsFile BrighterScript classes', () => {
         `) as BrsFile);
         await program.validate();
         expect(program.getDiagnostics()[0]?.message).not.to.exist;
-        let duckClass = file.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
+        let duckClass = file.parser.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
         expect(duckClass).to.exist;
         expect(duckClass.memberMap['move']).to.exist;
     });

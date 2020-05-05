@@ -98,25 +98,31 @@ export class FunctionExpression implements Expression {
     constructor(
         readonly parameters: FunctionParameter[],
         readonly returns: ValueKind,
-        readonly body: Block,
+        public body: Block,
         readonly functionType: Token | null,
-        readonly end: Token,
+        public end: Token,
         readonly leftParen: Token,
         readonly rightParen: Token,
         readonly asToken?: Token,
-        readonly returnTypeToken?: Token
+        readonly returnTypeToken?: Token,
+        /**
+         * If this function is enclosed within another function, this will reference that parent function
+         */
+        readonly parentFunction?: FunctionExpression
     ) {
-        this.range = Range.create(
-            this.functionType ? this.functionType.range.start : this.leftParen.range.start,
-            this.end.range.end
-        );
     }
+
 
     /**
      * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
      * and ending with the last n' in 'end function' or 'b' in 'end sub'
      */
-    public readonly range: Range;
+    public get range() {
+        return Range.create(
+            (this.functionType ?? this.leftParen).range.start,
+            (this.end ?? this.body ?? this.returnTypeToken ?? this.asToken ?? this.rightParen).range.end
+        );
+    }
 
     transpile(state: TranspileState, name?: Identifier) {
         let results = [];

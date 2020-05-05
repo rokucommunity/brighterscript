@@ -310,6 +310,18 @@ describe('util', () => {
             expect(results[2].key).to.eql('children.1');
             expect(results[2].value.id).to.eql(4);
         });
+
+        it('prevents recursive infinite loop', () => {
+            let objA = { name: 'a', sibling: undefined };
+            let objB = { name: 'b', sibling: objA };
+            objA.sibling = objB;
+            expect(
+                util.findAllDeep<any>(objA, x => ['a', 'b'].includes(x.name)).map(x => x.value.name)
+            ).to.eql([
+                'a',
+                'b'
+            ]);
+        });
     });
 
     describe('padLeft', () => {

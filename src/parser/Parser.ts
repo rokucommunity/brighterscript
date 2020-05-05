@@ -94,6 +94,59 @@ export class Parser {
     private globalTerminators = [] as TokenKind[][];
 
     /**
+     * All class statements defined in this file
+     */
+    public classStatements = [] as ClassStatement[];
+
+    /**
+     * All namespace statements defined in this file
+     */
+    public namespaceStatements = [] as NamespaceStatement[];
+
+    /**
+     * All function statements defined in this file
+     */
+    public functionStatements = [] as FunctionStatement[];
+
+    /**
+     * All function expressions defined in this file
+     */
+    public functionExpressions = [] as FunctionExpression[];
+
+    /**
+     * All `new <ClassName>` expressions defined in this file
+     */
+    public newExpressions = [] as NewExpression[];
+
+    /**
+     * All assignment statements in this file
+     */
+    public assignmentStatements = [] as AssignmentStatement[];
+
+    /**
+     * All import statements in this file
+     */
+    public importStatements = [] as ImportStatement[];
+
+    /**
+     * All library statements in this file
+     */
+    public libraryStatements = [] as LibraryStatement[];
+
+    /**
+     * When a namespace has been started, this gets set. When it's done, this gets unset.
+     * It is useful for passing the namespace into certain statements that need it
+     */
+    private currentNamespaceName: NamespacedVariableNameExpression;
+
+    /**
+     * When a FunctionExpression has been started, this gets set. When it's done, this gets unset.
+     * It's useful for passing the function into statements and expressions that need to be located
+     * by function later on.
+     */
+    private currentFunctionExpression: FunctionExpression;
+
+    /**
      * Get the currently active global terminators
      */
     private peekGlobalTerminators() {
@@ -292,6 +345,11 @@ export class Parser {
                 //methods (function/sub keyword OR identifier followed by opening paren)
                 if (this.check(TokenKind.Function, TokenKind.Sub) || (this.check(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
                     let funcDeclaration = this.functionDeclaration(false);
+
+                    //remove this function from the lists because it's a class method
+                    this.functionExpressions.pop();
+                    this.functionStatements.pop();
+
                     //if we have an overrides keyword AND this method is called 'new', that's not allowed
                     if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
                         this.diagnostics.push({
@@ -373,6 +431,7 @@ export class Parser {
             parentClassName,
             this.currentNamespaceName
         );
+        this.classStatements.push(result);
         return result;
     }
 
@@ -536,9 +595,33 @@ export class Parser {
                 TokenKind.Colon
             );
             while (this.match(TokenKind.Newline)) { }
-            //support ending the function with `end sub` OR `end function`
-            let body = this.block(TokenKind.EndSub, TokenKind.EndFunction);
-            if (!body) {
+            let func = new FunctionExpression(
+                params,
+                returnType,
+                undefined, //body
+                functionType,
+                undefined, //ending keyword
+                leftParen,
+                rightParen,
+                asToken,
+                typeToken,
+                this.currentFunctionExpression
+            );
+
+            this.functionExpressions.push(func);
+
+            let previousFunctionExpression = this.currentFunctionExpression;
+            this.currentFunctionExpression = func;
+
+            //make sure to restore the currentFunctionExpression even if the body block fails to parse
+            try {
+                //support ending the function with `end sub` OR `end function`
+                func.body = this.block(TokenKind.EndSub, TokenKind.EndFunction);
+            } finally {
+                this.currentFunctionExpression = previousFunctionExpression;
+            }
+
+            if (!func.body) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.callableBlockMissingEndKeyword(functionTypeText),
                     range: this.peek().range
@@ -547,32 +630,20 @@ export class Parser {
             }
             //prepend comment to body
             if (comment) {
-                body.statements.unshift(comment);
+                func.body.statements.unshift(comment);
             }
             // consume 'end sub' or 'end function'
-            let endingKeyword = this.advance();
+            func.end = this.advance();
             let expectedEndKind = isSub ? TokenKind.EndSub : TokenKind.EndFunction;
 
             //if `function` is ended with `end sub`, or `sub` is ended with `end function`, then
             //add an error but don't hard-fail so the AST can continue more gracefully
-            if (endingKeyword.kind !== expectedEndKind) {
+            if (func.end.kind !== expectedEndKind) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, endingKeyword.text),
+                    ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, func.end.text),
                     range: this.peek().range
                 });
             }
-
-            let func = new FunctionExpression(
-                params,
-                returnType,
-                body,
-                functionType,
-                endingKeyword,
-                leftParen,
-                rightParen,
-                asToken,
-                typeToken
-            );
 
             if (isAnonymous) {
                 return func;
@@ -581,7 +652,9 @@ export class Parser {
                 // expect to handle their own trailing whitespace
                 while (this.match(TokenKind.Newline)) {
                 }
-                return new FunctionStatement(name, func, this.currentNamespaceName);
+                let result = new FunctionStatement(name, func, this.currentNamespaceName);
+                this.functionStatements.push(result);
+                return result;
             }
         } finally {
             this.namespaceAndFunctionDepth--;
@@ -667,15 +740,19 @@ export class Parser {
         }
         while (this.match(TokenKind.Newline)) { }
 
+        let result: AssignmentStatement;
         if (operator.kind === TokenKind.Equal) {
-            return new AssignmentStatement(operator, name, value);
+            result = new AssignmentStatement(operator, name, value, this.currentFunctionExpression);
         } else {
-            return new AssignmentStatement(
+            result = new AssignmentStatement(
                 operator,
                 name,
-                new BinaryExpression(new VariableExpression(name), operator, value)
+                new BinaryExpression(new VariableExpression(name), operator, value),
+                this.currentFunctionExpression
             );
         }
+        this.assignmentStatements.push(result);
+        return result;
     }
 
     private checkLibrary() {
@@ -951,12 +1028,6 @@ export class Parser {
         }
     }
 
-    /**
-     * When a namespace has been started, this gets set. When it's done, this gets unset.
-     * It is useful for passing the namespace into certain statements that need it
-     */
-    private currentNamespaceName: NamespacedVariableNameExpression;
-
     private namespaceStatement(): NamespaceStatement | undefined {
         this.warnIfNotBrighterScriptMode('namespace');
         let keyword = this.advance();
@@ -998,7 +1069,10 @@ export class Parser {
         while (this.match(TokenKind.Newline)) { }
 
         this.namespaceAndFunctionDepth--;
-        return new NamespaceStatement(keyword, name, body, endKeyword);
+        let result = new NamespaceStatement(keyword, name, body, endKeyword);
+        this.namespaceStatements.push(result);
+
+        return result;
     }
 
     /**
@@ -1087,6 +1161,7 @@ export class Parser {
 
         //consume to the next newline, eof, or colon
         while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
+        this.libraryStatements.push(libStatement);
         return libStatement;
     }
 
@@ -1106,6 +1181,7 @@ export class Parser {
 
         //consume to the next newline, eof, or colon
         while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
+        this.importStatements.push(importStatement);
         return importStatement;
     }
 
@@ -1739,7 +1815,9 @@ export class Parser {
             TokenKind.LeftParen
         );
         let call = this.finishCall(leftParen, nameExpr);
-        return new NewExpression(newToken, call);
+        let result = new NewExpression(newToken, call);
+        this.newExpressions.push(result);
+        return result;
     }
 
     private call(): Expression {

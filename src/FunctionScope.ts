@@ -1,9 +1,9 @@
 import { VariableDeclaration } from './interfaces';
-import { FunctionExpression as ExpressionFunction } from './parser/Expression';
+import { FunctionExpression } from './parser/Expression';
 
 export class FunctionScope {
     constructor(
-        public func: ExpressionFunction
+        public func: FunctionExpression
     ) {
     }
 

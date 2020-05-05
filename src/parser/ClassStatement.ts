@@ -326,6 +326,7 @@ export class ClassMethodStatement implements Statement {
     transpile(state: TranspileState): Array<SourceNode | string> {
         if (this.name.text.toLowerCase() === 'new') {
             this.ensureSuperConstructorCall(state);
+            //TODO we need to undo this at the bottom of this method
             this.injectFieldInitializersForConstructor(state);
         }
         //TODO - remove type information from these methods because that doesn't work
@@ -416,7 +417,7 @@ export class ClassMethodStatement implements Statement {
             thisQualifiedName.text = 'm.' + field.name.text;
             if (field.initialValue) {
                 newStatements.push(
-                    new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue)
+                    new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue, this.func)
                 );
             } else {
                 //if there is no initial value, set the initial value to `invalid`
@@ -433,7 +434,8 @@ export class ClassMethodStatement implements Statement {
                             BrsInvalid.Instance,
                             //set the range to the end of the name so locations don't get broken
                             Range.create(field.name.range.end, field.name.range.end)
-                        )
+                        ),
+                        this.func
                     )
                 );
             }

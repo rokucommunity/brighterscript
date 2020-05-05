@@ -24,7 +24,7 @@ export class BsClassValidator {
         this.linkClassesWithParents();
         this.validateMemberCollisions();
         this.verifyChildConstructor();
-        this.verifyNewStatements();
+        this.verifyNewExpressions();
 
         this.cleanUp();
     }
@@ -41,34 +41,37 @@ export class BsClassValidator {
      * Find all "new" statements in the program,
      * and make sure we can find a class with that name
      */
-    private verifyNewStatements() {
-        let newExpressions = this.scope.getNewExpressions();
-        for (let newExpression of newExpressions) {
-            let className = newExpression.className.getName(ParseMode.BrighterScript);
-            let newableClass = this.getClassByName(
-                className,
-                newExpression.namespaceName?.getName(ParseMode.BrighterScript)
-            );
+    private verifyNewExpressions() {
+        for (let key in this.scope.files) {
+            let file = this.scope.files[key].file;
+            let newExpressions = file.parser.newExpressions;
+            for (let newExpression of newExpressions) {
+                let className = newExpression.className.getName(ParseMode.BrighterScript);
+                let newableClass = this.getClassByName(
+                    className,
+                    newExpression.namespaceName?.getName(ParseMode.BrighterScript)
+                );
 
-            if (!newableClass) {
-                //try and find functions with this name.
-                let fullName = util.getFulllyQualifiedClassName(className, newExpression.namespaceName?.getName(ParseMode.BrighterScript));
-                let callable = this.scope.getCallableByName(fullName);
-                //if we found a callable with this name, the user used a "new" keyword in front of a function. add error
-                if (callable) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.expressionIsNotConstructable(callable.isSub ? 'sub' : 'function'),
-                        file: newExpression.file,
-                        range: newExpression.className.range
-                    });
+                if (!newableClass) {
+                    //try and find functions with this name.
+                    let fullName = util.getFulllyQualifiedClassName(className, newExpression.namespaceName?.getName(ParseMode.BrighterScript));
+                    let callable = this.scope.getCallableByName(fullName);
+                    //if we found a callable with this name, the user used a "new" keyword in front of a function. add error
+                    if (callable) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.expressionIsNotConstructable(callable.isSub ? 'sub' : 'function'),
+                            file: file,
+                            range: newExpression.className.range
+                        });
 
-                    //could not find a class with this name
-                } else {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.classCouldNotBeFound(className, this.scope.name),
-                        file: newExpression.file,
-                        range: newExpression.className.range
-                    });
+                        //could not find a class with this name
+                    } else {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.classCouldNotBeFound(className, this.scope.name),
+                            file: file,
+                            range: newExpression.className.range
+                        });
+                    }
                 }
             }
         }
@@ -256,7 +259,7 @@ export class BsClassValidator {
         for (let key in this.scope.files) {
             let file = this.scope.files[key];
 
-            for (let x of file.file.classStatements) {
+            for (let x of file.file.parser.classStatements) {
                 let classStatement = x as AugmentedClassStatement;
                 let name = classStatement.getName(ParseMode.BrighterScript);
                 //skip this class if it doesn't have a name

@@ -9,8 +9,7 @@ import { FunctionScope } from '../FunctionScope';
 import { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
 import { Program } from '../Program';
 import util from '../util';
-import { ClassStatement } from '../parser/ClassStatement';
-import { NamespaceStatement, NewExpression } from '../parser';
+import { Parser } from '../parser/Parser';
 
 export class XmlFile {
     constructor(
@@ -47,6 +46,9 @@ export class XmlFile {
 
     public diagnostics = [] as BsDiagnostic[];
 
+    //TODO implement parsing
+    public parser = new Parser();
+
     //TODO implement the xml CDATA parsing, which would populate this list
     public callables = [] as Callable[];
 
@@ -54,13 +56,6 @@ export class XmlFile {
     public functionCalls = [] as FunctionCall[];
 
     public functionScopes = [] as FunctionScope[];
-
-    //TODO implement the xml CDATA parsing which would populate this list
-    public classStatements = [] as ClassStatement[];
-
-    public namespaceStatements = [] as NamespaceStatement[];
-
-    public newExpressions = [] as NewExpression[];
 
     /**
      * The name of the component that this component extends

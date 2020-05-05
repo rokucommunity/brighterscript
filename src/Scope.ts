@@ -141,7 +141,7 @@ export class Scope {
         let namespaceNameLower = namespaceName.toLowerCase();
         for (let key in this.files) {
             let file = this.files[key];
-            for (let namespace of file.file.namespaceStatements) {
+            for (let namespace of file.file.parser.namespaceStatements) {
                 let loopNamespaceNameLower = namespace.name.toLowerCase();
                 if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
                     return true;
@@ -309,7 +309,7 @@ export class Scope {
         let lookup = {} as { [lowerName: string]: ClassStatement };
         for (let key in this.files) {
             let file = this.files[key];
-            for (let cls of file.file.classStatements) {
+            for (let cls of file.file.parser.classStatements) {
                 lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
             }
         }
@@ -320,7 +320,7 @@ export class Scope {
         let result = [] as NamespaceStatement[];
         for (let filePath in this.files) {
             let file = this.files[filePath];
-            result.push(...file.file.namespaceStatements);
+            result.push(...file.file.parser.namespaceStatements);
         }
         return result;
     }
@@ -443,7 +443,7 @@ export class Scope {
         let result = [] as AugmentedNewExpression[];
         for (let key in this.files) {
             let file = this.files[key].file;
-            let expressions = file.newExpressions as AugmentedNewExpression[];
+            let expressions = file.parser.newExpressions as AugmentedNewExpression[];
             for (let expression of expressions) {
                 expression.file = file;
                 result.push(expression);

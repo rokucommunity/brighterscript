@@ -10,8 +10,8 @@ import { Deferred } from '../deferred';
 import { FunctionParameter } from '../brsTypes';
 import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
-import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, NewExpression, Expression } from '../parser/Expression';
-import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, NamespaceStatement, ImportStatement } from '../parser/Statement';
+import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, Expression } from '../parser/Expression';
+import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, ImportStatement } from '../parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -84,12 +84,6 @@ export class BrsFile {
 
     public functionScopes = [] as FunctionScope[];
 
-    public classStatements = [] as ClassStatement[];
-
-    public namespaceStatements = [] as NamespaceStatement[];
-
-    public newExpressions = [] as NewExpression[];
-
     /**
      * files referenced by import statements
      */
@@ -117,7 +111,7 @@ export class BrsFile {
         }
     }
 
-    private parser: Parser;
+    public parser: Parser;
 
     /**
      * Calculate the AST for this file
@@ -180,12 +174,6 @@ export class BrsFile {
         //scan the full text for any word that looks like a variable
         this.findPropertyNameCompletions();
 
-        this.findClassStatements();
-
-        this.findNamespaces();
-
-        this.findNewExpressions();
-
         this.findAndValidateImportAndImportStatements();
 
         //attach this file to every diagnostic
@@ -194,14 +182,6 @@ export class BrsFile {
         }
 
         this.parseDeferred.resolve();
-    }
-
-    private findNewExpressions() {
-        this.newExpressions = this.findAllInstances(NewExpression).map(x => x.value);
-    }
-
-    private findNamespaces() {
-        this.namespaceStatements = this.findAllInstances(NamespaceStatement).map(x => x.value);
     }
 
     public findAndValidateImportAndImportStatements() {
@@ -221,21 +201,16 @@ export class BrsFile {
             }
         }
 
-        //find all import and library statements in the entire file
-        let includeStatementSearchResults = util.findAllDeep<LibraryStatement | ImportStatement>(this.ast.statements, (item) => {
-            if (item instanceof LibraryStatement || item instanceof ImportStatement) {
-                return true;
-            } else {
-                return false;
-            }
-        });
-
-        for (let result of includeStatementSearchResults) {
+        let statements = [
+            ...this.parser.libraryStatements,
+            ...this.parser.importStatements
+        ];
+        for (let result of statements) {
             //register import statements
-            if (result.value instanceof ImportStatement && result.value.filePathToken) {
+            if (result instanceof ImportStatement && result.filePathToken) {
                 this.ownScriptImports.push({
-                    filePathRange: result.value.filePathToken.range,
-                    pkgPath: util.getPkgPathFromTarget(this.pkgPath, result.value.filePath),
+                    filePathRange: result.filePathToken.range,
+                    pkgPath: util.getPkgPathFromTarget(this.pkgPath, result.filePath),
                     sourceFile: this,
                     text: ''
                 });
@@ -243,29 +218,22 @@ export class BrsFile {
 
             //if this statement is not one of the top-of-file statements,
             //then add a diagnostic explaining that it is invalid
-            if (!topOfFileIncludeStatements.includes(result.value)) {
-                if (result.value instanceof LibraryStatement) {
+            if (!topOfFileIncludeStatements.includes(result)) {
+                if (result instanceof LibraryStatement) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile(),
-                        range: result.value.range,
+                        range: result.range,
                         file: this
                     });
-                } else if (result.value instanceof ImportStatement) {
+                } else if (result instanceof ImportStatement) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.importStatementMustBeDeclaredAtTopOfFile(),
-                        range: result.value.range,
+                        range: result.range,
                         file: this
                     });
                 }
             }
         }
-    }
-
-    /**
-     * Loop through all of the class statements and add them to `this.classStatements`
-     */
-    public findClassStatements() {
-        this.classStatements = this.findAllInstances(ClassStatement).map(x => x.value);
     }
 
     /**
@@ -312,13 +280,6 @@ export class BrsFile {
                 return globalClass;
             }
         }
-    }
-
-    /**
-     * Dig through the AST and find all properties that match the predicate
-     */
-    private findAllInstances<T extends new (...args: any) => any>(instanceType: T) {
-        return util.findAllDeep<InstanceType<T>>(this.ast.statements, (item) => item instanceof (instanceType as any));
     }
 
     public findPropertyNameCompletions() {
@@ -472,25 +433,15 @@ export class BrsFile {
      */
     private createFunctionScopes() {
         //find every function
-        let functions = this.findAllInstances(FunctionExpression);
+        let functions = this.parser.functionExpressions;
 
         //create a functionScope for every function
-        for (let kvp of functions) {
-            let func = kvp.value;
+        for (let func of functions) {
             let scope = new FunctionScope(func);
 
-            let ancestors = this.getAncestors(kvp.key);
-
-            let parentFunc: FunctionExpression;
             //find parent function, and add this scope to it if found
             {
-                for (let i = ancestors.length - 1; i >= 0; i--) {
-                    if (ancestors[i] instanceof FunctionExpression) {
-                        parentFunc = ancestors[i];
-                        break;
-                    }
-                }
-                let parentScope = this.scopesByFunc.get(parentFunc);
+                let parentScope = this.scopesByFunc.get(func.parentFunction);
 
                 //add this child scope to its parent
                 if (parentScope) {
@@ -517,12 +468,12 @@ export class BrsFile {
         }
 
         //find every variable assignment in the whole file
-        let assignmentStatements = this.findAllInstances(AssignmentStatement);
+        let assignmentStatements = this.parser.assignmentStatements;
 
-        for (let kvp of assignmentStatements) {
-            let statement = kvp.value;
+        for (let statement of assignmentStatements) {
+
             //find this statement's function scope
-            let scope = this.getFunctionScopeAtPosition(statement.name.range.start);
+            let scope = this.scopesByFunc.get(statement.containingFunction);
 
             //skip variable declarations that are outside of any scope
             if (scope) {
@@ -611,8 +562,7 @@ export class BrsFile {
     }
 
     private findCallables() {
-        let functionStatements = this.findAllInstances(FunctionStatement).map(x => x.value);
-        for (let statement of functionStatements) {
+        for (let statement of this.parser.functionStatements) {
 
             let functionType = new FunctionType(util.valueKindToBrsType(statement.func.returns));
             functionType.setName(statement.name.text);

@@ -465,9 +465,16 @@ export class Util {
 
     /**
      * Find all properties in an object that match the predicate.
+     * @param seenMap - used to prevent circular dependency infinite loops
      */
-    public findAllDeep<T>(obj: any, predicate: (value: any) => boolean | undefined, parentKey?: string, ancestors?: any[]) {
+    public findAllDeep<T>(obj: any, predicate: (value: any) => boolean | undefined, parentKey?: string, ancestors?: any[], seenMap?: Map<any, boolean>) {
+        seenMap = seenMap ?? new Map<any, boolean>();
         let result = [] as Array<{ key: string; value: T; ancestors: any[] }>;
+
+        //skip this object if we've already seen it
+        if (seenMap.has(obj)) {
+            return result;
+        }
 
         //base case. If this object maches, keep it as a result
         if (predicate(obj) === true) {
@@ -477,6 +484,8 @@ export class Util {
                 value: obj
             });
         }
+
+        seenMap.set(obj, true);
 
         //look through all children
         if (obj instanceof Object) {
@@ -491,7 +500,8 @@ export class Util {
                         [
                             ...(ancestors ?? []),
                             obj
-                        ]
+                        ],
+                        seenMap
                     )];
                 }
             }
