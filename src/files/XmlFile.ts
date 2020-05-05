@@ -77,11 +77,12 @@ export class XmlFile {
      */
     public propertyNameCompletions = [] as CompletionItem[];
 
+    private uriRangeRegex = /(.*?\s+uri\s*=\s*")(.*?)"/g;
+
     public async parse(fileContents: string) {
         if (this.parseDeferred.isCompleted) {
             throw new Error(`File was already processed. Create a new file instead. ${this.pathAbsolute}`);
         }
-
         //split the text into lines
         this.lines = util.getLines(fileContents);
 
@@ -93,7 +94,6 @@ export class XmlFile {
         let parsedXml;
         try {
             parsedXml = await util.parseXml(fileContents);
-
             if (parsedXml?.component) {
                 if (parsedXml.component.$) {
                     this.componentName = parsedXml.component.$.name;
@@ -103,11 +103,11 @@ export class XmlFile {
 
                 //find the range for the component element's opening tag
                 for (let lineIndex = 0; lineIndex < this.lines.length; lineIndex++) {
-                    let match = /(.*)(<component)/gi.exec(this.lines[lineIndex]);
-                    if (match) {
+                    let idx = this.lines[lineIndex].indexOf('<component');
+                    if (idx > -1) {
                         componentRange = Range.create(
-                            Position.create(lineIndex, match[1].length),
-                            Position.create(lineIndex, match[0].length)
+                            Position.create(lineIndex, idx),
+                            Position.create(lineIndex, idx + 10)
                         );
                         break;
                     }
@@ -193,10 +193,12 @@ export class XmlFile {
             let uriRanges = {} as { [uri: string]: Range[] };
             for (let lineIndex = 0; lineIndex < this.lines.length; lineIndex++) {
                 let line = this.lines[lineIndex];
-                let regex = /(.*?\s+uri\s*=\s*")(.*?)"/gi;
+                //reset the regex
+                this.uriRangeRegex.lastIndex = 0;
+
                 let lineIndexOffset = 0;
                 let match: RegExpExecArray;
-                while (match = regex.exec(line)) { //eslint-disable-line no-cond-assign
+                while (match = this.uriRangeRegex.exec(line)) { //eslint-disable-line no-cond-assign
                     let preUriContent = match[1];
                     let uri = match[2];
                     if (!uriRanges[uri]) {
