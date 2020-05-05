@@ -347,7 +347,7 @@ describe('XmlFile', () => {
     });
 
     describe('transpile', () => {
-        it.only('changes file extensions to brs from bs', async () => {
+        it('changes file extensions to brs from bs', async () => {
             await program.addOrReplaceFile({
                 src: `${rootDir}/components/SimpleScene.bs`,
                 dest: `components/SimpleScene.bs`
@@ -363,7 +363,7 @@ describe('XmlFile', () => {
                 <component name="SimpleScene" extends="Scene">
                     <script type="text/brightscript" uri="SimpleScene.brs"/>
                 </component>
-            `, 'none', 'SimpleScene.xml');
+            `, 'none', 'components/SimpleScene.xml');
         });
     });
 });
