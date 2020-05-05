@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'eventemitter3';
 import { CompletionItem, CompletionItemKind, Location, Position, Range } from 'vscode-languageserver';
 
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -21,8 +21,6 @@ export class Scope {
         public name: string,
         private matcher: (file: File) => boolean | void
     ) {
-        //allow unlimited listeners
-        this.emitter.setMaxListeners(0);
         this.isValidated = false;
     }
 

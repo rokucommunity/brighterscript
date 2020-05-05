@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'eventemitter3';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
 import { standardizePath as s } from './util';

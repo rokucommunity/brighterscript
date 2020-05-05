@@ -105,6 +105,7 @@
     "command-line-usage": "^5.0.5",
     "cross-platform-clear-console": "^2.3.0",
     "debounce-promise": "^3.1.0",
+    "eventemitter3": "^4.0.0",
     "fs-extra": "^7.0.1",
     "glob": "^7.1.6",
     "jsonc-parser": "^2.1.1",

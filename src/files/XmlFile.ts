@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'eventemitter3';
 import * as path from 'path';
 import { CodeWithSourceMap } from 'source-map';
 import { CompletionItem, Hover, Position, Range } from 'vscode-languageserver';
@@ -21,9 +21,6 @@ export class XmlFile {
         public program: Program
     ) {
         this.extension = path.extname(pathAbsolute).toLowerCase();
-
-        //allow unlimited listeners
-        this.emitter.setMaxListeners(0);
     }
 
     public parentNameRange: Range;
