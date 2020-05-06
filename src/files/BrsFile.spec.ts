@@ -1768,7 +1768,7 @@ describe('BrsFile', () => {
 });
 
 export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return async (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.brs') => {
+    return async (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs') => {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
         let file = await program.addOrReplaceFile({ src: `${rootDir}/${pkgPath}`, dest: pkgPath }, source) as BrsFile;
