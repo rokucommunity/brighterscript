@@ -169,8 +169,6 @@ export class ClassStatement implements Statement {
         state.blockDepth++;
         //indent
         result.push(state.indent());
-        //create the instance
-        result.push('instance = ');
 
         /**
          * The lineage of this class. index 0 is a direct parent, index 1 is index 0's parent, etc...
@@ -183,10 +181,12 @@ export class ClassStatement implements Statement {
                 this.parentClassName.getName(ParseMode.BrighterScript),
                 this.namespaceName?.getName(ParseMode.BrighterScript)
             );
-            result.push(this.getBuilderName(fullyQualifiedClassName), '()');
+            result.push(
+                'instance = ',
+                this.getBuilderName(fullyQualifiedClassName), '()');
         } else {
             //use an empty object.
-            result.push('{}');
+            result.push('instance = {}');
         }
         result.push(
             state.newline(),
@@ -223,9 +223,9 @@ export class ClassStatement implements Statement {
                     );
                 }
 
-                result.push(`instance.`);
                 state.classStatement = this;
                 result.push(
+                    'instance.',
                     state.sourceNode(statement.name, statement.name.text),
                     ' = ',
                     ...statement.transpile(state),
