@@ -208,16 +208,31 @@ export class Program {
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
-     * @param pathAbsolute
-     * @param fileContents
+     * @param relativePath the file path relative to the root dir
+     * @param fileContents the file contents. If not provided, the file will be loaded from disk
      */
-    public async addOrReplaceFile(fileEntry: StandardizedFileEntry, fileContents?: string) {
-        assert.ok(fileEntry, 'fileEntry is required');
-        assert.ok(fileEntry.src, 'fileEntry.src is required');
-        assert.ok(fileEntry.dest, 'fileEntry.dest is required');
+    public async addOrReplaceFile(relativePath: string, fileContents?: string): Promise<XmlFile | BrsFile>;
+    /**
+     * Load a file into the program. If that file already exists, it is replaced.
+     * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
+     * @param fileEntry an object that specifies src and dest for the file.
+     * @param fileContents the file contents. If not provided, the file will be loaded from disk
+     */
+    public async addOrReplaceFile(fileEntry: StandardizedFileEntry, fileContents?: string): Promise<XmlFile | BrsFile>;
+    public async addOrReplaceFile(fileParam: StandardizedFileEntry | string, fileContents?: string): Promise<XmlFile | BrsFile> {
+        assert.ok(fileParam, 'fileEntry is required');
+        let pathAbsolute: string;
+        let pkgPath: string;
+        if (typeof fileParam === 'string') {
+            pathAbsolute = s`${this.options.rootDir}/${fileParam}`;
+            pkgPath = s`${fileParam}`;
+        } else {
+            pathAbsolute = s`${fileParam.src}`;
+            pkgPath = s`${fileParam.dest}`;
+        }
 
-        let pathAbsolute = s`${fileEntry.src}`;
-        let pkgPath = s`${fileEntry.dest}`;
+        assert.ok(pathAbsolute, 'fileEntry.src is required');
+        assert.ok(pkgPath, 'fileEntry.dest is required');
 
         //if the file is already loaded, remove it
         if (this.hasFile(pathAbsolute)) {
