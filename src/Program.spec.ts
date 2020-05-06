@@ -2,7 +2,7 @@ import { assert, expect } from 'chai';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
-
+import * as fsExtra from 'fs-extra';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
@@ -14,15 +14,24 @@ import { standardizePath as s, util } from './util';
 let testProjectsPath = s`${__dirname}/../testProjects`;
 
 let sinon = sinonImport.createSandbox();
-let rootDir = process.cwd();
+let tmpPath = s`${process.cwd()}/.tmp`;
+let rootDir = s`${tmpPath}/rootDir`;
+let stagingFolderPath = s`${tmpPath}/staging`;
 let program: Program;
 
 describe('Program', () => {
     beforeEach(() => {
-        program = new Program({ rootDir: rootDir });
+        fsExtra.ensureDirSync(tmpPath);
+        fsExtra.emptyDirSync(tmpPath);
+        program = new Program({
+            rootDir: rootDir,
+            stagingFolderPath: stagingFolderPath
+        });
     });
     afterEach(() => {
         sinon.restore();
+        fsExtra.ensureDirSync(tmpPath);
+        fsExtra.emptyDirSync(tmpPath);
     });
 
     describe('platformScope', () => {
@@ -1276,6 +1285,35 @@ describe('Program', () => {
 
             expect(labels).to.deep.include({ label: 'count' });
         });
+    });
+
+    it('creates sourcemap for brs and xml files', async () => {
+        await program.addOrReplaceFile('source/main.brs', `
+            sub main()
+            end sub
+        `);
+        await program.addOrReplaceFile('components/comp1.xml', `
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="SimpleScene" extends="Scene">
+            </component>
+        `);
+        await program.validate();
+
+        expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/main.brs.map`)).is.false;
+        expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/components/comp1.xml.map`)).is.false;
+
+        let filePaths = [{
+            src: s`${rootDir}/source/main.brs`,
+            dest: s`source/main.brs`
+        }, {
+            src: s`${rootDir}/components/comp1.xml`,
+            dest: s`components/comp1.xml`
+        }];
+
+        await program.transpile(filePaths, program.options.stagingFolderPath);
+
+        expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/main.brs.map`)).is.true;
+        expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/components/comp1.xml.map`)).is.true;
     });
 
 });
