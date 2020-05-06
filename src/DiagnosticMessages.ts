@@ -544,6 +544,11 @@ export let DiagnosticMessages = {
         message: `Scope function has same name as built-in function and will not be accessible`,
         code: 1105,
         severity: DiagnosticSeverity.Warning
+    }),
+    brighterscriptScriptTagMissingTypeAttribute: () => ({
+        message: `All BrighterScript script tags must include the type="text/brighterscript" attribute`,
+        code: 1106,
+        severity: DiagnosticSeverity.Error
     })
 };
 

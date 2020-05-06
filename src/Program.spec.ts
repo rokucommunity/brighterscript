@@ -863,7 +863,7 @@ describe('Program', () => {
             let component = await program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
-                    <script type="text/brightscript" uri="pkg:/source/lib.bs" />
+                    <script type="text/brighterscript" uri="pkg:/source/lib.bs" />
                 </component>
             `);
             await program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `
@@ -899,7 +899,7 @@ describe('Program', () => {
             let component = await program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
-                    <script type="text/brightscript" uri="pkg:/source/lib.bs" />
+                    <script type="text/brighterscript" uri="pkg:/source/lib.bs" />
                 </component>
             `);
             await program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `

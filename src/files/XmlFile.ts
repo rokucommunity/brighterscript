@@ -119,6 +119,7 @@ export class XmlFile {
     public propertyNameCompletions = [] as CompletionItem[];
 
     private uriRangeRegex = /(.*?\s+uri\s*=\s*")(.*?)"/g;
+    private scriptTypeRegex = /type\s*=\s*"(.*?)"/gi;
 
     public async parse(fileContents: string) {
         if (this.parseDeferred.isCompleted) {
@@ -234,8 +235,9 @@ export class XmlFile {
             let uriRanges = {} as { [uri: string]: Range[] };
             for (let lineIndex = 0; lineIndex < this.lines.length; lineIndex++) {
                 let line = this.lines[lineIndex];
-                //reset the regex
+                //reset the regexes
                 this.uriRangeRegex.lastIndex = 0;
+                this.scriptTypeRegex.lastIndex = 0;
 
                 let lineIndexOffset = 0;
                 let match: RegExpExecArray;
@@ -256,6 +258,20 @@ export class XmlFile {
                             endColumnIndex
                         )
                     );
+
+                    //if this is a brighterscript file, validate that the `type` attribute is correct
+                    let scriptType = this.scriptTypeRegex.exec(line);
+                    let lowerScriptType = scriptType?.[1]?.toLowerCase();
+                    let lowerUri = uri.toLowerCase();
+                    //brighterscript script type with brightscript file extension
+                    if (lowerUri.endsWith('.bs') && (!scriptType || lowerScriptType !== 'text/brighterscript')) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.brighterscriptScriptTagMissingTypeAttribute(),
+                            file: this,
+                            //just flag the whole line; we'll get better location tracking when we have a formal xml parser
+                            range: Range.create(lineIndex, 0, lineIndex, line.length - 1)
+                        });
+                    }
                     lineIndexOffset += match[0].length;
                 }
             }

@@ -481,4 +481,44 @@ describe('XmlFile', () => {
             `, 'none', 'components/SimpleScene.xml');
         });
     });
+
+    it('catches brighterscript script tags missing the proper type', async () => {
+        await program.addOrReplaceFile({
+            src: `${rootDir}/components/SimpleScene.bs`,
+            dest: `components/SimpleScene.bs`
+        }, '');
+
+        //missing type
+        await program.addOrReplaceFile({
+            src: `${rootDir}/components/SimpleScene.xml`,
+            dest: `components/SimpleScene.xml`
+        }, `
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="SimpleScene" extends="Scene">
+                <script uri="SimpleScene.bs"/>
+            </component>
+        `);
+
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.exist.and.to.equal(
+            DiagnosticMessages.brighterscriptScriptTagMissingTypeAttribute().message
+        );
+
+        //wrong type
+        await program.addOrReplaceFile({
+            src: `${rootDir}/components/SimpleScene.xml`,
+            dest: `components/SimpleScene.xml`
+        }, `
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="SimpleScene" extends="Scene">
+                <script type="text/brightscript" uri="SimpleScene.bs"/>
+            </component>
+        `);
+
+        //wrong type
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.exist.and.to.equal(
+            DiagnosticMessages.brighterscriptScriptTagMissingTypeAttribute().message
+        );
+    });
 });
