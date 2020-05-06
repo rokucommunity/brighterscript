@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## unreleased
 ### Fixed
  - bug in lexer that was capturing the carriage return character (`\n`) at the end of comment statements
+ - bug in transpiler that wouldn't include a newline after the final comment statement
 
 
 ## [0.9.4] - 2020-05-05

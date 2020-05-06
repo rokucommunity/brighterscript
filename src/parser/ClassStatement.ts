@@ -237,6 +237,7 @@ export class ClassStatement implements Statement {
                 //other random statements (probably just comments)
                 result.push(
                     ...statement.transpile(state),
+                    state.newline(),
                     state.indent()
                 );
             }
