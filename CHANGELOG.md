@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.9.4] - 2020-05-05
-### Changed
+### Added
+ - diagnostic for detecting unnecessary script imports when `autoImportComponentScript` is enabled
 ### Fixed
  - bug that was not properly transpiling brighterscript script tags in xml components.
  - several performance issues introduced in v0.8.2. 

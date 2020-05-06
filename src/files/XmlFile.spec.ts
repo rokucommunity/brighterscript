@@ -461,7 +461,35 @@ describe('XmlFile', () => {
         });
     });
 
+    it('detects when importing the codebehind file unnecessarily', async () => {
+        program = new Program({
+            autoImportComponentScript: true,
+            rootDir: rootDir
+        });
+        await program.addOrReplaceFile({
+            src: `${rootDir}/components/SimpleScene.bs`,
+            dest: `components/SimpleScene.bs`
+        }, '');
+        await program.addOrReplaceFile({
+            src: `${rootDir}/components/SimpleScene.xml`,
+            dest: `components/SimpleScene.xml`
+        }, `
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="SimpleScene" extends="Scene">
+                <script type="text/brighterscript" uri="SimpleScene.bs" />
+            </component>
+        `);
+
+        await program.validate();
+        expect(
+            program.getDiagnostics()[0]?.message
+        ).to.equal(
+            DiagnosticMessages.unnecessaryCodebehindScriptImport().message
+        );
+    });
+
     describe('transpile', () => {
+
         it('changes file extensions to brs from bs', async () => {
             await program.addOrReplaceFile({
                 src: `${rootDir}/components/SimpleScene.bs`,

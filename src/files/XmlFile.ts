@@ -27,7 +27,17 @@ export class XmlFile {
                 this._allAvailableScriptImports = undefined;
             })
         );
+
+        this.possibleCodebehindPkgPaths = [
+            this.pkgPath.replace('.xml', '.bs'),
+            this.pkgPath.replace('.xml', '.brs')
+        ];
     }
+
+    /**
+     * The list of possible autoImport codebehind pkg paths.
+     */
+    private possibleCodebehindPkgPaths: string[];
 
     private subscriptions = [] as Array<() => void>;
 
@@ -285,6 +295,18 @@ export class XmlFile {
 
             //add all of these script imports
             this.scriptTagImports = scriptImports;
+        }
+
+        //catch script imports with same path as the auto-imported codebehind file
+        let explicitCodebehindScriptTag = this.program.options.autoImportComponentScript === true
+            ? this.scriptTagImports.find(x => this.possibleCodebehindPkgPaths.includes(x.pkgPath))
+            : undefined;
+        if (explicitCodebehindScriptTag) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.unnecessaryCodebehindScriptImport(),
+                file: this,
+                range: explicitCodebehindScriptTag.filePathRange
+            });
         }
 
         this.parseDeferred.resolve();

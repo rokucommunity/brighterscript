@@ -549,6 +549,11 @@ export let DiagnosticMessages = {
         message: `All BrighterScript script tags must include the type="text/brighterscript" attribute`,
         code: 1106,
         severity: DiagnosticSeverity.Error
+    }),
+    unnecessaryCodebehindScriptImport: () => ({
+        message: `This import is unnecessary because compiler option 'autoImportComponentScript' is enabled`,
+        code: 1107,
+        severity: DiagnosticSeverity.Warning
     })
 };
 
