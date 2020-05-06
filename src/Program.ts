@@ -16,6 +16,7 @@ import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DependencyGraph } from './DependencyGraph';
+import { SourceNode } from 'source-map';
 
 export class Program {
     constructor(
@@ -595,18 +596,19 @@ export class Program {
     public async transpile(fileEntries: StandardizedFileEntry[], stagingFolderPath: string) {
         let promises = Object.keys(this.files).map(async (filePath) => {
             let file = this.files[filePath];
+            let filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
+            if (!filePathObj) {
+                throw new Error(`Cannot find fileMap record in fileMaps for '${file.pathAbsolute}'`);
+            }
+            //replace the file extension
+            let outputCodePath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
+            //prepend the staging folder path
+            outputCodePath = s`${stagingFolderPath}/${outputCodePath}`;
+            let outputCodeMapPath = outputCodePath + '.map';
+
             if (file.needsTranspiled) {
                 let result = file.transpile();
-                let filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
-                if (!filePathObj) {
-                    throw new Error(`Cannot find fileMap record in fileMaps for '${file.pathAbsolute}'`);
-                }
 
-                //replace the file extension
-                let outputCodePath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
-                //prepend the staging folder path
-                outputCodePath = s`${stagingFolderPath}/${outputCodePath}`;
-                let outputCodeMapPath = outputCodePath + '.map';
 
                 //make sure the full dir path exists
                 await fsExtra.ensureDir(path.dirname(outputCodePath));
@@ -620,6 +622,23 @@ export class Program {
                     fsExtra.writeFile(outputCodePath, result.code),
                     writeMapPromise
                 ]);
+            } else {
+                //create a sourcemap
+                //create a source map from the original source code
+                let chunks = [] as (SourceNode | string)[];
+                let lines = file.fileContents.split(/\r?\n/g);
+                for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+                    let line = lines[lineIndex];
+                    chunks.push(
+                        lineIndex > 0 ? '\n' : '',
+                        new SourceNode(lineIndex + 1, 0, file.pathAbsolute, line)
+                    );
+                }
+                let result = new SourceNode(null, null, file.pathAbsolute, chunks).toStringWithSourceMap();
+                await fsExtra.writeFile(
+                    outputCodeMapPath,
+                    result.map
+                );
             }
         });
         await Promise.all(promises);

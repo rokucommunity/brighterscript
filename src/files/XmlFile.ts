@@ -124,6 +124,11 @@ export class XmlFile {
     public lines: string[];
 
     /**
+     * The full file contents
+     */
+    public fileContents: string;
+
+    /**
      * TODO: do we need this for xml files?
      */
     public propertyNameCompletions = [] as CompletionItem[];
@@ -132,6 +137,7 @@ export class XmlFile {
     private scriptTypeRegex = /type\s*=\s*"(.*?)"/gi;
 
     public async parse(fileContents: string) {
+        this.fileContents = fileContents;
         if (this.parseDeferred.isCompleted) {
             throw new Error(`File was already processed. Create a new file instead. ${this.pathAbsolute}`);
         }

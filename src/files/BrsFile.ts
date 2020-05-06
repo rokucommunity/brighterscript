@@ -113,11 +113,14 @@ export class BrsFile {
 
     public parser: Parser;
 
+    public fileContents: string;
+
     /**
      * Calculate the AST for this file
      * @param fileContents
      */
     public async parse(fileContents: string) {
+        this.fileContents = fileContents;
         if (this.parseDeferred.isCompleted) {
             throw new Error(`File was already processed. Create a new instance of BrsFile instead. ${this.pathAbsolute}`);
         }
