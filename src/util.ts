@@ -273,6 +273,7 @@ export class Util {
         config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
         config.diagnosticFilters = config.diagnosticFilters ?? [];
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
+        config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
         return config;
     }
 

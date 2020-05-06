@@ -192,6 +192,9 @@ export class ProgramBuilder {
     }
 
     private async printDiagnostics() {
+        if (this.options.showDiagnosticsInConsole === false) {
+            return;
+        }
         let diagnostics = this.getDiagnostics();
 
         //group the diagnostics by file
