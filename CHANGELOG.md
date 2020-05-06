@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.4] - 2020-05-05
 ### Added
  - diagnostic for detecting unnecessary script imports when `autoImportComponentScript` is enabled
+### Changed
+ - filter duplicate dignostics from multiple projects. ([#75](https://github.com/rokucommunity/brighterscript/issues/75))
 ### Fixed
  - bug that was flagging namespaced functions with the same name as a stdlib function.
  - bug that was not properly transpiling brighterscript script tags in xml components.

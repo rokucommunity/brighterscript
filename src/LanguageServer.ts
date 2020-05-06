@@ -881,7 +881,7 @@ export class LanguageServer {
     private latestDiagnosticsByFile = {} as { [key: string]: Diagnostic[] };
     private async sendDiagnostics() {
         //compute the new list of diagnostics for whole project
-        let issuesByFile = {} as { [key: string]: Diagnostic[] };
+        let diagnosticsByFile = {} as { [key: string]: Diagnostic[] };
         let workspaces = this.getWorkspaces();
 
         //make a bucket for every file in every project
@@ -891,7 +891,7 @@ export class LanguageServer {
             //if there is no program, skip this workspace (hopefully diagnostics were added to the builder itself
             if (workspace.builder && workspace.builder.program) {
                 for (let filePath in workspace.builder.program.files) {
-                    issuesByFile[filePath] = [];
+                    diagnosticsByFile[filePath] = [];
                 }
             }
         }
@@ -900,32 +900,52 @@ export class LanguageServer {
             workspaces.map((x) => x.builder.getDiagnostics())
         ) as BsDiagnostic[];
 
+        /**
+         * A map that tracks which diagnostics have been added for each file.
+         * This allows us to remove duplicate diagnostics
+         */
+        let uniqueMap = {} as { [diagnosticKey: string]: boolean };
+
         for (let diagnostic of diagnostics) {
             //certain diagnostics are attached to non-tracked files, so create those buckets dynamically
-            if (!issuesByFile[diagnostic.file.pathAbsolute]) {
-                issuesByFile[diagnostic.file.pathAbsolute] = [];
+            if (!diagnosticsByFile[diagnostic.file.pathAbsolute]) {
+                diagnosticsByFile[diagnostic.file.pathAbsolute] = [];
             }
-            issuesByFile[diagnostic.file.pathAbsolute].push({
-                severity: diagnostic.severity,
-                range: diagnostic.range,
-                message: diagnostic.message,
-                relatedInformation: diagnostic.relatedInformation,
-                code: diagnostic.code,
-                source: 'brs'
-            });
+            let key =
+                diagnostic.file.pathAbsolute + '-' +
+                diagnostic.code + '-' +
+                diagnostic.range.start.line + '-' +
+                diagnostic.range.start.character + '-' +
+                diagnostic.range.end.line + '-' +
+                diagnostic.range.end.character;
+
+            //filter exact duplicate diagnostics from multiple projects for same file and location
+            if (!uniqueMap[key]) {
+                uniqueMap[key] = true;
+                let d = {
+                    severity: diagnostic.severity,
+                    range: diagnostic.range,
+                    message: diagnostic.message,
+                    relatedInformation: diagnostic.relatedInformation,
+                    code: diagnostic.code,
+                    source: 'brs'
+                };
+
+                diagnosticsByFile[diagnostic.file.pathAbsolute].push(d);
+            }
         }
 
         //send all diagnostics
-        for (let filePath in issuesByFile) {
+        for (let filePath in diagnosticsByFile) {
             //TODO filter by only the files that have changed
             this.connection.sendDiagnostics({
                 uri: URI.file(filePath).toString(),
-                diagnostics: issuesByFile[filePath]
+                diagnostics: diagnosticsByFile[filePath]
             });
         }
 
         //clear any diagnostics for files that are no longer present
-        let currentFilePaths = Object.keys(issuesByFile);
+        let currentFilePaths = Object.keys(diagnosticsByFile);
         for (let filePath in this.latestDiagnosticsByFile) {
             if (!currentFilePaths.includes(filePath)) {
                 this.connection.sendDiagnostics({
@@ -936,7 +956,7 @@ export class LanguageServer {
         }
 
         //save the new list of diagnostics
-        this.latestDiagnosticsByFile = issuesByFile;
+        this.latestDiagnosticsByFile = diagnosticsByFile;
     }
 }
 

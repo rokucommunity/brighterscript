@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import * as fsExtra from 'fs-extra';
 import * as glob from 'glob';
 import * as path from 'path';
-import { DidChangeWatchedFilesParams, FileChangeType, TextDocumentSyncKind } from 'vscode-languageserver';
+import { DidChangeWatchedFilesParams, FileChangeType, TextDocumentSyncKind, Range } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import { LanguageServer, Workspace } from './LanguageServer';
 import { ProgramBuilder } from './ProgramBuilder';
@@ -30,6 +30,25 @@ describe('LanguageServer', () => {
 
     let vfs = {} as { [filePath: string]: string };
     let physicalFilePaths = [] as string[];
+    let connection = {
+        onInitialize: () => null,
+        onInitialized: () => null,
+        onDidChangeConfiguration: () => null,
+        onDidChangeWatchedFiles: () => null,
+        onCompletion: () => null,
+        onCompletionResolve: () => null,
+        onDefinition: () => null,
+        onHover: () => null,
+        listen: () => null,
+        sendNotification: () => null,
+        sendDiagnostics: () => null,
+        workspace: {
+            getWorkspaceFolders: () => workspaceFolders,
+            getConfiguration: () => {
+                return {};
+            }
+        }
+    };
 
     beforeEach(() => {
         server = new LanguageServer();
@@ -50,25 +69,6 @@ describe('LanguageServer', () => {
 
         //mock the connection stuff
         svr.createConnection = () => {
-            let connection = {
-                onInitialize: () => null,
-                onInitialized: () => null,
-                onDidChangeConfiguration: () => null,
-                onDidChangeWatchedFiles: () => null,
-                onCompletion: () => null,
-                onCompletionResolve: () => null,
-                onDefinition: () => null,
-                onHover: () => null,
-                listen: () => null,
-                sendNotification: () => null,
-                sendDiagnostics: () => null,
-                workspace: {
-                    getWorkspaceFolders: () => workspaceFolders,
-                    getConfiguration: () => {
-                        return {};
-                    }
-                }
-            };
             return connection;
         };
 
@@ -148,6 +148,40 @@ describe('LanguageServer', () => {
             deferred.resolve();
             await p;
             //test passed because no exceptions were thrown
+        });
+
+        it('dedupes diagnostics found at same location from multiple projects', async () => {
+            server.workspaces.push(<any>{
+                firstRunPromise: Promise.resolve(),
+                builder: {
+                    getDiagnostics: () => {
+                        return [{
+                            file: {
+                                pathAbsolute: s`${rootDir}/source/main.brs`
+                            },
+                            code: 1000,
+                            range: Range.create(1, 2, 3, 4)
+                        }];
+                    }
+                }
+            }, <any>{
+                firstRunPromise: Promise.resolve(),
+                builder: {
+                    getDiagnostics: () => {
+                        return [{
+                            file: {
+                                pathAbsolute: s`${rootDir}/source/main.brs`
+                            },
+                            code: 1000,
+                            range: Range.create(1, 2, 3, 4)
+                        }];
+                    }
+                }
+            });
+            svr.connection = connection;
+            let stub = sinon.stub(svr.connection, 'sendDiagnostics');
+            await svr.sendDiagnostics();
+            expect(stub.getCall(0).args?.[0]?.diagnostics).to.be.lengthOf(1);
         });
     });
 
