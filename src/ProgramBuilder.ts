@@ -322,13 +322,23 @@ export class ProgramBuilder {
                     outFile: path.basename(this.options.outFile)
                 });
             });
+
             let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
 
-            //exclude all BrighterScript files from publishing, because we will transpile them instead
-            options.files.push('!**/*.bs');
+            //remove all files currently loaded in the program, we will transpile those instead (even if just for source maps)
+            let filteredFileMap = [];
+            for (let fileEntry of fileMap) {
+                if (this.program.hasFile(fileEntry.src) === false) {
+                    filteredFileMap.push(fileEntry);
+                }
+            }
 
             util.log('Copying to staging directory');
-            await rokuDeploy.prepublishToStaging(options);
+            //prepublish all non-program-loaded files to staging
+            await rokuDeploy.prepublishToStaging({
+                ...options,
+                files: filteredFileMap
+            });
 
             util.log('Transpiling');
             //transpile any brighterscript files
