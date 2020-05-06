@@ -318,7 +318,7 @@ export class Lexer {
 
     private quoteComment() {
         // BrightScript doesn't have block comments; only line
-        while (this.peek() !== '\n' && !this.isAtEnd()) {
+        while (this.peek() !== '\r' && this.peek() !== '\n' && !this.isAtEnd()) {
             this.advance();
         }
         this.addToken(TokenKind.Comment);
