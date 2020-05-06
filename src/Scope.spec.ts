@@ -26,6 +26,21 @@ describe('Scope', () => {
         sinon.restore();
     });
 
+    it('does not mark namespace functions as collisions with stdlib', async () => {
+        await program.addOrReplaceFile({
+            src: `${rootDir}/source/main.bs`,
+            dest: `source/main.bs`
+        }, `
+            namespace a
+                function constructor()
+                end function
+            end namespace
+        `);
+
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).not.to.exist;
+    });
+
     describe('attachProgram', () => {
         it('correctly listens to program events', () => {
             scope = new Scope('some scope', () => true);

@@ -427,7 +427,7 @@ export class Scope {
      */
     private diagnosticDetectFunctionCollisions(file: BrsFile | XmlFile) {
         for (let func of file.callables) {
-            if (platformCallableMap[func.name.toLowerCase()]) {
+            if (platformCallableMap[func.getName(ParseMode.BrighterScript).toLowerCase()]) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction(),
                     range: func.nameRange,
