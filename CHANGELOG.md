@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## unreleased
+### Added
+ - new config option called `showDiagnosticsInConsole` which disables printing diagnostics to the console 
+### Fixed
+ - bug in lexer that was capturing the carriage return character (`\n`) at the end of comment statements
+ - bug in transpiler that wouldn't include a newline after the final comment statement
+ - bug in LanguageServer that was printing diagnostics to the console when it shouldn't be.
+
 
 ## [0.9.4] - 2020-05-05
 ### Added

@@ -80,13 +80,13 @@ export class FunctionParameter {
     public transpile(state: TranspileState) {
         let result = [
             //name
-            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pkgPath, this.name.text)
+            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
         ] as any[];
         if (this.asToken) {
             result.push(' ');
-            result.push(new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pkgPath, 'as'));
+            result.push(new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pathAbsolute, 'as'));
             result.push(' ');
-            result.push(new SourceNode(this.typeToken.range.start.line + 1, this.typeToken.range.start.character, state.pkgPath, this.typeToken.text));
+            result.push(new SourceNode(this.typeToken.range.start.line + 1, this.typeToken.range.start.character, state.pathAbsolute, this.typeToken.text));
         }
         if (this.defaultValue) {
             result.push(' = ');

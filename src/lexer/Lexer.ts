@@ -282,7 +282,7 @@ export class Lexer {
                 }
                 break;
             case `'`:
-                this.quoteComment();
+                this.comment();
                 break;
             case ' ':
             case '\t':
@@ -316,16 +316,9 @@ export class Lexer {
         }
     }
 
-    private quoteComment() {
+    private comment() {
         // BrightScript doesn't have block comments; only line
-        while (this.peek() !== '\n' && !this.isAtEnd()) {
-            this.advance();
-        }
-        this.addToken(TokenKind.Comment);
-    }
-
-    private remComment() {
-        while (this.peek() !== '\n' && !this.isAtEnd()) {
+        while (this.peek() !== '\r' && this.peek() !== '\n' && !this.isAtEnd()) {
             this.advance();
         }
         this.addToken(TokenKind.Comment);
@@ -643,7 +636,7 @@ export class Lexer {
             if (this.checkPreviousToken(TokenKind.Dot)) {
                 this.addToken(TokenKind.Identifier);
             } else {
-                this.remComment();
+                this.comment();
             }
         } else {
             this.addToken(tokenType);

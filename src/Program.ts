@@ -207,16 +207,31 @@ export class Program {
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
-     * @param pathAbsolute
-     * @param fileContents
+     * @param relativePath the file path relative to the root dir
+     * @param fileContents the file contents. If not provided, the file will be loaded from disk
      */
-    public async addOrReplaceFile(fileEntry: StandardizedFileEntry, fileContents?: string) {
-        assert.ok(fileEntry, 'fileEntry is required');
-        assert.ok(fileEntry.src, 'fileEntry.src is required');
-        assert.ok(fileEntry.dest, 'fileEntry.dest is required');
+    public async addOrReplaceFile(relativePath: string, fileContents?: string): Promise<XmlFile | BrsFile>;
+    /**
+     * Load a file into the program. If that file already exists, it is replaced.
+     * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
+     * @param fileEntry an object that specifies src and dest for the file.
+     * @param fileContents the file contents. If not provided, the file will be loaded from disk
+     */
+    public async addOrReplaceFile(fileEntry: StandardizedFileEntry, fileContents?: string): Promise<XmlFile | BrsFile>;
+    public async addOrReplaceFile(fileParam: StandardizedFileEntry | string, fileContents?: string): Promise<XmlFile | BrsFile> {
+        assert.ok(fileParam, 'fileEntry is required');
+        let pathAbsolute: string;
+        let pkgPath: string;
+        if (typeof fileParam === 'string') {
+            pathAbsolute = s`${this.options.rootDir}/${fileParam}`;
+            pkgPath = s`${fileParam}`;
+        } else {
+            pathAbsolute = s`${fileParam.src}`;
+            pkgPath = s`${fileParam.dest}`;
+        }
 
-        let pathAbsolute = s`${fileEntry.src}`;
-        let pkgPath = s`${fileEntry.dest}`;
+        assert.ok(pathAbsolute, 'fileEntry.src is required');
+        assert.ok(pkgPath, 'fileEntry.dest is required');
 
         //if the file is already loaded, remove it
         if (this.hasFile(pathAbsolute)) {
@@ -591,36 +606,34 @@ export class Program {
         return result;
     }
 
-
     public async transpile(fileEntries: StandardizedFileEntry[], stagingFolderPath: string) {
         let promises = Object.keys(this.files).map(async (filePath) => {
             let file = this.files[filePath];
-            if (file.needsTranspiled) {
-                let result = file.transpile();
-                let filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
-                if (!filePathObj) {
-                    throw new Error(`Cannot find fileMap record in fileMaps for '${file.pathAbsolute}'`);
-                }
-
-                //replace the file extension
-                let outputCodePath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
-                //prepend the staging folder path
-                outputCodePath = s`${stagingFolderPath}/${outputCodePath}`;
-                let outputCodeMapPath = outputCodePath + '.map';
-
-                //make sure the full dir path exists
-                await fsExtra.ensureDir(path.dirname(outputCodePath));
-
-                if (await fsExtra.pathExists(outputCodePath)) {
-                    throw new Error(`Error while transpiling "${filePath}". A file already exists at "${outputCodePath}" and will not be overwritten.`);
-                }
-
-                let writeMapPromise = result.map ? fsExtra.writeFile(outputCodeMapPath, result.map) : null;
-                await Promise.all([
-                    fsExtra.writeFile(outputCodePath, result.code),
-                    writeMapPromise
-                ]);
+            let filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
+            if (!filePathObj) {
+                throw new Error(`Cannot find fileMap record in fileMaps for '${file.pathAbsolute}'`);
             }
+            //replace the file extension
+            let outputCodePath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
+            //prepend the staging folder path
+            outputCodePath = s`${stagingFolderPath}/${outputCodePath}`;
+            let outputCodeMapPath = outputCodePath + '.map';
+
+            let result = file.transpile();
+
+            //make sure the full dir path exists
+            await fsExtra.ensureDir(path.dirname(outputCodePath));
+
+            if (await fsExtra.pathExists(outputCodePath)) {
+                throw new Error(`Error while transpiling "${filePath}". A file already exists at "${outputCodePath}" and will not be overwritten.`);
+            }
+
+            let writeMapPromise = result.map ? fsExtra.writeFile(outputCodeMapPath, result.map) : null;
+            await Promise.all([
+                fsExtra.writeFile(outputCodePath, result.code),
+                writeMapPromise
+            ]);
+
         });
         await Promise.all(promises);
     }

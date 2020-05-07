@@ -340,7 +340,8 @@ export class LanguageServer {
             watch: false,
             createPackage: false,
             deploy: false,
-            copyToStaging: false
+            copyToStaging: false,
+            showDiagnosticsInConsole: false
         });
         firstRunPromise.catch((err) => {
             console.error(err);

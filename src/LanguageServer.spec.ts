@@ -255,7 +255,7 @@ describe('LanguageServer', () => {
             // setVfsFile(mainPath, 'sub main()\nend sub');
 
             await server.handleFileChanges(workspace, [{
-                type: <FileChangeType>FileChangeType.Created,
+                type: FileChangeType.Created,
                 pathAbsolute: mainPath
             }]);
 
@@ -268,7 +268,7 @@ describe('LanguageServer', () => {
 
             expect(addOrReplaceFileStub.callCount).to.equal(1);
             await server.handleFileChanges(workspace, [{
-                type: <FileChangeType>FileChangeType.Created,
+                type: FileChangeType.Created,
                 pathAbsolute: libPath
             }]);
             //the function should have ignored the lib file, so no additional files were added

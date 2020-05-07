@@ -489,12 +489,11 @@ describe('XmlFile', () => {
     });
 
     describe('transpile', () => {
-
         it('changes file extensions to brs from bs', async () => {
-            await program.addOrReplaceFile({
-                src: `${rootDir}/components/SimpleScene.bs`,
-                dest: `components/SimpleScene.bs`
-            }, '');
+            await program.addOrReplaceFile(`components/SimpleScene.bs`, `
+                import "pkg:/source/lib.bs"
+            `);
+            await program.addOrReplaceFile('source/lib.bs', ``);
 
             await testTranspile(`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -505,6 +504,7 @@ describe('XmlFile', () => {
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
                     <script type="text/brightscript" uri="SimpleScene.brs"/>
+                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                 </component>
             `, 'none', 'components/SimpleScene.xml');
         });

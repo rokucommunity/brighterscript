@@ -155,6 +155,11 @@ describe('lexer', () => {
     });
 
     describe('comments', () => {
+        it('does not include carriage return character', () => {
+            let tokens = Lexer.scan(`'someComment\r\nprint "hello"`).tokens;
+            expect(tokens[0].text).to.equal(`'someComment`);
+        });
+
         it('includes the comment characters in the text', () => {
             let text = Lexer.scan(`
                 'comment

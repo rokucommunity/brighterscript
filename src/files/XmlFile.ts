@@ -1,6 +1,6 @@
 import { EventEmitter } from 'eventemitter3';
 import * as path from 'path';
-import { CodeWithSourceMap } from 'source-map';
+import { CodeWithSourceMap, SourceNode } from 'source-map';
 import { CompletionItem, Hover, Position, Range } from 'vscode-languageserver';
 import { Deferred } from '../deferred';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -124,6 +124,11 @@ export class XmlFile {
     public lines: string[];
 
     /**
+     * The full file contents
+     */
+    public fileContents: string;
+
+    /**
      * TODO: do we need this for xml files?
      */
     public propertyNameCompletions = [] as CompletionItem[];
@@ -132,6 +137,7 @@ export class XmlFile {
     private scriptTypeRegex = /type\s*=\s*"(.*?)"/gi;
 
     public async parse(fileContents: string) {
+        this.fileContents = fileContents;
         if (this.parseDeferred.isCompleted) {
             throw new Error(`File was already processed. Create a new file instead. ${this.pathAbsolute}`);
         }
@@ -431,7 +437,7 @@ export class XmlFile {
         }
     }
 
-    public getHover(position: Position): Hover { //eslint-disable-line
+    public getHover(position: Position): Promise<Hover> { //eslint-disable-line
         //TODO implement
         // let result = {} as Hover;
         return null;
@@ -496,48 +502,45 @@ export class XmlFile {
      */
     public transpile(): CodeWithSourceMap {
         //eventually we want to support sourcemaps and a full xml parser. However, for now just do some string transformations
-        let lines = [...this.lines];
-        for (let i = 0; i < lines.length; i++) {
-            let line = lines[i];
+        let chunks = [] as Array<SourceNode | string>;
+        for (let i = 0; i < this.lines.length; i++) {
+            let line = this.lines[i];
             let lowerLine = line.toLowerCase();
 
             let componentLocationIndex = lowerLine.indexOf('</component>');
             //include any bs import statements
             if (componentLocationIndex > -1) {
-                let missingImports = this.getMissingImportsForTranspile();
-                let newLines = [] as string[];
+                let missingImports = this.getMissingImportsForTranspile()
+                    //change the file extension to .brs since they will be transpiled
+                    .map(x => x.replace('.bs', '.brs'));
 
                 for (let missingImport of missingImports) {
                     let scriptTag = `<script type="text/brightscript" uri="${util.getRokuPkgPath(missingImport)}" />`;
                     //indent the script tag
                     let indent = ''.padStart(componentLocationIndex + 4, ' ');
-                    newLines.push(
-                        indent + scriptTag
+                    chunks.push(
+                        '\n',
+                        new SourceNode(1, 0, this.pathAbsolute, indent + scriptTag)
                     );
-                }
-
-                if (newLines.length > 0) {
-                    lines.splice(i, 0, ...newLines);
-                    //bump the loop index by however many items we added
-                    i += newLines.length;
                 }
             }
 
             //convert .bs extensions to .brs
             let idx = line.indexOf('.bs"');
             if (idx > -1) {
-                lines[i] = line.substring(0, idx) + '.brs' + line.substring(idx + 3);
-
+                line = line.substring(0, idx) + '.brs' + line.substring(idx + 3);
             }
+
             //convert "text/brighterscript" to "text/brightscript"
-            lines[i] = lines[i].replace(`"text/brighterscript"`, `"text/brightscript"`);
+            line = line.replace(`"text/brighterscript"`, `"text/brightscript"`);
+
+            chunks.push(
+                chunks.length > 0 ? '\n' : '',
+                line
+            );
         }
 
-        return {
-            code: lines.join('\n'),
-            //for now, return no map. We'll support this eventually
-            map: undefined
-        };
+        return new SourceNode(null, null, this.pathAbsolute, chunks).toStringWithSourceMap();
     }
 
     public dispose() {

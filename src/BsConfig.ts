@@ -105,4 +105,10 @@ export interface BsConfig {
      * in the same folder, and add it as a script import if found. Disabled by default"
      */
     autoImportComponentScript?: boolean;
+    /**
+     * When enabled, diagnostics will be printed to the console.
+     * When disabled, no diagnostics will be printed to the console.
+     * @default true
+     */
+    showDiagnosticsInConsole?: boolean;
 }
