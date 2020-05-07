@@ -10,13 +10,38 @@ import * as semverExtra from 'semver-extra';
  */
 export class Benchmarker {
 
-    public async runAll(tests, iterationCount = 3) {
+    public async runAll(tests, doSetup = true, iterationCount = 3) {
+        if (doSetup) {
+            this.prepare();
+        }
         this.addIterations(iterationCount);
         tests = tests?.length > 0 ? tests : ['lexer', 'parser'];
         for (var testName of tests) {
 
             await this[testName]();
         }
+    }
+
+
+    public prepare() {
+        console.log('deleting benchmarks/node_modules');
+        fsExtra.remove(`${__dirname}/node_modules`);
+
+        console.log('deleting benchmarks/package.json');
+        fsExtra.remove(`${__dirname}/node_modules/package.json`);
+
+        console.log(`installing brighterscript@${this.latestBrighterScriptVersion}`);
+        execSync(`npm init -y`, {
+            cwd: __dirname
+        });
+        execSync(`npm --cache-min 9999999 i brighterscript@${this.latestBrighterScriptVersion}`, {
+            cwd: __dirname
+        });
+
+        console.log('building local brighterscript');
+        execSync('npm run build', {
+            cwd: path.join(__dirname, '..')
+        });
     }
 
     private addIterations(iterationCount: number) {
@@ -58,27 +83,6 @@ export class Benchmarker {
         return this._latestBrighterScriptVersion;
     }
     private _latestBrighterScriptVersion: string;
-
-    public prepare() {
-        console.log('deleting benchmarks/node_modules');
-        fsExtra.remove(`${__dirname}/node_modules`);
-
-        console.log('deleting benchmarks/package.json');
-        fsExtra.remove(`${__dirname}/node_modules/package.json`);
-
-        console.log(`installing brighterscript@${this.latestBrighterScriptVersion}`);
-        execSync(`npm init -y`, {
-            cwd: __dirname
-        });
-        execSync(`npm --cache-min 9999999 i brighterscript@${this.latestBrighterScriptVersion}`, {
-            cwd: __dirname
-        });
-
-        console.log('building local brighterscript');
-        execSync('npm run build', {
-            cwd: path.join(__dirname, '..')
-        });
-    }
 
     private getTestFile(name: string) {
         if (!this.testFileCache[name]) {

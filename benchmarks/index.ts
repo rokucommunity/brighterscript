@@ -5,21 +5,15 @@ import { Benchmarker } from './Benchmarker';
         .boolean('nosetup')
         .argv;
 
-    var nosetup = argv.nosetup;
+    var doSetup = !argv.nosetup;
     var benchmarkNames = argv._;
     var iterationCount = argv.iterationCount;
     var maxPercentChange = argv.maxPercentChange;
 
     var benchmarker = new Benchmarker();
-    if (nosetup) {
-        console.log('Skipping initial setup');
-    } else {
-        //install npm modules, stuff like that
-        benchmarker.prepare();
-    }
 
     //now run all of the benchmarks
-    await benchmarker.runAll(benchmarkNames, iterationCount);
+    await benchmarker.runAll(benchmarkNames, doSetup, iterationCount);
 
     //write a blank line to separate the final results
     console.log('\nFinal Results:');
