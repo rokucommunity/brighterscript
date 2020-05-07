@@ -22,7 +22,6 @@ export class Benchmarker {
         }
     }
 
-
     public prepare() {
         console.log('deleting benchmarks/node_modules');
         fsExtra.remove(`${__dirname}/node_modules`);
@@ -50,8 +49,8 @@ export class Benchmarker {
             [require(`${__dirname}/../dist`), 'local']
         ];
 
-        for (var i = 0; i < iterationCount; i++) {
-            for (let j = 0; j < 2; j++) {
+        for (let j = 0; j < 2; j++) {
+            for (var i = 0; i < iterationCount; i++) {
                 this.iterations.push({
                     brighterscript: stuff[j][0],
                     name: `${stuff[j][1]} (${i + 1})`
@@ -159,13 +158,9 @@ export class Benchmarker {
             let computePercentChange = this.computePercentChange.bind(this);
             suite
                 .on('cycle', function (event) {
-                    (process as any).stdout.clearLine();
-                    (process as any).stdout.cursorTo(0);
-                    (process as any).stdout.write(event.target.toString());
+                    console.log(event.target.toString());
                 })
                 .on('complete', function () {
-                    (process as any).stdout.clearLine();
-                    (process as any).stdout.cursorTo(0);
                     console.log(`\nresults: `);
                     for (var i = 0; i < this.length; i++) {
                         // console.log(`${ this[i].name }: ${ Math.round(this[i].hz * 100) / 100 } ops / sec`);
