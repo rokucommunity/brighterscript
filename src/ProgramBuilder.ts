@@ -85,6 +85,7 @@ export class ProgramBuilder {
         this.program.fileResolvers.push(...this.fileResolvers);
 
         //parse every file in the entire project
+        util.log('Parsing files');
         await this.loadAllFilesAST();
 
         if (this.options.watch) {
@@ -174,14 +175,7 @@ export class ProgramBuilder {
         let runPromise = this.cancelLastRun().then(() => {
             //start the new run
             return this._runOnce(cancellationToken);
-        }).then(() => {
-            //track if the run completed
-            return this.printDiagnostics();
-        }, async (err) => {
-            await this.printDiagnostics();
-            //track if the run completed
-            throw err;
-        });
+        }) as any;
 
         //a function used to cancel this run
         this.cancelLastRun = () => {
@@ -225,6 +219,12 @@ export class ProgramBuilder {
             typeColor[DiagnosticSeverity.Warning] = chalk.yellow;
             typeColor[DiagnosticSeverity.Error] = chalk.red;
 
+            let severityTextMap = {};
+            severityTextMap[DiagnosticSeverity.Information] = 'info';
+            severityTextMap[DiagnosticSeverity.Hint] = 'hint';
+            severityTextMap[DiagnosticSeverity.Warning] = 'warning';
+            severityTextMap[DiagnosticSeverity.Error] = 'error';
+
             if (this.options && this.options.emitFullPaths !== true) {
                 filePath = path.relative(cwd, filePath);
             }
@@ -233,8 +233,10 @@ export class ProgramBuilder {
             //split the file on newline
             let lines = util.getLines(fileText);
             for (let diagnostic of sortedDiagnostics) {
+
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
+                let severityText = severityTextMap[severity];
                 console.log('');
                 console.log(
                     chalk.cyan(filePath) +
@@ -245,7 +247,7 @@ export class ProgramBuilder {
                         (diagnostic.range.start.character + 1)
                     ) +
                     ' - ' +
-                    typeColor[severity](DiagnosticSeverity[severity]) +
+                    typeColor[severity](severityText) +
                     ' ' +
                     chalk.grey('BS' + diagnostic.code) +
                     ': ' +
@@ -283,37 +285,48 @@ export class ProgramBuilder {
      * @param cancellationToken
      */
     private async _runOnce(cancellationToken: { isCanceled: any }) {
-        //maybe cancel?
-        if (cancellationToken.isCanceled === true) {
-            return -1;
+        let wereDiagnosticsPrinted = false;
+        try {
+            //maybe cancel?
+            if (cancellationToken.isCanceled === true) {
+                return -1;
+            }
+            util.log('Validating project');
+            //validate program
+            await this.validateProject();
+
+            //maybe cancel?
+            if (cancellationToken.isCanceled === true) {
+                return -1;
+            }
+
+            await this.printDiagnostics();
+            wereDiagnosticsPrinted = true;
+            let errorCount = this.getDiagnostics().filter(x => x.severity === DiagnosticSeverity.Error).length;
+
+            if (errorCount > 0) {
+                util.log(`Found ${errorCount} ${errorCount === 1 ? 'error' : 'errors'}`);
+                return errorCount;
+            }
+
+            //create the deployment package (and transpile as well)
+            await this.createPackageIfEnabled();
+
+            //maybe cancel?
+            if (cancellationToken.isCanceled === true) {
+                return -1;
+            }
+
+            //deploy the package
+            await this.deployPackageIfEnabled();
+
+            return 0;
+        } catch (e) {
+            if (wereDiagnosticsPrinted === false) {
+                await this.printDiagnostics();
+            }
+            throw e;
         }
-
-        //validate program
-        await this.validateProject();
-
-        let errorCount = this.getDiagnostics().length;
-
-        //maybe cancel?
-        if (cancellationToken.isCanceled === true) {
-            return -1;
-        }
-
-        if (errorCount > 0) {
-            return errorCount;
-        }
-
-        //create the deployment package (and transpile as well)
-        await this.createPackageIfEnabled();
-
-        //maybe cancel?
-        if (cancellationToken.isCanceled === true) {
-            return -1;
-        }
-
-        //deploy the package
-        await this.deployPackageIfEnabled();
-
-        return 0;
     }
 
     private async createPackageIfEnabled() {
@@ -389,7 +402,7 @@ export class ProgramBuilder {
                     }
                 } catch (e) {
                     //log the error, but don't fail this process because the file might be fixable later
-                    console.error(e);
+                    util.log(e);
                 }
             })
         );
