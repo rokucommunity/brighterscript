@@ -1288,6 +1288,7 @@ describe('Program', () => {
     });
 
     it('creates sourcemap for brs and xml files', async () => {
+        fsExtra.ensureDirSync(program.options.stagingFolderPath);
         await program.addOrReplaceFile('source/main.brs', `
             sub main()
             end sub
