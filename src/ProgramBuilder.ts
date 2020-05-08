@@ -259,21 +259,12 @@ export class ProgramBuilder {
                 // default to an empty string so it doesn't crash the error printing below
                 let diagnosticLine = lines[diagnostic.range.start.line] ?? '';
 
-                //if the squiggly length is longer than the line, concat to end of line
-                let squigglyLength = diagnostic.range.end.character - diagnostic.range.start.character;
-                if (squigglyLength > diagnosticLine.length - diagnostic.range.start.character) {
-                    squigglyLength = diagnosticLine.length - diagnostic.range.end.character;
-                }
+                let squigglyText = util.getDiagnosticSquigglyText(diagnostic, diagnosticLine);
+
                 let lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
                 let blankLineNumberText = chalk.bgWhite(' ' + chalk.bgWhite((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
                 console.log(lineNumberText + diagnosticLine);
-                console.log(blankLineNumberText +
-                    typeColor[severity](
-                        util.padLeft('', diagnostic.range.start.character, ' ') +
-                        //print squigglies
-                        util.padLeft('', squigglyLength, '~')
-                    )
-                );
+                console.log(blankLineNumberText + typeColor[severity](squigglyText));
                 console.log('');
             }
         }

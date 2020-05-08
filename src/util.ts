@@ -5,7 +5,7 @@ import { parse as parseJsonc, ParseError, printParseErrorCode } from 'jsonc-pars
 import * as moment from 'moment';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import { Position, Range } from 'vscode-languageserver';
+import { Position, Range, Diagnostic } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 
@@ -462,6 +462,52 @@ export class Util {
                 break;
             }
         }
+    }
+
+    /**
+     * Given a diagnostic, compute the range for the squiggly
+     */
+    public getDiagnosticSquigglyText(diagnostic: Diagnostic, line: string) {
+        console.log(JSON.stringify([diagnostic.range, line]));
+        let squiggle: string;
+        //fill the entire line
+        if (
+            //there is no range
+            !diagnostic.range ||
+            //there is no line
+            !line ||
+            //both positions point to same location
+            diagnostic.range.start.character === diagnostic.range.end.character ||
+            //the diagnostic starts after the end of the line
+            diagnostic.range.start.character >= line.length
+        ) {
+            squiggle = ''.padStart(line?.length ?? 0, '~');
+        } else {
+
+            let endIndex = Math.max(diagnostic.range?.end.character, line.length);
+            endIndex = endIndex > 0 ? endIndex : 0;
+            if (line?.length < endIndex) {
+                endIndex = line.length;
+            }
+
+            let leadingWhitespaceLength = diagnostic.range.start.character;
+            let squiggleLength = diagnostic.range.end.character - diagnostic.range.start.character;
+            let trailingWhitespaceLength = endIndex - diagnostic.range.end.character;
+
+            //opening whitespace
+            squiggle =
+                ''.padStart(leadingWhitespaceLength, ' ') +
+                //squiggle
+                ''.padStart(squiggleLength, '~') +
+                //trailing whitespace
+                ''.padStart(trailingWhitespaceLength, ' ');
+
+            //trim the end of the squiggle so it doesn't go longer than the end of the line
+            if (squiggle.length > endIndex) {
+                squiggle = squiggle.slice(0, endIndex);
+            }
+        }
+        return squiggle;
     }
 
     /**

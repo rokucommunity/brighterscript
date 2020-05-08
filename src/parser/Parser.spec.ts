@@ -14,14 +14,31 @@ describe('parser', () => {
         });
     });
 
-    it('tracks error locations', () => {
-        expect(parse(`
-            sub main()
-                call()a
-            end sub
-        `).diagnostics.map(x => rangeToArray(x.range))).to.eql([
-            [2, 22, 2, 23]
-        ]);
+    describe('diagnostic locations', () => {
+        it('tracks basic diagnostic locations', () => {
+            expect(parse(`
+                sub main()
+                    call()a
+                end sub
+            `).diagnostics.map(x => rangeToArray(x.range))).to.eql([
+                [2, 22, 2, 23]
+            ]);
+        });
+
+        it.skip('handles edge cases', () => {
+            let diagnostics = parse(`
+                function BuildCommit()
+                    return "6c5cdf1"
+                end functionasdf
+            `).diagnostics;
+            expect(diagnostics[0]?.message).to.exist.and.to.eql(
+                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression().message
+            );
+
+            expect(diagnostics[0]?.range).to.eql(
+                Range.create(3, 20, 3, 32)
+            );
+        });
     });
 
     describe('parse', () => {
