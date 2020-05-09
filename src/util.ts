@@ -468,7 +468,6 @@ export class Util {
      * Given a diagnostic, compute the range for the squiggly
      */
     public getDiagnosticSquigglyText(diagnostic: Diagnostic, line: string) {
-        console.log(JSON.stringify([diagnostic.range, line]));
         let squiggle: string;
         //fill the entire line
         if (
