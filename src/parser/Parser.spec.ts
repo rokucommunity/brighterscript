@@ -21,7 +21,7 @@ describe('parser', () => {
                     call()a
                 end sub
             `).diagnostics.map(x => rangeToArray(x.range))).to.eql([
-                [2, 22, 2, 23]
+                [2, 26, 2, 27]
             ]);
         });
 

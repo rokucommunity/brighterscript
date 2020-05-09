@@ -14,6 +14,7 @@ import { SourceMapConsumer } from 'source-map';
 import { TokenKind, Lexer, Keywords } from '../lexer';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { StandardizedFileEntry } from 'roku-deploy';
+import { standardizePath as s } from '../util';
 
 let sinon = sinonImport.createSandbox();
 
@@ -1584,6 +1585,28 @@ describe('BrsFile', () => {
             await testTranspile(`function log()\nend function`, undefined, 'none');
         });
 
+        it('handles sourcemap edge case', async () => {
+            let source =
+                'sub main()\n' +
+                '\n' +
+                '    print 1\n' +
+                '\n' +
+                'end sub';
+
+            let result = await testTranspile(source, `sub main()\n    print 1\nend sub`, 'none', 'source/main.bs');
+            //load the source map
+            let location = await SourceMapConsumer.with(result.map.toJSON(), null, (consumer) => {
+                return consumer.generatedPositionFor({
+                    line: 3,
+                    column: 0,
+                    source: s`${rootDir}/source/main.bs`,
+                    bias: SourceMapConsumer.LEAST_UPPER_BOUND
+                });
+            });
+            expect(location.line).to.eql(2);
+            expect(location.column).eql(4);
+        });
+
         it('computes correct locations for sourcemap', async () => {
             let source = `function log(name)\n    firstName = name\nend function`;
             let tokens = Lexer.scan(source).tokens
@@ -1771,7 +1794,7 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
     return async (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs') => {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
-        let file = await program.addOrReplaceFile({ src: `${rootDir}/${pkgPath}`, dest: pkgPath }, source) as BrsFile;
+        let file = await program.addOrReplaceFile({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source) as BrsFile;
         await program.validate();
         let diagnostics = file.getDiagnostics();
         if (diagnostics.length > 0) {
