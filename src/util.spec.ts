@@ -454,6 +454,12 @@ describe('util', () => {
             }, 'abcde')).to.equal('  ~~~');
         });
 
+        it('handles Number.MAX_VALUE for end character', () => {
+            expect(util.getDiagnosticSquigglyText(<any>{
+                range: Range.create(0, 0, 0, Number.MAX_VALUE)
+            }, 'abcde')).to.equal('~~~~~');
+        });
+
         it.skip('handles edge cases', () => {
             expect(util.getDiagnosticSquigglyText(<any>{
                 range: Range.create(5, 16, 5, 18)

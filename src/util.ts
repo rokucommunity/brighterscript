@@ -490,7 +490,12 @@ export class Util {
             }
 
             let leadingWhitespaceLength = diagnostic.range.start.character;
-            let squiggleLength = diagnostic.range.end.character - diagnostic.range.start.character;
+            let squiggleLength: number;
+            if (diagnostic.range.end.character === Number.MAX_VALUE) {
+                squiggleLength = line.length - leadingWhitespaceLength;
+            } else {
+                squiggleLength = diagnostic.range.end.character - diagnostic.range.start.character;
+            }
             let trailingWhitespaceLength = endIndex - diagnostic.range.end.character;
 
             //opening whitespace
