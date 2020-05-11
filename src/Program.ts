@@ -16,6 +16,7 @@ import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DependencyGraph } from './DependencyGraph';
+import { logger, LogLevel } from './Logger';
 
 export class Program {
     constructor(
@@ -25,6 +26,10 @@ export class Program {
         public options: BsConfig
     ) {
         this.options = util.normalizeConfig(options);
+
+        //set the logLevel of the global logger
+        //TODO make this program-specific someday
+        logger.logLevel = this.options.logLevel ?? LogLevel.info;
 
         //normalize the root dir path
         this.rootDir = util.getRootDir(this.options);

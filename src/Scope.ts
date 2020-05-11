@@ -12,6 +12,7 @@ import { ClassStatement } from './parser/ClassStatement';
 import { standardizePath as s, util } from './util';
 import { platformCallableMap } from './platformCallables';
 import { FunctionType } from './types/FunctionType';
+import { logger } from './Logger';
 
 /**
  * A class to keep track of all declarations within a given scope (like global scope, component scope)
@@ -344,6 +345,8 @@ export class Scope {
      * @param fileContents
      */
     public addOrReplaceFile(file: BrsFile | XmlFile) {
+        logger.debug('Scope ', `'${this.name}'`, 'addOrReplaceFile: ', file.pathAbsolute);
+
         this.isValidated = false;
 
         //if the file is already loaded, remove it first
@@ -377,6 +380,7 @@ export class Scope {
     }
 
     public validate(force = false) {
+        logger.debug('Validate scope', `'${this.name}'`, 'force', false);
         //if this scope is already validated, no need to revalidate
         if (this.isValidated === true && !force) {
             return;
