@@ -6,7 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## 0.9.5
+## 0.9.6
+### Added
+ - `logLevel` option from the bsconfig.json and command prompt that allows specifying how much detain the logging should contain.
+ - additional messages during cli run
+### Changed
+ - don't terminate bsc on warning diagnostics
+ - removed extraneous log statements from the util module 
+### Fixed
+ - fixed bugs when printing diagnostics to the console that wouldn't show the proper squiggly line location.
+
+
+
+## 0.9.5 - 2020-05-06
 ### Added
  - new config option called `showDiagnosticsInConsole` which disables printing diagnostics to the console 
 ### Fixed
@@ -250,6 +262,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.9.6]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.5...v0.9.6
 [0.9.5]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.4...v0.9.5
 [0.9.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.3...v0.9.4
 [0.9.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.2...v0.9.3
