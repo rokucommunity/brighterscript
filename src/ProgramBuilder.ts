@@ -8,7 +8,7 @@ import { FileResolver, Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import { logger } from './logger';
+import { logger } from './Logger';
 
 /**
  * A runner class that handles

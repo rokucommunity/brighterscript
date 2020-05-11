@@ -1,3 +1,4 @@
+import { LogLevel } from './Logger';
 
 export interface BsConfig {
     /**
@@ -111,4 +112,9 @@ export interface BsConfig {
      * @default true
      */
     showDiagnosticsInConsole?: boolean;
+    /**
+     * The log level.
+     * @default LogLevel.log
+     */
+    logLevel?: LogLevel;
 }

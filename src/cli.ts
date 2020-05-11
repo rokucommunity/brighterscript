@@ -21,6 +21,7 @@ let args = [
     { name: 'emit-full-paths', type: Boolean, description: 'Emit full paths to files when encountering diagnostics. Defaults to false' },
     { name: 'retain-staging-folder', type: Boolean, description: 'Prevent the staging folder from being deleted after creating the package. Defaults to false' },
     { name: 'staging-folder-path', type: String, description: 'The path where the files should be staged (right before being zipped up).' },
+    { name: 'log-level', type: String, description: 'The log level. Values can be "error", "warn", "log", "info", "debug". Defaults to "log"' },
     { name: 'help', type: Boolean, description: 'View help information about this tool.' }
 ];
 const options = commandLineArgs(args, { camelCase: true });
@@ -37,6 +38,7 @@ if (options.help) {
 } else {
     let builder = new ProgramBuilder();
     builder.run(<any>options).then(() => {
+        process.exit(-1);
         //if this is a single run (i.e. not watch mode) and there are error diagnostics, return an error code
         const hasError = !!builder.getDiagnostics().find(x => x.severity === DiagnosticSeverity.Error);
         if (builder.options.watch === false && hasError) {

@@ -26,6 +26,7 @@ import { UninitializedType } from './types/UninitializedType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import { DottedGetExpression, VariableExpression } from './parser/Expression';
+import { LogLevel } from './Logger';
 
 export class Util {
 
@@ -266,6 +267,10 @@ export class Util {
         config.diagnosticFilters = config.diagnosticFilters ?? [];
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
+        if (typeof config.logLevel === 'string') {
+            config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
+        }
+        config.logLevel = config.logLevel ?? LogLevel.log;
         return config;
     }
 
