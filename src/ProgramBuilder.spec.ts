@@ -113,3 +113,12 @@ describe('ProgramBuilder', () => {
         });
     });
 });
+
+//TODO remove this test, it's just for local debugging
+it.only(`Works for George's project`, async () => {
+    let builder = new ProgramBuilder();
+    await builder.run({
+        cwd: 'C:/projects/roku/george-roku-ioc',
+        rootDir: 'src'
+    });
+});

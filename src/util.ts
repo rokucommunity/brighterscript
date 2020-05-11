@@ -1,8 +1,6 @@
-import chalk from 'chalk';
 import * as fs from 'fs';
 import * as fsExtra from 'fs-extra';
 import { parse as parseJsonc, ParseError, printParseErrorCode } from 'jsonc-parser';
-import * as moment from 'moment';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
 import { Position, Range, Diagnostic } from 'vscode-languageserver';
@@ -30,12 +28,6 @@ import { ParseMode } from './parser/Parser';
 import { DottedGetExpression, VariableExpression } from './parser/Expression';
 
 export class Util {
-    public log(...args) {
-        //print an empty line
-        console.log('');
-        let timestamp = '[' + chalk.grey(moment().format('hh:mm:ss A')) + ']';
-        console.log.apply(console.log, [timestamp, ...args]);
-    }
 
     public clearConsole() {
         // process.stdout.write('\x1Bc');

@@ -8,6 +8,7 @@ import { FileResolver, Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
+import { logger } from './logger';
 
 /**
  * A runner class that handles
@@ -85,11 +86,11 @@ export class ProgramBuilder {
         this.program.fileResolvers.push(...this.fileResolvers);
 
         //parse every file in the entire project
-        util.log('Parsing files');
+        logger.log('Parsing files');
         await this.loadAllFilesAST();
 
         if (this.options.watch) {
-            util.log('Starting compilation in watch mode...');
+            logger.log('Starting compilation in watch mode...');
             await this.runOnce();
             this.enableWatchMode();
         } else {
@@ -119,13 +120,13 @@ export class ProgramBuilder {
             this.watcher.watch(src);
         }
 
-        util.log('Watching for file changes...');
+        logger.log('Watching for file changes...');
 
         let debouncedRunOnce = debounce(async () => {
-            util.log('File change detected. Starting incremental compilation...');
+            logger.log('File change detected. Starting incremental compilation...');
             await this.runOnce();
             let errorCount = this.getDiagnostics().length;
-            util.log(`Found ${errorCount} errors. Watching for file changes.`);
+            logger.log(`Found ${errorCount} errors. Watching for file changes.`);
         }, 50);
 
         //on any file watcher event
@@ -282,7 +283,7 @@ export class ProgramBuilder {
             if (cancellationToken.isCanceled === true) {
                 return -1;
             }
-            util.log('Validating project');
+            logger.log('Validating project');
             //validate program
             await this.validateProject();
 
@@ -296,7 +297,7 @@ export class ProgramBuilder {
             let errorCount = this.getDiagnostics().filter(x => x.severity === DiagnosticSeverity.Error).length;
 
             if (errorCount > 0) {
-                util.log(`Found ${errorCount} ${errorCount === 1 ? 'error' : 'errors'}`);
+                logger.log(`Found ${errorCount} ${errorCount === 1 ? 'error' : 'errors'}`);
                 return errorCount;
             }
 
@@ -340,20 +341,20 @@ export class ProgramBuilder {
                 }
             }
 
-            util.log('Copying to staging directory');
+            logger.log('Copying to staging directory');
             //prepublish all non-program-loaded files to staging
             await rokuDeploy.prepublishToStaging({
                 ...options,
                 files: filteredFileMap
             });
 
-            util.log('Transpiling');
+            logger.log('Transpiling');
             //transpile any brighterscript files
             await this.program.transpile(fileMap, options.stagingFolderPath);
 
             //create the zip file if configured to do so
             if (this.options.createPackage !== false || this.options.deploy) {
-                util.log(`Creating package at ${this.options.outFile}`);
+                logger.log(`Creating package at ${this.options.outFile}`);
                 await rokuDeploy.zipPackage({
                     ...this.options,
                     outDir: util.getOutDir(this.options),
@@ -366,7 +367,7 @@ export class ProgramBuilder {
     private async deployPackageIfEnabled() {
         //deploy the project if configured to do so
         if (this.options.deploy) {
-            util.log(`Deploying package to ${this.options.host}`);
+            logger.log(`Deploying package to ${this.options.host}`);
             await rokuDeploy.publish({
                 ...this.options,
                 outDir: util.getOutDir(this.options),
@@ -393,7 +394,7 @@ export class ProgramBuilder {
                     }
                 } catch (e) {
                     //log the error, but don't fail this process because the file might be fixable later
-                    util.log(e);
+                    logger.log(e);
                 }
             })
         );
