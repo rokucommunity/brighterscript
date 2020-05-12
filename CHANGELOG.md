@@ -6,7 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## 0.9.6
+### 0.9.7
+### Fixed
+ - the binary name got accidentally renamed to `bsc2` in release 0.9.6. This release fixes that issue.
+
+
+
+## 0.9.6 - 2020-05-11 [YANKED]
 ### Added
  - `logLevel` option from the bsconfig.json and command prompt that allows specifying how much detain the logging should contain.
  - additional messages during cli run
