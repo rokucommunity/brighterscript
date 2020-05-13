@@ -9,6 +9,8 @@ import { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../in
 import { Program } from '../Program';
 import util from '../util';
 import { Parser } from '../parser/Parser';
+import { logger } from '../Logger';
+import chalk from 'chalk';
 
 export class XmlFile {
     constructor(
@@ -24,6 +26,7 @@ export class XmlFile {
         //anytime a dependency changes, clean up some cached values
         this.subscriptions.push(
             this.program.dependencyGraph.onchange(this.pkgPath, () => {
+                this.logDebug('clear script imports because dependency graph changed');
                 this._allAvailableScriptImports = undefined;
             })
         );
@@ -77,7 +80,7 @@ export class XmlFile {
             let allDependencies = this.program.dependencyGraph.nodes[this.pkgPath].allDependencies;
 
             this._allAvailableScriptImports = this.program.getFilesByPkgPaths(allDependencies).map(x => x.pkgPath);
-
+            this.logDebug('computed allAvailableScriptImports', () => this._allAvailableScriptImports);
         }
         return this._allAvailableScriptImports;
     }
@@ -497,10 +500,15 @@ export class XmlFile {
         return result;
     }
 
+    private logDebug(...args) {
+        logger.log('XmlFile', chalk.green(this.pkgPath), ...args);
+    }
+
     /**
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
+        this.logDebug('transpile');
         //eventually we want to support sourcemaps and a full xml parser. However, for now just do some string transformations
         let chunks = [] as Array<SourceNode | string>;
         for (let i = 0; i < this.lines.length; i++) {

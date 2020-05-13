@@ -382,6 +382,7 @@ export class ProgramBuilder {
     private async loadAllFilesAST() {
         let errorCount = 0;
         let files = await util.getFilePaths(this.options);
+        logger.debug('ProgramBuilder.loadAllFilesAST() files:', files);
         //parse every file
         await Promise.all(
             files.map(async (file) => {

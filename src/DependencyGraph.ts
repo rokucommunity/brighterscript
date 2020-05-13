@@ -26,7 +26,7 @@ export class DependencyGraph {
         } else {
             let node = new Node(key, dependencies, this);
             this.nodes[key] = node;
-            this.onchangeEmitter.emit(key, node);
+            this.onchangeEmitter.emit(key, key);
         }
     }
 
@@ -35,14 +35,14 @@ export class DependencyGraph {
      */
     public remove(key: string) {
         delete this.nodes[key];
-        this.onchangeEmitter.emit(key);
+        this.onchangeEmitter.emit(key, key);
     }
 
     /**
      * Emit event that this item has changed
      */
     public emit(key: string) {
-        this.onchangeEmitter.emit(key);
+        this.onchangeEmitter.emit(key, key);
     }
 
     public onchange(key: string, handler: (key) => void) {

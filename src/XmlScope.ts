@@ -17,6 +17,7 @@ export class XmlScope extends Scope {
         this.xmlFileHandles = [
             //when the xml file gets a parent added, link to that parent's scope
             this.xmlFile.on('attach-parent', (parent: XmlFile) => {
+                this.logDebug('attach-parent', parent.componentName);
                 this.handleXmlFileParentAttach(parent);
             }),
 
@@ -30,6 +31,7 @@ export class XmlScope extends Scope {
         if (this.xmlFile.parent) {
             this.handleXmlFileParentAttach(this.xmlFile.parent);
         }
+
     }
 
     public attachProgram(program: Program) {
@@ -55,6 +57,14 @@ export class XmlScope extends Scope {
         if (this.xmlFile.parent && this.xmlFile.parent !== (this.program.platformScope as any)) {
             this.handleXmlFileParentAttach(this.xmlFile.parent);
         }
+
+        //anytime a dependency for this xml file changes, we need to be revalidated
+        this.programHandles.push(
+            this.program.dependencyGraph.onchange(this.xmlFile.pkgPath, (key: string) => {
+                this.logDebug('invalidated because dependency graph said [', key, '] changed');
+                this.isValidated = false;
+            })
+        );
     }
 
     /**

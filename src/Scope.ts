@@ -1,6 +1,6 @@
 import { EventEmitter } from 'eventemitter3';
 import { CompletionItem, CompletionItemKind, Location, Position, Range } from 'vscode-languageserver';
-
+import chalk from 'chalk';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
@@ -23,6 +23,8 @@ export class Scope {
         private matcher: (file: File) => boolean | void
     ) {
         this.isValidated = false;
+        //used for improved logging performance
+        this._debugLogComponentName = `'${chalk.redBright(this.name)}'`;
     }
 
     /**
@@ -151,6 +153,7 @@ export class Scope {
     }
 
     public detachParent() {
+        this.logDebug('detach-parent', this.parentScope?.name);
         for (let disconnect of this.parentScopeHandles) {
             disconnect();
         }
@@ -345,7 +348,7 @@ export class Scope {
      * @param fileContents
      */
     public addOrReplaceFile(file: BrsFile | XmlFile) {
-        logger.debug('Scope ', `'${this.name}'`, 'addOrReplaceFile: ', file.pathAbsolute);
+        this.logDebug('addOrReplaceFile', chalk.green(file.pathAbsolute));
 
         this.isValidated = false;
 
@@ -379,15 +382,22 @@ export class Scope {
         this.emit('invalidated');
     }
 
+    protected logDebug(...args) {
+        logger.debug('Scope', this._debugLogComponentName, ...args);
+    }
+    private _debugLogComponentName: string;
+
     public validate(force = false) {
-        logger.debug('Validate scope', `'${this.name}'`, 'force', false);
         //if this scope is already validated, no need to revalidate
         if (this.isValidated === true && !force) {
+            this.logDebug('validate(): already validated');
             return;
         }
+        this.logDebug('validate(): not validated');
 
         //validate our parent before we validate ourself
         if (this.parentScope && this.parentScope.isValidated === false) {
+            this.logDebug('validate(): validating parent first');
             this.parentScope.validate(force);
         }
         //clear the scope's errors list (we will populate them from this method)

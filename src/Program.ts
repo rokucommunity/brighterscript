@@ -4,7 +4,6 @@ import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import { StandardizedFileEntry } from 'roku-deploy';
 import { CompletionItem, Location, Position, Range, CompletionItemKind } from 'vscode-languageserver';
-
 import { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -224,6 +223,7 @@ export class Program {
      */
     public async addOrReplaceFile(fileEntry: StandardizedFileEntry, fileContents?: string): Promise<XmlFile | BrsFile>;
     public async addOrReplaceFile(fileParam: StandardizedFileEntry | string, fileContents?: string): Promise<XmlFile | BrsFile> {
+        logger.debug('Program.addOrReplaceFile()', fileParam);
         assert.ok(fileParam, 'fileEntry is required');
         let pathAbsolute: string;
         let pkgPath: string;
