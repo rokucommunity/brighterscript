@@ -622,7 +622,7 @@ export class Scope {
     }
 
     /**
-     * Determine if the scope already has this file in its files list
+     * Determine if this scope is referenced and known by the file.
      * @param file
      */
     public hasFile(file: BrsFile | XmlFile) {

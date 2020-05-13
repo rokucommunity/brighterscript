@@ -65,11 +65,22 @@ describe('XmlScope', () => {
                 <component name="ChildComponent" extends="ParentComponent">
                 </component>
             `);
-            await program.validate();
             let childScope = program.getScopesForFile(childXmlFile);
             let definition = childScope[0].getDefinition(childXmlFile, Position.create(2, 64));
             expect(definition).to.be.lengthOf(1);
             expect(definition[0].uri).to.equal(util.pathToUri(parentXmlFile.pathAbsolute));
+        });
+    });
+
+    describe('getFiles', () => {
+        it('includes the xml file', async () => {
+            let xmlFile = await program.addOrReplaceFile('components/child.xml', `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Child">
+                </component>
+            `);
+            await program.validate();
+            expect(program.getComponentScope('Child').getFiles()[0]).to.equal(xmlFile);
         });
     });
 });

@@ -87,6 +87,15 @@ export class XmlScope extends Scope {
         }
     }
 
+    public getFiles() {
+        return this.cache.getOrAdd('files', () => {
+            return [
+                this.xmlFile,
+                ...super.getFiles()
+            ];
+        });
+    }
+
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
