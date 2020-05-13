@@ -20,6 +20,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
     afterEach(() => {
         sinon.restore();
+        program.dispose();
     });
 
     async function addFile(relativePath: string, text: string) {

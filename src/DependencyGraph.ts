@@ -95,6 +95,14 @@ export class DependencyGraph {
             this.onchangeEmitter.off(key, handler);
         };
     }
+
+    public dispose() {
+        for (let key in this.nodes) {
+            let node = this.nodes[key];
+            node.dispose();
+        }
+        this.onchangeEmitter.removeAllListeners();
+    }
 }
 
 export class Node {

@@ -30,6 +30,7 @@ describe('BrsFile', () => {
     });
     afterEach(() => {
         sinon.restore();
+        program.dispose();
     });
 
     it('sets needsTranspiled to true for .bs files', () => {
@@ -1381,7 +1382,7 @@ describe('BrsFile', () => {
 
         it('finds function hover in scope', async () => {
             let rootDir = process.cwd();
-            let program = new Program({
+            program = new Program({
                 rootDir: rootDir
             });
 

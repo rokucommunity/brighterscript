@@ -31,6 +31,7 @@ describe('Program', () => {
         sinon.restore();
         fsExtra.ensureDirSync(tmpPath);
         fsExtra.emptyDirSync(tmpPath);
+        program.dispose();
     });
 
     describe('globalScope', () => {
@@ -137,7 +138,7 @@ describe('Program', () => {
 
         it('works with different cwd', async () => {
             let projectDir = s`${testProjectsPath}/project2`;
-            let program = new Program({ cwd: projectDir });
+            program = new Program({ cwd: projectDir });
             await program.addOrReplaceFile({ src: 'source/lib.brs', dest: 'source/lib.brs' }, 'function main()\n    print "hello world"\nend function');
             // await program.reloadFile('source/lib.brs', `'this is a comment`);
             //if we made it to here, nothing exploded, so the test passes

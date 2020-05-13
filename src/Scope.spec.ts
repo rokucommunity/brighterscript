@@ -17,6 +17,7 @@ describe('Scope', () => {
     });
     afterEach(() => {
         sinon.restore();
+        program.dispose();
     });
 
     it('does not mark namespace functions as collisions with stdlib', async () => {

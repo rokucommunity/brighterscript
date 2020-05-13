@@ -24,6 +24,7 @@ describe('XmlFile', () => {
     });
     afterEach(() => {
         sinon.restore();
+        program.dispose();
     });
 
     describe('parse', () => {
