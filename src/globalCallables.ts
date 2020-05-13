@@ -12,8 +12,11 @@ import { InterfaceType } from './types/InterfaceType';
 import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
+import { Parser } from './parser';
 
 export let globalFile = new BrsFile('global', 'global', null);
+globalFile.parser = new Parser();
+globalFile.parser.parse([]);
 
 let mathFunctions = [{
     name: 'Abs',

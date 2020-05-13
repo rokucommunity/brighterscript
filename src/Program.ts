@@ -16,6 +16,7 @@ import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DependencyGraph } from './DependencyGraph';
 import { logger, LogLevel } from './Logger';
 import chalk from 'chalk';
+import { globalFile } from './globalCallables';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export class Program {
@@ -34,15 +35,7 @@ export class Program {
         //normalize the root dir path
         this.options.rootDir = util.getRootDir(this.options);
 
-        //create the 'global' scope
-        this.globalScope = new Scope('global', 'scope:global', this);
-        this.scopes.global = this.globalScope;
-        this.dependencyGraph.addOrReplace('scope:global', ['global']);
-
-        //for now, disable validation of this scope because the global files have some duplicate method declarations
-        this.globalScope.validate = () => undefined;
-        //TODO we might need to fix this because the isValidated clears stuff now
-        (this.globalScope as any).isValidated = true;
+        this.createGlobalScope();
 
         //create the "source" scope
         let sourceScope = new Scope('source', 'scope:source', this);
@@ -53,6 +46,19 @@ export class Program {
             let contents = await this.util.getFileContents(pathAbsolute);
             return contents;
         });
+    }
+
+    private createGlobalScope() {
+        //create the 'global' scope
+        this.globalScope = new Scope('global', 'scope:global', this);
+        this.scopes.global = this.globalScope;
+        //hardcode the files list for global scope to only contain the global file
+        this.globalScope.getFiles = () => [globalFile];
+        this.globalScope.validate();
+        //for now, disable validation of global scope because the global files have some duplicate method declarations
+        this.globalScope.getDiagnostics = () => [];
+        //TODO we might need to fix this because the isValidated clears stuff now
+        (this.globalScope as any).isValidated = true;
     }
 
     /**

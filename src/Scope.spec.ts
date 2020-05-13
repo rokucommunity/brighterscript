@@ -5,10 +5,8 @@ import { standardizePath as s } from './util';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
-import { LogLevel, logger } from './Logger';
 
-
-describe.only('Scope', () => {
+describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
     let rootDir = process.cwd();
     let program: Program;
@@ -16,7 +14,6 @@ describe.only('Scope', () => {
         program = new Program({
             rootDir: rootDir
         });
-        // logger.logLevel = LogLevel.debug;
     });
     afterEach(() => {
         sinon.restore();
@@ -62,7 +59,7 @@ describe.only('Scope', () => {
             ]);
             expect(program.getDiagnostics()).to.be.lengthOf(0);
             expect(sourceScope.getOwnCallables()).is.lengthOf(3);
-            expect(sourceScope.getAllCallables()).is.lengthOf(3);
+            expect(sourceScope.getAllCallables()).is.length.greaterThan(3);
         });
 
         it('picks up new callables', async () => {
@@ -468,6 +465,9 @@ describe.only('Scope', () => {
     describe('getCallablesAsCompletions', () => {
         it('returns documentation when possible', () => {
             let completions = program.globalScope.getCallablesAsCompletions(ParseMode.BrightScript);
+            //it should find the completions for the global scope
+            expect(completions).to.be.length.greaterThan(0);
+            //it should find documentation for completions
             expect(completions.filter(x => !!x.documentation)).to.have.length.greaterThan(0);
         });
     });
