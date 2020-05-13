@@ -1,7 +1,7 @@
 import { Cache } from './Cache';
 import { expect } from 'chai';
 
-describe.only('Cache', () => {
+describe('Cache', () => {
     let cache: Cache;
     beforeEach(() => {
         cache = new Cache();

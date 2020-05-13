@@ -352,7 +352,7 @@ export class XmlFile {
             );
         }
         if (this.parentComponentName) {
-            dependencies.push(`component:${this.parentComponentName}`);
+            dependencies.push(`component:${this.parentComponentName.toLowerCase()}`);
         }
         this.program.dependencyGraph.addOrReplace(this.dependencyGraphKey, dependencies);
     }
