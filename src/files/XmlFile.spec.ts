@@ -86,7 +86,7 @@ describe('XmlFile', () => {
                 <script type="text/brightscript" uri="ChildScene.brs" />
                 </component>
             `);
-            expect(file.parentName).to.equal('ParentScene');
+            expect(file.parentComponentName).to.equal('ParentScene');
             expect(file.componentName).to.equal('ChildScene');
         });
 

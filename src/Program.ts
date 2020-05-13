@@ -10,12 +10,13 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { BsDiagnostic, File, FileReference } from './interfaces';
-import { platformFile } from './platformCallables';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DependencyGraph } from './DependencyGraph';
 import { logger, LogLevel } from './Logger';
+import chalk from 'chalk';
+const startOfSourcePkgPath = `source${path.sep}`;
 
 export class Program {
     constructor(
@@ -31,30 +32,23 @@ export class Program {
         logger.logLevel = this.options.logLevel ?? LogLevel.info;
 
         //normalize the root dir path
-        this.rootDir = util.getRootDir(this.options);
+        this.options.rootDir = util.getRootDir(this.options);
 
-        //create the 'platform' scope
-        this.platformScope = new Scope('platform', () => false);
+        //create the 'global' scope
+        this.globalScope = new Scope('global', 'scope:global', this);
+        this.scopes.global = this.globalScope;
+        this.dependencyGraph.addOrReplace('scope:global', ['global']);
 
-        //add all platform callables
-        this.platformScope.addOrReplaceFile(platformFile);
-        platformFile.program = this;
-        this.platformScope.attachProgram(this);
-        //for now, disable validation of this scope because the platform files have some duplicate method declarations
-        this.platformScope.validate = () => [];
-        this.platformScope.isValidated = true;
+        //for now, disable validation of this scope because the global files have some duplicate method declarations
+        this.globalScope.validate = () => undefined;
+        //TODO we might need to fix this because the isValidated clears stuff now
+        (this.globalScope as any).isValidated = true;
 
-        //create the "global" scope
-        let globalScope = new Scope('global', (file) => {
-            //global scope includes every file under the `source` folder
-            return file.pkgPath.startsWith(`source${path.sep}`);
-        });
-        globalScope.attachProgram(this);
-        //the global scope inherits from platform scope
-        globalScope.attachParentScope(this.platformScope);
-        this.scopes[globalScope.name] = globalScope;
+        //create the "source" scope
+        let sourceScope = new Scope('source', 'scope:source', this);
+        this.scopes.source = sourceScope;
 
-        //add the default file resolver
+        //add the default file resolver (used by this program to load source file contents).
         this.fileResolvers.push(async (pathAbsolute) => {
             let contents = await this.util.getFileContents(pathAbsolute);
             return contents;
@@ -62,7 +56,10 @@ export class Program {
     }
 
     /**
-     * A graph of all files and their dependencies
+     * A graph of all files and their dependencies.
+     * For example:
+     *      File.xml -> [lib1.brs, lib2.brs]
+     *      lib2.brs -> [lib3.brs] //via an import statement
      */
     public dependencyGraph = new DependencyGraph();
 
@@ -77,6 +74,57 @@ export class Program {
      * to resolve the opened file contents from memory instead of going to disk.
      */
     public fileResolvers = [] as FileResolver[];
+
+    /**
+     * A scope that contains all built-in global functions.
+     * All scopes should directly or indirectly inherit from this scope
+     */
+    public globalScope: Scope;
+
+    /**
+     * A set of diagnostics. This does not include any of the scope diagnostics.
+     * Should only be set from `this.validate()`
+     */
+    private diagnostics = [] as BsDiagnostic[];
+
+    /**
+     * A map of every file loaded into this program
+     */
+    public files = {} as { [filePath: string]: BrsFile | XmlFile };
+
+    private scopes = {} as { [name: string]: Scope };
+
+    /**
+     * A map of every component currently loaded into the program, indexed by the component name
+     */
+    private components = {} as { [lowerComponentName: string]: { file: XmlFile; scope: XmlScope } };
+
+    private readonly emitter = new EventEmitter();
+
+    /**
+     * Get the component with the specified name
+     */
+    public getComponent(componentName: string) {
+        return this.components[componentName.toLowerCase()];
+    }
+
+    /**
+     * Register (or replace) the reference to a component in the component map
+     */
+    private registerComponent(xmlFile: XmlFile, scope: XmlScope) {
+        //store a reference to this component by its component name
+        this.components[(xmlFile.componentName ?? xmlFile.pkgPath).toLowerCase()] = {
+            file: xmlFile,
+            scope: scope
+        };
+    }
+
+    /**
+     * Remove the specified component from the components map
+     */
+    private unregisterComponent(xmlFile: XmlFile) {
+        delete this.components[(xmlFile.componentName ?? xmlFile.pkgPath).toLowerCase()];
+    }
 
     /**
      * Get the contents of the specified file as a string.
@@ -94,23 +142,6 @@ export class Program {
         }
         throw new Error(`Could not load file "${pathAbsolute}"`);
     }
-
-    /**
-     * A scope that contains all platform-provided functions.
-     * All scopes should directly or indirectly inherit from this scope
-     */
-    public platformScope: Scope;
-
-    /**
-     * The full path to the root of the project (where the manifest file lives)
-     */
-    public rootDir: string;
-
-    /**
-     * A set of diagnostics. This does not include any of the scope diagnostics.
-     * Should only be set from `this.validate()`
-     */
-    private diagnostics = [] as BsDiagnostic[];
 
     /**
      * Get a list of all files that are inlcuded in the project but are not referenced
@@ -154,18 +185,11 @@ export class Program {
         //filter out diagnostics based on our diagnostic filters
         let finalDiagnostics = this.diagnosticFilterer.filter({
             ...this.options,
-            //pass the computed `rootDir` (because options sometimes is missing rootDir)
-            rootDir: this.rootDir
+            rootDir: this.options.rootDir
         }, diagnostics);
         return finalDiagnostics;
     }
 
-    /**
-     * A map of every file loaded into this program
-     */
-    public files = {} as { [filePath: string]: BrsFile | XmlFile };
-
-    private scopes = {} as { [name: string]: Scope };
 
     /**
      * Determine if the specified file is loaded in this program right now.
@@ -201,11 +225,18 @@ export class Program {
      * @param scopeName
      */
     public getScopeByName(scopeName: string) {
-        //most scopes are xml file pkg paths. however, the ones that are not are single names like "platform" and "global",
+        //most scopes are xml file pkg paths. however, the ones that are not are single names like "global" and "scope",
         //so it's safe to run the standardizePkgPath method
         scopeName = s`${scopeName}`;
         let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName.toLowerCase());
         return this.scopes[key];
+    }
+
+    /**
+     * Find the scope for the specified component
+     */
+    public getComponentScope(componentName: string) {
+        return this.getComponent(componentName)?.scope;
     }
 
     /**
@@ -223,14 +254,15 @@ export class Program {
      */
     public async addOrReplaceFile(fileEntry: StandardizedFileEntry, fileContents?: string): Promise<XmlFile | BrsFile>;
     public async addOrReplaceFile(fileParam: StandardizedFileEntry | string, fileContents?: string): Promise<XmlFile | BrsFile> {
-        logger.debug('Program.addOrReplaceFile()', fileParam);
         assert.ok(fileParam, 'fileEntry is required');
         let pathAbsolute: string;
         let pkgPath: string;
         if (typeof fileParam === 'string') {
+            logger.debug('Program.addOrReplaceFile()', () => chalk.green(fileParam));
             pathAbsolute = s`${this.options.rootDir}/${fileParam}`;
             pkgPath = s`${fileParam}`;
         } else {
+            logger.debug('Program.addOrReplaceFile()', fileParam);
             pathAbsolute = s`${fileParam.src}`;
             pkgPath = s`${fileParam.dest}`;
         }
@@ -263,6 +295,10 @@ export class Program {
             file = brsFile;
 
             this.dependencyGraph.addOrReplace(brsFile.pkgPath, brsFile.ownScriptImports.map(x => x.pkgPath));
+            //update the `source` scope with this file
+            if (brsFile.pkgPath.startsWith(startOfSourcePkgPath)) {
+                this.dependencyGraph.addDependency('scope:source', brsFile.pkgPath);
+            }
 
         } else if (
             //is xml file
@@ -275,33 +311,21 @@ export class Program {
             this.files[pathAbsolute] = xmlFile;
             await xmlFile.parse(await getFileContents());
 
-            let dependencies = [
-                ...xmlFile.scriptTagImports.map(x => x.pkgPath)
-            ];
-            //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
-            if (this.options.autoImportComponentScript) {
-                dependencies.push(
-                    //add the codebehind file dependencies.
-                    //These are kind of optional, so it doesn't hurt to just add both extension versions
-                    xmlFile.pkgPath.replace(/\.xml$/i, '.bs'),
-                    xmlFile.pkgPath.replace(/\.xml$/i, '.brs')
-                );
-            }
-            this.dependencyGraph.addOrReplace(xmlFile.pkgPath, dependencies);
-
             file = xmlFile;
 
             //create a new scope for this xml file
-            let scope = new XmlScope(xmlFile);
-            //attach this program to the new scope
-            scope.attachProgram(this);
-
-            //if the scope doesn't have a parent scope, give it the platform scope
-            if (!scope.parentScope) {
-                scope.parentScope = this.platformScope;
-            }
+            let scope = new XmlScope(xmlFile, this);
 
             this.scopes[scope.name] = scope;
+
+            //register this compoent now that we have parsed it and know its component name
+            this.registerComponent(xmlFile, scope);
+
+            //attach the dependency graph, so the component can
+            //   a) be regularly notified of changes
+            //   b) immediately emit its own changes
+            xmlFile.attachDependencyGraph(this.dependencyGraph);
+
         } else {
             //TODO do we actually need to implement this? Figure out how to handle img paths
             // let genericFile = this.files[pathAbsolute] = <any>{
@@ -311,33 +335,7 @@ export class Program {
             // } as File;
             // file = <any>genericFile;
         }
-
-        //notify listeners about this file change
-        if (file) {
-            this.emit('file-added', file);
-            file.setFinishedLoading();
-        } else {
-            //skip event when file is undefined
-        }
-
         return file;
-    }
-
-    private readonly emitter = new EventEmitter();
-
-    public on(name: 'file-added', callback: (file: BrsFile | XmlFile) => void);
-    public on(name: 'file-removed', callback: (file: BrsFile | XmlFile) => void);
-    public on(name: string, callback: (data: any) => void) {
-        this.emitter.on(name, callback);
-        return () => {
-            this.emitter.removeListener(name, callback);
-        };
-    }
-
-    protected emit(name: 'file-added', file: BrsFile | XmlFile);
-    protected emit(name: 'file-removed', file: BrsFile | XmlFile);
-    protected emit(name: string, data?: any) {
-        this.emitter.emit(name, data);
     }
 
     /**
@@ -399,23 +397,28 @@ export class Program {
         let file = this.getFile(pathAbsolute);
         if (file) {
 
-            //notify every scope of this file removal
-            for (let scopeName in this.scopes) {
-                let scope = this.scopes[scopeName];
-                scope.removeFile(file);
-            }
-
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.pkgPath];
             if (scope) {
                 scope.dispose();
+                //notify dependencies of this scope that it has been removed
+                this.dependencyGraph.remove(scope.dependencyGraphKey);
                 delete this.scopes[file.pkgPath];
             }
             //remove the file from the program
             delete this.files[pathAbsolute];
-            this.emit('file-removed', file);
 
             this.dependencyGraph.remove(file.pkgPath);
+
+            //if this is a pkg:/source file, notify the `source` scope that it has changed
+            if (file.pkgPath.startsWith(startOfSourcePkgPath)) {
+                this.dependencyGraph.removeDependency('scope:source', file.pkgPath);
+            }
+
+            //if this is a component, remove it from our components map
+            if (file instanceof XmlFile) {
+                this.unregisterComponent(file);
+            }
         }
     }
 
@@ -434,6 +437,7 @@ export class Program {
         for (let filePath in this.files) {
             let file = this.files[filePath];
             if (!this.fileIsIncludedInAnyScope(file)) {
+                logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.pkgPath));
                 //the file is not loaded in any scope
                 this.diagnostics.push({
                     ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
@@ -500,8 +504,8 @@ export class Program {
         //find the scopes for this file
         let scopes = this.getScopesForFile(file);
 
-        //if there are no scopes, include the platform scope so we at least get the built-in functions
-        scopes = scopes.length > 0 ? scopes : [this.platformScope];
+        //if there are no scopes, include the global scope so we at least get the built-in functions
+        scopes = scopes.length > 0 ? scopes : [this.globalScope];
 
         //get the completions for this file for every scope
 
@@ -650,7 +654,7 @@ export class Program {
         for (let name in this.scopes) {
             this.scopes[name].dispose();
         }
-        this.platformScope.dispose();
+        this.globalScope.dispose();
     }
 }
 

@@ -1,4 +1,3 @@
-import { EventEmitter } from 'eventemitter3';
 import * as path from 'path';
 import { CodeWithSourceMap, SourceNode } from 'source-map';
 import { CompletionItem, Hover, Position, Range } from 'vscode-languageserver';
@@ -11,6 +10,8 @@ import util from '../util';
 import { Parser } from '../parser/Parser';
 import { logger } from '../Logger';
 import chalk from 'chalk';
+import { Cache } from '../Cache';
+import { DependencyGraph } from '../DependencyGraph';
 
 export class XmlFile {
     constructor(
@@ -23,26 +24,23 @@ export class XmlFile {
     ) {
         this.extension = path.extname(pathAbsolute).toLowerCase();
 
-        //anytime a dependency changes, clean up some cached values
-        this.subscriptions.push(
-            this.program.dependencyGraph.onchange(this.pkgPath, () => {
-                this.logDebug('clear script imports because dependency graph changed');
-                this._allAvailableScriptImports = undefined;
-            })
-        );
-
         this.possibleCodebehindPkgPaths = [
             this.pkgPath.replace('.xml', '.bs'),
             this.pkgPath.replace('.xml', '.brs')
         ];
     }
 
+    private cache = new Cache();
+
     /**
      * The list of possible autoImport codebehind pkg paths.
      */
     private possibleCodebehindPkgPaths: string[];
 
-    private subscriptions = [] as Array<() => void>;
+    /**
+     * An unsubscribe function for the dependencyGraph subscription
+     */
+    private unsubscribeFromDependencyGraph: () => void;
 
     public parentNameRange: Range;
 
@@ -52,20 +50,20 @@ export class XmlFile {
     public extension: string;
 
     /**
-     * The list script imports delcared in the XML of this file.
+     * The list of script imports delcared in the XML of this file.
      * This excludes parent imports and auto codebehind imports
      */
     public scriptTagImports = [] as FileReference[];
 
     /**
-     * List of all pkgPaths to scripts that this XmlFile depends on that are actually loaded into the program,
+     * List of all pkgPaths to scripts that this XmlFile depends, regardless of whether they are loaded in the program or not.
      * coming from:
      *  - script tags
      *  - inferred codebehind file
      *  - import statements from imported scripts or their descendents
      */
     public get allScriptImports() {
-        return this.program.dependencyGraph.nodes[this.pkgPath].allDependencies;
+        return this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
     }
 
     /**
@@ -76,18 +74,20 @@ export class XmlFile {
      *  - import statements from imported scripts or their descendents
      */
     public get allAvailableScriptImports() {
-        if (!this._allAvailableScriptImports) {
-            let allDependencies = this.program.dependencyGraph.nodes[this.pkgPath].allDependencies;
-
-            this._allAvailableScriptImports = this.program.getFilesByPkgPaths(allDependencies).map(x => x.pkgPath);
-            this.logDebug('computed allAvailableScriptImports', () => this._allAvailableScriptImports);
-        }
-        return this._allAvailableScriptImports;
+        return this.cache.getOrAdd('allAvailableScriptImports', () => {
+            let allDependencies = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
+            let result = [] as string[];
+            let filesInProgram = this.program.getFilesByPkgPaths(allDependencies);
+            for (let file of filesInProgram) {
+                result.push(file.pkgPath);
+            }
+            this.logDebug('computed allAvailableScriptImports', () => result);
+            return result;
+        });
     }
-    private _allAvailableScriptImports = [] as string[];
 
     public getDiagnostics() {
-        return [...this.diagnostics];
+        return this.diagnostics;
     }
 
     /**
@@ -109,12 +109,14 @@ export class XmlFile {
     public functionScopes = [] as FunctionScope[];
 
     /**
-     * The name of the component that this component extends
+     * The name of the component that this component extends.
+     * Available after `parse()`
      */
-    public parentName: string;
+    public parentComponentName: string;
 
     /**
      * The name of the component declared in this xml file
+     * Available after `parse()`
      */
     public componentName: string;
 
@@ -158,7 +160,7 @@ export class XmlFile {
             if (parsedXml?.component) {
                 if (parsedXml.component.$) {
                     this.componentName = parsedXml.component.$.name;
-                    this.parentName = parsedXml.component.$.extends;
+                    this.parentComponentName = parsedXml.component.$.extends;
                 }
                 let componentRange: Range;
 
@@ -187,7 +189,7 @@ export class XmlFile {
                     });
                 }
                 //parent component name not defined
-                if (!this.parentName) {
+                if (!this.parentComponentName) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
                         range: Range.create(
@@ -322,13 +324,47 @@ export class XmlFile {
     }
 
     /**
-     * The file needs to know when the program has settled (i.e. the `file-added` event has finished).
-     * After calling this, the file is ready to be interacted with
+     * Attach the file to the dependency graph so it can monitor changes.
+     * Also notify the dependency graph of our current dependencies so other dependents can be notified.
      */
-    public setFinishedLoading() {
-        this.finishedLoadingDeferred.resolve();
+    public attachDependencyGraph(dependencyGraph: DependencyGraph) {
+        if (this.unsubscribeFromDependencyGraph) {
+            this.unsubscribeFromDependencyGraph();
+        }
+
+        //anytime a dependency changes, clean up some cached values
+        this.unsubscribeFromDependencyGraph = this.program.dependencyGraph.onchange(this.dependencyGraphKey, () => {
+            this.logDebug('clear cache because dependency graph changed');
+            this.cache.clear();
+        });
+
+
+        let dependencies = [
+            ...this.scriptTagImports.map(x => x.pkgPath)
+        ];
+        //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
+        if (this.program.options.autoImportComponentScript) {
+            dependencies.push(
+                //add the codebehind file dependencies.
+                //These are kind of optional, so it doesn't hurt to just add both extension versions
+                this.pkgPath.replace(/\.xml$/i, '.bs'),
+                this.pkgPath.replace(/\.xml$/i, '.brs')
+            );
+        }
+        if (this.parentComponentName) {
+            dependencies.push(`component:${this.parentComponentName}`);
+        }
+        this.program.dependencyGraph.addOrReplace(this.dependencyGraphKey, dependencies);
     }
-    private finishedLoadingDeferred = new Deferred();
+
+    /**
+     * The key used in the dependency graph for this file.
+     * If we have a component name, we will use that so we can be discoverable by child components.
+     * If we don't have a component name, use the pkgPath so at least we can self-validate
+     */
+    public get dependencyGraphKey() {
+        return (`component:${this.componentName}` ?? this.pkgPath).toLowerCase();
+    }
 
     private parseDeferred = new Deferred();
 
@@ -336,7 +372,7 @@ export class XmlFile {
      * Indicates that the file is completely ready for interaction
      */
     public isReady() {
-        return Promise.all([this.finishedLoadingDeferred.promise, this.parseDeferred.promise]);
+        return this.parseDeferred.promise;
     }
 
     /**
@@ -344,23 +380,25 @@ export class XmlFile {
      * @param file
      */
     public doesReferenceFile(file: File) {
-        if (file === this) {
-            return true;
-        }
-        let allScriptImports = this.allScriptImports;
-        for (let importPkgPath of allScriptImports) {
-            if (importPkgPath.toLowerCase() === file.pkgPath.toLowerCase()) {
+        return this.cache.getOrAdd(`doesReferenceFile: ${file.pkgPath}`, () => {
+            if (file === this) {
                 return true;
             }
-        }
+            let allScriptImports = this.allScriptImports;
+            for (let importPkgPath of allScriptImports) {
+                if (importPkgPath.toLowerCase() === file.pkgPath.toLowerCase()) {
+                    return true;
+                }
+            }
 
-        //if this is an xml file...do we extend the component it defines?
-        if (path.extname(file.pkgPath).toLowerCase() === '.xml') {
+            //if this is an xml file...do we extend the component it defines?
+            if (path.extname(file.pkgPath).toLowerCase() === '.xml') {
 
-            //didn't find any script imports for this file
+                //didn't find any script imports for this file
+                return false;
+            }
             return false;
-        }
-        return false;
+        });
     }
 
     /**
@@ -401,44 +439,15 @@ export class XmlFile {
         }
     }
 
-    public emitter = new EventEmitter();
-
-    public on(name: 'attach-parent', callback: (data: XmlFile) => void);
-    public on(name: 'detach-parent', callback: () => void);
-    public on(name: string, callback: (data: any) => void) {
-        this.emitter.on(name, callback);
-        return () => {
-            this.emitter.removeListener(name, callback);
-        };
-    }
-
-    protected emit(name: 'attach-parent', data: XmlFile);
-    protected emit(name: 'detach-parent');
-    protected emit(name: string, data?: any) {
-        this.emitter.emit(name, data);
-    }
-
-    public parent: XmlFile;
-
     /**
-     * Components can extend another component.
-     * This method attaches the parent component to this component, where
-     * this component can listen for script import changes on the parent.
-     * @param parent
+     * Get the parent component (the component this component extends)
      */
-    public attachParent(parent: XmlFile) {
-        //detach any existing parent
-        this.detachParent();
-        this.parent = parent;
-        this.emit('attach-parent', parent);
+    public get parentComponent() {
+        return this.cache.getOrAdd('parent', () => {
+            return this.program.getComponent(this.parentComponentName)?.file ?? null;
+        });
     }
 
-    public detachParent() {
-        if (this.parent) {
-            this.parent = undefined;
-            this.emit('detach-parent');
-        }
-    }
 
     public getHover(position: Position): Promise<Hover> { //eslint-disable-line
         //TODO implement
@@ -456,12 +465,20 @@ export class XmlFile {
      */
     public getAncestorScriptTagImports() {
         let result = [];
-        let parent = this.parent;
+        let parent = this.parentComponent;
         while (parent) {
             result.push(...parent.scriptTagImports);
-            parent = parent.parent;
+            parent = parent.parentComponent;
         }
         return result;
+    }
+
+    /**
+     * Remove this file from the dependency graph as a node
+     */
+    public detachDependencyGraph(dependencyGraph: DependencyGraph) {
+        dependencyGraph.remove(this.dependencyGraphKey);
+
     }
 
     /**
@@ -473,7 +490,7 @@ export class XmlFile {
     private getMissingImportsForTranspile() {
         let ownImports = this.allAvailableScriptImports;
 
-        let parentImports = this.parent?.allAvailableScriptImports ?? [];
+        let parentImports = this.parentComponent?.allAvailableScriptImports ?? [];
 
         let parentMap = parentImports.reduce((map, pkgPath) => {
             map[pkgPath] = true;
@@ -501,7 +518,7 @@ export class XmlFile {
     }
 
     private logDebug(...args) {
-        logger.log('XmlFile', chalk.green(this.pkgPath), ...args);
+        logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
     }
 
     /**
@@ -552,9 +569,8 @@ export class XmlFile {
     }
 
     public dispose() {
-        this.emitter.removeAllListeners();
-        for (let dispose of this.subscriptions) {
-            dispose();
+        if (this.unsubscribeFromDependencyGraph) {
+            this.unsubscribeFromDependencyGraph();
         }
     }
 }

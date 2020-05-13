@@ -19,14 +19,11 @@ describe('XmlScope', () => {
             src: xmlFilePath,
             dest: 'components/component.xml'
         }, '') as XmlFile;
-        scope = new XmlScope(xmlFile);
-        scope.attachProgram(program);
-
-        scope.parentScope = program.platformScope;
+        scope = new XmlScope(xmlFile, program);
     });
     describe('onProgramFileRemove', () => {
         it('handles file-removed event when file does not have component name', async () => {
-            xmlFile.parentName = 'Scene';
+            xmlFile.parentComponentName = 'Scene';
             xmlFile.componentName = 'ParentComponent';
             let namelessComponent = await program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -47,18 +44,18 @@ describe('XmlScope', () => {
                 src: `${rootDir}/components/parent.xml`,
                 dest: `components/parent.xml`
             }, '') as XmlFile;
-            let parentScope = new XmlScope(parentXmlFile);
+            let parentScope = new XmlScope(parentXmlFile, program);
             (program as any).scopes[parentScope.name] = parentScope;
 
-            //should default to platform scope
-            expect(scope.parentScope).to.equal(program.platformScope);
+            //should default to global scope
+            expect(scope.getParentScope()).to.equal(program.globalScope);
 
             //when the xml file attaches an xml parent, the xml scope should be notified and find its parent scope
-            xmlFile.attachParent(parentXmlFile);
-            expect(scope.parentScope).to.equal(parentScope);
+            // xmlFile.attachParent(parentXmlFile);
+            expect(scope.getParentScope()).to.equal(parentScope);
 
-            xmlFile.detachParent();
-            expect(scope.parentScope).to.equal(program.platformScope);
+            // xmlFile.detachParent();
+            expect(scope.getParentScope()).to.equal(program.globalScope);
         });
     });
 
@@ -74,6 +71,7 @@ describe('XmlScope', () => {
                 <component name="ChildComponent" extends="ParentComponent">
                 </component>
             `);
+            await program.validate();
             let childScope = program.getScopesForFile(childXmlFile);
             let definition = childScope[0].getDefinition(childXmlFile, Position.create(2, 64));
             expect(definition).to.be.lengthOf(1);

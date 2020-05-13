@@ -12,6 +12,9 @@ export class DependencyGraph {
 
     private onchangeEmitter = new EventEmitter();
 
+    /**
+     * Add a node to the graph.
+     */
     public addOrReplace(key: string, dependencies?: string[]) {
         //sort the dependencies
         dependencies = dependencies?.sort() ?? [];
@@ -31,6 +34,40 @@ export class DependencyGraph {
     }
 
     /**
+     * Add a new dependency to an existing node (or create a new node if the node doesn't exist
+     */
+    public addDependency(key: string, dependencyKey: string) {
+        let existingNode = this.nodes[key];
+        if (existingNode) {
+            let dependencies = existingNode.dependencies.includes(dependencyKey) ? existingNode.dependencies : [dependencyKey, ...existingNode.dependencies];
+            this.addOrReplace(key, dependencies);
+        } else {
+            this.addOrReplace(key, [dependencyKey]);
+        }
+    }
+
+    /**
+     * Remove a dependency from an existing node.
+     * Do nothing if the node does not have that dependency.
+     * Do nothing if that node does not exist
+     */
+    public removeDependency(key: string, dependencyKey: string) {
+        let existingNode = this.nodes[key];
+        let idx = (existingNode?.dependencies ?? []).indexOf(dependencyKey);
+        if (existingNode && idx > -1) {
+            existingNode.dependencies.splice(idx, 1);
+            this.addOrReplace(key, existingNode.dependencies);
+        }
+    }
+
+    /**
+     * Get a list of all the dependencies for the given key
+     */
+    public getAllDependencies(key: string) {
+        return this.nodes[key]?.allDependencies ?? [];
+    }
+
+    /**
      * Remove the item. This will emit an onchange event for all dependent nodes
      */
     public remove(key: string) {
@@ -45,8 +82,15 @@ export class DependencyGraph {
         this.onchangeEmitter.emit(key, key);
     }
 
-    public onchange(key: string, handler: (key) => void) {
+    /**
+     * Listen for any changes to dependencies with the given key.
+     * @param emitImmediately if true, the handler will be called once immediately.
+     */
+    public onchange(key: string, handler: (key) => void, emitImmediately = false) {
         this.onchangeEmitter.on(key, handler);
+        if (emitImmediately) {
+            this.onchangeEmitter.emit(key, key);
+        }
         return () => {
             this.onchangeEmitter.off(key, handler);
         };

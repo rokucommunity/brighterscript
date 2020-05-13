@@ -4,48 +4,45 @@ import chalk from 'chalk';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import { CallableContainer, BsDiagnostic, File } from './interfaces';
+import { CallableContainer, BsDiagnostic } from './interfaces';
 import { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement } from './parser';
 import { ClassStatement } from './parser/ClassStatement';
-import { standardizePath as s, util } from './util';
-import { platformCallableMap } from './platformCallables';
+import { util } from './util';
+import { globalCallableMap } from './globalCallables';
 import { FunctionType } from './types/FunctionType';
 import { logger } from './Logger';
+import { Cache } from './Cache';
 
 /**
- * A class to keep track of all declarations within a given scope (like global scope, component scope)
+ * A class to keep track of all declarations within a given scope (like source scope, component scope)
  */
 export class Scope {
     constructor(
         public name: string,
-        private matcher: (file: File) => boolean | void
+        public dependencyGraphKey: string,
+        public program: Program
     ) {
         this.isValidated = false;
         //used for improved logging performance
         this._debugLogComponentName = `'${chalk.redBright(this.name)}'`;
+
+        //anytime a dependency for this scope changes, we need to be revalidated
+        this.programHandles.push(
+            this.program.dependencyGraph.onchange(this.dependencyGraphKey, this.onDependenciesChanged.bind(this), true)
+        );
     }
 
     /**
      * Indicates whether this scope needs to be validated.
-     * Will be true when first constructed, or anytime one of its watched files is added, changed, or removed
+     * Will be true when first constructed, or anytime one of its dependencies changes
      */
-    public get isValidated() {
-        return this._isValidated;
-    }
-    public set isValidated(value) {
-        this._isValidated = value;
-
-        //clear out various lookups (they'll get regenerated on demand the first time requested)
-        delete this._namespaceLookup;
-        delete this._classLookup;
-    }
-    private _isValidated: boolean;
-
-    protected program: Program;
+    public readonly isValidated: boolean;
 
     protected programHandles = [] as Array<() => void>;
+
+    protected cache = new Cache();
 
     /**
      * A dictionary of namespaces, indexed by the lower case full name of each namespace.
@@ -53,58 +50,25 @@ export class Scope {
      * "namea", "namea.nameb", "namea.nameb.namec"
      */
     public get namespaceLookup() {
-        if (!this._namespaceLookup) {
-            this._namespaceLookup = this.buildNamespaceLookup();
-        }
-        return this._namespaceLookup;
+        return this.cache.getOrAdd('namespaceLookup', () => this.buildNamespaceLookup());
     }
-    private _namespaceLookup = {} as { [lowerNamespaceName: string]: NamespaceContainer };
 
     /**
      * A dictionary of all classes in this scope. This includes namespaced classes always with their full name.
      * The key is stored in lower case
      */
     public get classLookup() {
-        if (!this._classLookup) {
-            this._classLookup = this.buildClassLookup();
-        }
-        return this._classLookup;
+        return this.cache.getOrAdd('classLookup', () => this.buildClassLookup());
     }
-    private _classLookup = {} as { [lowerClassName: string]: ClassStatement };
-
 
     /**
      * The list of diagnostics found specifically for this scope. Individual file diagnostics are stored on the files themselves.
      */
     protected diagnostics = [] as BsDiagnostic[];
 
-    /**
-     * Attach the scope to a program. This allows the scope to monitor file adds, changes, and removals, and respond accordingly
-     * @param program
-     */
-    public attachProgram(program: Program) {
-        this.program = program;
-        this.programHandles = [
-            program.on('file-added', (file) => {
-                if (this.matcher(file)) {
-                    this.addOrReplaceFile(file);
-                }
-            }),
-
-            program.on('file-removed', (file) => {
-                if (this.hasFile(file)) {
-                    this.removeFile(file);
-                }
-            })
-        ];
-
-        //add any current matches
-        for (let filePath in program.files) {
-            let file = program.files[filePath];
-            if (this.matcher(file)) {
-                this.addOrReplaceFile(file);
-            }
-        }
+    protected onDependenciesChanged(key: string) {
+        this.logDebug('invalidated because dependency graph said [', key, '] changed');
+        this.invalidate();
     }
 
     /**
@@ -114,24 +78,6 @@ export class Scope {
         for (let disconnect of this.programHandles) {
             disconnect();
         }
-        this.detachParent();
-    }
-
-    private parentScopeHandles = [] as Array<() => void>;
-
-    public attachParentScope(parent: Scope) {
-        this.parentScope = parent;
-        this.parentScopeHandles = [
-            //whenever the parent is marked dirty, mark ourself as dirty
-            parent.on('invalidated', () => {
-                this.isValidated = false;
-            })
-        ];
-
-        //immediately invalidate self if parent is not validated
-        if (!this.parentScope.isValidated) {
-            this.isValidated = false;
-        }
     }
 
     /**
@@ -140,9 +86,9 @@ export class Scope {
      */
     public isKnownNamespace(namespaceName: string) {
         let namespaceNameLower = namespaceName.toLowerCase();
-        for (let key in this.files) {
-            let file = this.files[key];
-            for (let namespace of file.file.parser.namespaceStatements) {
+        let files = this.getFiles();
+        for (let file of files) {
+            for (let namespace of file.parser.namespaceStatements) {
                 let loopNamespaceNameLower = namespace.name.toLowerCase();
                 if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
                     return true;
@@ -152,38 +98,57 @@ export class Scope {
         return false;
     }
 
-    public detachParent() {
-        this.logDebug('detach-parent', this.parentScope?.name);
-        for (let disconnect of this.parentScopeHandles) {
-            disconnect();
+    /**
+     * Get the parent scope for this scope (for source scope this will always be the globalScope).
+     * XmlScope overrides this to return the parent xml scope if available.
+     * For globalScope this will return null.
+     */
+    public getParentScope() {
+        let scope: Scope;
+        //use the global scope if we didn't find a sope and this is not the global scope
+        if (this.program.globalScope !== this) {
+            scope = this.program.globalScope;
         }
-        //attach the platform scope as the parent (except when this IS the platform scope)
-        if (this.program.platformScope !== this) {
-            this.parentScope = this.program.platformScope;
+        if (scope) {
+            return scope;
+        } else {
+            //passing null to the cache allows it to skip the factory function in the future
+            return null;
         }
     }
 
     /**
-     * A parent scope that this scope inherits all things from.
+     * Get the file with the specified pkgPath
      */
-    public parentScope: Scope;
-
-    /**
-     * Determine if this file should
-     * @param filePath
-     */
-    public shouldIncludeFile(file: File) {
-        return this.matcher(file) === true;
+    public getFile(pathAbsolute: string) {
+        let files = this.getFiles();
+        for (let file of files) {
+            if (file.pathAbsolute === pathAbsolute) {
+                return file;
+            }
+        }
     }
 
-    public files = {} as { [filePath: string]: ScopeFile };
+    public getFiles() {
+        return this.cache.getOrAdd('files', () => {
+            let result = [] as Array<BrsFile | XmlFile>;
+            let dependencies = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
+            for (let dependency of dependencies) {
+                //skip scopes and components
+                if (dependency.startsWith('component:')) {
+                    continue;
+                }
+                let file = this.program.getFileByPkgPath(dependency);
+                if (file) {
+                    result.push(file);
+                }
+            }
+            return result;
+        });
+    }
 
     public get fileCount() {
-        return Object.keys(this.files).length;
-    }
-    public getFile(filePath: string) {
-        filePath = s`${filePath}`;
-        return this.files[filePath];
+        return Object.keys(this.getFiles()).length;
     }
 
     /**
@@ -192,10 +157,11 @@ export class Scope {
      */
     public getDiagnostics() {
         let diagnosticLists = [this.diagnostics] as BsDiagnostic[][];
+
+        let files = this.getFiles();
         //add diagnostics from every referenced file
-        for (let filePath in this.files) {
-            let ctxFile = this.files[filePath];
-            diagnosticLists.push(ctxFile.file.getDiagnostics());
+        for (let file of files) {
+            diagnosticLists.push(file.getDiagnostics());
         }
         let allDiagnostics = Array.prototype.concat.apply([], diagnosticLists) as BsDiagnostic[];
 
@@ -213,8 +179,9 @@ export class Scope {
      */
     public getAllCallables(): CallableContainer[] {
         //get callables from parent scopes
-        if (this.parentScope) {
-            return [...this.getOwnCallables(), ...this.parentScope.getAllCallables()];
+        let parentScope = this.getParentScope();
+        if (parentScope) {
+            return [...this.getOwnCallables(), ...parentScope.getAllCallables()];
         } else {
             return [...this.getOwnCallables()];
         }
@@ -241,11 +208,13 @@ export class Scope {
      */
     public getOwnCallables(): CallableContainer[] {
         let result = [] as CallableContainer[];
+        let files = this.getFiles();
+
+        this.logDebug('getOwnCallables() files: ', () => this.getFiles().map(x => x.pkgPath));
 
         //get callables from own files
-        for (let filePath in this.files) {
-            let file = this.files[filePath];
-            for (let callable of file.file.callables) {
+        for (let file of files) {
+            for (let callable of file.callables) {
                 result.push({
                     callable: callable,
                     scope: this
@@ -309,9 +278,9 @@ export class Scope {
 
     private buildClassLookup() {
         let lookup = {} as { [lowerName: string]: ClassStatement };
-        for (let key in this.files) {
-            let file = this.files[key];
-            for (let cls of file.file.parser.classStatements) {
+        let files = this.getFiles();
+        for (let file of files) {
+            for (let cls of file.parser.classStatements) {
                 lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
             }
         }
@@ -320,9 +289,9 @@ export class Scope {
 
     public getNamespaceStatements() {
         let result = [] as NamespaceStatement[];
-        for (let filePath in this.files) {
-            let file = this.files[filePath];
-            result.push(...file.file.parser.namespaceStatements);
+        let files = this.getFiles();
+        for (let file of files) {
+            result.push(...file.parser.namespaceStatements);
         }
         return result;
     }
@@ -342,46 +311,6 @@ export class Scope {
         this.emitter.emit(name, data);
     }
 
-    /**
-     * Add a file to the program.
-     * @param filePath
-     * @param fileContents
-     */
-    public addOrReplaceFile(file: BrsFile | XmlFile) {
-        this.logDebug('addOrReplaceFile', chalk.green(file.pathAbsolute));
-
-        this.isValidated = false;
-
-        //if the file is already loaded, remove it first
-        if (this.files[file.pathAbsolute]) {
-            this.removeFile(file);
-        }
-
-        let ctxFile = new ScopeFile(file);
-
-        //keep a reference to this file
-        this.files[file.pathAbsolute] = ctxFile;
-    }
-
-    /**
-     * Remove the file from this scope.
-     * If the file doesn't exist, the method exits immediately, but does not throw an error.
-     * @param file
-     * @param emitRemovedEvent - if false, the 'remove-file' event will not be emitted
-     */
-    public removeFile(file: File) {
-        this.isValidated = false;
-
-        let ctxFile = this.getFile(file.pathAbsolute);
-        if (!ctxFile) {
-            return;
-        }
-
-        //remove the reference to this file
-        delete this.files[file.pathAbsolute];
-        this.emit('invalidated');
-    }
-
     protected logDebug(...args) {
         logger.debug('Scope', this._debugLogComponentName, ...args);
     }
@@ -395,10 +324,12 @@ export class Scope {
         }
         this.logDebug('validate(): not validated');
 
+        let parentScope = this.getParentScope();
+
         //validate our parent before we validate ourself
-        if (this.parentScope && this.parentScope.isValidated === false) {
+        if (parentScope && parentScope.isValidated === false) {
             this.logDebug('validate(): validating parent first');
-            this.parentScope.validate(force);
+            parentScope.validate(force);
         }
         //clear the scope's errors list (we will populate them from this method)
         this.diagnostics = [];
@@ -424,16 +355,25 @@ export class Scope {
         //enforce a series of checks on the bodies of class methods
         this.validateClasses();
 
+        let files = this.getFiles();
         //do many per-file checks
-        for (let key in this.files) {
-            let scopeFile = this.files[key];
-            this.diagnosticDetectCallsToUnknownFunctions(scopeFile.file, callableContainerMap);
-            this.diagnosticDetectFunctionCallsWithWrongParamCount(scopeFile.file, callableContainerMap);
-            this.diagnosticDetectShadowedLocalVars(scopeFile.file, callableContainerMap);
-            this.diagnosticDetectFunctionCollisions(scopeFile.file);
+        for (let file of files) {
+            this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
+            this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
+            this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
+            this.diagnosticDetectFunctionCollisions(file);
         }
 
-        this.isValidated = true;
+        (this as any).isValidated = true;
+    }
+
+    /**
+     * Mark this scope as invalid, which means its `validate()` function needs to be called again before use.
+     */
+    public invalidate() {
+        (this as any).isValidated = false;
+        //clear out various lookups (they'll get regenerated on demand the next time they're requested)
+        this.cache.clear();
     }
 
     /**
@@ -441,7 +381,7 @@ export class Scope {
      */
     private diagnosticDetectFunctionCollisions(file: BrsFile | XmlFile) {
         for (let func of file.callables) {
-            if (platformCallableMap[func.getName(ParseMode.BrighterScript).toLowerCase()]) {
+            if (globalCallableMap[func.getName(ParseMode.BrighterScript).toLowerCase()]) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction(),
                     range: func.nameRange,
@@ -453,8 +393,8 @@ export class Scope {
 
     public getNewExpressions() {
         let result = [] as AugmentedNewExpression[];
-        for (let key in this.files) {
-            let file = this.files[key].file;
+        let files = this.getFiles();
+        for (let file of files) {
             let expressions = file.parser.newExpressions as AugmentedNewExpression[];
             for (let expression of expressions) {
                 expression.file = file;
@@ -526,7 +466,7 @@ export class Scope {
                     //local var function with same name as stdlib function
                     if (
                         //has same name as stdlib
-                        platformCallableMap[lowerVarName]
+                        globalCallableMap[lowerVarName]
                     ) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
@@ -552,7 +492,7 @@ export class Scope {
                     //is same name as a callable
                     callableContainerMap[lowerVarName] &&
                     //is NOT a callable from stdlib (because non-function local vars can have same name as stdlib names)
-                    !platformCallableMap[lowerVarName]
+                    !globalCallableMap[lowerVarName]
                 ) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.localVarShadowedByScopedFunction(),
@@ -608,30 +548,30 @@ export class Scope {
         for (let lowerName in callableContainersByLowerName) {
             let callableContainers = callableContainersByLowerName[lowerName];
 
-            let platformCallables = [] as CallableContainer[];
-            let nonPlatformCallables = [] as CallableContainer[];
+            let globalCallables = [] as CallableContainer[];
+            let nonGlobalCallables = [] as CallableContainer[];
             let ownCallables = [] as CallableContainer[];
-            let ancestorNonPlatformCallables = [] as CallableContainer[];
+            let ancestorNonGlobalCallables = [] as CallableContainer[];
 
             for (let container of callableContainers) {
-                if (container.scope === this.program.platformScope) {
-                    platformCallables.push(container);
+                if (container.scope === this.program.globalScope) {
+                    globalCallables.push(container);
                 } else {
-                    nonPlatformCallables.push(container);
+                    nonGlobalCallables.push(container);
                     if (container.scope === this) {
                         ownCallables.push(container);
                     } else {
-                        ancestorNonPlatformCallables.push(container);
+                        ancestorNonGlobalCallables.push(container);
                     }
                 }
             }
 
             //add info diagnostics about child shadowing parent functions
-            if (ownCallables.length > 0 && ancestorNonPlatformCallables.length > 0) {
+            if (ownCallables.length > 0 && ancestorNonGlobalCallables.length > 0) {
                 for (let container of ownCallables) {
                     //skip the init function (because every component will have one of those){
                     if (lowerName !== 'init') {
-                        let shadowedCallable = ancestorNonPlatformCallables[ancestorNonPlatformCallables.length - 1];
+                        let shadowedCallable = ancestorNonGlobalCallables[ancestorNonGlobalCallables.length - 1];
                         this.diagnostics.push({
                             ...DiagnosticMessages.overridesAncestorFunction(
                                 container.callable.name,
@@ -673,9 +613,10 @@ export class Scope {
      * @param relativePath
      */
     protected getFileByRelativePath(relativePath: string) {
-        for (let key in this.files) {
-            if (this.files[key].file.pkgPath.toLowerCase() === relativePath.toLowerCase()) {
-                return this.files[key];
+        let files = this.getFiles();
+        for (let file of files) {
+            if (file.pkgPath.toLowerCase() === relativePath.toLowerCase()) {
+                return file;
             }
         }
     }
@@ -684,20 +625,11 @@ export class Scope {
      * Determine if the scope already has this file in its files list
      * @param file
      */
-    public hasFile(pathAbsolute: string);
-    public hasFile(file: BrsFile | XmlFile);
-    public hasFile(file: BrsFile | XmlFile | string) {
-        let pathAbsolute: string;
-        if (file instanceof BrsFile || file instanceof XmlFile) {
-            pathAbsolute = file.pathAbsolute;
-        } else {
-            pathAbsolute = file;
-        }
-        if (this.files[pathAbsolute]) {
-            return true;
-        } else {
-            return false;
-        }
+    public hasFile(file: BrsFile | XmlFile) {
+        let files = this.getFiles();
+        let hasFile = files.includes(file);
+        this.logDebug('hasFile =', hasFile, 'for', () => chalk.green(file.pkgPath), 'in files', () => files.map(x => x.pkgPath));
+        return hasFile;
     }
 
     /**
@@ -736,21 +668,13 @@ export class Scope {
      */
     public getPropertyNameCompletions() {
         let results = [] as CompletionItem[];
-        for (let key in this.files) {
-            let file = this.files[key];
-            results.push(...file.file.propertyNameCompletions);
+        let files = this.getFiles();
+        for (let file of files) {
+            results.push(...file.propertyNameCompletions);
         }
         return results;
     }
 }
-
-class ScopeFile {
-    constructor(
-        public file: BrsFile | XmlFile
-    ) {
-    }
-}
-
 
 interface NamespaceContainer {
     fullName: string;

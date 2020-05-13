@@ -3,7 +3,6 @@ import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
-import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
@@ -34,12 +33,12 @@ describe('Program', () => {
         fsExtra.emptyDirSync(tmpPath);
     });
 
-    describe('platformScope', () => {
+    describe('globalScope', () => {
         it('returns all callables when asked', () => {
-            expect(program.platformScope.getAllCallables().length).to.be.greaterThan(0);
+            expect(program.globalScope.getAllCallables().length).to.be.greaterThan(0);
         });
         it('validate gets called and does nothing', () => {
-            expect(program.platformScope.validate()).to.eql([]);
+            expect(program.globalScope.validate()).to.eql([]);
         });
     });
 
@@ -251,7 +250,7 @@ describe('Program', () => {
             expect(program.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('recognizes platform function calls', async () => {
+        it('recognizes global function calls', async () => {
             expect(program.getDiagnostics().length).to.equal(0);
             await program.addOrReplaceFile({ src: `${rootDir}/source/file.brs`, dest: 'source/file.brs' }, `
                 function DoB()
@@ -472,7 +471,7 @@ describe('Program', () => {
                 </component>
             `);
 
-            expect(program.getScopeByName('components/ChildScene.xml').parentScope.name).to.equal(s`components/ParentScene.xml`);
+            expect(program.getScopeByName('components/ChildScene.xml').getParentScope().name).to.equal(s`components/ParentScene.xml`);
 
             //change the parent's name.
             await program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, `
@@ -481,8 +480,8 @@ describe('Program', () => {
                 </component>
             `);
 
-            //The child scope should no longer have the link to the parent scope, and should instead point back to platform
-            expect(program.getScopeByName('components/ChildScene.xml').parentScope.name).to.equal('platform');
+            //The child scope should no longer have the link to the parent scope, and should instead point back to global
+            expect(program.getScopeByName('components/ChildScene.xml').getParentScope().name).to.equal('global');
         });
 
         it('creates a new scope for every added component xml', async () => {
@@ -509,8 +508,8 @@ describe('Program', () => {
 
             let scope = program.getScopeByName(`components/component1.xml`);
             s`components/component1.xml`;
-            expect(scope.getFile(xmlPath).file.pkgPath).to.equal(s`components/component1.xml`);
-            expect(scope.getFile(brsPath).file.pkgPath).to.equal(s`components/component1.brs`);
+            expect(scope.getFile(xmlPath).pkgPath).to.equal(s`components/component1.xml`);
+            expect(scope.getFile(brsPath).pkgPath).to.equal(s`components/component1.brs`);
         });
 
         it('adds xml file to files map', async () => {
@@ -724,7 +723,7 @@ describe('Program', () => {
             expect(completions.map(x => x.label)).to.include('NameA_NameB_NameC_DoSomething');
         });
 
-        it('inlcudes platform completions for file with no scope', async () => {
+        it('inlcudes global completions for file with no scope', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'main.brs' }, `
                 function Main()
                     age = 1
@@ -861,7 +860,7 @@ describe('Program', () => {
                 kind: CompletionItemKind.File,
                 label: 'pkg:/components/component1.brs'
             });
-            //it should NOT include the platform methods
+            //it should NOT include the global methods
             expect(completions).to.be.lengthOf(2);
         });
     });
@@ -979,7 +978,7 @@ describe('Program', () => {
             `);
 
             //the child should have been attached to the parent
-            expect((childFile as XmlFile).parent).to.equal(parentFile);
+            expect((childFile as XmlFile).parentComponent).to.equal(parentFile);
 
             //change the name of the parent
             parentFile = await program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, `
@@ -989,7 +988,7 @@ describe('Program', () => {
             `);
 
             //the child should no longer have a parent
-            expect((childFile as XmlFile).parent).not.to.exist;
+            expect((childFile as XmlFile).parentComponent).not.to.exist;
         });
 
         it('provides child components with parent functions', async () => {
@@ -1156,13 +1155,6 @@ describe('Program', () => {
     });
 
     describe('getDiagnostics', () => {
-        it('passes computed `rootDir` when not set in options', () => {
-            let spy = sinon.spy((program as any).diagnosticFilterer, 'filter');
-            program.options.rootDir = 'not_real_rootdir';
-            program.rootDir = 'real_rootdir';
-            program.getDiagnostics();
-            expect(spy.getCalls()[0].args[0].rootDir).to.equal('real_rootdir');
-        });
         it('includes diagnostics from files not included in any scope', async () => {
             let pathAbsolute = s`${rootDir}/components/a/b/c/main.brs`;
             await program.addOrReplaceFile({ src: pathAbsolute, dest: 'components/a/b/c/main.brs' }, `
@@ -1206,12 +1198,6 @@ describe('Program', () => {
     });
 
     describe('getCompletions', () => {
-        beforeEach(() => {
-            //remove the platform stuff to simplify the tests
-            program.platformScope = new Scope('platform', () => false);
-            program.getScopeByName('global').attachParentScope(program.platformScope);
-        });
-
         it('returns all functions in scope', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
