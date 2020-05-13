@@ -111,7 +111,9 @@ export class Program {
      * Get the component with the specified name
      */
     public getComponent(componentName: string) {
-        return this.components[componentName.toLowerCase()];
+        if (componentName) {
+            return this.components[componentName.toLowerCase()];
+        }
     }
 
     /**
@@ -664,6 +666,7 @@ export class Program {
             this.scopes[name].dispose();
         }
         this.globalScope.dispose();
+        this.dependencyGraph.dispose();
     }
 }
 
