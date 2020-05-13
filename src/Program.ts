@@ -231,6 +231,9 @@ export class Program {
      * @param scopeName
      */
     public getScopeByName(scopeName: string) {
+        if (!scopeName) {
+            return undefined;
+        }
         //most scopes are xml file pkg paths. however, the ones that are not are single names like "global" and "scope",
         //so it's safe to run the standardizePkgPath method
         scopeName = s`${scopeName}`;

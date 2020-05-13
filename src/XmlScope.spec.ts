@@ -1,4 +1,4 @@
-import { assert, expect } from 'chai';
+import { expect } from 'chai';
 import { Position } from 'vscode-languageserver';
 
 import { XmlFile } from './files/XmlFile';
@@ -14,28 +14,14 @@ describe('XmlScope', () => {
     let xmlFilePath = s`${rootDir}/components/component.xml`;
     beforeEach(async () => {
 
-        program = new Program({ rootDir: rootDir });
+        program = new Program({
+            rootDir: rootDir
+        });
         xmlFile = await program.addOrReplaceFile({
             src: xmlFilePath,
             dest: 'components/component.xml'
         }, '') as XmlFile;
         scope = new XmlScope(xmlFile, program);
-    });
-    describe('onProgramFileRemove', () => {
-        it('handles file-removed event when file does not have component name', async () => {
-            xmlFile.parentComponentName = 'Scene';
-            xmlFile.componentName = 'ParentComponent';
-            let namelessComponent = await program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, `
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component extends="ParentComponent">
-                </component>
-            `);
-            try {
-                (scope as any).onProgramFileRemove(namelessComponent);
-            } catch (e) {
-                assert.fail(null, null, 'Should not have thrown');
-            }
-        });
     });
 
     describe('constructor', () => {

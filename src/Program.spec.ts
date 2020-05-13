@@ -446,17 +446,6 @@ describe('Program', () => {
     });
 
     describe('addOrReplaceFile', () => {
-        it('emits file-removed when file already exists', async () => {
-            let callCount = 0;
-            program.on('file-removed', () => {
-                callCount++;
-            });
-            await program.addOrReplaceFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `'comment`);
-            expect(callCount).to.equal(0);
-            await program.addOrReplaceFile({ src: `${rootDir}/lib.brs`, dest: 'lib.brs' }, `'comment`);
-            expect(callCount).to.equal(1);
-        });
-
         it('links xml scopes based on xml parent-child relationships', async () => {
             await program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
