@@ -56,26 +56,30 @@ export class XmlFile {
     public scriptTagImports = [] as FileReference[];
 
     /**
-     * List of all pkgPaths to scripts that this XmlFile depends, regardless of whether they are loaded in the program or not.
+     * List of all pkgPaths to scripts that this XmlFile depends on directly, regardless of whether they are loaded in the program or not.
+     * This does not account for parent component scripts
      * coming from:
      *  - script tags
-     *  - inferred codebehind file
+     *  - implied codebehind file
      *  - import statements from imported scripts or their descendents
      */
-    public get allScriptImports() {
-        return this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
+    public getAllScriptImports() {
+        return this.cache.getOrAdd('allScriptImports', () => {
+            return this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
+        });
     }
 
     /**
-     * List of all pkgPaths to scripts that this XmlFile depends on that are actually loaded into the program,
+     * List of all pkgPaths to scripts that this XmlFile depends on that are actually loaded into the program.
+     * This does not account for parent component scripts.
      * coming from:
      *  - script tags
      *  - inferred codebehind file
      *  - import statements from imported scripts or their descendents
      */
-    public get allAvailableScriptImports() {
+    public getAvailableScriptImports() {
         return this.cache.getOrAdd('allAvailableScriptImports', () => {
-            let allDependencies = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
+            let allDependencies = this.getAllScriptImports();
             let result = [] as string[];
             let filesInProgram = this.program.getFilesByPkgPaths(allDependencies);
             for (let file of filesInProgram) {
@@ -352,7 +356,7 @@ export class XmlFile {
             );
         }
         if (this.parentComponentName) {
-            dependencies.push(`component:${this.parentComponentName.toLowerCase()}`);
+            dependencies.push(this.parentComponentDependencyGraphKey);
         }
         this.program.dependencyGraph.addOrReplace(this.dependencyGraphKey, dependencies);
     }
@@ -363,7 +367,23 @@ export class XmlFile {
      * If we don't have a component name, use the pkgPath so at least we can self-validate
      */
     public get dependencyGraphKey() {
-        return (`component:${this.componentName}` ?? this.pkgPath).toLowerCase();
+        if (this.componentName) {
+            return `component:${this.componentName}`.toLowerCase();
+        } else {
+            return this.pkgPath.toLowerCase();
+        }
+    }
+
+    /**
+     * The key used in the dependency graph for this component's parent.
+     * If we have aparent, we will use that. If we don't, this will return undefined
+     */
+    public get parentComponentDependencyGraphKey() {
+        if (this.parentComponentName) {
+            return `component:${this.parentComponentName}`.toLowerCase();
+        } else {
+            return undefined;
+        }
     }
 
     private parseDeferred = new Deferred();
@@ -384,7 +404,7 @@ export class XmlFile {
             if (file === this) {
                 return true;
             }
-            let allScriptImports = this.allScriptImports;
+            let allScriptImports = this.getAllScriptImports();
             for (let importPkgPath of allScriptImports) {
                 if (importPkgPath.toLowerCase() === file.pkgPath.toLowerCase()) {
                     return true;
@@ -488,9 +508,9 @@ export class XmlFile {
      * If no parent is found, all imports are returned
      */
     private getMissingImportsForTranspile() {
-        let ownImports = this.allAvailableScriptImports;
+        let ownImports = this.getAvailableScriptImports();
 
-        let parentImports = this.parentComponent?.allAvailableScriptImports ?? [];
+        let parentImports = this.parentComponent?.getAvailableScriptImports() ?? [];
 
         let parentMap = parentImports.reduce((map, pkgPath) => {
             map[pkgPath] = true;

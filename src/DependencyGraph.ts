@@ -61,10 +61,19 @@ export class DependencyGraph {
     }
 
     /**
-     * Get a list of all the dependencies for the given key
+     * Get a list of the dependencies for the given key, recursively.
+     * @param key the key for which to get the dependencies
+     * @param exclude a list of keys to exclude from traversal. Anytime one of these nodes is encountered, it is skipped.
      */
-    public getAllDependencies(key: string) {
-        return this.nodes[key]?.allDependencies ?? [];
+    public getAllDependencies(key: string, exclude?: string[]) {
+        return this.nodes[key]?.getAllDependencies(exclude) ?? [];
+    }
+
+    /**
+     * Get the list of direct dependencies for the given key
+     */
+    public getOwnDependencies(key: string) {
+        return this.nodes[key]?.dependencies ?? [];
     }
 
     /**
@@ -118,9 +127,6 @@ export class Node {
             let sub = this.graph.onchange(dependency, (dependency) => {
                 //notify the graph that we changed since one of our dependencies changed
                 this.graph.emit(this.key);
-
-                //erase our full dependency list so it can be regenerated on next read
-                this._allDependencies = undefined;
             });
 
             this.subscriptions.push(sub);
@@ -129,28 +135,18 @@ export class Node {
     private subscriptions: Array<() => void>;
 
     /**
-     * The full list of dependencies for this node and all descendent nodes
-     */
-    public get allDependencies() {
-        if (!this._allDependencies) {
-            this._allDependencies = this.getAllDependencies();
-        }
-        return this._allDependencies;
-    }
-    private _allDependencies: string[];
-
-    /**
      * Return the full list of unique dependencies for this node by traversing all descendents
+     * @param exclude a list of keys to exclude from traversal. Anytime one of these nodes is encountered, it is skipped.
      */
-    private getAllDependencies() {
+    public getAllDependencies(exclude: string[] = []) {
         let dependencyMap = {};
         let dependencyStack = [...this.dependencies];
         //keep walking the dependency graph until we run out of unseen dependencies
         while (dependencyStack.length > 0) {
             let dependency = dependencyStack.pop();
 
-            //if this is a new dependency
-            if (!dependencyMap[dependency]) {
+            //if this is a new dependency and we aren't supposed to skip it
+            if (!dependencyMap[dependency] && !exclude.includes(dependency)) {
                 dependencyMap[dependency] = true;
 
                 //get the node for this dependency

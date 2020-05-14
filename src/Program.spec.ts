@@ -144,30 +144,30 @@ describe('Program', () => {
             //if we made it to here, nothing exploded, so the test passes
         });
 
-        it('adds files in the source folder to the global scope', async () => {
-            expect(program.getScopeByName('global')).to.exist;
-            //no files in global scope
-            expect(program.getScopeByName('global').fileCount).to.equal(0);
+        it(`adds files in the source folder to the 'source' scope`, async () => {
+            expect(program.getScopeByName('source')).to.exist;
+            //no files in source scope
+            expect(program.getScopeByName('source').fileCount).to.equal(0);
 
             let mainPath = s`${rootDir}/source/main.brs`;
             //add a new source file
             await program.addOrReplaceFile({ src: mainPath, dest: 'source/main.brs' }, '');
-            //file should be in global scope now
-            expect(program.getScopeByName('global').getFile(mainPath)).to.exist;
+            //file should be in source scope now
+            expect(program.getScopeByName('source').getFile(mainPath)).to.exist;
 
             //add an unreferenced file from the components folder
             await program.addOrReplaceFile({ src: `${rootDir}/components/component1/component1.brs`, dest: 'components/component1/component1.brs' }, '');
 
-            //global scope should have the same number of files
-            expect(program.getScopeByName('global').getFile(mainPath)).to.exist;
-            expect(program.getScopeByName('global').getFile(`${rootDir}/components/component1/component1.brs`)).not.to.exist;
+            //source scope should have the same number of files
+            expect(program.getScopeByName('source').getFile(mainPath)).to.exist;
+            expect(program.getScopeByName('source').getFile(`${rootDir}/components/component1/component1.brs`)).not.to.exist;
         });
 
         it('normalizes file paths', async () => {
             let filePath = `${rootDir}/source\\main.brs`;
             await program.addOrReplaceFile({ src: filePath, dest: 'source/main.brs' }, '');
 
-            expect(program.getScopeByName('global').getFile(filePath)).to.exist;
+            expect(program.getScopeByName('source').getFile(filePath)).to.exist;
 
             //shouldn't throw an exception because it will find the correct path after normalizing the above path and remove it
             try {
@@ -312,25 +312,25 @@ describe('Program', () => {
         });
 
         it('does not add info diagnostic on shadowed "init" functions', async () => {
-            await program.addOrReplaceFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, `
+            await program.addOrReplaceFile('components/parent.xml', `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/parent.brs" />
+                    <script type="text/brightscript" uri="parent.brs" />
                 </component>
-            `);
+                `);
+            await program.addOrReplaceFile(`components/parent.brs`, `sub Init()\nend sub`);
+            await program.addOrReplaceFile(`components/child.brs`, `sub Init()\nend sub`);
 
-            await program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, `
+            await program.addOrReplaceFile('components/child.xml', `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
-                    <script type="text/brightscript" uri="pkg:/child.brs" />
+                    <script type="text/brightscript" uri="child.brs" />
                 </component>
             `);
-
-            await program.addOrReplaceFile({ src: `${rootDir}/parent.brs`, dest: 'parent.brs' }, `sub Init()\nend sub`);
-            await program.addOrReplaceFile({ src: `${rootDir}/child.brs`, dest: 'child.brs' }, `sub Init()\nend sub`);
+            //run this validate separately so we can have an easier time debugging just the child component
             await program.validate();
             let diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(0);
+            expect(diagnostics.map(x => x.message)).to.eql([]);
         });
 
         it('catches duplicate methods in single file', async () => {
@@ -360,14 +360,14 @@ describe('Program', () => {
         });
 
         it('maintains correct callables list', async () => {
-            let initialCallableCount = program.getScopeByName('global').getAllCallables().length;
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let initialCallableCount = program.getScopeByName('source').getAllCallables().length;
+            await program.addOrReplaceFile('source/main.brs', `
                 sub DoSomething()
                 end sub
                 sub DoSomething()
                 end sub
             `);
-            expect(program.getScopeByName('global').getAllCallables().length).equals(initialCallableCount + 2);
+            expect(program.getScopeByName('source').getAllCallables().length).equals(initialCallableCount + 2);
             //set the file contents again (resetting the wasProcessed flag)
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething()
@@ -375,9 +375,9 @@ describe('Program', () => {
                 sub DoSomething()
                 end sub
                 `);
-            expect(program.getScopeByName('global').getAllCallables().length).equals(initialCallableCount + 2);
+            expect(program.getScopeByName('source').getAllCallables().length).equals(initialCallableCount + 2);
             program.removeFile(`${rootDir}/source/main.brs`);
-            expect(program.getScopeByName('global').getAllCallables().length).equals(initialCallableCount);
+            expect(program.getScopeByName('source').getAllCallables().length).equals(initialCallableCount);
         });
 
         it('resets errors on revalidate', async () => {
@@ -525,22 +525,21 @@ describe('Program', () => {
             });
         });
 
-        it('adds warning instead of error on mismatched upper/lower case script import', async () => {
-            let xmlPath = s`${rootDir}/components/component1.xml`;
-            await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, `
+        it.only('adds warning instead of error on mismatched upper/lower case script import', async () => {
+            await program.addOrReplaceFile('components/component1.xml', `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene" >');
-                    <script type="text/brightscript" uri="pkg:/components/component1.brs" />
+                    <script type="text/brightscript" uri="component1.brs" />
                 </component>
             `);
-            let brsPath = s`${rootDir}/components/COMPONENT1.brs`;
-            await program.addOrReplaceFile({ src: brsPath, dest: 'components/COMPONENT1.brs' }, '');
+            await program.addOrReplaceFile('components/COMPONENT1.brs', '');
 
             //validate
             await program.validate();
             let diagnostics = program.getDiagnostics();
-            expect(diagnostics).to.be.lengthOf(1);
-            expect(diagnostics[0].code).to.equal(DiagnosticMessages.scriptImportCaseMismatch('').code);
+            expect(diagnostics.map(x => x.message)).to.eql([
+                DiagnosticMessages.scriptImportCaseMismatch('COMPONENT1.brs').message
+            ]);
         });
     });
 
@@ -884,7 +883,7 @@ describe('Program', () => {
             await program.validate();
             expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
             expect(
-                (component as XmlFile).allAvailableScriptImports.sort()
+                (component as XmlFile).getAvailableScriptImports().sort()
             ).to.eql([
                 s`source/intOps.bs`,
                 s`source/lib.bs`,
@@ -914,7 +913,7 @@ describe('Program', () => {
             await program.validate();
             expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
             expect(
-                (component as XmlFile).allAvailableScriptImports
+                (component as XmlFile).getAvailableScriptImports()
             ).to.eql([
                 s`source/lib.bs`,
                 s`source/stringOps.brs`

@@ -428,6 +428,8 @@ export class ProgramBuilder {
         if (this.watcher) {
             this.watcher.dispose();
         }
-        this.program.dispose();
+        if (this.program) {
+            this.program.dispose?.();
+        }
     }
 }

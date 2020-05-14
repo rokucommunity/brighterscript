@@ -458,7 +458,7 @@ describe('Scope', () => {
     describe('getDefinition', () => {
         it('returns empty list when there are no files', async () => {
             let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
-            let scope = program.getScopeByName('global');
+            let scope = program.getScopeByName('source');
             expect(scope.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
         });
     });

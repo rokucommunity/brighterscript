@@ -87,12 +87,23 @@ export class XmlScope extends Scope {
         }
     }
 
+    /**
+     * Get the list of files referenced by this scope that are actually loaded in the program.
+     * This does not account for parent scope.
+     */
     public getFiles() {
         return this.cache.getOrAdd('files', () => {
-            return [
-                this.xmlFile,
-                ...super.getFiles()
-            ];
+            let result = [
+                this.xmlFile
+            ] as Array<BrsFile | XmlFile>;
+            let scriptPkgPaths = this.xmlFile.getAllScriptImports();
+            for (let scriptPkgPath of scriptPkgPaths) {
+                let file = this.program.getFileByPkgPath(scriptPkgPath);
+                if (file) {
+                    result.push(file);
+                }
+            }
+            return result;
         });
     }
 
