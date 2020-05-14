@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.9.7] - SOME_DATE
+## [0.9.7] - 2020-05-14
 ### Changed
  - TypeScript target to "ES2017" which provides a signifiant performance boost in lexer (~30%) and parser (~175%)
 ### Fixed

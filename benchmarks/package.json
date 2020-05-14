@@ -9,7 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "brighterscript": "^0.9.4"
+    "brighterscript": "^0.9.6"
   },
   "devDependencies": {},
   "description": ""
