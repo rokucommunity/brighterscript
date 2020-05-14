@@ -6,13 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-### 0.9.7
+## [0.9.7] - 2020-05-14
+### Changed
+ - TypeScript target to "ES2017" which provides a significant performance boost in lexer (~30%) and parser (~175%)
 ### Fixed
  - the binary name got accidentally renamed to `bsc2` in release 0.9.6. This release fixes that issue.
+ - removed some debug logs that were showing up when not using logLevel=debug
+ - false negative diagnostic when using the `new` keyword as a local variable [#79](https://github.com/rokucommunity/brighterscript/issues/79)
 
 
 
-## 0.9.6 - 2020-05-11 [YANKED]
+## [0.9.6] - 2020-05-11
 ### Added
  - `logLevel` option from the bsconfig.json and command prompt that allows specifying how much detain the logging should contain.
  - additional messages during cli run
@@ -24,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## 0.9.5 - 2020-05-06
+## [0.9.5] - 2020-05-06
 ### Added
  - new config option called `showDiagnosticsInConsole` which disables printing diagnostics to the console 
 ### Fixed
@@ -268,6 +272,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.9.7]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.6...v0.9.7
 [0.9.6]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.5...v0.9.6
 [0.9.5]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.4...v0.9.5
 [0.9.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.3...v0.9.4
