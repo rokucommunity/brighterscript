@@ -3,7 +3,7 @@ import { Position } from 'vscode-languageserver';
 import { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
-let rootDir = s`${process.cwd()}/rootDir`
+let rootDir = s`${process.cwd()}/rootDir`;
 
 describe('XmlScope', () => {
     let program: Program;
