@@ -329,5 +329,16 @@ describe('parser class', () => {
             let stmt = (body.statements[0] as AssignmentStatement);
             expect(stmt.value).to.be.instanceof(NewExpression);
         });
+
+        it.only('is allowed to be used as a local variable in brs files', () => {
+            let { diagnostics } = Parser.parse(`
+                sub main()
+                  new = true
+                  old = new
+                end sub
+            `, { mode: ParseMode.BrightScript });
+
+            expect(diagnostics[0]?.message).to.not.exist;
+        });
     });
 });
