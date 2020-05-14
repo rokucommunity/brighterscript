@@ -9,7 +9,7 @@ import { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement } from './parser';
 import { ClassStatement } from './parser/ClassStatement';
-import { util } from './util';
+import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { FunctionType } from './types/FunctionType';
 import { logger } from './Logger';
@@ -121,6 +121,7 @@ export class Scope {
      * Get the file with the specified pkgPath
      */
     public getFile(pathAbsolute: string) {
+        pathAbsolute = s`${pathAbsolute}`;
         let files = this.getFiles();
         for (let file of files) {
             if (file.pathAbsolute === pathAbsolute) {

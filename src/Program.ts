@@ -300,16 +300,18 @@ export class Program {
         if (fileExtension === '.brs' || fileExtension === '.bs') {
             let brsFile = new BrsFile(pathAbsolute, pkgPath, this);
 
+            //add file to the `source` dependency list
+            if (brsFile.pkgPath.startsWith(startOfSourcePkgPath)) {
+                this.dependencyGraph.addDependency('scope:source', brsFile.dependencyGraphKey);
+            }
+
             //add the file to the program
             this.files[pathAbsolute] = brsFile;
             await brsFile.parse(await getFileContents());
             file = brsFile;
 
-            this.dependencyGraph.addOrReplace(brsFile.pkgPath, brsFile.ownScriptImports.map(x => x.pkgPath));
-            //update the `source` scope with this file
-            if (brsFile.pkgPath.startsWith(startOfSourcePkgPath)) {
-                this.dependencyGraph.addDependency('scope:source', brsFile.pkgPath);
-            }
+            this.dependencyGraph.addOrReplace(brsFile.dependencyGraphKey, brsFile.ownScriptImports.map(x => x.pkgPath.toLowerCase()));
+
 
         } else if (
             //is xml file
@@ -369,12 +371,12 @@ export class Program {
      * Missing files are just ignored.
      */
     public getFilesByPkgPaths(pkgPaths: string[]) {
-        pkgPaths = pkgPaths.map(x => s`${x}`);
+        pkgPaths = pkgPaths.map(x => s`${x}`.toLowerCase());
 
         let result = [] as Array<XmlFile | BrsFile>;
         for (let filePath in this.files) {
             let file = this.files[filePath];
-            if (pkgPaths.includes(s`${file.pkgPath}`)) {
+            if (pkgPaths.includes(s`${file.pkgPath}`.toLowerCase())) {
                 result.push(file);
             }
         }
@@ -419,11 +421,11 @@ export class Program {
             //remove the file from the program
             delete this.files[pathAbsolute];
 
-            this.dependencyGraph.remove(file.pkgPath);
+            this.dependencyGraph.remove(file.dependencyGraphKey);
 
             //if this is a pkg:/source file, notify the `source` scope that it has changed
             if (file.pkgPath.startsWith(startOfSourcePkgPath)) {
-                this.dependencyGraph.removeDependency('scope:source', file.pkgPath);
+                this.dependencyGraph.removeDependency('scope:source', file.dependencyGraphKey);
             }
 
             //if this is a component, remove it from our components map

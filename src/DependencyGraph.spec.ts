@@ -45,18 +45,18 @@ describe('DependencyGraph', () => {
     it('updates allDependencies list when dependency changes', () => {
         graph.addOrReplace('a', ['b']);
         graph.addOrReplace('b', ['c']);
-        expect(graph.nodes['a'].allDependencies.sort()).to.eql(['b', 'c']);
+        expect(graph.nodes['a'].getAllDependencies().sort()).to.eql(['b', 'c']);
         graph.addOrReplace('b', ['d', 'e']);
-        expect(graph.nodes['a'].allDependencies.sort()).to.eql(['b', 'd', 'e']);
+        expect(graph.nodes['a'].getAllDependencies().sort()).to.eql(['b', 'd', 'e']);
     });
 
     describe('remove', () => {
         it('notifies parents', () => {
             graph.addOrReplace('a', ['b']);
             graph.addOrReplace('b', ['c']);
-            expect(graph.nodes['a'].allDependencies.sort()).to.eql(['b', 'c']);
+            expect(graph.nodes['a'].getAllDependencies().sort()).to.eql(['b', 'c']);
             graph.remove('b');
-            expect(graph.nodes['a'].allDependencies.sort()).to.eql(['b']);
+            expect(graph.nodes['a'].getAllDependencies().sort()).to.eql(['b']);
         });
     });
 });

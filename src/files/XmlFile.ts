@@ -65,7 +65,8 @@ export class XmlFile {
      */
     public getAllScriptImports() {
         return this.cache.getOrAdd('allScriptImports', () => {
-            return this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
+            let value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
+            return value;
         });
     }
 
@@ -344,15 +345,15 @@ export class XmlFile {
 
 
         let dependencies = [
-            ...this.scriptTagImports.map(x => x.pkgPath)
+            ...this.scriptTagImports.map(x => x.pkgPath.toLowerCase())
         ];
         //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
         if (this.program.options.autoImportComponentScript) {
             dependencies.push(
                 //add the codebehind file dependencies.
                 //These are kind of optional, so it doesn't hurt to just add both extension versions
-                this.pkgPath.replace(/\.xml$/i, '.bs'),
-                this.pkgPath.replace(/\.xml$/i, '.brs')
+                this.pkgPath.replace(/\.xml$/i, '.bs').toLowerCase(),
+                this.pkgPath.replace(/\.xml$/i, '.brs').toLowerCase()
             );
         }
         if (this.parentComponentName) {

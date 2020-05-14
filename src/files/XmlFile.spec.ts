@@ -324,7 +324,7 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                 </component>
             `) as any;
-            expect(file.allScriptImports).to.eql([
+            expect(file.getAllScriptImports()).to.eql([
                 s`source/lib.brs`
             ]);
         });

@@ -70,13 +70,6 @@ export class DependencyGraph {
     }
 
     /**
-     * Get the list of direct dependencies for the given key
-     */
-    public getOwnDependencies(key: string) {
-        return this.nodes[key]?.dependencies ?? [];
-    }
-
-    /**
      * Remove the item. This will emit an onchange event for all dependent nodes
      */
     public remove(key: string) {

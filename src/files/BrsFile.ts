@@ -38,6 +38,7 @@ export class BrsFile {
     ) {
         this.pathAbsolute = s`${this.pathAbsolute}`;
         this.pkgPath = s`${this.pkgPath}`;
+        this.dependencyGraphKey = this.pkgPath.toLowerCase();
 
         this.extension = path.extname(pathAbsolute).toLowerCase();
 
@@ -47,6 +48,10 @@ export class BrsFile {
         }
     }
 
+    /**
+     * The key used to identify this file in the dependency graph
+     */
+    public dependencyGraphKey: string;
     /**
      * The extension for this file
      */
