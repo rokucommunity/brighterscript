@@ -53,7 +53,7 @@ export class XmlScope extends Scope {
             //detect script imports to files that are not loaded in this scope
             this.diagnosticValidateScriptImportPaths();
 
-            (this as any).isValidated = false;
+            (this as any).isValidated = true;
         }
     }
 
