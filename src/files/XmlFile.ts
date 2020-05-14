@@ -501,7 +501,7 @@ export class XmlFile {
     }
 
     private logDebug(...args) {
-        logger.log('XmlFile', chalk.green(this.pkgPath), ...args);
+        logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
     }
 
     /**

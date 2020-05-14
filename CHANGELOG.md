@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Changed
  - TypeScript target to "ES2017" which provides a signifiant performance boost in lexer (~30%) and parser (~175%)
+### Fixed
+ - removed some debug logs that were showing up when not using logLevel=debug
 
 
 
