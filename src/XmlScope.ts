@@ -17,13 +17,6 @@ export class XmlScope extends Scope {
     }
 
     /**
-     * Called by the dependency graph onchange event by the parent scope anytime one of our scope dependencies has changed
-     */
-    protected onDependenciesChanged(key: string) {
-        super.onDependenciesChanged(key);
-    }
-
-    /**
      * Get the parent scope of this scope. If we could find the scope for our parentComponent, use that.
      * Otherwise default to global scope
      */

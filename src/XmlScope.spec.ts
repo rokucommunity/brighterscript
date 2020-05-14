@@ -2,8 +2,8 @@ import { expect } from 'chai';
 import { Position } from 'vscode-languageserver';
 import { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
-import { util } from './util';
-let rootDir = 'C:/projects/RokuApp';
+import { standardizePath as s, util } from './util';
+let rootDir = s`${process.cwd()}/rootDir`
 
 describe('XmlScope', () => {
     let program: Program;
