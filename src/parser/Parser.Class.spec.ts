@@ -330,7 +330,7 @@ describe('parser class', () => {
             expect(stmt.value).to.be.instanceof(NewExpression);
         });
 
-        it.only('is allowed to be used as a local variable in brs files', () => {
+        it('is allowed to be used as a local variable in brs files', () => {
             let { diagnostics } = Parser.parse(`
                 sub main()
                   new = true

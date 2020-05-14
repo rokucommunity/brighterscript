@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
  - the binary name got accidentally renamed to `bsc2` in release 0.9.6. This release fixes that issue.
  - removed some debug logs that were showing up when not using logLevel=debug
+ - false negative diagnostic when using the `new` keyword as a local variable [#79](https://github.com/rokucommunity/brighterscript/issues/79)
 
 
 

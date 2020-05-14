@@ -1821,7 +1821,7 @@ export class Parser {
     }
 
     private call(): Expression {
-        if (this.check(TokenKind.New)) {
+        if (this.check(TokenKind.New) && this.checkNext(TokenKind.Identifier, ...AllowedLocalIdentifiers)) {
             return this.newExpression();
         }
         let expr = this.primary();
