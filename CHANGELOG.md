@@ -6,17 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [Unreleased]
+## [0.9.7] - SOME_DATE
 ### Changed
  - TypeScript target to "ES2017" which provides a signifiant performance boost in lexer (~30%) and parser (~175%)
 ### Fixed
- - removed some debug logs that were showing up when not using logLevel=debug
-
-
-
-## [0.9.7]
-### Fixed
  - the binary name got accidentally renamed to `bsc2` in release 0.9.6. This release fixes that issue.
+ - removed some debug logs that were showing up when not using logLevel=debug
 
 
 
