@@ -1,5 +1,4 @@
 import { EventEmitter } from 'eventemitter3';
-import { util } from './util';
 /**
  * A graph of files and their dependencies.
  * Each file will only contain nodes that they directly reference (i.e. script imports, inheritance, etc)
@@ -21,16 +20,13 @@ export class DependencyGraph {
 
         let existingNode = this.nodes[key];
 
-        //if the dependencies array hasn't changed
-        if (existingNode && util.areArraysEqual(dependencies, existingNode.dependencies)) {
-            //do nothing, the dependencies haven't changed
+        //dispose the existing node
+        existingNode?.dispose();
 
-            //create a new dependency node
-        } else {
-            let node = new Node(key, dependencies, this);
-            this.nodes[key] = node;
-            this.onchangeEmitter.emit(key, key);
-        }
+        //create a new dependency node
+        let node = new Node(key, dependencies, this);
+        this.nodes[key] = node;
+        this.onchangeEmitter.emit(key, key);
     }
 
     /**
