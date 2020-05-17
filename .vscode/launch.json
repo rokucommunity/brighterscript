@@ -14,29 +14,11 @@
             "args": [
                 "${file}"
             ],
+            "skipFiles": [
+                "${workspaceFolder}/node_modules/**/*.js",
+                "<node_internals>/**/*.js"
+            ],
             "cwd": "${workspaceRoot}",
-            "protocol": "inspector",
-            "internalConsoleOptions": "openOnSessionStart"
-        },
-        {
-            "type": "node",
-            "request": "launch",
-            "name": "Run",
-            "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/cli.ts",
-            "args": [
-                "--root-dir",
-                "C:/projects/PlumMediaCenter.RokuOld",
-                "--watch",
-                "--noZip",
-                "--files",
-                "manifest",
-                "source/**/*.*"
-            ],
-            "outFiles": [
-                "${workspaceRoot}/dist/**/*.js"
-            ],
-            "cwd": "C:/projects/PlumMediaCenter.RokuOld",
             "protocol": "inspector",
             "internalConsoleOptions": "openOnSessionStart"
         }

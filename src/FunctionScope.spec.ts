@@ -12,6 +12,10 @@ describe('FunctionScope', () => {
         scope = new FunctionScope(null);
     });
 
+    afterEach(() => {
+        program.dispose();
+    });
+
     describe('getVariablesAbove', () => {
         it('returns empty array when there are no variables found', () => {
             let variables = scope.getVariablesAbove(10);

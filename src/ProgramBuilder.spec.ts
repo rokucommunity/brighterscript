@@ -34,6 +34,11 @@ describe('ProgramBuilder', () => {
         });
     });
 
+
+    afterEach(() => {
+        builder.dispose();
+    });
+
     describe('loadAllFilesAST', () => {
         it('loads .bs, .brs, .xml files', async () => {
             sinon.stub(util, 'getFilePaths').returns(Promise.resolve([{

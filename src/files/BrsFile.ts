@@ -38,6 +38,7 @@ export class BrsFile {
     ) {
         this.pathAbsolute = s`${this.pathAbsolute}`;
         this.pkgPath = s`${this.pkgPath}`;
+        this.dependencyGraphKey = this.pkgPath.toLowerCase();
 
         this.extension = path.extname(pathAbsolute).toLowerCase();
 
@@ -48,18 +49,13 @@ export class BrsFile {
     }
 
     /**
+     * The key used to identify this file in the dependency graph
+     */
+    public dependencyGraphKey: string;
+    /**
      * The extension for this file
      */
     public extension: string;
-
-    /**
-     * The file needs to know when the program has settled (i.e. the `file-added` event has finished).
-     * After calling this, the file is ready to be interacted with
-     */
-    public setFinishedLoading() {
-        this.finishedLoadingDeferred.resolve();
-    }
-    private finishedLoadingDeferred = new Deferred();
 
     private parseDeferred = new Deferred();
 
@@ -67,7 +63,7 @@ export class BrsFile {
      * Indicates that the file is completely ready for interaction
      */
     public isReady() {
-        return Promise.all([this.finishedLoadingDeferred.promise, this.parseDeferred.promise]);
+        return this.parseDeferred.promise;
     }
 
     private diagnostics = [] as BsDiagnostic[];
@@ -136,7 +132,7 @@ export class BrsFile {
         });
 
         //remove all code inside false-resolved conditional compilation statements
-        let manifest = await getManifest(this.program.rootDir);
+        let manifest = await getManifest(this.program.options.rootDir);
         let preprocessor = new Preprocessor();
 
         //currently the preprocessor throws exceptions on syntax errors...so we need to catch it

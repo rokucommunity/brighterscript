@@ -20,6 +20,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
     afterEach(() => {
         sinon.restore();
+        program.dispose();
     });
 
     async function addFile(relativePath: string, text: string) {
@@ -624,7 +625,7 @@ describe('BrsFile BrighterScript classes', () => {
     });
 
     it('detects extending unknown parent class', async () => {
-        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        (await program.addOrReplaceFile('source/main.brs', `
             class Duck extends Animal
                 sub speak()
                 end sub
@@ -632,13 +633,13 @@ describe('BrsFile BrighterScript classes', () => {
         `) as BrsFile);
         await program.validate();
         expect(program.getDiagnostics()[0]).to.exist.and.to.deep.include({
-            ...DiagnosticMessages.classCouldNotBeFound('Animal', 'global'),
+            ...DiagnosticMessages.classCouldNotBeFound('Animal', 'source'),
             range: Range.create(1, 31, 1, 37)
         });
     });
 
     it('catches newable class without namespace name', async () => {
-        (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+        (await program.addOrReplaceFile('source/main.bs', `
             namespace NameA.NameB
                 class Duck
                 end class
@@ -650,7 +651,7 @@ describe('BrsFile BrighterScript classes', () => {
         `) as BrsFile);
         await program.validate();
         expect(program.getDiagnostics()[0]?.message).to.equal(
-            DiagnosticMessages.classCouldNotBeFound('Duck', 'global').message
+            DiagnosticMessages.classCouldNotBeFound('Duck', 'source').message
         );
     });
 
@@ -679,7 +680,7 @@ describe('BrsFile BrighterScript classes', () => {
         `) as BrsFile);
         await program.validate();
         expect(program.getDiagnostics()[0]?.message).to.equal(
-            DiagnosticMessages.classCouldNotBeFound('NameA.NameB.Animal1', 'global').message
+            DiagnosticMessages.classCouldNotBeFound('NameA.NameB.Animal1', 'source').message
         );
     });
 
@@ -704,7 +705,7 @@ describe('BrsFile BrighterScript classes', () => {
         `) as BrsFile);
         await program.validate();
         expect(program.getDiagnostics()[0]?.message).to.equal(
-            DiagnosticMessages.duplicateClassDeclaration('global', 'Animal').message
+            DiagnosticMessages.duplicateClassDeclaration('source', 'Animal').message
         );
     });
 
@@ -718,7 +719,7 @@ describe('BrsFile BrighterScript classes', () => {
         `) as BrsFile);
         await program.validate();
         expect(program.getDiagnostics()[0]?.message).to.equal(
-            DiagnosticMessages.duplicateClassDeclaration('global', 'NameA.NameB.Animal').message
+            DiagnosticMessages.duplicateClassDeclaration('source', 'NameA.NameB.Animal').message
         );
     });
 
