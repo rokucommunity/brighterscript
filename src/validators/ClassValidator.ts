@@ -42,8 +42,8 @@ export class BsClassValidator {
      * and make sure we can find a class with that name
      */
     private verifyNewExpressions() {
-        for (let key in this.scope.files) {
-            let file = this.scope.files[key].file;
+        let files = this.scope.getFiles();
+        for (let file of files) {
             let newExpressions = file.parser.newExpressions;
             for (let newExpression of newExpressions) {
                 let className = newExpression.className.getName(ParseMode.BrighterScript);
@@ -256,10 +256,10 @@ export class BsClassValidator {
     private findClasses() {
         this.classes = {};
 
-        for (let key in this.scope.files) {
-            let file = this.scope.files[key];
+        let files = this.scope.getFiles();
 
-            for (let x of file.file.parser.classStatements) {
+        for (let file of files) {
+            for (let x of file.parser.classStatements) {
                 let classStatement = x as AugmentedClassStatement;
                 let name = classStatement.getName(ParseMode.BrighterScript);
                 //skip this class if it doesn't have a name
@@ -273,13 +273,13 @@ export class BsClassValidator {
                 //if we don't already have this class, register it
                 if (!alreadyDefinedClass) {
                     this.classes[lowerName] = classStatement;
-                    classStatement.file = file.file;
+                    classStatement.file = file;
 
                     //add a diagnostic about this class already existing
                 } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.duplicateClassDeclaration(this.scope.name, name),
-                        file: file.file,
+                        file: file,
                         range: classStatement.name.range,
                         relatedInformation: [{
                             location: Location.create(

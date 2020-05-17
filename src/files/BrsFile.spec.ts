@@ -30,6 +30,7 @@ describe('BrsFile', () => {
     });
     afterEach(() => {
         sinon.restore();
+        program.dispose();
     });
 
     it('sets needsTranspiled to true for .bs files', () => {
@@ -56,10 +57,17 @@ describe('BrsFile', () => {
         });
     });
 
+    describe('getScopesForFile', () => {
+        it('finds the scope for the file', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', ``);
+            expect(program.getScopesForFile(file)[0]?.name).to.equal('source');
+        });
+    });
+
     describe('getCompletions', () => {
         it('waits for the file to be processed before collecting completions', async () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.addOrReplaceFile('source/main.brs', `
                 sub Main()
                     print "hello"
                     Say
@@ -71,8 +79,8 @@ describe('BrsFile', () => {
 
             let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 23));
             let names = result.map(x => x.label);
-            expect(names).to.contain('Main');
-            expect(names).to.contain('SayHello');
+            expect(names).to.includes('Main');
+            expect(names).to.includes('SayHello');
         });
 
         it('always includes `m`', async () => {
@@ -1381,7 +1389,7 @@ describe('BrsFile', () => {
 
         it('finds function hover in scope', async () => {
             let rootDir = process.cwd();
-            let program = new Program({
+            program = new Program({
                 rootDir: rootDir
             });
 

@@ -31,15 +31,18 @@ export class Benchmarker {
 
         console.log(`installing brighterscript@${this.latestBrighterScriptVersion}`);
         execSync(`npm init -y`, {
-            cwd: __dirname
+            cwd: __dirname,
+            stdio: 'inherit'
         });
         execSync(`npm --cache-min 9999999 i brighterscript@${this.latestBrighterScriptVersion}`, {
-            cwd: __dirname
+            cwd: __dirname,
+            stdio: 'inherit'
         });
 
         console.log('building local brighterscript');
         execSync('npm run build', {
-            cwd: path.join(__dirname, '..')
+            cwd: path.join(__dirname, '..'),
+            stdio: 'inherit'
         });
     }
 
