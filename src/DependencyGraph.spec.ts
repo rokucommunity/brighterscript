@@ -82,4 +82,78 @@ describe('DependencyGraph', () => {
             expect(graph.getAllDependencies('a')).to.eql(['b']);
         });
     });
+
+    describe('removeDependency', () => {
+        it('does not throw when node does not exist', () => {
+            graph.removeDependency('a', 'b');
+            //did not throw, test passes!
+        });
+        it('removes dependency', () => {
+            graph.addOrReplace('a', ['b']);
+            expect(graph.nodes['a'].dependencies).to.eql([
+                'b'
+            ]);
+            graph.removeDependency('a', 'b');
+            expect(graph.nodes['a'].dependencies).to.be.empty;
+        });
+    });
+
+    describe('getAllDependencies', () => {
+        it('does not throw and returns empty array when node does not exist', () => {
+            expect(graph.getAllDependencies('a')).to.eql([]);
+        });
+        it('returns empty list for known dependency', () => {
+            graph.addOrReplace('a', []);
+            expect(graph.getAllDependencies('a')).to.eql([]);
+        });
+        it('returns dependencies', () => {
+            graph.addOrReplace('a', ['b']);
+            expect(graph.getAllDependencies('a')).to.eql([
+                'b'
+            ]);
+        });
+
+        it('does not return duplicate dependencies', () => {
+            graph.addOrReplace('a', ['b', 'c']);
+            graph.addOrReplace('b', ['c']);
+            expect(graph.getAllDependencies('a').sort()).to.eql([
+                'b',
+                'c'
+            ]);
+        });
+
+        it('skips dependencies and their descendent dependencies', () => {
+            graph.addOrReplace('a', ['b', 'c']);
+            graph.addOrReplace('b', ['d', 'e']);
+            graph.addOrReplace('c', ['f', 'g']);
+            expect(graph.getAllDependencies('a', ['c']).sort()).to.eql([
+                'b',
+                'd',
+                'e'
+            ]);
+        });
+    });
+
+    describe('onchange', () => {
+        it('emits when nodes are changed', () => {
+            let mock = sinon.mock();
+            graph.onchange('a', mock);
+            graph.addOrReplace('a');
+            expect(mock.callCount).to.equal(1);
+        });
+
+        it('emits immediately when configured to do so', () => {
+            let mock = sinon.mock();
+            graph.onchange('a', mock, true);
+            expect(mock.callCount).to.equal(1);
+        });
+    });
+
+    describe('dispose', () => {
+        it('does not throw', () => {
+            graph.addOrReplace('a');
+            graph.dispose();
+            //did not throw...test passes
+        });
+    });
 });
