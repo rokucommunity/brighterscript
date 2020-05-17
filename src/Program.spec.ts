@@ -920,6 +920,45 @@ describe('Program', () => {
             ]);
         });
 
+        it('detects when dependency contents have changed', async () => {
+            //create child component
+            await program.addOrReplaceFile('components/ChildScene.xml', `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <script type="text/brighterscript" uri="lib.bs" />
+                </component>
+            `);
+            await program.addOrReplaceFile('components/lib.bs', `
+                import "animalActions.bs"
+                function init1(strVal as string)
+                    Waddle()
+                end function
+            `);
+            //add the empty dependency
+            await program.addOrReplaceFile('components/animalActions.bs', ``);
+
+            //there should be an error because that function doesn't exist
+            await program.validate();
+
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                DiagnosticMessages.callToUnknownFunction('Waddle', s`components/ChildScene.xml`).message
+            ]);
+
+            //change the dependency to now contain the file. the scope should re-validate
+            await program.addOrReplaceFile('components/animalActions.bs', `
+                sub Waddle()
+                    print "Waddling"
+                end sub
+            `);
+
+            //validate again
+            await program.validate();
+
+            //the error should be gone
+            expect(program.getDiagnostics()).to.be.empty;
+
+        });
+
         it('adds brs imports to xml file during transpile', async () => {
             //create child component
             let component = await program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, `
