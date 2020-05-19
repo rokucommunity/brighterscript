@@ -19,7 +19,7 @@ We want to honor BrightScript, the language that BrighterScript is based off of,
 ## Features
 BrighterScript adds several new features to the BrightScript language such as Namespaces, classes, import statements, and more. Take a look at the language specification docs for more information. 
 
-[BrighterScript Language Specification](https://github.com/rokucommunity/brighterscript/docs/index.md)
+[BrighterScript Language Specification](https://github.com/rokucommunity/brighterscript/blob/master/docs/index.md)
 
 
 ## Installation
