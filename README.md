@@ -8,7 +8,14 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
 The goal of this project is to bring new features and syntax enhancements to Roku's BrightScript language. It also supports parsing and validating standard BrightScript, so you don't even need to write a single line of `BrighterScript` code to benefit from this project. 
 
- **Disclaimer:** This is currently a **work in progress**. Use at your own risk, but feel free to raise any issues you may find. 
+## What's with the name?
+The name BrighterScript is a compliment to everything that is great about Roku's awesome BrightScript language. Naming things are hard, and discoverability and recognizability is important. Here are the reasons we chose this name:
+ - the `er` in BrighterScript represents the additional features we have added on top of BrightScript
+ - It looks so similar to BrightScript, which is fitting because this language is 95% BrightScript, 5% extra stuff (the `er` bits).
+ - The config file and extension look very similar between BrightScript and BrighterScript. Take `bsconfig.json` for example. While `brsconfig.json` might be more fitting for a pure BrightScript project, `bsconfig.json` is so very close that you probably wouldn't think twice about it. Same with the fact that `.bs` (BrighterScript) and `.brs` are very similar.
+
+We want to honor BrightScript, the language that BrighterScript is based off of, and could think of no better way than to use _most_ of its name in our name. 
+
 
 ## Installation
 
