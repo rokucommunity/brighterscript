@@ -142,7 +142,12 @@ export class Lexer {
                 this.addToken(TokenKind.Comma);
                 break;
             case '@':
-                this.addToken(TokenKind.At);
+                if (this.peek() === '.') {
+                    this.advance();
+                    this.addToken(TokenKind.Callfunc);
+                } else {
+                    this.addToken(TokenKind.At);
+                }
                 break;
             case '.':
                 // this might be a float/double literal, because decimals without a leading 0

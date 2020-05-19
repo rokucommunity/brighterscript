@@ -19,6 +19,11 @@ describe('lexer', () => {
         ]);
     });
 
+    it('recognizes the callfunc operator', () => {
+        let { tokens } = Lexer.scan('@.');
+        expect(tokens[0].kind).to.equal(TokenKind.Callfunc);
+    });
+
     it('recognizes the import token', () => {
         let { tokens } = Lexer.scan('import');
         expect(tokens[0].kind).to.eql(TokenKind.Import);

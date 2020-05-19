@@ -573,3 +573,57 @@ export class NewExpression implements Expression {
         return this.call.transpile(state);
     }
 }
+
+export class CallfuncExpression implements Expression {
+    constructor(
+        readonly callee: Expression,
+        readonly operator: Token,
+        readonly methodName: Identifier,
+        readonly openingParen: Token,
+        readonly args: Expression[],
+        readonly closingParen: Token
+    ) {
+        this.range = Range.create(
+            callee.range.start,
+            (closingParen ?? args[args.length - 1] ?? openingParen ?? methodName ?? operator).range.end
+        );
+    }
+
+    public readonly range: Range;
+
+    public transpile(state: TranspileState) {
+        let result = [];
+        result.push(
+            ...this.callee.transpile(state),
+            new SourceNode(this.operator.range.start.line + 1, this.operator.range.start.character, state.pathAbsolute, '.callfunc'),
+            new SourceNode(this.openingParen.range.start.line + 1, this.openingParen.range.start.character, state.pathAbsolute, '('),
+            //the name of the function
+            new SourceNode(
+                this.methodName.range.start.line + 1,
+                this.methodName.range.start.character,
+                state.pathAbsolute,
+                `"${this.methodName.text}"`
+            ),
+            ', '
+        );
+        //transpile args
+        //callfunc with zero args never gets called, so pass invalid as the first parameter if there are no args
+        if (this.args.length === 0) {
+            result.push('invalid');
+        } else {
+            for (let i = 0; i < this.args.length; i++) {
+                //add comma between args
+                if (i > 0) {
+                    result.push(', ');
+                }
+                let arg = this.args[i];
+                result.push(...arg.transpile(state));
+            }
+        }
+        result.push(
+            new SourceNode(this.closingParen.range.start.line + 1, this.closingParen.range.start.character, state.pathAbsolute, ')')
+        );
+        return result;
+    }
+
+}

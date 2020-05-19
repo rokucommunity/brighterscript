@@ -1796,6 +1796,38 @@ describe('BrsFile', () => {
         });
 
     });
+
+    describe('callfunc operator', () => {
+        describe('transpile', () => {
+            it('sets invalid on empty callfunc', async () => {
+                await testTranspile(`
+                    sub main()
+                        node@.doSomething()
+                        m.top.node@.doSomething()
+                        m.top.node@.doSomething(1)
+                    end sub
+                `, `
+                    sub main()
+                        node.callfunc("doSomething", invalid)
+                        m.top.node.callfunc("doSomething", invalid)
+                        m.top.node.callfunc("doSomething", 1)
+                    end sub
+                `);
+            });
+
+            it('includes original arguments', async () => {
+                await testTranspile(`
+                    sub main()
+                        node@.doSomething(1, true, m.top.someVal)
+                    end sub
+                `, `
+                    sub main()
+                        node.callfunc("doSomething", 1, true, m.top.someVal)
+                    end sub
+                `);
+            });
+        });
+    });
 });
 
 export function getTestTranspile(scopeGetter: () => [Program, string]) {

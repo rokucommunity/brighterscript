@@ -554,6 +554,16 @@ export let DiagnosticMessages = {
         message: `This import is unnecessary because compiler option 'autoImportComponentScript' is enabled`,
         code: 1107,
         severity: DiagnosticSeverity.Warning
+    }),
+    expectedOpenParenToFollowCallfuncIdentifier: () => ({
+        message: `Expected '(' to follow callfunc identifier`,
+        code: 1108,
+        severity: DiagnosticSeverity.Error
+    }),
+    callfuncExpressionMustHaveAtLeastOneArgument: () => ({
+        message: `A callfunc expression must have at least one argument`,
+        code: 1109,
+        severity: DiagnosticSeverity.Error
     })
 };
 

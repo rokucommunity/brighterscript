@@ -53,7 +53,7 @@ import {
 } from './Statement';
 import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
-import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression, XmlAttributeGetExpression, NamespacedVariableNameExpression } from './Expression';
+import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression, XmlAttributeGetExpression, NamespacedVariableNameExpression, CallfuncExpression } from './Expression';
 import { Range, Diagnostic } from 'vscode-languageserver';
 import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from './ClassStatement';
 
@@ -1440,7 +1440,7 @@ export class Parser {
             );
         }
 
-        if (expr instanceof CallExpression) {
+        if (expr instanceof CallExpression || expr instanceof CallfuncExpression) {
             return new ExpressionStatement(expr);
         }
 
@@ -1820,6 +1820,21 @@ export class Parser {
         return result;
     }
 
+    /**
+     * A callfunc expression (i.e. `node@.someFunctionOnNode()`)
+     */
+    private callfunc(callee: Expression): Expression {
+        this.warnIfNotBrighterScriptMode('callfunc operator');
+        let operator = this.previous();
+        let methodName = this.consume(DiagnosticMessages.expectedIdentifier(), TokenKind.Identifier, ...AllowedProperties);
+        // force it into an identifier so the AST makes some sense
+        methodName.kind = TokenKind.Identifier;
+        let openParen = this.consume(DiagnosticMessages.expectedOpenParenToFollowCallfuncIdentifier(), TokenKind.LeftParen);
+        let call = this.finishCall(openParen, callee);
+
+        return new CallfuncExpression(callee, operator, methodName as Identifier, openParen, call.args, call.closingParen);
+    }
+
     private call(): Expression {
         if (this.check(TokenKind.New) && this.checkNext(TokenKind.Identifier, ...AllowedLocalIdentifiers)) {
             return this.newExpression();
@@ -1831,6 +1846,8 @@ export class Parser {
                 expr = this.finishCall(this.previous(), expr);
             } else if (this.match(TokenKind.LeftSquareBracket)) {
                 expr = this.indexedGet(expr);
+            } else if (this.match(TokenKind.Callfunc)) {
+                expr = this.callfunc(expr);
             } else if (this.match(TokenKind.Dot)) {
                 if (this.match(TokenKind.LeftSquareBracket)) {
                     expr = this.indexedGet(expr);

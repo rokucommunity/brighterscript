@@ -2,8 +2,8 @@ export enum TokenKind {
     // parens (and friends)
     LeftParen = 'LeftParen', // (
     RightParen = 'RightParen', // )
-    LeftSquareBracket = 'LeftSquare', // [
-    RightSquareBracket = 'RightSquare', // ]
+    LeftSquareBracket = 'LeftSquareBracket', // [
+    RightSquareBracket = 'RightSquareBracket', // ]
     LeftCurlyBrace = 'LeftCurlyBrace', // {
     RightCurlyBrace = 'RightCurlyBrace', // }
 
@@ -62,12 +62,13 @@ export enum TokenKind {
     Invalid = 'Invalid',
     Dynamic = 'Dynamic',
 
-    // other single-character symbols
+    // other symbols
     Dot = 'Dot', // .
     Comma = 'Comma', // ,
     Colon = 'Colon', // :
     Semicolon = 'Semicolon', // ;
     At = 'At', // @
+    Callfunc = 'Callfunc', // @.
 
     // conditional compilation
     HashIf = 'HashIf', // #if

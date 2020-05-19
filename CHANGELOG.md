@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+
+## [Unreleased]
+### Added 
+ - new callfunc operator. 
+
+
+
 ## [0.9.8] - 2020-05-16
 ### Changed
  - the inner event system handling file changes. This should fix several race conditions causing false negatives during CLI runs.

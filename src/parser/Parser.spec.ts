@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
-import { DottedGetExpression, XmlAttributeGetExpression } from './Expression';
+import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
 import { PrintStatement, AssignmentStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
@@ -11,6 +11,31 @@ describe('parser', () => {
         expect(Parser.parse([])).to.deep.include({
             statements: [],
             diagnostics: []
+        });
+    });
+
+    describe('callfunc operator', () => {
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(node as dynamic)
+                    node@.doSomething(1, 2)
+                end sub
+            `, ParseMode.BrightScript);
+            expect(
+                parser.diagnostics[0]?.message
+            ).to.equal(
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('callfunc operator').message
+            );
+        });
+
+        it('does not cause parse errors', () => {
+            let parser = parse(`
+                sub main(node as dynamic)
+                    node@.doSomething(1, 2)
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(parser.diagnostics[0]?.message).not.to.exist;
+            expect((parser as any).statements[0]?.func?.body?.statements[0]?.expression).to.be.instanceof(CallfuncExpression);
         });
     });
 
