@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [Unreleased]
+## [0.10.0]
 ### Added 
  - new callfunc operator. 
 
@@ -248,6 +248,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - parser bug that was preventing comments as their own lines inside associative array literals. ([#29](https://github.com/rokucommunity/brighterscript/issues/28))
 
 
+
 ## [0.2.2] - 2019-09-27
 ### Fixed
  - bug in language server where the server would crash when sending a diagnostic too early. Now the server waits for the program to load before sending diagnostics.
@@ -280,41 +281,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Bug during file creation that wouldn't recognize the file
 
 
-## 0.1.0 - 2019-08-10
+## [0.1.0] - 2019-08-10
 ### Changed
  - Cloned from [brightscript-language](https://github.com/rokucommunity/brightscript-language)
 
 
 
-[0.9.8]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.7...v0.9.8
-[0.9.7]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.6...v0.9.7
-[0.9.6]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.5...v0.9.6
-[0.9.5]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.4...v0.9.5
-[0.9.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.3...v0.9.4
-[0.9.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.2...v0.9.3
-[0.9.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.1...v0.9.2
-[0.9.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.0...v0.9.1
-[0.9.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.8.2...v0.9.0
-[0.8.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.8.1...v0.8.2
-[0.8.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.8.0...v0.8.1
-[0.8.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.7.2...v0.8.0
-[0.7.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.7.1...v0.7.2
-[0.7.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.7.0...v0.7.1
-[0.7.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.6.0...v0.7.0
-[0.6.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.4...v0.6.0
-[0.5.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.3...v0.5.4
-[0.5.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.2...v0.5.3
-[0.5.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.1...v0.5.2
-[0.5.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.5.0...v0.5.1
-[0.5.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.4...v0.5.0
-[0.4.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.3...v0.4.4
-[0.4.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.2...v0.4.3
-[0.4.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.1...v0.4.2
-[0.4.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.4.0...v0.4.1
-[0.4.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.3.1...v0.4.0
-[0.3.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.3.0...v0.3.1
-[0.3.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.2.2...v0.3.0
-[0.2.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.2.1...v0.2.2
-[0.2.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.2.0...v0.2.1
-[0.2.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.2.0
-[0.1.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.1.0
+[0.10.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.8...v0.10.0
+[0.9.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.7...v0.9.8
+[0.9.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.6...v0.9.7
+[0.9.6]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.5...v0.9.6
+[0.9.5]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.4...v0.9.5
+[0.9.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.3...v0.9.4
+[0.9.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.2...v0.9.3
+[0.9.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.1...v0.9.2
+[0.9.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.0...v0.9.1
+[0.9.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.8.2...v0.9.0
+[0.8.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.8.1...v0.8.2
+[0.8.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.8.0...v0.8.1
+[0.8.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.7.2...v0.8.0
+[0.7.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.7.1...v0.7.2
+[0.7.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.7.0...v0.7.1
+[0.7.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.6.0...v0.7.0
+[0.6.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.5.4...v0.6.0
+[0.5.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.5.3...v0.5.4
+[0.5.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.5.2...v0.5.3
+[0.5.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.5.1...v0.5.2
+[0.5.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.5.0...v0.5.1
+[0.5.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.4.4...v0.5.0
+[0.4.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.4.3...v0.4.4
+[0.4.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.4.2...v0.4.3
+[0.4.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.4.1...v0.4.2
+[0.4.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.4.0...v0.4.1
+[0.4.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.3.1...v0.4.0
+[0.3.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.3.0...v0.3.1
+[0.3.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.2.2...v0.3.0
+[0.2.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.2.1...v0.2.2
+[0.2.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.2.0...v0.2.1
+[0.2.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.2.0
+[0.1.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.1.0
