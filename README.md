@@ -16,6 +16,11 @@ The name BrighterScript is a compliment to everything that is great about Roku's
 
 We want to honor BrightScript, the language that BrighterScript is based off of, and could think of no better way than to use _most_ of its name in our name. 
 
+## Features
+BrighterScript adds several new features to the BrightScript language such as Namespaces, classes, import statements, and more. Take a look at the language specification docs for more information. 
+
+[BrighterScript Language Specification](https://github.com/rokucommunity/brighterscript/docs/index.md)
+
 
 ## Installation
 
