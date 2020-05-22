@@ -302,6 +302,16 @@ export const AssignmentOperators = [
     TokenKind.RightShiftEqual
 ];
 
+export const CompoundAssignmentOperators = [
+    TokenKind.MinusEqual,
+    TokenKind.PlusEqual,
+    TokenKind.StarEqual,
+    TokenKind.ForwardslashEqual,
+    TokenKind.BackslashEqual,
+    TokenKind.LeftShiftEqual,
+    TokenKind.RightShiftEqual
+];
+
 /** List of TokenKinds that are permitted as property names. */
 export const AllowedProperties = [
     TokenKind.As,

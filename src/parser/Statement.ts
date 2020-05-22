@@ -1,6 +1,6 @@
-import { Token, Identifier, TokenKind } from '../lexer';
+import { Token, Identifier, TokenKind, CompoundAssignmentOperators } from '../lexer';
 import { SourceNode } from 'source-map';
-import { Expression, FunctionExpression, NamespacedVariableNameExpression } from './Expression';
+import { Expression, FunctionExpression, NamespacedVariableNameExpression, BinaryExpression } from './Expression';
 import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
@@ -65,7 +65,6 @@ export class Body implements Statement {
     }
 }
 
-
 export class AssignmentStatement implements Statement {
     constructor(
         readonly equals: Token,
@@ -79,13 +78,18 @@ export class AssignmentStatement implements Statement {
     public readonly range: Range;
 
     transpile(state: TranspileState) {
-        return [
-            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text),
-            ' ',
-            new SourceNode(this.equals.range.start.line + 1, this.equals.range.start.character, state.pathAbsolute, '='),
-            ' ',
-            ...this.value.transpile(state)
-        ];
+        //if the value is a compound assignment, just transpile the expression itself
+        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.operator?.kind)) {
+            return this.value.transpile(state);
+        } else {
+            return [
+                new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text),
+                ' ',
+                new SourceNode(this.equals.range.start.line + 1, this.equals.range.start.character, state.pathAbsolute, '='),
+                ' ',
+                ...this.value.transpile(state)
+            ];
+        }
     }
 }
 
@@ -737,16 +741,21 @@ export class DottedSetStatement implements Statement {
     public readonly range: Range;
 
     transpile(state: TranspileState) {
-        return [
-            //object
-            ...this.obj.transpile(state),
-            '.',
-            //name
-            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text),
-            ' = ',
-            //right-hand-side of assignment
-            ...this.value.transpile(state)
-        ];
+        //if the value is a compound assignment, don't add the obj, dot, name, or operator...the expression will handle that
+        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.operator?.kind)) {
+            return this.value.transpile(state);
+        } else {
+            return [
+                //object
+                ...this.obj.transpile(state),
+                '.',
+                //name
+                new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text),
+                ' = ',
+                //right-hand-side of assignment
+                ...this.value.transpile(state)
+            ];
+        }
     }
 }
 
@@ -764,20 +773,25 @@ export class IndexedSetStatement implements Statement {
     public readonly range: Range;
 
     transpile(state: TranspileState) {
-        return [
-            //obj
-            ...this.obj.transpile(state),
-            //   [
-            new SourceNode(this.openingSquare.range.start.line + 1, this.openingSquare.range.start.character, state.pathAbsolute, '['),
-            //    index
-            ...this.index.transpile(state),
-            //         ]
-            new SourceNode(this.closingSquare.range.start.line + 1, this.closingSquare.range.start.character, state.pathAbsolute, ']'),
-            //           =
-            ' = ',
-            //             value
-            ...this.value.transpile(state)
-        ];
+        //if the value is a component assignment, don't add the obj, index or operator...the expression will handle that
+        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.operator?.kind)) {
+            return this.value.transpile(state);
+        } else {
+            return [
+                //obj
+                ...this.obj.transpile(state),
+                //   [
+                new SourceNode(this.openingSquare.range.start.line + 1, this.openingSquare.range.start.character, state.pathAbsolute, '['),
+                //    index
+                ...this.index.transpile(state),
+                //         ]
+                new SourceNode(this.closingSquare.range.start.line + 1, this.closingSquare.range.start.character, state.pathAbsolute, ']'),
+                //           =
+                ' = ',
+                //             value
+                ...this.value.transpile(state)
+            ];
+        }
     }
 }
 

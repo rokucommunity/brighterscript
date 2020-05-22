@@ -1453,6 +1453,42 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('transpiles local var assignment operators', async () => {
+            await testTranspile(`
+                sub main()
+                    count = 0
+                    count += 1
+                    count -= 1
+                    count *= 1
+                    count /= 1
+                    count \\= 1
+                    count <<= 1
+                    count >>= 1
+                end sub
+            `);
+        });
+
+        it('transpiles AA property assignment operators', async () => {
+            await testTranspile(`
+                sub main()
+                    person = {
+                        count: 0
+                    }
+                    person.count += 1
+                end sub
+            `);
+        });
+
+        it('transpiles AA indexed assignment operators', async () => {
+            await testTranspile(`
+                sub main()
+                    person = {
+                        count: 0
+                    }
+                    person["count"] += 1
+                end sub
+            `);
+        });
 
         it('relative-referenced namespaced functions get prefixed', async () => {
             await testTranspile(`
