@@ -1453,6 +1453,13 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('keeps function parameter types in proper order', async () => {
+            await testTranspile(`
+                function CreateTestStatistic(name as string, result = "Success" as string, time = 0 as integer, errorCode = 0 as integer, errorMessage = "" as string) as object
+                end function
+            `);
+        });
+
         it('transpiles local var assignment operators', async () => {
             await testTranspile(`
                 sub main()

@@ -82,16 +82,19 @@ export class FunctionParameter {
             //name
             new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
         ] as any[];
+        //default value
+        if (this.defaultValue) {
+            result.push(' = ');
+            result.push(this.defaultValue.transpile(state));
+        }
+        //type declaration
         if (this.asToken) {
             result.push(' ');
             result.push(new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pathAbsolute, 'as'));
             result.push(' ');
             result.push(new SourceNode(this.typeToken.range.start.line + 1, this.typeToken.range.start.character, state.pathAbsolute, this.typeToken.text));
         }
-        if (this.defaultValue) {
-            result.push(' = ');
-            result.push(this.defaultValue.transpile(state));
-        }
+
         return result;
     }
 }
