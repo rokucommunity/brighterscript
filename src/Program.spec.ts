@@ -855,6 +855,45 @@ describe('Program', () => {
     });
 
     describe('import statements', () => {
+        it('still transpiles import statements if found at bottom of file', async () => {
+            await program.addOrReplaceFile('components/ChildScene.xml', `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="Scene">
+                    <script type="text/brighterscript" uri="pkg:/source/lib.bs" />
+                </component>
+            `);
+
+            await program.addOrReplaceFile('source/lib.bs', `
+                function toLower(strVal as string)
+                    return StringToLower(strVal)
+                end function
+                'this import is purposefully at the bottom just to prove the transpile still works
+                import "stringOps.bs"
+            `);
+
+            await program.addOrReplaceFile('source/stringOps.bs', `
+                function StringToLower(strVal as string)
+                    return true
+                end function
+            `);
+            let files = Object.keys(program.files).map(x => program.getFileByPathAbsolute(x)).filter(x => !!x).map(x => {
+                return {
+                    src: x.pathAbsolute,
+                    dest: x.pkgPath
+                };
+            });
+            await program.transpile(files, stagingFolderPath);
+            expect(
+                fsExtra.readFileSync(`${stagingFolderPath}/components/ChildScene.xml`).toString()
+            ).to.equal(`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/stringOps.brs" />
+                </component>
+            `);
+        });
+
         it('finds function loaded in by import multiple levels deep', async () => {
             //create child component
             let component = await program.addOrReplaceFile('components/ChildScene.xml', `
