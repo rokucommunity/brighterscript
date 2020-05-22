@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.10.1]
+### Fixed
+ - transpile bug for compound assignment statements (such as `+=`, `-=`) ([#87](https://github.com/rokucommunity/brighterscript/issues/87))
+ - transpile bug that was inserting function parameter types before default values ([#88](https://github.com/rokucommunity/brighterscript/issues/88))
+ - export BsConfig interface from index.ts to make it easier for NodeJS importing.
+
+
+
 ## [0.10.0]
 ### Added 
  - new callfunc operator. 
@@ -287,6 +295,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.10.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.0...v0.10.1
 [0.10.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.8...v0.10.0
 [0.9.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.7...v0.9.8
 [0.9.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.6...v0.9.7
