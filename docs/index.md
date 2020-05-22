@@ -1,5 +1,5 @@
 # BrighterScript
-BrighterScript is a superset of Roku's BrightScript language. Its goal is to provide new functionality and enhanced syntax support to make Roku channel development more enjoyable. 
+BrighterScript is a superset of Roku's BrightScript language. Its goal is to provide new functionality and enhanced syntax support to enhance the Roku channel developer experience. 
 
 See the following pages for more information
 
