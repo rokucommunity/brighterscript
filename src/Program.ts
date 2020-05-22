@@ -96,7 +96,7 @@ export class Program {
     /**
      * A map of every file loaded into this program
      */
-    public files = {} as { [filePath: string]: BrsFile | XmlFile };
+    public files = {} as { [pathAbsolute: string]: BrsFile | XmlFile };
 
     private scopes = {} as { [name: string]: Scope };
 
