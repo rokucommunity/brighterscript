@@ -1115,6 +1115,22 @@ describe('BrsFile', () => {
             });
         });
 
+        it('finds function calls nested inside statements', async () => {
+            await program.addOrReplaceFile(`source/main.brs`, `
+                sub main()
+                    if true then
+                        DoesNotExist(1, 2)
+                    end if
+                end sub
+            `);
+            await program.validate();
+            expect(
+                program.getDiagnostics()[0]?.message
+            ).to.equal(
+                DiagnosticMessages.callToUnknownFunction('DoesNotExist', 'source').message
+            );
+        });
+
         it('finds arguments with variable values', async () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
             await file.parse(`

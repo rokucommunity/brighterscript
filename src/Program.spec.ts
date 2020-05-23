@@ -932,21 +932,21 @@ describe('Program', () => {
 
         it('supports importing brs files', async () => {
             //create child component
-            let component = await program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, `
+            let component = await program.addOrReplaceFile('components/ChildScene.xml', `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brighterscript" uri="pkg:/source/lib.bs" />
                 </component>
             `);
-            await program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `
+            await program.addOrReplaceFile('source/lib.bs', `
                 import "stringOps.brs"
                 function toLower(strVal as string)
                     return StringToLower(strVal)
                 end function
             `);
-            await program.addOrReplaceFile({ src: s`${rootDir}/source/stringOps.brs`, dest: 'source/stringOps.brs' }, `
+            await program.addOrReplaceFile('source/stringOps.brs', `
                 function StringToLower(strVal as string)
-                    return isInt(strVal)
+                    return lcase(strVal)
                 end function
             `);
             await program.validate();

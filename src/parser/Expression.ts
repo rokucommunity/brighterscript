@@ -112,6 +112,11 @@ export class FunctionExpression implements Expression {
     ) {
     }
 
+    /**
+     * The list of function calls that are declared within this function scope. This excludes CallExpressions
+     * declared in child functions
+     */
+    public callExpressions: CallExpression[];
 
     /**
      * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),

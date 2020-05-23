@@ -475,9 +475,16 @@ export class Parser {
         );
     }
 
+    /**
+     * An array of CallExpression for the current function body
+     */
+    private callExpressions = [];
+
     private functionDeclaration(isAnonymous: true): FunctionExpression;
     private functionDeclaration(isAnonymous: false): FunctionStatement;
     private functionDeclaration(isAnonymous: boolean) {
+        let previousCallExpressions = this.callExpressions;
+        this.callExpressions = [];
         try {
             //track depth to help certain statements need to know if they are contained within a function body
             this.namespaceAndFunctionDepth++;
@@ -644,6 +651,7 @@ export class Parser {
                     range: this.peek().range
                 });
             }
+            func.callExpressions = this.callExpressions;
 
             if (isAnonymous) {
                 return func;
@@ -658,6 +666,8 @@ export class Parser {
             }
         } finally {
             this.namespaceAndFunctionDepth--;
+            //restore the previous CallExpression list
+            this.callExpressions = previousCallExpressions;
         }
     }
 
@@ -1815,6 +1825,8 @@ export class Parser {
             TokenKind.LeftParen
         );
         let call = this.finishCall(leftParen, nameExpr);
+        //pop the call from the  callExpressions list because this is technically something else
+        this.callExpressions.pop();
         let result = new NewExpression(newToken, call);
         this.newExpressions.push(result);
         return result;
@@ -1912,7 +1924,9 @@ export class Parser {
             TokenKind.RightParen
         );
 
-        return new CallExpression(callee, openingParen, closingParen, args, this.currentNamespaceName);
+        let expression = new CallExpression(callee, openingParen, closingParen, args, this.currentNamespaceName);
+        this.callExpressions.push(expression);
+        return expression;
     }
 
     private primary(): Expression {
@@ -2218,6 +2232,9 @@ export class Parser {
 
             this.advance();
         }
+    }
+
+    public dispose() {
     }
 }
 

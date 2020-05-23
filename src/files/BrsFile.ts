@@ -148,7 +148,8 @@ export class BrsFile {
         //if the preprocessor generated tokens, use them.
         let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
 
-        this.parser = Parser.parse(tokens, {
+        this.parser = new Parser();
+        this.parser.parse(tokens, {
             mode: this.extension === '.brs' ? ParseMode.BrightScript : ParseMode.BrighterScript
         });
 
@@ -600,76 +601,69 @@ export class BrsFile {
 
     private findFunctionCalls() {
         this.functionCalls = [];
+        //for every function in the file
+        for (let func of this.parser.functionExpressions) {
+            //for all function calls in this function
+            for (let expression of func.callExpressions) {
 
-        //for now, just dig into top-level function declarations.
-        for (let statement of this.ast.statements as any) {
-            if (!statement.func) {
-                continue;
-            }
-            let bodyStatements = statement.func.body.statements;
-            for (let bodyStatement of bodyStatements) {
-                if (bodyStatement.expression && bodyStatement.expression instanceof CallExpression) {
-                    let expression: CallExpression = bodyStatement.expression;
-
-                    //filter out dotted function invocations (i.e. object.doSomething()) (not currently supported. TODO support it)
-                    if (bodyStatement.expression.callee.obj) {
-                        continue;
-                    }
-                    let functionName = (expression.callee as any).name.text;
-
-                    //callee is the name of the function being called
-                    let callee = expression.callee as VariableExpression;
-
-                    let columnIndexBegin = callee.range.start.character;
-                    let columnIndexEnd = callee.range.end.character;
-
-                    let args = [] as CallableArg[];
-                    //TODO convert if stmts to use instanceof instead
-                    for (let arg of expression.args as any) {
-                        //is variable being passed into argument
-                        if (arg.name) {
-                            args.push({
-                                range: arg.range,
-                                //TODO - look up the data type of the actual variable
-                                type: new DynamicType(),
-                                text: arg.name.text
-                            });
-                        } else if (arg.value) {
-                            let text = '';
-                            /* istanbul ignore next: TODO figure out why value is undefined sometimes */
-                            if (arg.value.value) {
-                                text = arg.value.value.toString();
-                            }
-                            let callableArg = {
-                                range: arg.range,
-                                type: util.valueKindToBrsType(arg.value.kind),
-                                text: text
-                            };
-                            //wrap the value in quotes because that's how it appears in the code
-                            if (callableArg.type instanceof StringType) {
-                                callableArg.text = '"' + callableArg.text + '"';
-                            }
-                            args.push(callableArg);
-                        } else {
-                            args.push({
-                                range: arg.range,
-                                type: new DynamicType(),
-                                //TODO get text from other types of args
-                                text: ''
-                            });
-                        }
-                    }
-                    let functionCall: FunctionCall = {
-                        range: Range.create(expression.range.start, expression.closingParen.range.end),
-                        functionScope: this.getFunctionScopeAtPosition(Position.create(callee.range.start.line, callee.range.start.character)),
-                        file: this,
-                        name: functionName,
-                        nameRange: Range.create(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
-                        //TODO keep track of parameters
-                        args: args
-                    };
-                    this.functionCalls.push(functionCall);
+                //filter out dotted function invocations (i.e. object.doSomething()) (not currently supported. TODO support it)
+                if ((expression.callee as any).obj) {
+                    continue;
                 }
+                let functionName = (expression.callee as any).name.text;
+
+                //callee is the name of the function being called
+                let callee = expression.callee as VariableExpression;
+
+                let columnIndexBegin = callee.range.start.character;
+                let columnIndexEnd = callee.range.end.character;
+
+                let args = [] as CallableArg[];
+                //TODO convert if stmts to use instanceof instead
+                for (let arg of expression.args as any) {
+                    //is variable being passed into argument
+                    if (arg.name) {
+                        args.push({
+                            range: arg.range,
+                            //TODO - look up the data type of the actual variable
+                            type: new DynamicType(),
+                            text: arg.name.text
+                        });
+                    } else if (arg.value) {
+                        let text = '';
+                        /* istanbul ignore next: TODO figure out why value is undefined sometimes */
+                        if (arg.value.value) {
+                            text = arg.value.value.toString();
+                        }
+                        let callableArg = {
+                            range: arg.range,
+                            type: util.valueKindToBrsType(arg.value.kind),
+                            text: text
+                        };
+                        //wrap the value in quotes because that's how it appears in the code
+                        if (callableArg.type instanceof StringType) {
+                            callableArg.text = '"' + callableArg.text + '"';
+                        }
+                        args.push(callableArg);
+                    } else {
+                        args.push({
+                            range: arg.range,
+                            type: new DynamicType(),
+                            //TODO get text from other types of args
+                            text: ''
+                        });
+                    }
+                }
+                let functionCall: FunctionCall = {
+                    range: Range.create(expression.range.start, expression.closingParen.range.end),
+                    functionScope: this.getFunctionScopeAtPosition(Position.create(callee.range.start.line, callee.range.start.character)),
+                    file: this,
+                    name: functionName,
+                    nameRange: Range.create(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
+                    //TODO keep track of parameters
+                    args: args
+                };
+                this.functionCalls.push(functionCall);
             }
         }
     }
@@ -1040,6 +1034,7 @@ export class BrsFile {
     }
 
     public dispose() {
+        this.parser?.dispose();
     }
 }
 
