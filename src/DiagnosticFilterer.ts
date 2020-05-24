@@ -61,6 +61,10 @@ export class DiagnosticFilterer {
         this.filePaths = [] as string[];
 
         for (let diagnostic of diagnostics) {
+            //skip diagnostics that have issues
+            if (!diagnostic?.file?.pathAbsolute) {
+                continue;
+            }
             //make a new array for this file if one does not yet exist
             if (!this.byFile[diagnostic.file.pathAbsolute]) {
                 this.byFile[diagnostic.file.pathAbsolute] = [];
