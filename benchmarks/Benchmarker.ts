@@ -164,11 +164,6 @@ export class Benchmarker {
                     console.log(event.target.toString());
                 })
                 .on('complete', function () {
-                    console.log(`\nresults: `);
-                    for (var i = 0; i < this.length; i++) {
-                        // console.log(`${ this[i].name }: ${ Math.round(this[i].hz * 100) / 100 } ops / sec`);
-                        console.log(this[i].toString());
-                    }
                     computePercentChange(suiteName, this);
                     resolve();
                 })
