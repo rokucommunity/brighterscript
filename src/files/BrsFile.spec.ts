@@ -1469,6 +1469,13 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('escapes quotes in string literals', async () => {
+            await testTranspile(`
+                sub main()
+                    expected += chr(10) + " version=""2.0"""
+                end sub
+            `);
+        });
         it('keeps function parameter types in proper order', async () => {
             await testTranspile(`
                 function CreateTestStatistic(name as string, result = "Success" as string, time = 0 as integer, errorCode = 0 as integer, errorMessage = "" as string) as object
