@@ -19,7 +19,8 @@ import {
     TextDocumentPositionParams,
     TextDocuments,
     Position,
-    TextDocumentSyncKind
+    TextDocumentSyncKind,
+    ExecuteCommandParams
 } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -101,6 +102,8 @@ export class LanguageServer {
 
         this.connection.onHover(this.onHover.bind(this));
 
+        this.connection.onExecuteCommand(this.onExecuteCommand.bind(this));
+
         /*
         this.connection.onDidOpenTextDocument((params) => {
              // A text document got opened in VSCode.
@@ -152,7 +155,12 @@ export class LanguageServer {
                     allCommitCharacters: ['.', '@']
                 },
                 definitionProvider: true,
-                hoverProvider: true
+                hoverProvider: true,
+                executeCommandProvider: {
+                    commands: [
+                        CustomCommands.TranspileFile
+                    ]
+                }
             } as ServerCapabilities
         };
     }
@@ -959,6 +967,23 @@ export class LanguageServer {
         //save the new list of diagnostics
         this.latestDiagnosticsByFile = diagnosticsByFile;
     }
+
+    public async onExecuteCommand(params: ExecuteCommandParams) {
+        await this.waitAllProgramFirstRuns();
+        if (params.command === CustomCommands.TranspileFile) {
+            return this.transpileFile(params.arguments[0]);
+        }
+    }
+
+    private transpileFile(pathAbsolute: string) {
+        let workspaces = this.getWorkspaces();
+        //find the first workspace that has this file
+        for (let workspace of workspaces) {
+            if (workspace.builder.program.hasFile(pathAbsolute)) {
+                return workspace.builder.program.getTranspiledFileContents(pathAbsolute);
+            }
+        }
+    }
 }
 
 export interface Workspace {
@@ -969,4 +994,8 @@ export interface Workspace {
     isFirstRunSuccessful: boolean;
     configFilePath?: string;
     isStandaloneFileWorkspace: boolean;
+}
+
+export enum CustomCommands {
+    TranspileFile = 'TranspileFile'
 }

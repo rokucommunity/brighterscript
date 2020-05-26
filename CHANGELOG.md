@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.10.2] - 2020-05-23
+### Added 
+ - language server command `TranspileFile` which will return the transpiled contents of the requested file. 
+### Fixed
+ - quotemarks in string literals were not being properly escaped during transpile ([#89](https://github.com/rokucommunity/brighterscript/issues/89))
+ - Bug that was only validating calls at top level. Now calls found anywhere in a function are validated
+
+
+
 ## [0.10.1] - 2020-05-22
 ### Fixed
  - transpile bug for compound assignment statements (such as `+=`, `-=`) ([#87](https://github.com/rokucommunity/brighterscript/issues/87))
@@ -295,6 +304,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.10.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.1...v0.10.2
 [0.10.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.0...v0.10.1
 [0.10.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.8...v0.10.0
 [0.9.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.7...v0.9.8

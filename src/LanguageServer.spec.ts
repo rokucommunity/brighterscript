@@ -42,6 +42,7 @@ describe('LanguageServer', () => {
         listen: () => null,
         sendNotification: () => null,
         sendDiagnostics: () => null,
+        onExecuteCommand: () => null,
         workspace: {
             getWorkspaceFolders: () => workspaceFolders,
             getConfiguration: () => {

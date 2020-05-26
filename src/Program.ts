@@ -628,6 +628,16 @@ export class Program {
         return result;
     }
 
+    /**
+     * Transpile a single file and get the result as a string.
+     * This does not write anything to the file system.
+     */
+    public getTranspiledFileContents(pathAbsolute: string) {
+        let file = this.getFile(pathAbsolute);
+        let result = file.transpile();
+        return result;
+    }
+
     public async transpile(fileEntries: StandardizedFileEntry[], stagingFolderPath: string) {
         let promises = Object.keys(this.files).map(async (filePath) => {
             let file = this.files[filePath];
