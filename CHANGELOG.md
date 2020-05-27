@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.10.3] - 2020-05-27
+### Changed
+ - tokenizing a string with no closing quote will now include all of the text until the end of the line.
+ - language server `TranspileFile` command now waits until the program is finished building before trying to transpile.
+
+
+
 ## [0.10.2] - 2020-05-23
 ### Added 
  - language server command `TranspileFile` which will return the transpiled contents of the requested file. 
@@ -304,6 +311,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.10.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.2...v0.10.3
 [0.10.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.1...v0.10.2
 [0.10.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.0...v0.10.1
 [0.10.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.8...v0.10.0
