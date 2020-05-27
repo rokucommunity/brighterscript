@@ -84,7 +84,8 @@ export class LanguageServer {
         this.documents.onDidChangeContent(async (change) => {
             await this.validateTextDocument(change.document);
         });
-        //whenever a document gets opened
+
+        //whenever a document gets closed
         this.documents.onDidClose(async (change) => {
             await this.onDocumentClose(change.document);
         });
@@ -107,7 +108,7 @@ export class LanguageServer {
         /*
         this.connection.onDidOpenTextDocument((params) => {
              // A text document got opened in VSCode.
-             // params.uri uniquely identifies the document. For documents store on disk this is a file URI.
+             // params.uri uniquely identifies the document. For documents stored on disk this is a file URI.
              // params.text the initial full content of the document.
             this.connection.console.log(`${params.textDocument.uri} opened.`);
         });
@@ -975,7 +976,9 @@ export class LanguageServer {
         }
     }
 
-    private transpileFile(pathAbsolute: string) {
+    private async transpileFile(pathAbsolute: string) {
+        //wait all program first runs
+        await this.waitAllProgramFirstRuns();
         let workspaces = this.getWorkspaces();
         //find the first workspace that has this file
         for (let workspace of workspaces) {

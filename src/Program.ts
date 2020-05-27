@@ -632,10 +632,16 @@ export class Program {
      * Transpile a single file and get the result as a string.
      * This does not write anything to the file system.
      */
-    public getTranspiledFileContents(pathAbsolute: string) {
+    public async getTranspiledFileContents(pathAbsolute: string) {
         let file = this.getFile(pathAbsolute);
+        //wait for the file to finish being parsed
+        await file.isReady();
         let result = file.transpile();
-        return result;
+        return {
+            ...result,
+            pathAbsolute: file.pathAbsolute,
+            pkgPath: file.pkgPath
+        };
     }
 
     public async transpile(fileEntries: StandardizedFileEntry[], stagingFolderPath: string) {
