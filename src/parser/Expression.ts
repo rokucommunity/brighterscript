@@ -326,11 +326,14 @@ export class LiteralExpression implements Expression {
     public readonly range: Range;
 
     transpile(state: TranspileState) {
-        let text = this.value.toString();
+        let text: string;
         if (this.value.kind === ValueKind.String) {
             //escape quote marks with another quote mark
-            text = `"${text.replace(/"/g, '""')}"`;
+            text = `"${this.value.toString().replace(/"/g, '""')}"`;
+        } else {
+            text = this.value.toString();
         }
+
         return [
             new SourceNode(
                 this.range.start.line + 1,

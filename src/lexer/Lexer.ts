@@ -398,6 +398,7 @@ export class Lexer {
      * string is terminated by a newline or the end of input.
      */
     private string() {
+        let isUnterminated = false;
         while (!this.isAtEnd()) {
             if (this.peek() === '"') {
                 if (this.peekNext() === '"') {
@@ -409,13 +410,14 @@ export class Lexer {
                 }
             }
 
-            if (this.peekNext() === '\n') {
+            if (this.peekNext() === '\n' || this.peekNext() === '\r') {
                 // BrightScript doesn't support multi-line strings
                 this.diagnostics.push({
                     ...DiagnosticMessages.unterminatedStringAtEndOfLine(),
                     range: this.rangeOf(this.source.slice(this.start, this.current))
                 });
-                return;
+                isUnterminated = true;
+                break;
             }
 
             this.advance();
@@ -427,14 +429,19 @@ export class Lexer {
                 ...DiagnosticMessages.unterminatedStringAtEndOfFile(),
                 range: this.rangeOf(this.source.slice(this.start, this.current))
             });
-            return;
+            isUnterminated = true;
         }
 
         // move past the closing `"`
         this.advance();
 
-        // trim the surrounding quotes, and replace the double-" literal with a single
-        let value = this.source.slice(this.start + 1, this.current - 1).replace(/""/g, '"');
+        let endIndex = isUnterminated ? this.current : this.current - 1;
+
+        //get the string text (and trim the leading and trailing quote)
+        let value = this.source.slice(this.start + 1, endIndex);
+
+        //replace escaped quotemarks "" with a single quote
+        value = value.replace(/""/g, '"');
         this.addToken(TokenKind.StringLiteral, new BrsString(value));
     }
 

@@ -1469,6 +1469,17 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('includes all text to end of line for a non-terminated string', async () => {
+            await testTranspile(`
+                sub main()
+                    name = "john 
+                end sub
+            `, `
+                sub main()
+                    name = "john "
+                end sub
+            `, 'trim', 'source/main.bs', false);
+        });
         it('escapes quotes in string literals', async () => {
             await testTranspile(`
                 sub main()
@@ -1897,13 +1908,13 @@ describe('BrsFile', () => {
 });
 
 export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return async (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs') => {
+    return async (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) => {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
         let file = await program.addOrReplaceFile({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source) as BrsFile;
         await program.validate();
         let diagnostics = file.getDiagnostics();
-        if (diagnostics.length > 0) {
+        if (diagnostics.length > 0 && failOnDiagnostic !== false) {
 
             expect(
                 diagnostics[0].range.start.line +

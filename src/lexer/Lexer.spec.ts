@@ -371,6 +371,16 @@ describe('lexer', () => {
             ]);
         });
 
+        it('captures text to end of line for unterminated strings with LF', () => {
+            let { tokens } = Lexer.scan(`"unterminated!\n`);
+            expect(tokens[0].literal.toString()).to.equal('unterminated!');
+        });
+
+        it('captures text to end of line for unterminated strings with CRLF', () => {
+            let { tokens } = Lexer.scan(`"unterminated!\r\n`);
+            expect(tokens[0].literal.toString()).to.equal('unterminated!');
+        });
+
         it('disallows multiline strings', () => {
             let { diagnostics } = Lexer.scan(`"multi-line\n\n`);
             expect(diagnostics.map(err => err.message)).to.deep.equal([
