@@ -11,3 +11,4 @@ export * from './XmlScope';
 export * from './lexer';
 export * from './parser/Parser';
 export * from './BsConfig';
+export * from './deferred';
