@@ -1492,6 +1492,27 @@ describe('BrsFile', () => {
                     end sub
                 `);
             });
+
+            it('properly transpiles inferred namespace function for assignment', async () => {
+                await testTranspile(`
+                    namespace NameA.NameB
+                        sub Speak()
+                        end sub
+                        sub main()
+                            sayHello = Speak
+                            sayHello()
+                        end sub
+                    end namespace
+                `, `
+                    sub NameA_NameB_Speak()
+                    end sub
+
+                    sub NameA_NameB_main()
+                        sayHello = NameA_NameB_Speak
+                        sayHello()
+                    end sub
+                `);
+            });
         });
         it('includes all text to end of line for a non-terminated string', async () => {
             await testTranspile(`

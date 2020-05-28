@@ -56,21 +56,9 @@ export class CallExpression implements Expression {
     transpile(state: TranspileState) {
         let result = [];
 
-        //if the callee is the name of a known namespace function
-        if (state.file.calleeIsKnownNamespaceFunction(this.callee, this.namespaceName?.getName(ParseMode.BrighterScript))) {
-            result.push(
-                new SourceNode(
-                    this.callee.range.start.line + 1,
-                    this.callee.range.start.character,
-                    state.pathAbsolute,
-                    `${this.namespaceName.getName(ParseMode.BrightScript)}_${(this.callee as VariableExpression).getName(ParseMode.BrightScript)}`
-                )
-            );
+        //transpile the name
+        result.push(...this.callee.transpile(state));
 
-            //transpile the callee normally
-        } else {
-            result.push(...this.callee.transpile(state));
-        }
         result.push(
             new SourceNode(this.openingParen.range.start.line + 1, this.openingParen.range.start.character, state.pathAbsolute, '(')
         );
@@ -537,7 +525,10 @@ export class UnaryExpression implements Expression {
 }
 
 export class VariableExpression implements Expression {
-    constructor(readonly name: Identifier) {
+    constructor(
+        readonly name: Identifier,
+        readonly namespaceName: NamespacedVariableNameExpression
+    ) {
         this.range = this.name.range;
     }
 
@@ -548,9 +539,25 @@ export class VariableExpression implements Expression {
     }
 
     transpile(state: TranspileState) {
-        return [
-            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
-        ];
+        let result = [];
+        //if the callee is the name of a known namespace function
+        if (state.file.calleeIsKnownNamespaceFunction(this, this.namespaceName?.getName(ParseMode.BrighterScript))) {
+            result.push(
+                new SourceNode(
+                    this.range.start.line + 1,
+                    this.range.start.character,
+                    state.pathAbsolute,
+                    `${this.namespaceName.getName(ParseMode.BrightScript)}_${this.getName(ParseMode.BrightScript)}`
+                )
+            );
+
+            //transpile  normally
+        } else {
+            result.push(
+                new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
+            );
+        }
+        return result;
     }
 }
 

@@ -69,6 +69,46 @@ end function
 
 Notice how we didn't need to specify `Vertibrates.Birds` in front of `GetDuck()` and `GetGoose()`. That's because the compiler is smart enough to recognize where those functions come from. 
 
+## Works in assignments as well
+The compiler is smart enough to recognize namespaces in assignments as well.
+
+```BrighterScript
+namespace Vertibrates.Birds
+    sub Quack()
+    end sub
+    
+    sub Waddle()
+    end sub
+
+    sub Live()
+        'assign based on fully-qualified namespace name
+        speak = Vertibrates.Birds.Quack
+        
+        'infer Current namespace
+        walk = Waddle
+    end sub
+end namespace
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+  
+```BrightScript
+sub Vertibrates_Birds_Quack()
+end sub
+
+sub Vertibrates_Birds_Waddle()
+end sub
+
+sub Vertibrates_Birds_Live()
+    'assign based on fully-qualified namespace name
+    speak = Vertibrates_Birds_Quack
+    'infer Current namespace
+    walk = Vertibrates_Birds_Waddle
+end sub
+```
+</details>
+
 ## Sharing name of namespaced item and non-namespaced item is prohibited
 The compiler will throw an error whenever it encounters a namespaced function with the same name as a global function. The same rule applies to classes.
 

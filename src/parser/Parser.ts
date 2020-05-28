@@ -757,7 +757,7 @@ export class Parser {
             result = new AssignmentStatement(
                 operator,
                 name,
-                new BinaryExpression(new VariableExpression(name), operator, value),
+                new BinaryExpression(new VariableExpression(name, this.currentNamespaceName), operator, value),
                 this.currentFunctionExpression
             );
         }
@@ -1100,7 +1100,7 @@ export class Parser {
         if (firstIdentifier) {
             // force it into an identifier so the AST makes some sense
             firstIdentifier.kind = TokenKind.Identifier;
-            expr = new VariableExpression(firstIdentifier);
+            expr = new VariableExpression(firstIdentifier, this.currentNamespaceName);
 
             //consume multiple dot identifiers (i.e. `Name.Space.Can.Have.Many.Parts`)
             while (this.check(TokenKind.Dot)) {
@@ -1946,7 +1946,7 @@ export class Parser {
             ):
                 return new LiteralExpression(this.previous().literal, this.previous().range);
             case this.match(TokenKind.Identifier, ...AllowedLocalIdentifiers):
-                return new VariableExpression(this.previous() as Identifier);
+                return new VariableExpression(this.previous() as Identifier, this.currentNamespaceName);
             case this.match(TokenKind.LeftParen):
                 let left = this.previous();
                 let expr = this.expression();
@@ -2091,7 +2091,7 @@ export class Parser {
                 let token = Object.assign(this.previous(), {
                     kind: TokenKind.Identifier
                 }) as Identifier;
-                return new VariableExpression(token);
+                return new VariableExpression(token, this.currentNamespaceName);
             case this.check(TokenKind.Function, TokenKind.Sub):
                 return this.anonymousFunction();
             case this.check(TokenKind.Comment):
