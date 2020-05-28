@@ -35,6 +35,21 @@ describe('Scope', () => {
         expect(program.getDiagnostics()[0]?.message).not.to.exist;
     });
 
+    it('flags parameter with same name as namespace', async () => {
+        await program.addOrReplaceFile('source/main.bs', `
+            namespace NameA.NameB
+            end namespace
+            sub main(nameA)
+            end sub
+        `);
+        await program.validate();
+        expect(
+            program.getDiagnostics()[0]?.message
+        ).to.eql(
+            DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace('nameA').message
+        );
+    });
+
     describe('addFile', () => {
         it('detects callables from all loaded files', async () => {
             const sourceScope = program.getScopeByName('source');

@@ -14,6 +14,7 @@ import { globalCallableMap } from './globalCallables';
 import { FunctionType } from './types/FunctionType';
 import { logger } from './Logger';
 import { Cache } from './Cache';
+import { URI } from 'vscode-uri';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -229,49 +230,53 @@ export class Scope {
      * Builds a tree of namespace objects
      */
     public buildNamespaceLookup() {
-        let namespaces = this.getNamespaceStatements();
         let namespaceLookup = {} as { [namespaceName: string]: NamespaceContainer };
-        for (let namespace of namespaces) {
-            //TODO should we handle non-brighterscript?
-            let name = namespace.nameExpression.getName(ParseMode.BrighterScript);
-            let nameParts = name.split('.');
+        let files = this.getFiles();
+        for (let file of files) {
+            for (let namespace of file.parser.namespaceStatements) {
+                //TODO should we handle non-brighterscript?
+                let name = namespace.nameExpression.getName(ParseMode.BrighterScript);
+                let nameParts = name.split('.');
 
-            let loopName = null;
-            //ensure each namespace section is represented in the results
-            //(so if the namespace name is A.B.C, this will make an entry for "A", an entry for "A.B", and an entry for "A.B.C"
-            for (let part of nameParts) {
-                loopName = loopName === null ? part : `${loopName}.${part}`;
-                let lowerLoopName = loopName.toLowerCase();
-                namespaceLookup[lowerLoopName] = namespaceLookup[lowerLoopName] ?? {
-                    fullName: loopName,
-                    lastPartName: part,
-                    namespaces: {},
-                    classStatements: {},
-                    functionStatements: {},
-                    statements: []
-                };
-            }
-            let ns = namespaceLookup[name.toLowerCase()];
-            ns.statements.push(...namespace.body.statements);
-            for (let statement of namespace.body.statements) {
-                if (statement instanceof ClassStatement) {
-                    ns.classStatements[statement.name.text.toLowerCase()] = statement;
-                } else if (statement instanceof FunctionStatement) {
-                    ns.functionStatements[statement.name.text.toLowerCase()] = statement;
+                let loopName = null;
+                //ensure each namespace section is represented in the results
+                //(so if the namespace name is A.B.C, this will make an entry for "A", an entry for "A.B", and an entry for "A.B.C"
+                for (let part of nameParts) {
+                    loopName = loopName === null ? part : `${loopName}.${part}`;
+                    let lowerLoopName = loopName.toLowerCase();
+                    namespaceLookup[lowerLoopName] = namespaceLookup[lowerLoopName] ?? {
+                        file: file,
+                        fullName: loopName,
+                        nameRange: namespace.nameExpression.range,
+                        lastPartName: part,
+                        namespaces: {},
+                        classStatements: {},
+                        functionStatements: {},
+                        statements: []
+                    };
+                }
+                let ns = namespaceLookup[name.toLowerCase()];
+                ns.statements.push(...namespace.body.statements);
+                for (let statement of namespace.body.statements) {
+                    if (statement instanceof ClassStatement) {
+                        ns.classStatements[statement.name.text.toLowerCase()] = statement;
+                    } else if (statement instanceof FunctionStatement) {
+                        ns.functionStatements[statement.name.text.toLowerCase()] = statement;
+                    }
                 }
             }
-        }
 
-        //associate child namespaces with their parents
-        for (let key in namespaceLookup) {
-            let ns = namespaceLookup[key];
-            let parts = ns.fullName.split('.');
+            //associate child namespaces with their parents
+            for (let key in namespaceLookup) {
+                let ns = namespaceLookup[key];
+                let parts = ns.fullName.split('.');
 
-            if (parts.length > 1) {
-                //remove the last part
-                parts.pop();
-                let parentName = parts.join('.');
-                namespaceLookup[parentName.toLowerCase()].namespaces[ns.lastPartName.toLowerCase()] = ns;
+                if (parts.length > 1) {
+                    //remove the last part
+                    parts.pop();
+                    let parentName = parts.join('.');
+                    namespaceLookup[parentName.toLowerCase()].namespaces[ns.lastPartName.toLowerCase()] = ns;
+                }
             }
         }
         return namespaceLookup;
@@ -363,6 +368,7 @@ export class Scope {
             this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
             this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
             this.diagnosticDetectFunctionCollisions(file);
+            this.detectVariableNamespaceCollisions(file);
         }
 
         (this as any).isValidated = true;
@@ -375,6 +381,31 @@ export class Scope {
         (this as any).isValidated = false;
         //clear out various lookups (they'll get regenerated on demand the next time they're requested)
         this.cache.clear();
+    }
+
+    private detectVariableNamespaceCollisions(file: BrsFile | XmlFile) {
+        //find all function parameters
+        for (let func of file.parser.functionExpressions) {
+            for (let param of func.parameters) {
+                let lowerParamName = param.name.text.toLowerCase();
+                let namespace = this.namespaceLookup[lowerParamName];
+                //see if the param matches any starting namespace part
+                if (namespace) {
+                    this.diagnostics.push({
+                        file: file,
+                        ...DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace(param.name.text),
+                        range: param.name.range,
+                        relatedInformation: [{
+                            message: 'Namespace declared here',
+                            location: Location.create(
+                                URI.file(namespace.file.pathAbsolute).toString(),
+                                namespace.nameRange
+                            )
+                        }]
+                    });
+                }
+            }
+        }
     }
 
     /**
@@ -678,7 +709,9 @@ export class Scope {
 }
 
 interface NamespaceContainer {
+    file: BrsFile | XmlFile;
     fullName: string;
+    nameRange: Range;
     lastPartName: string;
     statements: Statement[];
     classStatements: { [lowerClassName: string]: ClassStatement };

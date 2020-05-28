@@ -564,6 +564,11 @@ export let DiagnosticMessages = {
         message: `A callfunc expression must have at least one argument`,
         code: 1109,
         severity: DiagnosticSeverity.Error
+    }),
+    parameterMayNotHaveSameNameAsNamespace: (namespaceName: string) => ({
+        message: `Parameter '${namespaceName}' may not have the same name as namespace`,
+        code: 1110,
+        severity: DiagnosticSeverity.Error
     })
 };
 
