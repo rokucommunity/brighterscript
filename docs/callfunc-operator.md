@@ -25,7 +25,7 @@ node@.doSomething()
 
 will be transpiled into this:
 ```brightscript
-node.callfunc('doSomething', invalid)
+node.callfunc("doSomething", invalid)
 ```
 
 It is the developer's responsiblity to ensure that the target function has at least one parameter, and that the type is dynamic, otherwise a type mismatch runtime error will occur.

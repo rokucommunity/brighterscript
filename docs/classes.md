@@ -389,10 +389,14 @@ function __Person_builder()
         m.name = invalid
         m.socialSecurityNumber = invalid
     end sub
-    'defaults to public    'specified private    'defaults to public    instance.getName = function()
+    'defaults to public
+    'specified private
+    'defaults to public
+    instance.getName = function()
         return m.name
     end function
-    'specified private    instance.setSocialSecurityNumber = sub(value as string)
+    'specified private
+    instance.setSocialSecurityNumber = sub(value as string)
         m.socialSecurityNumber = value
     end sub
     return instance
@@ -434,7 +438,10 @@ function __Person_builder()
         m.name = invalid
         m.age = 12
     end sub
-    'defaults to type "dynamic"    'infers type "integer"    'infers type "integer"    instance.getAge = function()
+    'defaults to type "dynamic"
+    'infers type "integer"
+    'infers type "integer"
+    instance.getAge = function()
         return m.age
     end function
     return instance
