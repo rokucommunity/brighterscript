@@ -1469,6 +1469,30 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        describe('namespaces', () => {
+            it('properly transpiles namespace functions for assignments', async () => {
+                await testTranspile(`
+                    namespace NameA.NameB
+                        sub Speak()
+                        end sub
+                    end namespace
+                    sub main()
+                        sayHello = NameA.NameB.Speak
+                        sayHello()
+                        someOtherObject = some.other.object
+                    end sub
+                `, `
+                    sub NameA_NameB_Speak()
+                    end sub
+
+                    sub main()
+                        sayHello = NameA_NameB_Speak
+                        sayHello()
+                        someOtherObject = some.other.object
+                    end sub
+                `);
+            });
+        });
         it('includes all text to end of line for a non-terminated string', async () => {
             await testTranspile(`
                 sub main()

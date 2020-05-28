@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [Unreleased]
+### Fixed
+ - bug where assigning a namespaced function to a variable wasn't properly transpiling the dots to underscores (fixes [#91](https://github.com/rokucommunity/brighterscript/issues/91))
+
+
+
 ## [0.10.3] - 2020-05-27
 ### Changed
  - tokenizing a string with no closing quote will now include all of the text until the end of the line.

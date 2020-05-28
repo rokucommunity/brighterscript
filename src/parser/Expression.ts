@@ -56,13 +56,8 @@ export class CallExpression implements Expression {
     transpile(state: TranspileState) {
         let result = [];
 
-        //if the callee starts with a namespace name, transpile the name
-        if (state.file.calleeStartsWithNamespace(this.callee)) {
-            result.push(
-                ...new NamespacedVariableNameExpression(this.callee as DottedGetExpression | VariableExpression).transpile(state)
-            );
-            //if the callee is the name of a known namespace function
-        } else if (state.file.calleeIsKnownNamespaceFunction(this.callee, this.namespaceName?.getName(ParseMode.BrighterScript))) {
+        //if the callee is the name of a known namespace function
+        if (state.file.calleeIsKnownNamespaceFunction(this.callee, this.namespaceName?.getName(ParseMode.BrighterScript))) {
             result.push(
                 new SourceNode(
                     this.callee.range.start.line + 1,
@@ -243,11 +238,16 @@ export class DottedGetExpression implements Expression {
     public readonly range: Range;
 
     transpile(state: TranspileState) {
-        return [
-            ...this.obj.transpile(state),
-            '.',
-            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
-        ];
+        //if the callee starts with a namespace name, transpile the name
+        if (state.file.calleeStartsWithNamespace(this)) {
+            return new NamespacedVariableNameExpression(this as DottedGetExpression | VariableExpression).transpile(state);
+        } else {
+            return [
+                ...this.obj.transpile(state),
+                '.',
+                new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
+            ];
+        }
     }
 }
 
