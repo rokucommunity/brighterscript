@@ -6,7 +6,17 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 [![Coverage Status](https://coveralls.io/repos/github/rokucommunity/brighterscript/badge.svg?branch=master)](https://coveralls.io/github/rokucommunity/brighterscript?branch=master)
 [![NPM Version](https://badge.fury.io/js/brighterscript.svg?style=flat)](https://npmjs.org/package/brighterscript)
 
-The goal of this project is to bring new features and syntax enhancements to Roku's BrightScript language. It also supports parsing and validating standard BrightScript, so you don't even need to write a single line of `BrighterScript` code to benefit from this project. 
+## Reasons to use the BrighterScript Project
+
+The BrighterScript project provides new features and syntax enhancements to Roku's BrightScript language as well as parsing and validating standard BrightScript, so you don't even need to write a single line of `BrighterScript` code to benefit from this project. BrighterScript provides a simple-to-use command-line utility that will check the entire project for syntax and program errors. If you write BrighterScript, it will also provide enhanced syntax support and transpiles to plain BrightScript.
+
+Here are some of the major reasons you should consider using BrighterScript as part of your Roku application development workflow:
+
+ - Catch syntax and program errors for BrightScript and BrighterScript projects from a command line without needing to run on an actual Roku device
+ - Write BrighterScript to reduce boilerplate code (by using Classes, the ternary operator, in-code import statements and [more](https://github.com/rokucommunity/brighterscript/blob/master/docs/index.md)). 
+ - Get real-time syntax validation by using the cli in `--watch` mode.
+ - Validate BrightScript and BrighterScript projects in a Continuous Integration environment without needing 
+
 
 ## What's with the name?
 The name BrighterScript is a compliment to everything that is great about Roku's awesome BrightScript language. Naming things are hard, and discoverability and recognizability is important. Here are the reasons we chose this name:
