@@ -260,7 +260,27 @@ export class ClassStatement implements Statement {
         const constructorFunction = this.getConstructorFunction();
         const constructorParams = constructorFunction ? constructorFunction.func.parameters : [];
 
-        result.push(`function ${this.getName(ParseMode.BrightScript)}(`);
+        result.push(
+            new SourceNode(
+                this.classKeyword.range.start.line + 1,
+                this.classKeyword.range.start.character,
+                state.pathAbsolute,
+                'function'
+            ),
+            new SourceNode(
+                this.classKeyword.range.end.line + 1,
+                this.classKeyword.range.end.character,
+                state.pathAbsolute,
+                ' '
+            ),
+            new SourceNode(
+                this.name.range.start.line + 1,
+                this.name.range.start.character,
+                state.pathAbsolute,
+                this.getName(ParseMode.BrightScript)
+            ),
+            `(`
+        );
         let i = 0;
         for (let param of constructorParams) {
             if (i > 0) {
