@@ -32,7 +32,7 @@ The BrighterScript language provides new features and syntax enhancements to Rok
       - Missing imports are flagged at compile time.
     - [Classes](https://github.com/rokucommunity/brighterscript/blob/master/docs/classes.md)
       - Support for class inheritance and method overrides
-      - Fields/Methods can be marked as `public`, `protected`, and `private` and incorrect access will result in compile errors
+      - Class fields and can be marked as `public`, `protected`, and `private` and incorrect access will be enforced by compile-time checks.
       - Class methods are automatically scoped to the class
     - [Namespaces](https://github.com/rokucommunity/brighterscript/blob/master/docs/namespaces.md):
       - Automatically add a name prefix to all methods inside a namespace block.
@@ -40,9 +40,9 @@ The BrighterScript language provides new features and syntax enhancements to Rok
       - Missing method invocations, and other namespace related syntax errors are reported at compile time.
     - Additional Language features coming soon
       - Ternary operator: `username = m.user <> invalid ? m.user.name : "not logged in"`
-      - Template strings: ``` `Hello ${firstNameVar}` ```.
-      - Null coalesence: `user = m.user ?? getDefaultuser()`
-      - Null conditional: `userSettings = m.user?.account?.profile?.settings`
+      - Template strings: ```print `Hello ${firstNameVar}` ```.
+      - null-coalescing operator: `user = m.user ?? getDefaultUser()`
+      - null-conditional operator: `userSettings = m.user?.account?.profile?.settings`
     - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md)...
     
 
@@ -54,10 +54,10 @@ Brighterscript is used by [applicaster](https://www.applicaster.com/), [The mira
 
 The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) VSCode extension, and other tools.
 
-More projects are adopting some of the language features, or even just using the compiler, all the time. Watch this space!
+More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler as part of their build pipeline. Be sure to watch this space!
 
 ## What's with the name?
-The name BrighterScript is a compliment to everything that is great about Roku's awesome BrightScript language. Naming things are hard, and discoverability and recognizability is important. Here are the reasons we chose this name:
+The name BrighterScript is a compliment to everything that is great about Roku's awesome BrightScript language. Naming things is hard, and discoverability and recognizability are both very important. Here are the reasons we chose this name:
  - the `er` in BrighterScript represents the additional features we have added on top of BrightScript
  - It looks so similar to BrightScript, which is fitting because this language is 95% BrightScript, 5% extra stuff (the `er` bits).
  - The config file and extension look very similar between BrightScript and BrighterScript. Take `bsconfig.json` for example. While `brsconfig.json` might be more fitting for a pure BrightScript project, `bsconfig.json` is so very close that you probably wouldn't think twice about it. Same with the fact that `.bs` (BrighterScript) and `.brs` are very similar.
