@@ -1100,7 +1100,7 @@ export class Parser {
         if (firstIdentifier) {
             // force it into an identifier so the AST makes some sense
             firstIdentifier.kind = TokenKind.Identifier;
-            expr = new VariableExpression(firstIdentifier, this.currentNamespaceName);
+            expr = new VariableExpression(firstIdentifier, null);
 
             //consume multiple dot identifiers (i.e. `Name.Space.Can.Have.Many.Parts`)
             while (this.check(TokenKind.Dot)) {

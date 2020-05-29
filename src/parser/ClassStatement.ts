@@ -400,12 +400,15 @@ export class ClassMethodStatement implements Statement {
         this.func.body.statements.unshift(
             new ExpressionStatement(
                 new CallExpression(
-                    new VariableExpression({
-                        kind: TokenKind.Identifier,
-                        text: 'super',
-                        isReserved: false,
-                        range: state.classStatement.name.range
-                    }),
+                    new VariableExpression(
+                        {
+                            kind: TokenKind.Identifier,
+                            text: 'super',
+                            isReserved: false,
+                            range: state.classStatement.name.range
+                        },
+                        null
+                    ),
                     {
                         kind: TokenKind.LeftParen,
                         text: '(',

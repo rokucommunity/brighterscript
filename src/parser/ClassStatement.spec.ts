@@ -13,7 +13,7 @@ describe('ClassStatement', () => {
             <any>{ range: Range.create(0, 0, 0, 0) },
             null,
             null,
-            namespaceName ? new NamespacedVariableNameExpression(new VariableExpression(<any>{ text: namespaceName })) : null
+            namespaceName ? new NamespacedVariableNameExpression(new VariableExpression(<any>{ text: namespaceName }, null)) : null
         );
         return stmt;
     }
