@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [Unreleased]
+## [0.10.4] - 2020-05-28
 ### Fixed
  - bug where assigning a namespaced function to a variable wasn't properly transpiling the dots to underscores (fixes [#91](https://github.com/rokucommunity/brighterscript/issues/91))
  - flag parameter with same name as namespace
@@ -320,6 +320,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.10.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.3...v0.10.4
 [0.10.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.2...v0.10.3
 [0.10.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.1...v0.10.2
 [0.10.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.0...v0.10.1
