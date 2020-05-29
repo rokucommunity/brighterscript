@@ -9,53 +9,51 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
 ## Overview
 
-The BrighterScript language provides new features and syntax enhancements to Roku's BrightScript language. Because the language is a superset of BrightScript, the parser and associated tools (IDE-integration, intellisense, etc), work with standard BrightScript (.brs) files. This means you will get benefits (as described in the following section) from using the BrighterScript compiler, whether your project contains BrighterScript (.bs) files or not. The BrighterScript language transpiles to standard BrightScript, so your code is fully compatible with all roku devices.
+The BrighterScript language provides new features and syntax enhancements to Roku's BrightScript language. Because the language is a superset of BrightScript, the parser and associated tools (VSCode integration, cli, etc...) work with standard BrightScript (.brs) files. This means you will get benefits (as described in the following section) from using the BrighterScript compiler, whether your project contains BrighterScript (.bs) files or not. The BrighterScript language transpiles to standard BrightScript, so your code is fully compatible with all roku devices.
 
-## Why use the compiler?
+## Why use the BrighterScript compiler/CLI?
 
- - BrighterScript provides a simple-to-use command-line utility that will check the entire project for syntax and program errors
- - Catch syntax and program errors from a command line without needing to run on an actual Roku device.
- - Many errors are reported at compile time which would not otherwise appear until runtime, saving effort.
- - The compiler can be used as part of your tool-chains, such as continuous integration.
+ - Check the entire project for syntax and program errors.
+ - Use the CLI to catch syntax and program errors without needing to run on an actual Roku device.
+ - Catch errors at compile time which would not otherwise appear until runtime.
+ - The compiler can be used as part of your tool-chains, such as continuous integration or a custom build pipeline.
  - Get real-time syntax validation by using the cli in `--watch` mode.
 
-## Why use brighterscript?
+## Why use the BrighterScript language?
 
  - Brighterscript is in good hands:
     - The project is open source.
-    - Brighterscript is designed by roku-developers, for roku-developers.
-    - The project is owned by roku community and the syntax and features are thoroughly thought out, discussed, and planned.
+    - Brighterscript is designed by Roku developers, for Roku developers.
+    - The project is owned by [RokuCommunity](https://github.com/rokucommunity) and the syntax and features are thoroughly thought out, discussed, and planned.
     - Actively developed.
- - Reduce boilerplate code and time debugging, with these language features:
-    - Imports statements:
-      - Import statements in scripts, which resolve cascading imports, and automatically add script tags to node.
+ - Reduce boilerplate code and time debugging with language features like these:
+    - [Import statements](https://github.com/rokucommunity/brighterscript/blob/master/docs/imports.md)
+      - Declare import statements in scripts instead of xml script tags.
+      - Automatically add script tags to XML components for all script import statements and their cascading dependencies
       - Missing imports are flagged at compile time.
-    - Class specification:
-      - Classes can be defined using common syntax, and visibility (i.e. public, private and protected).
-      - Classes can be extended.
-      - Overriding, and super method calls are supported.
-      - Field initialization.
-      - Class methods are automatically scoped to the class.
-      - All manner of syntax errors relating to class creation are reported at compile time (or in the IDE, while typing)
-      - Class and method navigation is supported in vscode IDE.
-    - Namespacing:
+    - [Classes](https://github.com/rokucommunity/brighterscript/blob/master/docs/classes.md)
+      - Support for class inheritance and method overrides
+      - Fields/Methods can be marked as `public`, `protected`, and `private` and incorrect access will result in compile errors
+      - Class methods are automatically scoped to the class
+    - [Namespaces](https://github.com/rokucommunity/brighterscript/blob/master/docs/namespaces.md):
       - Automatically add a name prefix to all methods inside a namespace block.
-      - This prevents method naming collisions and improves code readability and maintainability.
+      - Prevents method naming collisions and improves code readability and maintainability.
       - Missing method invocations, and other namespace related syntax errors are reported at compile time.
-      - IDE support
-  - Additional Language features (wip):
-    - Ternary operator: `username = m.user <> invalid ? m.user.name : "not logged in"`
-    - Template strings: ``Hello ${"wor" + "ld"}!`.
-    - Null coalesence: `account = m.user ?? getDefaultAccount()`
-    - Null conditional: `accountSettings = m.user?.account?.profile?.settings`
-    - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md))
-  - Rich Type support TBD
+    - Additional Language features coming soon
+      - Ternary operator: `username = m.user <> invalid ? m.user.name : "not logged in"`
+      - Template strings: ``` `Hello ${firstNameVar}` ```.
+      - Null coalesence: `user = m.user ?? getDefaultuser()`
+      - Null conditional: `userSettings = m.user?.account?.profile?.settings`
+    - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md)...
+    
+
+  - Full BrighterScript support for syntax checking, validation, and intellisense is available within the [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) VSCode extension.
 
 ## Who uses Brighterscript?
 
 Brighterscript is used by [applicaster](https://www.applicaster.com/), [The miracle channel](https://miraclechannel.ca/corco/), and in open source projects such as [rooibos](https://github.com/georgejecook/rooibos/blob/master/docs/index.md), and the [maestro framework](https://github.com/georgejecook/maestro/blob/master/docs/index.md). The language has been in use for almost a year, and there are at least 2,000+ BrighterScript transpiled files on published channels.
 
-The Parser is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) vscode language extension, and other tools.
+The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) VSCode extension, and other tools.
 
 More projects are adopting some of the language features, or even just using the compiler, all the time. Watch this space!
 
@@ -78,7 +76,7 @@ BrighterScript adds several new features to the BrightScript language such as Na
 ### npm
 
 ```bash
-npm install BrighterScript -g
+npm install brighterscript -g
 ```
 
 ## Usage
