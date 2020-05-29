@@ -191,6 +191,27 @@ describe('BrsFile', () => {
 
     describe('comment flags', () => {
         describe('bs:disable-next-line', () => {
+            it('disables critical diagnostic issues', async () => {
+                await program.addOrReplaceFile('source/main.brs', `
+                    sub main()
+                        Dim requestData[requestList.count()]
+                    end sub
+                `);
+                //should have an error
+                await program.validate();
+                expect(program.getDiagnostics()[0]?.message).to.exist;
+
+                await program.addOrReplaceFile('source/main.brs', `
+                    sub main()
+                        'bs:disable-next-line
+                        Dim requestData[requestList.count()]
+                    end sub
+                `);
+                //should have an error
+                await program.validate();
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            });
+
             it('works for all', async () => {
                 let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
