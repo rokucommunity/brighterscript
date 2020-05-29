@@ -183,8 +183,12 @@ let runtimeFunctions = [{
         name: 'name',
         type: new StringType()
     }, {
-        name: 'parameters',
-        type: new ObjectType(),
+        name: 'param2',
+        type: new DynamicType(),
+        isOptional: true
+    }, {
+        name: 'param3',
+        type: new DynamicType(),
         isOptional: true
     }]
 }, {

@@ -33,6 +33,16 @@ describe('BrsFile', () => {
         program.dispose();
     });
 
+    it('supports the third parameter in CreateObject', async () => {
+        await program.addOrReplaceFile('source/main.brs', `
+            sub main()
+                regexp = CreateObject("roRegex", "[a-z]+", "i")
+            end sub
+        `);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.not.exist;
+    });
+
     it('sets needsTranspiled to true for .bs files', () => {
         //BrightScript
         expect(new BrsFile(`${rootDir}/source/main.brs`, 'source/main.brs', program).needsTranspiled).to.be.false;
