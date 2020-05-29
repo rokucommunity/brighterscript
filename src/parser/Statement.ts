@@ -275,9 +275,6 @@ export class IfStatement implements Statement {
         readonly tokens: {
             if: Token;
             then?: Token;
-            // TODO: figure a decent way to represent the if/then + elseif/then pairs to enable a
-            // linter to check for the lack of `then` with this AST. maybe copy ESTree's format?
-            elseIfs?: Token[];
             else?: Token;
             endIf?: Token;
         },
@@ -292,18 +289,6 @@ export class IfStatement implements Statement {
         );
     }
     public readonly range: Range;
-
-    private getEndPosition() {
-        if (this.tokens.endIf) {
-            return this.tokens.endIf.range;
-        } else if (this.elseBranch) {
-            return this.elseBranch.range;
-        } else if (this.elseIfs.length) {
-            return this.elseIfs[this.elseIfs.length - 1].thenBranch.range;
-        } else {
-            return this.thenBranch.range;
-        }
-    }
 
     transpile(state: TranspileState) {
         let results = [];

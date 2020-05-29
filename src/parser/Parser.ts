@@ -1205,7 +1205,6 @@ export class Parser {
         let elseBranch: Block | undefined;
 
         let thenToken: Token | undefined;
-        let elseIfTokens: Token[] = [];
         let endIfToken: Token | undefined;
         let elseToken: Token | undefined;
 
@@ -1266,7 +1265,6 @@ export class Parser {
             // attempt to read a bunch of "else if" clauses
             while (this.check(TokenKind.ElseIf)) {
                 let elseIfToken = this.advance();
-                elseIfTokens.push(elseIfToken);
                 let elseIfCondition = this.expression();
                 let thenToken: Token;
                 if (this.check(TokenKind.Then)) {
@@ -1405,7 +1403,6 @@ export class Parser {
             {
                 if: ifToken,
                 then: thenToken,
-                elseIfs: elseIfTokens,
                 endIf: endIfToken,
                 else: elseToken
             },
