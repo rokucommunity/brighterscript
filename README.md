@@ -2,9 +2,9 @@
 
 A superset of Roku's BrightScript language. Compiles to standard BrightScript. 
 
-[![build](https://img.shields.io/github/workflow/status/rokucommunity/BrighterScript/build.svg?logo=github)](https://github.com/rokucommunity/BrighterScript/actions?query=workflow%3Abuild)
-[![Coverage Status](https://coveralls.io/repos/github/rokucommunity/BrighterScript/badge.svg?branch=master)](https://coveralls.io/github/rokucommunity/BrighterScript?branch=master)
-[![NPM Version](https://badge.fury.io/js/BrighterScript.svg?style=flat)](https://npmjs.org/package/BrighterScript)
+[![build](https://img.shields.io/github/workflow/status/rokucommunity/brighterscript/build.svg?logo=github)](https://github.com/rokucommunity/brighterscript/actions?query=workflow%3Abuild)
+[![Coverage Status](https://coveralls.io/repos/github/rokucommunity/brighterscript/badge.svg?branch=master)](https://coveralls.io/github/rokucommunity/brighterscript?branch=master)
+[![NPM Version](https://badge.fury.io/js/brighterscript.svg?style=flat)](https://npmjs.org/package/brighterscript)
 
 
 ## Overview
