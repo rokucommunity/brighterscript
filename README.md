@@ -13,9 +13,8 @@ The BrighterScript language provides new features and syntax enhancements to Rok
 
 ## Why use the BrighterScript compiler/CLI?
 
- - Check the entire project for syntax and program errors.
- - Use the CLI to catch syntax and program errors without needing to run on an actual Roku device.
- - Catch errors at compile time which would not otherwise appear until runtime.
+ - Check the entire project for syntax and program errors without needing to run on an actual Roku device.
+ - Catch syntax and program errors at compile time which would not otherwise appear until runtime.
  - The compiler can be used as part of your tool-chains, such as continuous integration or a custom build pipeline.
  - Get real-time syntax validation by using the cli in `--watch` mode.
 
