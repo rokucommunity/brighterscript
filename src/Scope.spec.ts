@@ -50,6 +50,24 @@ describe('Scope', () => {
         );
     });
 
+    it('flags assignments with same name as namespace', async () => {
+        await program.addOrReplaceFile('source/main.bs', `
+            namespace NameA.NameB
+            end namespace
+            sub main()
+                namea = 2
+                NAMEA += 1
+            end sub
+        `);
+        await program.validate();
+        expect(
+            program.getDiagnostics().map(x => x.message)
+        ).to.eql([
+            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea').message,
+            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA').message
+        ]);
+    });
+
     describe('addFile', () => {
         it('detects callables from all loaded files', async () => {
             const sourceScope = program.getScopeByName('source');

@@ -406,6 +406,26 @@ export class Scope {
                 }
             }
         }
+
+        for (let assignment of file.parser.assignmentStatements) {
+            let lowerAssignmentName = assignment.name.text.toLowerCase();
+            let namespace = this.namespaceLookup[lowerAssignmentName];
+            //see if the param matches any starting namespace part
+            if (namespace) {
+                this.diagnostics.push({
+                    file: file,
+                    ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace(assignment.name.text),
+                    range: assignment.name.range,
+                    relatedInformation: [{
+                        message: 'Namespace declared here',
+                        location: Location.create(
+                            URI.file(namespace.file.pathAbsolute).toString(),
+                            namespace.nameRange
+                        )
+                    }]
+                });
+            }
+        }
     }
 
     /**
