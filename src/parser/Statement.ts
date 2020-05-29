@@ -286,7 +286,10 @@ export class IfStatement implements Statement {
         readonly elseIfs: ElseIf[],
         readonly elseBranch?: Block
     ) {
-        this.range = Range.create(this.tokens.if.range.start, this.getEndPosition().end);
+        this.range = Range.create(
+            this.tokens.if.range.start,
+            (this.tokens.endIf ?? this.elseBranch ?? this.elseIfs?.[this.elseIfs?.length - 1]?.thenBranch ?? this.thenBranch).range.end
+        );
     }
     public readonly range: Range;
 
