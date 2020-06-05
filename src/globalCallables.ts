@@ -574,11 +574,14 @@ By using Chr, you can create strings containing characters which cannot be conta
     }, {
         name: 'Left',
         shortDescription: 'Returns the first n characters of s. ',
-        type: new FunctionType(new IntegerType()),
+        type: new FunctionType(new StringType()),
         file: globalFile,
         params: [{
             name: 's',
             type: new StringType()
+        }, {
+            name: 'n',
+            type: new IntegerType()
         }]
     }, {
         name: 'Len',
