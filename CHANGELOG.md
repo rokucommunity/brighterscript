@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.10.6] - 2020-06-05
+### Fixed
+ - incorrect definition for global `Left()` function. ([#100](https://github.com/rokucommunity/brighterscript/issues/100))
+ - missing definition for global `Tab()` and `Pos()` functions ([#101](https://github.com/rokucommunity/brighterscript/issues/101))
+
+
+
 ## [0.10.5] - 2020-06-04
 ### Changed
  - added better logging for certain critical language server crashes
@@ -326,6 +333,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.10.6]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.5...v0.10.6
 [0.10.5]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.4...v0.10.5
 [0.10.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.3...v0.10.4
 [0.10.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.2...v0.10.3
