@@ -860,6 +860,7 @@ export class LanguageServer {
                 workspaces.map((x) => x.builder.program.validate())
             );
         } catch (e) {
+            this.connection.tracer.log(e);
             this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
         }
         await this.sendDiagnostics();
