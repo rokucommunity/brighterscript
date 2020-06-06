@@ -5,8 +5,8 @@ import { TokenKind, Lexer } from '../../../lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { token, EOF } from '../Parser.spec';
 import { BrsString, BrsBoolean } from '../../../brsTypes';
-import {AssignmentStatement, ForEachStatement} from '../../Statement';
-import {ConditionalExpression} from "../../Expression";
+import {AssignmentStatement, ExpressionStatement, ForEachStatement} from '../../Statement';
+import {CallExpression, ConditionalExpression} from "../../Expression";
 
 describe('parser conditional expressions', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -158,7 +158,11 @@ describe('parser conditional expressions', () => {
             let { tokens } = Lexer.scan(`m.eatBrains(a = true ? "a" : "b")`);
             let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(statements[0]).instanceof(ExpressionStatement);
+            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(callExpression.args.length).to.equal(1);
+            expect(callExpression.args[0]).instanceof(ConditionalExpression);
         });
 
         it(`in func call`, () => {
