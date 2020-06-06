@@ -6,11 +6,17 @@ import { Parser, ParseMode } from '../../Parser';
 import { token, EOF } from '../Parser.spec';
 import { BrsString, BrsBoolean } from '../../../brsTypes';
 import {AssignmentStatement, ExpressionStatement, ForEachStatement} from '../../Statement';
-import {CallExpression, ConditionalExpression} from "../../Expression";
+import {
+    AALiteralExpression,
+    ArrayLiteralExpression,
+    CallExpression,
+    ConditionalExpression,
+    LiteralExpression
+} from "../../Expression";
 
 describe('parser conditional expressions', () => {
     it('throws exception when used in brightscript scope', () => {
-        let { tokens } = Lexer.scan(`true ? "human" : "Zombie"`);
+        let { tokens } = Lexer.scan(`a = true ? "human" : "Zombie"`);
         let { diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrightScript });
         expect(diagnostics[0]?.code).to.equal(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('').code);
     });
@@ -154,6 +160,28 @@ describe('parser conditional expressions', () => {
             expect(statements[0]).instanceof(AssignmentStatement);
         });
 
+        it(`in func call with array args`, () => {
+            let { tokens } = Lexer.scan(`m.eatBrains(a.count() > 10 ? ["a","B"] : ["c", "d"])`);
+            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(statements[0]).instanceof(ExpressionStatement);
+            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(callExpression.args.length).to.equal(1);
+            expect(callExpression.args[0]).instanceof(ConditionalExpression);
+        });
+
+        it(`in func call with aa args`, () => {
+            let { tokens } = Lexer.scan(`m.eatBrains(a.count() > 10 ? {"a":1} : {"b": ["c", "d"]})`);
+            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(statements[0]).instanceof(ExpressionStatement);
+            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(callExpression.args.length).to.equal(1);
+            expect(callExpression.args[0]).instanceof(ConditionalExpression);
+        });
+
         it(`in simple func call`, () => {
             let { tokens } = Lexer.scan(`m.eatBrains(a = true ? "a" : "b")`);
             let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
@@ -165,12 +193,49 @@ describe('parser conditional expressions', () => {
             expect(callExpression.args[0]).instanceof(ConditionalExpression);
         });
 
-        it(`in func call`, () => {
-            let { tokens } = Lexer.scan(`m.eatBrains(a = true ? {"a":"a"} : {"b":"b"})`);
+        it(`in func call with more args`, () => {
+            let { tokens } = Lexer.scan(`m.eatBrains(a = true ? "a" : "b", true, 12)`);
+            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(statements[0]).instanceof(ExpressionStatement);
+            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(callExpression.args.length).to.equal(3);
+            expect(callExpression.args[0]).instanceof(ConditionalExpression);
+        });
+
+        it(`in func call with more args, and comparing value`, () => {
+            let { tokens } = Lexer.scan(`m.eatBrains((a = true ? "a" : "b").count() = 3, true, 12)`);
+            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(statements[0]).instanceof(ExpressionStatement);
+            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(callExpression.args.length).to.equal(3);
+        });
+
+        it(`in array`, () => {
+            let { tokens } = Lexer.scan(`a = [a = true ? {"a":"a"} : {"b":"b"}, "c"]`);
             let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements[0]).instanceof(AssignmentStatement);
-        });
+            expect((statements[0] as AssignmentStatement).value).instanceof(ArrayLiteralExpression);
+            let literalExpression = (statements[0] as AssignmentStatement).value as ArrayLiteralExpression;
+            expect(literalExpression.elements[0]).instanceOf(ConditionalExpression);
+            expect(literalExpression.elements[1]).instanceOf(LiteralExpression);
+        })
+        it(`in aa`, () => {
+            let { tokens } = Lexer.scan(`a = {"v1": a = true ? {"a":"a"} : {"b":"b"}, "v2": "c"}`);
+            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(statements[0]).instanceof(AssignmentStatement);
+            expect((statements[0] as AssignmentStatement).value).instanceof(AALiteralExpression);
+            let literalExpression = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            expect((literalExpression.elements[0] as any).key.value).is.equal("v1");
+            expect((literalExpression.elements[0] as any).value).instanceOf(ConditionalExpression);
+            expect((literalExpression.elements[1] as any).key.value).is.equal("v2");
+            expect((literalExpression.elements[1] as any).value).instanceOf(LiteralExpression);
+        })
         it(`in for each`, () => {
             let { tokens } = Lexer.scan(`for each person in isZombieMode ? zombies : humans
                 ? "person is " ; person
