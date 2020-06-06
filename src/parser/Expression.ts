@@ -667,7 +667,7 @@ export class ConditionalExpression implements Expression {
         return expressions;
     }
     getScopeVarsFromExpression(expression: Expression, expressions: Expression[]) {
-        //TODO - I think this should live on the epxression itself
+        //TODO - I think this should live on the expression itself
         if (expression instanceof VariableExpression) {
             expressions.push(expression);
         } else if (expression instanceof BinaryExpression) {
@@ -698,8 +698,44 @@ export class ConditionalExpression implements Expression {
         }
     }
 
+
+    getAllExpressions(expression: Expression, expressions: Expression[]) {
+        //TODO - I think this should live on the expression itself
+        expressions.push(expression);
+
+        if (expression instanceof VariableExpression) {
+        } else if (expression instanceof BinaryExpression) {
+            this.getAllExpressions(expression.left, expressions);
+            this.getAllExpressions(expression.right, expressions);
+        } else if (expression instanceof CallExpression) {
+            expression.args.map(e => this.getAllExpressions(e, expressions));
+        } else if (expression instanceof DottedGetExpression) {
+            this.getAllExpressions(expression.obj, expressions);
+        } else if (expression instanceof ArrayLiteralExpression) {
+            expression.elements.map(e => this.getAllExpressions(e, expressions));
+        } else if (expression instanceof AALiteralExpression) {
+            //FIXME - bron to help with this..
+            // const memberExpressions = expression.elements
+            //   .filter<AAMemberExpression>((e) => e instanceof AAMemberExpression).map((e: AAMemberExpression) => e.value);
+            //   expressions = expressions.concat(memberExpressions.map(e => this.getAllExpressions(e, expressions);
+        } else if (expression instanceof UnaryExpression) {
+            this.getAllExpressions(expression.right, expressions);
+        } else if (expression instanceof NewExpression) {
+            this.getAllExpressions(expression.call, expressions);
+        } else if (expression instanceof CallfuncExpression) {
+            expression.args.map(e => this.getAllExpressions(e, expressions));
+            this.getAllExpressions(expression.callee, expressions);
+        } else if (expression instanceof ConditionalExpression) {
+            this.getAllExpressions(expression.test, expressions);
+            this.getAllExpressions(expression.consequent, expressions);
+            this.getAllExpressions(expression.alternate, expressions);
+        }
+    }
+
     transpile(state: TranspileState) {
         const scopeVars = this.getScopeVars();
+        let allExpressions = [];
+        this.getAllExpressions(this, allExpressions);
         let result = [];
         // let the fun begin
         return result;

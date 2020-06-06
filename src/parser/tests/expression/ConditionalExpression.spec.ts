@@ -259,9 +259,8 @@ describe('transpilation', () => {
     });
 
     it('generates scope for complex case', () => {
-        let { tokens } = Lexer.scan(`true ? m.a + m.b(m.a, var1) : var2.name + process([var3, var4])`);
-        let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrightScript });
-        expect(diagnostics[0]?.code).to.equal(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('').code);
-        statements[0].transpile(null)
+        let { tokens } = Lexer.scan(`a = true ? m.a + m.b(m.a, var1) : var2.name + process([var3, var4])`);
+        let { statements } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+        (statements[0] as AssignmentStatement).value.transpile(null)
     });
 });
