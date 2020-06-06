@@ -661,84 +661,91 @@ export class ConditionalExpression implements Expression {
 
     public readonly range: Range;
 
-    getScopeVars(): Expression[] {
-        let expressions = [];
-        this.getScopeVarsFromExpression(this, expressions);
-        return expressions;
-    }
-    getScopeVarsFromExpression(expression: Expression, expressions: Expression[]) {
-        //TODO - I think this should live on the expression itself
-        if (expression instanceof VariableExpression) {
-            expressions.push(expression);
-        } else if (expression instanceof BinaryExpression) {
-            this.getScopeVarsFromExpression(expression.left, expressions);
-            this.getScopeVarsFromExpression(expression.right, expressions);
-        } else if (expression instanceof CallExpression) {
-            expression.args.map(e => this.getScopeVarsFromExpression(e, expressions));
-        } else if (expression instanceof DottedGetExpression) {
-            this.getScopeVarsFromExpression(expression.obj, expressions);
-        } else if (expression instanceof ArrayLiteralExpression) {
-            expression.elements.map(e => this.getScopeVarsFromExpression(e, expressions));
-        } else if (expression instanceof AALiteralExpression) {
-            //FIXME - bron to help with this..
-            // const memberExpressions = expression.elements
-            //   .filter<AAMemberExpression>((e) => e instanceof AAMemberExpression).map((e: AAMemberExpression) => e.value);
-            //   expressions = expressions.concat(memberExpressions.map(e => this.getScopeVarsFromExpression(e, expressions);
-        } else if (expression instanceof UnaryExpression) {
-            this.getScopeVarsFromExpression(expression.right, expressions);
-        } else if (expression instanceof NewExpression) {
-            this.getScopeVarsFromExpression(expression.call, expressions);
-        } else if (expression instanceof CallfuncExpression) {
-            expression.args.map(e => this.getScopeVarsFromExpression(e, expressions));
-            this.getScopeVarsFromExpression(expression.callee, expressions);
-        } else if (expression instanceof ConditionalExpression) {
-            this.getScopeVarsFromExpression(expression.test, expressions);
-            this.getScopeVarsFromExpression(expression.consequent, expressions);
-            this.getScopeVarsFromExpression(expression.alternate, expressions);
-        }
-    }
-
-
-    getAllExpressions(expression: Expression, expressions: Expression[]) {
-        //TODO - I think this should live on the expression itself
-        expressions.push(expression);
-
-        if (expression instanceof VariableExpression) {
-        } else if (expression instanceof BinaryExpression) {
-            this.getAllExpressions(expression.left, expressions);
-            this.getAllExpressions(expression.right, expressions);
-        } else if (expression instanceof CallExpression) {
-            expression.args.map(e => this.getAllExpressions(e, expressions));
-        } else if (expression instanceof DottedGetExpression) {
-            this.getAllExpressions(expression.obj, expressions);
-        } else if (expression instanceof ArrayLiteralExpression) {
-            expression.elements.map(e => this.getAllExpressions(e, expressions));
-        } else if (expression instanceof AALiteralExpression) {
-            //FIXME - bron to help with this..
-            // const memberExpressions = expression.elements
-            //   .filter<AAMemberExpression>((e) => e instanceof AAMemberExpression).map((e: AAMemberExpression) => e.value);
-            //   expressions = expressions.concat(memberExpressions.map(e => this.getAllExpressions(e, expressions);
-        } else if (expression instanceof UnaryExpression) {
-            this.getAllExpressions(expression.right, expressions);
-        } else if (expression instanceof NewExpression) {
-            this.getAllExpressions(expression.call, expressions);
-        } else if (expression instanceof CallfuncExpression) {
-            expression.args.map(e => this.getAllExpressions(e, expressions));
-            this.getAllExpressions(expression.callee, expressions);
-        } else if (expression instanceof ConditionalExpression) {
-            this.getAllExpressions(expression.test, expressions);
-            this.getAllExpressions(expression.consequent, expressions);
-            this.getAllExpressions(expression.alternate, expressions);
-        }
-    }
-
     transpile(state: TranspileState) {
-        const scopeVars = this.getScopeVars();
-        let allExpressions = [];
-        this.getAllExpressions(this, allExpressions);
-        let result = [];
-        // let the fun begin
-        return result;
+        let [testExpressions, testVarExpressions, testUniqueNames] = this.getExpressionInfo(this.test);
+        let [consequentExpressions, consequentVarExpressions, consequentUniqueNames] = this.getExpressionInfo(this.consequent);
+        let [alternateExpressions, alternateVarExpressions, alternateUniqueNames] = this.getExpressionInfo(this.alternate);
+
+        let allExpressions = [...testExpressions, ...consequentExpressions, ...alternateExpressions];
+        let allUniqueVarNames = [...new Set([...testUniqueNames, ...consequentUniqueNames, ...alternateUniqueNames])];
+
+        let mutatingExpressions = allExpressions.filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression);
+
+        // - TODO - it doesn't look like we need to manipulate the variable names
+        // we can assign m on scope, and it should be fine
+        if (mutatingExpressions.length > 0) {
+            //we need to do a scope-safe ternary operation
+            let scope = '{'
+
+            // eslint-disable-next-line no-return-assign
+            allUniqueVarNames.forEach(name => scope += `\n"${name}": name`);
+            scope += '}';
+
+            const ternaryCall = `bslib_scopeSafeTernary(${this.test.transpile(state)}, ${scope}, ${this.getScopedFunction(this.consequent, consequentUniqueNames)}, ${this.getScopedFunction(this.alternate, alternateUniqueNames)})`;
+            return [
+                new SourceNode(this.range.start.line + 1, this.range.start.character, state.pathAbsolute, ternaryCall)
+            ];
+        } else {
+            const ternaryCall = `bslib_simpleTernary(${this.test.transpile(state)}, ${this.consequent.transpile(state)}, ${this.alternate.transpile((state))})`;
+            return [
+                new SourceNode(this.range.start.line + 1, this.range.start.character, state.pathAbsolute, ternaryCall)
+            ];
+        }
+    }
+
+    private getExpressionInfo(expression: Expression): [Expression[], Expression[], string[]] {
+        const expressions = getAllExpressions(expression);
+        const varExpressions = expressions.filter(e => e instanceof VariableExpression) as VariableExpression[];
+        const uniqueVarNames = [...new Set(varExpressions.map(e => e.name.text))];
+        return [expressions, varExpressions, uniqueVarNames];
+    }
+
+    private getScopedFunction(alternate: Expression, scopeVarNames: string[]) {
+        let text = 'function(scope)\n';
+        scopeVarNames.forEach(name => {
+            text += `${name} = scope.${name}\n`;
+        });
+        text += 'end function\n';
+        return text;
     }
 }
 
+/**
+ * Walks an expression, getting all nested expressions
+ * @param expression
+ * @param expressions
+ */
+function getAllExpressions(expression: Expression, expressions: Expression[] = []): Expression[] {
+    //TODO - I think this should live on the expression itself
+    expressions.push(expression);
+
+    if (expression instanceof VariableExpression) {
+    } else if (expression instanceof BinaryExpression) {
+        getAllExpressions(expression.left, expressions);
+        getAllExpressions(expression.right, expressions);
+    } else if (expression instanceof CallExpression) {
+        expression.args.map(e => getAllExpressions(e, expressions));
+    } else if (expression instanceof DottedGetExpression) {
+        getAllExpressions(expression.obj, expressions);
+    } else if (expression instanceof ArrayLiteralExpression) {
+        expression.elements.map(e => getAllExpressions(e, expressions));
+    } else if (expression instanceof AALiteralExpression) {
+        expression.elements.forEach(e => {
+            if (!(e instanceof CommentStatement)) {
+                getAllExpressions(e.value, expressions);
+            }
+        });
+    } else if (expression instanceof UnaryExpression) {
+        getAllExpressions(expression.right, expressions);
+    } else if (expression instanceof NewExpression) {
+        getAllExpressions(expression.call, expressions);
+    } else if (expression instanceof CallfuncExpression) {
+        expression.args.map(e => getAllExpressions(e, expressions));
+        getAllExpressions(expression.callee, expressions);
+    } else if (expression instanceof ConditionalExpression) {
+        getAllExpressions(expression.test, expressions);
+        getAllExpressions(expression.consequent, expressions);
+        getAllExpressions(expression.alternate, expressions);
+    }
+    return expressions;
+}
