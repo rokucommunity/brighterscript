@@ -1756,11 +1756,7 @@ export class Parser {
         while (this.match(TokenKind.And, TokenKind.Or)) {
             let operator = this.previous();
             let right = this.relational();
-            if (this.checkNext(TokenKind.QuestionMark)) {
-                expr = this.conditionalExpression();
-            } else {
-                expr = new BinaryExpression(expr, operator, right);
-            }
+            expr = new BinaryExpression(expr, operator, right);
         }
 
         return expr;
@@ -1783,7 +1779,7 @@ export class Parser {
             if (this.checkNext(TokenKind.QuestionMark)) {
                 expr = this.conditionalExpression();
             } else {
-              let right = this.additive();
+                let right = this.additive();
                 expr = new BinaryExpression(expr, operator, right);
             }
         }
