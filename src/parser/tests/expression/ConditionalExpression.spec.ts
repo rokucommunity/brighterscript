@@ -5,8 +5,8 @@ import { TokenKind, Lexer } from '../../../lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { token, EOF } from '../Parser.spec';
 import { BrsString, BrsBoolean } from '../../../brsTypes';
-import { AssignmentStatement, ExpressionStatement } from '../../Statement';
-import {TranspileState} from "../../TranspileState";
+import {AssignmentStatement, ForEachStatement} from '../../Statement';
+import {ConditionalExpression} from "../../Expression";
 
 describe('parser conditional expressions', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -15,7 +15,7 @@ describe('parser conditional expressions', () => {
         expect(diagnostics[0]?.code).to.equal(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('').code);
     });
 
-    describe('conditional expressions as statements', () => {
+    describe('conditional expressions as statements are not supported', () => {
         it('basic statement', () => {
             let { statements, diagnostics } = Parser.parse([
                 token(TokenKind.True, 'true', BrsBoolean.True),
@@ -26,14 +26,12 @@ describe('parser conditional expressions', () => {
                 EOF
             ], { mode: ParseMode.BrighterScript });
 
-            expect(diagnostics).to.be.empty;
+            expect(diagnostics).to.not.be.empty;
             expect(statements).to.exist;
-            expect(statements).not.to.be.null;
-        // //expect(statements).toMatchSnapshot();
+            expect(statements).to.be.empty;
         });
 
-
-        it(`supports various tests with primitive values:`, () => {
+        it(`does not supports various tests with primitive values:`, () => {
         //test as property
             for (const test in [
                 'true',
@@ -45,8 +43,29 @@ describe('parser conditional expressions', () => {
 
                 let { tokens } = Lexer.scan(`${test} ? "human" : "zombie"`);
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-                expect(diagnostics).to.be.lengthOf(0);
-                expect(statements[0]).instanceof(ExpressionStatement);
+                expect(diagnostics).to.not.be.empty;
+                expect(statements).to.exist;
+                expect(statements).to.be.empty;
+            }
+        });
+    });
+
+    describe('conditional expressions - variety of test cases', () => {
+        it(`does not supports various tests with primitive values:`, () => {
+            //test as property
+            for (const test in [
+                'result = true',
+                'result = false',
+                'result = len("person") = 10',
+                'result = m.getResponse()',
+                'result = m.myZombies[3].ifFed = true'
+            ]) {
+
+                let { tokens } = Lexer.scan(`${test} ? "human" : "zombie"`);
+                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+                expect(diagnostics).to.not.be.empty;
+                expect(statements).to.exist;
+                expect(statements).to.be.empty;
             }
         });
 
@@ -61,10 +80,12 @@ describe('parser conditional expressions', () => {
                 'getZombieName'
             ]) {
 
-                let { tokens } = Lexer.scan(`true ? ${consequent} : "zombie"`);
+                let { tokens } = Lexer.scan(`result = true ? ${consequent} : "zombie"`);
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expect(diagnostics).to.be.lengthOf(0);
-                expect(statements[0]).instanceof(ExpressionStatement);
+                expect(statements[0]).instanceof(AssignmentStatement);
+                expect((statements[0] as AssignmentStatement).value).instanceof(ConditionalExpression);
+
             }
         });
 
@@ -79,10 +100,11 @@ describe('parser conditional expressions', () => {
                 'getZombieName'
             ]) {
 
-                let { tokens } = Lexer.scan(`true ? "zombie" : ${alternate}`);
+                let { tokens } = Lexer.scan(`result = true ? "zombie" : ${alternate}`);
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expect(diagnostics).to.be.lengthOf(0);
-                expect(statements[0]).instanceof(ExpressionStatement);
+                expect(statements[0]).instanceof(AssignmentStatement);
+                expect((statements[0] as AssignmentStatement).value).instanceof(ConditionalExpression);
             }
         });
     });
@@ -132,11 +154,28 @@ describe('parser conditional expressions', () => {
             expect(statements[0]).instanceof(AssignmentStatement);
         });
 
+        it(`in simple func call`, () => {
+            let { tokens } = Lexer.scan(`m.eatBrains(a = true ? "a" : "b")`);
+            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(statements[0]).instanceof(AssignmentStatement);
+        });
+
         it(`in func call`, () => {
             let { tokens } = Lexer.scan(`m.eatBrains(a = true ? {"a":"a"} : {"b":"b"})`);
             let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements[0]).instanceof(AssignmentStatement);
+        });
+        it(`in for each`, () => {
+            let { tokens } = Lexer.scan(`for each person in isZombieMode ? zombies : humans
+                ? "person is " ; person
+            end for
+            `);
+            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(statements[0]).instanceof(ForEachStatement);
+            expect((statements[0] as ForEachStatement).target).instanceof(ConditionalExpression);
         });
 
     });

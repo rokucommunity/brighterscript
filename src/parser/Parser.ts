@@ -1475,10 +1475,6 @@ export class Parser {
             return new IncrementStatement(expr, operator);
         }
 
-        if (this.check(TokenKind.QuestionMark)) {
-            return new ExpressionStatement(this.conditionalExpression(expr));
-        }
-
         if (!this.check(...additionalTerminators, TokenKind.Comment)) {
             this.consume(
                 DiagnosticMessages.expectedNewlineOrColonAfterExpressionStatement(),
@@ -1750,7 +1746,6 @@ export class Parser {
         if (this.checkNext(TokenKind.QuestionMark)) {
             return this.conditionalExpression();
         }
-
 
         return this.boolean();
     }

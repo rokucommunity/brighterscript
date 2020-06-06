@@ -5,7 +5,6 @@ import {
     FunctionExpression,
     NamespacedVariableNameExpression,
     BinaryExpression,
-    ConditionalExpression
 } from './Expression';
 import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
