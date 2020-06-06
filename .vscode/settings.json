@@ -22,5 +22,14 @@
     ],
     "mocha.env": {
         "TS_NODE_TYPE_CHECK": false
+    },
+    "jira-plugin.workingProject": "",
+    "workbench.colorCustomizations": {
+      "statusBar.background": "#551A8B",
+      "statusBar.debuggingBackground": "#551A8B",
+      "panelTitle.activeBorder": "#ff0000",
+      "activityBar.background": "#212B52",
+      "titleBar.activeBackground": "#2E3C72",
+      "titleBar.activeForeground": "#F9FAFD"
     }
 }

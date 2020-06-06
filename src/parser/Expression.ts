@@ -662,6 +662,7 @@ export class ConditionalExpression implements Expression {
     public readonly range: Range;
 
     transpile(state: TranspileState) {
+        let result = [];
         let [testExpressions, testVarExpressions, testUniqueNames] = this.getExpressionInfo(this.test);
         let [consequentExpressions, consequentVarExpressions, consequentUniqueNames] = this.getExpressionInfo(this.consequent);
         let [alternateExpressions, alternateVarExpressions, alternateUniqueNames] = this.getExpressionInfo(this.alternate);
@@ -673,24 +674,25 @@ export class ConditionalExpression implements Expression {
 
         // - TODO - it doesn't look like we need to manipulate the variable names
         // we can assign m on scope, and it should be fine
+
+        //FIXME - need to ensure I'm using SourceNode's correctly here - not sure how to do that yet
         if (mutatingExpressions.length > 0) {
             //we need to do a scope-safe ternary operation
-            let scope = '{'
-
+            let scope = '{';
             // eslint-disable-next-line no-return-assign
             allUniqueVarNames.forEach(name => scope += `\n"${name}": name`);
             scope += '}';
 
-            const ternaryCall = `bslib_scopeSafeTernary(${this.test.transpile(state)}, ${scope}, ${this.getScopedFunction(this.consequent, consequentUniqueNames)}, ${this.getScopedFunction(this.alternate, alternateUniqueNames)})`;
-            return [
-                new SourceNode(this.range.start.line + 1, this.range.start.character, state.pathAbsolute, ternaryCall)
-            ];
+            result.push(`bslib_scopeSafeTernary(${this.test.transpile(state)}, ${scope},`);
+            result = result.concat(this.getScopedFunction(state, this.consequent, consequentUniqueNames));
+            result = result.concat(this.getScopedFunction(state, this.alternate, alternateUniqueNames));
+            result.push(')');
         } else {
             const ternaryCall = `bslib_simpleTernary(${this.test.transpile(state)}, ${this.consequent.transpile(state)}, ${this.alternate.transpile((state))})`;
-            return [
-                new SourceNode(this.range.start.line + 1, this.range.start.character, state.pathAbsolute, ternaryCall)
-            ];
+
+            result.push(new SourceNode(this.range.start.line + 1, this.range.start.character, state.pathAbsolute, ternaryCall));
         }
+        return result;
     }
 
     private getExpressionInfo(expression: Expression): [Expression[], Expression[], string[]] {
@@ -700,13 +702,16 @@ export class ConditionalExpression implements Expression {
         return [expressions, varExpressions, uniqueVarNames];
     }
 
-    private getScopedFunction(alternate: Expression, scopeVarNames: string[]) {
+    private getScopedFunction(state: TranspileState, alternate: Expression, scopeVarNames: string[]): Array<string| SourceNode> {
+        let result = [];
         let text = 'function(scope)\n';
         scopeVarNames.forEach(name => {
             text += `${name} = scope.${name}\n`;
         });
-        text += 'end function\n';
-        return text;
+        result.push(text);
+        result = result.concat(alternate.transpile(state));
+        result.push('end function\n');
+        return result;
     }
 }
 
