@@ -1,61 +1,80 @@
 import {
-    TokenKind,
-    Token,
-    Identifier,
-    BlockTerminator,
     AllowedLocalIdentifiers,
-    AssignmentOperators,
-    DisallowedLocalIdentifiersText,
     AllowedProperties,
-    Lexer
+    AssignmentOperators,
+    BlockTerminator,
+    DisallowedLocalIdentifiersText,
+    Identifier,
+    Lexer,
+    Token,
+    TokenKind
 } from '../lexer';
 
 import {
-    BrsInvalid,
-    BrsBoolean,
-    BrsString,
-    Int32,
-    ValueKind,
     Argument,
-    StdlibArgument,
+    BrsBoolean,
+    BrsInvalid,
+    BrsString,
     FunctionParameter,
+    Int32,
+    StdlibArgument,
+    ValueKind,
     valueKindFromString
 } from '../brsTypes';
 import {
-    Statement,
-    FunctionStatement,
-    CommentStatement,
-    PrintSeparatorTab,
-    PrintSeparatorSpace,
     AssignmentStatement,
-    WhileStatement,
-    ExitWhileStatement,
-    ForStatement,
-    ForEachStatement,
-    ExitForStatement,
-    LibraryStatement,
     Block,
-    IfStatement,
-    ElseIf,
-    DottedSetStatement,
-    IndexedSetStatement,
-    ExpressionStatement,
-    IncrementStatement,
-    ReturnStatement,
-    EndStatement,
-    PrintStatement,
-    LabelStatement,
-    GotoStatement,
-    StopStatement,
-    NamespaceStatement,
     Body,
-    ImportStatement
+    CommentStatement,
+    DottedSetStatement,
+    ElseIf,
+    EndStatement,
+    ExitForStatement,
+    ExitWhileStatement,
+    ExpressionStatement,
+    ForEachStatement,
+    ForStatement,
+    FunctionStatement,
+    GotoStatement,
+    IfStatement,
+    ImportStatement,
+    IncrementStatement,
+    IndexedSetStatement,
+    LabelStatement,
+    LibraryStatement,
+    NamespaceStatement,
+    PrintSeparatorSpace,
+    PrintSeparatorTab,
+    PrintStatement,
+    ReturnStatement,
+    Statement,
+    StopStatement,
+    WhileStatement
 } from './Statement';
-import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
+import { DiagnosticInfo, DiagnosticMessages } from '../DiagnosticMessages';
 import { util } from '../util';
-import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression, XmlAttributeGetExpression, NamespacedVariableNameExpression, CallfuncExpression } from './Expression';
-import { Range, Diagnostic } from 'vscode-languageserver';
-import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from './ClassStatement';
+import {
+    AALiteralExpression,
+    AAMemberExpression,
+    ArrayLiteralExpression,
+    BinaryExpression,
+    CallExpression,
+    CallfuncExpression,
+    ConditionalExpression,
+    DottedGetExpression,
+    Expression,
+    FunctionExpression,
+    GroupingExpression,
+    IndexedGetExpression,
+    LiteralExpression,
+    NamespacedVariableNameExpression,
+    NewExpression,
+    UnaryExpression,
+    VariableExpression,
+    XmlAttributeGetExpression
+} from './Expression';
+import { Diagnostic, Range } from 'vscode-languageserver';
+import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
 
 export class Parser {
     /**
@@ -800,7 +819,7 @@ export class Parser {
             return this.ifStatement();
         }
 
-        if (this.check(TokenKind.Print)) {
+        if (this.check(TokenKind.Print) || this.check(TokenKind.QuestionMark)) {
             return this.printStatement(...additionalterminators);
         }
 
@@ -840,7 +859,6 @@ export class Parser {
         if (this.check(TokenKind.Identifier) && this.checkNext(TokenKind.Colon)) {
             return this.labelStatement();
         }
-
         // TODO: support multi-statements
         return this.setStatement(...additionalterminators);
     }
@@ -1195,6 +1213,25 @@ export class Parser {
         return importStatement;
     }
 
+    private conditionalExpression(test?: Expression): ConditionalExpression {
+        this.warnIfNotBrighterScriptMode('ternary operator');
+        if (!test) {
+            test = this.boolean();
+        }
+        this.advance();
+        const consequent = this.expression();
+        this.advance();
+        const alternate = this.expression();
+
+        if (!consequent || !alternate) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.malformedTernaryOperator(),
+                range: test.range
+            });
+        }
+        return new ConditionalExpression(test, consequent, alternate);
+    }
+
     private ifStatement(): IfStatement {
         const ifToken = this.advance();
         const startingRange = ifToken.range;
@@ -1438,6 +1475,10 @@ export class Parser {
             return new IncrementStatement(expr, operator);
         }
 
+        if (this.check(TokenKind.QuestionMark)) {
+            return new ExpressionStatement(this.conditionalExpression(expr));
+        }
+
         if (!this.check(...additionalTerminators, TokenKind.Comment)) {
             this.consume(
                 DiagnosticMessages.expectedNewlineOrColonAfterExpressionStatement(),
@@ -1462,7 +1503,7 @@ export class Parser {
         ...additionalTerminators: BlockTerminator[]
     ): DottedSetStatement | IndexedSetStatement | ExpressionStatement | IncrementStatement {
         /**
-         * Attempts to find an expression-statement or an increment statement.
+         * Attempts to find an expression-statement, conditional-expressoin or an increment statement.
          * While calls are valid expressions _and_ statements, increment (e.g. `foo++`)
          * statements aren't valid expressions. They _do_ however fall under the same parsing
          * priority as standalone function calls though, so we can parse them in the same way.
@@ -1705,6 +1746,11 @@ export class Parser {
         if (this.check(TokenKind.Sub, TokenKind.Function)) {
             return this.functionDeclaration(true);
         }
+
+        if (this.checkNext(TokenKind.QuestionMark)) {
+            return this.conditionalExpression();
+        }
+
 
         return this.boolean();
     }

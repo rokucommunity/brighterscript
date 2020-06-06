@@ -69,6 +69,8 @@ export enum TokenKind {
     Semicolon = 'Semicolon', // ;
     At = 'At', // @
     Callfunc = 'Callfunc', // @.
+    QuestionMark = 'QuestionMark', // ?
+
 
     // conditional compilation
     HashIf = 'HashIf', // #if

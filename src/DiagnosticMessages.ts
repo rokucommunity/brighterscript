@@ -574,7 +574,13 @@ export let DiagnosticMessages = {
         message: `Variable '${variableName}' may not have the same name as namespace`,
         code: 1111,
         severity: DiagnosticSeverity.Error
-    })
+    }),
+    malformedTernaryOperator: () => ({
+        message: `Ternary '?' operator must be of form: test ? true value : false value`,
+        code: 1058,
+        severity: DiagnosticSeverity.Error
+    }),
+
 };
 
 let allCodes = [] as number[];

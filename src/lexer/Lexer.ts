@@ -234,7 +234,7 @@ export class Lexer {
                 this.addToken(TokenKind.Semicolon);
                 break;
             case '?':
-                this.addToken(TokenKind.Print);
+                this.addToken(TokenKind.QuestionMark);
                 break;
             case '<':
                 switch (this.peek()) {

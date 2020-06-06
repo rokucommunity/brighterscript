@@ -33,6 +33,12 @@ describe('lexer', () => {
         let { tokens } = Lexer.scan('library');
         expect(tokens[0].kind).to.eql(TokenKind.Library);
     });
+
+    it('recognizes the question mark operator', () => {
+        let { tokens } = Lexer.scan('?');
+        expect(tokens[0].kind).to.equal(TokenKind.QuestionMark);
+    });
+
     it('produces an at symbol token', () => {
         let { tokens } = Lexer.scan('@');
         expect(tokens[0].kind).to.equal(TokenKind.At);

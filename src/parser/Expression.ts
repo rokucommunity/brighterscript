@@ -645,5 +645,64 @@ export class CallfuncExpression implements Expression {
         );
         return result;
     }
-
 }
+
+export class ConditionalExpression implements Expression {
+    constructor(
+        readonly test: Expression,
+        readonly consequent: Expression,
+        readonly alternate: Expression
+    ) {
+        this.range = Range.create(
+            test.range.start,
+            alternate.range.end
+        );
+    }
+
+    public readonly range: Range;
+
+    getScopeVars(): Expression[] {
+        let expressions = [];
+        this.getScopeVarsFromExpression(this, expressions);
+        return expressions;
+    }
+    getScopeVarsFromExpression(expression: Expression, expressions: Expression[]) {
+        //TODO - I think this should live on the epxression itself
+        if (expression instanceof VariableExpression) {
+            expressions.push(expression);
+        } else if (expression instanceof BinaryExpression) {
+            this.getScopeVarsFromExpression(expression.left, expressions);
+            this.getScopeVarsFromExpression(expression.right, expressions);
+        } else if (expression instanceof CallExpression) {
+            expression.args.map(e => this.getScopeVarsFromExpression(e, expressions));
+        } else if (expression instanceof DottedGetExpression) {
+            this.getScopeVarsFromExpression(expression.obj, expressions);
+        } else if (expression instanceof ArrayLiteralExpression) {
+            expression.elements.map(e => this.getScopeVarsFromExpression(e, expressions));
+        } else if (expression instanceof AALiteralExpression) {
+            //FIXME - bron to help with this..
+            // const memberExpressions = expression.elements
+            //   .filter<AAMemberExpression>((e) => e instanceof AAMemberExpression).map((e: AAMemberExpression) => e.value);
+            //   expressions = expressions.concat(memberExpressions.map(e => this.getScopeVarsFromExpression(e, expressions);
+        } else if (expression instanceof UnaryExpression) {
+            this.getScopeVarsFromExpression(expression.right, expressions);
+        } else if (expression instanceof NewExpression) {
+            this.getScopeVarsFromExpression(expression.call, expressions);
+        } else if (expression instanceof CallfuncExpression) {
+            expression.args.map(e => this.getScopeVarsFromExpression(e, expressions));
+            this.getScopeVarsFromExpression(expression.callee, expressions);
+        } else if (expression instanceof ConditionalExpression) {
+            this.getScopeVarsFromExpression(expression.test, expressions);
+            this.getScopeVarsFromExpression(expression.consequent, expressions);
+            this.getScopeVarsFromExpression(expression.alternate, expressions);
+        }
+    }
+
+    transpile(state: TranspileState) {
+        const scopeVars = this.getScopeVars();
+        let result = [];
+        // let the fun begin
+        return result;
+    }
+}
+

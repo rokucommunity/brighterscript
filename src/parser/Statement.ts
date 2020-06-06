@@ -1,6 +1,12 @@
 import { Token, Identifier, TokenKind, CompoundAssignmentOperators } from '../lexer';
 import { SourceNode } from 'source-map';
-import { Expression, FunctionExpression, NamespacedVariableNameExpression, BinaryExpression } from './Expression';
+import {
+    Expression,
+    FunctionExpression,
+    NamespacedVariableNameExpression,
+    BinaryExpression,
+    ConditionalExpression
+} from './Expression';
 import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
