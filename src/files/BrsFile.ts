@@ -345,13 +345,13 @@ export class BrsFile {
             //bs:disable-next-line and bs:disable-line
             {
                 let searches = [{
-                    text: `'bs:disable-next-line`,
+                    pattern: /'\s*bs\:disable-next-line/,
                     lineOffset: 1,
                     getAffectedRange: () => {
                         return Range.create(lineIndex + 1, 0, lineIndex + 1, nextLineLength);
                     }
                 }, {
-                    text: `'bs:disable-line`,
+                    pattern: /'\s*bs\:disable-line/,
                     lineOffset: 0,
                     getAffectedRange: (idx: number) => {
                         return Range.create(lineIndex, 0, lineIndex, idx);
@@ -360,11 +360,11 @@ export class BrsFile {
 
                 for (let search of searches) {
                     //find the disable-next-line
-                    let idx = line.indexOf(search.text);
-                    if (idx > -1) {
-                        let affectedRange = search.getAffectedRange(idx);
-                        let stmt = line.substring(idx).trim();
-                        stmt = stmt.replace(search.text, '');
+                    let match = search.pattern.exec(line);
+                    if (match) {
+                        let affectedRange = search.getAffectedRange(match.index);
+                        let stmt = line.substring(match.index).trim();
+                        stmt = stmt.replace(match[0], '');
                         stmt = stmt.trim();
 
                         let commentFlag: CommentFlag;
@@ -375,7 +375,7 @@ export class BrsFile {
                                 file: this,
                                 //null means all codes
                                 codes: null,
-                                range: Range.create(lineIndex, idx, lineIndex, idx + search.text.length),
+                                range: Range.create(lineIndex, match.index, lineIndex, match.index + match[0].length),
                                 affectedRange: affectedRange
                             };
 
@@ -384,7 +384,7 @@ export class BrsFile {
                             stmt = stmt.replace(':', '');
                             let codes = [] as number[];
                             //starting position + search.text length + 1 for the colon
-                            let offset = idx + search.text.length + 1;
+                            let offset = match.index + match.length + 1;
                             let codeTokens = util.tokenizeByWhitespace(stmt);
                             for (let codeToken of codeTokens) {
                                 let codeInt = parseInt(codeToken.text);
@@ -403,7 +403,7 @@ export class BrsFile {
                                 commentFlag = {
                                     file: this,
                                     codes: codes,
-                                    range: Range.create(lineIndex, idx, lineIndex, line.length),
+                                    range: Range.create(lineIndex, match.index, lineIndex, line.length),
                                     affectedRange: affectedRange
                                 };
                             }

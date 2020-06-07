@@ -212,6 +212,20 @@ describe('BrsFile', () => {
                 expect(program.getDiagnostics()[0]?.message).not.to.exist;
             });
 
+            it('works with leading whitespace', async () => {
+                expect(program.getDiagnostics()[0]?.message).to.exist;
+
+                await program.addOrReplaceFile('source/main.brs', `
+                    sub main()
+                        'bs:disable-next-line
+                        =asdf=sadf=
+                    end sub
+                `);
+                //should have an error
+                await program.validate();
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            });
+
             it('works for all', async () => {
                 let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
