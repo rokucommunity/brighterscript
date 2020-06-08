@@ -683,14 +683,17 @@ export class ConditionalExpression implements Expression {
             allUniqueVarNames.forEach(name => scope += `\n"${name}": name`);
             scope += '}';
 
-            result.push(`bslib_scopeSafeTernary(${this.test.transpile(state)}, ${scope},`);
+            result.push(`bslib_scopeSafeTernary(`);
+            result = result.concat(this.test.transpile(state));
+            result.push(`, ${scope},`);
             result = result.concat(this.getScopedFunction(state, this.consequent, consequentUniqueNames));
             result = result.concat(this.getScopedFunction(state, this.alternate, alternateUniqueNames));
             result.push(')');
         } else {
-            const ternaryCall = `bslib_simpleTernary(${this.test.transpile(state)}, ${this.consequent.transpile(state)}, ${this.alternate.transpile((state))})`;
-
-            result.push(new SourceNode(this.range.start.line + 1, this.range.start.character, state.pathAbsolute, ternaryCall));
+            result.push(`bslib_simpleTernary(`);
+            result = result.concat(this.test.transpile(state));
+            result = result.concat(this.consequent.transpile(state));
+            result = result.concat(this.alternate.transpile(state));
         }
         return result;
     }
@@ -714,6 +717,75 @@ export class ConditionalExpression implements Expression {
         return result;
     }
 }
+
+export class InvalidCoalescingExpression implements Expression {
+    constructor(
+        readonly consequent: Expression,
+        readonly alternate: Expression
+    ) {
+        this.range = Range.create(
+            consequent.range.start,
+            alternate.range.end
+        );
+    }
+
+    public readonly range: Range;
+
+    transpile(state: TranspileState) {
+        let result = [];
+        let [consequentExpressions, consequentVarExpressions, consequentUniqueNames] = this.getExpressionInfo(this.consequent);
+        let [alternateExpressions, alternateVarExpressions, alternateUniqueNames] = this.getExpressionInfo(this.alternate);
+
+        let allExpressions = [...alternateExpressions];
+        let allUniqueVarNames = alternateUniqueNames;
+
+        let mutatingExpressions = allExpressions.filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression);
+
+        // - TODO - it doesn't look like we need to manipulate the variable names
+        // we can assign m on scope, and it should be fine
+
+        //FIXME - need to ensure I'm using SourceNode's correctly here - not sure how to do that yet
+        if (mutatingExpressions.length > 0) {
+            //we need to do a scope-safe ternary operation
+            let scope = '{';
+            // eslint-disable-next-line no-return-assign
+            allUniqueVarNames.forEach(name => scope += `\n"${name}": name`);
+            scope += '}';
+
+            result.push(`bslib_scopeSafeCoalesce(`);
+            result = result.concat(this.consequent.transpile(state));
+            result.push(`, ${scope},`);
+            result = result.concat(this.getScopedFunction(state, this.alternate, alternateUniqueNames));
+            result.push(')');
+        } else {
+            result.push(`bslib_simpleCoalesce(`);
+            result = result.concat(this.consequent.transpile(state));
+            result = result.concat(this.alternate.transpile(state));
+            result.push(')');
+        }
+        return result;
+    }
+
+    private getExpressionInfo(expression: Expression): [Expression[], Expression[], string[]] {
+        const expressions = getAllExpressions(expression);
+        const varExpressions = expressions.filter(e => e instanceof VariableExpression) as VariableExpression[];
+        const uniqueVarNames = [...new Set(varExpressions.map(e => e.name.text))];
+        return [expressions, varExpressions, uniqueVarNames];
+    }
+
+    private getScopedFunction(state: TranspileState, alternate: Expression, scopeVarNames: string[]): Array<string| SourceNode> {
+        let result = [];
+        let text = 'function(scope)\n';
+        scopeVarNames.forEach(name => {
+            text += `${name} = scope.${name}\n`;
+        });
+        result.push(text);
+        result = result.concat(alternate.transpile(state));
+        result.push('end function\n');
+        return result;
+    }
+}
+
 
 /**
  * Walks an expression, getting all nested expressions

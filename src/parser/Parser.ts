@@ -71,7 +71,8 @@ import {
     NewExpression,
     UnaryExpression,
     VariableExpression,
-    XmlAttributeGetExpression
+    XmlAttributeGetExpression,
+    InvalidCoalescingExpression
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
@@ -1213,23 +1214,39 @@ export class Parser {
         return importStatement;
     }
 
-    private conditionalExpression(test?: Expression): ConditionalExpression {
+    private conditionalOrCoalescingExpression(test?: Expression): ConditionalExpression | InvalidCoalescingExpression {
         this.warnIfNotBrighterScriptMode('ternary operator');
         if (!test) {
             test = this.boolean();
         }
-        this.advance();
-        const consequent = this.expression();
-        this.advance();
-        const alternate = this.expression();
-
-        if (!consequent || !alternate) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.malformedTernaryOperator(),
-                range: test.range
-            });
+        if (!this.check(TokenKind.QuestionMark)) {
+            //got here in error
         }
-        return new ConditionalExpression(test, consequent, alternate);
+        this.advance();
+
+        if (this.check(TokenKind.QuestionMark)) {
+            //we are a null coalescene
+            this.advance();
+            const alternate = this.expression();
+            return new InvalidCoalescingExpression(test, alternate);
+        } else {
+            //we are a ternary
+            const consequent = this.expression();
+            if (!this.check(TokenKind.Colon)) {
+                //got here in error
+            }
+
+            this.advance();
+            const alternate = this.expression();
+
+            if (!consequent || !alternate) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.malformedTernaryOperator(),
+                    range: test.range
+                });
+            }
+            return new ConditionalExpression(test, consequent, alternate);
+        }
     }
 
     private ifStatement(): IfStatement {
@@ -1744,7 +1761,7 @@ export class Parser {
         }
 
         if (this.checkNext(TokenKind.QuestionMark)) {
-            return this.conditionalExpression();
+            return this.conditionalOrCoalescingExpression();
         }
 
         return this.boolean();
@@ -1777,7 +1794,7 @@ export class Parser {
         ) {
             let operator = this.previous();
             if (this.checkNext(TokenKind.QuestionMark)) {
-                expr = this.conditionalExpression();
+                expr = this.conditionalOrCoalescingExpression();
             } else {
                 let right = this.additive();
                 expr = new BinaryExpression(expr, operator, right);
