@@ -15,12 +15,6 @@ describe('parser', () => {
     });
 
     describe('callfunc operator', () => {
-        it.only('test', () => {
-            const ast = parse(`
-                a.b.c.d.e = true
-            `);
-            expect(ast).to.exist;
-        });
         it('is not allowed in brightscript mode', () => {
             let parser = parse(`
                 sub main(node as dynamic)

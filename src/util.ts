@@ -27,6 +27,7 @@ import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import { DottedGetExpression, VariableExpression } from './parser/Expression';
 import { LogLevel } from './Logger';
+import { TokenKind, Token } from './lexer';
 
 export class Util {
 
@@ -710,6 +711,70 @@ export class Util {
                 }
             }
         }
+    }
+
+    /**
+     * Small tokenizer for bs:disable comments
+     */
+    public tokenizeBsDisableComment(token: Token) {
+        if (token.kind !== TokenKind.Comment) {
+            return null;
+        }
+        let lowerText = token.text.toLowerCase();
+        let offset = 0;
+        let commentTokenText: string;
+
+        if (token.text.startsWith(`'`)) {
+            commentTokenText = `'`;
+            offset = 1;
+            lowerText = lowerText.substring(1);
+        } else if (lowerText.startsWith('rem')) {
+            commentTokenText = lowerText.substring(0, 3);
+            offset = 3;
+            lowerText = lowerText.substring(3);
+        }
+
+        let disableType: 'line' | 'next-line';
+        //trim leading/trailing whitespace
+        let len = lowerText.length;
+        lowerText = lowerText.trimLeft();
+        offset += len - lowerText.length;
+        if (lowerText.startsWith('bs:disable-line')) {
+            lowerText = lowerText.substring('bs:disable-line'.length);
+            offset += 'bs:disable-line'.length;
+            disableType = 'line';
+        } else if (lowerText.startsWith('bs:disable-next-line')) {
+            lowerText = lowerText.substring('bs:disable-next-line'.length);
+            offset += 'bs:disable-next-line'.length;
+            disableType = 'next-line';
+        } else {
+            return null;
+        }
+        //do something with the colon
+        if (lowerText.startsWith(':')) {
+            lowerText = lowerText.substring(1);
+            offset += 1;
+        }
+
+        let items = this.tokenizeByWhitespace(lowerText);
+        let codes = [] as Array<{ code: string; range: Range }>;
+        for (let item of items) {
+            codes.push({
+                code: item.text,
+                range: Range.create(
+                    token.range.start.line,
+                    offset + item.startIndex,
+                    token.range.start.line,
+                    offset + item.startIndex + item.text.length
+                )
+            });
+        }
+
+        return {
+            commentTokenText: commentTokenText,
+            disableType: disableType,
+            codes: codes
+        };
     }
 
     /**

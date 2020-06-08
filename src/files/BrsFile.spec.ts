@@ -237,7 +237,7 @@ describe('BrsFile', () => {
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: null,
                     range: Range.create(2, 24, 2, 45),
-                    affectedRange: Range.create(3, 0, 3, 35)
+                    affectedRange: Range.create(3, 0, 3, Number.MAX_SAFE_INTEGER)
                 } as CommentFlag);
                 await program.validate();
                 //the "unterminated string" error should be filtered out
@@ -255,7 +255,7 @@ describe('BrsFile', () => {
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: [1083, 1001],
                     range: Range.create(2, 24, 2, 57),
-                    affectedRange: Range.create(3, 0, 3, 35)
+                    affectedRange: Range.create(3, 0, 3, Number.MAX_SAFE_INTEGER)
                 } as CommentFlag);
                 //the "unterminated string" error should be filtered out
                 expect(program.getDiagnostics()[0]?.message).to.not.exist;
@@ -288,7 +288,7 @@ describe('BrsFile', () => {
             it('works for all', async () => {
                 let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
-                        name = "bob 'bs:disable-line
+                        z::;;%%%%%% 'bs:disable-line
                     end sub
                 `) as BrsFile;
                 expect(file.commentFlags[0]).to.exist;
