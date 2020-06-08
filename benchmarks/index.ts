@@ -38,6 +38,6 @@ import { Benchmarker } from './Benchmarker';
     }
 
     if (isFailure) {
-        process.exit(-1);
+        process.exit(1);
     }
 })();
