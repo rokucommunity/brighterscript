@@ -11,3 +11,4 @@ coverage
 graph.svg
 .history
 *.tgz
+benchmarks/*.json
