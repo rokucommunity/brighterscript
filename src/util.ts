@@ -763,9 +763,9 @@ export class Util {
                 code: item.text,
                 range: Range.create(
                     token.range.start.line,
-                    offset + item.startIndex,
+                    token.range.start.character + offset + item.startIndex,
                     token.range.start.line,
-                    offset + item.startIndex + item.text.length
+                    token.range.start.character + offset + item.startIndex + item.text.length
                 )
             });
         }

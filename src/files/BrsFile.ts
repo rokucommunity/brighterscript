@@ -343,9 +343,9 @@ export class BrsFile {
 
             let affectedRange: Range;
             if (tokenized.disableType === 'line') {
-                affectedRange = Range.create(token.range.start.line + 1, 0, token.range.start.line + 1, Number.MAX_SAFE_INTEGER);
-            } else if (tokenized.disableType === 'next-line') {
                 affectedRange = Range.create(token.range.start.line, 0, token.range.start.line, token.range.start.character);
+            } else if (tokenized.disableType === 'next-line') {
+                affectedRange = Range.create(token.range.start.line + 1, 0, token.range.start.line + 1, Number.MAX_SAFE_INTEGER);
             }
 
             let commentFlag: CommentFlag;

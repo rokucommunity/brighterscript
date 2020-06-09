@@ -213,11 +213,9 @@ describe('BrsFile', () => {
             });
 
             it('works with leading whitespace', async () => {
-                expect(program.getDiagnostics()[0]?.message).to.exist;
-
                 await program.addOrReplaceFile('source/main.brs', `
                     sub main()
-                        'bs:disable-next-line
+                        ' bs:disable-next-line
                         =asdf=sadf=
                     end sub
                 `);
