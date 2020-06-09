@@ -21,7 +21,7 @@ describe('parser conditional expressions', () => {
     it('throws exception when used in brightscript scope', () => {
         let { tokens } = Lexer.scan(`a = true ? "human" : "Zombie"`);
         let { diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrightScript });
-        expect(diagnostics[0]?.code).to.equal(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('').code);
+        expect(diagnostics[0]?.message).to.equal(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('ternary operator').message);
     });
 
     describe('conditional expressions as statements are not supported', () => {
