@@ -668,7 +668,7 @@ export class TemplateStringExpression implements Expression {
                 result.push(' + ');
             }
             isFirst = false;
-            result = result.concat(part.transpile(state));
+            result.push(...part.transpile(state));
         }
         return result;
     }
