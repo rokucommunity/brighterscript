@@ -4,7 +4,7 @@ import {
     Expression,
     FunctionExpression,
     NamespacedVariableNameExpression,
-    BinaryExpression,
+    BinaryExpression
 } from './Expression';
 import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';

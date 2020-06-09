@@ -272,7 +272,6 @@ describe('parser conditional expressions', () => {
 describe('transpilation', () => {
     let rootDir = process.cwd();
     let program: Program;
-    // @ts-ignore
     let file: BrsFile;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 

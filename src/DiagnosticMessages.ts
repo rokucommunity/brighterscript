@@ -579,7 +579,7 @@ export let DiagnosticMessages = {
         message: `Ternary '?' operator must be of form: test ? true value : false value`,
         code: 1058,
         severity: DiagnosticSeverity.Error
-    }),
+    })
 
 };
 
