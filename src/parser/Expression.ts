@@ -724,10 +724,6 @@ export class ConditionalExpression extends Expression {
 
         let mutatingExpressions = allExpressions.filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression);
 
-        // - TODO - it doesn't look like we need to manipulate the variable names
-        // we can assign m on scope, and it should be fine
-
-        //FIXME - need to ensure I'm using SourceNode's correctly here - not sure how to do that yet
         if (mutatingExpressions.length > 0) {
             //we need to do a scope-safe ternary operation
             let scope = '{';
