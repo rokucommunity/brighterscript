@@ -11,6 +11,4 @@ coverage
 graph.svg
 .history
 *.tgz
-benchmarks/results.json
-benchmarks/package.json
-benchmarks/package-lock.json
+benchmarks/*.json
