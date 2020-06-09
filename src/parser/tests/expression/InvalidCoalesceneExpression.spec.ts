@@ -13,6 +13,8 @@ import {
     InvalidCoalescingExpression,
     LiteralExpression
 } from '../../Expression';
+import { Program, BrsFile } from '../../..';
+import { getTestTranspile } from '../../../files/BrsFile.spec';
 
 describe('parser invalid coalescene', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -175,16 +177,29 @@ describe('parser invalid coalescene', () => {
 });
 
 describe('transpilation', () => {
-    it('transpiles simple case', () => {
-        let { tokens } = Lexer.scan(`person ?? "zombie"`);
-        let { diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrightScript });
+    let rootDir = process.cwd();
+    let program: Program;
+    // @ts-ignore
+    let file: BrsFile;
+    let testTranspile = getTestTranspile(() => [program, rootDir]);
 
-        expect(diagnostics[0]?.code).to.equal(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('').code);
+    beforeEach(() => {
+        program = new Program({ rootDir: rootDir });
+        file = new BrsFile('abs', 'rel', program);
+    });
+    afterEach(() => {
+        program.dispose();
     });
 
-    it('generates scope for complex case', () => {
-        let { tokens } = Lexer.scan(`m.a + m.b(m.a, var1) ?? var2.name + process([var3, var4])`);
-        let { statements } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-        (statements[0] as AssignmentStatement).value.transpile(null);
+    it('properly transpiles null coalesence assignments - simple', async () => {
+        await testTranspile(`a = user ?? {"id": "default"}`,'a = bslib_simpleCoalesce(user{\n    "id": "default"\n})');
+    });
+
+    it('properly transpiles null coalesence assignments - complex consequent', async () => {
+        await testTranspile(`a = user.getAccount() ?? {"id": "default"}`,'a = bslib_simpleCoalesce(user{\n    "id": "default"\n})');
+    });
+
+    it('properly transpiles null coalesence assignments - complex alternate', async () => {
+        await testTranspile(`a = user ?? m.defaults.getAccount(settings.name)`,'a = bslib_simpleCoalesce(user{\n    "id": "default"\n})');
     });
 });

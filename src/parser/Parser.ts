@@ -1217,7 +1217,7 @@ export class Parser {
     private conditionalOrCoalescingExpression(test?: Expression): ConditionalExpression | InvalidCoalescingExpression {
         this.warnIfNotBrighterScriptMode('ternary operator');
         if (!test) {
-            test = this.boolean();
+            test = this.expression();
         }
         if (!this.check(TokenKind.QuestionMark)) {
             //got here in error
@@ -1756,15 +1756,17 @@ export class Parser {
     }
 
     private anonymousFunction(): Expression {
+        let expr;
         if (this.check(TokenKind.Sub, TokenKind.Function)) {
-            return this.functionDeclaration(true);
+            expr = this.functionDeclaration(true);
+        } else {
+            expr = this.boolean();
         }
 
-        if (this.checkNext(TokenKind.QuestionMark)) {
-            return this.conditionalOrCoalescingExpression();
+        if (this.check(TokenKind.QuestionMark)) {
+            expr = this.conditionalOrCoalescingExpression(expr);
         }
-
-        return this.boolean();
+        return expr;
     }
 
     private boolean(): Expression {
@@ -1793,12 +1795,8 @@ export class Parser {
             )
         ) {
             let operator = this.previous();
-            if (this.checkNext(TokenKind.QuestionMark)) {
-                expr = this.conditionalOrCoalescingExpression();
-            } else {
-                let right = this.additive();
-                expr = new BinaryExpression(expr, operator, right);
-            }
+            let right = this.additive();
+            expr = new BinaryExpression(expr, operator, right);
         }
 
         return expr;

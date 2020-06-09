@@ -13,6 +13,9 @@ import {
     ConditionalExpression,
     LiteralExpression
 } from '../../Expression';
+import {Program} from "../../../Program";
+import {BrsFile} from "../../..";
+import {getTestTranspile} from "../../../files/BrsFile.spec";
 
 describe('parser conditional expressions', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -54,6 +57,21 @@ describe('parser conditional expressions', () => {
                 expect(statements).to.be.empty;
             }
         });
+    });
+
+    it(`supports simple assign:`, () => {
+        let { tokens } = Lexer.scan(`being = isZombie = false ? "human" : "zombie"`);
+        let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+        expect(diagnostics).to.be.empty;
+        expect(statements).to.exist;
+        expect(statements).to.not.be.empty;
+    });
+    it(`supports complex test:`, () => {
+        let { tokens } = Lexer.scan(`a = user.getAccount() ? "logged in" : "not logged in"`);
+        let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+        expect(diagnostics).to.be.empty;
+        expect(statements).to.exist;
+        expect(statements).to.not.be.empty;
     });
 
     describe('conditional expressions - variety of test cases', () => {
@@ -250,17 +268,31 @@ describe('parser conditional expressions', () => {
     });
 });
 
-describe('transpilation', () => {
-    it('transpiles simple case', () => {
-        let { tokens } = Lexer.scan(`true ? "human" : "Zombie"`);
-        let { diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrightScript });
 
-        expect(diagnostics[0]?.code).to.equal(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('').code);
+describe('transpilation', () => {
+    let rootDir = process.cwd();
+    let program: Program;
+    // @ts-ignore
+    let file: BrsFile;
+    let testTranspile = getTestTranspile(() => [program, rootDir]);
+
+    beforeEach(() => {
+        program = new Program({ rootDir: rootDir });
+        file = new BrsFile('abs', 'rel', program);
+    });
+    afterEach(() => {
+        program.dispose();
     });
 
-    it('generates scope for complex case', () => {
-        let { tokens } = Lexer.scan(`a = true ? m.a + m.b(m.a, var1) : var2.name + process([var3, var4])`);
-        let { statements } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-        (statements[0] as AssignmentStatement).value.transpile(null);
+    it('properly transpiles ternary assignments - simple', async () => {
+        await testTranspile(`a = user = invalid ? "no user" : "logged in"`,`a = bslib_simpleTernary(user = invalid, "no user", "logged in") `);
+    });
+
+    it('properly transpiles ternary assignments - complex consequent', async () => {
+        await testTranspile(`a = user.getAccount() ? "logged in" : "not logged in"`,'a = bslib_simpleCoalesce(user{\n    "id": "default"\n})');
+    });
+
+    it('properly transpiles ternary assignments - complex alternate', async () => {
+        await testTranspile(`a = user ? m.defaults.getAccount(settings.name) : "no"`,'a = bslib_simpleCoalesce(user{\n    "id": "default"\n})');
     });
 });
