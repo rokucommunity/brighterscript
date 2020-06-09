@@ -468,8 +468,8 @@ export class Lexer {
                 this.addToken(TokenKind.TemplateStringQuasi, new BrsString(value));
                 this.advance();
                 this.advance();
-                this.start = this.current;
                 while (!this.isAtEnd() && !this.check('}')) {
+                    this.start = this.current;
                     this.scanToken();
                 }
                 this.start = this.current + 1;

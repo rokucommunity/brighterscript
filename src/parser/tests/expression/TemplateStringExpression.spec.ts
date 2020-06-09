@@ -65,7 +65,7 @@ describe('transpilation', () => {
     });
     it('properly transpiles one line template string with expressions', async () => {
         await testTranspile(`a = \`hello \${a.text} world \${"template" + m.getChars()} test\``,
-          `a = "hello " + a.text + " world " + "template" + m.m.getChars() + " test"`);
+          `a = "hello " + a.text + " world " + "template" + m.getChars() + " test"`);
     });
     it('properly transpiles simple multiline template string', async () => {
         await testTranspile(`a = \`hello world
