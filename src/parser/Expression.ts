@@ -9,23 +9,27 @@ import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 
 /** A BrightScript expression */
-export interface Expression {
+export abstract class Expression {
     /** The starting and ending location of the expression. */
     range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string>;
+    abstract transpile(state: TranspileState): Array<SourceNode | string>;
+
+    getAllExpressions(expressions: Expression[] = []): Expression[] {
+        expressions.push(this);
+        return expressions;
+    }
 }
 
-export class BinaryExpression implements Expression {
+export class BinaryExpression extends Expression {
     constructor(
         readonly left: Expression,
         readonly operator: Token,
         readonly right: Expression
     ) {
+        super();
         this.range = Range.create(this.left.range.start, this.right.range.end);
     }
-
-    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
@@ -36,9 +40,16 @@ export class BinaryExpression implements Expression {
             new SourceNode(this.right.range.start.line + 1, this.right.range.start.character, state.pathAbsolute, this.right.transpile(state))
         ];
     }
+    getAllExpressions(expressions: Expression[] = []): Expression[] {
+        super.getAllExpressions(expressions);
+        this.left.getAllExpressions(expressions);
+        this.right.getAllExpressions(expressions);
+
+        return expressions;
+    }
 }
 
-export class CallExpression implements Expression {
+export class CallExpression extends Expression {
     static MaximumArguments = 32;
 
     constructor(
@@ -48,10 +59,9 @@ export class CallExpression implements Expression {
         readonly args: Expression[],
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
+        super();
         this.range = Range.create(this.callee.range.start, this.closingParen.range.end);
     }
-
-    public readonly range: Range;
 
     transpile(state: TranspileState) {
         let result = [];
@@ -75,9 +85,16 @@ export class CallExpression implements Expression {
         );
         return result;
     }
+    getAllExpressions(expressions: Expression[] = []): Expression[] {
+        super.getAllExpressions(expressions);
+        this.args.map(e => e.getAllExpressions(expressions));
+        this.callee.getAllExpressions(expressions);
+
+        return expressions;
+    }
 }
 
-export class FunctionExpression implements Expression {
+export class FunctionExpression extends Expression {
     constructor(
         readonly parameters: FunctionParameter[],
         readonly returns: ValueKind,
@@ -93,6 +110,7 @@ export class FunctionExpression implements Expression {
      */
         readonly parentFunction?: FunctionExpression
     ) {
+        super();
     }
 
     /**
@@ -168,11 +186,12 @@ export class FunctionExpression implements Expression {
     }
 }
 
-export class NamespacedVariableNameExpression implements Expression {
+export class NamespacedVariableNameExpression extends Expression {
     constructor(
     //if this is a `DottedGetExpression`, it must be comprised only of `VariableExpression`s
         readonly expression: DottedGetExpression | VariableExpression
     ) {
+        super();
         this.range = expression.range;
     }
     range: Range;
@@ -212,18 +231,18 @@ export class NamespacedVariableNameExpression implements Expression {
             return this.getNameParts().join('_');
         }
     }
+
 }
 
-export class DottedGetExpression implements Expression {
+export class DottedGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
         readonly dot: Token
     ) {
+        super();
         this.range = Range.create(this.obj.range.start, this.name.range.end);
     }
-
-    public readonly range: Range;
 
     transpile(state: TranspileState) {
     //if the callee starts with a namespace name, transpile the name
@@ -237,18 +256,23 @@ export class DottedGetExpression implements Expression {
             ];
         }
     }
+    getAllExpressions(expressions: Expression[] = []): Expression[] {
+        super.getAllExpressions(expressions);
+        this.obj.getAllExpressions(expressions);
+
+        return expressions;
+    }
 }
 
-export class XmlAttributeGetExpression implements Expression {
+export class XmlAttributeGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
         readonly at: Token
     ) {
+        super();
         this.range = Range.create(this.obj.range.start, this.name.range.end);
     }
-
-    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
@@ -259,17 +283,16 @@ export class XmlAttributeGetExpression implements Expression {
     }
 }
 
-export class IndexedGetExpression implements Expression {
+export class IndexedGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
         readonly index: Expression,
         readonly openingSquare: Token,
         readonly closingSquare: Token
     ) {
+        super();
         this.range = Range.create(this.obj.range.start, this.closingSquare.range.end);
     }
-
-    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
@@ -281,7 +304,7 @@ export class IndexedGetExpression implements Expression {
     }
 }
 
-export class GroupingExpression implements Expression {
+export class GroupingExpression extends Expression {
     constructor(
         readonly tokens: {
             left: Token;
@@ -289,10 +312,9 @@ export class GroupingExpression implements Expression {
         },
         readonly expression: Expression
     ) {
+        super();
         this.range = Range.create(this.tokens.left.range.start, this.tokens.right.range.end);
     }
-
-    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
@@ -303,15 +325,14 @@ export class GroupingExpression implements Expression {
     }
 }
 
-export class LiteralExpression implements Expression {
+export class LiteralExpression extends Expression {
     constructor(
         readonly value: BrsType,
         range: Range
     ) {
+        super();
         this.range = range ?? Range.create(-1, -1, -1, -1);
     }
-
-    public readonly range: Range;
 
     transpile(state: TranspileState) {
         let text: string;
@@ -333,16 +354,15 @@ export class LiteralExpression implements Expression {
     }
 }
 
-export class ArrayLiteralExpression implements Expression {
+export class ArrayLiteralExpression extends Expression {
     constructor(
         readonly elements: Array<Expression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) {
+        super();
         this.range = Range.create(this.open.range.start, this.close.range.end);
     }
-
-    public readonly range: Range;
 
     transpile(state: TranspileState) {
         let result = [];
@@ -399,6 +419,15 @@ export class ArrayLiteralExpression implements Expression {
         );
         return result;
     }
+    getAllExpressions(expressions: Expression[] = []): Expression[] {
+        super.getAllExpressions(expressions);
+        for (let e of this.elements) {
+            if (e instanceof Expression) {
+                e.getAllExpressions(expressions);
+            }
+        }
+        return expressions;
+    }
 }
 
 /** A member of an associative array literal. */
@@ -412,16 +441,15 @@ export interface AAMemberExpression {
     range: Range;
 }
 
-export class AALiteralExpression implements Expression {
+export class AALiteralExpression extends Expression {
     constructor(
         readonly elements: Array<AAMemberExpression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) {
+        super();
         this.range = Range.create(this.open.range.start, this.close.range.end);
     }
-
-    public readonly range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         let result = [];
@@ -503,17 +531,26 @@ export class AALiteralExpression implements Expression {
         );
         return result;
     }
+    getAllExpressions(expressions: Expression[] = []): Expression[] {
+        super.getAllExpressions(expressions);
+        for (let e of this.elements) {
+            if (!(e instanceof CommentStatement)) {
+                e.value.getAllExpressions(expressions);
+            }
+        }
+
+        return expressions;
+    }
 }
 
-export class UnaryExpression implements Expression {
+export class UnaryExpression extends Expression {
     constructor(
         readonly operator: Token,
         readonly right: Expression
     ) {
+        super();
         this.range = Range.create(this.operator.range.start, this.right.range.end);
     }
-
-    public readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
@@ -522,17 +559,22 @@ export class UnaryExpression implements Expression {
             ...this.right.transpile(state)
         ];
     }
+    getAllExpressions(expressions: Expression[] = []): Expression[] {
+        super.getAllExpressions(expressions);
+        this.right.getAllExpressions(expressions);
+
+        return expressions;
+    }
 }
 
-export class VariableExpression implements Expression {
+export class VariableExpression extends Expression {
     constructor(
         readonly name: Identifier,
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
+        super();
         this.range = this.name.range;
     }
-
-    public readonly range: Range;
 
     public getName(parseMode: ParseMode) {
         return parseMode === ParseMode.BrightScript ? this.name.text : this.name.text;
@@ -566,11 +608,12 @@ export class VariableExpression implements Expression {
  * except we need to uniquely identify these statements so we can
  * do more type checking.
  */
-export class NewExpression implements Expression {
+export class NewExpression extends Expression {
     constructor(
         readonly newKeyword: Token,
         readonly call: CallExpression
     ) {
+        super();
         this.range = Range.create(this.newKeyword.range.start, this.call.range.end);
     }
 
@@ -587,14 +630,18 @@ export class NewExpression implements Expression {
         return this.call.namespaceName;
     }
 
-    public readonly range: Range;
-
     public transpile(state: TranspileState) {
         return this.call.transpile(state);
     }
+    getAllExpressions(expressions: Expression[] = []): Expression[] {
+        super.getAllExpressions(expressions);
+        this.call.getAllExpressions(expressions);
+
+        return expressions;
+    }
 }
 
-export class CallfuncExpression implements Expression {
+export class CallfuncExpression extends Expression {
     constructor(
         readonly callee: Expression,
         readonly operator: Token,
@@ -603,13 +650,12 @@ export class CallfuncExpression implements Expression {
         readonly args: Expression[],
         readonly closingParen: Token
     ) {
+        super();
         this.range = Range.create(
             callee.range.start,
             (closingParen ?? args[args.length - 1] ?? openingParen ?? methodName ?? operator).range.end
         );
     }
-
-    public readonly range: Range;
 
     public transpile(state: TranspileState) {
         let result = [];
@@ -645,21 +691,27 @@ export class CallfuncExpression implements Expression {
         );
         return result;
     }
+    getAllExpressions(expressions: Expression[] = []): Expression[] {
+        super.getAllExpressions(expressions);
+        this.args.map(e => e.getAllExpressions(expressions));
+        this.callee.getAllExpressions(expressions);
+
+        return expressions;
+    }
 }
 
-export class ConditionalExpression implements Expression {
+export class ConditionalExpression extends Expression {
     constructor(
         readonly test: Expression,
         readonly consequent: Expression,
         readonly alternate: Expression
     ) {
+        super();
         this.range = Range.create(
             test.range.start,
             alternate.range.end
         );
     }
-
-    public readonly range: Range;
 
     transpile(state: TranspileState) {
         let result = [];
@@ -703,47 +755,14 @@ export class ConditionalExpression implements Expression {
         }
         return result;
     }
-}
+    getAllExpressions(expressions: Expression[] = []): Expression[] {
+        super.getAllExpressions(expressions);
+        this.test.getAllExpressions(expressions);
+        this.consequent.getAllExpressions(expressions);
+        this.alternate.getAllExpressions(expressions);
 
-/**
- * Walks an expression, getting all nested expressions
- * @param expression
- * @param expressions
- */
-function getAllExpressions(expression: Expression, expressions: Expression[] = []): Expression[] {
-    //TODO - I think this should live on the expression itself
-    expressions.push(expression);
-
-    if (expression instanceof VariableExpression) {
-    } else if (expression instanceof BinaryExpression) {
-        getAllExpressions(expression.left, expressions);
-        getAllExpressions(expression.right, expressions);
-    } else if (expression instanceof CallExpression) {
-        expression.args.map(e => getAllExpressions(e, expressions));
-        getAllExpressions(expression.callee, expressions);
-    } else if (expression instanceof DottedGetExpression) {
-        getAllExpressions(expression.obj, expressions);
-    } else if (expression instanceof ArrayLiteralExpression) {
-        expression.elements.map(e => getAllExpressions(e, expressions));
-    } else if (expression instanceof AALiteralExpression) {
-        for (let e of expression.elements) {
-            if (!(e instanceof CommentStatement)) {
-                getAllExpressions(e.value, expressions);
-            }
-        }
-    } else if (expression instanceof UnaryExpression) {
-        getAllExpressions(expression.right, expressions);
-    } else if (expression instanceof NewExpression) {
-        getAllExpressions(expression.call, expressions);
-    } else if (expression instanceof CallfuncExpression) {
-        expression.args.map(e => getAllExpressions(e, expressions));
-        getAllExpressions(expression.callee, expressions);
-    } else if (expression instanceof ConditionalExpression) {
-        getAllExpressions(expression.test, expressions);
-        getAllExpressions(expression.consequent, expressions);
-        getAllExpressions(expression.alternate, expressions);
+        return expressions;
     }
-    return expressions;
 }
 
 function getExpressionInfo(expression: Expression): {
@@ -751,7 +770,7 @@ function getExpressionInfo(expression: Expression): {
     varExpressions: Expression[];
     uniqueVarNames: string[];
 } {
-    const expressions = getAllExpressions(expression);
+    const expressions = expression.getAllExpressions();
     const varExpressions = expressions.filter(e => e instanceof VariableExpression) as VariableExpression[];
     const uniqueVarNames = [...new Set(varExpressions.map(e => e.name.text))];
     return { expressions: expressions, varExpressions: varExpressions, uniqueVarNames: uniqueVarNames };
