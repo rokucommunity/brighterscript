@@ -4,6 +4,7 @@ import * as sinonImport from 'sinon';
 
 import util from './util';
 import { Range } from 'vscode-languageserver';
+import { Lexer } from './lexer';
 
 //shorthand for normalizing a path
 let n = path.normalize;
@@ -464,6 +465,62 @@ describe('util', () => {
             expect(util.getDiagnosticSquigglyText(<any>{
                 range: Range.create(5, 16, 5, 18)
             }, 'end functionasdf')).to.equal('            ~~~~');
+        });
+    });
+
+    describe('tokenizeBsDisableComment', () => {
+        it('skips non disable comments', () => {
+            expect(util.tokenizeBsDisableComment(
+                Lexer.scan(`'not disable comment`).tokens[0]
+            )).not.to.exist;
+        });
+
+        it('tokenizes bs:disable-line comment', () => {
+            expect(util.tokenizeBsDisableComment(
+                Lexer.scan(`'bs:disable-line`).tokens[0])
+            ).to.eql({
+                commentTokenText: `'`,
+                disableType: 'line',
+                codes: []
+            });
+        });
+
+        it('works for special case', () => {
+            expect(util.tokenizeBsDisableComment(
+                Lexer.scan(`print "hi" 'bs:disable-line: 123456 999999   aaaab`).tokens[2])
+            ).to.eql({
+                commentTokenText: `'`,
+                disableType: 'line',
+                codes: [{
+                    code: '123456',
+                    range: Range.create(0, 29, 0, 35)
+                }, {
+                    code: '999999',
+                    range: Range.create(0, 36, 0, 42)
+                }, {
+                    code: 'aaaab',
+                    range: Range.create(0, 45, 0, 50)
+                }]
+            });
+        });
+
+        it('tokenizes bs:disable-line comment with codes', () => {
+            expect(util.tokenizeBsDisableComment(
+                Lexer.scan(`'bs:disable-line:1 2 3`).tokens[0])
+            ).to.eql({
+                commentTokenText: `'`,
+                disableType: 'line',
+                codes: [{
+                    code: '1',
+                    range: Range.create(0, 17, 0, 18)
+                }, {
+                    code: '2',
+                    range: Range.create(0, 19, 0, 20)
+                }, {
+                    code: '3',
+                    range: Range.create(0, 21, 0, 22)
+                }]
+            });
         });
     });
 });
