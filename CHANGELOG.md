@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.10.8] - 2020-06-09
+### Fixed
+ - Allow leading spcaes for `bs:disable-line` and `bs:disable-next-line` comments ([#108](https://github.com/rokucommunity/brighterscript/pull/108))
+
+
+
 ## [0.10.7] - 2020-06-08
 ### Fixed
  - bug in cli that was always returning a nonzero error code
@@ -339,6 +345,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.10.8]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.7...v0.10.8
 [0.10.7]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.6...v0.10.7
 [0.10.6]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.5...v0.10.6
 [0.10.5]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.4...v0.10.5
