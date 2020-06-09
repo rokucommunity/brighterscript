@@ -72,7 +72,9 @@ import {
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression,
-    InvalidCoalescingExpression
+    InvalidCoalescingExpression,
+    TemplateStringExpression,
+    TemplateLiteralExpression
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
@@ -1249,6 +1251,28 @@ export class Parser {
         }
     }
 
+    private templateString(): TemplateStringExpression {
+        let expressions = [];
+        this.warnIfNotBrighterScriptMode('template string');
+        this.advance();
+        while (!this.check(TokenKind.BackTick) && !this.check(TokenKind.Eof)) {
+            let next = this.peek();
+            if (next.kind === TokenKind.TemplateStringQuasi) {
+                expressions.push(new TemplateLiteralExpression(next.literal, next.range));
+                this.advance();
+            } else {
+                expressions.push(this.expression());
+            }
+        }
+        this.advance();
+
+        if (this.check(TokenKind.Eof)) {
+            //error - missing backtick
+        } else {
+            return new TemplateStringExpression(expressions);
+        }
+    }
+
     private ifStatement(): IfStatement {
         const ifToken = this.advance();
         const startingRange = ifToken.range;
@@ -1759,7 +1783,9 @@ export class Parser {
         let expr;
         if (this.check(TokenKind.Sub, TokenKind.Function)) {
             expr = this.functionDeclaration(true);
-        } else {
+        } else if (this.check(TokenKind.BackTick)) {
+            return this.templateString();        
+	} else {
             expr = this.boolean();
         }
 

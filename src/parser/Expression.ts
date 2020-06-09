@@ -332,6 +332,45 @@ export class LiteralExpression implements Expression {
     ];
   }
 }
+export class TemplateLiteralExpression extends LiteralExpression {
+    public readonly range: Range;
+
+    transpile(state: TranspileState) {
+        let text: string;
+        if (this.value.kind === ValueKind.String) {
+            //escape quote marks with another quote mark
+            text = `"${this.value.toString().replace(/"/g, '""')}"`;
+        } else {
+            text = this.value.toString();
+        }
+
+        let parts = text.split('\n');
+        let result = [];
+
+        let startChar = this.range.start.character;
+        let startLine = this.range.start.line + 1;
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            result.push(new SourceNode(
+              startLine,
+              startChar,
+              state.pathAbsolute,
+              part
+            ));
+            if (i < parts.length -1) {
+                result.push(new SourceNode(
+                    startLine,
+                    startChar,
+                    state.pathAbsolute,
+                    `" + chr(10)${i < parts.length -1  ? ' + "' : ''}`
+                ));
+            }
+            startChar += part.length;
+
+        }
+        return result;
+    }
+}
 
 export class ArrayLiteralExpression implements Expression {
   constructor(
@@ -817,4 +856,30 @@ function getScopedFunction(state: TranspileState, alternate: Expression, scopeVa
   result.push(...alternate.transpile(state));
   result.push('\nend function');
   return result;
+}
+
+export class TemplateStringExpression implements Expression {
+    constructor(
+        readonly parts: Expression[]
+    ) {
+        this.range = Range.create(
+            parts[0].range.start,
+            parts[parts.length - 1].range.end
+        );
+    }
+
+    public readonly range: Range;
+
+    transpile(state: TranspileState) {
+        let result = [];
+        let isFirst = true;
+        for (let part of this.parts) {
+            if (!isFirst) {
+                result.push(' + ');
+            }
+            isFirst = false;
+            result.push(...part.transpile(state));
+        }
+        return result;
+    }
 }

@@ -574,11 +574,14 @@ By using Chr, you can create strings containing characters which cannot be conta
     }, {
         name: 'Left',
         shortDescription: 'Returns the first n characters of s. ',
-        type: new FunctionType(new IntegerType()),
+        type: new FunctionType(new StringType()),
         file: globalFile,
         params: [{
             name: 's',
             type: new StringType()
+        }, {
+            name: 'n',
+            type: new IntegerType()
         }]
     }, {
         name: 'Len',
@@ -716,7 +719,31 @@ By using Chr, you can create strings containing characters which cannot be conta
         }]
     }
 ] as Callable[];
-export let globalCallables = [...mathFunctions, ...runtimeFunctions, ...globalUtilityFunctions, ...globalStringFunctions];
+
+
+let programStatementFunctions = [
+    {
+        name: 'Tab',
+        shortDescription: 'Moves the cursor to the specified position on the current line (modulo the width of your console if you specify TAB positions greater than the console width). TAB may be used several times in a PRINT list. No punctuation is required after a TAB modifier. Numerical expressions may be used to specify a TAB position. TAB cannot be used to move the cursor to the left. If the cursor is beyond the specified position, the TAB is ignored.',
+        type: new FunctionType(new VoidType()),
+        file: globalFile,
+        params: [{
+            name: 'expression',
+            type: new IntegerType()
+        }]
+    }, {
+        name: 'Pos',
+        shortDescription: 'Returns a number from 0 to window width, indicating the current cursor position on the cursor. Requires a "dummy argument" (any numeric expression).',
+        type: new FunctionType(new VoidType()),
+        file: globalFile,
+        params: [{
+            name: 'x',
+            type: new IntegerType()
+        }]
+    }
+] as Callable[];
+
+export let globalCallables = [...mathFunctions, ...runtimeFunctions, ...globalUtilityFunctions, ...globalStringFunctions, ...programStatementFunctions];
 for (let callable of globalCallables) {
     //give each callable a dummy location
     callable.nameRange = Range.create(0, 0, 0, callable.name.length);
