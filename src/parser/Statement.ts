@@ -174,26 +174,11 @@ export class CommentStatement implements Statement {
     public expression: CommentExpression;
 
     get text() {
-        return this.expression.comments.map(x => x.text).join('\n');
+        return this.expression.text;
     }
 
     transpile(state: TranspileState): Array<SourceNode | string> {
-        let result = [];
-        let comments = this.expression.comments;
-        for (let i = 0; i < comments.length; i++) {
-            let comment = comments[i];
-            if (i > 0) {
-                result.push(state.indent());
-            }
-            result.push(
-                new SourceNode(comment.range.start.line + 1, comment.range.start.character, state.pathAbsolute, comment.text)
-            );
-            //add newline for all except final comment
-            if (i < comments.length - 1) {
-                result.push('\n');
-            }
-        }
-        return result;
+        return this.expression.transpile(state);
     }
 }
 

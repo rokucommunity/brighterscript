@@ -1,6 +1,6 @@
 import { Token, Identifier } from '../lexer';
 import { BrsType, ValueKind, BrsString, FunctionParameter } from '../brsTypes';
-import { Block, CommentStatement } from './Statement';
+import { Block } from './Statement';
 import { SourceNode } from 'source-map';
 
 import { Range } from 'vscode-languageserver';
@@ -356,7 +356,7 @@ export class LiteralExpression extends Expression {
 
 export class ArrayLiteralExpression extends Expression {
     constructor(
-        readonly elements: Array<Expression | CommentStatement>,
+        readonly elements: Array<Expression>,
         readonly open: Token,
         readonly close: Token
     ) {
@@ -376,7 +376,7 @@ export class ArrayLiteralExpression extends Expression {
             let previousElement = this.elements[i - 1];
             let element = this.elements[i];
 
-            if (element instanceof CommentStatement) {
+            if (element instanceof CommentExpression) {
                 //if the comment is on the same line as opening square or previous statement, don't add newline
                 if (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element)) {
                     result.push(' ');
@@ -400,7 +400,7 @@ export class ArrayLiteralExpression extends Expression {
                 for (let j = i + 1; j < this.elements.length; j++) {
                     let el = this.elements[j];
                     //add a comma if there will be another element after this
-                    if (el instanceof CommentStatement === false) {
+                    if (el instanceof CommentExpression === false) {
                         result.push(',');
                         break;
                     }
@@ -443,7 +443,7 @@ export interface AAMemberExpression {
 
 export class AALiteralExpression extends Expression {
     constructor(
-        readonly elements: Array<AAMemberExpression | CommentStatement>,
+        readonly elements: Array<AAMemberExpression | CommentExpression>,
         readonly open: Token,
         readonly close: Token
     ) {
@@ -459,7 +459,7 @@ export class AALiteralExpression extends Expression {
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
-        if (hasChildren && ((this.elements[0] instanceof CommentStatement) === false || !util.linesTouch(this.elements[0], this.open))) {
+        if (hasChildren && ((this.elements[0] instanceof CommentExpression) === false || !util.linesTouch(this.elements[0], this.open))) {
             result.push('\n');
         }
         state.blockDepth++;
@@ -469,7 +469,7 @@ export class AALiteralExpression extends Expression {
             let nextElement = this.elements[i + 1];
 
             //don't indent if comment is same-line
-            if (element instanceof CommentStatement &&
+            if (element instanceof CommentExpression &&
         (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element))
             ) {
                 result.push(' ');
@@ -480,7 +480,7 @@ export class AALiteralExpression extends Expression {
             }
 
             //render comments
-            if (element instanceof CommentStatement) {
+            if (element instanceof CommentExpression) {
                 result.push(...element.transpile(state));
             } else {
                 //key
@@ -496,7 +496,7 @@ export class AALiteralExpression extends Expression {
                 //determine if comments are the only members left in the array
                 let onlyCommentsRemaining = true;
                 for (let j = i + 1; j < this.elements.length; j++) {
-                    if ((this.elements[j] instanceof CommentStatement) === false) {
+                    if ((this.elements[j] instanceof CommentExpression) === false) {
                         onlyCommentsRemaining = false;
                         break;
                     }
@@ -512,7 +512,7 @@ export class AALiteralExpression extends Expression {
 
 
             //if next element is a same-line comment, skip the newline
-            if (nextElement && nextElement instanceof CommentStatement && nextElement.range.start.line === element.range.start.line) {
+            if (nextElement && nextElement instanceof CommentExpression && nextElement.range.start.line === element.range.start.line) {
 
                 //add a newline between statements
             } else {
@@ -534,7 +534,7 @@ export class AALiteralExpression extends Expression {
     getAllExpressions(expressions: Expression[] = []): Expression[] {
         super.getAllExpressions(expressions);
         for (let e of this.elements) {
-            if (!(e instanceof CommentStatement)) {
+            if (!(e instanceof CommentExpression)) {
                 e.value.getAllExpressions(expressions);
             }
         }
@@ -795,6 +795,10 @@ export class CommentExpression extends Expression {
             this.comments[0].range.start,
             this.comments[this.comments.length - 1].range.end
         );
+    }
+
+    get text() {
+        return this.comments.map(x => x.text).join('\n');
     }
 
     transpile(state: TranspileState): Array<SourceNode | string> {

@@ -2015,12 +2015,12 @@ export class Parser {
                 );
                 return new GroupingExpression({ left: left, right: right }, expr);
             case this.match(TokenKind.LeftSquareBracket):
-                let elements: Array<Expression | CommentStatement> = [];
+                let elements: Array<Expression | CommentExpression> = [];
                 let openingSquare = this.previous();
 
                 //add any comment found right after the opening square
                 if (this.check(TokenKind.Comment)) {
-                    elements.push(new CommentStatement([this.advance()]));
+                    elements.push(new CommentExpression([this.advance()]));
                 }
 
                 while (this.match(TokenKind.Newline)) {
@@ -2032,7 +2032,7 @@ export class Parser {
                     while (this.match(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
                         if (this.checkPrevious(TokenKind.Comment) || this.check(TokenKind.Comment)) {
                             let comment = this.check(TokenKind.Comment) ? this.advance() : this.previous();
-                            elements.push(new CommentStatement([comment]));
+                            elements.push(new CommentExpression([comment]));
                         }
                         while (this.match(TokenKind.Newline)) {
 
@@ -2057,7 +2057,7 @@ export class Parser {
                 return new ArrayLiteralExpression(elements, openingSquare, closingSquare);
             case this.match(TokenKind.LeftCurlyBrace):
                 let openingBrace = this.previous();
-                let members: Array<AAMemberExpression | CommentStatement> = [];
+                let members: Array<AAMemberExpression | CommentExpression> = [];
 
                 let key = () => {
                     let result = {
@@ -2093,7 +2093,7 @@ export class Parser {
 
                 if (!this.match(TokenKind.RightCurlyBrace)) {
                     if (this.check(TokenKind.Comment)) {
-                        members.push(new CommentStatement([this.advance()]));
+                        members.push(new CommentExpression([this.advance()]));
                     } else {
                         let k = key();
                         let expr = this.expression();
@@ -2110,7 +2110,7 @@ export class Parser {
                         //check for comment at the end of the current line
                         if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
                             let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
-                            members.push(new CommentStatement([token]));
+                            members.push(new CommentExpression([token]));
                         } else {
                             while (this.match(TokenKind.Newline, TokenKind.Colon)) {
 
@@ -2118,7 +2118,7 @@ export class Parser {
                             //check for a comment on its own line
                             if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
                                 let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
-                                members.push(new CommentStatement([token]));
+                                members.push(new CommentExpression([token]));
                                 continue;
                             }
 
