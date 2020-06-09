@@ -577,7 +577,7 @@ export let DiagnosticMessages = {
     }),
     malformedTernaryOperator: () => ({
         message: `Ternary '?' operator must be of form: test ? true value : false value`,
-        code: 1058,
+        code: 1112,
         severity: DiagnosticSeverity.Error
     })
 

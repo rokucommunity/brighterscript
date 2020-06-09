@@ -1224,13 +1224,17 @@ export class Parser {
         this.advance();
 
         if (this.check(TokenKind.QuestionMark)) {
-            //we are a null coalescene
+            //we are an invalid coalescence
             // TODO - this is implemented in a separate pr
         } else {
             //we are a ternary
             const consequent = this.expression();
             if (!this.check(TokenKind.Colon)) {
                 //got here in error
+                this.diagnostics.push({
+                    ...DiagnosticMessages.malformedTernaryOperator(),
+                    range: test.range
+                });
             }
 
             this.advance();

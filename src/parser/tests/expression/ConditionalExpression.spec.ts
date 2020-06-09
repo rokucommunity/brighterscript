@@ -14,7 +14,6 @@ import {
     LiteralExpression
 } from '../../Expression';
 import { Program } from '../../../Program';
-import { BrsFile } from '../../..';
 import { getTestTranspile } from '../../../files/BrsFile.spec';
 
 describe('parser conditional expressions', () => {
@@ -272,12 +271,10 @@ describe('parser conditional expressions', () => {
 describe('transpilation', () => {
     let rootDir = process.cwd();
     let program: Program;
-    let file: BrsFile;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
-        program = new Program({ rootDir: rootDir });
-        file = new BrsFile('abs', 'rel', program);
+        program = new Program({rootDir: rootDir});
     });
     afterEach(() => {
         program.dispose();
