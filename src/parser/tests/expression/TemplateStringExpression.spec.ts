@@ -4,6 +4,8 @@ import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Lexer } from '../../../lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { AssignmentStatement } from '../../Statement';
+import { getTestTranspile } from '../../../files/BrsFile.spec';
+import { Program, BrsFile } from '../../..';
 
 describe('parser template String', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -15,6 +17,12 @@ describe('parser template String', () => {
     describe('in assignment', () => {
         it(`simple case`, () => {
             let { tokens } = Lexer.scan(`a = \`hello      world\``);
+            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(statements[0]).instanceof(AssignmentStatement);
+        });
+        it(`complex case`, () => {
+            let { tokens } = Lexer.scan(`a = \`hello \${a.text} world \${"template" + m.getChars()} test\``);
             let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements[0]).instanceof(AssignmentStatement);
@@ -35,16 +43,35 @@ describe('parser template String', () => {
 });
 
 describe('transpilation', () => {
-    it('transpiles simple case', () => {
-        let { tokens } = Lexer.scan(`person ?? "zombie"`);
-        let { diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrightScript });
+    let rootDir = process.cwd();
+    let program: Program;
 
-        expect(diagnostics[0]?.code).to.equal(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('').code);
+    // @ts-ignore
+    let file: BrsFile;
+    let testTranspile = getTestTranspile(() => [program, rootDir]);
+
+    beforeEach(() => {
+        program = new Program({ rootDir: rootDir });
+        file = new BrsFile('abs', 'rel', program);
+    });
+    afterEach(() => {
+        program.dispose();
     });
 
-    it('generates scope for complex case', () => {
-        let { tokens } = Lexer.scan(`m.a + m.b(m.a, var1) ?? var2.name + process([var3, var4])`);
-        let { statements } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-        (statements[0] as AssignmentStatement).value.transpile(null);
+    it('properly transpiles simple template string', async () => {
+        await testTranspile(`a = \`hello world\``, `
+        a = "hello world"
+    `);
     });
+    it('properly transpiles one line template string with expressions', async () => {
+        await testTranspile(`a = \`hello \${a.text} world \${"template" + m.getChars()} test\``,
+          `a = "hello " + a.text + " world " + "template" + m.m.getChars() + " test"`);
+    });
+    it('properly transpiles simple multiline template string', async () => {
+        await testTranspile(`a = \`hello world
+I am multiline\``, `
+a = "hello world
+I am multiline"`);
+    });
+
 });

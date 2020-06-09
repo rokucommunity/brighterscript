@@ -650,7 +650,7 @@ export class CallfuncExpression implements Expression {
 
 export class TemplateStringExpression implements Expression {
     constructor(
-        readonly parts: Expression[],
+        readonly parts: Expression[]
     ) {
         this.range = Range.create(
             parts[0].range.start,
@@ -662,7 +662,14 @@ export class TemplateStringExpression implements Expression {
 
     transpile(state: TranspileState) {
         let result = [];
-        this.parts.forEach(e => result = result.concat(e.transpile(state)));
+        let isFirst = true;
+        for (let part of this.parts) {
+            if (!isFirst) {
+                result.push(' + ');
+            }
+            isFirst = false;
+            result = result.concat(part.transpile(state));
+        }
         return result;
     }
 }
