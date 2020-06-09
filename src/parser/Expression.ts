@@ -332,6 +332,45 @@ export class LiteralExpression implements Expression {
         ];
     }
 }
+export class TemplateLiteralExpression extends LiteralExpression {
+    public readonly range: Range;
+
+    transpile(state: TranspileState) {
+        let text: string;
+        if (this.value.kind === ValueKind.String) {
+            //escape quote marks with another quote mark
+            text = `"${this.value.toString().replace(/"/g, '""')}"`;
+        } else {
+            text = this.value.toString();
+        }
+
+        let parts = text.split('\n');
+        let result = [];
+
+        let startChar = this.range.start.character;
+        let startLine = this.range.start.line + 1;
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            result.push(new SourceNode(
+              startLine,
+              startChar,
+              state.pathAbsolute,
+              part
+            ));
+            if (i < parts.length -1) {
+                result.push(new SourceNode(
+                    startLine,
+                    startChar,
+                    state.pathAbsolute,
+                    `" + chr(10)${i < parts.length -1  ? ' + "' : ''}`
+                ));
+            }
+            startChar += part.length;
+
+        }
+        return result;
+    }
+}
 
 export class ArrayLiteralExpression implements Expression {
     constructor(

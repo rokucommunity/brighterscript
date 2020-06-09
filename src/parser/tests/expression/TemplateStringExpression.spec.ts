@@ -73,5 +73,11 @@ I am multiline\``, `
 a = "hello world
 I am multiline"`);
     });
+    it('properly transpiles more complex multiline template string', async () => {
+        await testTranspile(`a = \`hello world
+I am multiline
+\${a.isRunning()}
+more\``, `a = "hello world" + chr(10) + "I am multiline" + chr(10) + "" + a.isRunning() + "" + chr(10) + "more"`);
+    });
 
 });

@@ -71,7 +71,8 @@ import {
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression,
-    TemplateStringExpression
+    TemplateStringExpression,
+    TemplateLiteralExpression
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
@@ -1221,7 +1222,7 @@ export class Parser {
         while (!this.check(TokenKind.BackTick) && !this.check(TokenKind.Eof)) {
             let next = this.peek();
             if (next.kind === TokenKind.TemplateStringQuasi) {
-                expressions.push(new LiteralExpression(next.literal, next.range));
+                expressions.push(new TemplateLiteralExpression(next.literal, next.range));
                 this.advance();
             } else {
                 expressions.push(this.expression());
