@@ -71,8 +71,7 @@ import {
     NewExpression,
     UnaryExpression,
     VariableExpression,
-    XmlAttributeGetExpression,
-    InvalidCoalescingExpression
+    XmlAttributeGetExpression
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
@@ -1214,7 +1213,7 @@ export class Parser {
         return importStatement;
     }
 
-    private conditionalOrCoalescingExpression(test?: Expression): ConditionalExpression | InvalidCoalescingExpression {
+    private conditionalOrCoalescingExpression(test?: Expression): ConditionalExpression {
         this.warnIfNotBrighterScriptMode('ternary operator');
         if (!test) {
             test = this.expression();
@@ -1226,9 +1225,7 @@ export class Parser {
 
         if (this.check(TokenKind.QuestionMark)) {
             //we are a null coalescene
-            this.advance();
-            const alternate = this.expression();
-            return new InvalidCoalescingExpression(test, alternate);
+            // TODO - this is implemented in a separate pr
         } else {
             //we are a ternary
             const consequent = this.expression();

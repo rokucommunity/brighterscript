@@ -13,9 +13,9 @@ import {
     ConditionalExpression,
     LiteralExpression
 } from '../../Expression';
-import {Program} from "../../../Program";
-import {BrsFile} from "../../..";
-import {getTestTranspile} from "../../../files/BrsFile.spec";
+import { Program } from '../../../Program';
+import { BrsFile } from '../../..';
+import { getTestTranspile } from '../../../files/BrsFile.spec';
 
 describe('parser conditional expressions', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -285,14 +285,14 @@ describe('transpilation', () => {
     });
 
     it('properly transpiles ternary assignments - simple', async () => {
-        await testTranspile(`a = user = invalid ? "no user" : "logged in"`,`a = bslib_simpleTernary(user = invalid, "no user", "logged in") `);
+        await testTranspile(`a = user = invalid ? "no user" : "logged in"`, `a = bslib_simpleTernary(user = invalid, "no user", "logged in") `, 'none');
     });
 
     it('properly transpiles ternary assignments - complex consequent', async () => {
-        await testTranspile(`a = user.getAccount() ? "logged in" : "not logged in"`,'a = bslib_simpleCoalesce(user{\n    "id": "default"\n})');
+        await testTranspile(`a = user.getAccount() ? "logged in" : "not logged in"`, 'a = bslib_scopeSafeTernary(user.getAccount(), {\n  "user": user\n},function(scope)\n  return "logged in"\nend function\n function(scope)\n  return "not logged in"\nend function) ', 'none');
     });
 
     it('properly transpiles ternary assignments - complex alternate', async () => {
-        await testTranspile(`a = user ? m.defaults.getAccount(settings.name) : "no"`,'a = bslib_simpleCoalesce(user{\n    "id": "default"\n})');
+        await testTranspile(`a = user ? m.defaults.getAccount(settings.name) : "no"`, 'a = bslib_scopeSafeTernary(user, {\n  "user": user\n  "settings": settings\n  "m": m\n},function(scope)\n  settings = scope.settings\n  m = scope.m\n  return m.defaults.getAccount(settings.name)\nend function\n function(scope)\n  return "no"\nend function) ', 'none');
     });
 });
