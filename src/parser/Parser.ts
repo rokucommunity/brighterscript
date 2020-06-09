@@ -71,7 +71,8 @@ import {
     NewExpression,
     UnaryExpression,
     VariableExpression,
-    XmlAttributeGetExpression
+    XmlAttributeGetExpression,
+    CommentExpression
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
@@ -2153,7 +2154,7 @@ export class Parser {
             case this.check(TokenKind.Function, TokenKind.Sub):
                 return this.anonymousFunction();
             case this.check(TokenKind.Comment):
-                return new CommentStatement([this.advance()]);
+                return new CommentExpression([this.advance()]);
             default:
                 //if we found an expected terminator, don't throw a diagnostic...just return undefined
                 if (this.check(...this.peekGlobalTerminators())) {

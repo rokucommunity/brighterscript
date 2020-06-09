@@ -784,3 +784,34 @@ function getScopedFunction(state: TranspileState, alternate: Expression, scopeVa
     result.push('\nend function');
     return result;
 }
+
+
+export class CommentExpression extends Expression {
+    constructor(
+        public comments: Token[]
+    ) {
+        super();
+        this.range = Range.create(
+            this.comments[0].range.start,
+            this.comments[this.comments.length - 1].range.end
+        );
+    }
+
+    transpile(state: TranspileState): Array<SourceNode | string> {
+        let result = [];
+        for (let i = 0; i < this.comments.length; i++) {
+            let comment = this.comments[i];
+            if (i > 0) {
+                result.push(state.indent());
+            }
+            result.push(
+                new SourceNode(comment.range.start.line + 1, comment.range.start.character, state.pathAbsolute, comment.text)
+            );
+            //add newline for all except final comment
+            if (i < this.comments.length - 1) {
+                result.push('\n');
+            }
+        }
+        return result;
+    }
+}
