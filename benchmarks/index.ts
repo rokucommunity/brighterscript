@@ -33,7 +33,7 @@ import { Benchmarker } from './Benchmarker';
             Math.abs(percentChange) > parseFloat(maxPercentChange)
         ) {
             isFailure = true;
-            console.log(`'${benchmarkName}' failed because ${percentChange}% is above the threshold of ${maxPercentChange}%`);
+            console.log(`'${benchmarkName}' failed because ${percentChange}% is more than a ${maxPercentChange}% decrease in performance`);
         }
     }
 
