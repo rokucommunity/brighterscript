@@ -236,6 +236,9 @@ export class Lexer {
             case '?':
                 this.addToken(TokenKind.Print);
                 break;
+            case '`':
+                this.templateString();
+                break;
             case '<':
                 switch (this.peek()) {
                     case '=':
@@ -443,6 +446,54 @@ export class Lexer {
         //replace escaped quotemarks "" with a single quote
         value = value.replace(/""/g, '"');
         this.addToken(TokenKind.StringLiteral, new BrsString(value));
+    }
+    /**
+     * Reads characters within a string literal, advancing through escaped characters to the
+     * terminating `"`, and adds the produced token to the `tokens` array. Creates a `BrsError` if the
+     * string is terminated by a newline or the end of input.
+     */
+    private templateString() {
+        this.addToken(TokenKind.BackTick);
+        this.start = this.current;
+        this.advance();
+        let value = '';
+        while (!this.isAtEnd() && !this.check('`')) {
+            if (this.check('\\') && this.peekNext() === '`') {
+                this.advance();
+                this.advance();
+            }
+            if (this.check('$') && this.peekNext() === '{') {
+                value = this.source.slice(this.start, this.current);
+                value = value.replace(/\\`/g, '/');
+                this.addToken(TokenKind.TemplateStringQuasi, new BrsString(value));
+                this.advance();
+                this.advance();
+                this.start = this.current;
+                while (!this.isAtEnd() && !this.check('}')) {
+                    this.scanToken();
+                }
+                this.start = this.current + 1;
+            }
+            this.advance();
+        }
+
+        if (this.isAtEnd()) {
+            // terminating a string with EOF is also not allowed
+            this.diagnostics.push({
+                ...DiagnosticMessages.unterminatedStringAtEndOfFile(),
+                range: this.rangeOf(this.source.slice(this.start, this.current))
+            });
+        }
+
+        //get last quasi
+        value = this.source.slice(this.start, this.current);
+        value = value.replace(/\\`/g, '`');
+        this.addToken(TokenKind.TemplateStringQuasi, new BrsString(value));
+        this.addToken(TokenKind.BackTick);
+
+        // move past the closing ```
+        this.advance();
+
     }
 
     /**

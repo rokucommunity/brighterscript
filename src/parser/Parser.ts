@@ -53,9 +53,28 @@ import {
 } from './Statement';
 import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
-import { FunctionExpression, CallExpression, BinaryExpression, VariableExpression, LiteralExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, ArrayLiteralExpression, AAMemberExpression, Expression, UnaryExpression, AALiteralExpression, NewExpression, XmlAttributeGetExpression, NamespacedVariableNameExpression, CallfuncExpression } from './Expression';
-import { Range, Diagnostic } from 'vscode-languageserver';
-import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from './ClassStatement';
+import {
+    AALiteralExpression,
+    AAMemberExpression,
+    ArrayLiteralExpression,
+    BinaryExpression,
+    CallExpression,
+    CallfuncExpression,
+    DottedGetExpression,
+    Expression,
+    FunctionExpression,
+    GroupingExpression,
+    IndexedGetExpression,
+    LiteralExpression,
+    NamespacedVariableNameExpression,
+    NewExpression,
+    UnaryExpression,
+    VariableExpression,
+    XmlAttributeGetExpression,
+    TemplateStringExpression
+} from './Expression';
+import { Diagnostic, Range } from 'vscode-languageserver';
+import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
 
 export class Parser {
     /**
@@ -1195,6 +1214,28 @@ export class Parser {
         return importStatement;
     }
 
+    private templateString(): TemplateStringExpression {
+        let expressions = [];
+        this.warnIfNotBrighterScriptMode('template string');
+        this.advance();
+        while (!this.check(TokenKind.BackTick) && !this.check(TokenKind.Eof)) {
+            let next = this.peek();
+            if (next.kind === TokenKind.TemplateStringQuasi) {
+                expressions.push(new LiteralExpression(next.literal, next.range));
+                this.advance();
+            } else {
+                expressions.push(this.expression());
+            }
+        }
+        this.advance();
+
+        if (this.check(TokenKind.Eof)) {
+            //error - missing backtick
+        } else {
+            return new TemplateStringExpression(expressions);
+        }
+    }
+
     private ifStatement(): IfStatement {
         const ifToken = this.advance();
         const startingRange = ifToken.range;
@@ -1704,6 +1745,10 @@ export class Parser {
     private anonymousFunction(): Expression {
         if (this.check(TokenKind.Sub, TokenKind.Function)) {
             return this.functionDeclaration(true);
+        }
+
+        if (this.check(TokenKind.BackTick)) {
+            return this.templateString();
         }
 
         return this.boolean();

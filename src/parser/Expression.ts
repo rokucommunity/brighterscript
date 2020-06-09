@@ -647,3 +647,22 @@ export class CallfuncExpression implements Expression {
     }
 
 }
+
+export class TemplateStringExpression implements Expression {
+    constructor(
+        readonly parts: Expression[],
+    ) {
+        this.range = Range.create(
+            parts[0].range.start,
+            parts[parts.length - 1].range.end
+        );
+    }
+
+    public readonly range: Range;
+
+    transpile(state: TranspileState) {
+        let result = [];
+        this.parts.forEach(e => result = result.concat(e.transpile(state)));
+        return result;
+    }
+}
