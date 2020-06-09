@@ -92,24 +92,11 @@ import * as benchmark from 'benchmark';
             Math.abs(percentChange) > parseFloat(maxPercentChange)
         ) {
             isFailure = true;
-            console.log(`'${benchmarkName}' failed because ${percentChange}% is above the threshold of ${maxPercentChange}%`);
+            console.log(`'${benchmarkName}' failed because ${percentChange}% is more than a ${maxPercentChange}% decrease in performance`);
         }
     }
 
     if (isFailure) {
-        process.exit(-1);
+        process.exit(1);
     }
 })();
-
-function computePercentChange(suiteName: string, suite: benchmark.Suite) {
-    let npmValues = suite.filter(x => !(x.name as string).startsWith('local')).map(x => x.hz);
-    let originalNumber = npmValues.reduce((sum, current) => sum + current, 0) / npmValues.length;
-
-    let localValues = suite.filter(x => (x.name as string).startsWith('local')).map(x => x.hz);
-    let newNumber = localValues.reduce((sum, current) => sum + current, 0) / localValues.length;
-
-    let percentIncrease = (newNumber - originalNumber) / originalNumber * 100;
-    //round the value to 3 decimal places
-    percentIncrease = Math.round(percentIncrease * 100) / 100;
-    this.percentChanges[suiteName] = percentIncrease;
-}

@@ -1,6 +1,6 @@
 {
     "name": "brighterscript",
-    "version": "0.10.6",
+    "version": "0.10.7",
     "description": "A superset of Roku's BrightScript language.",
     "scripts": {
         "preversion": "npm run build && npm run lint && npm run test",
@@ -15,7 +15,7 @@
         "dep-graph": "madge --image graph.svg --extensions ts ./src/parser",
         "docs": "ts-node scripts/compile-doc-examples.ts",
         "benchmark": "ts-node --transpile-only benchmarks/index.ts",
-        "benchmark:ci": "npm run benchmark --  --iteration-count=5 --max-percentage-change=10"
+        "benchmark:ci": "npm run benchmark --  --iteration-count=1 --max-percent-change=10"
     },
     "mocha": {
         "spec": "src/**/*.spec.ts",
