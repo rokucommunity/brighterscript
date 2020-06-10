@@ -1,3 +1,4 @@
+/* eslint no-template-curly-in-string: 0 */
 import { expect } from 'chai';
 
 import { TokenKind } from '.';
@@ -387,21 +388,21 @@ describe('lexer', () => {
                 'Unterminated string at end of line'
             ]);
         });
-    }); 
-    
+    });
+
     // template string literals
 
     describe('template string literals', () => {
 
         it(`safely escapes \` literals`, () => {
             let { tokens } = Lexer.scan('`the cat says \\`meow\\`');
-            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick,TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
+            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick, TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
             expect(tokens[1].literal).to.deep.equal(new BrsString('the cat says `meow`'));
         });
 
         it('produces template string literal tokens', () => {
             let { tokens } = Lexer.scan('`hello world`');
-            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick,TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
+            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick, TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
             expect(tokens[1].literal).to.deep.equal(new BrsString('hello world'));
         });
 
@@ -427,14 +428,14 @@ describe('lexer', () => {
 
         it('allows multiline strings', () => {
             let { tokens } = Lexer.scan('`multi-line\n\n`');
-            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick,TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
+            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick, TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
             expect(tokens[1].literal).to.deep.equal(new BrsString(`multi-line\n\n`));
         });
         it('Example that tripped up the expression tests', () => {
             let { tokens } = Lexer.scan(`\`I am a complex example
             \${a.isRunning(["a","b","c"])}
             more \${m.finish(true)}\``);
-            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick,TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
+            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick, TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
             expect(tokens[1].literal).to.deep.equal(new BrsString(`multi-line\n\n`));
         });
     }); // string literals

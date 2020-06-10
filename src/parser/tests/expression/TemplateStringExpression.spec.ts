@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/no-for-in-array */
+/* eslint no-template-curly-in-string: 0 */
+
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Lexer } from '../../../lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { AssignmentStatement } from '../../Statement';
 import { getTestTranspile } from '../../../files/BrsFile.spec';
-import { Program, BrsFile } from '../../..';
+import { Program } from '../../../Program';
 
 describe('parser template String', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -55,45 +57,53 @@ describe('transpilation', () => {
     let rootDir = process.cwd();
     let program: Program;
 
-    // @ts-ignore
-    let file: BrsFile;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
         program = new Program({ rootDir: rootDir });
-        file = new BrsFile('abs', 'rel', program);
     });
+
     afterEach(() => {
         program.dispose();
     });
 
-    it('properly transpiles simple template string', async () => {
-        await testTranspile(`a = \`hello world\``, `
-        a = "hello world"
-    `);
+    it.only('properly transpiles simple template string', async () => {
+        await testTranspile(
+            'a = `hello world`',
+            'a = "hello world"'
+        );
     });
+
     it('properly transpiles one line template string with expressions', async () => {
-        await testTranspile(`a = \`hello \${a.text} world \${"template" + m.getChars()} test\``,
-          `a = stdlib_concat(["hello ", a.text, " world ", "template" + m.getChars(), " test"])`);
+        await testTranspile(
+            'a = `hello ${a.text} world ${"template" + m.getChars()} test`',
+            `a = stdlib_concat(["hello ", a.text, " world ", "template" + m.getChars(), " test"])`
+        );
     });
+
     it('properly transpiles simple multiline template string', async () => {
-        await testTranspile(`a = \`hello world
-I am multiline\``, `a = stdlib_concat(["hello world\nI am multiline"])`);
+        await testTranspile(
+            'a = `hello world\nI am multiline`',
+            'a = stdlib_concat(["hello world\nI am multiline"])'
+        );
     });
+
     it('properly transpiles more complex multiline template string', async () => {
-        await testTranspile(`a = \`hello world
-I am multiline
-\${a.isRunning()}
-more\``, `a = stdlib_concat(["hello world\nI am multiline\n", a.isRunning(), "\nmore"])`);
+        await testTranspile(
+            'a = `hello world\nI am multiline\n${a.isRunning()}\nmore`',
+            `a = stdlib_concat(["hello world\nI am multiline\n", a.isRunning(), "\nmore"])`
+        );
     });
+
     it('properly transpiles complex multiline template string in array def', async () => {
-        await testTranspile(`a = ["one", "two", \`I am a complex example
-            \${a.isRunning(["a","b","c"])}\`]`);
+        await testTranspile(
+            'a = ["one", "two", `I am a complex example\n${a.isRunning(["a","b","c"])}`]'
+        );
     });
 
     it('properly transpiles complex multiline template string in array def, with nested template', async () => {
-        await testTranspile(`a = ["one", "two", \`I am a complex example
-            \${a.isRunning(["a","b","c", \`template \${"inside" + m.items[0]} template\`])}\`]`);
+        await testTranspile(
+            'a = ["one", "two", `I am a complex example\n${a.isRunning(["a","b","c", `template ${"inside" + m.items[0]} template`])}`]'
+        );
     });
-
 });
