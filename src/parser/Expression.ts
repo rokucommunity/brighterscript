@@ -343,32 +343,12 @@ export class TemplateLiteralExpression extends LiteralExpression {
         } else {
             text = this.value.toString();
         }
-
-        let parts = text.split('\n');
-        let result = [];
-
-        let startChar = this.range.start.character;
-        let startLine = this.range.start.line + 1;
-        for (let i = 0; i < parts.length; i++) {
-            const part = parts[i];
-            result.push(new SourceNode(
-              startLine,
-              startChar,
-              state.pathAbsolute,
-              part
-            ));
-            if (i < parts.length -1) {
-                result.push(new SourceNode(
-                    startLine,
-                    startChar,
-                    state.pathAbsolute,
-                    `" + chr(10)${i < parts.length -1  ? ' + "' : ''}`
-                ));
-            }
-            startChar += part.length;
-
-        }
-        return result;
+        return [new SourceNode(
+            this.range.start.line + 1,
+            this.range.start.character,
+            state.pathAbsolute,
+            text
+        )];
     }
 }
 
@@ -689,11 +669,12 @@ export class CallfuncExpression implements Expression {
 
 export class TemplateStringExpression implements Expression {
     constructor(
-        readonly parts: Expression[]
+        readonly quasis: TemplateLiteralExpression[],
+        readonly expressions: Expression[]
     ) {
         this.range = Range.create(
-            parts[0].range.start,
-            parts[parts.length - 1].range.end
+            quasis[0].range.start,
+            quasis[quasis.length - 1].range.end
         );
     }
 
@@ -702,13 +683,20 @@ export class TemplateStringExpression implements Expression {
     transpile(state: TranspileState) {
         let result = [];
         let isFirst = true;
-        for (let part of this.parts) {
+        result.push('stdlib_concat([');
+        for (let i = 0; i < this.quasis.length; i++) {
+            let quasi = this.quasis[i];
             if (!isFirst) {
-                result.push(' + ');
+                result.push(', ');
             }
+            result.push(...quasi.transpile(state));
             isFirst = false;
-            result.push(...part.transpile(state));
+            if (this.expressions.length > i) {
+                result.push(', ');
+                result.push(...this.expressions[i].transpile(state));
+            }
         }
+        result.push('])');
         return result;
     }
 }

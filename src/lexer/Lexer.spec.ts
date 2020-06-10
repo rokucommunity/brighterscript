@@ -420,16 +420,20 @@ describe('lexer', () => {
         });
 
         it('complicated example', () => {
-            let { tokens } = Lexer.scan('`hello ${"world"}!' +
-              'I am a ${"template" + "string"} ' +
-              'and I am very ${["pleased"][0]} to meet you ${m.top.getChildCount()}.' +
-              'The end`');
+            let { tokens } = Lexer.scan(`\`hello \${\\"world\\"}!I am a \${\\"template\\" + \\"string\\"} and I am very \${[\\"pleased\\"][0]} to meet you \${m.top.getChildCount()}.The end\``);
             expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick, TokenKind.TemplateStringQuasi, TokenKind.StringLiteral, TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
             expect(tokens[1].literal).to.deep.equal(new BrsString(`multi-line\n\n`));
         });
 
         it('allows multiline strings', () => {
             let { tokens } = Lexer.scan('`multi-line\n\n`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick,TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
+            expect(tokens[1].literal).to.deep.equal(new BrsString(`multi-line\n\n`));
+        });
+        it('Example that tripped up the expression tests', () => {
+            let { tokens } = Lexer.scan(`\`I am a complex example
+            \${a.isRunning(["a","b","c"])}
+            more \${m.finish(true)}\``);
             expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick,TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
             expect(tokens[1].literal).to.deep.equal(new BrsString(`multi-line\n\n`));
         });

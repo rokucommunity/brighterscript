@@ -39,6 +39,15 @@ describe('parser template String', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements[0]).instanceof(AssignmentStatement);
         });
+
+        it(`complex case that tripped up the tranpsile tests`, () => {
+
+            let { tokens } = Lexer.scan(`a = ["one", "two", \`I am a complex example
+            \${a.isRunning(["a","b","c"])}\`]`);
+            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(statements[0]).instanceof(AssignmentStatement);
+        });
     });
 });
 
@@ -65,19 +74,21 @@ describe('transpilation', () => {
     });
     it('properly transpiles one line template string with expressions', async () => {
         await testTranspile(`a = \`hello \${a.text} world \${"template" + m.getChars()} test\``,
-          `a = "hello " + a.text + " world " + "template" + m.getChars() + " test"`);
+          `a = stdlib_concat(["hello ", a.text, " world ", "template" + m.getChars(), " test"])`);
     });
     it('properly transpiles simple multiline template string', async () => {
         await testTranspile(`a = \`hello world
-I am multiline\``, `
-a = "hello world
-I am multiline"`);
+I am multiline\``, `a = stdlib_concat(["hello world\nI am multiline"])`);
     });
     it('properly transpiles more complex multiline template string', async () => {
         await testTranspile(`a = \`hello world
 I am multiline
 \${a.isRunning()}
-more\``, `a = "hello world" + chr(10) + "I am multiline" + chr(10) + "" + a.isRunning() + "" + chr(10) + "more"`);
+more\``, `a = stdlib_concat(["hello world\nI am multiline\n", a.isRunning(), "\nmore"])`);
+    });
+    it('properly transpiles complex multiline template string in array def', async () => {
+        await testTranspile(`a = ["one", "two", \`I am a complex example
+            \${a.isRunning(["a","b","c"])}\`]`);
     });
 
 });

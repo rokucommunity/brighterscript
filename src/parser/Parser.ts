@@ -1216,24 +1216,32 @@ export class Parser {
     }
 
     private templateString(): TemplateStringExpression {
+        let quasis = [];
         let expressions = [];
         this.warnIfNotBrighterScriptMode('template string');
+        let startToken = this.peek();
         this.advance();
         while (!this.check(TokenKind.BackTick) && !this.check(TokenKind.Eof)) {
             let next = this.peek();
             if (next.kind === TokenKind.TemplateStringQuasi) {
-                expressions.push(new TemplateLiteralExpression(next.literal, next.range));
+                quasis.push(new TemplateLiteralExpression(next.literal, next.range));
                 this.advance();
             } else {
                 expressions.push(this.expression());
             }
         }
-        this.advance();
 
         if (this.check(TokenKind.Eof)) {
             //error - missing backtick
+            this.diagnostics.push({
+                ...DiagnosticMessages.unterminatedTemplateStringAtEndOfFile(),
+                range: util.getRange(startToken, this.peek())
+            });
+            throw this.lastDiagnosticAsError();
+
         } else {
-            return new TemplateStringExpression(expressions);
+            this.advance();
+            return new TemplateStringExpression(quasis, expressions);
         }
     }
 
