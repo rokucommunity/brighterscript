@@ -60,7 +60,7 @@ import {
     BinaryExpression,
     CallExpression,
     CallfuncExpression,
-    ConditionalExpression,
+    TernaryExpression,
     DottedGetExpression,
     Expression,
     FunctionExpression,
@@ -1214,7 +1214,7 @@ export class Parser {
         return importStatement;
     }
 
-    private conditionalOrCoalescingExpression(test?: Expression): ConditionalExpression {
+    private conditionalOrCoalescingExpression(test?: Expression): TernaryExpression {
         this.warnIfNotBrighterScriptMode('ternary operator');
         if (!test) {
             test = this.expression();
@@ -1247,7 +1247,7 @@ export class Parser {
                     range: test.range
                 });
             }
-            return new ConditionalExpression(test, consequent, alternate);
+            return new TernaryExpression(test, consequent, alternate);
         }
     }
 

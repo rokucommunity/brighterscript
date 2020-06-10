@@ -10,20 +10,20 @@ import {
     AALiteralExpression,
     ArrayLiteralExpression,
     CallExpression,
-    ConditionalExpression,
+    TernaryExpression,
     LiteralExpression
 } from '../../Expression';
 import { Program } from '../../../Program';
 import { getTestTranspile } from '../../../files/BrsFile.spec';
 
-describe('parser conditional expressions', () => {
+describe('parser ternary expressions', () => {
     it('throws exception when used in brightscript scope', () => {
         let { tokens } = Lexer.scan(`a = true ? "human" : "Zombie"`);
         let { diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrightScript });
         expect(diagnostics[0]?.message).to.equal(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('ternary operator').message);
     });
 
-    describe('conditional expressions as statements are not supported', () => {
+    describe('ternary expressions as statements are not supported', () => {
         it('basic statement', () => {
             let { statements, diagnostics } = Parser.parse([
                 token(TokenKind.True, 'true', BrsBoolean.True),
@@ -73,7 +73,7 @@ describe('parser conditional expressions', () => {
         expect(statements).to.not.be.empty;
     });
 
-    describe('conditional expressions - variety of test cases', () => {
+    describe('ternary expressions - variety of test cases', () => {
         it(`does not supports various tests with primitive values:`, () => {
             //test as property
             for (const test in [
@@ -107,7 +107,7 @@ describe('parser conditional expressions', () => {
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expect(diagnostics).to.be.lengthOf(0);
                 expect(statements[0]).instanceof(AssignmentStatement);
-                expect((statements[0] as AssignmentStatement).value).instanceof(ConditionalExpression);
+                expect((statements[0] as AssignmentStatement).value).instanceof(TernaryExpression);
 
             }
         });
@@ -127,7 +127,7 @@ describe('parser conditional expressions', () => {
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expect(diagnostics).to.be.lengthOf(0);
                 expect(statements[0]).instanceof(AssignmentStatement);
-                expect((statements[0] as AssignmentStatement).value).instanceof(ConditionalExpression);
+                expect((statements[0] as AssignmentStatement).value).instanceof(TernaryExpression);
             }
         });
     });
@@ -185,7 +185,7 @@ describe('parser conditional expressions', () => {
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(1);
-            expect(callExpression.args[0]).instanceof(ConditionalExpression);
+            expect(callExpression.args[0]).instanceof(TernaryExpression);
         });
 
         it(`in func call with aa args`, () => {
@@ -196,7 +196,7 @@ describe('parser conditional expressions', () => {
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(1);
-            expect(callExpression.args[0]).instanceof(ConditionalExpression);
+            expect(callExpression.args[0]).instanceof(TernaryExpression);
         });
 
         it(`in simple func call`, () => {
@@ -207,7 +207,7 @@ describe('parser conditional expressions', () => {
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(1);
-            expect(callExpression.args[0]).instanceof(ConditionalExpression);
+            expect(callExpression.args[0]).instanceof(TernaryExpression);
         });
 
         it(`in func call with more args`, () => {
@@ -218,7 +218,7 @@ describe('parser conditional expressions', () => {
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(3);
-            expect(callExpression.args[0]).instanceof(ConditionalExpression);
+            expect(callExpression.args[0]).instanceof(TernaryExpression);
         });
 
         it(`in func call with more args, and comparing value`, () => {
@@ -238,7 +238,7 @@ describe('parser conditional expressions', () => {
             expect(statements[0]).instanceof(AssignmentStatement);
             expect((statements[0] as AssignmentStatement).value).instanceof(ArrayLiteralExpression);
             let literalExpression = (statements[0] as AssignmentStatement).value as ArrayLiteralExpression;
-            expect(literalExpression.elements[0]).instanceOf(ConditionalExpression);
+            expect(literalExpression.elements[0]).instanceOf(TernaryExpression);
             expect(literalExpression.elements[1]).instanceOf(LiteralExpression);
         });
         it(`in aa`, () => {
@@ -249,7 +249,7 @@ describe('parser conditional expressions', () => {
             expect((statements[0] as AssignmentStatement).value).instanceof(AALiteralExpression);
             let literalExpression = (statements[0] as AssignmentStatement).value as AALiteralExpression;
             expect((literalExpression.elements[0] as any).key.value).is.equal('v1');
-            expect((literalExpression.elements[0] as any).value).instanceOf(ConditionalExpression);
+            expect((literalExpression.elements[0] as any).value).instanceOf(TernaryExpression);
             expect((literalExpression.elements[1] as any).key.value).is.equal('v2');
             expect((literalExpression.elements[1] as any).value).instanceOf(LiteralExpression);
         });
@@ -261,7 +261,7 @@ describe('parser conditional expressions', () => {
             let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements[0]).instanceof(ForEachStatement);
-            expect((statements[0] as ForEachStatement).target).instanceof(ConditionalExpression);
+            expect((statements[0] as ForEachStatement).target).instanceof(TernaryExpression);
         });
 
     });

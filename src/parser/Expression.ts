@@ -700,7 +700,7 @@ export class CallfuncExpression extends Expression {
     }
 }
 
-export class ConditionalExpression extends Expression {
+export class TernaryExpression extends Expression {
     constructor(
         readonly test: Expression,
         readonly consequent: Expression,
