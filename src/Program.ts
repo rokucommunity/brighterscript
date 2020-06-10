@@ -670,8 +670,17 @@ export class Program {
                 fsExtra.writeFile(outputCodePath, result.code),
                 writeMapPromise
             ]);
-
         });
+
+        //copy the brighterscript stdlib to the output directory
+        promises.push(
+            fsExtra.ensureDir(s`${this.options.stagingFolderPath}/source`).then(() => {
+                return fsExtra.copyFile(
+                    s`${__dirname}/../bslib.brs`,
+                    s`${this.options.stagingFolderPath}/source/bslib.brs`
+                );
+            })
+        );
         await Promise.all(promises);
     }
 

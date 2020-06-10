@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [Unreleased]
+### Added
+ - bslib.brs gets copied to `pkg:/source` and added as an import to every component on transpile.
+
+
+
 ## [0.10.8] - 2020-06-09
 ### Fixed
  - Allow leading spcaes for `bs:disable-line` and `bs:disable-next-line` comments ([#108](https://github.com/rokucommunity/brighterscript/pull/108))
