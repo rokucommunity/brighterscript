@@ -91,4 +91,9 @@ more\``, `a = stdlib_concat(["hello world\nI am multiline\n", a.isRunning(), "\n
             \${a.isRunning(["a","b","c"])}\`]`);
     });
 
+    it('properly transpiles complex multiline template string in array def, with nested template', async () => {
+        await testTranspile(`a = ["one", "two", \`I am a complex example
+            \${a.isRunning(["a","b","c", \`template ${"inside"} template\`])}\`]`);
+    });
+
 });
