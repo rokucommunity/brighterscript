@@ -3,62 +3,34 @@ benchmark.support.decompilation = false;
 import { execSync } from 'child_process';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import * as semverExtra from 'semver-extra';
 
 /**
  * Assumes that the brighterscript project has already been built. 
  */
 export class Benchmarker {
 
-    public async runAll(tests, doSetup = true, iterationCount = 3) {
-        if (doSetup) {
-            this.prepare();
-        }
-        this.addIterations(iterationCount);
-        tests = tests?.length > 0 ? tests : ['lexer', 'parser'];
-        for (var testName of tests) {
-
-            await this[testName]();
-        }
+    public async run(testName: 'lexer' | 'parser', version: string, iterationCount = 3) {
+        iterationCount = iterationCount < 3 ? 3 : iterationCount;
+        this.addIterations(testName, version, iterationCount);
+        this.version = version;
+        await this[testName]();
     }
 
-    public prepare() {
-        console.log('deleting benchmarks/node_modules');
-        fsExtra.remove(`${__dirname}/node_modules`);
+    private version: string;
 
-        console.log('deleting benchmarks/package.json');
-        fsExtra.remove(`${__dirname}/node_modules/package.json`);
+    private addIterations(testName: string, version: string, iterationCount: number) {
+        let brighterscript: any;
+        if (version === 'local') {
+            brighterscript = require(`${__dirname}/../dist`);
+        } else {
+            brighterscript = require('brighterscript');
+        }
 
-        console.log(`installing brighterscript@${this.latestBrighterScriptVersion}`);
-        execSync(`npm init -y`, {
-            cwd: __dirname,
-            stdio: 'inherit'
-        });
-        execSync(`npm --cache-min 9999999 i brighterscript@${this.latestBrighterScriptVersion}`, {
-            cwd: __dirname,
-            stdio: 'inherit'
-        });
-
-        console.log('building local brighterscript');
-        execSync('npm run build', {
-            cwd: path.join(__dirname, '..'),
-            stdio: 'inherit'
-        });
-    }
-
-    private addIterations(iterationCount: number) {
-        let stuff = [
-            [require('brighterscript'), this.latestBrighterScriptVersion],
-            [require(`${__dirname}/../dist`), 'local']
-        ];
-
-        for (let j = 0; j < 2; j++) {
-            for (var i = 0; i < iterationCount; i++) {
-                this.iterations.push({
-                    brighterscript: stuff[j][0],
-                    name: `${stuff[j][1]} (${i + 1})`
-                });
-            }
+        for (var i = 0; i < iterationCount; i++) {
+            this.iterations.push({
+                brighterscript: brighterscript,
+                name: `run ${i + 1}:`
+            });
         }
     }
 
@@ -66,25 +38,8 @@ export class Benchmarker {
      * An array of brighterscript lib and name. Used to run the tests multiple times to get a better average result
      */
     private iterations = [] as { brighterscript: any, name: string }[];
-    public hasFailures = false;
 
-    /**
-     * Map of percent change by benchmark name.
-     * The value is always "The percent the current code changed from the latest release"
-     */
-    public percentChanges = {} as { [benchmarkName: string]: number };
-
-    private get latestBrighterScriptVersion() {
-        if (!this._latestBrighterScriptVersion) {
-            //computing latest brighterscript version         
-            var versions = JSON.parse(
-                execSync('npm view brighterscript versions --json').toString()
-            );
-            this._latestBrighterScriptVersion = semverExtra.maxStable(versions) as string;
-        }
-        return this._latestBrighterScriptVersion;
-    }
-    private _latestBrighterScriptVersion: string;
+    public averages = {} as { [testName: string]: number };
 
     private getTestFile(name: string) {
         if (!this.testFileCache[name]) {
@@ -102,7 +57,7 @@ export class Benchmarker {
      * Lexer benchmark
      */
     public async lexer() {
-        console.log('\n--------lexer benchmarks--------');
+        console.log(`\n--------lexer (${this.version})--------`);
 
         var sourceFile = this.getTestFile('100-functions.brs');
         let suite = new benchmark.Suite();
@@ -129,7 +84,7 @@ export class Benchmarker {
      * Parser benchmark
      */
     public async parser() {
-        console.log('\n--------parser benchmarks--------');
+        console.log(`\n--------parser ${this.version}--------`);
 
         var giant = this.getTestFile('100-functions.brs');
         let suite = new benchmark.Suite();
@@ -158,29 +113,35 @@ export class Benchmarker {
 
     public async runSuite(suiteName: string, suite: benchmark.Suite) {
         return new Promise((resolve) => {
-            let computePercentChange = this.computePercentChange.bind(this);
+            let computeAverageOpsPerSec = this.computeAverageOpsPerSec.bind(this);
             suite
                 .on('cycle', function (event) {
                     console.log(event.target.toString());
                 })
                 .on('complete', function () {
-                    computePercentChange(suiteName, this);
+                    computeAverageOpsPerSec(suiteName, this);
                     resolve();
                 })
                 .run({ async: true });
         });
     }
 
-    private computePercentChange(suiteName: string, suite: benchmark.Suite) {
-        let npmValues = suite.filter(x => !(x.name as string).startsWith('local')).map(x => x.hz);
-        let originalNumber = npmValues.reduce((sum, current) => sum + current, 0) / npmValues.length;
+    private computeAverageOpsPerSec(suiteName: string, suite: benchmark.Suite) {
+        let values = suite
+            //filter out the warmup run
+            .filter(x => !(x.name as string).startsWith('warmup'))
+            //only keep the ops/sec
+            .map(x => x.hz)
+            //sort the values
+            .sort();
+        //throw out the lowest value
+        values.splice(0, 1);
+        //throw out the highest value
+        values.splice(values.length - 1, 1);
 
-        let localValues = suite.filter(x => (x.name as string).startsWith('local')).map(x => x.hz);
-        let newNumber = localValues.reduce((sum, current) => sum + current, 0) / localValues.length;
+        //we should now have the most stable of the run times
 
-        let percentIncrease = (newNumber - originalNumber) / originalNumber * 100;
-        //round the value to 3 decimal places
-        percentIncrease = Math.round(percentIncrease * 100) / 100;
-        this.percentChanges[suiteName] = percentIncrease;
+        let average = values.reduce((sum, current) => sum + current, 0) / values.length;
+        this.averages[suiteName] = average;
     }
 }
