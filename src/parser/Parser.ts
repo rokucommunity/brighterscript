@@ -1216,10 +1216,10 @@ export class Parser {
     }
 
     private templateString(): TemplateStringExpression {
+        this.warnIfNotBrighterScriptMode('template string');
         let quasis = [];
         let expressions = [];
-        this.warnIfNotBrighterScriptMode('template string');
-        let startToken = this.peek();
+        let openingBacktick = this.peek();
         this.advance();
         while (!this.check(TokenKind.BackTick) && !this.check(TokenKind.Eof)) {
             let next = this.peek();
@@ -1235,13 +1235,13 @@ export class Parser {
             //error - missing backtick
             this.diagnostics.push({
                 ...DiagnosticMessages.unterminatedTemplateStringAtEndOfFile(),
-                range: util.getRange(startToken, this.peek())
+                range: util.getRange(openingBacktick, this.peek())
             });
             throw this.lastDiagnosticAsError();
 
         } else {
-            this.advance();
-            return new TemplateStringExpression(quasis, expressions);
+            let closingBacktick = this.advance();
+            return new TemplateStringExpression(openingBacktick, quasis, expressions, closingBacktick);
         }
     }
 

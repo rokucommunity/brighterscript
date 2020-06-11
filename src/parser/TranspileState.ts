@@ -55,9 +55,6 @@ export class TranspileState {
         return ' '.repeat(totalSpaceCount);
     }
 
-    /**
-     * Get a newline and an indent together
-     */
     public newline() {
         return '\n';
     }
