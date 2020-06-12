@@ -1,7 +1,16 @@
 import chalk from 'chalk';
 import * as moment from 'moment';
+import { EventEmitter } from 'eventemitter3';
 
 export class Logger {
+
+    public static subscribe(callback) {
+        this.emitter.on('log', callback);
+        return () => {
+            this.emitter.off('log', callback);
+        };
+    }
+    private static emitter = new EventEmitter();
 
     constructor(logLevel?: LogLevel) {
         this.logLevel = logLevel;
@@ -38,6 +47,9 @@ export class Logger {
             finalArgs.push(arg);
         }
         method.call(console, this.getTimestamp(), ...finalArgs);
+        if (Logger.emitter.listenerCount('log') > 0) {
+            Logger.emitter.emit('log', finalArgs.join(' '));
+        }
     }
 
     /**
