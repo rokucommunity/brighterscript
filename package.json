@@ -30,6 +30,7 @@
     },
     "files": [
         "dist/**/!(*.spec.*)*",
+        "bslib.brs",
         "bsconfig.schema.json"
     ],
     "main": "dist/index.js",
