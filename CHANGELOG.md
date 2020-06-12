@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
  - bslib.brs gets copied to `pkg:/source` and added as an import to every component on transpile.
+ - several timing logs under the `"info"` log level.
 ### Fixed
  - bug with global `val` function signature definition that did not support the second parameter ([#110](https://github.com/rokucommunity/vscode-brightscript-language/issues/110))
 
