@@ -5,9 +5,9 @@ import { expect } from 'chai';
 let tmpPath = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tmpPath}/rootDir`;
 let stagingFolderPath = s`${tmpPath}/staging`;
-let program: Program;
 
 describe('globalCallables', () => {
+    let program: Program;
     beforeEach(() => {
         program = new Program({
             rootDir: rootDir,

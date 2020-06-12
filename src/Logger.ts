@@ -3,14 +3,26 @@ import * as moment from 'moment';
 
 export class Logger {
 
-    public logLevel = LogLevel.log;
+    constructor(logLevel?: LogLevel) {
+        this.logLevel = logLevel;
+    }
+
+    public get logLevel() {
+        return this._logLevel;
+    }
+    public set logLevel(value: LogLevel) {
+        if (value) {
+            this._logLevel = value;
+        }
+    }
+    private _logLevel = LogLevel.log;
 
     private getTimestamp() {
         return '[' + chalk.grey(moment().format('hh:mm:ss A')) + ']';
     }
 
     private writeToLog(method: (...consoleArgs: any[]) => void, ...args: any[]) {
-        if (this.logLevel === LogLevel.trace) {
+        if (this._logLevel === LogLevel.trace) {
             method = console.trace;
         }
         let finalArgs = [];
@@ -29,7 +41,7 @@ export class Logger {
      * Log an error message to the console
      */
     error(...messages) {
-        if (this.logLevel >= LogLevel.error) {
+        if (this._logLevel >= LogLevel.error) {
             this.writeToLog(console.error, ...messages);
         }
     }
@@ -38,7 +50,7 @@ export class Logger {
      * Log a warning message to the console
      */
     warn(...messages) {
-        if (this.logLevel >= LogLevel.warn) {
+        if (this._logLevel >= LogLevel.warn) {
             this.writeToLog(console.warn, ...messages);
         }
     }
@@ -47,7 +59,7 @@ export class Logger {
      * Log a standard log message to the console
      */
     log(...messages) {
-        if (this.logLevel >= LogLevel.log) {
+        if (this._logLevel >= LogLevel.log) {
             this.writeToLog(console.log, ...messages);
         }
     }
@@ -55,7 +67,7 @@ export class Logger {
      * Log an ingo message to the console
      */
     info(...messages) {
-        if (this.logLevel >= LogLevel.info) {
+        if (this._logLevel >= LogLevel.info) {
             this.writeToLog(console.info, ...messages);
         }
     }
@@ -64,7 +76,7 @@ export class Logger {
      * Log a debug message to the console
      */
     debug(...messages) {
-        if (this.logLevel >= LogLevel.debug) {
+        if (this._logLevel >= LogLevel.debug) {
             this.writeToLog(console.debug, ...messages);
         }
     }
@@ -73,7 +85,7 @@ export class Logger {
      * Log a debug message to the console
      */
     trace(...messages) {
-        if (this.logLevel >= LogLevel.trace) {
+        if (this._logLevel >= LogLevel.trace) {
             this.writeToLog(console.trace, ...messages);
         }
     }
@@ -87,6 +99,3 @@ export enum LogLevel {
     debug = 5,
     trace = 6
 }
-
-//default logger
-export const logger = new Logger();

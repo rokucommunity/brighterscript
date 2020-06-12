@@ -12,7 +12,6 @@ import { ClassStatement } from './parser/ClassStatement';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { FunctionType } from './types/FunctionType';
-import { logger } from './Logger';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 
@@ -318,7 +317,7 @@ export class Scope {
     }
 
     protected logDebug(...args) {
-        logger.debug('Scope', this._debugLogComponentName, ...args);
+        this.program.logger.debug('Scope', this._debugLogComponentName, ...args);
     }
     private _debugLogComponentName: string;
 

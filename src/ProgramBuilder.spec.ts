@@ -4,6 +4,7 @@ import * as sinonImport from 'sinon';
 import { Program } from './Program';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
+import { Logger, LogLevel } from './Logger';
 
 let sinon = sinonImport.createSandbox();
 let rootDir = process.cwd();
@@ -21,6 +22,7 @@ describe('ProgramBuilder', () => {
         b = builder;
         b.options = await util.normalizeAndResolveConfig(undefined);
         b.program = new Program(b.options);
+        b.logger = new Logger();
         let vfs = {};
         setVfsFile = (filePath, contents) => {
             vfs[filePath] = contents;
@@ -116,5 +118,26 @@ describe('ProgramBuilder', () => {
             expect(diagnostics.map(x => x.message)).to.eql([]);
             expect(builder.program.getFileByPathAbsolute(s``));
         });
+    });
+
+    it('uses a unique logger for each builder', async () => {
+        let builder1 = new ProgramBuilder();
+        let builder2 = new ProgramBuilder();
+        expect(builder1.logger).not.to.equal(builder2.logger);
+
+        await Promise.all([
+            builder1.run({
+                logLevel: LogLevel.info,
+                watch: false
+            }),
+            builder2.run({
+                logLevel: LogLevel.error,
+                watch: false
+            })
+        ]);
+
+        //the loggers should have different log levels
+        expect(builder1.logger.logLevel).to.equal(LogLevel.info);
+        expect(builder2.logger.logLevel).to.equal(LogLevel.error);
     });
 });

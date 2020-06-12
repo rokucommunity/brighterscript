@@ -8,7 +8,7 @@ import { FileResolver, Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import { logger } from './Logger';
+import { Logger } from './Logger';
 
 /**
  * A runner class that handles
@@ -23,7 +23,7 @@ export class ProgramBuilder {
     private isRunning = false;
     private watcher: Watcher;
     public program: Program;
-
+    public logger = new Logger();
     private fileResolvers = [] as FileResolver[];
     public addFileResolver(fileResolver: FileResolver) {
         this.fileResolvers.push(fileResolver);
@@ -60,6 +60,7 @@ export class ProgramBuilder {
     }
 
     public async run(options: BsConfig) {
+        this.logger.logLevel = options.logLevel;
         if (this.isRunning) {
             throw new Error('Server is already running');
         }
@@ -80,17 +81,16 @@ export class ProgramBuilder {
             //For now, just use a default options object so we have a functioning program
             this.options = util.normalizeConfig({});
         }
-
         this.program = new Program(this.options);
         //add the initial FileResolvers
         this.program.fileResolvers.push(...this.fileResolvers);
 
         //parse every file in the entire project
-        logger.log('Parsing files');
+        this.logger.log('Parsing files');
         await this.loadAllFilesAST();
 
         if (this.options.watch) {
-            logger.log('Starting compilation in watch mode...');
+            this.logger.log('Starting compilation in watch mode...');
             await this.runOnce();
             this.enableWatchMode();
         } else {
@@ -120,13 +120,13 @@ export class ProgramBuilder {
             this.watcher.watch(src);
         }
 
-        logger.log('Watching for file changes...');
+        this.logger.log('Watching for file changes...');
 
         let debouncedRunOnce = debounce(async () => {
-            logger.log('File change detected. Starting incremental compilation...');
+            this.logger.log('File change detected. Starting incremental compilation...');
             await this.runOnce();
             let errorCount = this.getDiagnostics().length;
-            logger.log(`Found ${errorCount} errors. Watching for file changes.`);
+            this.logger.log(`Found ${errorCount} errors. Watching for file changes.`);
         }, 50);
 
         //on any file watcher event
@@ -283,7 +283,7 @@ export class ProgramBuilder {
             if (cancellationToken.isCanceled === true) {
                 return -1;
             }
-            logger.log('Validating project');
+            this.logger.log('Validating project');
             //validate program
             await this.validateProject();
 
@@ -297,7 +297,7 @@ export class ProgramBuilder {
             let errorCount = this.getDiagnostics().filter(x => x.severity === DiagnosticSeverity.Error).length;
 
             if (errorCount > 0) {
-                logger.log(`Found ${errorCount} ${errorCount === 1 ? 'error' : 'errors'}`);
+                this.logger.log(`Found ${errorCount} ${errorCount === 1 ? 'error' : 'errors'}`);
                 return errorCount;
             }
 
@@ -341,20 +341,20 @@ export class ProgramBuilder {
                 }
             }
 
-            logger.log('Copying to staging directory');
+            this.logger.log('Copying to staging directory');
             //prepublish all non-program-loaded files to staging
             await rokuDeploy.prepublishToStaging({
                 ...options,
                 files: filteredFileMap
             });
 
-            logger.log('Transpiling');
+            this.logger.log('Transpiling');
             //transpile any brighterscript files
             await this.program.transpile(fileMap, options.stagingFolderPath);
 
             //create the zip file if configured to do so
             if (this.options.createPackage !== false || this.options.deploy) {
-                logger.log(`Creating package at ${this.options.outFile}`);
+                this.logger.log(`Creating package at ${this.options.outFile}`);
                 await rokuDeploy.zipPackage({
                     ...this.options,
                     outDir: util.getOutDir(this.options),
@@ -367,7 +367,7 @@ export class ProgramBuilder {
     private async deployPackageIfEnabled() {
         //deploy the project if configured to do so
         if (this.options.deploy) {
-            logger.log(`Deploying package to ${this.options.host}`);
+            this.logger.log(`Deploying package to ${this.options.host}`);
             await rokuDeploy.publish({
                 ...this.options,
                 outDir: util.getOutDir(this.options),
@@ -382,7 +382,7 @@ export class ProgramBuilder {
     private async loadAllFilesAST() {
         let errorCount = 0;
         let files = await util.getFilePaths(this.options);
-        logger.debug('ProgramBuilder.loadAllFilesAST() files:', files);
+        this.logger.debug('ProgramBuilder.loadAllFilesAST() files:', files);
         //parse every file
         await Promise.all(
             files.map(async (file) => {
@@ -395,7 +395,7 @@ export class ProgramBuilder {
                     }
                 } catch (e) {
                     //log the error, but don't fail this process because the file might be fixable later
-                    logger.log(e);
+                    this.logger.log(e);
                 }
             })
         );
