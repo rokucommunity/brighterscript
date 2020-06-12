@@ -468,8 +468,19 @@ describe('lexer', () => {
 
         it('allows multiline strings', () => {
             let { tokens } = Lexer.scan('`multi-line\n\n`');
-            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick, TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
-            expect(tokens[1].literal).to.deep.equal(new BrsString(`multi-line\n\n`));
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect(tokens[1].literal).to.eql(new BrsString(`multi-line`));
+            expect(tokens[2].text).to.equal('\n');
+            expect(tokens[2].text).to.equal('\n');
         });
 
         it('maintains proper line/column locations for multiline strings', () => {
@@ -484,7 +495,12 @@ describe('lexer', () => {
             })).to.eql([
                 { range: Range.create(0, 0, 0, 3), kind: TokenKind.IntegerLiteral },
                 { range: Range.create(0, 4, 0, 5), kind: TokenKind.BackTick },
-                { range: Range.create(0, 5, 2, 7), kind: TokenKind.TemplateStringQuasi },
+                { range: Range.create(0, 5, 0, 10), kind: TokenKind.TemplateStringQuasi },
+                { range: Range.create(0, 10, 0, 11), kind: TokenKind.EscapedCharCodeLiteral },
+                { range: Range.create(1, 0, 1, 4), kind: TokenKind.TemplateStringQuasi },
+                { range: Range.create(1, 4, 1, 5), kind: TokenKind.EscapedCharCodeLiteral },
+                { range: Range.create(1, 5, 1, 6), kind: TokenKind.EscapedCharCodeLiteral },
+                { range: Range.create(2, 0, 2, 7), kind: TokenKind.TemplateStringQuasi },
                 { range: Range.create(2, 7, 2, 8), kind: TokenKind.BackTick },
                 { range: Range.create(2, 9, 2, 13), kind: TokenKind.True },
                 { range: Range.create(2, 13, 2, 14), kind: TokenKind.Newline },
@@ -500,6 +516,8 @@ describe('lexer', () => {
             expect(tokens.map(t => t.kind)).to.deep.equal([
                 TokenKind.BackTick,
                 TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
                 TokenKind.Identifier,
                 TokenKind.Dot,
                 TokenKind.Identifier,
@@ -512,6 +530,8 @@ describe('lexer', () => {
                 TokenKind.StringLiteral,
                 TokenKind.RightSquareBracket,
                 TokenKind.RightParen,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
                 TokenKind.TemplateStringQuasi,
                 TokenKind.Identifier,
                 TokenKind.Dot,

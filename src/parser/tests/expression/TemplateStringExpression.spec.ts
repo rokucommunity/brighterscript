@@ -97,10 +97,17 @@ describe('TemplateStringExpression', () => {
             );
         });
 
+        it('properly handles clrf', async () => {
+            await testTranspile(
+                'a = `\r\n`',
+                'a = chr(13) + chr(10)'
+            );
+        });
+
         it('properly transpiles more complex multiline template string', async () => {
             await testTranspile(
-                'a = `hello world\nI am multiline\n${a.isRunning()}\nmore`',
-                'a = "hello world" + chr(10) + "I am multiline" + chr(10) + bslib_toString(a.isRunning()) + chr(10) + "more"'
+                'a = `I am multiline\n${a.isRunning()}\nmore`',
+                'a = "I am multiline" + chr(10) + bslib_toString(a.isRunning()) + chr(10) + "more"'
             );
         });
 

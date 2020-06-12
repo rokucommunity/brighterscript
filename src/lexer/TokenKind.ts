@@ -49,6 +49,7 @@ export enum TokenKind {
     FloatLiteral = 'FloatLiteral',
     DoubleLiteral = 'DoubleLiteral',
     LongIntegerLiteral = 'LongIntegerLiteral',
+    EscapedCharCodeLiteral = 'EscapedCharCodeLiteral', //this is used to capture things like `\n`, `\r\n` in template strings
 
     //types
     Void = 'Void',

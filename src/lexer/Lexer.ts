@@ -470,9 +470,6 @@ export class Lexer {
      */
     private templateString() {
         this.addToken(TokenKind.BackTick);
-        this.start = this.current;
-        this.advance();
-        let value = '';
         while (!this.isAtEnd() && !this.check('`')) {
             if (this.check('\\') && this.peekNext() === '`') {
                 this.advance();
@@ -481,21 +478,40 @@ export class Lexer {
 
             //handle line/column tracking when capturing newlines
             if (this.check('\n')) {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                //store the char code
+                token.charCode = 10;
+
+                //move the location tracking to the next line
                 this.lineEnd++;
+                this.lineBegin = this.lineEnd;
                 this.columnEnd = 0;
-                this.current++;
+                this.columnBegin = this.columnEnd;
                 continue;
             } else if (this.check('\r') && this.peekNext() === '\n') {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = 13;
+
+                this.advance();
+                token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = 10;
+
+                //move the location tracking to the next line
                 this.lineEnd++;
+                this.lineBegin = this.lineEnd;
                 this.columnEnd = 0;
-                this.current += 2;
+                this.columnBegin = this.columnEnd;
                 continue;
             }
 
             if (this.check('$') && this.peekNext() === '{') {
-                value = this.source.slice(this.start, this.current);
-                value = value.replace(/\\`/g, '/');
-                this.addToken(TokenKind.TemplateStringQuasi, new BrsString(value));
+                this.templateQuasiString();
                 this.advance();
                 this.advance();
                 while (!this.isAtEnd() && !this.check('}')) {
@@ -516,13 +532,18 @@ export class Lexer {
         }
 
         //get last quasi
-        value = this.source.slice(this.start, this.current);
-        value = value.replace(/\\`/g, '`');
-        this.addToken(TokenKind.TemplateStringQuasi, new BrsString(value));
+        this.templateQuasiString();
+
         // move past the closing ```
         this.advance();
-
         this.addToken(TokenKind.BackTick);
+    }
+
+    private templateQuasiString() {
+        let value = this.source.slice(this.start, this.current);
+        //replace escaped backticks with actual backticks
+        value = value.replace(/\\`/g, '`');
+        this.addToken(TokenKind.TemplateStringQuasi, new BrsString(value));
     }
 
     /**

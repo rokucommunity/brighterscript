@@ -311,13 +311,14 @@ export class LiteralExpression implements Expression {
         this.range = range ?? Range.create(-1, -1, -1, -1);
     }
 
+
     public readonly range: Range;
 
     transpile(state: TranspileState) {
         let text: string;
         if (this.value.kind === ValueKind.String) {
             //escape quote marks with another quote mark
-            text = `"${this.value.toString().replace(/"/g, '""')}"`;
+            text = `"${this.value.value.replace(/"/g, '""')}"`;
         } else {
             text = this.value.toString();
         }
@@ -332,49 +333,28 @@ export class LiteralExpression implements Expression {
         ];
     }
 }
-export class TemplateLiteralExpression extends LiteralExpression {
-    public readonly range: Range;
+
+/**
+ * This is a special expression only used within template strings. It exists so we can prevent producing lots of empty strings
+ * during template string transpile by identifying these expressions explicitly and skipping the bslib_toString around them
+ */
+export class EscapedCharCodeLiteral implements Expression {
+    constructor(
+        readonly token: Token & { charCode: number }
+    ) {
+        this.range = token.range;
+    }
+    readonly range: Range;
 
     transpile(state: TranspileState) {
-        let text: string;
-        if (this.value.kind === ValueKind.String) {
-            //escape quote marks with another quote mark
-            text = this.value.toString().replace(/"/g, '""');
-            //wrap the text in quotes
-            text = `"${text}"`;
-
-            let literalSearches = [{
-                char: '\n',
-                regex: /\n/g,
-                replace: 'chr(10)'
-            }];
-            for (let search of literalSearches) {
-                //replace the entire string with the char code
-                if (text[1] === search.char && text.length === 3) {
-                    text = search.replace;
-                }
-                //replace leading (the string starts with a double quote, so look at second char
-                if (text[1] === search.char) {
-                    //skip the first two characters
-                    text = `${search.replace} + "${text.substring(2)}`;
-                }
-                //replace trailing (text ends with a double quote, so look at the next-to-last char
-                if (text.length > 2 && text[text.length - 2] === search.char) {
-                    //take all but the last 2 characters
-                    text = text.substring(0, text.length - 2) + `" + ${search.replace}`;
-                }
-                //replace chars in the middle
-                text = text.replace(search.regex, `" + ${search.replace} + "`);
-            }
-        } else {
-            text = this.value.toString();
-        }
-        return [new SourceNode(
-            this.range.start.line + 1,
-            this.range.start.character,
-            state.pathAbsolute,
-            text
-        )];
+        return [
+            new SourceNode(
+                this.range.start.line + 1,
+                this.range.start.character,
+                state.pathAbsolute,
+                `chr(${this.token.charCode})`
+            )
+        ];
     }
 }
 
@@ -696,7 +676,7 @@ export class CallfuncExpression implements Expression {
 export class TemplateStringExpression implements Expression {
     constructor(
         readonly openingBacktick: Token,
-        readonly quasis: TemplateLiteralExpression[],
+        readonly quasis: LiteralExpression[],
         readonly expressions: Expression[],
         readonly closingBacktick: Token
     ) {
@@ -735,12 +715,26 @@ export class TemplateStringExpression implements Expression {
                 plus = ' + ';
             }
             if (expression) {
-                result.push(
-                    plus,
-                    'bslib_toString(',
-                    ...expression.transpile(state),
-                    ')'
-                );
+                //skip the toString wrapper around certain expressions
+                if (
+                    expression instanceof EscapedCharCodeLiteral ||
+                    (expression instanceof LiteralExpression && expression.value.kind === ValueKind.String)
+                ) {
+                    result.push(
+                        plus,
+                        ...expression.transpile(state)
+                    );
+
+                    //wrap all other expressions with a bslib_toString call to prevent runtime type mismatch errors
+                } else {
+
+                    result.push(
+                        plus,
+                        'bslib_toString(',
+                        ...expression.transpile(state),
+                        ')'
+                    );
+                }
                 plus = ' + ';
             }
         }
@@ -760,7 +754,7 @@ export class TemplateStringExpression implements Expression {
 export class TaggedTemplateStringExpression implements Expression {
     constructor(
         readonly openingBacktick: Token,
-        readonly quasis: TemplateLiteralExpression[],
+        readonly quasis: LiteralExpression[],
         readonly expressions: Expression[],
         readonly closingBacktick: Token
     ) {

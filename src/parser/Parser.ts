@@ -72,7 +72,7 @@ import {
     VariableExpression,
     XmlAttributeGetExpression,
     TemplateStringExpression,
-    TemplateLiteralExpression
+    EscapedCharCodeLiteral
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
@@ -1217,14 +1217,17 @@ export class Parser {
 
     private templateString(): TemplateStringExpression {
         this.warnIfNotBrighterScriptMode('template string');
-        let quasis = [];
+        let quasis = [] as LiteralExpression[];
         let expressions = [];
         let openingBacktick = this.peek();
         this.advance();
         while (!this.check(TokenKind.BackTick) && !this.check(TokenKind.Eof)) {
             let next = this.peek();
             if (next.kind === TokenKind.TemplateStringQuasi) {
-                quasis.push(new TemplateLiteralExpression(next.literal, next.range));
+                quasis.push(new LiteralExpression(next.literal, next.range));
+                this.advance();
+            } else if (next.kind === TokenKind.EscapedCharCodeLiteral) {
+                expressions.push(new EscapedCharCodeLiteral(<any>next));
                 this.advance();
             } else {
                 expressions.push(this.expression());
