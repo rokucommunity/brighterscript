@@ -672,11 +672,41 @@ export class CallfuncExpression implements Expression {
     }
 }
 
+/**
+ * Since template strings can contain newlines, we need to concatenate multiple strings together with chr() calls.
+ * This is a single expression that represents the string contatenation of all parts of a single quasi.
+ */
+export class TemplateStringQuasiExpression implements Expression {
+    constructor(
+        readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteral>
+    ) {
+        this.range = Range.create(this.expressions[0].range.start, this.expressions[this.expressions.length - 1].range.end);
+    }
+    readonly range: Range;
+
+    transpile(state: TranspileState) {
+        let result = [];
+        let plus = '';
+        for (let expression of this.expressions) {
+            //skip empty strings
+            if (((expression as LiteralExpression)?.value as BrsString)?.value === '') {
+                continue;
+            }
+            result.push(
+                plus,
+                ...expression.transpile(state)
+            );
+            plus = ' + ';
+        }
+        return result;
+    }
+}
+
 
 export class TemplateStringExpression implements Expression {
     constructor(
         readonly openingBacktick: Token,
-        readonly quasis: LiteralExpression[],
+        readonly quasis: TemplateStringQuasiExpression[],
         readonly expressions: Expression[],
         readonly closingBacktick: Token
     ) {
@@ -693,6 +723,7 @@ export class TemplateStringExpression implements Expression {
             return this.quasis[0].transpile(state);
         }
         let result = [];
+        //wrap the expression in parens to readability
         // result.push(
         //     new SourceNode(
         //         this.openingBacktick.range.start.line + 1,
@@ -702,42 +733,46 @@ export class TemplateStringExpression implements Expression {
         //     )
         // );
         let plus = '';
+        //helper function to figure out when to include the plus
+        function add(...items) {
+            if (items.length > 0) {
+                result.push(
+                    plus,
+                    ...items
+                );
+            }
+            plus = ' + ';
+        }
+
         for (let i = 0; i < this.quasis.length; i++) {
             let quasi = this.quasis[i];
             let expression = this.expressions[i];
 
-            //skip empty strings
-            if ((quasi.value as BrsString).value.length > 0) {
-                result.push(
-                    plus,
-                    ...quasi.transpile(state)
-                );
-                plus = ' + ';
-            }
+            add(
+                ...quasi.transpile(state)
+            );
             if (expression) {
                 //skip the toString wrapper around certain expressions
                 if (
                     expression instanceof EscapedCharCodeLiteral ||
                     (expression instanceof LiteralExpression && expression.value.kind === ValueKind.String)
                 ) {
-                    result.push(
-                        plus,
+                    add(
                         ...expression.transpile(state)
                     );
 
                     //wrap all other expressions with a bslib_toString call to prevent runtime type mismatch errors
                 } else {
-
-                    result.push(
-                        plus,
+                    add(
                         'bslib_toString(',
                         ...expression.transpile(state),
                         ')'
                     );
                 }
-                plus = ' + ';
             }
         }
+
+        //wrap the expression in parens to readability
         // result.push(
         //     new SourceNode(
         //         this.openingBacktick.range.end.line + 1,

@@ -72,7 +72,8 @@ import {
     VariableExpression,
     XmlAttributeGetExpression,
     TemplateStringExpression,
-    EscapedCharCodeLiteral
+    EscapedCharCodeLiteral,
+    TemplateStringQuasiExpression
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
@@ -1217,22 +1218,40 @@ export class Parser {
 
     private templateString(): TemplateStringExpression {
         this.warnIfNotBrighterScriptMode('template string');
-        let quasis = [] as LiteralExpression[];
+        let quasis = [] as TemplateStringQuasiExpression[];
         let expressions = [];
         let openingBacktick = this.peek();
         this.advance();
+        let currentQuasiExpressionParts = [];
         while (!this.check(TokenKind.BackTick) && !this.check(TokenKind.Eof)) {
             let next = this.peek();
             if (next.kind === TokenKind.TemplateStringQuasi) {
-                quasis.push(new LiteralExpression(next.literal, next.range));
+                //a quasi can actually be made up of multiple quasis when it includes char literals
+                currentQuasiExpressionParts.push(
+                    new LiteralExpression(next.literal, next.range)
+                );
                 this.advance();
             } else if (next.kind === TokenKind.EscapedCharCodeLiteral) {
-                expressions.push(new EscapedCharCodeLiteral(<any>next));
+                currentQuasiExpressionParts.push(
+                    new EscapedCharCodeLiteral(<any>next)
+                );
                 this.advance();
             } else {
+                //finish up the current quasi
+                quasis.push(
+                    new TemplateStringQuasiExpression(currentQuasiExpressionParts)
+                );
+                currentQuasiExpressionParts = [];
+
+                //now keep this expression
                 expressions.push(this.expression());
             }
         }
+
+        //store the final set of quasis
+        quasis.push(
+            new TemplateStringQuasiExpression(currentQuasiExpressionParts)
+        );
 
         if (this.check(TokenKind.Eof)) {
             //error - missing backtick
