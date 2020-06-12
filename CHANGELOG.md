@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.10.10]
+### Fixed
+ - include the missing `bslib.brs` file in the npm package which was causing errors during transpile. 
+
+
+
 ## [0.10.9]
 ### Added
  - bslib.brs gets copied to `pkg:/source` and added as an import to every component on transpile.
@@ -357,6 +363,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.10.10]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.9...v0.10.10
 [0.10.9]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.8...v0.10.9
 [0.10.7]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.6...v0.10.7
 [0.10.6]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.5...v0.10.6
