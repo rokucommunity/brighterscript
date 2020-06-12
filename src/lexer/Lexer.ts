@@ -471,11 +471,6 @@ export class Lexer {
     private templateString() {
         this.addToken(TokenKind.BackTick);
         while (!this.isAtEnd() && !this.check('`')) {
-            if (this.check('\\') && this.peekNext() === '`') {
-                this.advance();
-                this.advance();
-            }
-
             //handle line/column tracking when capturing newlines
             if (this.check('\n')) {
                 this.templateQuasiString();
@@ -507,6 +502,28 @@ export class Lexer {
                 this.lineBegin = this.lineEnd;
                 this.columnEnd = 0;
                 this.columnBegin = this.columnEnd;
+                continue;
+
+                //escaped chars
+            } else if (this.check('\\')) {
+                this.templateQuasiString();
+
+                //step past the escape character
+                this.advance();
+                let charCode: number;
+                //a few common cases
+                if (this.check('n')) {
+                    charCode = '\n'.charCodeAt(0);
+                } else if (this.check('r')) {
+                    charCode = '\r'.charCodeAt(0);
+                } else if (this.check('\\')) {
+                    charCode = '\\'.charCodeAt(0);
+                } else {
+                    charCode = this.peek().charCodeAt(0);
+                }
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = charCode;
                 continue;
             }
 
@@ -541,8 +558,6 @@ export class Lexer {
 
     private templateQuasiString() {
         let value = this.source.slice(this.start, this.current);
-        //replace escaped backticks with actual backticks
-        value = value.replace(/\\`/g, '`');
         this.addToken(TokenKind.TemplateStringQuasi, new BrsString(value));
     }
 

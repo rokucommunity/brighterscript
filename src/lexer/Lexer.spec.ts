@@ -393,11 +393,59 @@ describe('lexer', () => {
     // template string literals
 
     describe('template string literals', () => {
+        it('supports escaped chars', () => {
+            let { tokens } = Lexer.scan('`\\n\\`\\r\\n`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral, // slash n
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral, // slash backtick
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral, // slash r
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral, // slash n
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect(tokens.map(x => (x as any).charCode).filter(x => !!x)).to.eql([
+                10,
+                96,
+                13,
+                10
+            ]);
+        });
+
+        it('prevents expressions when escaping the dollar sign', () => {
+            let { tokens } = Lexer.scan('`\\${just text}`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral, // slash dollar sign
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
 
         it(`safely escapes \` literals`, () => {
-            let { tokens } = Lexer.scan('`the cat says \\`meow\\`');
-            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick, TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
-            expect(tokens[1].literal).to.deep.equal(new BrsString('the cat says `meow`'));
+            let { tokens } = Lexer.scan('`the cat says \\`meow\\` a lot`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral, // slash backtick
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral, // slash backtick
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect(tokens[1].literal).to.eql(new BrsString('the cat says '));
+            expect(tokens[2].text).to.eql('\\`');
+            expect(tokens[3].literal).to.eql(new BrsString('meow'));
+            expect(tokens[4].text).to.eql('\\`');
+            expect(tokens[5].literal).to.eql(new BrsString(' a lot'));
         });
 
         it('produces template string literal tokens', () => {
