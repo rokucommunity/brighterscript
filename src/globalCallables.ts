@@ -632,16 +632,7 @@ By using Chr, you can create strings containing characters which cannot be conta
         }]
     }, {
         name: 'StrI',
-        shortDescription: 'Converts a value to a string. Str(A), for example, returns a string equal to the decimal representation of the numeric value of A.\nNote: for non-negative numbers, a leading blank is inserted before the value string as a sign placeholder.',
-        type: new FunctionType(new StringType()),
-        file: globalFile,
-        params: [{
-            name: 'value',
-            type: new IntegerType()
-        }]
-    }, {
-        name: 'StrI',
-        shortDescription: 'Converts the integer value into a string representation using the given radix.\nIf radix is not 2 .. 36 then an empty string is returned.\nNote that the returned string does not include a base prefix and uses lowercase letters to represent those digits in bases greater than 10.',
+        shortDescription: 'Converts a value to a string. Str(A), for example, returns a string equal to the decimal representation of the numeric value of A.\nNote: for non-negative numbers, a leading blank is inserted before the value string as a sign placeholder.. If the radix parameter is provided, then converts the integer value into a string representation using the given radix.\nIf radix is not 2 .. 36 then an empty string is returned.\nNote that the returned string does not include a base prefix and uses lowercase letters to represent those digits in bases greater than 10.',
         type: new FunctionType(new StringType()),
         file: globalFile,
         params: [{

@@ -40,4 +40,27 @@ describe('globalCallables', () => {
         });
     });
 
+    describe('StrI', () => {
+        it('allows single parameter', async () => {
+            await program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print StrI(2)
+                end sub
+            `);
+            await program.validate();
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+
+        it('allows both parameters', async () => {
+            await program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print StrI(2, 10)
+                end sub
+            `);
+            await program.validate();
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+    });
+
+
 });
