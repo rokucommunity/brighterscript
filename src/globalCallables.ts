@@ -677,16 +677,7 @@ By using Chr, you can create strings containing characters which cannot be conta
         }]
     }, {
         name: 'Val',
-        shortDescription: 'Performs the inverse of the STR function: returns the number represented by the characters in a string argument.\nFor example, if A$="12" and B$="34" then VAL(A$+ "."+B$) returns the number 12.34.',
-        type: new FunctionType(new FloatType()),
-        file: globalFile,
-        params: [{
-            name: 's',
-            type: new StringType()
-        }]
-    }, {
-        name: 'Val',
-        shortDescription: 'Returns the integer value from parsing the string with the specified radix.\nRadix should be 2 .. 36 or the special value 0 (which automatically identified hexadecimal or octal numbers based on 0x or 0 prefixes respectively).\nLeading whitespace is ignored then as much of the rest of the string will be parsed as valid.',
+        shortDescription: 'Performs the inverse of the STR function: returns the number represented by the characters in a string argument.\nFor example, if A$="12" and B$="34" then VAL(A$+ "."+B$) returns the number 12.34. If radix is provided as the second parameter, it returns the integer value from parsing the string with the specified radix.\nRadix should be 2 .. 36 or the special value 0 (which automatically identified hexadecimal or octal numbers based on 0x or 0 prefixes respectively).\nLeading whitespace is ignored then as much of the rest of the string will be parsed as valid.',
         type: new FunctionType(new IntegerType()),
         file: globalFile,
         params: [{
