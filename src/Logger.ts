@@ -11,14 +11,17 @@ export class Logger {
         return this._logLevel;
     }
     public set logLevel(value: LogLevel) {
-        if (value) {
-            this._logLevel = value;
-        }
+        this._logLevel = value ?? LogLevel.log;
     }
     private _logLevel = LogLevel.log;
 
     private getTimestamp() {
-        return '[' + chalk.grey(moment().format('hh:mm:ss A')) + ']';
+        let milliseconds: string;
+        //show milliseconds when in the more chatty log levels
+        if (this._logLevel === LogLevel.info || this._logLevel === LogLevel.debug || this._logLevel === LogLevel.trace) {
+            milliseconds = ':SSS';
+        }
+        return '[' + chalk.grey(moment().format(`hh:mm:ss${milliseconds} A`)) + ']';
     }
 
     private writeToLog(method: (...consoleArgs: any[]) => void, ...args: any[]) {
@@ -64,7 +67,7 @@ export class Logger {
         }
     }
     /**
-     * Log an ingo message to the console
+     * Log an info message to the console
      */
     info(...messages) {
         if (this._logLevel >= LogLevel.info) {
