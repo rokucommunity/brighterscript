@@ -61,6 +61,32 @@ textWithBacktick = `this is a backtick \` character`
   <summary>View the transpiled BrightScript code</summary>
   
 ```BrightScript
-textWithBacktick = "this is a backtick ` character"
+textWithBacktick = "this is a backtick " + chr(96) + " character"
+```
+</details>
+
+If you want to include the literal text `${}` in your string, you can escape the leading dollar sign like so:
+```BrighterScript
+text = `look \${here}`
+```
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+  
+```BrightScript
+text = "look " + chr(36) + "{here}"
+```
+</details>
+
+### Escaping unicode characters
+You also have the option to escape unicode characters. Since most BrightScript developers are already familiar with calling `chr(charCode)`, BrighterScript makes this simple. Just prefix your char code with `\c`. For example, if you wanted to insert char code 22 into a string, you could do this:
+
+```BrighterScript
+text = `\c22`
+```
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+  
+```BrightScript
+text = chr(99) + "22"
 ```
 </details>

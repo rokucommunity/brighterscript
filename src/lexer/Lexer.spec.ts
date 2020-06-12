@@ -429,6 +429,27 @@ describe('lexer', () => {
             ]);
         });
 
+        it('supports escaping unicode char codes', () => {
+            let { tokens } = Lexer.scan('`\\c1\\c12\\c123`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect(tokens.map(x => (x as any).charCode).filter(x => !!x)).to.eql([
+                1,
+                12,
+                123
+            ]);
+        });
+
         it(`safely escapes \` literals`, () => {
             let { tokens } = Lexer.scan('`the cat says \\`meow\\` a lot`');
             expect(tokens.map(t => t.kind)).to.deep.equal([

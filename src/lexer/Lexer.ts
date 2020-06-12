@@ -518,6 +518,22 @@ export class Lexer {
                     charCode = '\r'.charCodeAt(0);
                 } else if (this.check('\\')) {
                     charCode = '\\'.charCodeAt(0);
+
+                    //support escaped unicode codes
+                } else if (this.check('c')) {
+                    let numText = '';
+                    //read tokens until we find a non-numeric one
+                    while (
+                        !isNaN(
+                            parseInt(
+                                this.peekNext()
+                            )
+                        )
+                    ) {
+                        this.advance();
+                        numText += this.peek();
+                    }
+                    charCode = parseInt(numText);
                 } else {
                     charCode = this.peek().charCodeAt(0);
                 }

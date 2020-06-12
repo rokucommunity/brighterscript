@@ -83,6 +83,20 @@ describe('TemplateStringExpression', () => {
             );
         });
 
+        it('handles escaped characters', async () => {
+            await testTranspile(
+                'a = `\\r\\n\\`\\$`',
+                `a = chr(13) + chr(10) + chr(96) + chr(36)`
+            );
+        });
+
+        it('handles escaped unicode char codes', async () => {
+            await testTranspile(
+                'a = `\\c2\\c987`',
+                `a = chr(2) + chr(987)`
+            );
+        });
+
         it('properly transpiles simple multiline template string', async () => {
             await testTranspile(
                 'a = `hello world\nI am multiline`',
