@@ -19,7 +19,7 @@ export class Logger {
         let milliseconds: string;
         //show milliseconds when in the more chatty log levels
         if (this._logLevel === LogLevel.info || this._logLevel === LogLevel.debug || this._logLevel === LogLevel.trace) {
-            milliseconds = ':SSS';
+            milliseconds = ':SSSS';
         }
         return '[' + chalk.grey(moment().format(`hh:mm:ss${milliseconds} A`)) + ']';
     }
@@ -92,6 +92,33 @@ export class Logger {
             this.writeToLog(console.trace, ...messages);
         }
     }
+
+    time(logLevel: LogLevel, ...messages) {
+        if (this._logLevel >= logLevel) {
+            let start = Date.now();
+            let logLevelString = LogLevel[logLevel];
+            this[logLevelString](...messages);
+            //return a function to call when the timer is complete
+            return () => {
+                let diffDate = new Date(Date.now() - start);
+                let timeString = '';
+                if (diffDate.getMinutes() > 0) {
+                    timeString = `${diffDate.getMinutes()}m${diffDate.getSeconds()}s${diffDate.getMilliseconds()}ms`;
+                } else if (diffDate.getSeconds() > 0) {
+                    timeString += `${diffDate.getSeconds()}s${diffDate.getMilliseconds()}ms`;
+                } else {
+                    timeString = `${diffDate.getMilliseconds()}ms`;
+                }
+                this[logLevelString](...messages, ` finished. (${chalk.blue(timeString)})`);
+            };
+        } else {
+            return noop;
+        }
+    }
+}
+
+function noop() {
+
 }
 
 export enum LogLevel {

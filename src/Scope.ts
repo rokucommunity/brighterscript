@@ -14,6 +14,7 @@ import { globalCallableMap } from './globalCallables';
 import { FunctionType } from './types/FunctionType';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
+import { LogLevel } from './Logger';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -26,7 +27,7 @@ export class Scope {
     ) {
         this.isValidated = false;
         //used for improved logging performance
-        this._debugLogComponentName = `'${chalk.redBright(this.name)}'`;
+        this._debugLogComponentName = `Scope '${chalk.redBright(this.name)}'`;
 
         //anytime a dependency for this scope changes, we need to be revalidated
         this.programHandles.push(
@@ -317,7 +318,7 @@ export class Scope {
     }
 
     protected logDebug(...args) {
-        this.program.logger.debug('Scope', this._debugLogComponentName, ...args);
+        this.program.logger.debug(this._debugLogComponentName, ...args);
     }
     private _debugLogComponentName: string;
 
@@ -327,7 +328,7 @@ export class Scope {
             this.logDebug('validate(): already validated');
             return;
         }
-        this.logDebug('validate(): not validated');
+        let logLap = this.program.logger.time(LogLevel.info, this._debugLogComponentName, 'validate()');
 
         let parentScope = this.getParentScope();
 
@@ -371,6 +372,7 @@ export class Scope {
         }
 
         (this as any).isValidated = true;
+        logLap();
     }
 
     /**

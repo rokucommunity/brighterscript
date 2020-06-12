@@ -81,6 +81,9 @@ export class ProgramBuilder {
             //For now, just use a default options object so we have a functioning program
             this.options = util.normalizeConfig({});
         }
+        console.log(this.options);
+        this.logger.logLevel = options.logLevel;
+
         this.program = new Program(this.options);
         //add the initial FileResolvers
         this.program.fileResolvers.push(...this.fileResolvers);
@@ -399,7 +402,6 @@ export class ProgramBuilder {
                 }
             })
         );
-
         return errorCount;
     }
 
