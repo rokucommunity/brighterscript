@@ -506,6 +506,7 @@ describe('XmlFile', () => {
                 <component name="SimpleScene" extends="Scene">
                     <script type="text/brightscript" uri="SimpleScene.brs"/>
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 </component>
             `, 'none', 'components/SimpleScene.xml');
         });

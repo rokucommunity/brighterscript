@@ -8,7 +8,6 @@ import { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../in
 import { Program } from '../Program';
 import util from '../util';
 import { Parser } from '../parser/Parser';
-import { logger } from '../Logger';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import { DependencyGraph } from '../DependencyGraph';
@@ -539,7 +538,7 @@ export class XmlFile {
     }
 
     private logDebug(...args) {
-        logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
+        this.program.logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
     }
 
     /**
@@ -559,6 +558,8 @@ export class XmlFile {
                 let missingImports = this.getMissingImportsForTranspile()
                     //change the file extension to .brs since they will be transpiled
                     .map(x => x.replace('.bs', '.brs'));
+                //always include the bslib file
+                missingImports.push('source/bslib.brs');
 
                 for (let missingImport of missingImports) {
                     let scriptTag = `<script type="text/brightscript" uri="${util.getRokuPkgPath(missingImport)}" />`;
@@ -569,6 +570,8 @@ export class XmlFile {
                         new SourceNode(1, 0, this.pathAbsolute, indent + scriptTag)
                     );
                 }
+            } else {
+                //we couldn't find the closing component tag....so maybe there's something wrong? or this isn't actually a component?
             }
 
             //convert .bs extensions to .brs

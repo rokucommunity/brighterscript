@@ -31,6 +31,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { BsDiagnostic } from './interfaces';
+import { Logger } from './Logger';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
@@ -63,11 +64,18 @@ export class LanguageServer {
         return createConnection(ProposedFeatures.all);
     }
 
+    private loggerSubscription;
+
     //run the server
     public run() {
         // Create a connection for the server. The connection uses Node's IPC as a transport.
         // Also include all preview / proposed LSP features.
         this.connection = this.createConnection();
+
+        //listen to all of the output log events and pipe them into the debug channel in the extension
+        this.loggerSubscription = Logger.subscribe((text) => {
+            this.connection.tracer.log(text);
+        });
 
         this.connection.onInitialize(this.onInitialize.bind(this));
 
@@ -987,6 +995,10 @@ export class LanguageServer {
                 return workspace.builder.program.getTranspiledFileContents(pathAbsolute);
             }
         }
+    }
+
+    public dispose() {
+        this.loggerSubscription?.();
     }
 }
 

@@ -121,15 +121,12 @@ export class BrsFile {
             throw new Error(`File was already processed. Create a new instance of BrsFile instead. ${this.pathAbsolute}`);
         }
 
-        //split the text into lines
-        let lines = util.getLines(fileContents);
-
-        this.getIgnores(lines);
-
         //tokenize the input file
         let lexer = Lexer.scan(fileContents, {
             includeWhitespace: false
         });
+
+        this.getIgnores(lexer.tokens);
 
         //remove all code inside false-resolved conditional compilation statements
         let manifest = await getManifest(this.program.options.rootDir);
@@ -334,94 +331,71 @@ export class BrsFile {
      * Find all comment flags in the source code. These enable or disable diagnostic messages.
      * @param lines - the lines of the program
      */
-    public getIgnores(lines: string[]) {
+    public getIgnores(tokens: Token[]) {
         //TODO use the comment statements found in the AST for this instead of text search
         let allCodesExcept1014 = diagnosticCodes.filter((x) => x !== DiagnosticMessages.unknownDiagnosticCode(0).code);
         this.commentFlags = [];
-        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-            let line = lines[lineIndex];
-            let nextLineLength = lines[lineIndex + 1] ? lines[lineIndex + 1].length : Number.MAX_SAFE_INTEGER;
+        for (let token of tokens) {
+            let tokenized = util.tokenizeBsDisableComment(token);
+            if (!tokenized) {
+                continue;
+            }
 
-            //bs:disable-next-line and bs:disable-line
-            {
-                let searches = [{
-                    text: `'bs:disable-next-line`,
-                    lineOffset: 1,
-                    getAffectedRange: () => {
-                        return Range.create(lineIndex + 1, 0, lineIndex + 1, nextLineLength);
-                    }
-                }, {
-                    text: `'bs:disable-line`,
-                    lineOffset: 0,
-                    getAffectedRange: (idx: number) => {
-                        return Range.create(lineIndex, 0, lineIndex, idx);
-                    }
-                }];
+            let affectedRange: Range;
+            if (tokenized.disableType === 'line') {
+                affectedRange = Range.create(token.range.start.line, 0, token.range.start.line, token.range.start.character);
+            } else if (tokenized.disableType === 'next-line') {
+                affectedRange = Range.create(token.range.start.line + 1, 0, token.range.start.line + 1, Number.MAX_SAFE_INTEGER);
+            }
 
-                for (let search of searches) {
-                    //find the disable-next-line
-                    let idx = line.indexOf(search.text);
-                    if (idx > -1) {
-                        let affectedRange = search.getAffectedRange(idx);
-                        let stmt = line.substring(idx).trim();
-                        stmt = stmt.replace(search.text, '');
-                        stmt = stmt.trim();
+            let commentFlag: CommentFlag;
 
-                        let commentFlag: CommentFlag;
+            //statement to disable EVERYTHING
+            if (tokenized.codes.length === 0) {
+                commentFlag = {
+                    file: this,
+                    //null means all codes
+                    codes: null,
+                    range: token.range,
+                    affectedRange: affectedRange
+                };
 
-                        //statement to disable EVERYTHING
-                        if (stmt.length === 0) {
-                            commentFlag = {
-                                file: this,
-                                //null means all codes
-                                codes: null,
-                                range: Range.create(lineIndex, idx, lineIndex, idx + search.text.length),
-                                affectedRange: affectedRange
-                            };
-
-                            //disable specific rules on the next line
-                        } else if (stmt.startsWith(':')) {
-                            stmt = stmt.replace(':', '');
-                            let codes = [] as number[];
-                            //starting position + search.text length + 1 for the colon
-                            let offset = idx + search.text.length + 1;
-                            let codeTokens = util.tokenizeByWhitespace(stmt);
-                            for (let codeToken of codeTokens) {
-                                let codeInt = parseInt(codeToken.text);
-                                //add a warning for unknown codes
-                                if (!diagnosticCodes.includes(codeInt)) {
-                                    this.diagnostics.push({
-                                        ...DiagnosticMessages.unknownDiagnosticCode(codeInt),
-                                        file: this,
-                                        range: Range.create(lineIndex, offset + codeToken.startIndex, lineIndex, offset + codeToken.startIndex + codeToken.text.length)
-                                    });
-                                } else {
-                                    codes.push(codeInt);
-                                }
-                            }
-                            if (codes.length > 0) {
-                                commentFlag = {
-                                    file: this,
-                                    codes: codes,
-                                    range: Range.create(lineIndex, idx, lineIndex, line.length),
-                                    affectedRange: affectedRange
-                                };
-                            }
-                        }
-
-                        if (commentFlag) {
-                            this.commentFlags.push(commentFlag);
-
-                            //add an ignore for everything in this comment except for Unknown_diagnostic_code_1014
-                            this.commentFlags.push({
-                                affectedRange: commentFlag.range,
-                                range: commentFlag.range,
-                                codes: allCodesExcept1014,
-                                file: this
-                            });
-                        }
+                //disable specific diagnostic codes
+            } else {
+                let codes = [] as number[];
+                for (let codeToken of tokenized.codes) {
+                    let codeInt = parseInt(codeToken.code);
+                    //add a warning for unknown codes
+                    if (diagnosticCodes.includes(codeInt)) {
+                        codes.push(codeInt);
+                    } else {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.unknownDiagnosticCode(codeInt),
+                            file: this,
+                            range: codeToken.range
+                        });
                     }
                 }
+                if (codes.length > 0) {
+                    commentFlag = {
+                        file: this,
+                        codes: codes,
+                        range: token.range,
+                        affectedRange: affectedRange
+                    };
+                }
+            }
+
+            if (commentFlag) {
+                this.commentFlags.push(commentFlag);
+
+                //add an ignore for everything in this comment except for Unknown_diagnostic_code_1014
+                this.commentFlags.push({
+                    affectedRange: commentFlag.range,
+                    range: commentFlag.range,
+                    codes: allCodesExcept1014,
+                    file: this
+                });
             }
         }
     }

@@ -48,6 +48,9 @@ describe('LanguageServer', () => {
             getConfiguration: () => {
                 return {};
             }
+        },
+        tracer: {
+            log: () => { }
         }
     };
 
@@ -90,6 +93,7 @@ describe('LanguageServer', () => {
         } catch (e) {
 
         }
+        server.dispose();
     });
 
     function writeToFs(pathAbsolute: string, contents: string) {

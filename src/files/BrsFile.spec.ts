@@ -212,6 +212,18 @@ describe('BrsFile', () => {
                 expect(program.getDiagnostics()[0]?.message).not.to.exist;
             });
 
+            it('works with leading whitespace', async () => {
+                await program.addOrReplaceFile('source/main.brs', `
+                    sub main()
+                        ' bs:disable-next-line
+                        =asdf=sadf=
+                    end sub
+                `);
+                //should have an error
+                await program.validate();
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            });
+
             it('works for all', async () => {
                 let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
@@ -223,7 +235,7 @@ describe('BrsFile', () => {
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: null,
                     range: Range.create(2, 24, 2, 45),
-                    affectedRange: Range.create(3, 0, 3, 35)
+                    affectedRange: Range.create(3, 0, 3, Number.MAX_SAFE_INTEGER)
                 } as CommentFlag);
                 await program.validate();
                 //the "unterminated string" error should be filtered out
@@ -241,7 +253,7 @@ describe('BrsFile', () => {
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: [1083, 1001],
                     range: Range.create(2, 24, 2, 57),
-                    affectedRange: Range.create(3, 0, 3, 35)
+                    affectedRange: Range.create(3, 0, 3, Number.MAX_SAFE_INTEGER)
                 } as CommentFlag);
                 //the "unterminated string" error should be filtered out
                 expect(program.getDiagnostics()[0]?.message).to.not.exist;
@@ -274,7 +286,7 @@ describe('BrsFile', () => {
             it('works for all', async () => {
                 let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
-                        name = "bob 'bs:disable-line
+                        z::;;%%%%%% 'bs:disable-line
                     end sub
                 `) as BrsFile;
                 expect(file.commentFlags[0]).to.exist;
@@ -1798,6 +1810,56 @@ describe('BrsFile', () => {
                 });
                 expect(sourcemapResult).to.eql(tokenResult);
             });
+        });
+
+        it('handles empty if block', async () => {
+            await testTranspile(`
+                if true then
+                end if
+                if true then
+                else
+                    print "else"
+                end if
+                if true then
+                else if true then
+                    print "else"
+                end if
+                if true then
+                else if true then
+                    print "elseif"
+                else
+                    print "else"
+                end if
+            `);
+        });
+
+        it('handles empty elseif block', async () => {
+            await testTranspile(`
+                if true then
+                    print "if"
+                else if true then
+                end if
+                if true then
+                    print "if"
+                else if true then
+                else if true then
+                end if
+            `);
+        });
+
+        it('handles empty else block', async () => {
+            await testTranspile(`
+                if true then
+                    print "if"
+                else
+                end if
+                if true then
+                    print "if"
+                else if true then
+                    print "elseif"
+                else
+                end if
+            `);
         });
 
         it('works for function parameters', async () => {

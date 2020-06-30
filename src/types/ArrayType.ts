@@ -27,6 +27,7 @@ export class ArrayType implements BrsType {
                 return false;
             }
         }
+        return true;
     }
 
     public isConvertibleTo(targetType: BrsType) {
