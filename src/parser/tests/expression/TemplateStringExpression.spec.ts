@@ -171,6 +171,14 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
+        it('skips calling toString on strings', async () => {
+            await testTranspile(`
+                text = \`Hello \${"world"}\`
+            `, `
+                text = "Hello " + "world"
+            `);
+        });
+
         describe('tagged template strings', () => {
             it('properly transpiles', async () => {
                 await testTranspile(`
@@ -179,14 +187,31 @@ describe('TemplateStringExpression', () => {
                     sub main()
                         zombie = zombify\`Hello \${"world"}\`
                     end sub
-            `, `
-                function zombify(strings, values)
-                end function
+                `, `
+                    function zombify(strings, values)
+                    end function
 
-                sub main()
-                    zombie = zombify(["Hello ", ""], ["world"])
-                end sub
-            `);
+                    sub main()
+                        zombie = zombify(["Hello ", ""], ["world"])
+                    end sub
+                `);
+            });
+
+            it('handles multiple embedded expressions', async () => {
+                await testTranspile(`
+                    function zombify(strings, values)
+                    end function
+                    sub main()
+                        zombie = zombify\`Hello \${"world"} I am \${12} years old\`
+                    end sub
+                `, `
+                    function zombify(strings, values)
+                    end function
+
+                    sub main()
+                        zombie = zombify(["Hello ", " I am ", " years old"], ["world", 12])
+                    end sub
+                `);
             });
         });
     });

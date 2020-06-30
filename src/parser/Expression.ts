@@ -802,10 +802,6 @@ export class TaggedTemplateStringExpression implements Expression {
     public readonly range: Range;
 
     transpile(state: TranspileState) {
-        //if there is only a single quasi, this is a "simple" expression, just treat it as a string
-        if (this.quasis.length === 1 && this.expressions.length === 0) {
-            return this.quasis[0].transpile(state);
-        }
         let result = [];
         result.push(
             new SourceNode(
@@ -839,7 +835,7 @@ export class TaggedTemplateStringExpression implements Expression {
             let expression = this.expressions[i];
             if (i > 0) {
                 result.push(
-                    ','
+                    ', '
                 );
             }
             result.push(
