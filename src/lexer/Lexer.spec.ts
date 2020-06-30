@@ -450,6 +450,19 @@ describe('lexer', () => {
             ]);
         });
 
+        it('converts doublequote to EscapedCharCodeLiteral', () => {
+            let { tokens } = Lexer.scan('`"`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral, // quote
+                TokenKind.TemplateStringQuasi, // empty
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect((tokens[2] as any).charCode).to.equal(34);
+        });
+
         it(`safely escapes \` literals`, () => {
             let { tokens } = Lexer.scan('`the cat says \\`meow\\` a lot`');
             expect(tokens.map(t => t.kind)).to.deep.equal([

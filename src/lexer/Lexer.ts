@@ -541,6 +541,20 @@ export class Lexer {
                 let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
                 token.charCode = charCode;
                 continue;
+            } else if (this.check('"')) {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                //store the char code
+                token.charCode = '"'.charCodeAt(0);
+
+                //move the location tracking to the next line
+                this.lineEnd++;
+                this.lineBegin = this.lineEnd;
+                this.columnEnd = 0;
+                this.columnBegin = this.columnEnd;
+                continue;
             }
 
             if (this.check('$') && this.peekNext() === '{') {

@@ -90,3 +90,15 @@ text = `abc\c22def`
 text = "abc" + chr(22) + "def"
 ```
 </details>
+
+### Capturing quotes
+
+Quotemarks found within template strings will be transpiled to `chr(34)` calls.
+
+```BrighterScript
+stringWithQuotes = `hello "John"`
+```
+transpiles to
+```BrightScript
+stringWithQuotes = "hello " + chr(34) + "John" + chr(34)
+```
