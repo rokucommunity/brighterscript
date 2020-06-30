@@ -1,6 +1,6 @@
 {
     "name": "brighterscript",
-    "version": "0.10.8",
+    "version": "0.10.10",
     "description": "A superset of Roku's BrightScript language.",
     "scripts": {
         "preversion": "npm run build && npm run lint && npm run test",
@@ -30,6 +30,7 @@
     },
     "files": [
         "dist/**/!(*.spec.*)*",
+        "bslib.brs",
         "bsconfig.schema.json"
     ],
     "main": "dist/index.js",

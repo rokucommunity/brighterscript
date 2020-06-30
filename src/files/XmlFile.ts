@@ -8,7 +8,6 @@ import { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../in
 import { Program } from '../Program';
 import util from '../util';
 import { Parser } from '../parser/Parser';
-import { logger } from '../Logger';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import { DependencyGraph } from '../DependencyGraph';
@@ -539,7 +538,7 @@ export class XmlFile {
     }
 
     private logDebug(...args) {
-        logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
+        this.program.logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
     }
 
     /**

@@ -14,7 +14,7 @@ import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DependencyGraph } from './DependencyGraph';
-import { logger, LogLevel } from './Logger';
+import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
 import { globalFile } from './globalCallables';
 const startOfSourcePkgPath = `source${path.sep}`;
@@ -24,13 +24,11 @@ export class Program {
         /**
          * The root directory for this program
          */
-        public options: BsConfig
+        public options: BsConfig,
+        logger?: Logger
     ) {
         this.options = util.normalizeConfig(options);
-
-        //set the logLevel of the global logger
-        //TODO make this program-specific someday
-        logger.logLevel = this.options.logLevel ?? LogLevel.info;
+        this.logger = logger ? logger : new Logger(options.logLevel);
 
         //normalize the root dir path
         this.options.rootDir = util.getRootDir(this.options);
@@ -47,6 +45,8 @@ export class Program {
             return contents;
         });
     }
+
+    public logger: Logger;
 
     private createGlobalScope() {
         //create the 'global' scope
@@ -269,14 +269,13 @@ export class Program {
         let pathAbsolute: string;
         let pkgPath: string;
         if (typeof fileParam === 'string') {
-            logger.debug('Program.addOrReplaceFile()', () => chalk.green(fileParam));
             pathAbsolute = s`${this.options.rootDir}/${fileParam}`;
             pkgPath = s`${fileParam}`;
         } else {
-            logger.debug('Program.addOrReplaceFile()', fileParam);
             pathAbsolute = s`${fileParam.src}`;
             pkgPath = s`${fileParam.dest}`;
         }
+        let logLap = this.logger.time(LogLevel.info, 'Program.addOrReplaceFile()', () => chalk.green(pathAbsolute));
 
         assert.ok(pathAbsolute, 'fileEntry.src is required');
         assert.ok(pkgPath, 'fileEntry.dest is required');
@@ -348,6 +347,7 @@ export class Program {
             // } as File;
             // file = <any>genericFile;
         }
+        logLap();
         return file;
     }
 
@@ -440,6 +440,7 @@ export class Program {
      * @param force - if true, then all scopes are force to validate, even if they aren't marked as dirty
      */
     public async validate() {
+        let logLap = this.logger.time(LogLevel.debug, 'Program.validate()');
         this.diagnostics = [];
         for (let scopeName in this.scopes) {
             let scope = this.scopes[scopeName];
@@ -450,7 +451,7 @@ export class Program {
         for (let filePath in this.files) {
             let file = this.files[filePath];
             if (!this.fileIsIncludedInAnyScope(file)) {
-                logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.pkgPath));
+                this.logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.pkgPath));
                 //the file is not loaded in any scope
                 this.diagnostics.push({
                     ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
@@ -460,6 +461,7 @@ export class Program {
             }
         }
         await Promise.resolve();
+        logLap();
     }
 
     /**

@@ -6,9 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [Unreleased]
+## [0.10.10]
+### Fixed
+ - include the missing `bslib.brs` file in the npm package which was causing errors during transpile. 
+
+
+
+## [0.10.9]
 ### Added
  - bslib.brs gets copied to `pkg:/source` and added as an import to every component on transpile.
+ - several timing logs under the `"info"` log level.
+### Changed
+ - pipe the language server output to the extension's log window
+### Fixed
+ - bug with global `val` function signature that did not support the second parameter ([#110](https://github.com/rokucommunity/vscode-brightscript-language/issues/110))
+ - bug with global 'StrI' function signature that did not support the second parameter.
 
 
 
@@ -351,7 +363,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-[0.10.8]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.7...v0.10.8
+[0.10.10]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.9...v0.10.10
+[0.10.9]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.8...v0.10.9
 [0.10.7]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.6...v0.10.7
 [0.10.6]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.5...v0.10.6
 [0.10.5]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.4...v0.10.5

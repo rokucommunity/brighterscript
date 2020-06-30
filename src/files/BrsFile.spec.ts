@@ -1812,6 +1812,56 @@ describe('BrsFile', () => {
             });
         });
 
+        it('handles empty if block', async () => {
+            await testTranspile(`
+                if true then
+                end if
+                if true then
+                else
+                    print "else"
+                end if
+                if true then
+                else if true then
+                    print "else"
+                end if
+                if true then
+                else if true then
+                    print "elseif"
+                else
+                    print "else"
+                end if
+            `);
+        });
+
+        it('handles empty elseif block', async () => {
+            await testTranspile(`
+                if true then
+                    print "if"
+                else if true then
+                end if
+                if true then
+                    print "if"
+                else if true then
+                else if true then
+                end if
+            `);
+        });
+
+        it('handles empty else block', async () => {
+            await testTranspile(`
+                if true then
+                    print "if"
+                else
+                end if
+                if true then
+                    print "if"
+                else if true then
+                    print "elseif"
+                else
+                end if
+            `);
+        });
+
         it('works for function parameters', async () => {
             await testTranspile(`
                 function DoSomething(name, age as integer, text as string)

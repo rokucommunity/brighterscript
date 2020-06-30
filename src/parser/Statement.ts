@@ -312,8 +312,8 @@ export class IfStatement implements Statement {
         state.lineage.shift();
         if (thenNodes.length > 0) {
             results.push(thenNodes);
-            results.push('\n');
         }
+        results.push('\n');
 
         //else if blocks
         for (let elseif of this.elseIfs) {
@@ -343,8 +343,8 @@ export class IfStatement implements Statement {
 
             if (body.length > 0) {
                 results.push(...body);
-                results.push('\n');
             }
+            results.push('\n');
         }
 
         //else branch
@@ -362,8 +362,8 @@ export class IfStatement implements Statement {
 
             if (body.length > 0) {
                 results.push(...body);
-                results.push('\n');
             }
+            results.push('\n');
         }
         //end if
         results.push(state.indent());
