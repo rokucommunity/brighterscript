@@ -81,12 +81,12 @@ text = "look " + chr(36) + "{here}"
 You also have the option to escape unicode characters. Since most BrightScript developers are already familiar with calling `chr(charCode)`, BrighterScript makes this simple. Just prefix your char code with `\c`. For example, if you wanted to insert char code 22 into a string, you could do this:
 
 ```BrighterScript
-text = `\c22`
+text = `abc\c22def`
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
   
 ```BrightScript
-text = chr(99) + "22"
+text = "abc" + chr(22) + "def"
 ```
 </details>
