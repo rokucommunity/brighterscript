@@ -570,20 +570,14 @@ export class Lexer {
             this.advance();
         }
 
-        if (this.isAtEnd()) {
-            // terminating a string with EOF is also not allowed
-            this.diagnostics.push({
-                ...DiagnosticMessages.unterminatedStringAtEndOfFile(),
-                range: this.rangeOf(this.source.slice(this.start, this.current))
-            });
-        }
-
         //get last quasi
         this.templateQuasiString();
 
-        // move past the closing ```
-        this.advance();
-        this.addToken(TokenKind.BackTick);
+        if (this.check('`')) {
+            // move past the closing ```
+            this.advance();
+            this.addToken(TokenKind.BackTick);
+        }
     }
 
     private templateQuasiString() {

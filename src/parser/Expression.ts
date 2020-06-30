@@ -680,7 +680,10 @@ export class TemplateStringQuasiExpression implements Expression {
     constructor(
         readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteral>
     ) {
-        this.range = Range.create(this.expressions[0].range.start, this.expressions[this.expressions.length - 1].range.end);
+        this.range = Range.create(
+            this.expressions[0].range.start,
+            this.expressions[this.expressions.length - 1].range.end
+        );
     }
     readonly range: Range;
 

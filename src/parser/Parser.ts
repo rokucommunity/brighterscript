@@ -78,6 +78,7 @@ import {
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
+import { Logger } from '../Logger';
 
 export class Parser {
     /**
@@ -196,6 +197,7 @@ export class Parser {
      * @returns the same instance of the parser which contains the diagnostics and statements
      */
     public parse(tokens: Token[], options?: ParseOptions) {
+        this.logger = options?.logger ?? new Logger();
         this.tokens = tokens;
         this.options = this.sanitizeParseOptions(options);
         this.current = 0;
@@ -207,6 +209,8 @@ export class Parser {
 
         return this;
     }
+
+    private logger: Logger;
 
     private body() {
         let body = new Body([]);
@@ -262,7 +266,9 @@ export class Parser {
      * Throws an exception using the last diagnostic message
      */
     private lastDiagnosticAsError() {
-        return new Error(this.diagnostics[this.diagnostics.length - 1]?.message);
+        let error = new Error(this.diagnostics[this.diagnostics.length - 1]?.message);
+        (error as any).isDiagnostic = true;
+        return error;
     }
 
     private declaration(...additionalTerminators: BlockTerminator[]): Statement | undefined {
@@ -312,6 +318,10 @@ export class Parser {
 
             return this.statement(...additionalTerminators);
         } catch (error) {
+            //if the error is not a diagnostic, then log the error for debugging purposes
+            if (!error.isDiagnostic) {
+                this.logger.error(error);
+            }
             this.synchronize();
         }
     }
@@ -1233,7 +1243,7 @@ export class Parser {
         let openingBacktick = this.peek();
         this.advance();
         let currentQuasiExpressionParts = [];
-        while (!this.check(TokenKind.BackTick) && !this.check(TokenKind.Eof)) {
+        while (!this.isAtEnd() && !this.check(TokenKind.BackTick)) {
             let next = this.peek();
             if (next.kind === TokenKind.TemplateStringQuasi) {
                 //a quasi can actually be made up of multiple quasis when it includes char literals
@@ -1263,7 +1273,7 @@ export class Parser {
             new TemplateStringQuasiExpression(currentQuasiExpressionParts)
         );
 
-        if (this.check(TokenKind.Eof)) {
+        if (this.isAtEnd()) {
             //error - missing backtick
             this.diagnostics.push({
                 ...DiagnosticMessages.unterminatedTemplateStringAtEndOfFile(),
@@ -2223,7 +2233,9 @@ export class Parser {
         if (token) {
             return token;
         } else {
-            throw new Error(diagnosticInfo.message);
+            let error = new Error(diagnosticInfo.message);
+            (error as any).isDiagnostic = true;
+            throw error;
         }
     }
 
@@ -2339,4 +2351,8 @@ export interface ParseOptions {
      * The parse mode. When in 'BrightScript' mode, no BrighterScript syntax is allowed, and will emit diagnostics.
      */
     mode: ParseMode;
+    /**
+     * A logger that should be used for logging. If omitted, a default logger is used
+     */
+    logger?: Logger;
 }

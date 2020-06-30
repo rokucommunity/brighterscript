@@ -33,15 +33,14 @@ describe('TemplateStringExpression', () => {
             });
 
             it(`complex case`, () => {
-
                 let { tokens } = Lexer.scan(`a = \`hello \${"world"}!
                     I am a \${"template" + "\`string\`"} 
                     and I am very \${["pleased"][0]} to meet you \${m.top.getChildCount()}
                     the end. 
-                    goodnight`
-                );
+                    goodnight\`
+                `);
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-                expect(diagnostics).to.be.lengthOf(0);
+                expect(diagnostics[0]?.message).not.to.exist;
                 expect(statements[0]).instanceof(AssignmentStatement);
             });
 
@@ -52,6 +51,12 @@ describe('TemplateStringExpression', () => {
                 expect(diagnostics).to.be.lengthOf(0);
                 expect(statements[0]).instanceof(AssignmentStatement);
             });
+        });
+
+        it('catches missing closing backtick', () => {
+            let { tokens } = Lexer.scan('name = `hello world');
+            let parser = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            expect(parser.diagnostics[0]?.message).to.equal(DiagnosticMessages.unterminatedTemplateStringAtEndOfFile().message);
         });
     });
 

@@ -365,13 +365,6 @@ describe('lexer', () => {
             expect(tokens[0].literal).to.deep.equal(new BrsString(`the cat says "meow"`));
         });
 
-        it('produces an error for unterminated strings', () => {
-            let { diagnostics } = Lexer.scan(`"unterminated!`);
-            expect(diagnostics.map(err => err.message)).to.deep.equal([
-                'Unterminated string at end of file'
-            ]);
-        });
-
         it('captures text to end of line for unterminated strings with LF', () => {
             let { tokens } = Lexer.scan(`"unterminated!\n`);
             expect(tokens[0].literal.toString()).to.equal('unterminated!');
@@ -487,14 +480,6 @@ describe('lexer', () => {
             expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick, TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
             expect(tokens[1].literal).to.deep.equal(new BrsString('hello world'));
         });
-
-        it('produces an error for unterminated strings', () => {
-            let { diagnostics } = Lexer.scan('`unterminated!');
-            expect(diagnostics.map(err => err.message)).to.deep.equal([
-                'Unterminated string at end of file'
-            ]);
-        });
-
 
         it('collects quasis outside and expressions inside of template strings', () => {
             let { tokens } = Lexer.scan('`hello ${"world"}!`');
