@@ -39,9 +39,8 @@ describe('util', () => {
 
     describe('uriToPath', () => {
         it('retains original drive casing for windows', () => {
-            let isWin = process.platform === "win32";
-            expect(util.uriToPath(`file:///C:\\something`)).to.equal(isWin ? 'C:\\something' : 'C:/something');
-            expect(util.uriToPath(`file:///C:\\something`)).to.equal(isWin ? 'C:\\something' : 'C:/something');
+            expect(util.uriToPath(`file:///C:${path.sep}something`)).to.equal(`C:${path.sep}something`);
+            expect(util.uriToPath(`file:///c:${path.sep}something`)).to.equal(`c:${path.sep}something`);
         });
     });
 
