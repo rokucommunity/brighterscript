@@ -684,12 +684,12 @@ export class TemplateStringQuasiExpression implements Expression {
     }
     readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: TranspileState, skipEmptyStrings = true) {
         let result = [];
         let plus = '';
         for (let expression of this.expressions) {
             //skip empty strings
-            if (((expression as LiteralExpression)?.value as BrsString)?.value === '') {
+            if (((expression as LiteralExpression)?.value as BrsString)?.value === '' && skipEmptyStrings === true) {
                 continue;
             }
             result.push(
@@ -785,11 +785,11 @@ export class TemplateStringExpression implements Expression {
     }
 }
 
-//TODO implement this further at a later time
 export class TaggedTemplateStringExpression implements Expression {
     constructor(
+        readonly tagName: Identifier,
         readonly openingBacktick: Token,
-        readonly quasis: LiteralExpression[],
+        readonly quasis: TemplateStringQuasiExpression[],
         readonly expressions: Expression[],
         readonly closingBacktick: Token
     ) {
@@ -809,14 +809,13 @@ export class TaggedTemplateStringExpression implements Expression {
         let result = [];
         result.push(
             new SourceNode(
-                this.openingBacktick.range.start.line + 1,
-                this.openingBacktick.range.start.character,
+                this.tagName.range.start.line + 1,
+                this.tagName.range.start.character,
                 state.pathAbsolute,
-                'bslib_templateString([\n'
-            )
+                this.tagName.text
+            ),
+            '(['
         );
-        state.blockDepth++;
-        result.push(state.indent());
 
         //add quasis as the first array
         for (let i = 0; i < this.quasis.length; i++) {
@@ -824,25 +823,15 @@ export class TaggedTemplateStringExpression implements Expression {
             //separate items with a comma
             if (i > 0) {
                 result.push(
-                    ',',
-                    state.newline(),
-                    state.indent()
+                    ', '
                 );
             }
             result.push(
-                ...quasi.transpile(state)
+                ...quasi.transpile(state, false)
             );
         }
-        result.push(state.newline());
-        state.blockDepth--;
         result.push(
-            state.indent(),
             '], ['
-        );
-        state.blockDepth++;
-        result.push(
-            state.newline(),
-            state.indent()
         );
 
         //add expressions as the second array
@@ -850,19 +839,13 @@ export class TaggedTemplateStringExpression implements Expression {
             let expression = this.expressions[i];
             if (i > 0) {
                 result.push(
-                    ',',
-                    state.newline(),
-                    state.indent()
+                    ','
                 );
             }
             result.push(
                 ...expression.transpile(state)
             );
         }
-        result.push(state.newline());
-        state.blockDepth--;
-        result.push(state.indent());
-
         result.push(
             new SourceNode(
                 this.closingBacktick.range.end.line + 1,

@@ -170,5 +170,24 @@ describe('TemplateStringExpression', () => {
                 ]
             `);
         });
+
+        describe('tagged template strings', () => {
+            it('properly transpiles', async () => {
+                await testTranspile(`
+                    function zombify(strings, values)
+                    end function
+                    sub main()
+                        zombie = zombify\`Hello \${"world"}\`
+                    end sub
+            `, `
+                function zombify(strings, values)
+                end function
+
+                sub main()
+                    zombie = zombify(["Hello ", ""], ["world"])
+                end sub
+            `);
+            });
+        });
     });
 });

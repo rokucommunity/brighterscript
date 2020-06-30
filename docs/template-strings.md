@@ -102,3 +102,82 @@ transpiles to
 ```BrightScript
 stringWithQuotes = "hello " + chr(34) + "John" + chr(34)
 ```
+
+
+## Tagged Template Strings
+If a template string is preceeded by an expression, this is called a tagged template. In this situation, the tag expression will be called with all of the values of the template string. The tag function is not limited to returning strings: it can return whatever you want. 
+
+The tag function accepts two arguments: an array of strings and an array of expressions. There will always be one more string than expression, and generally you should iterate through as follows: `strings[0] + values[0] + strings[1] values[1] + strings[2] ...`
+
+### Simple example
+```BrighterScript
+function zombify(strings, values)
+    result = ""
+    for i = 0 to strings.count() - 1
+        value = values[i]
+        if value = "Human" then
+          value = "Zombie"
+        end if
+        result = result + strings[i] + value
+    end for
+    result += strings[i]
+    return result
+end function
+
+function main()
+  name = "Human"
+  print zombify`Hello ${name}` ' prints "Hello Zombie"
+end function
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+  
+```BrightScript
+function zombify(strings, values)
+    result = ""
+    for i = 0 to strings.count() - 1
+        value = values[i]
+        if value = "Human" then
+            value = "Zombie"
+        end if
+        result = result + strings[i] + value
+    end for
+    result += strings[i]
+    return result
+end function
+
+function main()
+    name = "Human"
+    print zombify ; "Hello " + bslib_toString(name) ' prints "Hello Zombie"
+end function
+```
+</details>
+
+
+### Returning non strings
+Tag functions don't even need to return a string.
+```BrighterScript
+function zombify(strings, values)
+    return new Zombie(values[0])
+end function
+
+function main()
+  name = "Human"
+  result = zombify`Hello ${name}`
+end function
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+  
+```BrightScript
+function zombify(strings, values)
+    return Zombie(values[0])
+end function
+
+function main()
+    name = "Human"
+end function
+```
+</details>

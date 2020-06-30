@@ -73,7 +73,8 @@ import {
     XmlAttributeGetExpression,
     TemplateStringExpression,
     EscapedCharCodeLiteral,
-    TemplateStringQuasiExpression
+    TemplateStringQuasiExpression,
+    TaggedTemplateStringExpression
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
@@ -1216,8 +1217,17 @@ export class Parser {
         return importStatement;
     }
 
-    private templateString(): TemplateStringExpression {
+    private templateString(isTagged: boolean): TemplateStringExpression | TaggedTemplateStringExpression {
         this.warnIfNotBrighterScriptMode('template string');
+
+        //get the tag name
+        let tagName: Identifier;
+        if (isTagged) {
+            tagName = this.consume(DiagnosticMessages.expectedIdentifier(), TokenKind.Identifier, ...AllowedProperties) as Identifier;
+            // force it into an identifier so the AST makes some sense
+            tagName.kind = TokenKind.Identifier;
+        }
+
         let quasis = [] as TemplateStringQuasiExpression[];
         let expressions = [];
         let openingBacktick = this.peek();
@@ -1263,7 +1273,11 @@ export class Parser {
 
         } else {
             let closingBacktick = this.advance();
-            return new TemplateStringExpression(openingBacktick, quasis, expressions, closingBacktick);
+            if (isTagged) {
+                return new TaggedTemplateStringExpression(tagName, openingBacktick, quasis, expressions, closingBacktick);
+            } else {
+                return new TemplateStringExpression(openingBacktick, quasis, expressions, closingBacktick);
+            }
         }
     }
 
@@ -1778,8 +1792,12 @@ export class Parser {
             return this.functionDeclaration(true);
         }
 
+        //template string
         if (this.check(TokenKind.BackTick)) {
-            return this.templateString();
+            return this.templateString(false);
+            //tagged template string (currently we do not support spaces between the identifier and the backtick
+        } else if (this.check(TokenKind.Identifier, ...AllowedLocalIdentifiers) && this.checkNext(TokenKind.BackTick)) {
+            return this.templateString(true);
         }
 
         return this.boolean();
