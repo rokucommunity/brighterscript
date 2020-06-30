@@ -574,11 +574,14 @@ By using Chr, you can create strings containing characters which cannot be conta
     }, {
         name: 'Left',
         shortDescription: 'Returns the first n characters of s. ',
-        type: new FunctionType(new IntegerType()),
+        type: new FunctionType(new StringType()),
         file: globalFile,
         params: [{
             name: 's',
             type: new StringType()
+        }, {
+            name: 'n',
+            type: new IntegerType()
         }]
     }, {
         name: 'Len',
@@ -629,16 +632,7 @@ By using Chr, you can create strings containing characters which cannot be conta
         }]
     }, {
         name: 'StrI',
-        shortDescription: 'Converts a value to a string. Str(A), for example, returns a string equal to the decimal representation of the numeric value of A.\nNote: for non-negative numbers, a leading blank is inserted before the value string as a sign placeholder.',
-        type: new FunctionType(new StringType()),
-        file: globalFile,
-        params: [{
-            name: 'value',
-            type: new IntegerType()
-        }]
-    }, {
-        name: 'StrI',
-        shortDescription: 'Converts the integer value into a string representation using the given radix.\nIf radix is not 2 .. 36 then an empty string is returned.\nNote that the returned string does not include a base prefix and uses lowercase letters to represent those digits in bases greater than 10.',
+        shortDescription: 'Converts a value to a string. Str(A), for example, returns a string equal to the decimal representation of the numeric value of A.\nNote: for non-negative numbers, a leading blank is inserted before the value string as a sign placeholder.. If the radix parameter is provided, then converts the integer value into a string representation using the given radix.\nIf radix is not 2 .. 36 then an empty string is returned.\nNote that the returned string does not include a base prefix and uses lowercase letters to represent those digits in bases greater than 10.',
         type: new FunctionType(new StringType()),
         file: globalFile,
         params: [{
@@ -674,16 +668,7 @@ By using Chr, you can create strings containing characters which cannot be conta
         }]
     }, {
         name: 'Val',
-        shortDescription: 'Performs the inverse of the STR function: returns the number represented by the characters in a string argument.\nFor example, if A$="12" and B$="34" then VAL(A$+ "."+B$) returns the number 12.34.',
-        type: new FunctionType(new FloatType()),
-        file: globalFile,
-        params: [{
-            name: 's',
-            type: new StringType()
-        }]
-    }, {
-        name: 'Val',
-        shortDescription: 'Returns the integer value from parsing the string with the specified radix.\nRadix should be 2 .. 36 or the special value 0 (which automatically identified hexadecimal or octal numbers based on 0x or 0 prefixes respectively).\nLeading whitespace is ignored then as much of the rest of the string will be parsed as valid.',
+        shortDescription: 'Performs the inverse of the STR function: returns the number represented by the characters in a string argument.\nFor example, if A$="12" and B$="34" then VAL(A$+ "."+B$) returns the number 12.34. If radix is provided as the second parameter, it returns the integer value from parsing the string with the specified radix.\nRadix should be 2 .. 36 or the special value 0 (which automatically identified hexadecimal or octal numbers based on 0x or 0 prefixes respectively).\nLeading whitespace is ignored then as much of the rest of the string will be parsed as valid.',
         type: new FunctionType(new IntegerType()),
         file: globalFile,
         params: [{
@@ -716,7 +701,31 @@ By using Chr, you can create strings containing characters which cannot be conta
         }]
     }
 ] as Callable[];
-export let globalCallables = [...mathFunctions, ...runtimeFunctions, ...globalUtilityFunctions, ...globalStringFunctions];
+
+
+let programStatementFunctions = [
+    {
+        name: 'Tab',
+        shortDescription: 'Moves the cursor to the specified position on the current line (modulo the width of your console if you specify TAB positions greater than the console width). TAB may be used several times in a PRINT list. No punctuation is required after a TAB modifier. Numerical expressions may be used to specify a TAB position. TAB cannot be used to move the cursor to the left. If the cursor is beyond the specified position, the TAB is ignored.',
+        type: new FunctionType(new VoidType()),
+        file: globalFile,
+        params: [{
+            name: 'expression',
+            type: new IntegerType()
+        }]
+    }, {
+        name: 'Pos',
+        shortDescription: 'Returns a number from 0 to window width, indicating the current cursor position on the cursor. Requires a "dummy argument" (any numeric expression).',
+        type: new FunctionType(new VoidType()),
+        file: globalFile,
+        params: [{
+            name: 'x',
+            type: new IntegerType()
+        }]
+    }
+] as Callable[];
+
+export let globalCallables = [...mathFunctions, ...runtimeFunctions, ...globalUtilityFunctions, ...globalStringFunctions, ...programStatementFunctions];
 for (let callable of globalCallables) {
     //give each callable a dummy location
     callable.nameRange = Range.create(0, 0, 0, callable.name.length);

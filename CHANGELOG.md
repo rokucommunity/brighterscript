@@ -6,6 +6,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.10.10]
+### Fixed
+ - include the missing `bslib.brs` file in the npm package which was causing errors during transpile. 
+
+
+
+## [0.10.9]
+### Added
+ - bslib.brs gets copied to `pkg:/source` and added as an import to every component on transpile.
+ - several timing logs under the `"info"` log level.
+### Changed
+ - pipe the language server output to the extension's log window
+### Fixed
+ - bug with global `val` function signature that did not support the second parameter ([#110](https://github.com/rokucommunity/vscode-brightscript-language/issues/110))
+ - bug with global 'StrI' function signature that did not support the second parameter.
+
+
+
+## [0.10.8] - 2020-06-09
+### Fixed
+ - Allow leading spcaes for `bs:disable-line` and `bs:disable-next-line` comments ([#108](https://github.com/rokucommunity/brighterscript/pull/108))
+
+
+
+## [0.10.7] - 2020-06-08
+### Fixed
+ - bug in cli that was always returning a nonzero error code
+
+
+
+## [0.10.6] - 2020-06-05
+### Fixed
+ - incorrect definition for global `Left()` function. ([#100](https://github.com/rokucommunity/brighterscript/issues/100))
+ - missing definition for global `Tab()` and `Pos()` functions ([#101](https://github.com/rokucommunity/brighterscript/issues/101))
+
+
+
 ## [0.10.5] - 2020-06-04
 ### Changed
  - added better logging for certain critical language server crashes
@@ -326,6 +363,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.10.10]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.9...v0.10.10
+[0.10.9]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.8...v0.10.9
+[0.10.7]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.6...v0.10.7
+[0.10.6]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.5...v0.10.6
 [0.10.5]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.4...v0.10.5
 [0.10.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.3...v0.10.4
 [0.10.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.2...v0.10.3

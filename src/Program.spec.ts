@@ -16,9 +16,9 @@ let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tmpPath}/rootDir`;
 let stagingFolderPath = s`${tmpPath}/staging`;
-let program: Program;
 
 describe('Program', () => {
+    let program: Program;
     beforeEach(() => {
         fsExtra.ensureDirSync(tmpPath);
         fsExtra.emptyDirSync(tmpPath);
@@ -890,6 +890,7 @@ describe('Program', () => {
                 <component name="ChildScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                     <script type="text/brightscript" uri="pkg:/source/stringOps.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 </component>
             `);
         });
@@ -1023,6 +1024,7 @@ describe('Program', () => {
                 <component name="ChildScene" extends="ParentScene">
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                     <script type="text/brightscript" uri="pkg:/source/stringOps.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 </component>
             `);
         });
@@ -1368,6 +1370,15 @@ describe('Program', () => {
 
         expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/main.brs.map`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/components/comp1.xml.map`)).is.true;
+    });
+
+    it('copies the bslib.brs file', async () => {
+        fsExtra.ensureDirSync(program.options.stagingFolderPath);
+        await program.validate();
+
+        await program.transpile([], program.options.stagingFolderPath);
+
+        expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/bslib.brs`)).is.true;
     });
 
 });

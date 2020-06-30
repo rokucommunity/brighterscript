@@ -1,5 +1,4 @@
 name: benchmark
-on: [push, pull_request]
 
 jobs:
   ci:
