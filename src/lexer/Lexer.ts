@@ -119,12 +119,41 @@ export class Lexer {
      */
     private scanToken(): void {
         let c = this.advance();
+        if (isAlpha(c)) {
+            this.identifier();
+            return;
+        }
         switch (c.toLowerCase()) {
+            case '\r':
+            case '\n':
+                this.newline();
+                break;
+            case '.':
+                // this might be a float/double literal, because decimals without a leading 0
+                // are allowed
+                if (isDecimalDigit(this.peek())) {
+                    this.decimalNumber(true);
+                } else {
+                    this.addToken(TokenKind.Dot);
+                }
+                break;
             case '(':
                 this.addToken(TokenKind.LeftParen);
                 break;
             case ')':
                 this.addToken(TokenKind.RightParen);
+                break;
+            case '=':
+                this.addToken(TokenKind.Equal);
+                break;
+            case '"':
+                this.string();
+                break;
+            case `'`:
+                this.comment();
+                break;
+            case ',':
+                this.addToken(TokenKind.Comma);
                 break;
             case '{':
                 this.addToken(TokenKind.LeftCurlyBrace);
@@ -138,24 +167,12 @@ export class Lexer {
             case ']':
                 this.addToken(TokenKind.RightSquareBracket);
                 break;
-            case ',':
-                this.addToken(TokenKind.Comma);
-                break;
             case '@':
                 if (this.peek() === '.') {
                     this.advance();
                     this.addToken(TokenKind.Callfunc);
                 } else {
                     this.addToken(TokenKind.At);
-                }
-                break;
-            case '.':
-                // this might be a float/double literal, because decimals without a leading 0
-                // are allowed
-                if (isDecimalDigit(this.peek())) {
-                    this.decimalNumber(true);
-                } else {
-                    this.addToken(TokenKind.Dot);
                 }
                 break;
             case '+':
@@ -224,9 +241,6 @@ export class Lexer {
                         break;
                 }
                 break;
-            case '=':
-                this.addToken(TokenKind.Equal);
-                break;
             case ':':
                 this.addToken(TokenKind.Colon);
                 break;
@@ -286,19 +300,9 @@ export class Lexer {
                         break;
                 }
                 break;
-            case `'`:
-                this.comment();
-                break;
             case ' ':
             case '\t':
                 this.whitespace();
-                break;
-            case '\r':
-            case '\n':
-                this.newline();
-                break;
-            case '"':
-                this.string();
                 break;
             case '#':
                 this.preProcessedConditional();
@@ -309,8 +313,6 @@ export class Lexer {
                 } else if (c === '&' && this.peek().toLowerCase() === 'h') {
                     this.advance(); // move past 'h'
                     this.hexadecimalNumber();
-                } else if (isAlpha(c)) {
-                    this.identifier();
                 } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unexpectedCharacter(c),
