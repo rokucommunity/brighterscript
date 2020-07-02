@@ -142,6 +142,13 @@ export enum TokenKind {
     Override = 'Override',
     Import = 'Import',
 
+    //brighterscript source literals
+    SourceFilePath = 'SourceFilePath',
+    SourceLineNum = 'SourceLineNum',
+    FunctionName = 'FunctionName',
+    SourceLocation = 'SourceLocation',
+    PkgPath = 'PkgPath',
+    PkgLocation = 'PkgLocation',
 
     //comments
     Comment = 'Comment',
