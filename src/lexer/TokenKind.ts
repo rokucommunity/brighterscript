@@ -143,12 +143,12 @@ export enum TokenKind {
     Import = 'Import',
 
     //brighterscript source literals
-    SourceFilePath = 'SourceFilePath',
-    SourceLineNum = 'SourceLineNum',
-    FunctionName = 'FunctionName',
-    SourceLocation = 'SourceLocation',
-    PkgPath = 'PkgPath',
-    PkgLocation = 'PkgLocation',
+    SourceFilePathLiteral = 'SourceFilePathLiteral',
+    SourceLineNumLiteral = 'SourceLineNumLiteral',
+    FunctionNameLiteral = 'FunctionNameLiteral',
+    SourceLocationLiteral = 'SourceLocationLiteral',
+    PkgPathLiteral = 'PkgPathLiteral',
+    PkgLocationLiteral = 'PkgLocationLiteral',
 
     //comments
     Comment = 'Comment',
@@ -280,7 +280,13 @@ export const Keywords: { [key: string]: TokenKind } = {
     namespace: TokenKind.Namespace,
     endnamespace: TokenKind.EndNamespace,
     'end namespace': TokenKind.EndNamespace,
-    import: TokenKind.Import
+    import: TokenKind.Import,
+    'source_file_path': TokenKind.SourceFilePathLiteral,
+    'source_line_num': TokenKind.SourceLineNumLiteral,
+    'function_name': TokenKind.FunctionNameLiteral,
+    'source_location': TokenKind.SourceLocationLiteral,
+    'pkg_path': TokenKind.PkgPathLiteral,
+    'pkg_location': TokenKind.PkgLocationLiteral
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
@@ -387,7 +393,13 @@ export const AllowedProperties = [
     TokenKind.Override,
     TokenKind.Namespace,
     TokenKind.EndNamespace,
-    TokenKind.Import
+    TokenKind.Import,
+    TokenKind.SourceFilePathLiteral,
+    TokenKind.SourceLineNumLiteral,
+    TokenKind.FunctionNameLiteral,
+    TokenKind.SourceLocationLiteral,
+    TokenKind.PkgPathLiteral,
+    TokenKind.PkgLocationLiteral
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */

@@ -819,4 +819,17 @@ describe('lexer', () => {
             ]);
         });
     });
+
+    it('identifies brighterscript source literals', () => {
+        let { tokens } = Lexer.scan('SOURCE_FILE_PATH SOURCE_LINE_NUM FUNCTION_NAME SOURCE_LOCATION PKG_PATH PKG_LOCATION');
+        expect(tokens.map(x => x.kind)).to.eql([
+            TokenKind.SourceFilePathLiteral,
+            TokenKind.SourceLineNumLiteral,
+            TokenKind.FunctionNameLiteral,
+            TokenKind.SourceLocationLiteral,
+            TokenKind.PkgPathLiteral,
+            TokenKind.PkgLocationLiteral,
+            TokenKind.Eof
+        ]);
+    });
 });
