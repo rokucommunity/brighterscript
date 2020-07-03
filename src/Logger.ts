@@ -25,7 +25,7 @@ export class Logger {
     private _logLevel = LogLevel.log;
 
     private getTimestamp() {
-        let milliseconds: string;
+        let milliseconds = '';
         //show milliseconds when in the more chatty log levels
         if (this._logLevel === LogLevel.info || this._logLevel === LogLevel.debug || this._logLevel === LogLevel.trace) {
             milliseconds = ':SSSS';
