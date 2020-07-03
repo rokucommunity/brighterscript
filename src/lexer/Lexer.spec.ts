@@ -525,7 +525,7 @@ describe('lexer', () => {
                 TokenKind.Return,
                 TokenKind.True,
                 TokenKind.False,
-                TokenKind.Identifier,
+                TokenKind.LineNumLiteral,
                 TokenKind.Eof
             ]);
             expect(tokens.filter(w => !!w.literal).length).to.equal(0);
@@ -821,11 +821,13 @@ describe('lexer', () => {
     });
 
     it('identifies brighterscript source literals', () => {
-        let { tokens } = Lexer.scan('SOURCE_FILE_PATH SOURCE_LINE_NUM FUNCTION_NAME SOURCE_LOCATION PKG_PATH PKG_LOCATION');
+        let { tokens } = Lexer.scan('LINE_NUM SOURCE_FILE_PATH SOURCE_LINE_NUM FUNCTION_NAME SOURCE_FUNCTION_NAME SOURCE_LOCATION PKG_PATH PKG_LOCATION');
         expect(tokens.map(x => x.kind)).to.eql([
+            TokenKind.LineNumLiteral,
             TokenKind.SourceFilePathLiteral,
             TokenKind.SourceLineNumLiteral,
             TokenKind.FunctionNameLiteral,
+            TokenKind.SourceFunctionNameLiteral,
             TokenKind.SourceLocationLiteral,
             TokenKind.PkgPathLiteral,
             TokenKind.PkgLocationLiteral,

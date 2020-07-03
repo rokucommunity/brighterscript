@@ -1,5 +1,5 @@
 # Source Literals
-BrightScript provides the `LINE_NUM` literal, which represents the runtime line number of the current line of code. In a similar fashion, BrighterScript provides several more source literals.
+BrightScript provides the `LINE_NUM` literal, which represents the runtime 1-based line number of the current line of code. In a similar fashion, BrighterScript provides several more source literals.
 
 These source literals are converted into inline variables at transpile-time, so keep in mind that any post-processing to the transpiled files could  cause these values to be incorrect.
 
@@ -13,23 +13,26 @@ print SOURCE_FILE_PATH
 transpiles to: 
 
 ```BrightScript
-print SOURCE_FILE_PATH
+print "file:/c:\projects\roku\brighterscript\scripts\rootDir\source\main.bs"
 ```
 
 ## SOURCE_LINE_NUM
-The line number of the source file. 
+The 1-based line number of the source file. 
 
 ```BrighterScript
-print SOURCE_LINE_NUM
+'I am line 1
+print SOURCE_LINE_NUM 'I am line 2
 ```
 
 transpiles to: 
 
 ```BrightScript
-print SOURCE_FILE_PATH
+'I am line 1
+print 2 'I am line 2
 ```
 
 ## FUNCTION_NAME
+### Basic
 The name of the current function
 ```BrighterScript
 function RunFromZombie()
@@ -40,9 +43,29 @@ end function
 transpiles to: 
 
 ```BrightScript
-print SOURCE_FILE_PATH
+function RunFromZombie()
+    print "RunFromZombie"
+end function
 ```
 
+### Namespaced
+if the function is contained in a namespace, that name will be included in the function name
+```BrighterScript
+namespace Human.Versus.Zombie
+    function RunFromZombie()
+        print FUNCTION_NAME
+    end function
+end namespace
+```
+
+transpiles to: 
+
+```BrightScript
+function Human_Versus_Zombie_RunFromZombie()
+    print "Human_Versus_Zombie_RunFromZombie"
+end function
+```
+### Anonymous Functions
 For anonymous functions, FUNCTION_NAME will include the enclosing function name, followed by `anon` and the index of the function in its parent. If there are multiple nested anonymous functions, each level will have its own `anon[index]` in the name. Function indexes start at 0 within each enclosing function.
 
 ```BrighterScript
@@ -58,16 +81,66 @@ function main()
         useSword()
     end function
 end function
+namespace Human.Versus.Zombie
+    function Eat()
+        print SOURCE_FUNCTION_NAME
+        findFood = function()
+            print FUNCTION_NAME
+        end function
+    end function
+end namespace
 ```
 
 transpiles to: 
 
 ```BrightScript
-print FUNCTION_NAME
+function main()
+    zombieAttack = function()
+        print "main$anon0"
+    end function
+    humanAttack = function()
+        useSword = function()
+            print "main$anon1$anon0"
+        end function
+        useSword()
+    end function
+end function
+function Human_Versus_Zombie_Eat()
+    print "Human.Versus.Zombie.Eat"
+    findFood = function()
+        print "Human_Versus_Zombie_Eat$anon0"
+    end function
+end function
+```
+
+## SOURCE_FUNCTION_NAME
+This works the same as FUNCTION_NAME except that it will use a dot in namespace names instead of the transpiled underscores.
+
+
+```BrighterScript
+namespace Human.Versus.Zombie
+    function Eat()
+        print SOURCE_FUNCTION_NAME
+        findFood = function()
+            print SOURCE_FUNCTION_NAME
+        end function
+    end function
+end namespace
+```
+
+transpiles to: 
+
+```BrightScript
+function Human_Versus_Zombie_Eat()
+    print "Human.Versus.Zombie.Eat"
+    findFood = function()
+        print "Human.Versus.Zombie.Eat$anon0"
+    end function
+end function
 ```
 
 ## SOURCE_LOCATION
-A combination of SOURCE_FILE_PATH, FUNCTION_NAME, and SOURCE_LINE_NUM.
+A combination of SOURCE_FILE_PATH and SOURCE_LINE_NUM.
 
 ```BrighterScript
 function main()
@@ -78,7 +151,9 @@ end function
 transpiles to: 
 
 ```BrightScript
-print SOURCE_FILE_PATH
+function main()
+    print "file:/c:\projects\roku\brighterscript\scripts\rootDir\source\main.bs:2"
+end function
 ```
 
 ## PKG_PATH
@@ -93,17 +168,19 @@ end function
 transpiles to: 
 
 ```BrightScript
-print SOURCE_FILE_PATH
+function main()
+    print "pkg:/source/main.brs"
+end function
 ```
 
 ## PKG_LOCATION
-A combination of PKG_PATH, FUNCTION_NAME, and LINE_NUM. Keep in mind, LINE_NUM is a runtime variable provided by Roku. 
+A combination of PKG_PATH and LINE_NUM. Keep in mind, LINE_NUM is a runtime variable provided by Roku. 
 ```BrighterScript
-print SOURCE_FILE_PATH
+print PKG_LOCATION
 ```
 
 transpiles to: 
 
 ```BrightScript
-print SOURCE_FILE_PATH
+print "pkg:/source/main.brs:" + str(LINE_NUM)
 ```
