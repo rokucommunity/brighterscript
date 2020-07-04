@@ -676,10 +676,10 @@ export class Program {
 
         //copy the brighterscript stdlib to the output directory
         promises.push(
-            fsExtra.ensureDir(s`${this.options.stagingFolderPath}/source`).then(() => {
+            fsExtra.ensureDir(s`${stagingFolderPath}/source`).then(() => {
                 return fsExtra.copyFile(
                     s`${__dirname}/../bslib.brs`,
-                    s`${this.options.stagingFolderPath}/source/bslib.brs`
+                    s`${stagingFolderPath}/source/bslib.brs`
                 );
             })
         );
