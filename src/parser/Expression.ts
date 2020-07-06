@@ -639,14 +639,14 @@ export class SourceLiteralExpression implements Expression {
                 text = `"file:/${state.file.pathAbsolute}:${this.token.range.start.line + 1}"`;
                 break;
             case TokenKind.PkgPathLiteral:
-                let pkgPath1 = `pkg:/${state.pkgPath}`
+                let pkgPath1 = `pkg:/${state.file.pkgPath}`
                     .replace(/\\/g, '/')
                     .replace(/\.bs$/i, '.brs');
 
                 text = `"${pkgPath1}"`;
                 break;
             case TokenKind.PkgLocationLiteral:
-                let pkgPath2 = `pkg:/${state.pkgPath}`
+                let pkgPath2 = `pkg:/${state.file.pkgPath}`
                     .replace(/\\/g, '/')
                     .replace(/\.bs$/i, '.brs');
 
