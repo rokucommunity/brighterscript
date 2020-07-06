@@ -2,7 +2,6 @@ import { SourceNode } from 'source-map';
 import { ClassStatement } from './ClassStatement';
 import { Range } from 'vscode-languageserver';
 import { BrsFile } from '../files/BrsFile';
-import { standardizePath as s } from '../util';
 
 /**
  * Holds the state of a transpile operation as it works its way through the transpile process
