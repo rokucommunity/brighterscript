@@ -1136,11 +1136,13 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
 
+            //the children shouldn't have diagnostics about shadowing their parent lib.brs file.
             let shadowedDiagnositcs = diagnostics.filter((x) => x.code === DiagnosticMessages.overridesAncestorFunction('', '', '', '').code);
+            expect(shadowedDiagnositcs).to.be.lengthOf(0);
 
-            //the children should all have diagnostics about shadowing their parent lib.brs file.
-            //If not, then the parent-child attachment was severed somehow
-            expect(shadowedDiagnositcs).to.be.lengthOf(childCount);
+            //the children all include a redundant import of lib.brs file which is imported by the parent.
+            let importDiagnositcs = diagnostics.filter((x) => x.code === DiagnosticMessages.unnecessaryScriptImportInChildFromParent('').code);
+            expect(importDiagnositcs).to.be.lengthOf(childCount);
         });
 
         it('detects script import changes', async () => {
