@@ -6,13 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.10.10]
+## [0.10.11] - 2020-07-05
+ - Fix bug that would fail to copy files to staging without explicitly specifying `stagingFolderpath`. [#129](https://github.com/rokucommunity/brighterscript/issues/129)
+
+
+
+## [0.10.10] - 2020-06-12
 ### Fixed
  - include the missing `bslib.brs` file in the npm package which was causing errors during transpile. 
 
 
 
-## [0.10.9]
+## [0.10.9] 2020-06-12
 ### Added
  - bslib.brs gets copied to `pkg:/source` and added as an import to every component on transpile.
  - several timing logs under the `"info"` log level.
