@@ -1381,4 +1381,26 @@ describe('Program', () => {
         expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/bslib.brs`)).is.true;
     });
 
+    describe('transpile', () => {
+        it.only('uses sourceRoot when provided', async () => {
+            program = new Program({
+                rootDir: rootDir,
+                stagingFolderPath: stagingFolderPath,
+                sourceRoot: s`${tmpPath}/sourceRootFolder`
+            });
+            await program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                end sub
+            `);
+            await program.transpile([{
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`${stagingFolderPath}/source/main.bs`
+            }], stagingFolderPath);
+
+            let contents = fsExtra.readFileSync(s`${stagingFolderPath}/source/main.brs.map`).toString();
+            let map = JSON.parse(contents);
+            expect(map).to.eql({});
+        });
+    });
+
 });
