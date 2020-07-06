@@ -2,11 +2,11 @@ import { Token, Identifier, TokenKind } from '../lexer';
 import { BrsType, ValueKind, BrsString, FunctionParameter } from '../brsTypes';
 import { Block, CommentStatement, FunctionStatement } from './Statement';
 import { SourceNode } from 'source-map';
-
 import { Range } from 'vscode-languageserver';
 import util from '../util';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
+import * as fileUrl from 'file-url';
 
 /** A BrightScript expression */
 export interface Expression {
@@ -624,7 +624,7 @@ export class SourceLiteralExpression implements Expression {
         let text: string;
         switch (this.token.kind) {
             case TokenKind.SourceFilePathLiteral:
-                text = `"file:/${state.file.pathAbsolute}"`;
+                text = `"${fileUrl(state.pathAbsolute)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
                 text = `${this.token.range.start.line + 1}`;
@@ -636,7 +636,7 @@ export class SourceLiteralExpression implements Expression {
                 text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
                 break;
             case TokenKind.SourceLocationLiteral:
-                text = `"file:/${state.file.pathAbsolute}:${this.token.range.start.line + 1}"`;
+                text = `"${fileUrl(state.pathAbsolute)}:${this.token.range.start.line + 1}"`;
                 break;
             case TokenKind.PkgPathLiteral:
                 let pkgPath1 = `pkg:/${state.file.pkgPath}`

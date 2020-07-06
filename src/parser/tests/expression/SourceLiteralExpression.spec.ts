@@ -1,9 +1,10 @@
 import { getTestTranspile } from '../../../files/BrsFile.spec';
 import { Program } from '../../../Program';
 import { standardizePath as s } from '../../../util';
+import * as fileUrl from 'file-url';
 
 describe('SourceLiteralExpression', () => {
-    let rootDir = process.cwd();
+    let rootDir = s`${process.cwd()}/rootDir`;
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
@@ -46,7 +47,7 @@ describe('SourceLiteralExpression', () => {
                 end sub
             `, `
                 sub main()
-                    print "file:/${s`${rootDir}/source/main.bs`}"
+                    print "${fileUrl(`${rootDir}/source/main.bs`)}"
                 end sub
             `, undefined, 'source/main.bs');
         });
@@ -138,7 +139,7 @@ describe('SourceLiteralExpression', () => {
                 end sub
             `, `
                 sub main()
-                    print "file:/${s`${rootDir}/source/main.bs:3`}"
+                    print "${fileUrl(`${rootDir}/source/main.bs`)}:3"
                 end sub
             `, undefined, 'source/main.bs');
         });
@@ -173,6 +174,40 @@ describe('SourceLiteralExpression', () => {
                     print LINE_NUM
                 end sub
             `);
+        });
+
+        it('accounts for sourceRoot in SOURCE_FILE_PATH', async () => {
+            let sourceRoot = s`${process.cwd()} / sourceRoot`;
+            program = new Program({
+                rootDir: rootDir,
+                sourceRoot: sourceRoot
+            });
+            await testTranspile(`
+                sub main()
+                    print SOURCE_FILE_PATH
+                end sub
+            `, `
+                sub main()
+                    print "${fileUrl(s`${sourceRoot}/source/main.bs`)}"
+                end sub
+            `, undefined, 'source/main.bs');
+        });
+
+        it('accounts for sourceRoot in SOURCE_LOCATION', async () => {
+            let sourceRoot = s`${process.cwd()} / sourceRoot`;
+            program = new Program({
+                rootDir: rootDir,
+                sourceRoot: sourceRoot
+            });
+            await testTranspile(`
+                sub main()
+                    print SOURCE_LOCATION
+                end sub
+            `, `
+                sub main()
+                    print "${fileUrl(`${sourceRoot}/source/main.bs`)}:3"
+                end sub
+            `, undefined, 'source/main.bs');
         });
     });
 });
