@@ -22,6 +22,7 @@ let args = [
     { name: 'root-dir', type: String, description: 'Path to the root of your project files (where the manifest lives). Defaults to current directory.' },
     { name: 'staging-folder-path', type: String, description: 'The path where the files should be staged (right before being zipped up).' },
     { name: 'username', type: String, description: 'The username for deploying to a Roku. Defaults to "rokudev".' },
+    { name: 'source-root', type: String, description: 'Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files.' },
     { name: 'watch', type: Boolean, description: 'Watch input files.' }
 ];
 const options = commandLineArgs(args, { camelCase: true });
