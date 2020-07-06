@@ -121,7 +121,7 @@ export interface BsConfig {
      * Override the path to source files in source maps. Use this if you have a preprocess step and want
      * to ensure the source maps point to the original location.
      * This will only alter source maps for files within rootDir. Any files found outside of rootDir will not
-     * have their source maps changed.
+     * have their source maps changed. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
      */
     sourceRoot?: string;
 }

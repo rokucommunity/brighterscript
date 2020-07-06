@@ -492,7 +492,7 @@ describe('BrsFile', () => {
                     print LINE_NUM
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expect(file.getDiagnostics()[0]?.message).not.to.exist;
         });
 
         it('supports many keywords as object property names', async () => {
@@ -2053,14 +2053,13 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
         await program.validate();
         let diagnostics = file.getDiagnostics();
         if (diagnostics.length > 0 && failOnDiagnostic !== false) {
-
-            expect(
+            throw new Error(
                 diagnostics[0].range.start.line +
                 ':' +
                 diagnostics[0].range.start.character +
                 ' ' +
                 diagnostics[0]?.message
-            ).to.not.exist;
+            );
         }
         let transpiled = file.transpile();
 

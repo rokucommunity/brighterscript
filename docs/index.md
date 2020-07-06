@@ -7,4 +7,5 @@ See the following pages for more information
  - [Imports](imports.md)
  - [Namespaces](namespaces.md)
  - [callfunc operator](callfunc-operator.md)
+ - [Source literals](source-literals.md)
  - [Template strings (Template literals)](template-strings.md)

@@ -7,7 +7,8 @@ import {
     AssignmentOperators,
     DisallowedLocalIdentifiersText,
     AllowedProperties,
-    Lexer
+    Lexer,
+    BrighterScriptSourceLiterals
 } from '../lexer';
 
 import {
@@ -74,7 +75,8 @@ import {
     TemplateStringExpression,
     EscapedCharCodeLiteral,
     TemplateStringQuasiExpression,
-    TaggedTemplateStringExpression
+    TaggedTemplateStringExpression,
+    SourceLiteralExpression
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
@@ -170,6 +172,12 @@ export class Parser {
     private currentFunctionExpression: FunctionExpression;
 
     /**
+     * A list of allowed local identifiers. We store this in a property because we augment the list in the constructor
+     * based on the parse mode
+     */
+    private allowedLocalIdentifiers: TokenKind[];
+
+    /**
      * Get the currently active global terminators
      */
     private peekGlobalTerminators() {
@@ -200,6 +208,11 @@ export class Parser {
         this.logger = options?.logger ?? new Logger();
         this.tokens = tokens;
         this.options = this.sanitizeParseOptions(options);
+        this.allowedLocalIdentifiers = [
+            ...AllowedLocalIdentifiers,
+            //when in plain brightscript mode, the BrighterScript source literals can be used as regular variables
+            ...(this.options.mode === ParseMode.BrightScript ? BrighterScriptSourceLiterals : [])
+        ];
         this.current = 0;
         this.diagnostics = [];
         this.namespaceAndFunctionDepth = 0;
@@ -296,7 +309,7 @@ export class Parser {
             // `let`, (...) keyword. As such, we must check the token *after* an identifier to figure
             // out what to do with it.
             if (
-                this.check(TokenKind.Identifier, ...AllowedLocalIdentifiers) &&
+                this.check(TokenKind.Identifier, ...this.allowedLocalIdentifiers) &&
                 this.checkNext(...AssignmentOperators)
             ) {
                 return this.assignment(...additionalTerminators);
@@ -339,7 +352,7 @@ export class Parser {
         let parentClassName: NamespacedVariableNameExpression;
 
         //get the class name
-        let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier, ...AllowedLocalIdentifiers) as Identifier;
+        let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
 
         //see if the class inherits from parent
         if (this.peek().text.toLowerCase() === 'extends') {
@@ -646,6 +659,10 @@ export class Parser {
                 typeToken,
                 this.currentFunctionExpression
             );
+            //if there is a parent function, register this function with the parent
+            if (this.currentFunctionExpression) {
+                this.currentFunctionExpression.childFunctionExpressions.push(func);
+            }
 
             this.functionExpressions.push(func);
 
@@ -693,6 +710,7 @@ export class Parser {
                 while (this.match(TokenKind.Newline)) {
                 }
                 let result = new FunctionStatement(name, func, this.currentNamespaceName);
+                func.functionStatement = result;
                 this.functionStatements.push(result);
                 return result;
             }
@@ -704,7 +722,7 @@ export class Parser {
     }
 
     private functionParameter(): FunctionParameter {
-        if (!this.check(TokenKind.Identifier, ...AllowedLocalIdentifiers)) {
+        if (!this.check(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedParameterNameButFound(this.peek().text),
                 range: this.peek().range
@@ -1124,7 +1142,7 @@ export class Parser {
         let firstIdentifier = this.consume(
             DiagnosticMessages.expectedIdentifierAfterKeyword(this.previous().text),
             TokenKind.Identifier,
-            ...AllowedLocalIdentifiers
+            ...this.allowedLocalIdentifiers
         ) as Identifier;
 
         let expr: DottedGetExpression | VariableExpression;
@@ -1146,7 +1164,7 @@ export class Parser {
                 let identifier = this.tryConsume(
                     DiagnosticMessages.expectedIdentifier(),
                     TokenKind.Identifier,
-                    ...AllowedLocalIdentifiers,
+                    ...this.allowedLocalIdentifiers,
                     ...AllowedProperties
                 ) as Identifier;
                 // force it into an identifier so the AST makes some sense
@@ -1949,7 +1967,7 @@ export class Parser {
     }
 
     private call(): Expression {
-        if (this.check(TokenKind.New) && this.checkNext(TokenKind.Identifier, ...AllowedLocalIdentifiers)) {
+        if (this.check(TokenKind.New) && this.checkNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
             return this.newExpression();
         }
         let expr = this.primary();
@@ -2046,7 +2064,10 @@ export class Parser {
                 TokenKind.StringLiteral
             ):
                 return new LiteralExpression(this.previous().literal, this.previous().range);
-            case this.match(TokenKind.Identifier, ...AllowedLocalIdentifiers):
+            //capture source literals (LINE_NUM if brightscript, or a bunch of them if brighterscript
+            case this.match(TokenKind.LineNumLiteral, ...(this.options.mode === ParseMode.BrightScript ? [] : BrighterScriptSourceLiterals)):
+                return new SourceLiteralExpression(this.previous());
+            case this.match(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
                 return new VariableExpression(this.previous() as Identifier, this.currentNamespaceName);
             case this.match(TokenKind.LeftParen):
                 let left = this.previous();

@@ -1,12 +1,12 @@
-import { Token, Identifier } from '../lexer';
+import { Token, Identifier, TokenKind } from '../lexer';
 import { BrsType, ValueKind, BrsString, FunctionParameter } from '../brsTypes';
-import { Block, CommentStatement } from './Statement';
+import { Block, CommentStatement, FunctionStatement } from './Statement';
 import { SourceNode } from 'source-map';
-
 import { Range } from 'vscode-languageserver';
 import util from '../util';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
+import * as fileUrl from 'file-url';
 
 /** A BrightScript expression */
 export interface Expression {
@@ -100,6 +100,16 @@ export class FunctionExpression implements Expression {
      * declared in child functions
      */
     public callExpressions = [] as CallExpression[];
+
+    /**
+     * If this function is part of a FunctionStatement, this will be set. Otherwise this will be undefined
+     */
+    public functionStatement?: FunctionStatement;
+
+    /**
+     * A list of all child functions declared directly within this function
+     */
+    public childFunctionExpressions = [] as FunctionExpression[];
 
     /**
      * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
@@ -583,6 +593,80 @@ export class VariableExpression implements Expression {
             );
         }
         return result;
+    }
+}
+
+export class SourceLiteralExpression implements Expression {
+    constructor(
+        readonly token: Token
+    ) {
+        this.range = token.range;
+    }
+
+    public readonly range: Range;
+
+    private getFunctionName(state: TranspileState, parseMode: ParseMode) {
+        let func = state.file.getFunctionScopeAtPosition(this.token.range.start).func;
+        let nameParts = [];
+        while (func.parentFunction) {
+            let index = func.parentFunction.childFunctionExpressions.indexOf(func);
+            nameParts.unshift(`anon${index}`);
+            func = func.parentFunction;
+        }
+        //get the index of this function in its parent
+        nameParts.unshift(
+            func.functionStatement.getName(parseMode)
+        );
+        return nameParts.join('$');
+    }
+
+    transpile(state: TranspileState) {
+        let text: string;
+        switch (this.token.kind) {
+            case TokenKind.SourceFilePathLiteral:
+                text = `"${fileUrl(state.pathAbsolute)}"`;
+                break;
+            case TokenKind.SourceLineNumLiteral:
+                text = `${this.token.range.start.line + 1}`;
+                break;
+            case TokenKind.FunctionNameLiteral:
+                text = `"${this.getFunctionName(state, ParseMode.BrightScript)}"`;
+                break;
+            case TokenKind.SourceFunctionNameLiteral:
+                text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
+                break;
+            case TokenKind.SourceLocationLiteral:
+                text = `"${fileUrl(state.pathAbsolute)}:${this.token.range.start.line + 1}"`;
+                break;
+            case TokenKind.PkgPathLiteral:
+                let pkgPath1 = `pkg:/${state.file.pkgPath}`
+                    .replace(/\\/g, '/')
+                    .replace(/\.bs$/i, '.brs');
+
+                text = `"${pkgPath1}"`;
+                break;
+            case TokenKind.PkgLocationLiteral:
+                let pkgPath2 = `pkg:/${state.file.pkgPath}`
+                    .replace(/\\/g, '/')
+                    .replace(/\.bs$/i, '.brs');
+
+                text = `"${pkgPath2}:" + str(LINE_NUM)`;
+                break;
+            case TokenKind.LineNumLiteral:
+            default:
+                //use the original text (because it looks like a variable)
+                text = this.token.text;
+                break;
+
+        }
+        return [
+            new SourceNode(
+                this.range.start.line + 1,
+                this.range.start.character,
+                state.pathAbsolute,
+                text
+            )
+        ];
     }
 }
 
