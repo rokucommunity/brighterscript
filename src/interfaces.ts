@@ -86,8 +86,7 @@ export interface FileObj {
  */
 export interface FileReference {
     /**
-     * The relative path to the referenced file. This is relative to the root, and should
-     * be used to look up the file in the program
+     * The pkgPath to the referenced file.
      */
     pkgPath: string;
     text: string;
