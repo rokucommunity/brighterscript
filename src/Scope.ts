@@ -625,6 +625,10 @@ export class Scope {
                     //skip the init function (because every component will have one of those){
                     if (lowerName !== 'init') {
                         let shadowedCallable = ancestorNonGlobalCallables[ancestorNonGlobalCallables.length - 1];
+                        if (!!shadowedCallable && shadowedCallable.callable.file === container.callable.file) {
+                            //same file: skip redundant imports
+                            continue;
+                        }
                         this.diagnostics.push({
                             ...DiagnosticMessages.overridesAncestorFunction(
                                 container.callable.name,
