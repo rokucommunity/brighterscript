@@ -311,13 +311,14 @@ export class LiteralExpression implements Expression {
         this.range = range ?? Range.create(-1, -1, -1, -1);
     }
 
+
     public readonly range: Range;
 
     transpile(state: TranspileState) {
         let text: string;
         if (this.value.kind === ValueKind.String) {
             //escape quote marks with another quote mark
-            text = `"${this.value.toString().replace(/"/g, '""')}"`;
+            text = `"${this.value.value.replace(/"/g, '""')}"`;
         } else {
             text = this.value.toString();
         }
@@ -328,6 +329,30 @@ export class LiteralExpression implements Expression {
                 this.range.start.character,
                 state.pathAbsolute,
                 text
+            )
+        ];
+    }
+}
+
+/**
+ * This is a special expression only used within template strings. It exists so we can prevent producing lots of empty strings
+ * during template string transpile by identifying these expressions explicitly and skipping the bslib_toString around them
+ */
+export class EscapedCharCodeLiteral implements Expression {
+    constructor(
+        readonly token: Token & { charCode: number }
+    ) {
+        this.range = token.range;
+    }
+    readonly range: Range;
+
+    transpile(state: TranspileState) {
+        return [
+            new SourceNode(
+                this.range.start.line + 1,
+                this.range.start.character,
+                state.pathAbsolute,
+                `chr(${this.token.charCode})`
             )
         ];
     }
@@ -645,5 +670,189 @@ export class CallfuncExpression implements Expression {
         );
         return result;
     }
+}
 
+/**
+ * Since template strings can contain newlines, we need to concatenate multiple strings together with chr() calls.
+ * This is a single expression that represents the string contatenation of all parts of a single quasi.
+ */
+export class TemplateStringQuasiExpression implements Expression {
+    constructor(
+        readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteral>
+    ) {
+        this.range = Range.create(
+            this.expressions[0].range.start,
+            this.expressions[this.expressions.length - 1].range.end
+        );
+    }
+    readonly range: Range;
+
+    transpile(state: TranspileState, skipEmptyStrings = true) {
+        let result = [];
+        let plus = '';
+        for (let expression of this.expressions) {
+            //skip empty strings
+            if (((expression as LiteralExpression)?.value as BrsString)?.value === '' && skipEmptyStrings === true) {
+                continue;
+            }
+            result.push(
+                plus,
+                ...expression.transpile(state)
+            );
+            plus = ' + ';
+        }
+        return result;
+    }
+}
+
+
+export class TemplateStringExpression implements Expression {
+    constructor(
+        readonly openingBacktick: Token,
+        readonly quasis: TemplateStringQuasiExpression[],
+        readonly expressions: Expression[],
+        readonly closingBacktick: Token
+    ) {
+        this.range = Range.create(
+            quasis[0].range.start,
+            quasis[quasis.length - 1].range.end
+        );
+    }
+
+    public readonly range: Range;
+
+    transpile(state: TranspileState) {
+        if (this.quasis.length === 1 && this.expressions.length === 0) {
+            return this.quasis[0].transpile(state);
+        }
+        let result = [];
+        //wrap the expression in parens to readability
+        // result.push(
+        //     new SourceNode(
+        //         this.openingBacktick.range.start.line + 1,
+        //         this.openingBacktick.range.start.character,
+        //         state.pathAbsolute,
+        //         '('
+        //     )
+        // );
+        let plus = '';
+        //helper function to figure out when to include the plus
+        function add(...items) {
+            if (items.length > 0) {
+                result.push(
+                    plus,
+                    ...items
+                );
+            }
+            plus = ' + ';
+        }
+
+        for (let i = 0; i < this.quasis.length; i++) {
+            let quasi = this.quasis[i];
+            let expression = this.expressions[i];
+
+            add(
+                ...quasi.transpile(state)
+            );
+            if (expression) {
+                //skip the toString wrapper around certain expressions
+                if (
+                    expression instanceof EscapedCharCodeLiteral ||
+                    (expression instanceof LiteralExpression && expression.value.kind === ValueKind.String)
+                ) {
+                    add(
+                        ...expression.transpile(state)
+                    );
+
+                    //wrap all other expressions with a bslib_toString call to prevent runtime type mismatch errors
+                } else {
+                    add(
+                        'bslib_toString(',
+                        ...expression.transpile(state),
+                        ')'
+                    );
+                }
+            }
+        }
+
+        //wrap the expression in parens to readability
+        // result.push(
+        //     new SourceNode(
+        //         this.openingBacktick.range.end.line + 1,
+        //         this.openingBacktick.range.end.character,
+        //         state.pathAbsolute,
+        //         ')'
+        //     )
+        // );
+        return result;
+    }
+}
+
+export class TaggedTemplateStringExpression implements Expression {
+    constructor(
+        readonly tagName: Identifier,
+        readonly openingBacktick: Token,
+        readonly quasis: TemplateStringQuasiExpression[],
+        readonly expressions: Expression[],
+        readonly closingBacktick: Token
+    ) {
+        this.range = Range.create(
+            quasis[0].range.start,
+            quasis[quasis.length - 1].range.end
+        );
+    }
+
+    public readonly range: Range;
+
+    transpile(state: TranspileState) {
+        let result = [];
+        result.push(
+            new SourceNode(
+                this.tagName.range.start.line + 1,
+                this.tagName.range.start.character,
+                state.pathAbsolute,
+                this.tagName.text
+            ),
+            '(['
+        );
+
+        //add quasis as the first array
+        for (let i = 0; i < this.quasis.length; i++) {
+            let quasi = this.quasis[i];
+            //separate items with a comma
+            if (i > 0) {
+                result.push(
+                    ', '
+                );
+            }
+            result.push(
+                ...quasi.transpile(state, false)
+            );
+        }
+        result.push(
+            '], ['
+        );
+
+        //add expressions as the second array
+        for (let i = 0; i < this.expressions.length; i++) {
+            let expression = this.expressions[i];
+            if (i > 0) {
+                result.push(
+                    ', '
+                );
+            }
+            result.push(
+                ...expression.transpile(state)
+            );
+        }
+        result.push(
+            new SourceNode(
+                this.closingBacktick.range.end.line + 1,
+                this.closingBacktick.range.end.character,
+                state.pathAbsolute,
+                '])'
+            )
+        );
+        return result;
+    }
 }
