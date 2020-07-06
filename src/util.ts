@@ -268,6 +268,7 @@ export class Util {
         config.diagnosticFilters = config.diagnosticFilters ?? [];
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
+        config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
         if (typeof config.logLevel === 'string') {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
         }

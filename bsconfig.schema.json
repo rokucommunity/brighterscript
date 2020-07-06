@@ -183,6 +183,10 @@
                 "debug",
                 "trace"
             ]
+        },
+        "sourceRoot": {
+            "description": "Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files.",
+            "type": "string"
         }
     }
 }

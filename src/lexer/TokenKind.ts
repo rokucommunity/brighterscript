@@ -44,10 +44,12 @@ export enum TokenKind {
     // literals
     Identifier = 'Identifier',
     StringLiteral = 'StringLiteral',
+    TemplateStringQuasi = 'TemplateStringQuasi',
     IntegerLiteral = 'IntegerLiteral',
     FloatLiteral = 'FloatLiteral',
     DoubleLiteral = 'DoubleLiteral',
     LongIntegerLiteral = 'LongIntegerLiteral',
+    EscapedCharCodeLiteral = 'EscapedCharCodeLiteral', //this is used to capture things like `\n`, `\r\n` in template strings
 
     //types
     Void = 'Void',
@@ -69,6 +71,9 @@ export enum TokenKind {
     Semicolon = 'Semicolon', // ;
     At = 'At', // @
     Callfunc = 'Callfunc', // @.
+
+    BackTick = 'BackTick', // `
+
 
     // conditional compilation
     HashIf = 'HashIf', // #if
@@ -128,6 +133,7 @@ export enum TokenKind {
 
     //misc
     Library = 'Library',
+    Dollar = '$',
 
     //brighterscript keywords
     Class = 'Class',

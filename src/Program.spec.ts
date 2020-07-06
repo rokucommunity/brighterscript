@@ -1381,4 +1381,56 @@ describe('Program', () => {
         expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/bslib.brs`)).is.true;
     });
 
+    describe('transpile', () => {
+        it('uses sourceRoot when provided for brs files', async () => {
+            let sourceRoot = s`${tmpPath}/sourceRootFolder`;
+            program = new Program({
+                rootDir: rootDir,
+                stagingFolderPath: stagingFolderPath,
+                sourceRoot: sourceRoot
+            });
+            await program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                end sub
+            `);
+            await program.transpile([{
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            }], stagingFolderPath);
+
+            let contents = fsExtra.readFileSync(s`${stagingFolderPath}/source/main.brs.map`).toString();
+            let map = JSON.parse(contents);
+            expect(
+                s`${map.sources[0]}`
+            ).to.eql(
+                s`${sourceRoot}/source/main.brs`
+            );
+        });
+
+        it('uses sourceRoot when provided for bs files', async () => {
+            let sourceRoot = s`${tmpPath}/sourceRootFolder`;
+            program = new Program({
+                rootDir: rootDir,
+                stagingFolderPath: stagingFolderPath,
+                sourceRoot: sourceRoot
+            });
+            await program.addOrReplaceFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            await program.transpile([{
+                src: s`${rootDir}/source/main.bs`,
+                dest: s`source/main.bs`
+            }], stagingFolderPath);
+
+            let contents = fsExtra.readFileSync(s`${stagingFolderPath}/source/main.brs.map`).toString();
+            let map = JSON.parse(contents);
+            expect(
+                s`${map.sources[0]}`
+            ).to.eql(
+                s`${sourceRoot}/source/main.bs`
+            );
+        });
+    });
+
 });

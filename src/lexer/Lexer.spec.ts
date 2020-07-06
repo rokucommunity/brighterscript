@@ -1,3 +1,4 @@
+/* eslint no-template-curly-in-string: 0 */
 import { expect } from 'chai';
 
 import { TokenKind } from '.';
@@ -364,13 +365,6 @@ describe('lexer', () => {
             expect(tokens[0].literal).to.deep.equal(new BrsString(`the cat says "meow"`));
         });
 
-        it('produces an error for unterminated strings', () => {
-            let { diagnostics } = Lexer.scan(`"unterminated!`);
-            expect(diagnostics.map(err => err.message)).to.deep.equal([
-                'Unterminated string at end of file'
-            ]);
-        });
-
         it('captures text to end of line for unterminated strings with LF', () => {
             let { tokens } = Lexer.scan(`"unterminated!\n`);
             expect(tokens[0].literal.toString()).to.equal('unterminated!');
@@ -385,6 +379,236 @@ describe('lexer', () => {
             let { diagnostics } = Lexer.scan(`"multi-line\n\n`);
             expect(diagnostics.map(err => err.message)).to.deep.equal([
                 'Unterminated string at end of line'
+            ]);
+        });
+    });
+
+    // template string literals
+
+    describe('template string literals', () => {
+        it('supports escaped chars', () => {
+            let { tokens } = Lexer.scan('`\\n\\`\\r\\n`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral, // slash n
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral, // slash backtick
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral, // slash r
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral, // slash n
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect(tokens.map(x => (x as any).charCode).filter(x => !!x)).to.eql([
+                10,
+                96,
+                13,
+                10
+            ]);
+        });
+
+        it('prevents expressions when escaping the dollar sign', () => {
+            let { tokens } = Lexer.scan('`\\${just text}`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral, // slash dollar sign
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('supports escaping unicode char codes', () => {
+            let { tokens } = Lexer.scan('`\\c1\\c12\\c123`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect(tokens.map(x => (x as any).charCode).filter(x => !!x)).to.eql([
+                1,
+                12,
+                123
+            ]);
+        });
+
+        it('converts doublequote to EscapedCharCodeLiteral', () => {
+            let { tokens } = Lexer.scan('`"`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.EscapedCharCodeLiteral, // quote
+                TokenKind.TemplateStringQuasi, // empty
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect((tokens[2] as any).charCode).to.equal(34);
+        });
+
+        it(`safely escapes \` literals`, () => {
+            let { tokens } = Lexer.scan('`the cat says \\`meow\\` a lot`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral, // slash backtick
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral, // slash backtick
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect(tokens[1].literal).to.eql(new BrsString('the cat says '));
+            expect(tokens[2].text).to.eql('\\`');
+            expect(tokens[3].literal).to.eql(new BrsString('meow'));
+            expect(tokens[4].text).to.eql('\\`');
+            expect(tokens[5].literal).to.eql(new BrsString(' a lot'));
+        });
+
+        it('produces template string literal tokens', () => {
+            let { tokens } = Lexer.scan('`hello world`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick, TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
+            expect(tokens[1].literal).to.deep.equal(new BrsString('hello world'));
+        });
+
+        it('collects quasis outside and expressions inside of template strings', () => {
+            let { tokens } = Lexer.scan('`hello ${"world"}!`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.StringLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect(tokens[1].literal).to.deep.equal(new BrsString(`hello `));
+        });
+
+        it('complicated example', () => {
+            let { tokens } = Lexer.scan(
+                '`hello ${"world"}!I am a ${"template" + "string"} and I am very ${["pleased"][0]} to meet you ${m.top.getChildCount()}.The end`'
+            );
+            expect(tokens.map(t => t.kind)).to.eql([
+                TokenKind.BackTick, // `
+                TokenKind.TemplateStringQuasi, // hello
+                // ${
+                TokenKind.StringLiteral, // "world"
+                // }
+                TokenKind.TemplateStringQuasi, //!I am a
+                // ${
+                TokenKind.StringLiteral, // "template"
+                TokenKind.Plus, // +
+                TokenKind.StringLiteral, //"string"
+                // }
+                TokenKind.TemplateStringQuasi, // and I am very
+                TokenKind.LeftSquareBracket, // [
+                TokenKind.StringLiteral, // "pleased"
+                TokenKind.RightSquareBracket, // ]
+                TokenKind.LeftSquareBracket, // [
+                TokenKind.IntegerLiteral, // 0
+                TokenKind.RightSquareBracket, // ]
+                // }
+                TokenKind.TemplateStringQuasi, // to meet you
+                TokenKind.Identifier, // m
+                TokenKind.Dot, // .
+                TokenKind.Identifier, // top
+                TokenKind.Dot, // .
+                TokenKind.Identifier, //getChildCount,
+                TokenKind.LeftParen, // (
+                TokenKind.RightParen, // )
+                // }
+                TokenKind.TemplateStringQuasi, // .The end
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('allows multiline strings', () => {
+            let { tokens } = Lexer.scan('`multi-line\n\n`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect(tokens[1].literal).to.eql(new BrsString(`multi-line`));
+            expect(tokens[2].text).to.equal('\n');
+            expect(tokens[2].text).to.equal('\n');
+        });
+
+        it('maintains proper line/column locations for multiline strings', () => {
+            let { tokens } = Lexer.scan(
+                '123 `multi\nline\r\nstrings` true\nfalse'
+            );
+            expect(tokens.map(x => {
+                return {
+                    range: x.range,
+                    kind: x.kind
+                };
+            })).to.eql([
+                { range: Range.create(0, 0, 0, 3), kind: TokenKind.IntegerLiteral },
+                { range: Range.create(0, 4, 0, 5), kind: TokenKind.BackTick },
+                { range: Range.create(0, 5, 0, 10), kind: TokenKind.TemplateStringQuasi },
+                { range: Range.create(0, 10, 0, 11), kind: TokenKind.EscapedCharCodeLiteral },
+                { range: Range.create(1, 0, 1, 4), kind: TokenKind.TemplateStringQuasi },
+                { range: Range.create(1, 4, 1, 5), kind: TokenKind.EscapedCharCodeLiteral },
+                { range: Range.create(1, 5, 1, 6), kind: TokenKind.EscapedCharCodeLiteral },
+                { range: Range.create(2, 0, 2, 7), kind: TokenKind.TemplateStringQuasi },
+                { range: Range.create(2, 7, 2, 8), kind: TokenKind.BackTick },
+                { range: Range.create(2, 9, 2, 13), kind: TokenKind.True },
+                { range: Range.create(2, 13, 2, 14), kind: TokenKind.Newline },
+                { range: Range.create(3, 0, 3, 5), kind: TokenKind.False },
+                { range: Range.create(3, 5, 3, 6), kind: TokenKind.Eof }
+            ]);
+        });
+
+        it('Example that tripped up the expression tests', () => {
+            let { tokens } = Lexer.scan(
+                '`I am a complex example\n${a.isRunning(["a","b","c"])}\nmore ${m.finish(true)}\`'
+            );
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.Identifier,
+                TokenKind.Dot,
+                TokenKind.Identifier,
+                TokenKind.LeftParen,
+                TokenKind.LeftSquareBracket,
+                TokenKind.StringLiteral,
+                TokenKind.Comma,
+                TokenKind.StringLiteral,
+                TokenKind.Comma,
+                TokenKind.StringLiteral,
+                TokenKind.RightSquareBracket,
+                TokenKind.RightParen,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.Identifier,
+                TokenKind.Dot,
+                TokenKind.Identifier,
+                TokenKind.LeftParen,
+                TokenKind.True,
+                TokenKind.RightParen,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
             ]);
         });
     }); // string literals
@@ -688,26 +912,38 @@ describe('lexer', () => {
     });
 
     describe('location tracking', () => {
-        it('tracks starting and ending lines', () => {
-            let { tokens } = Lexer.scan(`sub foo()\n\n    print "bar"\nend sub`);
-            expect(tokens.map(t => t.range.start.line)).to.deep.equal([0, 0, 0, 0, 0, 1, 2, 2, 2, 3, 3]);
-
-            expect(tokens.map(t => t.range.end.line)).to.deep.equal([0, 0, 0, 0, 0, 1, 2, 2, 2, 3, 3]);
+        it('tracks starting and ending locations including whitespace', () => {
+            let { tokens } = Lexer.scan(`sub foo()\n    print "bar"\r\nend sub`, { includeWhitespace: true });
+            expect(tokens.map(t => t.range)).to.eql([
+                Range.create(0, 0, 0, 3), // sub
+                Range.create(0, 3, 0, 4), // <space>
+                Range.create(0, 4, 0, 7), // foo
+                Range.create(0, 7, 0, 8), // (
+                Range.create(0, 8, 0, 9), // )
+                Range.create(0, 9, 0, 10), // \n
+                Range.create(1, 0, 1, 4), //<space>
+                Range.create(1, 4, 1, 9), // print
+                Range.create(1, 9, 1, 10), // <space>
+                Range.create(1, 10, 1, 15), // "bar"
+                Range.create(1, 15, 1, 17), // \n
+                Range.create(2, 0, 2, 7), // end sub
+                Range.create(2, 7, 2, 8) // EOF
+            ]);
         });
 
-        it('tracks starting and ending columns', () => {
-            let { tokens } = Lexer.scan(`sub foo()\n    print "bar"\nend sub`);
-            expect(tokens.map(t => [t.range.start.character, t.range.end.character])).to.deep.equal([
-                [0, 3], // sub
-                [4, 7], // foo
-                [7, 8], // (
-                [8, 9], // )
-                [9, 10], // \n
-                [4, 9], // print
-                [10, 15], // "bar"
-                [15, 16], // \n
-                [0, 7], // end sub
-                [7, 8] // EOF
+        it('tracks starting and ending locations excluding whitespace', () => {
+            let { tokens } = Lexer.scan(`sub foo()\n    print "bar"\r\nend sub`, { includeWhitespace: false });
+            expect(tokens.map(t => t.range)).to.eql([
+                Range.create(0, 0, 0, 3), // sub
+                Range.create(0, 4, 0, 7), // foo
+                Range.create(0, 7, 0, 8), // (
+                Range.create(0, 8, 0, 9), // )
+                Range.create(0, 9, 0, 10), // \n
+                Range.create(1, 4, 1, 9), // print
+                Range.create(1, 10, 1, 15), // "bar"
+                Range.create(1, 15, 1, 17), // \n
+                Range.create(2, 0, 2, 7), // end sub
+                Range.create(2, 7, 2, 8) // EOF
             ]);
         });
     });
