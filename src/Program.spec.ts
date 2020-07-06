@@ -1382,11 +1382,12 @@ describe('Program', () => {
     });
 
     describe('transpile', () => {
-        it.only('uses sourceRoot when provided', async () => {
+        it('uses sourceRoot when provided', async () => {
+            let sourceRoot = s`${tmpPath}/sourceRootFolder`;
             program = new Program({
                 rootDir: rootDir,
                 stagingFolderPath: stagingFolderPath,
-                sourceRoot: s`${tmpPath}/sourceRootFolder`
+                sourceRoot: sourceRoot
             });
             await program.addOrReplaceFile('source/main.brs', `
                 sub main()
@@ -1394,12 +1395,16 @@ describe('Program', () => {
             `);
             await program.transpile([{
                 src: s`${rootDir}/source/main.brs`,
-                dest: s`${stagingFolderPath}/source/main.bs`
+                dest: s`source/main.bs`
             }], stagingFolderPath);
 
             let contents = fsExtra.readFileSync(s`${stagingFolderPath}/source/main.brs.map`).toString();
             let map = JSON.parse(contents);
-            expect(map).to.eql({});
+            expect(
+                s`${map.sources[0]}`
+            ).to.eql(
+                s`${sourceRoot}/source/main.brs`
+            );
         });
     });
 

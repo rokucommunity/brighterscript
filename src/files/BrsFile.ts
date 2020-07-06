@@ -984,15 +984,14 @@ export class BrsFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile() {
+        const state = new TranspileState(this);
         if (this.needsTranspiled) {
-            const state = new TranspileState(this);
             let programNode = new SourceNode(null, null, this.pathAbsolute, this.ast.transpile(state));
             let result = programNode.toStringWithSourceMap({
                 file: this.pathAbsolute
             });
             return result;
         } else {
-            //create a sourcemap
             //create a source map from the original source code
             let chunks = [] as (SourceNode | string)[];
             let lines = this.fileContents.split(/\r?\n/g);
@@ -1000,10 +999,10 @@ export class BrsFile {
                 let line = lines[lineIndex];
                 chunks.push(
                     lineIndex > 0 ? '\n' : '',
-                    new SourceNode(lineIndex + 1, 0, this.pathAbsolute, line)
+                    new SourceNode(lineIndex + 1, 0, state.pathAbsolute, line)
                 );
             }
-            return new SourceNode(null, null, this.pathAbsolute, chunks).toStringWithSourceMap();
+            return new SourceNode(null, null, state.pathAbsolute, chunks).toStringWithSourceMap();
         }
     }
 
