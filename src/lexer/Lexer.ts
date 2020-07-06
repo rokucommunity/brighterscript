@@ -18,14 +18,24 @@ export class Lexer {
     private current: number;
 
     /**
-     * The zero-indexed line number being parsed.
+     * The zero-indexed begin line number being parsed.
      */
-    private line: number;
+    private lineBegin: number;
 
     /**
-     * The zero-indexed column number being parsed.
+     * The zero-indexed end line number being parsed
      */
-    private column: number;
+    private lineEnd: number;
+
+    /**
+     * The zero-indexed begin column number being parsed.
+     */
+    private columnBegin: number;
+
+    /**
+     * The zero-indexed end column number being parsed
+     */
+    private columnEnd: number;
 
     /**
      * The BrightScript code being converted to an array of `Token`s.
@@ -73,13 +83,14 @@ export class Lexer {
         this.options = this.sanitizeOptions(options);
         this.start = 0;
         this.current = 0;
-        this.line = 0;
-        this.column = 0;
+        this.lineBegin = 0;
+        this.lineEnd = 0;
+        this.columnBegin = 0;
+        this.columnEnd = 0;
         this.tokens = [];
         this.diagnostics = [];
 
         while (!this.isAtEnd()) {
-            this.start = this.current;
             this.scanToken();
         }
 
@@ -87,7 +98,7 @@ export class Lexer {
             kind: TokenKind.Eof,
             isReserved: false,
             text: '',
-            range: Range.create(this.line, this.column, this.line, this.column + 1)
+            range: Range.create(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
         });
 
         return this;
@@ -119,12 +130,41 @@ export class Lexer {
      */
     private scanToken(): void {
         let c = this.advance();
+        if (isAlpha(c)) {
+            this.identifier();
+            return;
+        }
         switch (c.toLowerCase()) {
+            case '\r':
+            case '\n':
+                this.newline();
+                break;
+            case '.':
+                // this might be a float/double literal, because decimals without a leading 0
+                // are allowed
+                if (isDecimalDigit(this.peek())) {
+                    this.decimalNumber(true);
+                } else {
+                    this.addToken(TokenKind.Dot);
+                }
+                break;
             case '(':
                 this.addToken(TokenKind.LeftParen);
                 break;
             case ')':
                 this.addToken(TokenKind.RightParen);
+                break;
+            case '=':
+                this.addToken(TokenKind.Equal);
+                break;
+            case '"':
+                this.string();
+                break;
+            case `'`:
+                this.comment();
+                break;
+            case ',':
+                this.addToken(TokenKind.Comma);
                 break;
             case '{':
                 this.addToken(TokenKind.LeftCurlyBrace);
@@ -138,24 +178,12 @@ export class Lexer {
             case ']':
                 this.addToken(TokenKind.RightSquareBracket);
                 break;
-            case ',':
-                this.addToken(TokenKind.Comma);
-                break;
             case '@':
                 if (this.peek() === '.') {
                     this.advance();
                     this.addToken(TokenKind.Callfunc);
                 } else {
                     this.addToken(TokenKind.At);
-                }
-                break;
-            case '.':
-                // this might be a float/double literal, because decimals without a leading 0
-                // are allowed
-                if (isDecimalDigit(this.peek())) {
-                    this.decimalNumber(true);
-                } else {
-                    this.addToken(TokenKind.Dot);
                 }
                 break;
             case '+':
@@ -224,9 +252,6 @@ export class Lexer {
                         break;
                 }
                 break;
-            case '=':
-                this.addToken(TokenKind.Equal);
-                break;
             case ':':
                 this.addToken(TokenKind.Colon);
                 break;
@@ -235,6 +260,9 @@ export class Lexer {
                 break;
             case '?':
                 this.addToken(TokenKind.Print);
+                break;
+            case '`':
+                this.templateString();
                 break;
             case '<':
                 switch (this.peek()) {
@@ -286,19 +314,9 @@ export class Lexer {
                         break;
                 }
                 break;
-            case `'`:
-                this.comment();
-                break;
             case ' ':
             case '\t':
                 this.whitespace();
-                break;
-            case '\r':
-            case '\n':
-                this.newline();
-                break;
-            case '"':
-                this.string();
                 break;
             case '#':
                 this.preProcessedConditional();
@@ -309,8 +327,6 @@ export class Lexer {
                 } else if (c === '&' && this.peek().toLowerCase() === 'h') {
                     this.advance(); // move past 'h'
                     this.hexadecimalNumber();
-                } else if (isAlpha(c)) {
-                    this.identifier();
                 } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unexpectedCharacter(c),
@@ -335,6 +351,9 @@ export class Lexer {
         }
         if (this.options.includeWhitespace) {
             this.addToken(TokenKind.Whitespace);
+        } else {
+            //toss out the whitespace
+            this.sync();
         }
         this.start = this.current;
     }
@@ -349,9 +368,11 @@ export class Lexer {
         this.addToken(TokenKind.Newline);
         this.start = this.current;
         // advance the line counter
-        this.line++;
+        this.lineBegin++;
+        this.lineEnd = this.lineBegin;
         // and always reset the column counter
-        this.column = 0;
+        this.columnBegin = 0;
+        this.columnEnd = 0;
     }
 
     /**
@@ -360,7 +381,7 @@ export class Lexer {
      */
     private advance(): string {
         this.current++;
-        this.column++;
+        this.columnEnd++;
         return this.source.charAt(this.current - 1);
     }
 
@@ -443,6 +464,127 @@ export class Lexer {
         //replace escaped quotemarks "" with a single quote
         value = value.replace(/""/g, '"');
         this.addToken(TokenKind.StringLiteral, new BrsString(value));
+    }
+    /**
+     * Reads characters within a string literal, advancing through escaped characters to the
+     * terminating `"`, and adds the produced token to the `tokens` array. Creates a `BrsError` if the
+     * string is terminated by a newline or the end of input.
+     */
+    private templateString() {
+        this.addToken(TokenKind.BackTick);
+        while (!this.isAtEnd() && !this.check('`')) {
+            //handle line/column tracking when capturing newlines
+            if (this.check('\n')) {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                //store the char code
+                token.charCode = 10;
+
+                //move the location tracking to the next line
+                this.lineEnd++;
+                this.lineBegin = this.lineEnd;
+                this.columnEnd = 0;
+                this.columnBegin = this.columnEnd;
+                continue;
+            } else if (this.check('\r') && this.peekNext() === '\n') {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = 13;
+
+                this.advance();
+                token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = 10;
+
+                //move the location tracking to the next line
+                this.lineEnd++;
+                this.lineBegin = this.lineEnd;
+                this.columnEnd = 0;
+                this.columnBegin = this.columnEnd;
+                continue;
+
+                //escaped chars
+            } else if (this.check('\\')) {
+                this.templateQuasiString();
+
+                //step past the escape character
+                this.advance();
+                let charCode: number;
+                //a few common cases
+                if (this.check('n')) {
+                    charCode = '\n'.charCodeAt(0);
+                } else if (this.check('r')) {
+                    charCode = '\r'.charCodeAt(0);
+                } else if (this.check('\\')) {
+                    charCode = '\\'.charCodeAt(0);
+
+                    //support escaped unicode codes
+                } else if (this.check('c')) {
+                    let numText = '';
+                    //read tokens until we find a non-numeric one
+                    while (
+                        !isNaN(
+                            parseInt(
+                                this.peekNext()
+                            )
+                        )
+                    ) {
+                        this.advance();
+                        numText += this.peek();
+                    }
+                    charCode = parseInt(numText);
+                } else {
+                    charCode = this.peek().charCodeAt(0);
+                }
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = charCode;
+                continue;
+            } else if (this.check('"')) {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                //store the char code
+                token.charCode = '"'.charCodeAt(0);
+
+                //move the location tracking to the next line
+                this.lineEnd++;
+                this.lineBegin = this.lineEnd;
+                this.columnEnd = 0;
+                this.columnBegin = this.columnEnd;
+                continue;
+            }
+
+            if (this.check('$') && this.peekNext() === '{') {
+                this.templateQuasiString();
+                this.advance();
+                this.advance();
+                while (!this.isAtEnd() && !this.check('}')) {
+                    this.start = this.current;
+                    this.scanToken();
+                }
+                this.start = this.current + 1;
+            }
+            this.advance();
+        }
+
+        //get last quasi
+        this.templateQuasiString();
+
+        if (this.check('`')) {
+            // move past the closing ```
+            this.advance();
+            this.addToken(TokenKind.BackTick);
+        }
+    }
+
+    private templateQuasiString() {
+        let value = this.source.slice(this.start, this.current);
+        this.addToken(TokenKind.TemplateStringQuasi, new BrsString(value));
     }
 
     /**
@@ -605,7 +747,7 @@ export class Lexer {
         ) {
             let endOfFirstWord = {
                 position: this.current,
-                column: this.column
+                column: this.columnEnd
             };
 
             // skip past any whitespace
@@ -629,7 +771,7 @@ export class Lexer {
             } else {
                 // reset if the last word and the current word didn't form a multi-word TokenKind
                 this.current = endOfFirstWord.position;
-                this.column = endOfFirstWord.column;
+                this.columnEnd = endOfFirstWord.column;
             }
         }
 
@@ -785,7 +927,17 @@ export class Lexer {
             range: this.rangeOf(text)
         };
         this.tokens.push(token);
+        this.sync();
         return token;
+    }
+
+    /**
+     * Move all location and char pointers to current position. Normally called after adding a token.
+     */
+    private sync() {
+        this.start = this.current;
+        this.lineBegin = this.lineEnd;
+        this.columnBegin = this.columnEnd;
     }
 
     /**
@@ -795,10 +947,10 @@ export class Lexer {
      */
     private rangeOf(text: string): Range {
         return Range.create(
-            this.line,
-            this.column - text.length,
-            this.line,
-            Math.max(this.column - text.length + 1, this.column)
+            this.lineBegin,
+            this.columnBegin,
+            this.lineEnd,
+            this.columnEnd
         );
     }
 }

@@ -39,8 +39,8 @@ describe('util', () => {
 
     describe('uriToPath', () => {
         it('retains original drive casing for windows', () => {
-            expect(util.uriToPath(`file:///C:\\something`)).to.equal('C:\\something');
-            expect(util.uriToPath(`file:///C:\\something`)).to.equal('C:\\something');
+            expect(util.uriToPath(`file:///C:${path.sep}something`)).to.equal(`C:${path.sep}something`);
+            expect(util.uriToPath(`file:///c:${path.sep}something`)).to.equal(`c:${path.sep}something`);
         });
     });
 
