@@ -18,6 +18,7 @@ transpiles to
 name = "John Smith"
 text = "hello " + bslib_toString(name)
 text = "first line text" + chr(10) + "second line text"
+text = tag(["hello ", " how are you"], [name])
 ```
 
 ## Description
@@ -41,15 +42,15 @@ text = "line1" + chr(10) + "line2" + chr(10)
 
 You can also use escape characters in your text. For example, `\n` for unix-style line endings and `\r\n` for windows-style line endings.
 ```BrighterScript
-unixText = "line1\nline2"
-windowsText = "line1\r\nline2"
+unixText = `line1\nline2`
+windowsText = `line1\r\nline2`
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
   
 ```BrightScript
-unixText = "line1\nline2"
-windowsText = "line1\r\nline2"
+unixText = "line1" + chr(10) + "line2"
+windowsText = "line1" + chr(13) + chr(10) + "line2"
 ```
 </details>
 
@@ -149,7 +150,7 @@ end function
 
 function main()
     name = "Human"
-    print zombify ; "Hello " + bslib_toString(name) ' prints "Hello Zombie"
+    print zombify(["Hello ", ""], [name]) ' prints "Hello Zombie"
 end function
 ```
 </details>
@@ -178,6 +179,7 @@ end function
 
 function main()
     name = "Human"
+    result = zombify(["Hello ", ""], [name])
 end function
 ```
 </details>
