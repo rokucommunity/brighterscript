@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.11.0] - 2020-07-06
+### Added
+ - [Source literals feature](https://github.com/rokucommunity/brighterscript/blob/master/docs/source-literals.md) which adds new literals such as `SOURCE_FILE_PATH`, `SOURCE_LINE_NUM`, `FUNCTION_NAME`, and more. ([#13](https://github.com/rokucommunity/brighterscript/issues/13))
+ - `sourceRoot` config option to fix sourcemap paths for projects that use a temporary staging folder before calling the BrighterScript compiler. ([#134](https://github.com/rokucommunity/brighterscript/commit/e5b73ca37016d5015a389257fb259573c4721e7a))
+ - [Template string feature](https://github.com/rokucommunity/brighterscript/blob/master/docs/template-strings.md) which brings template string support to BrighterScript. ([#98](https://github.com/rokucommunity/brighterscript/issues/98))
+### Fixed
+ - Do not show BS1010 diagnostic `hint`s for the same script imported for parent and child. ([#113](https://github.com/rokucommunity/brighterscript/issues/113))
 
 ## [0.10.11] - 2020-07-05
  - Fix bug that would fail to copy files to staging without explicitly specifying `stagingFolderpath`. [#129](https://github.com/rokucommunity/brighterscript/issues/129)
@@ -368,6 +375,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.11.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.10...v0.11.0
 [0.10.10]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.9...v0.10.10
 [0.10.9]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.8...v0.10.9
 [0.10.7]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.6...v0.10.7
