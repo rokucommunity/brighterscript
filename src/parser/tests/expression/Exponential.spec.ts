@@ -19,7 +19,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses repeated exponential operators as left-associative', () => {
@@ -36,7 +35,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 });

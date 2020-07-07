@@ -17,7 +17,6 @@ describe('parser postfix unary expressions', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses postfix \'--\' for dotted get expressions', () => {
@@ -32,7 +31,6 @@ describe('parser postfix unary expressions', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses postfix \'++\' for indexed get expressions', () => {
@@ -48,7 +46,6 @@ describe('parser postfix unary expressions', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('disallows consecutive postfix operators', () => {
@@ -97,7 +94,6 @@ describe('parser postfix unary expressions', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {

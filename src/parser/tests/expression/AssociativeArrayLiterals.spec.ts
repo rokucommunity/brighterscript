@@ -19,7 +19,6 @@ describe('parser associative array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines', () => {
@@ -39,7 +38,6 @@ describe('parser associative array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 
@@ -66,7 +64,6 @@ describe('parser associative array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines with commas', () => {
@@ -95,7 +92,6 @@ describe('parser associative array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines without commas', () => {
@@ -122,7 +118,6 @@ describe('parser associative array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 
@@ -154,7 +149,6 @@ describe('parser associative array literals', () => {
         ]);
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('allows a mix of quoted and unquoted keys', () => {
@@ -183,7 +177,6 @@ describe('parser associative array literals', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {

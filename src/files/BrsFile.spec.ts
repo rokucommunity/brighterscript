@@ -878,7 +878,6 @@ describe('BrsFile', () => {
             ).to.eql([
                 DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile().message
             ]);
-            //expect({ diagnostics: diagnostics, statements: statements }).toMatchSnapshot();
         });
 
         it('adds error for library statements inside of function body', async () => {

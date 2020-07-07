@@ -19,7 +19,6 @@ describe('parser array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines', () => {
@@ -39,7 +38,6 @@ describe('parser array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 
@@ -60,7 +58,6 @@ describe('parser array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines with commas', () => {
@@ -83,7 +80,6 @@ describe('parser array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines without commas', () => {
@@ -104,7 +100,6 @@ describe('parser array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 
@@ -125,7 +120,6 @@ describe('parser array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('can contain other arrays', () => {
@@ -154,7 +148,6 @@ describe('parser array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('can contain expressions', () => {
@@ -174,7 +167,6 @@ describe('parser array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 

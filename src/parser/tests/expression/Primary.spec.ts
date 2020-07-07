@@ -18,7 +18,6 @@ describe('parser primary expressions', () => {
         ]);
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.have.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses string literals', () => {
@@ -32,7 +31,6 @@ describe('parser primary expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.have.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses expressions in parentheses', () => {
@@ -52,7 +50,6 @@ describe('parser primary expressions', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.have.length.greaterThan(0);
 
-        //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {

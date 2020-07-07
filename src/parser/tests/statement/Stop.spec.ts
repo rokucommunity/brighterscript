@@ -17,13 +17,11 @@ describe('stop statement', () => {
         expect(diagnostics).to.be.lengthOf(1);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        // //expect(statements).toMatchSnapshot();
     });
 
     it('is valid as a statement', () => {
         let { diagnostics } = Parser.parse([token(TokenKind.Stop, 'stop'), EOF]);
         expect(diagnostics[0]).to.be.undefined;
-        // //expect(statements).toMatchSnapshot();
     });
 
     it('can be used as an object property', () => {
@@ -37,6 +35,5 @@ describe('stop statement', () => {
         `);
         let { diagnostics } = Parser.parse(tokens);
         expect(diagnostics.length).to.equal(0);
-        // //expect(statements).toMatchSnapshot();
     });
 });

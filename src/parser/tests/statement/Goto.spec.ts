@@ -12,7 +12,6 @@ describe('parser goto statements', () => {
             EOF
         ]);
         expect(diagnostics).to.be.lengthOf(0);
-        //expect({ errors, statements }).toMatchSnapshot();
     });
 
     it('detects labels', () => {
@@ -22,7 +21,6 @@ describe('parser goto statements', () => {
             EOF
         ]);
         expect(diagnostics).to.be.lengthOf(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('allows multiple goto statements on one line', () => {
@@ -35,6 +33,5 @@ describe('parser goto statements', () => {
         `);
         let { diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
-        //expect(statements).toMatchSnapshot();
     });
 });

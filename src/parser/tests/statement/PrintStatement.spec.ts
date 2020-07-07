@@ -17,7 +17,6 @@ describe('parser print statements', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('supports empty print', () => {
@@ -25,7 +24,6 @@ describe('parser print statements', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses print lists with no separator', () => {
@@ -40,7 +38,6 @@ describe('parser print statements', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses print lists with separators', () => {
@@ -57,7 +54,6 @@ describe('parser print statements', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {

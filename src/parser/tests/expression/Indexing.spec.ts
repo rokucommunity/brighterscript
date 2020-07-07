@@ -23,7 +23,6 @@ describe('parser indexing', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
-            //expect(statements).toMatchSnapshot();
         });
 
         it('bracketed', () => {
@@ -40,7 +39,6 @@ describe('parser indexing', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
-            //expect(statements).toMatchSnapshot();
         });
 
         describe('dotted and bracketed', () => {
@@ -195,7 +193,6 @@ describe('parser indexing', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('bracketed', () => {
@@ -217,7 +214,6 @@ describe('parser indexing', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('mixed', () => {
@@ -237,7 +233,6 @@ describe('parser indexing', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 });

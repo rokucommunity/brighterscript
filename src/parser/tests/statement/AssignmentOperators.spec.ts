@@ -16,7 +16,6 @@ describe('parser assignment operators', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('-=', () => {
@@ -29,7 +28,6 @@ describe('parser assignment operators', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('*=', () => {
@@ -42,7 +40,6 @@ describe('parser assignment operators', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('/=', () => {
@@ -55,7 +52,6 @@ describe('parser assignment operators', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('\\=', () => {
@@ -68,7 +64,6 @@ describe('parser assignment operators', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('<<=', () => {
@@ -81,7 +76,6 @@ describe('parser assignment operators', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('>>=', () => {
@@ -94,6 +88,5 @@ describe('parser assignment operators', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
-        //expect(statements).toMatchSnapshot();
     });
 });
