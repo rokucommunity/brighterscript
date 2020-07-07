@@ -1,4 +1,5 @@
 name: benchmark
+on: repository_dispatch #only run manually for now...something is wrong with the benchmark
 
 jobs:
   ci:
