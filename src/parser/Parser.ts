@@ -1281,8 +1281,23 @@ export class Parser {
                 );
                 currentQuasiExpressionParts = [];
 
+                if (next.kind === TokenKind.TemplateStringExpressionBegin) {
+                    this.advance();
+                }
                 //now keep this expression
                 expressions.push(this.expression());
+                if (!this.isAtEnd() && this.check(TokenKind.TemplateStringExpressionEnd)) {
+                    //TODO is it an error if this is not present?
+                    this.advance();
+                } else {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.unterminatedTemplateExpression(),
+                        range: util.getRange(openingBacktick, this.peek())
+                    });
+                    throw this.lastDiagnosticAsError();
+
+                }
+
             }
         }
 

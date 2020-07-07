@@ -447,9 +447,9 @@ describe('lexer', () => {
             let { tokens } = Lexer.scan('`"`');
             expect(tokens.map(t => t.kind)).to.deep.equal([
                 TokenKind.BackTick,
-                TokenKind.TemplateStringQuasi, //empty
-                TokenKind.EscapedCharCodeLiteral, // quote
-                TokenKind.TemplateStringQuasi, // empty
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
                 TokenKind.BackTick,
                 TokenKind.Eof
             ]);
@@ -486,12 +486,99 @@ describe('lexer', () => {
             expect(tokens.map(t => t.kind)).to.deep.equal([
                 TokenKind.BackTick,
                 TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
                 TokenKind.StringLiteral,
+                TokenKind.TemplateStringExpressionEnd,
                 TokenKind.TemplateStringQuasi,
                 TokenKind.BackTick,
                 TokenKind.Eof
             ]);
             expect(tokens[1].literal).to.deep.equal(new BrsString(`hello `));
+        });
+        it('real example, which is causing issues in the formatter', () => {
+            let { tokens } = Lexer.scan(`    function getItemXML(item)
+            return \`<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+      <channel>
+      <title>smithsonian</title>
+      <item>
+      <title>\${item.title}</title>
+      <guid>\${item.vamsId}</guid>
+      <media:rating scheme="urn:v-chip">\${item.ratings.first.code.name}</media:rating>
+      </item>
+      </channel>
+      </rss>\`
+      end function
+      `);
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.Function,
+                TokenKind.Identifier,
+                TokenKind.LeftParen,
+                TokenKind.Identifier,
+                TokenKind.RightParen,
+                TokenKind.Newline,
+                TokenKind.Return,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.Identifier,
+                TokenKind.Dot,
+                TokenKind.Identifier,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.Identifier,
+                TokenKind.Dot,
+                TokenKind.Identifier,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.Identifier,
+                TokenKind.Dot,
+                TokenKind.Identifier,
+                TokenKind.Dot,
+                TokenKind.Identifier,
+                TokenKind.Dot,
+                TokenKind.Identifier,
+                TokenKind.Dot,
+                TokenKind.Identifier,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Newline,
+                TokenKind.EndFunction,
+                TokenKind.Newline,
+                TokenKind.Eof
+            ]);
         });
 
         it('complicated example', () => {
@@ -501,24 +588,26 @@ describe('lexer', () => {
             expect(tokens.map(t => t.kind)).to.eql([
                 TokenKind.BackTick, // `
                 TokenKind.TemplateStringQuasi, // hello
-                // ${
+                TokenKind.TemplateStringExpressionBegin, //$ {
                 TokenKind.StringLiteral, // "world"
-                // }
+                TokenKind.TemplateStringExpressionEnd, // }
                 TokenKind.TemplateStringQuasi, //!I am a
-                // ${
+                TokenKind.TemplateStringExpressionBegin, // ${
                 TokenKind.StringLiteral, // "template"
                 TokenKind.Plus, // +
                 TokenKind.StringLiteral, //"string"
-                // }
+                TokenKind.TemplateStringExpressionEnd, // }
                 TokenKind.TemplateStringQuasi, // and I am very
+                TokenKind.TemplateStringExpressionBegin, // ${
                 TokenKind.LeftSquareBracket, // [
                 TokenKind.StringLiteral, // "pleased"
                 TokenKind.RightSquareBracket, // ]
                 TokenKind.LeftSquareBracket, // [
                 TokenKind.IntegerLiteral, // 0
                 TokenKind.RightSquareBracket, // ]
-                // }
+                TokenKind.TemplateStringExpressionEnd, // }
                 TokenKind.TemplateStringQuasi, // to meet you
+                TokenKind.TemplateStringExpressionBegin, // ${
                 TokenKind.Identifier, // m
                 TokenKind.Dot, // .
                 TokenKind.Identifier, // top
@@ -526,7 +615,7 @@ describe('lexer', () => {
                 TokenKind.Identifier, //getChildCount,
                 TokenKind.LeftParen, // (
                 TokenKind.RightParen, // )
-                // }
+                TokenKind.TemplateStringExpressionEnd, // }
                 TokenKind.TemplateStringQuasi, // .The end
                 TokenKind.BackTick,
                 TokenKind.Eof
@@ -578,13 +667,14 @@ describe('lexer', () => {
 
         it('Example that tripped up the expression tests', () => {
             let { tokens } = Lexer.scan(
-                '`I am a complex example\n${a.isRunning(["a","b","c"])}\nmore ${m.finish(true)}\`'
+                '`I am a complex example\n${a.isRunning(["a","b","c"])}\nmore ${m.finish(true)}`'
             );
             expect(tokens.map(t => t.kind)).to.deep.equal([
                 TokenKind.BackTick,
                 TokenKind.TemplateStringQuasi,
                 TokenKind.EscapedCharCodeLiteral,
                 TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
                 TokenKind.Identifier,
                 TokenKind.Dot,
                 TokenKind.Identifier,
@@ -597,15 +687,18 @@ describe('lexer', () => {
                 TokenKind.StringLiteral,
                 TokenKind.RightSquareBracket,
                 TokenKind.RightParen,
+                TokenKind.TemplateStringExpressionEnd,
                 TokenKind.TemplateStringQuasi,
                 TokenKind.EscapedCharCodeLiteral,
                 TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
                 TokenKind.Identifier,
                 TokenKind.Dot,
                 TokenKind.Identifier,
                 TokenKind.LeftParen,
                 TokenKind.True,
                 TokenKind.RightParen,
+                TokenKind.TemplateStringExpressionEnd,
                 TokenKind.TemplateStringQuasi,
                 TokenKind.BackTick,
                 TokenKind.Eof

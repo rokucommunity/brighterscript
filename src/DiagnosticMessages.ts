@@ -579,6 +579,11 @@ export let DiagnosticMessages = {
         message: `Unterminated template string at end of file`,
         code: 1113,
         severity: DiagnosticSeverity.Error
+    }),
+    unterminatedTemplateExpression: () => ({
+        message: `Unterminated template string expression. '\${' must be followed by expression, then '}'`,
+        code: 1114,
+        severity: DiagnosticSeverity.Error
     })
 
 };
