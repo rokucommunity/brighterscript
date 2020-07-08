@@ -597,7 +597,7 @@ export class Lexer {
 
     private templateQuasiString() {
         let value = this.source.slice(this.start, this.current);
-        if (value !== '`') { // if this is an empty string straight after an expressoin, then we'll accidentally consume the backtick
+        if (value !== '`') { // if this is an empty string straight after an expression, then we'll accidentally consume the backtick
             this.addToken(TokenKind.TemplateStringQuasi, new BrsString(value));
         }
     }
