@@ -17,6 +17,7 @@ import { DependencyGraph } from './DependencyGraph';
 import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
 import { globalFile } from './globalCallables';
+import { parseManifest, ManifestValue } from './preprocessor/Manifest';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export class Program {
@@ -307,7 +308,9 @@ export class Program {
                 //add the file to the program
                 this.files[pathAbsolute] = brsFile;
                 let fileContents = await getFileContents();
-                await brsFile.parse(fileContents);
+                this.logger.time(LogLevel.info, ['parse', chalk.green(pathAbsolute)], () => {
+                    brsFile.parse(fileContents);
+                });
                 file = brsFile;
 
                 this.dependencyGraph.addOrReplace(brsFile.dependencyGraphKey, brsFile.ownScriptImports.map(x => x.pkgPath.toLowerCase()));
@@ -688,6 +691,28 @@ export class Program {
         );
         await Promise.all(promises);
     }
+
+    /**
+     * Get a map of the manifest information
+     */
+    public getManifest() {
+        if (!this._manifest) {
+            //load the manifest file.
+            //TODO update this to get the manifest from the files array or require it in the options...we shouldn't assume the location of the manifest
+            let manifestPath = path.join(this.options.rootDir, 'manifest');
+
+            let contents: string;
+            try {
+                //we only load this manifest once, so do it sync to improve speed downstream
+                contents = fsExtra.readFileSync(manifestPath, 'utf-8');
+                this._manifest = parseManifest(contents);
+            } catch (err) {
+                this._manifest = new Map();
+            }
+        }
+        return this._manifest;
+    }
+    private _manifest: Map<string, ManifestValue>;
 
     public dispose() {
         this.emitter.removeAllListeners();
