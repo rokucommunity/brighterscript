@@ -210,7 +210,7 @@ export class BrsFile {
                     filePathRange: result.filePathToken.range,
                     pkgPath: util.getPkgPathFromTarget(this.pkgPath, result.filePath),
                     sourceFile: this,
-                    text: ''
+                    text: result.filePathToken?.text
                 });
             }
 
