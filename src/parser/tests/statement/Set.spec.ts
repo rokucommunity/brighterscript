@@ -25,7 +25,6 @@ describe('parser indexed assignment', () => {
             expect(diagnostics).to.be.empty;
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
-            // //expect(statements).toMatchSnapshot();
         });
 
         it('assigns boolean expressions', () => {
@@ -44,7 +43,6 @@ describe('parser indexed assignment', () => {
             expect(diagnostics).to.be.empty;
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
-            // //expect(statements).toMatchSnapshot();
         });
 
         it('assignment operator', () => {
@@ -61,7 +59,6 @@ describe('parser indexed assignment', () => {
             expect(diagnostics).to.be.empty;
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
-            // //expect(statements).toMatchSnapshot();
         });
     });
 
@@ -84,7 +81,6 @@ describe('parser indexed assignment', () => {
             expect(diagnostics).to.be.empty;
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
-            // //expect(statements).toMatchSnapshot();
         });
 
         it('assigns boolean expressions', () => {
@@ -104,7 +100,6 @@ describe('parser indexed assignment', () => {
             expect(diagnostics).to.be.empty;
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
-            // //expect(statements).toMatchSnapshot();
         });
 
         it('assignment operator', () => {
@@ -121,7 +116,6 @@ describe('parser indexed assignment', () => {
             expect(diagnostics).to.be.empty;
             expect(statements).to.exist;
             expect(statements).not.to.be.null;
-            // //expect(statements).toMatchSnapshot();
         });
     });
 

@@ -29,8 +29,6 @@ describe('parser for loops', () => {
         expect(statements[0]).to.exist;
         expect(statements[0].increment).to.exist;
         expect(statements[0].increment.value).to.include(new Int32(2));
-
-        //expect(statements).toMatchSnapshot();
     });
 
     it('defaults a missing \'step\' clause to \'1\'', () => {
@@ -53,8 +51,6 @@ describe('parser for loops', () => {
         expect(statements[0]).to.exist;
         expect(statements[0].increment).to.exist;
         expect(statements[0].increment.value).to.include(new Int32(1));
-
-        //expect(statements).toMatchSnapshot();
     });
 
     it('allows \'next\' to terminate loop', () => {
@@ -74,7 +70,6 @@ describe('parser for loops', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {

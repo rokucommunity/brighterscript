@@ -11,23 +11,30 @@ export class TranspileState {
         file: BrsFile
     ) {
         this.file = file;
+
+        //if a sourceRoot is specified, use that instead of the rootDir
+        if (this.file.program.options.sourceRoot) {
+            this.pathAbsolute = this.file.pathAbsolute.replace(
+                this.file.program.options.rootDir,
+                this.file.program.options.sourceRoot
+            );
+        } else {
+            this.pathAbsolute = this.file.pathAbsolute;
+        }
     }
+
     /**
      * The BrsFile that is currently being transpiled
      */
-    file: BrsFile;
+    public file: BrsFile;
+
     /**
-     * the path for this file relative to the root of the output package
+     * The absolute path to the source location of this file. If sourceRoot is specified,
+     * this path will be full path to the file in sourceRoot instead of rootDir.
+     * If the file resides outside of rootDir, then no changes will be made to this path.
      */
-    get pkgPath() {
-        return this.file.pkgPath;
-    }
-    /**
-     * the absolute path to the source location of this file
-     */
-    get pathAbsolute() {
-        return this.file.pathAbsolute;
-    }
+    public pathAbsolute: string;
+
     /**
      * The number of active parent blocks for the current location of the state.
      */
@@ -55,9 +62,6 @@ export class TranspileState {
         return ' '.repeat(totalSpaceCount);
     }
 
-    /**
-     * Get a newline and an indent together
-     */
     public newline() {
         return '\n';
     }

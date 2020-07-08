@@ -13,7 +13,6 @@ describe('parser library statements', () => {
         `);
         const { diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
-        //expect({ diagnostics: diagnostics, statements: statements }).toMatchSnapshot();
     });
 
     it('supports multiple library statements separated by colon', () => {
@@ -24,7 +23,6 @@ describe('parser library statements', () => {
         `);
         const { diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
-        //expect({ diagnostics: diagnostics, statements: statements }).toMatchSnapshot();
     });
 
     it('still parses entire file after invalid library statement', () => {
@@ -35,7 +33,6 @@ describe('parser library statements', () => {
         `);
         const { diagnostics } = Parser.parse(tokens);
         expect(diagnostics.length).to.be.greaterThan(0);
-        //expect({ diagnostics: diagnostics, statements: statements }).toMatchSnapshot();
     });
 
     it('does not prevent usage of `library` as varible name', () => {
@@ -50,7 +47,6 @@ describe('parser library statements', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(assignment).to.be.instanceOf(AssignmentStatement);
         expect(assignment.name.text).to.equal('library');
-        //expect({ diagnostics: diagnostics, statements: statements }).toMatchSnapshot();
     });
 
     it('does not prevent usage of `library` as object property name', () => {
@@ -67,7 +63,6 @@ describe('parser library statements', () => {
             'library'
         );
         expect(diagnostics).to.be.lengthOf(0);
-        //expect({ diagnostics: diagnostics, statements: statements }).toMatchSnapshot();
     });
 
     it('parses rest of file with ONLY the library keyword present at root level', () => {
@@ -81,6 +76,5 @@ describe('parser library statements', () => {
         expect(diagnostics).to.be.lengthOf(1);
         //function statement should still exist
         expect(statements[statements.length - 1]).to.be.instanceOf(BrsFunction);
-        //expect({ diagnostics: diagnostics, statements: statements }).toMatchSnapshot();
     });
 });

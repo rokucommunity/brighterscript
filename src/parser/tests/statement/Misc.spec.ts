@@ -14,7 +14,6 @@ describe('parser', () => {
             `);
             let { diagnostics } = Parser.parse(tokens);
             expect(diagnostics[0]?.message).to.not.exist;
-            //expect(statements).toMatchSnapshot();
         });
         it('can be used as a property name on objects', () => {
             let { tokens } = Lexer.scan(`
@@ -26,7 +25,6 @@ describe('parser', () => {
             `);
             let { diagnostics } = Parser.parse(tokens);
             expect(diagnostics).to.be.lengthOf(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('is not allowed as a standalone variable', () => {
@@ -38,7 +36,6 @@ describe('parser', () => {
             expect(diagnostics[0].range).to.deep.include(
                 Range.create(1, 4, 1, 8)
             );
-            //expect(statements).toMatchSnapshot();
         });
     });
 
@@ -57,7 +54,6 @@ describe('parser', () => {
         `);
         let { diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('most reserved words are not allowed as local var identifiers', () => {
@@ -96,7 +92,6 @@ describe('parser', () => {
         `);
         let { diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
-        // expect(statementList).toMatchSnapshot();
     });
 
     it('allows certain TokenKinds as object properties', () => {
@@ -240,7 +235,6 @@ describe('parser', () => {
         let { diagnostics } = Parser.parse(tokens);
         expect(JSON.stringify(diagnostics[0])).not.to.exist;
         expect(diagnostics).to.be.lengthOf(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('allows rem as a property name only in certain situations', () => {

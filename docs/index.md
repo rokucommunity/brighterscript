@@ -3,7 +3,9 @@ BrighterScript is a superset of Roku's BrightScript language. Its goal is to pro
 
 See the following pages for more information
 
+ - [Callfunc Operator](callfunc-operator.md)
  - [Classes](classes.md)
  - [Imports](imports.md)
  - [Namespaces](namespaces.md)
- - [callfunc operator](callfunc-operator.md)
+ - [Source Literals](source-literals.md)
+ - [Template Strings (Template Literals)](template-strings.md)

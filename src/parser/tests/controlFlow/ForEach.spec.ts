@@ -30,8 +30,6 @@ describe('parser foreach loops', () => {
         expect(forEach.item).to.deep.include(identifier('word'));
         expect(forEach.target).to.be.instanceof(VariableExpression);
         expect(forEach.target.name).to.deep.include(identifier('lipsum'));
-
-        //expect(statements).toMatchSnapshot();
     });
 
     it('allows \'next\' to terminate loop', () => {
@@ -51,7 +49,6 @@ describe('parser foreach loops', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {

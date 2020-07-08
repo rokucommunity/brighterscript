@@ -20,7 +20,6 @@ describe('parser boolean expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses boolean ORs', () => {
@@ -35,7 +34,6 @@ describe('parser boolean expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {

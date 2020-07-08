@@ -23,7 +23,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses colon-separated function declarations', () => {
@@ -43,7 +42,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses non-empty function expressions', () => {
@@ -63,7 +61,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with implicit-dynamic arguments', () => {
@@ -83,7 +80,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with typed arguments', () => {
@@ -111,7 +107,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with default argument expressions', () => {
@@ -145,7 +140,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with typed arguments and default expressions', () => {
@@ -178,7 +172,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses return types', () => {
@@ -197,7 +190,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 
@@ -216,7 +208,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses non-empty sub expressions', () => {
@@ -236,7 +227,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with implicit-dynamic arguments', () => {
@@ -256,7 +246,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with typed arguments', () => {
@@ -284,7 +273,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with default argument expressions', () => {
@@ -318,7 +306,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with typed arguments and default expressions', () => {
@@ -351,7 +338,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 
@@ -378,7 +364,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('allows function expressions in assignment RHS', () => {
@@ -400,7 +385,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 

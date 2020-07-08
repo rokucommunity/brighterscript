@@ -17,7 +17,6 @@ describe('parser call expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('does not invalidate the rest of the file on incomplete statement', () => {
@@ -37,7 +36,6 @@ describe('parser call expressions', () => {
         for (let lineNumber of lineNumbers) {
             expect(lineNumber).to.equal(2);
         }
-        //expect(statements).toMatchSnapshot();
     });
 
     it('does not invalidate the next statement on a multi-statement line', () => {
@@ -55,7 +53,6 @@ describe('parser call expressions', () => {
         expect(statements).to.be.length.greaterThan(0);
         //the error should be BEFORE the `name = "bob"` statement
         expect(diagnostics[0].range.end.character).to.be.lessThan(25);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('allows closing parentheses on separate line', () => {
@@ -70,7 +67,6 @@ describe('parser call expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('accepts arguments', () => {
@@ -87,7 +83,6 @@ describe('parser call expressions', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         expect(statements[0].expression.args).to.be.ok;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {
