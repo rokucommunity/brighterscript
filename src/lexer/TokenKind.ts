@@ -45,6 +45,8 @@ export enum TokenKind {
     Identifier = 'Identifier',
     StringLiteral = 'StringLiteral',
     TemplateStringQuasi = 'TemplateStringQuasi',
+    TemplateStringExpressionBegin = 'TemplateStringExpressionBegin',
+    TemplateStringExpressionEnd = 'TemplateStringExpressionEnd',
     IntegerLiteral = 'IntegerLiteral',
     FloatLiteral = 'FloatLiteral',
     DoubleLiteral = 'DoubleLiteral',

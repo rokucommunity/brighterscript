@@ -563,13 +563,26 @@ export class Lexer {
                 this.templateQuasiString();
                 this.advance();
                 this.advance();
+                this.addToken(TokenKind.TemplateStringExpressionBegin);
                 while (!this.isAtEnd() && !this.check('}')) {
                     this.start = this.current;
                     this.scanToken();
                 }
-                this.start = this.current + 1;
+                if (this.check('}')) {
+                    this.current++;
+                    this.addToken(TokenKind.TemplateStringExpressionEnd);
+                } else {
+
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.unexpectedConditionalCompilationString(),
+                        range: this.rangeOf(this.source.slice(this.start, this.current))
+                    });
+                }
+
+                this.start = this.current;
+            } else {
+                this.advance();
             }
-            this.advance();
         }
 
         //get last quasi
@@ -584,7 +597,9 @@ export class Lexer {
 
     private templateQuasiString() {
         let value = this.source.slice(this.start, this.current);
-        this.addToken(TokenKind.TemplateStringQuasi, new BrsString(value));
+        if (value !== '`') { // if this is an empty string straight after an expression, then we'll accidentally consume the backtick
+            this.addToken(TokenKind.TemplateStringQuasi, new BrsString(value));
+        }
     }
 
     /**
