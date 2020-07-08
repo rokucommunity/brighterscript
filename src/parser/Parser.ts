@@ -1295,9 +1295,7 @@ export class Parser {
                         range: util.getRange(openingBacktick, this.peek())
                     });
                     throw this.lastDiagnosticAsError();
-
                 }
-
             }
         }
 
