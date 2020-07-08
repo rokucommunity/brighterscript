@@ -681,7 +681,7 @@ export class Scope {
     }
 
     /**
-     * Verify that all of the scripts ipmorted by
+     * Verify that all of the scripts ipmorted by each file in this scope actually exist
      */
     private diagnosticValidateScriptImportPaths() {
         let scriptImports = this.getScriptImports();
