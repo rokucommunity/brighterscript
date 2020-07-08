@@ -275,79 +275,82 @@ export class Program {
             pathAbsolute = s`${fileParam.src}`;
             pkgPath = s`${fileParam.dest}`;
         }
-        let logLap = this.logger.time(LogLevel.info, 'Program.addOrReplaceFile()', () => chalk.green(pathAbsolute));
+        let file = await this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(pathAbsolute)], async () => {
 
-        assert.ok(pathAbsolute, 'fileEntry.src is required');
-        assert.ok(pkgPath, 'fileEntry.dest is required');
+            assert.ok(pathAbsolute, 'fileEntry.src is required');
+            assert.ok(pkgPath, 'fileEntry.dest is required');
 
-        //if the file is already loaded, remove it
-        if (this.hasFile(pathAbsolute)) {
-            this.removeFile(pathAbsolute);
-        }
-        let fileExtension = path.extname(pathAbsolute).toLowerCase();
-        let file: BrsFile | XmlFile | undefined;
+            //if the file is already loaded, remove it
+            if (this.hasFile(pathAbsolute)) {
+                this.removeFile(pathAbsolute);
+            }
+            let fileExtension = path.extname(pathAbsolute).toLowerCase();
+            let file: BrsFile | XmlFile | undefined;
 
-        //load the file contents by file path if not provided
-        let getFileContents = async () => {
-            if (fileContents === undefined) {
-                return this.getFileContents(pathAbsolute);
+            //load the file contents by file path if not provided
+            let getFileContents = async () => {
+                if (fileContents === undefined) {
+                    return this.getFileContents(pathAbsolute);
+                } else {
+                    return fileContents;
+                }
+            };
+            //get the extension of the file
+            if (fileExtension === '.brs' || fileExtension === '.bs') {
+                let brsFile = new BrsFile(pathAbsolute, pkgPath, this);
+
+                //add file to the `source` dependency list
+                if (brsFile.pkgPath.startsWith(startOfSourcePkgPath)) {
+                    this.dependencyGraph.addDependency('scope:source', brsFile.dependencyGraphKey);
+                }
+
+                //add the file to the program
+                this.files[pathAbsolute] = brsFile;
+                let fileContents = await getFileContents();
+                await brsFile.parse(fileContents);
+                file = brsFile;
+
+                this.dependencyGraph.addOrReplace(brsFile.dependencyGraphKey, brsFile.ownScriptImports.map(x => x.pkgPath.toLowerCase()));
+
+
+            } else if (
+                //is xml file
+                fileExtension === '.xml' &&
+                //resides in the components folder (Roku will only parse xml files in the components folder)
+                pkgPath.toLowerCase().startsWith(util.pathSepNormalize(`components/`))
+            ) {
+                let xmlFile = new XmlFile(pathAbsolute, pkgPath, this);
+                //add the file to the program
+                this.files[pathAbsolute] = xmlFile;
+                let fileContents = await getFileContents();
+                await xmlFile.parse(fileContents);
+
+                file = xmlFile;
+
+                //create a new scope for this xml file
+                let scope = new XmlScope(xmlFile, this);
+
+                this.scopes[scope.name] = scope;
+
+                //register this compoent now that we have parsed it and know its component name
+                this.registerComponent(xmlFile, scope);
+
+                //attach the dependency graph, so the component can
+                //   a) be regularly notified of changes
+                //   b) immediately emit its own changes
+                xmlFile.attachDependencyGraph(this.dependencyGraph);
+
             } else {
-                return fileContents;
+                //TODO do we actually need to implement this? Figure out how to handle img paths
+                // let genericFile = this.files[pathAbsolute] = <any>{
+                //     pathAbsolute: pathAbsolute,
+                //     pkgPath: pkgPath,
+                //     wasProcessed: true
+                // } as File;
+                // file = <any>genericFile;
             }
-        };
-        //get the extension of the file
-        if (fileExtension === '.brs' || fileExtension === '.bs') {
-            let brsFile = new BrsFile(pathAbsolute, pkgPath, this);
-
-            //add file to the `source` dependency list
-            if (brsFile.pkgPath.startsWith(startOfSourcePkgPath)) {
-                this.dependencyGraph.addDependency('scope:source', brsFile.dependencyGraphKey);
-            }
-
-            //add the file to the program
-            this.files[pathAbsolute] = brsFile;
-            await brsFile.parse(await getFileContents());
-            file = brsFile;
-
-            this.dependencyGraph.addOrReplace(brsFile.dependencyGraphKey, brsFile.ownScriptImports.map(x => x.pkgPath.toLowerCase()));
-
-
-        } else if (
-            //is xml file
-            fileExtension === '.xml' &&
-            //resides in the components folder (Roku will only parse xml files in the components folder)
-            pkgPath.toLowerCase().startsWith(util.pathSepNormalize(`components/`))
-        ) {
-            let xmlFile = new XmlFile(pathAbsolute, pkgPath, this);
-            //add the file to the program
-            this.files[pathAbsolute] = xmlFile;
-            await xmlFile.parse(await getFileContents());
-
-            file = xmlFile;
-
-            //create a new scope for this xml file
-            let scope = new XmlScope(xmlFile, this);
-
-            this.scopes[scope.name] = scope;
-
-            //register this compoent now that we have parsed it and know its component name
-            this.registerComponent(xmlFile, scope);
-
-            //attach the dependency graph, so the component can
-            //   a) be regularly notified of changes
-            //   b) immediately emit its own changes
-            xmlFile.attachDependencyGraph(this.dependencyGraph);
-
-        } else {
-            //TODO do we actually need to implement this? Figure out how to handle img paths
-            // let genericFile = this.files[pathAbsolute] = <any>{
-            //     pathAbsolute: pathAbsolute,
-            //     pkgPath: pkgPath,
-            //     wasProcessed: true
-            // } as File;
-            // file = <any>genericFile;
-        }
-        logLap();
+            return file;
+        });
         return file;
     }
 
@@ -440,28 +443,28 @@ export class Program {
      * @param force - if true, then all scopes are force to validate, even if they aren't marked as dirty
      */
     public async validate() {
-        let logLap = this.logger.time(LogLevel.debug, 'Program.validate()');
-        this.diagnostics = [];
-        for (let scopeName in this.scopes) {
-            let scope = this.scopes[scopeName];
-            scope.validate();
-        }
-
-        //find any files NOT loaded into a scope
-        for (let filePath in this.files) {
-            let file = this.files[filePath];
-            if (!this.fileIsIncludedInAnyScope(file)) {
-                this.logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.pkgPath));
-                //the file is not loaded in any scope
-                this.diagnostics.push({
-                    ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
-                    file: file,
-                    range: Range.create(0, 0, 0, Number.MAX_VALUE)
-                });
+        await this.logger.time(LogLevel.debug, ['Program.validate()'], async () => {
+            this.diagnostics = [];
+            for (let scopeName in this.scopes) {
+                let scope = this.scopes[scopeName];
+                scope.validate();
             }
-        }
-        await Promise.resolve();
-        logLap();
+
+            //find any files NOT loaded into a scope
+            for (let filePath in this.files) {
+                let file = this.files[filePath];
+                if (!this.fileIsIncludedInAnyScope(file)) {
+                    this.logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.pkgPath));
+                    //the file is not loaded in any scope
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
+                        file: file,
+                        range: Range.create(0, 0, 0, Number.MAX_VALUE)
+                    });
+                }
+            }
+            await Promise.resolve();
+        });
     }
 
     /**

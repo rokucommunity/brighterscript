@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { SourceNode } from 'source-map';
 import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
-
+import chalk from 'chalk';
 import { Scope } from '../Scope';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
@@ -21,8 +21,11 @@ import { VoidType } from '../types/VoidType';
 import { standardizePath as s, util } from '../util';
 import { TranspileState } from '../parser/TranspileState';
 import { ClassStatement } from '../parser/ClassStatement';
-import { getManifest } from '../preprocessor/Manifest';
+import { parseManifest } from '../preprocessor/Manifest';
+import * as fsExtra from 'fs-extra';
 import { Preprocessor } from '../preprocessor/Preprocessor';
+import { LogLevel } from '../Logger';
+import { serializeError } from 'serialize-error';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -116,69 +119,99 @@ export class BrsFile {
      * @param fileContents
      */
     public async parse(fileContents: string) {
-        this.fileContents = fileContents;
-        if (this.parseDeferred.isCompleted) {
-            throw new Error(`File was already processed. Create a new instance of BrsFile instead. ${this.pathAbsolute}`);
-        }
+        await this.program.logger.time(LogLevel.info, ['parse', chalk.green(this.pathAbsolute)], async (pause, resume) => {
+            try {
+                this.fileContents = fileContents;
+                if (this.parseDeferred.isCompleted) {
+                    throw new Error(`File was already processed. Create a new instance of BrsFile instead. ${this.pathAbsolute}`);
+                }
 
-        //tokenize the input file
-        let lexer = Lexer.scan(fileContents, {
-            includeWhitespace: false
-        });
+                //tokenize the input file
+                let lexer = this.program.logger.time(LogLevel.debug, ['lexer.lex', chalk.green(this.pathAbsolute)], () => {
+                    return Lexer.scan(fileContents, {
+                        includeWhitespace: false
+                    });
+                });
 
-        this.getIgnores(lexer.tokens);
+                this.getIgnores(lexer.tokens);
 
-        //remove all code inside false-resolved conditional compilation statements
-        let manifest = await getManifest(this.program.options.rootDir);
-        let preprocessor = new Preprocessor();
+                //remove all code inside false-resolved conditional compilation statements
+                //load the manifest file
+                let manifestPath = path.join(this.program.options.rootDir, 'manifest');
 
-        //currently the preprocessor throws exceptions on syntax errors...so we need to catch it
-        try {
-            preprocessor.process(lexer.tokens, manifest);
-        } catch (error) {
-            //if the thrown error is DIFFERENT than any errors from the preprocessor, add that error to the list as well
-            if (this.diagnostics.find((x) => x === error) === undefined) {
-                this.diagnostics.push(error);
+                let contents: string;
+                try {
+                    pause();
+                    //TODO don't load the manifest for every brs file
+                    contents = await fsExtra.readFile(manifestPath, 'utf-8');
+                } catch (err) {
+                    return new Map();
+                }
+                resume();
+                let manifest = this.program.logger.time(LogLevel.debug, ['parseManifest', chalk.green(this.pathAbsolute)], () => {
+                    return parseManifest(contents);
+                });
+                let preprocessor = new Preprocessor();
+
+                //currently the preprocessor throws exceptions on syntax errors...so we need to catch it
+                try {
+                    this.program.logger.time(LogLevel.debug, ['preprocessor.process', chalk.green(this.pathAbsolute)], () => {
+                        preprocessor.process(lexer.tokens, manifest);
+                    });
+                } catch (error) {
+                    //if the thrown error is DIFFERENT than any errors from the preprocessor, add that error to the list as well
+                    if (this.diagnostics.find((x) => x === error) === undefined) {
+                        this.diagnostics.push(error);
+                    }
+                }
+
+                //if the preprocessor generated tokens, use them.
+                let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
+
+                this.parser = new Parser();
+                this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.pathAbsolute)], () => {
+                    this.parser.parse(tokens, {
+                        mode: this.extension === '.brs' ? ParseMode.BrightScript : ParseMode.BrighterScript,
+                        logger: this.program.logger
+                    });
+                });
+
+                //absorb all lexing/preprocessing/parsing diagnostics
+                this.diagnostics.push(
+                    ...lexer.diagnostics as BsDiagnostic[],
+                    ...preprocessor.diagnostics as BsDiagnostic[],
+                    ...this.parser.diagnostics as BsDiagnostic[]
+                );
+
+                this.ast = this.parser.ast;
+
+                //extract all callables from this file
+                this.findCallables();
+
+                //traverse the ast and find all functions and create a scope object
+                this.createFunctionScopes();
+
+                //find all places where a sub/function is being called
+                this.findFunctionCalls();
+
+                //scan the full text for any word that looks like a variable
+                this.findPropertyNameCompletions();
+
+                this.findAndValidateImportAndImportStatements();
+
+                //attach this file to every diagnostic
+                for (let diagnostic of this.diagnostics) {
+                    diagnostic.file = this;
+                }
+            } catch (e) {
+                this.parser = new Parser();
+                this.diagnostics.push({
+                    file: this,
+                    range: Range.create(0, 0, 0, Number.MAX_VALUE),
+                    ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(serializeError(e)))
+                });
             }
-        }
-
-        //if the preprocessor generated tokens, use them.
-        let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
-
-        this.parser = new Parser();
-        this.parser.parse(tokens, {
-            mode: this.extension === '.brs' ? ParseMode.BrightScript : ParseMode.BrighterScript,
-            logger: this.program.logger
         });
-
-        //absorb all lexing/preprocessing/parsing diagnostics
-        this.diagnostics.push(
-            ...lexer.diagnostics as BsDiagnostic[],
-            ...preprocessor.diagnostics as BsDiagnostic[],
-            ...this.parser.diagnostics as BsDiagnostic[]
-        );
-
-        this.ast = this.parser.ast;
-
-        //extract all callables from this file
-        this.findCallables();
-
-        //traverse the ast and find all functions and create a scope object
-        this.createFunctionScopes();
-
-        //find all places where a sub/function is being called
-        this.findFunctionCalls();
-
-        //scan the full text for any word that looks like a variable
-        this.findPropertyNameCompletions();
-
-        this.findAndValidateImportAndImportStatements();
-
-        //attach this file to every diagnostic
-        for (let diagnostic of this.diagnostics) {
-            diagnostic.file = this;
-        }
-
         this.parseDeferred.resolve();
     }
 

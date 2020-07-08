@@ -145,6 +145,7 @@ export class Scope {
                     result.push(file);
                 }
             }
+            this.logDebug('getFiles', () => result.map(x => x.pkgPath));
             return result;
         });
     }
@@ -328,54 +329,55 @@ export class Scope {
             this.logDebug('validate(): already validated');
             return;
         }
-        let logLap = this.program.logger.time(LogLevel.info, this._debugLogComponentName, 'validate()');
 
-        let parentScope = this.getParentScope();
+        this.program.logger.time(LogLevel.info, [this._debugLogComponentName, 'validate()'], () => {
 
-        //validate our parent before we validate ourself
-        if (parentScope && parentScope.isValidated === false) {
-            this.logDebug('validate(): validating parent first');
-            parentScope.validate(force);
-        }
-        //clear the scope's errors list (we will populate them from this method)
-        this.diagnostics = [];
+            let parentScope = this.getParentScope();
 
-        let callables = this.getAllCallables();
+            //validate our parent before we validate ourself
+            if (parentScope && parentScope.isValidated === false) {
+                this.logDebug('validate(): validating parent first');
+                parentScope.validate(force);
+            }
+            //clear the scope's errors list (we will populate them from this method)
+            this.diagnostics = [];
 
-        //sort the callables by filepath and then method name, so the errors will be consistent
-        callables = callables.sort((a, b) => {
-            return (
-                //sort by path
-                a.callable.file.pathAbsolute.localeCompare(b.callable.file.pathAbsolute) ||
-                //then sort by method name
-                a.callable.name.localeCompare(b.callable.name)
-            );
+            let callables = this.getAllCallables();
+
+            //sort the callables by filepath and then method name, so the errors will be consistent
+            callables = callables.sort((a, b) => {
+                return (
+                    //sort by path
+                    a.callable.file.pathAbsolute.localeCompare(b.callable.file.pathAbsolute) ||
+                    //then sort by method name
+                    a.callable.name.localeCompare(b.callable.name)
+                );
+            });
+
+            //get a list of all callables, indexed by their lower case names
+            let callableContainerMap = util.getCallableContainersByLowerName(callables);
+
+            //find all duplicate function declarations
+            this.diagnosticFindDuplicateFunctionDeclarations(callableContainerMap);
+
+            //detect missing and incorrect-case script imports
+            this.diagnosticValidateScriptImportPaths();
+
+            //enforce a series of checks on the bodies of class methods
+            this.validateClasses();
+
+            let files = this.getFiles();
+            //do many per-file checks
+            for (let file of files) {
+                this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
+                this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
+                this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
+                this.diagnosticDetectFunctionCollisions(file);
+                this.detectVariableNamespaceCollisions(file);
+            }
+
+            (this as any).isValidated = true;
         });
-
-        //get a list of all callables, indexed by their lower case names
-        let callableContainerMap = util.getCallableContainersByLowerName(callables);
-
-        //find all duplicate function declarations
-        this.diagnosticFindDuplicateFunctionDeclarations(callableContainerMap);
-
-        //detect missing and incorrect-case script imports
-        this.diagnosticValidateScriptImportPaths();
-
-        //enforce a series of checks on the bodies of class methods
-        this.validateClasses();
-
-        let files = this.getFiles();
-        //do many per-file checks
-        for (let file of files) {
-            this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
-            this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
-            this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
-            this.diagnosticDetectFunctionCollisions(file);
-            this.detectVariableNamespaceCollisions(file);
-        }
-
-        (this as any).isValidated = true;
-        logLap();
     }
 
     /**
@@ -737,7 +739,6 @@ export class Scope {
     public hasFile(file: BrsFile | XmlFile) {
         let files = this.getFiles();
         let hasFile = files.includes(file);
-        this.logDebug('hasFile =', hasFile, 'for', () => chalk.green(file.pkgPath), 'in files', () => files.map(x => x.pkgPath));
         return hasFile;
     }
 

@@ -8,7 +8,7 @@ import { FileResolver, Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import { Logger } from './Logger';
+import { Logger, LogLevel } from './Logger';
 
 /**
  * A runner class that handles
@@ -343,24 +343,27 @@ export class ProgramBuilder {
                 }
             }
 
-            this.logger.log('Copying to staging directory');
-            //prepublish all non-program-loaded files to staging
-            await rokuDeploy.prepublishToStaging({
-                ...options,
-                files: filteredFileMap
+            await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
+                //prepublish all non-program-loaded files to staging
+                await rokuDeploy.prepublishToStaging({
+                    ...options,
+                    files: filteredFileMap
+                });
             });
 
-            this.logger.log('Transpiling');
-            //transpile any brighterscript files
-            await this.program.transpile(fileMap, options.stagingFolderPath);
+            await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
+                //transpile any brighterscript files
+                await this.program.transpile(fileMap, options.stagingFolderPath);
+            });
 
             //create the zip file if configured to do so
             if (this.options.createPackage !== false || this.options.deploy) {
-                this.logger.log(`Creating package at ${this.options.outFile}`);
-                await rokuDeploy.zipPackage({
-                    ...this.options,
-                    outDir: util.getOutDir(this.options),
-                    outFile: path.basename(this.options.outFile)
+                await this.logger.time(LogLevel.log, [`Creating package at ${this.options.outFile}`], async () => {
+                    await rokuDeploy.zipPackage({
+                        ...this.options,
+                        outDir: util.getOutDir(this.options),
+                        outFile: path.basename(this.options.outFile)
+                    });
                 });
             }
         }
@@ -369,11 +372,12 @@ export class ProgramBuilder {
     private async deployPackageIfEnabled() {
         //deploy the project if configured to do so
         if (this.options.deploy) {
-            this.logger.log(`Deploying package to ${this.options.host}`);
-            await rokuDeploy.publish({
-                ...this.options,
-                outDir: util.getOutDir(this.options),
-                outFile: path.basename(this.options.outFile)
+            await this.logger.time(LogLevel.log, ['Deploying package to', this.options.host], async () => {
+                await rokuDeploy.publish({
+                    ...this.options,
+                    outDir: util.getOutDir(this.options),
+                    outFile: path.basename(this.options.outFile)
+                });
             });
         }
     }
@@ -383,7 +387,9 @@ export class ProgramBuilder {
      */
     private async loadAllFilesAST() {
         let errorCount = 0;
-        let files = await util.getFilePaths(this.options);
+        let files = await this.logger.time(LogLevel.debug, ['ProgramBuilder.loadAllFilesAST()'], async () => {
+            return util.getFilePaths(this.options);
+        });
         this.logger.debug('ProgramBuilder.loadAllFilesAST() files:', files);
         //parse every file
         await Promise.all(

@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
  - Do not show BS1010 diagnostic `hint`s for the same script imported for parent and child. ([#113](https://github.com/rokucommunity/brighterscript/issues/113))
 
+
+
 ## [0.10.11] - 2020-07-05
  - Fix bug that would fail to copy files to staging without explicitly specifying `stagingFolderpath`. [#129](https://github.com/rokucommunity/brighterscript/issues/129)
 
