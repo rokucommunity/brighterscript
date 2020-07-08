@@ -1,51 +1,45 @@
 export enum TokenKind {
     // parens (and friends)
-    LeftParen = 'LeftParen',
-    RightParen = 'RightParen',
-    LeftSquareBracket = 'LeftSquareBracket',
-    RightSquareBracket = 'RightSquareBracket',
-    LeftCurlyBrace = 'LeftCurlyBrace',
-    RightCurlyBrace = 'RightCurlyBrace',
-
+    LeftParen = 'LeftParen', // (
+    RightParen = 'RightParen', // )
+    LeftSquareBracket = 'LeftSquareBracket', // [
+    RightSquareBracket = 'RightSquareBracket', // ]
+    LeftCurlyBrace = 'LeftCurlyBrace', // {
+    RightCurlyBrace = 'RightCurlyBrace', // }
 
     // operators
-    Caret = 'Caret',
-    Minus = 'Minus',
-    Plus = 'Plus',
-    Star = 'Star',
-    Forwardslash = 'Forwardslash',
-    Mod = 'Mod',
-    Backslash = 'Backslash',
-
+    Caret = 'Caret', // ^
+    Minus = 'Minus', // -
+    Plus = 'Plus', // +
+    Star = 'Star', // *
+    Forwardslash = 'Forwardslash', // /
+    Mod = 'Mod', // mod
+    Backslash = 'Backslash', // \
 
     // postfix operators
-    PlusPlus = 'PlusPlus',
-    MinusMinus = 'MinusMinus',
-
+    PlusPlus = 'PlusPlus', // ++
+    MinusMinus = 'MinusMinus', // --
 
     // bitshift
-    LeftShift = 'LeftShift',
-    RightShift = 'RightShift',
-
+    LeftShift = 'LeftShift', // <<
+    RightShift = 'RightShift', // >>
 
     // assignment operators
-    MinusEqual = 'MinusEqual',
-    PlusEqual = 'PlusEqual',
-    StarEqual = 'StarEqual',
-    ForwardslashEqual = 'ForwardslashEqual',
-    BackslashEqual = 'BackslashEqual',
-    LeftShiftEqual = 'LeftShiftEqual',
-    RightShiftEqual = 'RightShiftEqual',
-
+    MinusEqual = 'MinusEqual', // -=
+    PlusEqual = 'PlusEqual', // +=
+    StarEqual = 'StarEqual', // *=
+    ForwardslashEqual = 'ForwardslashEqual', // /=
+    BackslashEqual = 'BackslashEqual', // \=
+    LeftShiftEqual = 'LeftShiftEqual', // <<=
+    RightShiftEqual = 'RightShiftEqual', // >>=
 
     // comparators
-    Less = 'Less',
-    LessEqual = 'LessEqual',
-    Greater = 'Greater',
-    GreaterEqual = 'GreaterEqual',
-    Equal = 'Equal',
-    LessGreater = 'LessGreater',
-
+    Less = 'Less', // <
+    LessEqual = 'LessEqual', // <=
+    Greater = 'Greater', // >
+    GreaterEqual = 'GreaterEqual', // >=
+    Equal = 'Equal', // =
+    LessGreater = 'LessGreater', // BrightScript uses `<>` for "not equal"
 
     // literals
     Identifier = 'Identifier',
@@ -57,8 +51,7 @@ export enum TokenKind {
     FloatLiteral = 'FloatLiteral',
     DoubleLiteral = 'DoubleLiteral',
     LongIntegerLiteral = 'LongIntegerLiteral',
-    EscapedCharCodeLiteral = 'EscapedCharCodeLiteral',
-
+    EscapedCharCodeLiteral = 'EscapedCharCodeLiteral', //this is used to capture things like `\n`, `\r\n` in template strings
 
     //types
     Void = 'Void',
@@ -74,23 +67,23 @@ export enum TokenKind {
     Dynamic = 'Dynamic',
 
     // other symbols
-    Dot = 'Dot',
-    Comma = 'Comma',
-    Colon = 'Colon',
-    Semicolon = 'Semicolon',
-    At = 'At',
-    Callfunc = 'Callfunc',
+    Dot = 'Dot', // .
+    Comma = 'Comma', // ,
+    Colon = 'Colon', // :
+    Semicolon = 'Semicolon', // ;
+    At = 'At', // @
+    Callfunc = 'Callfunc', // @.
 
-    // template strings
-    BackTick = 'BackTick',
+    BackTick = 'BackTick', // `
+
 
     // conditional compilation
-    HashIf = 'HashIf',
-    HashElseIf = 'HashElseIf',
-    HashElse = 'HashElse',
-    HashEndIf = 'HashEndIf',
-    HashConst = 'HashConst',
-    HashError = 'HashError',
+    HashIf = 'HashIf', // #if
+    HashElseIf = 'HashElseIf', // #elseif
+    HashElse = 'HashElse', // #else
+    HashEndIf = 'HashEndIf', // #endif
+    HashConst = 'HashConst', // #const
+    HashError = 'HashError', // #error
     HashErrorMessage = 'HashErrorMessage',
 
     // keywords
@@ -111,7 +104,7 @@ export enum TokenKind {
     EndWhile = 'EndWhile',
     Eval = 'Eval',
     Exit = 'Exit',
-    ExitFor = 'ExitFor',
+    ExitFor = 'ExitFor', // not technically a reserved word, but definitely a tokenKind
     ExitWhile = 'ExitWhile',
     False = 'False',
     For = 'For',
@@ -173,7 +166,7 @@ export enum TokenKind {
     // structural
     Whitespace = 'Whitespace',
     Newline = 'Newline',
-    Eof = 'Eof',
+    Eof = 'Eof'
 }
 
 /**
