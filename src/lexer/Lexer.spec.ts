@@ -495,21 +495,26 @@ describe('lexer', () => {
             ]);
             expect(tokens[1].literal).to.deep.equal(new BrsString(`hello `));
         });
+
         it('real example, which is causing issues in the formatter', () => {
-            let { tokens } = Lexer.scan(`    function getItemXML(item)
-            return \`<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
-      <channel>
-      <title>smithsonian</title>
-      <item>
-      <title>\${item.title}</title>
-      <guid>\${item.vamsId}</guid>
-      <media:rating scheme="urn:v-chip">\${item.ratings.first.code.name}</media:rating>
-      </item>
-      </channel>
-      </rss>\`
-      end function
-      `);
+            let { tokens } = Lexer.scan(`
+                function getItemXML(item)
+                    return \`
+                        <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+                        <channel>
+                            <title>smithsonian</title>
+                            <item>
+                                <title>\${item.title}</title>
+                                <guid>\${item.vamsId}</guid>
+                                <media:rating scheme="urn:v-chip">\${item.ratings.first.code.name}</media:rating>
+                            </item>
+                        </channel>
+                        </rss>
+                    \`
+                end function
+            `);
             expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.Newline,
                 TokenKind.Function,
                 TokenKind.Identifier,
                 TokenKind.LeftParen,
@@ -535,12 +540,6 @@ describe('lexer', () => {
                 TokenKind.TemplateStringQuasi,
                 TokenKind.EscapedCharCodeLiteral,
                 TokenKind.TemplateStringQuasi,
-                TokenKind.TemplateStringExpressionBegin,
-                TokenKind.Identifier,
-                TokenKind.Dot,
-                TokenKind.Identifier,
-                TokenKind.TemplateStringExpressionEnd,
-                TokenKind.TemplateStringQuasi,
                 TokenKind.EscapedCharCodeLiteral,
                 TokenKind.TemplateStringQuasi,
                 TokenKind.TemplateStringExpressionBegin,
@@ -551,6 +550,14 @@ describe('lexer', () => {
                 TokenKind.TemplateStringQuasi,
                 TokenKind.EscapedCharCodeLiteral,
                 TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.Identifier,
+                TokenKind.Dot,
+                TokenKind.Identifier,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
+                TokenKind.TemplateStringQuasi,
                 TokenKind.EscapedCharCodeLiteral,
                 TokenKind.TemplateStringQuasi,
                 TokenKind.EscapedCharCodeLiteral,
@@ -566,6 +573,8 @@ describe('lexer', () => {
                 TokenKind.Dot,
                 TokenKind.Identifier,
                 TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral,
                 TokenKind.TemplateStringQuasi,
                 TokenKind.EscapedCharCodeLiteral,
                 TokenKind.TemplateStringQuasi,
