@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+
+## [0.11.1] - 2020-07-07
+### Added
+ - diagnostic for unknown file reference in import statements ([#139](https://github.com/rokucommunity/brighterscript/pull/139))
+### Changed
+ - upgraded to [roku-deploy@3.2.1](https://www.npmjs.com/package/roku-deploy/v/3.2.1)
+ - upgraded to jsonc-parser@2.3.0
+ - add begin and end template string literal tokens so we can better format and understand the code downstream. ([#138](https://github.com/rokucommunity/brighterscript/pull/138))
+### Fixed
+ - roku-deploy bug that would fail to load `bsconfig.json` files with comments in them.
+ - bug in parser that would fail to find function calls in certain situations, killing the rest of the parse.
+
+
+
 ## [0.11.0] - 2020-07-06
 ### Added
  - [Source literals feature](https://github.com/rokucommunity/brighterscript/blob/master/docs/source-literals.md) which adds new literals such as `SOURCE_FILE_PATH`, `SOURCE_LINE_NUM`, `FUNCTION_NAME`, and more. ([#13](https://github.com/rokucommunity/brighterscript/issues/13))
@@ -375,6 +389,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.11.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.0...v0.11.1
 [0.11.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.10...v0.11.0
 [0.10.10]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.9...v0.10.10
 [0.10.9]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.8...v0.10.9
