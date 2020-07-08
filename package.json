@@ -117,7 +117,7 @@
         "file-url": "^3.0.0",
         "fs-extra": "^7.0.1",
         "glob": "^7.1.6",
-        "jsonc-parser": "^2.1.1",
+        "jsonc-parser": "^2.3.0",
         "long": "^3.2.0",
         "luxon": "^1.8.3",
         "minimatch": "^3.0.4",
