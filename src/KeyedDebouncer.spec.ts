@@ -1,7 +1,7 @@
 import { KeyedDebouncer } from './KeyedDebouncer';
 import { expect } from 'chai';
 
-describe.only('KeyedDebouncer', () => {
+describe('KeyedDebouncer', () => {
     let debouncer: KeyedDebouncer<string>;
     beforeEach(() => {
         debouncer = new KeyedDebouncer<string>();

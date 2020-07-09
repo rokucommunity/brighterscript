@@ -75,12 +75,10 @@ export class LanguageServer {
 
     private debouncer = new KeyedDebouncer<string>();
 
-    private throttledValidation: TaskThrottler;
+    private throttledValidation = new TaskThrottler(this.validateAll.bind(this));
 
     //run the server
     public run() {
-        this.throttledValidation = new TaskThrottler(this.validateAll.bind(this));
-
         // Create a connection for the server. The connection uses Node's IPC as a transport.
         // Also include all preview / proposed LSP features.
         this.connection = this.createConnection();
