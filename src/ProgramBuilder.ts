@@ -1,4 +1,3 @@
-import chalk from 'chalk';
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
@@ -9,6 +8,7 @@ import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { Logger, LogLevel } from './Logger';
+import { getPrintDiagnosticOptions, printDiagnostic } from './diagnosticUtils';
 
 /**
  * A runner class that handles
@@ -203,34 +203,9 @@ export class ProgramBuilder {
             diagnosticsByFile[diagnostic.file.pathAbsolute].push(diagnostic);
         }
 
-        let cwd = this.options && this.options.cwd ? this.options.cwd : process.cwd();
-
-        let diagnosticLevel = (this.options && this.options.diagnosticLevel) || 'warn';
-
-        let diagnosticSeverityMap = {};
-        diagnosticSeverityMap['info'] = DiagnosticSeverity.Information;
-        diagnosticSeverityMap['hint'] = DiagnosticSeverity.Hint;
-        diagnosticSeverityMap['warn'] = DiagnosticSeverity.Warning;
-        diagnosticSeverityMap['error'] = DiagnosticSeverity.Error;
-
-        let severityLevel = diagnosticSeverityMap[diagnosticLevel] || DiagnosticSeverity.Warning;
-        let order = [DiagnosticSeverity.Information, DiagnosticSeverity.Hint, DiagnosticSeverity.Warning, DiagnosticSeverity.Error];
-        let includeDiagnostic = order.slice(order.indexOf(severityLevel)).reduce((acc, value) => {
-            acc[value] = true;
-            return acc;
-        }, {});
-
-        let typeColor = {} as any;
-        typeColor[DiagnosticSeverity.Information] = chalk.blue;
-        typeColor[DiagnosticSeverity.Hint] = chalk.green;
-        typeColor[DiagnosticSeverity.Warning] = chalk.yellow;
-        typeColor[DiagnosticSeverity.Error] = chalk.red;
-
-        let severityTextMap = {};
-        severityTextMap[DiagnosticSeverity.Information] = 'info';
-        severityTextMap[DiagnosticSeverity.Hint] = 'hint';
-        severityTextMap[DiagnosticSeverity.Warning] = 'warning';
-        severityTextMap[DiagnosticSeverity.Error] = 'error';
+        //get printing options
+        const options = getPrintDiagnosticOptions(this.options);
+        const { cwd, emitFullPaths } = options;
 
         let pathsAbsolute = Object.keys(diagnosticsByFile).sort();
         for (let pathAbsolute of pathsAbsolute) {
@@ -242,53 +217,21 @@ export class ProgramBuilder {
                     a.range.start.character - b.range.start.character
                 );
             });
-            let filePath = pathAbsolute;
 
-            if (this.options && this.options.emitFullPaths !== true) {
+            let filePath = pathAbsolute;
+            if (!emitFullPaths) {
                 filePath = path.relative(cwd, filePath);
             }
+
             //load the file text
             let fileText = await util.getFileContents(pathAbsolute);
-            //split the file on newline
             let lines = util.getLines(fileText);
-            for (let diagnostic of sortedDiagnostics) {
 
+            for (let diagnostic of sortedDiagnostics) {
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
-                if (!includeDiagnostic[severity]) {
-                    continue;
-                }
-
-                let severityText = severityTextMap[severity];
-                console.log('');
-                console.log(
-                    chalk.cyan(filePath) +
-                    ':' +
-                    chalk.yellow(
-                        (diagnostic.range.start.line + 1) +
-                        ':' +
-                        (diagnostic.range.start.character + 1)
-                    ) +
-                    ' - ' +
-                    typeColor[severity](severityText) +
-                    ' ' +
-                    chalk.grey('BS' + diagnostic.code) +
-                    ': ' +
-                    chalk.white(diagnostic.message)
-                );
-                console.log('');
-
-                //Get the line referenced by the diagnostic. if we couldn't find a line,
-                // default to an empty string so it doesn't crash the error printing below
-                let diagnosticLine = lines[diagnostic.range.start.line] ?? '';
-
-                let squigglyText = util.getDiagnosticSquigglyText(diagnostic, diagnosticLine);
-
-                let lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
-                let blankLineNumberText = chalk.bgWhite(' ' + chalk.bgWhite((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
-                console.log(lineNumberText + diagnosticLine);
-                console.log(blankLineNumberText + typeColor[severity](squigglyText));
-                console.log('');
+                //format output
+                printDiagnostic(options, severity, filePath, lines, diagnostic);
             }
         }
     }
