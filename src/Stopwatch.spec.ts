@@ -19,7 +19,7 @@ describe('Stopwatch', () => {
         stopwatch.totalMilliseconds = 3;
         stopwatch.start();
         await new Promise((resolve) => {
-            setTimeout(resolve, 3);
+            setTimeout(resolve, 4);
         });
         stopwatch.stop();
         expect(stopwatch.totalMilliseconds).to.be.at.least(6);
