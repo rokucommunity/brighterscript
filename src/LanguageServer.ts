@@ -33,6 +33,7 @@ import { standardizePath as s, util } from './util';
 import { BsDiagnostic } from './interfaces';
 import { Logger } from './Logger';
 import { KeyedDebouncer } from './KeyedDebouncer';
+import { TaskThrottler } from './TaskThrottler';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
@@ -74,8 +75,12 @@ export class LanguageServer {
 
     private debouncer = new KeyedDebouncer<string>();
 
+    private throttledValidation: TaskThrottler;
+
     //run the server
     public run() {
+        this.throttledValidation = new TaskThrottler(this.validateAll.bind(this));
+
         // Create a connection for the server. The connection uses Node's IPC as a transport.
         // Also include all preview / proposed LSP features.
         this.connection = this.createConnection();
@@ -892,15 +897,29 @@ export class LanguageServer {
             //synchronze parsing for open files that were included/excluded from projects
             await this.synchronizeStandaloneWorkspaces();
 
-            //validate all programs
-            await Promise.all(
-                workspaces.map((x) => x.builder.program.validate())
-            );
+            // validate
+            this.throttledValidation.run();
         } catch (e) {
             this.connection.tracer.log(e);
             this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
         }
-        await this.sendDiagnostics();
+    }
+
+    private async validateAll() {
+        try {
+            let workspaces = this.getWorkspaces();
+
+            //validate all programs
+            await Promise.all(
+                workspaces.map((x) => x.builder.program.validate())
+            );
+
+            await this.sendDiagnostics();
+        } catch (e) {
+            this.connection.tracer.log(e);
+            this.sendCriticalFailure(`Critical error validating workspace: ${e.message}`);
+        }
+
         this.connection.sendNotification('build-status', 'success');
     }
 
