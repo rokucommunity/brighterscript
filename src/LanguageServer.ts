@@ -31,7 +31,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { BsDiagnostic } from './interfaces';
-import { Logger, LogLevel } from './Logger';
+import { Logger } from './Logger';
 import { KeyedDebouncer } from './KeyedDebouncer';
 
 export class LanguageServer {
