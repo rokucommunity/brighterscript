@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [Unreleased]
+### Fixed
+ - Throttle LanguageServer validation to prevent running too many validations in a row. 
+
+
+
 ## [0.11.2] - 2020-07-09
 ### Changed
  - add 350ms debounce in LanguageServer `onDidChangeWatchedFiles` to increase performance by reducing the number of times a file is parsed and validated.
@@ -401,6 +407,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.11.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.2...v0.11.3
 [0.11.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.1...v0.11.2
 [0.11.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.0...v0.11.1
 [0.11.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.10...v0.11.0
