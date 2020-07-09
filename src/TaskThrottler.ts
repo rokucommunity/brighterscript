@@ -1,6 +1,9 @@
 export class TaskThrottler {
+
     private runningJob: Promise<void>;
     private pendingRequest: boolean;
+
+    public onIdle: () => void;
 
     /**
      * Set up a single job runner, ignoring extra requests to re-run the job
@@ -20,12 +23,13 @@ export class TaskThrottler {
         this.pendingRequest = false;
         this.runningJob = this.runJob();
         // on completion, re-run if there were extra requests
-        this.runningJob.then(() => {
-            this.runningJob = null;
-            if (this.pendingRequest) this.run();
-        }, () => {
-            this.runningJob = null;
-        });
+        this.runningJob.then(() => this.nextJob(), () => this.nextJob());
+    }
+
+    private nextJob() {
+        this.runningJob = null;
+        if (this.pendingRequest) this.run();
+        else if (!!this.onIdle) this.onIdle();
     }
 
     private runJob(): Promise<void> {
