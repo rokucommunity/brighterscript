@@ -577,21 +577,8 @@ export class LanguageServer {
         //wait for all of the programs to finish starting up
         await this.waitAllProgramFirstRuns();
 
-        //remove any standalone file workspaces in case they have now been included in an actual project
-        await this.synchronizeStandaloneWorkspaces();
-
-        //validate each workspace
-        await Promise.all(
-            this.workspaces.map(async (x) => {
-                //only validate workspaces with a working builder (i.e. no critical runtime errors)
-                if (x.isFirstRunComplete && x.isFirstRunSuccessful) {
-                    return x.builder.program.validate();
-                }
-            })
-        );
-
-        //send all diagnostics
-        await this.sendDiagnostics();
+        // valdiate all workspaces
+        this.throttledValidation.run();
     }
 
     private getRootDir(workspace: Workspace) {
@@ -753,13 +740,8 @@ export class LanguageServer {
                 workspaces.map((workspace) => this.handleFileChanges(workspace, changes))
             );
 
-            //revalidate every program
-            await Promise.all(
-                workspaces.map((x) => x.builder.program.validate())
-            );
-
-            //send all diagnostics to the client
-            await this.sendDiagnostics();
+            //valdiate all workspaces
+            this.throttledValidation.run();
         }
         this.connection.sendNotification('build-status', 'success');
     }
@@ -892,7 +874,7 @@ export class LanguageServer {
                 })
             );
 
-            // validate
+            // valdiate all workspaces
             this.throttledValidation.run();
         } catch (e) {
             this.connection.tracer.log(e);
