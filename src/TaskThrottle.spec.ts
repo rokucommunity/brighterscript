@@ -9,14 +9,16 @@ describe.only('TaskThrottler', () => {
     beforeEach(() => {
         throttler = new TaskThrottler(() => {
             return new Promise(resolve => {
-                if (isRunning) throw "Another job is running";
+                if (isRunning) {
+                    throw new Error('Another job is running');
+                }
                 isRunning = true;
                 setTimeout(() => {
                     isRunning = false;
                     runs++;
                     resolve();
                 }, 10);
-            })
+            });
         });
         isRunning = false;
         runs = 0;
@@ -25,14 +27,14 @@ describe.only('TaskThrottler', () => {
         throttler.onIdle = () => {
             expect(runs).to.equal(1);
             done();
-        }
+        };
         throttler.run();
     });
     it('calling run many times results in two successive runs', done => {
         throttler.onIdle = () => {
             expect(runs).to.equal(2);
             done();
-        }
+        };
         throttler.run();
         throttler.run();
         throttler.run();

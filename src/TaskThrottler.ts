@@ -1,7 +1,7 @@
 export class TaskThrottler {
 
-    private runningJob: Promise<void>;
-    private pendingRequest: boolean;
+    private runningJob: Promise<void> = null;
+    private pendingRequest = false;
 
     public onIdle: () => void;
 
@@ -15,7 +15,7 @@ export class TaskThrottler {
 
     public run() {
         // ignore requests while a job is running
-        if (!!this.runningJob) {
+        if (this.runningJob !== null) {
             this.pendingRequest = true;
             return;
         }
@@ -28,8 +28,11 @@ export class TaskThrottler {
 
     private nextJob() {
         this.runningJob = null;
-        if (this.pendingRequest) this.run();
-        else if (!!this.onIdle) this.onIdle();
+        if (this.pendingRequest) {
+            this.run();
+        } else if (this.onIdle) {
+            this.onIdle();
+        }
     }
 
     private runJob(): Promise<void> {
@@ -37,6 +40,6 @@ export class TaskThrottler {
             setTimeout(() => {
                 resolve(this.job());
             }, this.delay);
-        })
+        });
     }
 }
