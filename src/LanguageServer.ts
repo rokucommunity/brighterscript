@@ -31,13 +31,19 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { BsDiagnostic } from './interfaces';
-import { Logger } from './Logger';
+import { Logger, LogLevel } from './Logger';
+import { KeyedDebouncer } from './KeyedDebouncer';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
     private connection: Connection = <any>undefined;
 
     public workspaces = [] as Workspace[];
+
+    /**
+     * The number of milliseconds that should be used for language server typing debouncing
+     */
+    private debounceTimeout = 350;
 
     /**
      * These workspaces are created on the fly whenever a file is opened that is not included
@@ -65,6 +71,8 @@ export class LanguageServer {
     }
 
     private loggerSubscription;
+
+    private debouncer = new KeyedDebouncer<string>();
 
     //run the server
     public run() {
@@ -672,70 +680,84 @@ export class LanguageServer {
             };
         });
 
-        //reload any workspace whose bsconfig.json file has changed
-        {
-            let workspacesToReload = [] as Workspace[];
-            //get the file paths as a string array
-            let filePaths = changes.map((x) => x.pathAbsolute);
+        let keys = changes.map(x => x.pathAbsolute);
 
-            for (let workspace of workspaces) {
-                if (workspace.configFilePath && filePaths.includes(workspace.configFilePath)) {
-                    workspacesToReload.push(workspace);
+        //Debounce the list of keys so we avoid duplicate parsing. This will return only the keys
+        //that made it through the debounce (i.e. no other method debounced those keys again).
+        //Any that are not present will be handled by the later listener that debouced it.
+        keys = await this.debouncer.debounce(keys, this.debounceTimeout);
+
+        //filter the list of changes to only the ones that made it through the debounce unscathed
+        changes = changes.filter(x => keys.includes(x.pathAbsolute));
+
+        //if we have changes to work with
+        if (changes.length > 0) {
+
+            //reload any workspace whose bsconfig.json file has changed
+            {
+                let workspacesToReload = [] as Workspace[];
+                //get the file paths as a string array
+                let filePaths = changes.map((x) => x.pathAbsolute);
+
+                for (let workspace of workspaces) {
+                    if (workspace.configFilePath && filePaths.includes(workspace.configFilePath)) {
+                        workspacesToReload.push(workspace);
+                    }
                 }
+                //reload any workspaces that need to be reloaded
+                await this.reloadWorkspaces(workspacesToReload);
+
+                //set the list of workspaces to non-reloaded workspaces
+                workspaces = workspaces.filter(x => !workspacesToReload.includes(x));
             }
-            //reload any workspaces that need to be reloaded
-            await this.reloadWorkspaces(workspacesToReload);
 
-            //set the list of workspaces to non-reloaded workspaces
-            workspaces = workspaces.filter(x => !workspacesToReload.includes(x));
+            //convert created folders into a list of files of their contents
+            const directoryChanges = changes
+                //get only creation items
+                .filter(change => change.type === FileChangeType.Created)
+                //keep only the directories
+                .filter(change => util.isDirectorySync(change.pathAbsolute));
+
+            //remove the created directories from the changes array (we will add back each of their files next)
+            changes = changes.filter(x => !directoryChanges.includes(x));
+
+            //look up every file in each of the newly added directories
+            const newFileChanges = directoryChanges
+                //take just the path
+                .map(x => x.pathAbsolute)
+                //exclude the roku deploy staging folder
+                .filter(dirPath => !dirPath.includes('.roku-deploy-staging'))
+                //get the files for each folder recursively
+                .flatMap(dirPath => {
+                    //create a glob pattern to match all files
+                    let pattern = rokuDeploy.util.toForwardSlashes(`${dirPath}/**/*`);
+                    let files = glob.sync(pattern, {
+                        absolute: true
+                    });
+                    return files.map(x => {
+                        return {
+                            type: FileChangeType.Created as FileChangeType,
+                            pathAbsolute: s`${x}`
+                        };
+                    });
+                });
+
+            //add the new file changes to the changes array.
+            changes.push(...newFileChanges);
+
+            //give every workspace the chance to handle file changes
+            await Promise.all(
+                workspaces.map((workspace) => this.handleFileChanges(workspace, changes))
+            );
+
+            //revalidate every program
+            await Promise.all(
+                workspaces.map((x) => x.builder.program.validate())
+            );
+
+            //send all diagnostics to the client
+            await this.sendDiagnostics();
         }
-
-        //convert created folders into a list of files of their contents
-        const directoryChanges = changes
-            //get only creation items
-            .filter(change => change.type === FileChangeType.Created)
-            //keep only the directories
-            .filter(change => util.isDirectorySync(change.pathAbsolute));
-
-        //remove the created directories from the changes array (we will add back each of their files next)
-        changes = changes.filter(x => !directoryChanges.includes(x));
-
-        //look up every file in each of the newly added directories
-        const newFileChanges = directoryChanges
-            //take just the path
-            .map(x => x.pathAbsolute)
-            //exclude the roku deploy staging folder
-            .filter(dirPath => !dirPath.includes('.roku-deploy-staging'))
-            //get the files for each folder recursively
-            .flatMap(dirPath => {
-                //create a glob pattern to match all files
-                let pattern = rokuDeploy.util.toForwardSlashes(`${dirPath}/**/*`);
-                let files = glob.sync(pattern, {
-                    absolute: true
-                });
-                return files.map(x => {
-                    return {
-                        type: FileChangeType.Created as FileChangeType,
-                        pathAbsolute: s`${x}`
-                    };
-                });
-            });
-
-        //add the new file changes to the changes array.
-        changes.push(...newFileChanges);
-
-        //give every workspace the chance to handle file changes
-        await Promise.all(
-            workspaces.map((workspace) => this.handleFileChanges(workspace, changes))
-        );
-
-        //revalidate every program
-        await Promise.all(
-            workspaces.map((x) => x.builder.program.validate())
-        );
-
-        //send all diagnostics to the client
-        await this.sendDiagnostics();
         this.connection.sendNotification('build-status', 'success');
     }
 
@@ -836,12 +858,19 @@ export class LanguageServer {
     }
 
     private async validateTextDocument(textDocument: TextDocument): Promise<void> {
-        this.connection.sendNotification('build-status', 'building');
 
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
 
         let filePath = URI.parse(textDocument.uri).fsPath;
+        let keys = await this.debouncer.debounce([textDocument.uri], this.debounceTimeout);
+        //skip parsing the file because some other iteration debounced the file after us so they will handle it
+        if (keys.length === 0) {
+            return;
+        }
+
+        this.connection.sendNotification('build-status', 'building');
+
         let documentText = textDocument.getText();
         let workspaces = this.getWorkspaces();
         try {
