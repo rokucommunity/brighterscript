@@ -894,9 +894,6 @@ export class LanguageServer {
                 })
             );
 
-            //synchronze parsing for open files that were included/excluded from projects
-            await this.synchronizeStandaloneWorkspaces();
-
             // validate
             this.throttledValidation.run();
         } catch (e) {
@@ -907,6 +904,10 @@ export class LanguageServer {
 
     private async validateAll() {
         try {
+
+            //synchronze parsing for open files that were included/excluded from projects
+            await this.synchronizeStandaloneWorkspaces();
+
             let workspaces = this.getWorkspaces();
 
             //validate all programs
