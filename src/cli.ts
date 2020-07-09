@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import * as commandLineArgs from 'command-line-args';
 import * as commandLineUsage from 'command-line-usage';
-
 import { ProgramBuilder } from './ProgramBuilder';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 

@@ -60,7 +60,7 @@ export class ProgramBuilder {
     }
 
     public async run(options: BsConfig) {
-        this.logger.logLevel = options.logLevel;
+        this.logger.logLevel = options.logLevel as LogLevel;
         if (this.isRunning) {
             throw new Error('Server is already running');
         }
@@ -81,7 +81,7 @@ export class ProgramBuilder {
             //For now, just use a default options object so we have a functioning program
             this.options = util.normalizeConfig({});
         }
-        this.logger.logLevel = options.logLevel;
+        this.logger.logLevel = options.logLevel as LogLevel;
 
         this.program = new Program(this.options);
         //add the initial FileResolvers

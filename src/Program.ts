@@ -29,7 +29,7 @@ export class Program {
         logger?: Logger
     ) {
         this.options = util.normalizeConfig(options);
-        this.logger = logger ? logger : new Logger(options.logLevel);
+        this.logger = logger ? logger : new Logger(options.logLevel as LogLevel);
 
         //normalize the root dir path
         this.options.rootDir = util.getRootDir(this.options);

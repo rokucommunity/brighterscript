@@ -116,7 +116,7 @@ export interface BsConfig {
      * The log level.
      * @default LogLevel.log
      */
-    logLevel?: LogLevel;
+    logLevel?: LogLevel | 'error' | 'warn' | 'log' | 'info' | 'debug' | 'trace';
     /**
      * Override the path to source files in source maps. Use this if you have a preprocess step and want
      * to ensure the source maps point to the original location.

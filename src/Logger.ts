@@ -21,6 +21,10 @@ export class Logger {
         return this._logLevel;
     }
     public set logLevel(value: LogLevel) {
+        //cast the string version to the numberic version
+        if (typeof (value) === 'string') {
+            value = LogLevel[value] as any;
+        }
         this._logLevel = value ?? LogLevel.log;
     }
     private _logLevel = LogLevel.log;
@@ -121,7 +125,7 @@ export class Logger {
 
             //return a function to call when the timer is complete
             let done = () => {
-                this[logLevelString](...messages, ` finished. (${chalk.blue(stopwatch.getDurationText())})`);
+                this[logLevelString](...messages, `finished. (${chalk.blue(stopwatch.getDurationText())})`);
             };
 
             stopwatch.start();

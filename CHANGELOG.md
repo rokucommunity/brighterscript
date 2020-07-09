@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [Unreleased]
+### Fixed
+ - bug in the log output that wasn't casting string log levels into their numeric enum versions, causing messages to be lost at certain log levels.
+
+
+
 ## [0.11.1] - 2020-07-07
 ### Added
  - diagnostic for unknown file reference in import statements ([#139](https://github.com/rokucommunity/brighterscript/pull/139))
