@@ -6,9 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [Unreleased]
+## [0.11.2]
+### Changed
+ - add 350ms debounce in LanguageServer `onDidChangeWatchedFiles` to increase performance by reducing the number of times a file is parsed and validated.
 ### Fixed
  - bug in the log output that wasn't casting string log levels into their numeric enum versions, causing messages to be lost at certain log levels.
+ - load manifest file exactly one time per program rather than every time a file gets parsed.
+ - bug in `info` logging that wasn't showing the proper parse times for files on first run.
 
 
 
@@ -397,6 +401,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.11.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.1...v0.11.2
 [0.11.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.0...v0.11.1
 [0.11.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.10...v0.11.0
 [0.10.10]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.9...v0.10.10
