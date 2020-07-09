@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { TaskThrottler } from './TaskThrottler';
 
-describe.only('TaskThrottler', () => {
+describe('TaskThrottler', () => {
     let throttler: TaskThrottler;
     let runs: number;
     let isRunning: boolean;

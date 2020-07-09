@@ -1,4 +1,3 @@
-import chalk from 'chalk';
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
@@ -9,6 +8,7 @@ import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { Logger, LogLevel } from './Logger';
+import { getPrintDiagnosticOptions, printDiagnostic } from './diagnosticUtils';
 
 /**
  * A runner class that handles
@@ -203,7 +203,9 @@ export class ProgramBuilder {
             diagnosticsByFile[diagnostic.file.pathAbsolute].push(diagnostic);
         }
 
-        let cwd = this.options && this.options.cwd ? this.options.cwd : process.cwd();
+        //get printing options
+        const options = getPrintDiagnosticOptions(this.options);
+        const { cwd, emitFullPaths } = options;
 
         let pathsAbsolute = Object.keys(diagnosticsByFile).sort();
         for (let pathAbsolute of pathsAbsolute) {
@@ -215,60 +217,21 @@ export class ProgramBuilder {
                     a.range.start.character - b.range.start.character
                 );
             });
+
             let filePath = pathAbsolute;
-            let typeColor = {} as any;
-            typeColor[DiagnosticSeverity.Information] = chalk.blue;
-            typeColor[DiagnosticSeverity.Hint] = chalk.green;
-            typeColor[DiagnosticSeverity.Warning] = chalk.yellow;
-            typeColor[DiagnosticSeverity.Error] = chalk.red;
-
-            let severityTextMap = {};
-            severityTextMap[DiagnosticSeverity.Information] = 'info';
-            severityTextMap[DiagnosticSeverity.Hint] = 'hint';
-            severityTextMap[DiagnosticSeverity.Warning] = 'warning';
-            severityTextMap[DiagnosticSeverity.Error] = 'error';
-
-            if (this.options && this.options.emitFullPaths !== true) {
+            if (!emitFullPaths) {
                 filePath = path.relative(cwd, filePath);
             }
+
             //load the file text
             let fileText = await util.getFileContents(pathAbsolute);
-            //split the file on newline
             let lines = util.getLines(fileText);
-            for (let diagnostic of sortedDiagnostics) {
 
+            for (let diagnostic of sortedDiagnostics) {
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
-                let severityText = severityTextMap[severity];
-                console.log('');
-                console.log(
-                    chalk.cyan(filePath) +
-                    ':' +
-                    chalk.yellow(
-                        (diagnostic.range.start.line + 1) +
-                        ':' +
-                        (diagnostic.range.start.character + 1)
-                    ) +
-                    ' - ' +
-                    typeColor[severity](severityText) +
-                    ' ' +
-                    chalk.grey('BS' + diagnostic.code) +
-                    ': ' +
-                    chalk.white(diagnostic.message)
-                );
-                console.log('');
-
-                //Get the line referenced by the diagnostic. if we couldn't find a line,
-                // default to an empty string so it doesn't crash the error printing below
-                let diagnosticLine = lines[diagnostic.range.start.line] ?? '';
-
-                let squigglyText = util.getDiagnosticSquigglyText(diagnostic, diagnosticLine);
-
-                let lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
-                let blankLineNumberText = chalk.bgWhite(' ' + chalk.bgWhite((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
-                console.log(lineNumberText + diagnosticLine);
-                console.log(blankLineNumberText + typeColor[severity](squigglyText));
-                console.log('');
+                //format output
+                printDiagnostic(options, severity, filePath, lines, diagnostic);
             }
         }
     }

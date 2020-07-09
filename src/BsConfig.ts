@@ -102,6 +102,11 @@ export interface BsConfig {
     diagnosticFilters?: Array<number | string | { src: string; codes: number[] } | { src: string } | { codes: number[] }>;
 
     /**
+     * Specify what diagnostic types should be printed to the console. Defaults to 'warn'
+     */
+    diagnosticLevel?: 'info' | 'hint' | 'warn' | 'error';
+
+    /**
      * When enabled, every xml component will search for a .bs or .brs file with the same name
      * in the same folder, and add it as a script import if found. Disabled by default"
      */
