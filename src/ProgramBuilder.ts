@@ -205,6 +205,33 @@ export class ProgramBuilder {
 
         let cwd = this.options && this.options.cwd ? this.options.cwd : process.cwd();
 
+        let diagnosticLevel = (this.options && this.options.diagnosticLevel) || 'warn';
+
+        let diagnosticSeverityMap = {};
+        diagnosticSeverityMap['info'] = DiagnosticSeverity.Information;
+        diagnosticSeverityMap['hint'] = DiagnosticSeverity.Hint;
+        diagnosticSeverityMap['warn'] = DiagnosticSeverity.Warning;
+        diagnosticSeverityMap['error'] = DiagnosticSeverity.Error;
+
+        let severityLevel = diagnosticSeverityMap[diagnosticLevel] || DiagnosticSeverity.Warning;
+        let order = [DiagnosticSeverity.Information, DiagnosticSeverity.Hint, DiagnosticSeverity.Warning, DiagnosticSeverity.Error];
+        let includeDiagnostic = order.slice(order.indexOf(severityLevel)).reduce((acc, value) => {
+            acc[value] = true;
+            return acc;
+        }, {});
+
+        let typeColor = {} as any;
+        typeColor[DiagnosticSeverity.Information] = chalk.blue;
+        typeColor[DiagnosticSeverity.Hint] = chalk.green;
+        typeColor[DiagnosticSeverity.Warning] = chalk.yellow;
+        typeColor[DiagnosticSeverity.Error] = chalk.red;
+
+        let severityTextMap = {};
+        severityTextMap[DiagnosticSeverity.Information] = 'info';
+        severityTextMap[DiagnosticSeverity.Hint] = 'hint';
+        severityTextMap[DiagnosticSeverity.Warning] = 'warning';
+        severityTextMap[DiagnosticSeverity.Error] = 'error';
+
         let pathsAbsolute = Object.keys(diagnosticsByFile).sort();
         for (let pathAbsolute of pathsAbsolute) {
             let diagnosticsForFile = diagnosticsByFile[pathAbsolute];
@@ -216,17 +243,6 @@ export class ProgramBuilder {
                 );
             });
             let filePath = pathAbsolute;
-            let typeColor = {} as any;
-            typeColor[DiagnosticSeverity.Information] = chalk.blue;
-            typeColor[DiagnosticSeverity.Hint] = chalk.green;
-            typeColor[DiagnosticSeverity.Warning] = chalk.yellow;
-            typeColor[DiagnosticSeverity.Error] = chalk.red;
-
-            let severityTextMap = {};
-            severityTextMap[DiagnosticSeverity.Information] = 'info';
-            severityTextMap[DiagnosticSeverity.Hint] = 'hint';
-            severityTextMap[DiagnosticSeverity.Warning] = 'warning';
-            severityTextMap[DiagnosticSeverity.Error] = 'error';
 
             if (this.options && this.options.emitFullPaths !== true) {
                 filePath = path.relative(cwd, filePath);
@@ -239,6 +255,10 @@ export class ProgramBuilder {
 
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
+                if (!includeDiagnostic[severity]) {
+                    continue;
+                }
+
                 let severityText = severityTextMap[severity];
                 console.log('');
                 console.log(
