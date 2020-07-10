@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.12.0]
+## [0.12.0] - 2020-07-09
 ### Added
  - `diagnosticLevel` option to limit/control the noise in the console diagnostics
 ### Changed
