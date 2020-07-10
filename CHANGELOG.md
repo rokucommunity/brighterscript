@@ -6,9 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [Unreleased]
+## [0.12.0]
+### Added
+ - `diagnosticLevel` option to limit/control the noise in the console diagnostics
+### Changed
+ - Move away from `command-line-args` in favor of `yargs` for CLI support 
 ### Fixed
  - Throttle LanguageServer validation to prevent running too many validations in a row. 
+ - Bug in CLI preventing ability to provide false values to certain flags
+ - Do not print `info` and `hint` diagnostics from the CLI by default.
 
 
 
@@ -407,6 +413,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.12.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.3...v0.12.0
 [0.11.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.2...v0.11.3
 [0.11.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.1...v0.11.2
 [0.11.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.0...v0.11.1
