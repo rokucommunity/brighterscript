@@ -119,6 +119,12 @@ If you need to configure `bsc`, you can do so in two ways:
     ```bash
     bsc --project ./some_folder/bsconfig.json
     ```
+
+5. Run the compiler as a **linter** only (watch mode supported)
+    ```bash
+    bsc --create-package false --copy-to-staging false
+    ```
+
 ## bsconfig.json
 
 ### Overview
@@ -177,6 +183,8 @@ These are the options available in the `bsconfig.json` file.
             "codes": [1000, 1011] //ignore these specific codes from vendor libraries 
         }]
         ```
+ - **diagnosticLevel**: `'info' | 'hint' | 'warn' | 'error'` - Specify what diagnostic types should be printed to the console. Defaults to `warn`.
+
  - **autoImportComponentScript**: `bool` - BrighterScript only: will automatically import a script at transpile-time for a component with the same name if it exists.
 
  - **sourceRoot*: `string` - Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
