@@ -183,7 +183,7 @@ These are the options available in the `bsconfig.json` file.
             "codes": [1000, 1011] //ignore these specific codes from vendor libraries 
         }]
         ```
- - **diagnosticLevel**: `'info' | 'hint' | 'warn' | 'error'` - Specify what diagnostic types should be printed to the console. Defaults to `warn`.
+ - **diagnosticLevel**: `'hint' | 'info' | 'warn' | 'error'` - Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to 'warn'
 
  - **autoImportComponentScript**: `bool` - BrighterScript only: will automatically import a script at transpile-time for a component with the same name if it exists.
 
