@@ -13,7 +13,7 @@ print SOURCE_FILE_PATH
 transpiles to: 
 
 ```BrightScript
-print "file:/c:\projects\roku\brighterscript\scripts\rootDir\source\main.bs"
+print "file:///c:/projects/roku/brighterscript/scripts/rootDir/source/main.bs"
 ```
 
 ## SOURCE_LINE_NUM
@@ -152,7 +152,7 @@ transpiles to:
 
 ```BrightScript
 function main()
-    print "file:/c:\projects\roku\brighterscript\scripts\rootDir\source\main.bs:2"
+    print "file:///c:/projects/roku/brighterscript/scripts/rootDir/source/main.bs:2"
 end function
 ```
 
