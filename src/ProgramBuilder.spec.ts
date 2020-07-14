@@ -158,4 +158,15 @@ describe('ProgramBuilder', () => {
         expect(builder1.logger.logLevel).to.equal(LogLevel.info);
         expect(builder2.logger.logLevel).to.equal(LogLevel.error);
     });
+
+    it('does not error when loading stagingFolderPath from bsconfig.json', async () => {
+        fsExtra.ensureDirSync(rootDir);
+        fsExtra.writeFileSync(`${rootDir}/bsconfig.json`, `{
+            "stagingFolderPath": "./out"
+        }`);
+        let builder = new ProgramBuilder();
+        await builder.run({
+            cwd: rootDir
+        });
+    });
 });
