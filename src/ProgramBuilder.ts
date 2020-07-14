@@ -61,6 +61,7 @@ export class ProgramBuilder {
 
     public async run(options: BsConfig) {
         this.logger.logLevel = options.logLevel as LogLevel;
+
         if (this.isRunning) {
             throw new Error('Server is already running');
         }
@@ -81,7 +82,13 @@ export class ProgramBuilder {
             //For now, just use a default options object so we have a functioning program
             this.options = util.normalizeConfig({});
         }
-        this.logger.logLevel = options.logLevel as LogLevel;
+        this.logger.logLevel = this.options.logLevel as LogLevel;
+        this.rootDir = s(
+            path.resolve(
+                this.options.cwd,
+                this.options.rootDir ?? process.cwd()
+            )
+        );
 
         this.program = new Program(this.options);
         //add the initial FileResolvers
@@ -148,16 +155,9 @@ export class ProgramBuilder {
     }
 
     /**
-     * Get the rootDir for this program
+     * The rootDir for this program
      */
-    public get rootDir() {
-        return s(
-            path.resolve(
-                this.program.options.cwd,
-                this.program.options.rootDir ?? this.program.options.cwd
-            )
-        );
-    }
+    public rootDir: string;
 
     /**
      * A method that is used to cancel a previous run task.
