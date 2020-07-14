@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [Unreleased]
+## [0.12.1]
 ### Changed
  - upgraded to [roku-deploy@3.2.2](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#322---2020-07-14)
 ### Fixed
@@ -421,6 +421,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.12.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.12.0...v0.12.1
 [0.12.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.3...v0.12.0
 [0.11.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.2...v0.11.3
 [0.11.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.1...v0.11.2
