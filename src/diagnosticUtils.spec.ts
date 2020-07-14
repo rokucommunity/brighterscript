@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import * as util from './diagnosticUtils';
 import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 
-describe.only('diagnosticUtils', () => {
+describe('diagnosticUtils', () => {
     describe('getPrintDiagnosticOptions', () => {
         let options: ReturnType<typeof util.getPrintDiagnosticOptions>;
         it('prepares cwd value', () => {
