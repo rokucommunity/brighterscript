@@ -23,7 +23,7 @@ export class TaskThrottler {
         this.pendingRequest = false;
         this.runningJob = this.runJob();
         // on completion, re-run if there were extra requests
-        this.runningJob.then(() => this.nextJob(), () => this.nextJob());
+        this.runningJob.finally(() => this.nextJob());
     }
 
     private nextJob() {
