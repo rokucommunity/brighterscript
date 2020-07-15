@@ -83,12 +83,6 @@ export class ProgramBuilder {
             this.options = util.normalizeConfig({});
         }
         this.logger.logLevel = this.options.logLevel as LogLevel;
-        this.rootDir = s(
-            path.resolve(
-                this.options.cwd,
-                this.options.rootDir ?? process.cwd()
-            )
-        );
 
         this.program = new Program(this.options);
         //add the initial FileResolvers
@@ -155,9 +149,11 @@ export class ProgramBuilder {
     }
 
     /**
-     * The rootDir for this program
+     * The rootDir for this program.
      */
-    public rootDir: string;
+    public get rootDir() {
+        return this.program.options.rootDir;
+    }
 
     /**
      * A method that is used to cancel a previous run task.
