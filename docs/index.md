@@ -7,5 +7,6 @@ See the following pages for more information
  - [Classes](classes.md)
  - [Imports](imports.md)
  - [Namespaces](namespaces.md)
+ - [Reflection](reflection.md)
  - [Source Literals](source-literals.md)
  - [Template Strings (Template Literals)](template-strings.md)
