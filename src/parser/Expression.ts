@@ -8,8 +8,10 @@ import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import { TypeReference } from './TypeReference';
-import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
+import { NamespaceType } from '../types/NamespaceType';
+import { StringType } from '../types/StringType';
+import { IntegerType } from '../types/IntegerType';
 
 /** A BrightScript expression */
 export interface Expression {
@@ -22,7 +24,7 @@ export interface Expression {
      */
     readonly typeRef: TypeReference;
 
-    abstract transpile(state: TranspileState): Array<SourceNode | string>;
+    transpile(state: TranspileState): Array<SourceNode | string>;
 }
 
 export class BinaryExpression implements Expression {
@@ -103,10 +105,11 @@ export class FunctionParameter {
         public defaultValue?: Expression
     ) {
         this.isOptional = !!this.defaultValue;
-        if(this.typeToken){
-            
-            this.typeRef.addLink(this.typeToken
-        this.typeRef.addLink(this.typeToken ? util.tokenKindToType(this.typeToken.kind) : this.defaultValue.typeRef.getType();
+        if (this.typeToken) {
+            this.typeRef.addLink(this.typeToken.kind);
+        } else {
+            this.typeRef.addLink(this.defaultValue.typeRef);
+        }
     }
 
     public typeRef = new TypeReference();
@@ -164,20 +167,12 @@ export class FunctionExpression implements Expression {
         readonly parentFunction?: FunctionExpression
     ) {
         this.isSub = this.functionTypeToken?.kind === TokenKind.Sub;
+        //TODO how do I handle typeref for functions???
     }
 
     public readonly isSub: boolean;
 
-    public get type() {
-        let type = new FunctionType(
-            null,
-            this.isSub,
-            this.returnTypeToken
-        );
-        for (let param of this.parameters) {
-            type.addParameter(param.name, param.type
-        }
-    }
+    readonly typeRef = new TypeReference();
 
     public get returnType() {
         return util.tokenKindToType(this.returnTypeToken.kind);
@@ -272,8 +267,11 @@ export class NamespacedVariableNameExpression implements Expression {
         readonly expression: DottedGetExpression | VariableExpression
     ) {
         this.range = expression.range;
+        this.typeRef.addLink(NamespaceType.instance);
     }
-    range: Range;
+
+    readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState) {
         return [
@@ -319,9 +317,12 @@ export class DottedGetExpression implements Expression {
         readonly dot: Token
     ) {
         this.range = Range.create(this.obj.range.start, this.name.range.end);
+        //TODO how do we handle dotted get type tracking???
     }
 
     public readonly range: Range;
+
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState) {
         //if the callee starts with a namespace name, transpile the name
@@ -344,9 +345,11 @@ export class XmlAttributeGetExpression implements Expression {
         readonly at: Token
     ) {
         this.range = Range.create(this.obj.range.start, this.name.range.end);
+        //TODO implement typeRef
     }
 
     public readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState) {
         return [
@@ -365,9 +368,11 @@ export class IndexedGetExpression implements Expression {
         readonly closingSquare: Token
     ) {
         this.range = Range.create(this.obj.range.start, this.closingSquare.range.end);
+        //TODO implement typeRef
     }
 
     public readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState) {
         return [
@@ -388,9 +393,11 @@ export class GroupingExpression implements Expression {
         readonly expression: Expression
     ) {
         this.range = Range.create(this.tokens.left.range.start, this.tokens.right.range.end);
+        this.typeRef.addLink(this.expression.typeRef);
     }
 
     public readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState) {
         return [
@@ -406,9 +413,11 @@ export class LiteralExpression implements Expression {
         readonly value: Token
     ) {
         this.range = this.value?.range ?? negativeRange;
+        this.typeRef.addLink(this.value.kind);
     }
 
-    public readonly range: Range;
+    readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState) {
         return [
@@ -431,8 +440,10 @@ export class EscapedCharCodeLiteral implements Expression {
         readonly token: Token & { charCode: number }
     ) {
         this.range = token.range;
+        this.typeRef.addLink(StringType.instance);
     }
     readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState) {
         return [
@@ -453,9 +464,11 @@ export class ArrayLiteralExpression implements Expression {
         readonly close: Token
     ) {
         this.range = Range.create(this.open.range.start, this.close.range.end);
+        //TODO how do we handle typeref?
     }
 
     public readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState) {
         let result = [];
@@ -527,9 +540,12 @@ export class AAMemberExpression implements Expression {
             this.keyToken.range.start,
             (this.value ?? this.colonToken ?? this.keyToken).range.end
         );
+        //this expression returns no value
+        this.typeRef.addLink(VoidType.instance);
     }
 
     public readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         let result = [];
@@ -566,9 +582,11 @@ export class AALiteralExpression implements Expression {
         readonly close: Token
     ) {
         this.range = Range.create(this.open.range.start, this.close.range.end);
+        //TODO handle typeRef
     }
 
     public readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         let result = [];
@@ -648,9 +666,11 @@ export class UnaryExpression implements Expression {
         readonly right: Expression
     ) {
         this.range = Range.create(this.operator.range.start, this.right.range.end);
+        //TODO handle typeRef
     }
 
     public readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState) {
         return [
@@ -661,16 +681,17 @@ export class UnaryExpression implements Expression {
     }
 }
 
-export class VariableExpression extends Expression {
+export class VariableExpression implements Expression {
     constructor(
         readonly name: Identifier,
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
-        super();
         this.range = this.name.range;
+        //the linking pass will find all typeRefs for variables and auto-link them, so we don't need to do anything with typeRef here
     }
 
     public readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     public getName(parseMode: ParseMode) {
         return parseMode === ParseMode.BrightScript ? this.name.text : this.name.text;
@@ -704,9 +725,18 @@ export class SourceLiteralExpression implements Expression {
         readonly token: Token
     ) {
         this.range = token.range;
+
+        //these literals are numbers.
+        if (token.kind === TokenKind.LineNumLiteral || token.kind === TokenKind.SourceLineNumLiteral) {
+            this.typeRef.addLink(IntegerType.instance);
+        } else {
+            //all the other literals are strings
+            this.typeRef.addLink(StringType.instance);
+        }
     }
 
     public readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     private getFunctionName(state: TranspileState, parseMode: ParseMode) {
         let func = state.file.getFunctionScopeAtPosition(this.token.range.start).func;
@@ -784,7 +814,11 @@ export class NewExpression implements Expression {
         readonly call: CallExpression
     ) {
         this.range = Range.create(this.newKeyword.range.start, this.call.range.end);
+        //TODO handle typeRef
     }
+
+    readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     /**
      * The name of the class to initialize (with optional namespace prefixed)
@@ -799,7 +833,6 @@ export class NewExpression implements Expression {
         return this.call.namespaceName;
     }
 
-    public readonly range: Range;
 
     public transpile(state: TranspileState) {
         return this.call.transpile(state);
@@ -819,9 +852,11 @@ export class CallfuncExpression implements Expression {
             callee.range.start,
             (closingParen ?? args[args.length - 1] ?? openingParen ?? methodName ?? operator).range.end
         );
+        //TODO handle typeRef
     }
 
     public readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     public transpile(state: TranspileState) {
         let result = [];
@@ -871,8 +906,10 @@ export class TemplateStringQuasiExpression implements Expression {
             this.expressions[0].range.start,
             this.expressions[this.expressions.length - 1].range.end
         );
+        this.typeRef.addLink(StringType.instance);
     }
     readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState, skipEmptyStrings = true) {
         let result = [];
@@ -892,7 +929,6 @@ export class TemplateStringQuasiExpression implements Expression {
     }
 }
 
-
 export class TemplateStringExpression implements Expression {
     constructor(
         readonly openingBacktick: Token,
@@ -904,9 +940,12 @@ export class TemplateStringExpression implements Expression {
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end
         );
+        //the return value of a template string is a string (even though it's composed of lots of magic!)
+        this.typeRef.addLink(StringType.instance);
     }
 
     public readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState) {
         if (this.quasis.length === 1 && this.expressions.length === 0) {
@@ -987,9 +1026,12 @@ export class TaggedTemplateStringExpression implements Expression {
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end
         );
+        //the return value of a tagged template string is a string
+        this.typeRef.addLink(StringType.instance);
     }
 
     public readonly range: Range;
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState) {
         let result = [];

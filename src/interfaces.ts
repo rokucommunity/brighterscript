@@ -8,6 +8,7 @@ import { Type } from './types/BrsType';
 import { FunctionType, FunctionTypeParameter } from './types/FunctionType';
 import { ParseMode } from './parser/Parser';
 import { FunctionStatement } from './parser/Statement';
+import { CallExpression } from './parser';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
@@ -50,15 +51,11 @@ export interface Callable1 {
 }
 
 export interface FunctionCall {
-    /**
-     * The full range of this function call (from the start of the function name to its closing paren)
-     */
-    range: Range;
+    call: CallExpression;
     functionScope: FunctionScope;
     file: File;
     name: string;
     args: CallableArg[];
-    nameRange: Range;
 }
 
 /**

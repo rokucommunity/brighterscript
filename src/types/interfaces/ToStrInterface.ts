@@ -3,6 +3,6 @@ import { StringType } from '../StringType';
 
 export class ToStrInterface {
     public static methods = [
-        new FunctionType('ToStr', false, new StringType())
+        new FunctionType(new StringType(), 'ToStr', false)
     ];
 }

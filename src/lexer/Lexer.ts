@@ -418,7 +418,6 @@ export class Lexer {
      * string is terminated by a newline or the end of input.
      */
     private string() {
-        let isUnterminated = false;
         while (!this.isAtEnd()) {
             if (this.peek() === '"') {
                 if (this.peekNext() === '"') {
@@ -436,7 +435,6 @@ export class Lexer {
                     ...DiagnosticMessages.unterminatedStringAtEndOfLine(),
                     range: this.rangeOf(this.source.slice(this.start, this.current))
                 });
-                isUnterminated = true;
                 break;
             }
 
@@ -449,7 +447,6 @@ export class Lexer {
                 ...DiagnosticMessages.unterminatedStringAtEndOfFile(),
                 range: this.rangeOf(this.source.slice(this.start, this.current))
             });
-            isUnterminated = true;
         }
 
         // move past the closing `"`

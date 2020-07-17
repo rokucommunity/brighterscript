@@ -22,7 +22,6 @@ import { InvalidType } from './types/InvalidType';
 import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
-import { UninitializedType } from './types/UninitializedType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import { DottedGetExpression, VariableExpression } from './parser/Expression';
@@ -319,7 +318,7 @@ export class Util {
             //TODO refine the function type on the outside (I don't think this ValueKind is actually returned)
             case TokenKind.Function:
             case TokenKind.Sub:
-                return new FunctionType(null, false, new VoidType());
+                return new FunctionType(new VoidType());
             case TokenKind.Double:
                 return DoubleType.instance;
             case TokenKind.Dynamic:

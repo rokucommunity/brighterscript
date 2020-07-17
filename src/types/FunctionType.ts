@@ -3,9 +3,9 @@ import { DynamicType } from './DynamicType';
 
 export class FunctionType implements Type {
     constructor(
-        name: string,
-        isSub: boolean,
-        returnType?: Type,
+        returnType: Type,
+        name?: string,
+        isSub?: boolean,
         params?: FunctionTypeParameter[]
     ) {
         this.name = name;
@@ -25,7 +25,7 @@ export class FunctionType implements Type {
     /**
      * Determines if this is a sub or not
      */
-    public isSub;
+    public isSub: boolean;
 
     public params: FunctionTypeParameter[];
 

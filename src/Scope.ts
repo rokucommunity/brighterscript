@@ -498,7 +498,7 @@ export class Scope {
                     let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
                     this.diagnostics.push({
                         ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
-                        range: expCall.nameRange,
+                        range: expCall.call.callee.range,
                         //TODO detect end of expression call
                         file: file
                     });
@@ -573,7 +573,7 @@ export class Scope {
             let lowerName = expCall.name.toLowerCase();
 
             //get the local scope for this expression
-            let scope = file.getFunctionScopeAtPosition(expCall.nameRange.start);
+            let scope = file.getFunctionScopeAtPosition(expCall.call.callee.range.start);
 
             //if we don't already have a variable with this name.
             if (!scope?.getVariableByName(lowerName)) {
@@ -586,7 +586,7 @@ export class Scope {
                 if (!knownCallable) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.callToUnknownFunction(expCall.name, this.name),
-                        range: expCall.nameRange,
+                        range: expCall.call.callee.range,
                         file: file
                     });
                 }

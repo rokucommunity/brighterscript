@@ -582,9 +582,6 @@ export class BrsFile {
                 //callee is the name of the function being called
                 let callee = expression.callee as VariableExpression;
 
-                let columnIndexBegin = callee.range.start.character;
-                let columnIndexEnd = callee.range.end.character;
-
                 let args = [] as CallableArg[];
                 //TODO convert if stmts to use instanceof instead
                 for (let arg of expression.args as any) {
@@ -607,10 +604,6 @@ export class BrsFile {
                             type: util.tokenKindToType(arg.value.kind),
                             text: text
                         };
-                        //wrap the value in quotes because that's how it appears in the code
-                        if (callableArg.type instanceof StringType) {
-                            callableArg.text = '"' + callableArg.text + '"';
-                        }
                         args.push(callableArg);
                     } else {
                         args.push({
@@ -621,12 +614,12 @@ export class BrsFile {
                         });
                     }
                 }
+
                 let functionCall: FunctionCall = {
-                    range: Range.create(expression.range.start, expression.closingParen.range.end),
+                    call: expression,
                     functionScope: this.getFunctionScopeAtPosition(Position.create(callee.range.start.line, callee.range.start.character)),
                     file: this,
                     name: functionName,
-                    nameRange: Range.create(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
                     //TODO keep track of parameters
                     args: args
                 };

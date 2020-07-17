@@ -4,7 +4,6 @@ import { expect } from 'chai';
 import { TokenKind } from '.';
 import { Lexer } from './Lexer';
 import { isToken } from './Token';
-import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 
@@ -99,26 +98,26 @@ describe('lexer', () => {
 
     it('computes range properly both with and without whitespace', () => {
         let withoutWhitespace = Lexer.scan(`sub Main()\n    bob = true\nend sub`).tokens
-            .map(x => rangeToArray(x.range));
+            .map(x => x.range);
 
         let withWhitespace = Lexer.scan(`sub Main()\n    bob = true\nend sub`).tokens
             //filter out the whitespace...we only care that it was computed during the scan
             .filter(x => x.kind !== TokenKind.Whitespace)
-            .map(x => rangeToArray(x.range));
+            .map(x => x.range);
 
         /*eslint-disable */
         let expectedLocations = [
-            [0, 0, 0, 3],   // sub
-            [0, 4, 0, 8],   // main
-            [0, 8, 0, 9],   // (
-            [0, 9, 0, 10],  // )
-            [0, 10, 0, 11], // \n
-            [1, 4, 1, 7],   // bob
-            [1, 8, 1, 9],   // =
-            [1, 10, 1, 14], // true,
-            [1, 14, 1, 15], // \n
-            [2, 0, 2, 7],   //end sub
-            [2, 7, 2, 8]    //Eof
+            Range.create(0, 0, 0, 3),   // sub
+            Range.create(0, 4, 0, 8),   // main
+            Range.create(0, 8, 0, 9),   // (
+            Range.create(0, 9, 0, 10),  // )
+            Range.create(0, 10, 0, 11), // \n
+            Range.create(1, 4, 1, 7),   // bob
+            Range.create(1, 8, 1, 9),   // =
+            Range.create(1, 10, 1, 14), // true,
+            Range.create(1, 14, 1, 15), // \n
+            Range.create(2, 0, 2, 7),   //end sub
+            Range.create(2, 7, 2, 8)    //Eof
         ];
         /*eslint-enable*/
 
@@ -188,36 +187,36 @@ describe('lexer', () => {
                 end sub
             `, {
                 includeWhitespace: true
-            }).tokens.map(x => [...rangeToArray(x.range), x.text]);
+            }).tokens.map(x => [x.range, x.text]);
 
             expect(tokens).to.eql([
-                [0, 0, 0, 1, '\n'],
-                [1, 0, 1, 16, '                '],
-                [1, 16, 1, 19, 'sub'],
-                [1, 19, 1, 20, ' '],
-                [1, 20, 1, 24, 'main'],
-                [1, 24, 1, 25, '('],
-                [1, 25, 1, 26, ')'],
-                [1, 26, 1, 27, ' '],
-                [1, 27, 1, 41, `'first comment`],
-                [1, 41, 1, 42, '\n'],
-                [2, 0, 2, 20, '                    '],
-                [2, 20, 2, 21, 'k'],
-                [2, 21, 2, 22, ' '],
-                [2, 22, 2, 23, '='],
-                [2, 23, 2, 24, ' '],
-                [2, 24, 2, 25, '2'],
-                [2, 25, 2, 26, ' '],
-                [2, 26, 2, 42, `' second comment`],
-                [2, 42, 2, 43, '\n'],
-                [3, 0, 3, 20, '                    '],
-                [3, 20, 3, 37, 'REM third comment'],
-                [3, 37, 3, 38, '\n'],
-                [4, 0, 4, 16, '                '],
-                [4, 16, 4, 23, 'end sub'],
-                [4, 23, 4, 24, '\n'],
-                [5, 0, 5, 12, '            '],
-                [5, 12, 5, 13, '']//EOF
+                [Range.create(0, 0, 0, 1), '\n'],
+                [Range.create(1, 0, 1, 16), '                '],
+                [Range.create(1, 16, 1, 19), 'sub'],
+                [Range.create(1, 19, 1, 20), ' '],
+                [Range.create(1, 20, 1, 24), 'main'],
+                [Range.create(1, 24, 1, 25), '('],
+                [Range.create(1, 25, 1, 26), ')'],
+                [Range.create(1, 26, 1, 27), ' '],
+                [Range.create(1, 27, 1, 41), `'first comment`],
+                [Range.create(1, 41, 1, 42), '\n'],
+                [Range.create(2, 0, 2, 20), '                    '],
+                [Range.create(2, 20, 2, 21), 'k'],
+                [Range.create(2, 21, 2, 22), ' '],
+                [Range.create(2, 22, 2, 23), '='],
+                [Range.create(2, 23, 2, 24), ' '],
+                [Range.create(2, 24, 2, 25), '2'],
+                [Range.create(2, 25, 2, 26), ' '],
+                [Range.create(2, 26, 2, 42), `' second comment`],
+                [Range.create(2, 42, 2, 43), '\n'],
+                [Range.create(3, 0, 3, 20), '                    '],
+                [Range.create(3, 20, 3, 37), 'REM third comment'],
+                [Range.create(3, 37, 3, 38), '\n'],
+                [Range.create(4, 0, 4, 16), '                '],
+                [Range.create(4, 16, 4, 23), 'end sub'],
+                [Range.create(4, 23, 4, 24), '\n'],
+                [Range.create(5, 0, 5, 12), '            '],
+                [Range.create(5, 12, 5, 13), '']//EOF
             ]);
         });
 
@@ -461,17 +460,17 @@ describe('lexer', () => {
                 TokenKind.BackTick,
                 TokenKind.Eof
             ]);
-            expect(tokens[1].literal).to.eql(new BrsString('the cat says '));
+            expect(tokens[1].text).to.eql('the cat says ');
             expect(tokens[2].text).to.eql('\\`');
-            expect(tokens[3].literal).to.eql(new BrsString('meow'));
+            expect(tokens[3].text).to.eql('meow');
             expect(tokens[4].text).to.eql('\\`');
-            expect(tokens[5].literal).to.eql(new BrsString(' a lot'));
+            expect(tokens[5].text).to.eql(' a lot');
         });
 
         it('produces template string literal tokens', () => {
             let { tokens } = Lexer.scan('`hello world`');
             expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.BackTick, TokenKind.TemplateStringQuasi, TokenKind.BackTick, TokenKind.Eof]);
-            expect(tokens[1].literal).to.deep.equal(new BrsString('hello world'));
+            expect(tokens[1].text).to.equal('hello world');
         });
 
         it('collects quasis outside and expressions inside of template strings', () => {
@@ -486,7 +485,7 @@ describe('lexer', () => {
                 TokenKind.BackTick,
                 TokenKind.Eof
             ]);
-            expect(tokens[1].literal).to.deep.equal(new BrsString(`hello `));
+            expect(tokens[1].text).to.equal('hello ');
         });
 
         it('real example, which is causing issues in the formatter', () => {
@@ -636,7 +635,7 @@ describe('lexer', () => {
                 TokenKind.BackTick,
                 TokenKind.Eof
             ]);
-            expect(tokens[1].literal).to.eql(new BrsString(`multi-line`));
+            expect(tokens[1].text).to.equal('multi-line');
             expect(tokens[2].text).to.equal('\n');
             expect(tokens[2].text).to.equal('\n');
         });
@@ -712,31 +711,31 @@ describe('lexer', () => {
         it('respects \'#\' suffix', () => {
             let d = Lexer.scan('123#').tokens[0];
             expect(d.kind).to.equal(TokenKind.DoubleLiteral);
-            expect(d.literal).to.deep.equal(new Double(123));
+            expect(d.text).to.equal('123#');
         });
 
         it('forces literals >= 10 digits into doubles', () => {
             let d = Lexer.scan('0000000005').tokens[0];
             expect(d.kind).to.equal(TokenKind.DoubleLiteral);
-            expect(d.literal).to.deep.equal(new Double(5));
+            expect(d.text).to.equal('0000000005');
         });
 
         it('forces literals with \'D\' in exponent into doubles', () => {
             let d = Lexer.scan('2.5d3').tokens[0];
             expect(d.kind).to.equal(TokenKind.DoubleLiteral);
-            expect(d.literal).to.deep.equal(new Double(2500));
+            expect(d.text).to.equal('2.5d3');
         });
 
         it('allows digits before `.` to be elided', () => {
             let f = Lexer.scan('.123#').tokens[0];
             expect(f.kind).to.equal(TokenKind.DoubleLiteral);
-            expect(f.literal).to.deep.equal(new Double(0.123));
+            expect(f.text).to.equal('.123#');
         });
 
         it('allows digits after `.` to be elided', () => {
             let f = Lexer.scan('12.#').tokens[0];
             expect(f.kind).to.equal(TokenKind.DoubleLiteral);
-            expect(f.literal).to.deep.equal(new Double(12));
+            expect(f.text).to.equal('12.#');
         });
     });
 
@@ -744,33 +743,31 @@ describe('lexer', () => {
         it('respects \'!\' suffix', () => {
             let f = Lexer.scan('0.00000008!').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
-            // Floating precision will make this *not* equal
-            expect(f.literal).not.to.equal(8e-8);
-            expect(f.literal).to.deep.equal(new Float(0.00000008));
+            expect(f.text).to.equal('0.00000008!');
         });
 
         it('forces literals with a decimal into floats', () => {
             let f = Lexer.scan('1.0').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
-            expect(f.literal).to.deep.equal(new Float(1000000000000e-12));
+            expect(f.text).to.equal('1.0');
         });
 
         it('forces literals with \'E\' in exponent into floats', () => {
             let f = Lexer.scan('2.5e3').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
-            expect(f.literal).to.deep.equal(new Float(2500));
+            expect(f.text).to.equal('2.5e3');
         });
 
         it('allows digits before `.` to be elided', () => {
             let f = Lexer.scan('.123').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
-            expect(f.literal).to.deep.equal(new Float(0.123));
+            expect(f.text).to.equal('.123');
         });
 
         it('allows digits after `.` to be elided', () => {
             let f = Lexer.scan('12.').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
-            expect(f.literal).to.deep.equal(new Float(12));
+            expect(f.text).to.equal('12.');
         });
     });
 
@@ -778,19 +775,19 @@ describe('lexer', () => {
         it('supports hexadecimal literals', () => {
             let i = Lexer.scan('&hf00d&').tokens[0];
             expect(i.kind).to.equal(TokenKind.LongIntegerLiteral);
-            expect(i.literal).to.deep.equal(new Int64(61453));
+            expect(i.text).to.equal('&hf00d&');
         });
 
         it('allows very long Int64 literals', () => {
             let li = Lexer.scan('9876543210&').tokens[0];
             expect(li.kind).to.equal(TokenKind.LongIntegerLiteral);
-            expect(li.literal).to.deep.equal(Int64.fromString('9876543210'));
+            expect(li.text).to.equal('9876543210&');
         });
 
         it('forces literals with \'&\' suffix into Int64s', () => {
             let li = Lexer.scan('123&').tokens[0];
             expect(li.kind).to.equal(TokenKind.LongIntegerLiteral);
-            expect(li.literal).to.deep.equal(new Int64(123));
+            expect(li.text).to.equal('123&');
         });
     });
 
@@ -798,13 +795,13 @@ describe('lexer', () => {
         it('supports hexadecimal literals', () => {
             let i = Lexer.scan('&hFf').tokens[0];
             expect(i.kind).to.equal(TokenKind.IntegerLiteral);
-            expect(i.literal).to.deep.equal(new Int32(255));
+            expect(i.text).to.equal('&hFf');
         });
 
         it('falls back to a regular integer', () => {
             let i = Lexer.scan('123').tokens[0];
             expect(i.kind).to.equal(TokenKind.IntegerLiteral);
-            expect(i.literal).to.deep.equal(new Int32(123));
+            expect(i.text).to.equal('123');
         });
     });
 
@@ -847,7 +844,6 @@ describe('lexer', () => {
                 TokenKind.LineNumLiteral,
                 TokenKind.Eof
             ]);
-            expect(tokens.filter(w => !!w.literal).length).to.equal(0);
         });
 
         it('matches multi-word keywords', () => {
@@ -861,7 +857,6 @@ describe('lexer', () => {
                 TokenKind.ExitWhile,
                 TokenKind.Eof
             ]);
-            expect(tokens.filter(w => !!w.literal).length).to.equal(0);
         });
 
         it('accepts \'exit for\' but not \'exitfor\'', () => {
