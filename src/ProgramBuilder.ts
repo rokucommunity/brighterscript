@@ -284,36 +284,9 @@ export class ProgramBuilder {
 
     private async createPackageIfEnabled() {
         if (this.options.copyToStaging || this.options.createPackage || this.options.deploy) {
-            let options = util.cwdWork(this.options.cwd, () => {
-                return rokuDeploy.getOptions({
-                    ...this.options,
-                    outDir: util.getOutDir(this.options),
-                    outFile: path.basename(this.options.outFile)
-                });
-            });
 
-            let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
-
-            //remove all files currently loaded in the program, we will transpile those instead (even if just for source maps)
-            let filteredFileMap = [];
-            for (let fileEntry of fileMap) {
-                if (this.program.hasFile(fileEntry.src) === false) {
-                    filteredFileMap.push(fileEntry);
-                }
-            }
-
-            await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
-                //prepublish all non-program-loaded files to staging
-                await rokuDeploy.prepublishToStaging({
-                    ...options,
-                    files: filteredFileMap
-                });
-            });
-
-            await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
-                //transpile any brighterscript files
-                await this.program.transpile(fileMap, options.stagingFolderPath);
-            });
+            //transpile the project
+            await this.transpile();
 
             //create the zip file if configured to do so
             if (this.options.createPackage !== false || this.options.deploy) {
@@ -326,6 +299,43 @@ export class ProgramBuilder {
                 });
             }
         }
+    }
+
+    /**
+     * Transpiles the entire program into the staging folder
+     */
+    public async transpile() {
+        let options = util.cwdWork(this.options.cwd, () => {
+            return rokuDeploy.getOptions({
+                ...this.options,
+                outDir: util.getOutDir(this.options),
+                outFile: path.basename(this.options.outFile)
+            });
+        });
+
+        //get every file referenced by the files array
+        let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
+
+        //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
+        let filteredFileMap = [];
+        for (let fileEntry of fileMap) {
+            if (this.program.hasFile(fileEntry.src) === false) {
+                filteredFileMap.push(fileEntry);
+            }
+        }
+
+        await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
+            //prepublish all non-program-loaded files to staging
+            await rokuDeploy.prepublishToStaging({
+                ...options,
+                files: filteredFileMap
+            });
+        });
+
+        await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
+            //transpile any brighterscript files
+            await this.program.transpile(fileMap, options.stagingFolderPath);
+        });
     }
 
     private async deployPackageIfEnabled() {
