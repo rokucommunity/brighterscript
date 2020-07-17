@@ -10,18 +10,7 @@ import {
     Lexer,
     BrighterScriptSourceLiterals
 } from '../lexer';
-
-import {
-    BrsInvalid,
-    BrsBoolean,
-    BrsString,
-    Int32,
-    ValueKind,
-    Argument,
-    StdlibArgument,
-    FunctionParameter,
-    valueKindFromString
-} from '../brsTypes';
+import { negativeRange } from '../lexer/Token';
 import {
     Statement,
     FunctionStatement,
@@ -76,7 +65,8 @@ import {
     EscapedCharCodeLiteral,
     TemplateStringQuasiExpression,
     TaggedTemplateStringExpression,
-    SourceLiteralExpression
+    SourceLiteralExpression,
+    FunctionParameter
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
@@ -494,12 +484,13 @@ export class Parser {
             fieldType = this.advance();
 
             //no field type specified
-            if (!valueKindFromString(`${fieldType.text}`) && !this.check(TokenKind.Identifier)) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
-                    range: this.peek().range
-                });
-            }
+            //TODO this logic needs to be handled in the validator after the linking phase
+            // if (!valueKindFromString(`${fieldType.text}`) && !this.check(TokenKind.Identifier)) {
+            //     this.diagnostics.push({
+            //         ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
+            //         range: this.peek().range
+            //     });
+            // }
         }
 
         let initialValue: Expression;
@@ -555,14 +546,7 @@ export class Parser {
             let isSub = functionType && functionType.kind === TokenKind.Sub;
             let functionTypeText = isSub ? 'sub' : 'function';
             let name: Identifier;
-            let returnType: ValueKind;
             let leftParen: Token;
-
-            if (isSub) {
-                returnType = ValueKind.Void;
-            } else {
-                returnType = ValueKind.Dynamic;
-            }
 
             if (isAnonymous) {
                 leftParen = this.consume(
@@ -593,7 +577,7 @@ export class Parser {
 
             let params: FunctionParameter[] = [];
             let asToken: Token;
-            let typeToken: Token;
+            let returnTypeToken: Token;
             if (!this.check(TokenKind.RightParen)) {
                 do {
                     if (params.length >= CallExpression.MaximumArguments) {
@@ -610,30 +594,18 @@ export class Parser {
 
             if (this.check(TokenKind.As)) {
                 asToken = this.advance();
-
-                typeToken = this.advance();
-                let typeString = typeToken.text || '';
-                let maybeReturnType = valueKindFromString(typeString);
-
-                if (!maybeReturnType) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.invalidFunctionReturnType(typeString),
-                        range: typeToken.range
-                    });
-                }
-
-                returnType = maybeReturnType;
+                returnTypeToken = this.advance();
             }
 
-            params.reduce((haveFoundOptional: boolean, arg: Argument) => {
-                if (haveFoundOptional && !arg.defaultValue) {
+            params.reduce((haveFoundOptional: boolean, param) => {
+                if (haveFoundOptional && !param.defaultValue) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(arg.name.text),
-                        range: arg.range
+                        ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(param.name.text),
+                        range: param.range
                     });
                 }
 
-                return haveFoundOptional || !!arg.defaultValue;
+                return haveFoundOptional || !!param.defaultValue;
             }, false);
             let comment: CommentStatement;
             //get a comment if available
@@ -649,14 +621,13 @@ export class Parser {
             while (this.match(TokenKind.Newline)) { }
             let func = new FunctionExpression(
                 params,
-                returnType,
                 undefined, //body
                 functionType,
                 undefined, //ending keyword
                 leftParen,
                 rightParen,
                 asToken,
-                typeToken,
+                returnTypeToken,
                 this.currentFunctionExpression
             );
             //if there is a parent function, register this function with the parent
@@ -734,12 +705,13 @@ export class Parser {
         // force the name into an identifier so the AST makes some sense
         name.kind = TokenKind.Identifier;
 
-        let type: ValueKind = ValueKind.Dynamic;
         let typeToken: Token | undefined;
+        let equalsToken: Token | undefined;
         let defaultValue;
 
         // parse argument default value
-        if (this.match(TokenKind.Equal)) {
+        if (this.check(TokenKind.Equal)) {
+            equalsToken = this.advance();
             // it seems any expression is allowed here -- including ones that operate on other arguments!
             defaultValue = this.expression();
         }
@@ -749,28 +721,14 @@ export class Parser {
             asToken = this.advance();
 
             typeToken = this.advance();
-            let typeValueKind = valueKindFromString(typeToken.text);
-
-            if (!typeValueKind) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeToken.text),
-                    range: typeToken.range
-                });
-                throw this.lastDiagnosticAsError();
-            }
-
-            type = typeValueKind;
         }
 
         return new FunctionParameter(
             name,
-            {
-                kind: type,
-                range: typeToken ? typeToken.range : StdlibArgument.InternalRange
-            },
+            equalsToken,
             typeToken,
-            defaultValue,
-            asToken
+            asToken,
+            defaultValue
         );
     }
 
@@ -960,7 +918,12 @@ export class Parser {
             increment = this.expression();
         } else {
             // BrightScript for/to/step loops default to a step of 1 if no `step` is provided
-            increment = new LiteralExpression(new Int32(1), this.peek().range);
+            increment = new LiteralExpression({
+                kind: TokenKind.Integer,
+                text: '1',
+                isReserved: false,
+                range: negativeRange
+            });
         }
         while (this.match(TokenKind.Newline)) {
 
@@ -1266,7 +1229,7 @@ export class Parser {
             if (next.kind === TokenKind.TemplateStringQuasi) {
                 //a quasi can actually be made up of multiple quasis when it includes char literals
                 currentQuasiExpressionParts.push(
-                    new LiteralExpression(next.literal, next.range)
+                    new LiteralExpression(next)
                 );
                 this.advance();
             } else if (next.kind === TokenKind.EscapedCharCodeLiteral) {
@@ -1292,7 +1255,7 @@ export class Parser {
                 } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unterminatedTemplateExpression(),
-                        range: util.getRange(openingBacktick, this.peek())
+                        range: Range.create(openingBacktick.range.start, this.peek().range.end)
                     });
                     throw this.lastDiagnosticAsError();
                 }
@@ -1308,7 +1271,7 @@ export class Parser {
             //error - missing backtick
             this.diagnostics.push({
                 ...DiagnosticMessages.unterminatedTemplateStringAtEndOfFile(),
-                range: util.getRange(openingBacktick, this.peek())
+                range: Range.create(openingBacktick.range.start, this.peek().range.end)
             });
             throw this.lastDiagnosticAsError();
 
@@ -1667,7 +1630,12 @@ export class Parser {
 
         //print statements can be empty, so look for empty print conditions
         if (this.isAtEnd() || this.check(TokenKind.Newline, TokenKind.Colon)) {
-            let emptyStringLiteral = new LiteralExpression(new BrsString(''), printKeyword.range);
+            let emptyStringLiteral = new LiteralExpression({
+                isReserved: false,
+                kind: TokenKind.String,
+                range: negativeRange,
+                text: '""'
+            });
             values.push(emptyStringLiteral);
         } else {
             values.push(this.expression());
@@ -2063,20 +2031,17 @@ export class Parser {
 
     private primary(): Expression {
         switch (true) {
-            case this.match(TokenKind.False):
-                return new LiteralExpression(BrsBoolean.False, this.previous().range);
-            case this.match(TokenKind.True):
-                return new LiteralExpression(BrsBoolean.True, this.previous().range);
-            case this.match(TokenKind.Invalid):
-                return new LiteralExpression(BrsInvalid.Instance, this.previous().range);
             case this.match(
+                TokenKind.False,
+                TokenKind.True,
+                TokenKind.Invalid,
                 TokenKind.IntegerLiteral,
                 TokenKind.LongIntegerLiteral,
                 TokenKind.FloatLiteral,
                 TokenKind.DoubleLiteral,
                 TokenKind.StringLiteral
             ):
-                return new LiteralExpression(this.previous().literal, this.previous().range);
+                return new LiteralExpression(this.previous());
             //capture source literals (LINE_NUM if brightscript, or a bunch of them if brighterscript
             case this.match(TokenKind.LineNumLiteral, ...(this.options.mode === ParseMode.BrightScript ? [] : BrighterScriptSourceLiterals)):
                 return new SourceLiteralExpression(this.previous());
@@ -2135,34 +2100,6 @@ export class Parser {
                 let openingBrace = this.previous();
                 let members: Array<AAMemberExpression | CommentStatement> = [];
 
-                let key = () => {
-                    let result = {
-                        colonToken: null as Token,
-                        keyToken: null as Token,
-                        key: null as BrsString,
-                        range: null as Range
-                    };
-                    if (this.check(TokenKind.Identifier, ...AllowedProperties)) {
-                        result.keyToken = this.advance();
-                        result.key = new BrsString(result.keyToken.text);
-                    } else if (this.check(TokenKind.StringLiteral)) {
-                        result.keyToken = this.advance();
-                        result.key = result.keyToken.literal as BrsString;
-                    } else {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.unexpectedAAKey(),
-                            range: this.peek().range
-                        });
-                        throw this.lastDiagnosticAsError();
-                    }
-
-                    result.colonToken = this.consume(
-                        DiagnosticMessages.expectedColonBetweenAAKeyAndvalue(),
-                        TokenKind.Colon
-                    );
-                    result.range = util.getRange(result.keyToken, result.colonToken);
-                    return result;
-                };
 
                 while (this.match(TokenKind.Newline)) {
                 }
@@ -2171,15 +2108,13 @@ export class Parser {
                     if (this.check(TokenKind.Comment)) {
                         members.push(new CommentStatement([this.advance()]));
                     } else {
-                        let k = key();
+                        let key = this.aaKey();
                         let expr = this.expression();
-                        members.push({
-                            key: k.key,
-                            keyToken: k.keyToken,
-                            colonToken: k.colonToken,
-                            value: expr,
-                            range: util.getRange(k, expr)
-                        });
+                        members.push(new AAMemberExpression(
+                            key.keyToken,
+                            key.colonToken,
+                            expr)
+                        );
                     }
 
                     while (this.match(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
@@ -2201,15 +2136,15 @@ export class Parser {
                             if (this.check(TokenKind.RightCurlyBrace)) {
                                 break;
                             }
-                            let k = key();
+                            let key = this.aaKey();
                             let expr = this.expression();
-                            members.push({
-                                key: k.key,
-                                keyToken: k.keyToken,
-                                colonToken: k.colonToken,
-                                value: expr,
-                                range: util.getRange(k, expr)
-                            });
+                            members.push(
+                                new AAMemberExpression(
+                                    key.keyToken,
+                                    key.colonToken,
+                                    expr
+                                )
+                            );
                         }
                     }
 
@@ -2245,6 +2180,30 @@ export class Parser {
                     throw this.lastDiagnosticAsError();
                 }
         }
+    }
+
+    private aaKey() {
+        let result = {
+            colonToken: null as Token,
+            keyToken: null as Token
+        };
+        if (this.check(TokenKind.Identifier, ...AllowedProperties)) {
+            result.keyToken = this.advance();
+        } else if (this.check(TokenKind.StringLiteral)) {
+            result.keyToken = this.advance();
+        } else {
+            this.diagnostics.push({
+                ...DiagnosticMessages.unexpectedAAKey(),
+                range: this.peek().range
+            });
+            throw this.lastDiagnosticAsError();
+        }
+
+        result.colonToken = this.consume(
+            DiagnosticMessages.expectedColonBetweenAAKeyAndvalue(),
+            TokenKind.Colon
+        );
+        return result;
     }
 
     /**

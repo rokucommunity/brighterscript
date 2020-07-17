@@ -1,18 +1,18 @@
-import { BrsType } from './BrsType';
+import { Type } from './BrsType';
 import { DoubleType } from './DoubleType';
 import { DynamicType } from './DynamicType';
 import { FloatType } from './FloatType';
 import { IntegerType } from './IntegerType';
 
-export class LongIntegerType implements BrsType {
-    public isAssignableTo(targetType: BrsType) {
+export class LongIntegerType implements Type {
+    public isAssignableTo(targetType: Type) {
         return (
             targetType instanceof LongIntegerType ||
             targetType instanceof DynamicType
         );
     }
 
-    public isConvertibleTo(targetType: BrsType) {
+    public isConvertibleTo(targetType: Type) {
         if (
             targetType instanceof DynamicType ||
             targetType instanceof IntegerType ||
@@ -29,4 +29,7 @@ export class LongIntegerType implements BrsType {
     public toString() {
         return 'longinteger';
     }
+
+    public static instance = new LongIntegerType();
+
 }

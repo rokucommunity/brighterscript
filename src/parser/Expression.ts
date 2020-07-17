@@ -1,5 +1,5 @@
 import { Token, Identifier, TokenKind } from '../lexer';
-import { BrsType, ValueKind, BrsString, FunctionParameter } from '../brsTypes';
+import { negativeRange } from '../lexer/Token';
 import { Block, CommentStatement, FunctionStatement } from './Statement';
 import { SourceNode } from 'source-map';
 import { Range } from 'vscode-languageserver';
@@ -7,13 +7,22 @@ import util from '../util';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
+import { TypeReference } from './TypeReference';
+import { FunctionType } from '../types/FunctionType';
+import { VoidType } from '../types/VoidType';
 
 /** A BrightScript expression */
 export interface Expression {
-    /** The starting and ending location of the expression. */
-    range: Range;
+    /**
+     * The starting and ending location of the expression.
+     */
+    readonly range: Range;
+    /**
+     * The reference to this expression's type.
+     */
+    readonly typeRef: TypeReference;
 
-    transpile(state: TranspileState): Array<SourceNode | string>;
+    abstract transpile(state: TranspileState): Array<SourceNode | string>;
 }
 
 export class BinaryExpression implements Expression {
@@ -23,9 +32,13 @@ export class BinaryExpression implements Expression {
         readonly right: Expression
     ) {
         this.range = Range.create(this.left.range.start, this.right.range.end);
+        this.typeRef.addLink(this.left.typeRef);
+        this.typeRef.addLink(this.right.typeRef);
     }
 
-    public readonly range: Range;
+    readonly range: Range;
+
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState) {
         return [
@@ -49,9 +62,12 @@ export class CallExpression implements Expression {
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
         this.range = Range.create(this.callee.range.start, this.closingParen.range.end);
+        this.typeRef.addLink(callee.typeRef);
     }
 
-    public readonly range: Range;
+    readonly range: Range;
+
+    readonly typeRef = new TypeReference();
 
     transpile(state: TranspileState) {
         let result = [];
@@ -77,12 +93,66 @@ export class CallExpression implements Expression {
     }
 }
 
+
+export class FunctionParameter {
+    constructor(
+        public name: Identifier,
+        public equalsToken?: Token,
+        public typeToken?: Token,
+        public asToken?: Token,
+        public defaultValue?: Expression
+    ) {
+        this.isOptional = !!this.defaultValue;
+        if(this.typeToken){
+            
+            this.typeRef.addLink(this.typeToken
+        this.typeRef.addLink(this.typeToken ? util.tokenKindToType(this.typeToken.kind) : this.defaultValue.typeRef.getType();
+    }
+
+    public typeRef = new TypeReference();
+
+    public get range(): Range {
+        return {
+            start: this.name.range.start,
+            end: this.typeToken ? this.typeToken.range.end : this.name.range.end
+        };
+    }
+
+    /**
+     * Indicates that this is an optional parameter
+     */
+    public isOptional: boolean;
+
+    public transpile(state: TranspileState) {
+        let result = [
+            //name
+            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
+        ] as any[];
+        //default value
+        if (this.defaultValue) {
+            result.push(' = ');
+            result.push(this.defaultValue.transpile(state));
+        }
+        //type declaration
+        if (this.asToken) {
+            result.push(' ');
+            result.push(new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pathAbsolute, 'as'));
+            result.push(' ');
+            result.push(new SourceNode(this.typeToken.range.start.line + 1, this.typeToken.range.start.character, state.pathAbsolute, this.typeToken.text));
+        }
+
+        return result;
+    }
+}
+
 export class FunctionExpression implements Expression {
     constructor(
         readonly parameters: FunctionParameter[],
-        readonly returns: ValueKind,
         public body: Block,
-        readonly functionType: Token | null,
+        /**
+         * Is this a function or a sub?
+         */
+        readonly functionTypeToken: Token | null,
         public end: Token,
         readonly leftParen: Token,
         readonly rightParen: Token,
@@ -93,6 +163,24 @@ export class FunctionExpression implements Expression {
          */
         readonly parentFunction?: FunctionExpression
     ) {
+        this.isSub = this.functionTypeToken?.kind === TokenKind.Sub;
+    }
+
+    public readonly isSub: boolean;
+
+    public get type() {
+        let type = new FunctionType(
+            null,
+            this.isSub,
+            this.returnTypeToken
+        );
+        for (let param of this.parameters) {
+            type.addParameter(param.name, param.type
+        }
+    }
+
+    public get returnType() {
+        return util.tokenKindToType(this.returnTypeToken.kind);
     }
 
     /**
@@ -117,7 +205,7 @@ export class FunctionExpression implements Expression {
      */
     public get range() {
         return Range.create(
-            (this.functionType ?? this.leftParen).range.start,
+            (this.functionTypeToken ?? this.leftParen).range.start,
             (this.end ?? this.body ?? this.returnTypeToken ?? this.asToken ?? this.rightParen).range.end
         );
     }
@@ -126,7 +214,7 @@ export class FunctionExpression implements Expression {
         let results = [];
         //'function'|'sub'
         results.push(
-            new SourceNode(this.functionType.range.start.line + 1, this.functionType.range.start.character, state.pathAbsolute, this.functionType.text.toLowerCase())
+            new SourceNode(this.functionTypeToken.range.start.line + 1, this.functionTypeToken.range.start.character, state.pathAbsolute, this.functionTypeToken.text.toLowerCase())
         );
         //functionName?
         if (name) {
@@ -315,30 +403,20 @@ export class GroupingExpression implements Expression {
 
 export class LiteralExpression implements Expression {
     constructor(
-        readonly value: BrsType,
-        range: Range
+        readonly value: Token
     ) {
-        this.range = range ?? Range.create(-1, -1, -1, -1);
+        this.range = this.value?.range ?? negativeRange;
     }
-
 
     public readonly range: Range;
 
     transpile(state: TranspileState) {
-        let text: string;
-        if (this.value.kind === ValueKind.String) {
-            //escape quote marks with another quote mark
-            text = `"${this.value.value.replace(/"/g, '""')}"`;
-        } else {
-            text = this.value.toString();
-        }
-
         return [
             new SourceNode(
                 this.range.start.line + 1,
                 this.range.start.character,
                 state.pathAbsolute,
-                text
+                this.value.text
             )
         ];
     }
@@ -437,14 +515,48 @@ export class ArrayLiteralExpression implements Expression {
 }
 
 /** A member of an associative array literal. */
-export interface AAMemberExpression {
-    /** The name of the member. */
-    key: BrsString;
-    keyToken: Token;
-    colonToken: Token;
-    /** The expression evaluated to determine the member's initial value. */
-    value: Expression;
-    range: Range;
+export class AAMemberExpression implements Expression {
+    constructor(
+        /** The name of the member. */
+        readonly keyToken: Token,
+        readonly colonToken: Token,
+        /** The expression evaluated to determine the member's initial value. */
+        readonly value: Expression
+    ) {
+        this.range = Range.create(
+            this.keyToken.range.start,
+            (this.value ?? this.colonToken ?? this.keyToken).range.end
+        );
+    }
+
+    public readonly range: Range;
+
+    transpile(state: TranspileState): Array<SourceNode | string> {
+        let result = [];
+        //key
+        result.push(
+            new SourceNode(
+                this.keyToken.range.start.line + 1,
+                this.keyToken.range.start.character,
+                state.pathAbsolute,
+                this.keyToken.text
+            )
+        );
+        //colon
+        result.push(
+            new SourceNode(
+                this.colonToken.range.start.line + 1,
+                this.colonToken.range.start.character,
+                state.pathAbsolute,
+                ':'
+            ),
+            ' '
+        );
+
+        //value
+        result.push(...this.value.transpile(state));
+        return result;
+    }
 }
 
 export class AALiteralExpression implements Expression {
@@ -490,15 +602,7 @@ export class AALiteralExpression implements Expression {
             if (element instanceof CommentStatement) {
                 result.push(...element.transpile(state));
             } else {
-                //key
-                result.push(
-                    new SourceNode(element.keyToken.range.start.line + 1, element.keyToken.range.start.character, state.pathAbsolute, element.keyToken.text)
-                );
-                //colon
-                result.push(
-                    new SourceNode(element.colonToken.range.start.line + 1, element.colonToken.range.start.character, state.pathAbsolute, ':'),
-                    ' '
-                );
+                result.push(...element.transpile(state));
 
                 //determine if comments are the only members left in the array
                 let onlyCommentsRemaining = true;
@@ -509,8 +613,6 @@ export class AALiteralExpression implements Expression {
                     }
                 }
 
-                //value
-                result.push(...element.value.transpile(state));
                 //add trailing comma if not final element (excluding comments)
                 if (i !== this.elements.length - 1 && onlyCommentsRemaining === false) {
                     result.push(',');
@@ -559,11 +661,12 @@ export class UnaryExpression implements Expression {
     }
 }
 
-export class VariableExpression implements Expression {
+export class VariableExpression extends Expression {
     constructor(
         readonly name: Identifier,
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
+        super();
         this.range = this.name.range;
     }
 
@@ -776,7 +879,7 @@ export class TemplateStringQuasiExpression implements Expression {
         let plus = '';
         for (let expression of this.expressions) {
             //skip empty strings
-            if (((expression as LiteralExpression)?.value as BrsString)?.value === '' && skipEmptyStrings === true) {
+            if ((expression as LiteralExpression).value.text === '""' && skipEmptyStrings === true) {
                 continue;
             }
             result.push(
@@ -842,7 +945,7 @@ export class TemplateStringExpression implements Expression {
                 //skip the toString wrapper around certain expressions
                 if (
                     expression instanceof EscapedCharCodeLiteral ||
-                    (expression instanceof LiteralExpression && expression.value.kind === ValueKind.String)
+                    (expression instanceof LiteralExpression && expression.value.kind === TokenKind.String)
                 ) {
                     add(
                         ...expression.transpile(state)

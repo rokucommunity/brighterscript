@@ -1,5 +1,4 @@
 import { TokenKind } from './TokenKind';
-import { BrsType } from '../brsTypes';
 import { Range } from 'vscode-languageserver';
 
 /**
@@ -12,8 +11,6 @@ export interface Token {
     text: string;
     /** True if this token's `text` is a reserved word, otherwise `false`. */
     isReserved: boolean;
-    /** The literal value (using the BRS type system) associated with this token, if any. */
-    literal?: BrsType;
     /** Where the token was found. */
     range: Range;
 }
@@ -41,3 +38,8 @@ export interface Identifier extends Token {
 export function isToken(obj: Record<string, any>): obj is Token {
     return !!(obj.kind && obj.text && obj.range);
 }
+
+/**
+ * A static range instance that points at -1, -1, -1, -1 for auto-generated tokens
+ */
+export const negativeRange = Range.create(-1, -1, -1, -1);

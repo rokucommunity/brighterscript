@@ -3,7 +3,6 @@ import { TokenKind } from '../lexer/TokenKind';
 import { Preprocessor } from './Preprocessor';
 import { BrightScriptChunk, DeclarationChunk, ErrorChunk, HashIfStatement } from './Chunk';
 import { expect } from 'chai';
-import { BrsBoolean, BrsString } from '../brsTypes';
 import { createSandbox } from 'sinon';
 let sinon = createSandbox();
 

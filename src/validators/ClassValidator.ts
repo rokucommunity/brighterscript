@@ -59,7 +59,7 @@ export class BsClassValidator {
                     //if we found a callable with this name, the user used a "new" keyword in front of a function. add error
                     if (callable) {
                         this.diagnostics.push({
-                            ...DiagnosticMessages.expressionIsNotConstructable(callable.isSub ? 'sub' : 'function'),
+                            ...DiagnosticMessages.expressionIsNotConstructable(callable.func.isSub ? 'sub' : 'function'),
                             file: file,
                             range: newExpression.className.range
                         });

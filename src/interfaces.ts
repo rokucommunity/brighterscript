@@ -4,16 +4,20 @@ import { Scope } from './Scope';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { FunctionScope } from './FunctionScope';
-import { BrsType } from './types/BrsType';
-import { FunctionType } from './types/FunctionType';
+import { Type } from './types/BrsType';
+import { FunctionType, FunctionTypeParameter } from './types/FunctionType';
 import { ParseMode } from './parser/Parser';
+import { FunctionStatement } from './parser/Statement';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
 }
 
-export interface Callable {
+export type Callable = FunctionStatement & {
     file: BrsFile | XmlFile;
+};
+
+export interface Callable1 {
     name: string;
     /**
      * Is the callable declared as "sub". If falsey, assumed declared as "function"
@@ -28,7 +32,7 @@ export interface Callable {
      * A more lengthy explanation of the callable. This is parsed as markdown
      */
     documentation?: string;
-    params: CallableParam[];
+    params: FunctionTypeParameter[];
     /**
      * The full range of the function or sub.
      */
@@ -62,18 +66,8 @@ export interface FunctionCall {
  */
 export interface CallableArg {
     text: string;
-    type: BrsType;
+    type: Type;
     range: Range;
-}
-
-export interface CallableParam {
-    name: string;
-    type: BrsType;
-    isOptional?: boolean;
-    /**
-     * Indicates that an unlimited number of arguments can be passed in
-     */
-    isRestArgument?: boolean;
 }
 
 export interface FileObj {
@@ -114,7 +108,7 @@ export interface File {
 
 export interface VariableDeclaration {
     name: string;
-    type: BrsType;
+    type: Type;
     /**
      * The range for the variable name
      */
@@ -124,22 +118,6 @@ export interface VariableDeclaration {
      * we only need to know the line index
      */
     lineIndex: number;
-}
-
-//copied from brs (since it's not exported from there)
-export enum ValueKind {
-    Invalid = 0,
-    Boolean = 1,
-    String = 2,
-    Int32 = 3,
-    Int64 = 4,
-    Float = 5,
-    Double = 6,
-    Callable = 7,
-    Uninitialized = 8,
-    Dynamic = 9,
-    Void = 10,
-    Object = 11
 }
 
 /**

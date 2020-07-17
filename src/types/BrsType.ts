@@ -1,5 +1,5 @@
-export interface BrsType {
-    isAssignableTo(targetType: BrsType): boolean;
-    isConvertibleTo(targetType: BrsType): boolean;
+export interface Type {
+    isAssignableTo(targetType: Type): boolean;
+    isConvertibleTo(targetType: Type): boolean;
     toString(): string;
 }

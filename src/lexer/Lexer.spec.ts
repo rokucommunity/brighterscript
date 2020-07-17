@@ -2,11 +2,11 @@
 import { expect } from 'chai';
 
 import { TokenKind } from '.';
-import { BrsString, Double, Float, Int32, Int64 } from '../brsTypes';
 import { Lexer } from './Lexer';
 import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 
 describe('lexer', () => {
     it('recognizes namespace keywords', () => {
@@ -295,7 +295,6 @@ describe('lexer', () => {
                 TokenKind.RightCurlyBrace,
                 TokenKind.Eof
             ]);
-            expect(tokens.filter(t => !!t.literal).length).to.equal(0);
         });
 
         it('reads operators', () => {
@@ -313,7 +312,6 @@ describe('lexer', () => {
                 TokenKind.PlusPlus,
                 TokenKind.Eof
             ]);
-            expect(tokens.filter(t => !!t.literal).length).to.equal(0);
         });
 
         it('reads bitshift operators', () => {
@@ -324,7 +322,6 @@ describe('lexer', () => {
                 TokenKind.LeftShift,
                 TokenKind.Eof
             ]);
-            expect(tokens.filter(t => !!t.literal).length).to.equal(0);
         });
 
         it('reads bitshift assignment operators', () => {
@@ -334,7 +331,6 @@ describe('lexer', () => {
                 TokenKind.RightShiftEqual,
                 TokenKind.Eof
             ]);
-            expect(tokens.filter(t => !!t.literal).length).to.equal(0);
         });
 
         it('reads comparators', () => {
@@ -348,7 +344,6 @@ describe('lexer', () => {
                 TokenKind.LessGreater,
                 TokenKind.Eof
             ]);
-            expect(tokens.filter(t => !!t.literal).length).to.equal(0);
         });
     }); // non-literals
 
@@ -356,30 +351,28 @@ describe('lexer', () => {
         it('produces string literal tokens', () => {
             let { tokens } = Lexer.scan(`"hello world"`);
             expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.StringLiteral, TokenKind.Eof]);
-            expect(tokens[0].literal).to.deep.equal(new BrsString('hello world'));
+            expect(tokens[0].text).to.eql(`"hello world"`);
         });
 
         it(`safely escapes " literals`, () => {
             let { tokens } = Lexer.scan(`"the cat says ""meow"""`);
             expect(tokens[0].kind).to.equal(TokenKind.StringLiteral);
-            expect(tokens[0].literal).to.deep.equal(new BrsString(`the cat says "meow"`));
+            expect(tokens[0].text).to.eql(`"the cat says ""meow"""`);
         });
 
         it('captures text to end of line for unterminated strings with LF', () => {
             let { tokens } = Lexer.scan(`"unterminated!\n`);
-            expect(tokens[0].literal.toString()).to.equal('unterminated!');
+            expect(tokens[0].text).to.equal(`"unterminated!`);
         });
 
         it('captures text to end of line for unterminated strings with CRLF', () => {
             let { tokens } = Lexer.scan(`"unterminated!\r\n`);
-            expect(tokens[0].literal.toString()).to.equal('unterminated!');
+            expect(tokens[0].text).to.equal(`"unterminated!`);
         });
 
         it('disallows multiline strings', () => {
             let { diagnostics } = Lexer.scan(`"multi-line\n\n`);
-            expect(diagnostics.map(err => err.message)).to.deep.equal([
-                'Unterminated string at end of line'
-            ]);
+            expect(diagnostics[0]?.message).to.eql(DiagnosticMessages.unterminatedStringAtEndOfLine().message);
         });
     });
 

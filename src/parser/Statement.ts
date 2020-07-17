@@ -5,6 +5,7 @@ import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
+import { TypeReference } from './TypeReference';
 
 /**
  * A BrightScript statement
@@ -14,6 +15,10 @@ export interface Statement {
      *  The starting and ending location of the statement.
      **/
     range: Range;
+    /**
+     * The TypeReference for this statement. TypeRefernce tracks what type the result of this statement should be
+     */
+    typeRef?: TypeReference;
 
     transpile(state: TranspileState): Array<SourceNode | string>;
 }
@@ -73,7 +78,10 @@ export class AssignmentStatement implements Statement {
         readonly containingFunction: FunctionExpression
     ) {
         this.range = Range.create(this.name.range.start, this.value.range.end);
+        this.typeRef.addLink(this.value.typeRef);
     }
+
+    public typeRef = new TypeReference();
 
     public readonly range: Range;
 
@@ -234,9 +242,16 @@ export class FunctionStatement implements Statement {
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
         this.range = this.func.range;
+        this.hasNamespace = !!namespaceName;
+        this.type = func.type;
     }
 
     public readonly range: Range;
+
+    /**
+     * Indiciates whether this function has a namespace or not
+     */
+    public readonly hasNamespace: boolean;
 
     /**
      * Get the name of this expression based on the parse mode

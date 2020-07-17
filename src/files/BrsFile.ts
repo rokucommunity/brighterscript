@@ -5,15 +5,14 @@ import chalk from 'chalk';
 import { Scope } from '../Scope';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
+import { CallableArg, CommentFlag, FunctionCall, BsDiagnostic, FileReference, Callable } from '../interfaces';
 import { Deferred } from '../deferred';
-import { FunctionParameter } from '../brsTypes';
 import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
-import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, Expression } from '../parser/Expression';
+import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, Expression, FunctionParameter } from '../parser/Expression';
 import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, ImportStatement } from '../parser/Statement';
 import { Program } from '../Program';
-import { BrsType } from '../types/BrsType';
+import { Type } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { StringType } from '../types/StringType';
@@ -447,7 +446,7 @@ export class BrsFile {
                     nameRange: param.name.range,
                     lineIndex: param.name.range.start.line,
                     name: param.name.text,
-                    type: util.valueKindToBrsType(param.type.kind)
+                    type: util.tokenKindToType(param.typeToken.kind)
                 });
             }
 
@@ -471,7 +470,7 @@ export class BrsFile {
                     nameRange: statement.name.range,
                     lineIndex: statement.name.range.start.line,
                     name: statement.name.text,
-                    type: this.getBRSTypeFromAssignment(statement, scope)
+                    type: this.getTypeFromAssignment(statement, scope)
                 });
             }
         }
@@ -496,39 +495,44 @@ export class BrsFile {
         return ancestors;
     }
 
-    private getBRSTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BrsType {
+    private getTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): Type {
         try {
+            let value = assignment.value;
             //function
-            if (assignment.value instanceof FunctionExpression) {
-                let functionType = new FunctionType(util.valueKindToBrsType(assignment.value.returns));
-                functionType.isSub = assignment.value.functionType.text === 'sub';
+            if (value instanceof FunctionExpression) {
+                let functionType = new FunctionType(
+                    value.functionStatement?.name?.text,
+                    value.isSub
+                );
                 if (functionType.isSub) {
                     functionType.returnType = new VoidType();
+                } else {
+                    functionType.returnType = util.tokenKindToType(value.returnTypeToken?.kind);
                 }
 
                 functionType.setName(assignment.name.text);
-                for (let argument of assignment.value.parameters) {
+                for (let argument of value.parameters) {
                     let isRequired = !argument.defaultValue;
                     //TODO compute optional parameters
-                    functionType.addParameter(argument.name.text, util.valueKindToBrsType(argument.type.kind), isRequired);
+                    functionType.addParameter(argument.name.text, util.tokenKindToType(argument.typeToken.kind), isRequired);
                 }
                 return functionType;
 
                 //literal
-            } else if (assignment.value instanceof LiteralExpression) {
-                return util.valueKindToBrsType((assignment.value as any).value.kind);
+            } else if (value instanceof LiteralExpression) {
+                return util.tokenKindToType(value.value.kind);
 
                 //function call
-            } else if (assignment.value instanceof CallExpression) {
-                let calleeName = (assignment.value.callee as any).name.text;
+            } else if (value instanceof CallExpression) {
+                let calleeName = (value.callee as any).name.text;
                 if (calleeName) {
                     let func = this.getCallableByName(calleeName);
                     if (func) {
-                        return func.type.returnType;
+                        return func.returnType;
                     }
                 }
-            } else if (assignment.value instanceof VariableExpression) {
-                let variableName = assignment.value.name.text;
+            } else if (value instanceof VariableExpression) {
+                let variableName = value.name.text;
                 let variable = scope.getVariableByName(variableName);
                 return variable.type;
             }
@@ -545,47 +549,16 @@ export class BrsFile {
             return;
         }
         for (let func of this.callables) {
-            if (func.name.toLowerCase() === name) {
+            if (func.name.text.toLowerCase() === name) {
                 return func;
             }
         }
     }
 
     private findCallables() {
-        for (let statement of this.parser.functionStatements) {
-
-            let functionType = new FunctionType(util.valueKindToBrsType(statement.func.returns));
-            functionType.setName(statement.name.text);
-            functionType.isSub = statement.func.functionType.text.toLowerCase() === 'sub';
-            if (functionType.isSub) {
-                functionType.returnType = new VoidType();
-            }
-
-            //extract the parameters
-            let params = [] as CallableParam[];
-            for (let param of statement.func.parameters) {
-                let callableParam = {
-                    name: param.name.text,
-                    type: util.valueKindToBrsType(param.type.kind),
-                    isOptional: !!param.defaultValue,
-                    isRestArgument: false
-                };
-                params.push(callableParam);
-                let isRequired = !param.defaultValue;
-                functionType.addParameter(callableParam.name, callableParam.type, isRequired);
-            }
-
-            this.callables.push({
-                isSub: statement.func.functionType.text.toLowerCase() === 'sub',
-                name: statement.name.text,
-                nameRange: statement.name.range,
-                file: this,
-                params: params,
-                range: statement.func.range,
-                type: functionType,
-                getName: statement.getName.bind(statement),
-                hasNamespace: !!statement.namespaceName
-            });
+        for (let statement of (this.parser.functionStatements as Callable[])) {
+            statement.file = this;
+            this.callables.push(statement);
         }
     }
 
@@ -631,7 +604,7 @@ export class BrsFile {
                         }
                         let callableArg = {
                             range: arg.range,
-                            type: util.valueKindToBrsType(arg.value.kind),
+                            type: util.tokenKindToType(arg.value.kind),
                             text: text
                         };
                         //wrap the value in quotes because that's how it appears in the code
@@ -993,7 +966,7 @@ export class BrsFile {
                 if (callable) {
                     return {
                         range: token.range,
-                        contents: callable.type.toString()
+                        contents: callable.type
                     };
                 }
             }

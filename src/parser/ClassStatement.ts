@@ -6,7 +6,6 @@ import { TranspileState } from './TranspileState';
 import { Parser, ParseMode } from './Parser';
 import { Range } from 'vscode-languageserver';
 import util from '../util';
-import { BrsInvalid } from '../brsTypes/BrsType';
 
 export class ClassStatement implements Statement {
 
@@ -454,11 +453,13 @@ export class ClassMethodStatement implements Statement {
                             text: '='
                         },
                         thisQualifiedName,
-                        new LiteralExpression(
-                            BrsInvalid.Instance,
+                        new LiteralExpression({
+                            isReserved: false,
+                            kind: TokenKind.Invalid,
                             //set the range to the end of the name so locations don't get broken
-                            Range.create(field.name.range.end, field.name.range.end)
-                        ),
+                            range: Range.create(field.name.range.end, field.name.range.end),
+                            text: 'invalid'
+                        }),
                         this.func
                     )
                 );

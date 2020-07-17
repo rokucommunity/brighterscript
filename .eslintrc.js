@@ -28,6 +28,7 @@ module.exports = {
         '@typescript-eslint/no-empty-function': 'off',
         '@typescript-eslint/no-explicit-any': 'off',
         '@typescript-eslint/no-extra-parens': 'off',
+        '@typescript-eslint/no-extraneous-class': 'off',
         '@typescript-eslint/no-floating-promises': 'error',
         '@typescript-eslint/no-magic-numbers': 'off',
         '@typescript-eslint/no-parameter-properties': 'off',

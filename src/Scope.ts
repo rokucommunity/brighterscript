@@ -350,7 +350,7 @@ export class Scope {
                     //sort by path
                     a.callable.file.pathAbsolute.localeCompare(b.callable.file.pathAbsolute) ||
                     //then sort by method name
-                    a.callable.name.localeCompare(b.callable.name)
+                    a.callable.name.text.localeCompare(b.callable.name.text)
                 );
             });
 
@@ -442,7 +442,7 @@ export class Scope {
             if (globalCallableMap[func.getName(ParseMode.BrighterScript).toLowerCase()]) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction(),
-                    range: func.nameRange,
+                    range: func.name.range,
                     file: file
                 });
             }
@@ -485,7 +485,7 @@ export class Scope {
                 //get min/max parameter count for callable
                 let minParams = 0;
                 let maxParams = 0;
-                for (let param of knownCallableContainer.callable.params) {
+                for (let param of knownCallableContainer.callable.func.parameters) {
                     maxParams++;
                     //optional parameters must come last, so we can assume that minParams won't increase once we hit
                     //the first isOptional
@@ -636,13 +636,13 @@ export class Scope {
                         }
                         this.diagnostics.push({
                             ...DiagnosticMessages.overridesAncestorFunction(
-                                container.callable.name,
+                                container.callable.name.text,
                                 container.scope.name,
                                 shadowedCallable.callable.file.pkgPath,
                                 //grab the last item in the list, which should be the closest ancestor's version
                                 shadowedCallable.scope.name
                             ),
-                            range: container.callable.nameRange,
+                            range: container.callable.name.range,
                             file: container.callable.file
                         });
                     }
@@ -656,12 +656,12 @@ export class Scope {
                     let callable = callableContainer.callable;
 
                     this.diagnostics.push({
-                        ...DiagnosticMessages.duplicateFunctionImplementation(callable.name, callableContainer.scope.name),
+                        ...DiagnosticMessages.duplicateFunctionImplementation(callable.name.text, callableContainer.scope.name),
                         range: Range.create(
-                            callable.nameRange.start.line,
-                            callable.nameRange.start.character,
-                            callable.nameRange.start.line,
-                            callable.nameRange.end.character
+                            callable.name.range.start.line,
+                            callable.name.range.start.character,
+                            callable.name.range.start.line,
+                            callable.name.range.end.character
                         ),
                         file: callable.file
                     });

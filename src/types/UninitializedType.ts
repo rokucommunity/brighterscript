@@ -1,15 +1,15 @@
-import { BrsType } from './BrsType';
+import { Type } from './BrsType';
 import { DynamicType } from './DynamicType';
 
-export class UninitializedType implements BrsType {
-    public isAssignableTo(targetType: BrsType) {
+export class UninitializedType implements Type {
+    public isAssignableTo(targetType: Type) {
         return (
             targetType instanceof UninitializedType ||
             targetType instanceof DynamicType
         );
     }
 
-    public isConvertibleTo(targetType: BrsType) {
+    public isConvertibleTo(targetType: Type) {
         return this.isAssignableTo(targetType);
     }
 

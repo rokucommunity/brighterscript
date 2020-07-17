@@ -1,31 +1,40 @@
-import { BrsType } from './BrsType';
+import { Type } from './BrsType';
 import { DynamicType } from './DynamicType';
 
-export class FunctionType implements BrsType {
+export class FunctionType implements Type {
     constructor(
-        public returnType: BrsType
+        name: string,
+        isSub: boolean,
+        returnType?: Type,
+        params?: FunctionTypeParameter[]
     ) {
-
+        this.name = name;
+        this.isSub = isSub === true ?? false;
+        this.returnType = returnType;
+        this.params = params ?? [];
     }
 
+    public returnType: Type;
+
     /**
-     * The name of the function for this type. Can be null
+     * The name of the function for this type. Can be null.
+     * This is only used in toString()
      */
     public name: string;
 
     /**
      * Determines if this is a sub or not
      */
-    public isSub = false;
+    public isSub;
 
-    public params = [] as Array<{ name: string; type: BrsType; isRequired: boolean }>;
+    public params: FunctionTypeParameter[];
 
     public setName(name: string) {
         this.name = name;
         return this;
     }
 
-    public addParameter(name: string, type: BrsType, isRequired: boolean) {
+    public addParameter(name: string, type: Type, isRequired: boolean) {
         this.params.push({
             name: name,
             type: type,
@@ -34,7 +43,7 @@ export class FunctionType implements BrsType {
         return this;
     }
 
-    public isAssignableTo(targetType: BrsType) {
+    public isAssignableTo(targetType: Type) {
         if (targetType instanceof DynamicType) {
             return true;
         } else if (targetType instanceof FunctionType) {
@@ -60,7 +69,7 @@ export class FunctionType implements BrsType {
         }
     }
 
-    public isConvertibleTo(targetType: BrsType) {
+    public isConvertibleTo(targetType: Type) {
         return this.isAssignableTo(targetType);
     }
 
@@ -72,4 +81,10 @@ export class FunctionType implements BrsType {
         return `${this.isSub ? 'sub' : 'function'} ${this.name}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
 
     }
+}
+
+export interface FunctionTypeParameter {
+    name: string;
+    type: Type;
+    isRequired: boolean;
 }

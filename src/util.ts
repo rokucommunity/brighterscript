@@ -10,9 +10,9 @@ import * as xml2js from 'xml2js';
 import { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
-import { CallableContainer, ValueKind, BsDiagnostic, FileReference } from './interfaces';
+import { CallableContainer, BsDiagnostic, FileReference } from './interfaces';
 import { BooleanType } from './types/BooleanType';
-import { BrsType } from './types/BrsType';
+import { Type } from './types/BrsType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
@@ -307,33 +307,42 @@ export class Util {
         });
     }
 
-    public valueKindToBrsType(kind: ValueKind): BrsType {
+    /**
+     * Convert the basic tokenKind tokens to a type
+     */
+    public tokenKindToType(kind: TokenKind): Type {
         switch (kind) {
-            case ValueKind.Boolean:
-                return new BooleanType();
+            case TokenKind.Boolean:
+            case TokenKind.True:
+            case TokenKind.False:
+                return BooleanType.instance;
             //TODO refine the function type on the outside (I don't think this ValueKind is actually returned)
-            case ValueKind.Callable:
-                return new FunctionType(new VoidType());
-            case ValueKind.Double:
-                return new DoubleType();
-            case ValueKind.Dynamic:
+            case TokenKind.Function:
+            case TokenKind.Sub:
+                return new FunctionType(null, false, new VoidType());
+            case TokenKind.Double:
+                return DoubleType.instance;
+            case TokenKind.Dynamic:
                 return new DynamicType();
-            case ValueKind.Float:
-                return new FloatType();
-            case ValueKind.Int32:
-                return new IntegerType();
-            case ValueKind.Int64:
-                return new LongIntegerType();
-            case ValueKind.Invalid:
-                return new InvalidType();
-            case ValueKind.Object:
-                return new ObjectType();
-            case ValueKind.String:
-                return new StringType();
-            case ValueKind.Uninitialized:
-                return new UninitializedType();
-            case ValueKind.Void:
-                return new VoidType();
+            case TokenKind.Float:
+            case TokenKind.FloatLiteral:
+                return FloatType.instance;
+            case TokenKind.Integer:
+            case TokenKind.IntegerLiteral:
+                return IntegerType.instance;
+            case TokenKind.LongInteger:
+            case TokenKind.LongIntegerLiteral:
+                return LongIntegerType.instance;
+            case TokenKind.Invalid:
+                return InvalidType.instance;
+            case TokenKind.Object:
+                return ObjectType.instance;
+            case TokenKind.String:
+                return StringType.instance;
+            // case TokenKind.Uninitialized:
+            //     return new UninitializedType();
+            case TokenKind.Void:
+                return VoidType.instance;
             default:
                 return undefined;
         }
@@ -834,13 +843,6 @@ export class Util {
         } else {
             return false;
         }
-    }
-
-    /**
-     * Get a location object back by extracting location information from other objects that contain location
-     */
-    public getRange(startObj: { range: Range }, endObj: { range: Range }): Range {
-        return Range.create(startObj.range.start, endObj.range.end);
     }
 
     /**

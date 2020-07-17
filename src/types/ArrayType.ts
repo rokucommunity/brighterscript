@@ -1,13 +1,13 @@
-import { BrsType } from './BrsType';
+import { Type } from './BrsType';
 import { DynamicType } from './DynamicType';
 
-export class ArrayType implements BrsType {
-    constructor(...innerTypes: BrsType[]) {
+export class ArrayType implements Type {
+    constructor(...innerTypes: Type[]) {
         this.innerTypes = innerTypes;
     }
-    public innerTypes: BrsType[] = [];
+    public innerTypes: Type[] = [];
 
-    public isAssignableTo(targetType: BrsType) {
+    public isAssignableTo(targetType: Type) {
         if (targetType instanceof DynamicType) {
             return true;
         } else if (!(targetType instanceof ArrayType)) {
@@ -30,7 +30,7 @@ export class ArrayType implements BrsType {
         return true;
     }
 
-    public isConvertibleTo(targetType: BrsType) {
+    public isConvertibleTo(targetType: Type) {
         return this.isAssignableTo(targetType);
     }
 

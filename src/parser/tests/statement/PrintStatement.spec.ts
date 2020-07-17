@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsString } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
@@ -56,7 +55,7 @@ describe('parser print statements', () => {
         expect(statements).not.to.be.null;
     });
 
-    it('location tracking', () => {
+    it.only('location tracking', () => {
         /**
          *    0   0   0   1
          *    0   4   8   2
@@ -73,7 +72,6 @@ describe('parser print statements', () => {
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
-                literal: new BrsString('foo'),
                 isReserved: false,
                 range: Range.create(0, 6, 0, 11)
             },

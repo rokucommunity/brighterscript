@@ -2,7 +2,6 @@ import { PreprocessorParser } from './PreprocessorParser';
 import { identifier, token } from '../parser/tests/Parser.spec';
 import { TokenKind } from '../lexer/TokenKind';
 import { expect } from 'chai';
-import { BrsBoolean } from '../brsTypes';
 import { BrightScriptChunk } from './Chunk';
 
 describe('preprocessor parser', () => {
