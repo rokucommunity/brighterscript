@@ -44,6 +44,12 @@ describe('util', () => {
         });
     });
 
+    describe('getRokuPkgPath', () => {
+        it('replaces more than one windows slash in a path', () => {
+            expect(util.getRokuPkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
+        });
+    });
+
     describe('loadConfigFile', () => {
         it('returns proper list of ancestor project paths', async () => {
             vfs[n(`${cwd}/child.json`)] = `{"extends": "parent.json"}`;

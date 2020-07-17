@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
  - Expose `ProgramBuilder.transpile()` method to make it easier for tools to transpile programmatically. [#154](https://github.com/rokucommunity/brighterscript/issues/154)
+### Fixed
+ - bug on Windows when transpiling BrighterScript import statements into xml script tags that would use the wrong path separator sometimes.
 
 
 
