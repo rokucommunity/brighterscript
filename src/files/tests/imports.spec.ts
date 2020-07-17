@@ -5,6 +5,7 @@ import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
 import { XmlFile } from '../XmlFile';
+import { getTestTranspile } from '../BrsFile.spec';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -13,6 +14,8 @@ let stagingFolderPath = s`${tmpPath}/staging`;
 
 describe('import statements', () => {
     let program: Program;
+    const testTranspile = getTestTranspile(() => [program, rootDir]);
+
     beforeEach(() => {
         fsExtra.ensureDirSync(tmpPath);
         fsExtra.emptyDirSync(tmpPath);
@@ -217,5 +220,33 @@ describe('import statements', () => {
         `);
         await program.validate();
         expect(program.getDiagnostics().map(x => x.message)[0]).to.eql(DiagnosticMessages.referencedFileDoesNotExist().message);
+    });
+
+    it('complicated import graph adds correct script tags', async () => {
+        await program.addOrReplaceFile('source/maestro/ioc/IOCMixin.bs', `
+            sub DoIocThings()
+            end sub
+        `);
+        await program.addOrReplaceFile('source/BaseClass.bs', `
+            import "pkg:/source/maestro/ioc/IOCMixin.bs"
+        `);
+
+        await program.addOrReplaceFile('components/AuthManager.bs', `
+            import "pkg:/source/BaseClass.bs"
+        `);
+        await testTranspile(`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+                <script type="text/brighterscript" uri="AuthManager.bs" />
+            </component>
+        `, `
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+                <script type="text/brightscript" uri="AuthManager.brs" />
+                <script type="text/brightscript" uri="pkg:/source/maestro/ioc/IOCMixin.brs" />
+                <script type="text/brightscript" uri="pkg:/source/BaseClass.brs" />
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+            </component>
+        `, null, 'components/AuthenticationService.xml');
     });
 });
