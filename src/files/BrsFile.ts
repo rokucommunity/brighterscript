@@ -15,7 +15,6 @@ import { Program } from '../Program';
 import { Type } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
-import { StringType } from '../types/StringType';
 import { VoidType } from '../types/VoidType';
 import { standardizePath as s, util } from '../util';
 import { TranspileState } from '../parser/TranspileState';

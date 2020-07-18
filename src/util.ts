@@ -348,6 +348,37 @@ export class Util {
     }
 
     /**
+     * Convert a Type into a TokenKind. This only works for primitive TokenKind values
+     */
+    public typeToTokenKind(type: Type): TokenKind {
+        if (type instanceof BooleanType) {
+            return TokenKind.Boolean;
+        } else if (type instanceof FunctionType) {
+            return type.isSub ? TokenKind.Sub : TokenKind.Function;
+        } else if (type instanceof DoubleType) {
+            return TokenKind.Double;
+        } else if (type instanceof DynamicType) {
+            return TokenKind.Dynamic;
+        } else if (type instanceof FloatType) {
+            return TokenKind.Float;
+        } else if (type instanceof IntegerType) {
+            return TokenKind.Integer;
+        } else if (type instanceof LongIntegerType) {
+            return TokenKind.LongInteger;
+        } else if (type instanceof InvalidType) {
+            return TokenKind.Invalid;
+        } else if (type instanceof ObjectType) {
+            return TokenKind.Object;
+        } else if (type instanceof StringType) {
+            return TokenKind.String;
+        } else if (type instanceof VoidType) {
+            return TokenKind.Void;
+        } else {
+            return undefined;
+        }
+    }
+
+    /**
      * Given a list of callables as a dictionary indexed by their full name (namespace included, transpiled to underscore-separated.
      * @param callables
      */

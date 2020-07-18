@@ -18,7 +18,8 @@
         "benchmark:ci": "npm run benchmark --  --iteration-count=1 --max-percent-change=10"
     },
     "mocha": {
-        "spec": "src/**/*.spec.ts",
+        "spec1": "src/**/*.spec.ts",
+        "spec": "src/files/BrsFile.spec.ts",
         "require": [
             "source-map-support/register",
             "ts-node/register"

@@ -100,9 +100,9 @@ export class FunctionParameter {
     constructor(
         public name: Identifier,
         public equalsToken?: Token,
-        public typeToken?: Token,
+        public defaultValue?: Expression,
         public asToken?: Token,
-        public defaultValue?: Expression
+        public typeToken?: Token
     ) {
         this.isOptional = !!this.defaultValue;
         if (this.typeToken) {

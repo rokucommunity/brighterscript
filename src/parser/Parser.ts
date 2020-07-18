@@ -726,9 +726,9 @@ export class Parser {
         return new FunctionParameter(
             name,
             equalsToken,
-            typeToken,
+            defaultValue,
             asToken,
-            defaultValue
+            typeToken,
         );
     }
 
