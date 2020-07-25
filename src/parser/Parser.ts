@@ -2,14 +2,13 @@ import {
     AllowedLocalIdentifiers,
     AllowedProperties,
     AssignmentOperators,
+    BrighterScriptSourceLiterals,
     BlockTerminator,
     DisallowedLocalIdentifiersText,
-    AllowedProperties,
     Identifier,
     Lexer,
     Token,
     TokenKind
-    BrighterScriptSourceLiterals
 } from '../lexer';
 
 import {
@@ -70,7 +69,7 @@ import {
     LiteralExpression,
     NamespacedVariableNameExpression,
     NewExpression,
-	TernaryExpression,
+    TernaryExpression,
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression,
@@ -78,7 +77,8 @@ import {
     EscapedCharCodeLiteral,
     TemplateStringQuasiExpression,
     TaggedTemplateStringExpression,
-    SourceLiteralExpression
+    SourceLiteralExpression,
+    CommentExpression
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
@@ -1867,24 +1867,24 @@ export class Parser {
     }
 
     private anonymousFunction(): Expression {
-        let expr;
         if (this.check(TokenKind.Sub, TokenKind.Function)) {
-            expr = this.functionDeclaration(true);
-        } else {
-            expr = this.boolean();
+            return this.functionDeclaration(true);
         }
 
-		//template string
+        //template string
         if (this.check(TokenKind.BackTick)) {
             return this.templateString(false);
             //tagged template string (currently we do not support spaces between the identifier and the backtick
         } else if (this.check(TokenKind.Identifier, ...AllowedLocalIdentifiers) && this.checkNext(TokenKind.BackTick)) {
             return this.templateString(true);
-        } else if (this.check(TokenKind.QuestionMark)) {
-            expr = this.conditionalOrCoalescingExpression(expr);
-		}
+        }
+        let expr = this.boolean();
 
-        return this.boolean();
+        if (this.check(TokenKind.QuestionMark)) {
+            return this.conditionalOrCoalescingExpression(expr);
+        }
+
+        return expr;
     }
 
     private boolean(): Expression {

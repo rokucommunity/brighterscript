@@ -284,11 +284,29 @@ describe('transpilation', () => {
         await testTranspile(`a = user = invalid ? "no user" : "logged in"`, `a = bslib_simpleTernary(user = invalid, "no user", "logged in") `, 'none');
     });
 
-    it('properly transpiles ternary assignments - complex consequent', async () => {
-        await testTranspile(`a = user.getAccount() ? "logged in" : "not logged in"`, 'a = bslib_scopeSafeTernary(user.getAccount(), {\n  "user": user\n},function(scope)\n  return "logged in"\nend function\n function(scope)\n  return "not logged in"\nend function) ', 'none');
+    describe('conditionalScopeProtection: none', () => {
+        it('properly transpiles ternary assignments - complex consequent ', async () => {
+            await testTranspile(`a = user.getAccount() ? "logged in" : "not logged in"`, 'a = bslib_simpleTernary(user.getAccount(), "logged in", "not logged in") ', 'none');
+        });
+
+        it('properly transpiles ternary assignments - complex alternate', async () => {
+            await testTranspile(`a = user ? m.defaults.getAccount(settings.name) : "no"`, 'a = bslib_simpleTernary(user, m.defaults.getAccount(settings.name), "no") ', 'none');
+        });
     });
 
-    it('properly transpiles ternary assignments - complex alternate', async () => {
-        await testTranspile(`a = user ? m.defaults.getAccount(settings.name) : "no"`, 'a = bslib_scopeSafeTernary(user, {\n  "user": user\n  "settings": settings\n  "m": m\n},function(scope)\n  settings = scope.settings\n  m = scope.m\n  return m.defaults.getAccount(settings.name)\nend function\n function(scope)\n  return "no"\nend function) ', 'none');
+    describe('conditionalScopeProtection: function-calls', () => {
+
+        beforeEach(() => {
+            program = new Program({ rootDir: rootDir, conditionalScopeProtection: 'function-calls' });
+            testTranspile = getTestTranspile(() => [program, rootDir]);
+        });
+
+        it('properly transpiles ternary assignments - complex consequent', async () => {
+            await testTranspile(`a = user.getAccount() ? "logged in" : "not logged in"`, 'a = bslib_scopeSafeTernary(user.getAccount(), {\n  "user": user\n},function(scope)\n  return "logged in"\nend function\n function(scope)\n  return "not logged in"\nend function) ', 'none');
+        });
+
+        it('properly transpiles ternary assignments - complex alternate', async () => {
+            await testTranspile(`a = user ? m.defaults.getAccount(settings.name) : "no"`, 'a = bslib_scopeSafeTernary(user, {\n  "user": user\n  "settings": settings\n  "m": m\n},function(scope)\n  settings = scope.settings\n  m = scope.m\n  return m.defaults.getAccount(settings.name)\nend function\n function(scope)\n  return "no"\nend function) ', 'none');
+        });
     });
 });

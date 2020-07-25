@@ -13,10 +13,10 @@ export class TranspileState {
         this.file = file;
 
         //if a sourceRoot is specified, use that instead of the rootDir
-        if (this.file.program.options.sourceRoot) {
+        if (this.options.sourceRoot) {
             this.pathAbsolute = this.file.pathAbsolute.replace(
-                this.file.program.options.rootDir,
-                this.file.program.options.sourceRoot
+                this.options.rootDir,
+                this.options.sourceRoot
             );
         } else {
             this.pathAbsolute = this.file.pathAbsolute;
@@ -64,6 +64,13 @@ export class TranspileState {
 
     public newline() {
         return '\n';
+    }
+
+    /**
+     * shortcut access to the program's options
+     */
+    public get options() {
+        return this.file.program.options;
     }
 
     /**

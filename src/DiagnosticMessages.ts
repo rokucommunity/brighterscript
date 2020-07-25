@@ -49,7 +49,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Warning
     }),
     xmlGenericParseError: (message: string) => ({
-        //generic catchall xml parse error
+    //generic catchall xml parse error
         message: message,
         code: 1008,
         severity: DiagnosticSeverity.Error
@@ -423,8 +423,8 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     /**
-     * Used in the lexer anytime we encounter an unsupported character
-     */
+   * Used in the lexer anytime we encounter an unsupported character
+   */
     unexpectedCharacter: (text: string) => ({
         message: `Unexpected character '${text}' (char code ${text?.charCodeAt(0)})`,
         code: 1082,
@@ -578,6 +578,8 @@ export let DiagnosticMessages = {
     malformedTernaryOperator: () => ({
         message: `Ternary '?' operator must be of form: test ? true value : false value`,
         code: 1112,
+        severity: DiagnosticSeverity.Error
+    }),
     unterminatedTemplateStringAtEndOfFile: () => ({
         message: `Unterminated template string at end of file`,
         code: 1113,
@@ -588,7 +590,6 @@ export let DiagnosticMessages = {
         code: 1114,
         severity: DiagnosticSeverity.Error
     })
-
 };
 
 let allCodes = [] as number[];

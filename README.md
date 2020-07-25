@@ -189,6 +189,11 @@ These are the options available in the `bsconfig.json` file.
 
  - **sourceRoot*: `string` - Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
 
+ 
+ - **conditionalScopeProtection**: `'function-calls' | 'never'` - Specifies how to guard against accidental execution of code, when using ternary opertator. This option changes how the consequent(true part) and alternate (false part) will be wrapped. This is to prevent accidental code access. e.g, given `myValue = isTrue ? "say hello" : doSomeFunction()` ; the brs code will execute doSomeFunction() to evaluate it's value. This can lead to unexpected side effects.
+   - When `function-calls`, consequent and alternate will be wrapped in a scoping function, any function calls (e.g. someNode.getValue()) to prevent side effects.
+    - When `never`, consequent and alternate are left, as is. _This is not advised_.
+
 
 ## Ignore errors and warnings on a per-line basis
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:

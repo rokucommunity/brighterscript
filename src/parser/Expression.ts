@@ -1,6 +1,6 @@
 import { Token, Identifier, TokenKind } from '../lexer';
 import { BrsType, ValueKind, BrsString, FunctionParameter } from '../brsTypes';
-import { Block, CommentStatement, FunctionStatement } from './Statement';
+import { Block, FunctionStatement } from './Statement';
 import { SourceNode } from 'source-map';
 import { Range } from 'vscode-languageserver';
 import util from '../util';
@@ -375,9 +375,9 @@ export class EscapedCharCodeLiteral extends Expression {
     constructor(
         readonly token: Token & { charCode: number }
     ) {
+        super();
         this.range = token.range;
     }
-    readonly range: Range;
 
     transpile(state: TranspileState) {
         return [
@@ -391,7 +391,7 @@ export class EscapedCharCodeLiteral extends Expression {
     }
 }
 
-export class ArrayLiteralExpression implements Expression {
+export class ArrayLiteralExpression extends Expression {
     constructor(
         readonly elements: Array<Expression>,
         readonly open: Token,
@@ -640,14 +640,13 @@ export class VariableExpression extends Expression {
     }
 }
 
-export class SourceLiteralExpression implements Expression {
+export class SourceLiteralExpression extends Expression {
     constructor(
         readonly token: Token
     ) {
+        super();
         this.range = token.range;
     }
-
-    public readonly range: Range;
 
     private getFunctionName(state: TranspileState, parseMode: ParseMode) {
         let func = state.file.getFunctionScopeAtPosition(this.token.range.start).func;
@@ -819,12 +818,12 @@ export class TemplateStringQuasiExpression extends Expression {
     constructor(
         readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteral>
     ) {
+        super();
         this.range = Range.create(
             this.expressions[0].range.start,
             this.expressions[this.expressions.length - 1].range.end
         );
     }
-    readonly range: Range;
 
     transpile(state: TranspileState, skipEmptyStrings = true) {
         let result = [];
@@ -851,13 +850,12 @@ export class TemplateStringExpression extends Expression {
         readonly expressions: Expression[],
         readonly closingBacktick: Token
     ) {
+        super();
         this.range = Range.create(
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end
         );
     }
-
-    public readonly range: Range;
 
     transpile(state: TranspileState) {
         if (this.quasis.length === 1 && this.expressions.length === 0) {
@@ -934,13 +932,12 @@ export class TaggedTemplateStringExpression extends Expression {
         readonly expressions: Expression[],
         readonly closingBacktick: Token
     ) {
+        super();
         this.range = Range.create(
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end
         );
     }
-
-    public readonly range: Range;
 
     transpile(state: TranspileState) {
         let result = [];
@@ -1017,7 +1014,7 @@ export class TernaryExpression extends Expression {
         let allExpressions = [...testInfo.expressions, ...consequentInfo.expressions, ...alternateInfo.expressions];
         let allUniqueVarNames = [...new Set([...testInfo.uniqueVarNames, ...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])];
 
-        let mutatingExpressions = allExpressions.filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression);
+        let mutatingExpressions = state.options.conditionalScopeProtection === 'function-calls' ? allExpressions.filter(e => e instanceof CallExpression || e instanceof CallfuncExpression) : [];
 
         if (mutatingExpressions.length > 0) {
             //we need to do a scope-safe ternary operation

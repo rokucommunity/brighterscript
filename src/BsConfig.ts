@@ -129,4 +129,15 @@ export interface BsConfig {
      * have their source maps changed. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
      */
     sourceRoot?: string;
+
+    /**
+     * Specify how to guard against accidental execution of code, when using ternary opertator. This option changes how the
+     * consequent(true part) and alternate (false part) will be wrapped. This is to prevent accidental code access
+     * e.g, given `myValue = isTrue ? "say hello" : doSomeFunction()` ; the brs code will execute doSomeFunction() to evaluate it's value.
+     * This can lead to unexpected side effects.
+     * When function-calls, consequent and alternate will be wrapped in a scoping function, any function calls (e.g. someNode.getValue())
+     * to prevent side effects.
+     * When never, consequent and alternate are left, as is. This is not advised.
+     */
+    conditionalScopeProtection?: 'function-calls' | 'never';
 }
