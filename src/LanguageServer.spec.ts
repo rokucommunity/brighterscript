@@ -220,6 +220,14 @@ describe('LanguageServer', () => {
             let libPath = s`${workspacePath}/source/lib.brs`;
             writeToFs(libPath, 'sub lib(): return : end sub');
 
+            let deferred = new Deferred();
+            let throttleCount = 0;
+            (server as any).throttledValidation.onIdle = () => {
+                throttleCount++;
+                if (throttleCount > 1) {
+                    deferred.resolve();
+                }
+            };
             await svr.onDidChangeWatchedFiles({
                 changes: [{
                     uri: getFileProtocolPath(libPath),
@@ -235,6 +243,8 @@ describe('LanguageServer', () => {
                     // }
                 ]
             });
+            //wait for the task throttler to complete
+            await deferred.promise;
             expect(server.workspaces[0].builder.program.hasFile(libPath)).to.be.true;
         });
     });

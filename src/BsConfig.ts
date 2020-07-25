@@ -102,6 +102,11 @@ export interface BsConfig {
     diagnosticFilters?: Array<number | string | { src: string; codes: number[] } | { src: string } | { codes: number[] }>;
 
     /**
+     * Specify what diagnostic types should be printed to the console. Defaults to 'warn'
+     */
+    diagnosticLevel?: 'info' | 'hint' | 'warn' | 'error';
+
+    /**
      * When enabled, every xml component will search for a .bs or .brs file with the same name
      * in the same folder, and add it as a script import if found. Disabled by default"
      */
@@ -116,5 +121,12 @@ export interface BsConfig {
      * The log level.
      * @default LogLevel.log
      */
-    logLevel?: LogLevel;
+    logLevel?: LogLevel | 'error' | 'warn' | 'log' | 'info' | 'debug' | 'trace';
+    /**
+     * Override the path to source files in source maps. Use this if you have a preprocess step and want
+     * to ensure the source maps point to the original location.
+     * This will only alter source maps for files within rootDir. Any files found outside of rootDir will not
+     * have their source maps changed. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
+     */
+    sourceRoot?: string;
 }

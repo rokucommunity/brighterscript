@@ -1,10 +1,10 @@
 import { EventEmitter } from 'eventemitter3';
 import { CompletionItem, CompletionItemKind, Location, Position, Range } from 'vscode-languageserver';
 import chalk from 'chalk';
-import { DiagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticMessages, DiagnosticInfo } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import { CallableContainer, BsDiagnostic } from './interfaces';
+import { CallableContainer, BsDiagnostic, FileReference } from './interfaces';
 import { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement } from './parser';
@@ -145,6 +145,7 @@ export class Scope {
                     result.push(file);
                 }
             }
+            this.logDebug('getFiles', () => result.map(x => x.pkgPath));
             return result;
         });
     }
@@ -328,51 +329,55 @@ export class Scope {
             this.logDebug('validate(): already validated');
             return;
         }
-        let logLap = this.program.logger.time(LogLevel.info, this._debugLogComponentName, 'validate()');
 
-        let parentScope = this.getParentScope();
+        this.program.logger.time(LogLevel.info, [this._debugLogComponentName, 'validate()'], () => {
 
-        //validate our parent before we validate ourself
-        if (parentScope && parentScope.isValidated === false) {
-            this.logDebug('validate(): validating parent first');
-            parentScope.validate(force);
-        }
-        //clear the scope's errors list (we will populate them from this method)
-        this.diagnostics = [];
+            let parentScope = this.getParentScope();
 
-        let callables = this.getAllCallables();
+            //validate our parent before we validate ourself
+            if (parentScope && parentScope.isValidated === false) {
+                this.logDebug('validate(): validating parent first');
+                parentScope.validate(force);
+            }
+            //clear the scope's errors list (we will populate them from this method)
+            this.diagnostics = [];
 
-        //sort the callables by filepath and then method name, so the errors will be consistent
-        callables = callables.sort((a, b) => {
-            return (
-                //sort by path
-                a.callable.file.pathAbsolute.localeCompare(b.callable.file.pathAbsolute) ||
-                //then sort by method name
-                a.callable.name.localeCompare(b.callable.name)
-            );
+            let callables = this.getAllCallables();
+
+            //sort the callables by filepath and then method name, so the errors will be consistent
+            callables = callables.sort((a, b) => {
+                return (
+                    //sort by path
+                    a.callable.file.pathAbsolute.localeCompare(b.callable.file.pathAbsolute) ||
+                    //then sort by method name
+                    a.callable.name.localeCompare(b.callable.name)
+                );
+            });
+
+            //get a list of all callables, indexed by their lower case names
+            let callableContainerMap = util.getCallableContainersByLowerName(callables);
+
+            //find all duplicate function declarations
+            this.diagnosticFindDuplicateFunctionDeclarations(callableContainerMap);
+
+            //detect missing and incorrect-case script imports
+            this.diagnosticValidateScriptImportPaths();
+
+            //enforce a series of checks on the bodies of class methods
+            this.validateClasses();
+
+            let files = this.getFiles();
+            //do many per-file checks
+            for (let file of files) {
+                this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
+                this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
+                this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
+                this.diagnosticDetectFunctionCollisions(file);
+                this.detectVariableNamespaceCollisions(file);
+            }
+
+            (this as any).isValidated = true;
         });
-
-        //get a list of all callables, indexed by their lower case names
-        let callableContainerMap = util.getCallableContainersByLowerName(callables);
-
-        //find all duplicate function declarations
-        this.diagnosticFindDuplicateFunctionDeclarations(callableContainerMap);
-
-        //enforce a series of checks on the bodies of class methods
-        this.validateClasses();
-
-        let files = this.getFiles();
-        //do many per-file checks
-        for (let file of files) {
-            this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
-            this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
-            this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
-            this.diagnosticDetectFunctionCollisions(file);
-            this.detectVariableNamespaceCollisions(file);
-        }
-
-        (this as any).isValidated = true;
-        logLap();
     }
 
     /**
@@ -625,6 +630,10 @@ export class Scope {
                     //skip the init function (because every component will have one of those){
                     if (lowerName !== 'init') {
                         let shadowedCallable = ancestorNonGlobalCallables[ancestorNonGlobalCallables.length - 1];
+                        if (!!shadowedCallable && shadowedCallable.callable.file === container.callable.file) {
+                            //same file: skip redundant imports
+                            continue;
+                        }
                         this.diagnostics.push({
                             ...DiagnosticMessages.overridesAncestorFunction(
                                 container.callable.name,
@@ -662,6 +671,55 @@ export class Scope {
     }
 
     /**
+     * Get the list of all script imports for this scope
+     */
+    private getScriptImports() {
+        let result = [] as FileReference[];
+        let files = this.getFiles();
+        for (let file of files) {
+            if (file instanceof BrsFile) {
+                result.push(...file.ownScriptImports);
+            } else if (file instanceof XmlFile) {
+                result.push(...file.scriptTagImports);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Verify that all of the scripts ipmorted by each file in this scope actually exist
+     */
+    private diagnosticValidateScriptImportPaths() {
+        let scriptImports = this.getScriptImports();
+        //verify every script import
+        for (let scriptImport of scriptImports) {
+            let referencedFile = this.getFileByRelativePath(scriptImport.pkgPath);
+            //if we can't find the file
+            if (!referencedFile) {
+                let dInfo: DiagnosticInfo;
+                if (scriptImport.text.trim().length === 0) {
+                    dInfo = DiagnosticMessages.scriptSrcCannotBeEmpty();
+                } else {
+                    dInfo = DiagnosticMessages.referencedFileDoesNotExist();
+                }
+
+                this.diagnostics.push({
+                    ...dInfo,
+                    range: scriptImport.filePathRange,
+                    file: scriptImport.sourceFile
+                });
+                //if the character casing of the script import path does not match that of the actual path
+            } else if (scriptImport.pkgPath !== referencedFile.pkgPath) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.pkgPath),
+                    range: scriptImport.filePathRange,
+                    file: scriptImport.sourceFile
+                });
+            }
+        }
+    }
+
+    /**
      * Find the file with the specified relative path
      * @param relativePath
      */
@@ -681,7 +739,6 @@ export class Scope {
     public hasFile(file: BrsFile | XmlFile) {
         let files = this.getFiles();
         let hasFile = files.includes(file);
-        this.logDebug('hasFile =', hasFile, 'for', () => chalk.green(file.pkgPath), 'in files', () => files.map(x => x.pkgPath));
         return hasFile;
     }
 

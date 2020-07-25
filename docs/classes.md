@@ -457,8 +457,11 @@ end function
 ## Property initialization
 Like most other object-oriented classes, you can initialze a property with a default value. 
 
-```vb
+```BrighterScript
 class Duck
+    name = "Donald"
+    hasChildren = true
+end class
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
@@ -467,6 +470,8 @@ class Duck
 function __Duck_builder()
     instance = {}
     instance.new = sub()
+        m.name = "Donald"
+        m.hasChildren = true
     end sub
     return instance
 end function

@@ -1,12 +1,12 @@
-import { Token, Identifier } from '../lexer';
+import { Token, Identifier, TokenKind } from '../lexer';
 import { BrsType, ValueKind, BrsString, FunctionParameter } from '../brsTypes';
-import { Block } from './Statement';
+import { Block, CommentStatement, FunctionStatement } from './Statement';
 import { SourceNode } from 'source-map';
-
 import { Range } from 'vscode-languageserver';
 import util from '../util';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
+import * as fileUrl from 'file-url';
 
 /** A BrightScript expression */
 export abstract class Expression {
@@ -120,9 +120,19 @@ export class FunctionExpression extends Expression {
     public callExpressions = [] as CallExpression[];
 
     /**
-   * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
-   * and ending with the last n' in 'end function' or 'b' in 'end sub'
-   */
+     * If this function is part of a FunctionStatement, this will be set. Otherwise this will be undefined
+     */
+    public functionStatement?: FunctionStatement;
+
+    /**
+     * A list of all child functions declared directly within this function
+     */
+    public childFunctionExpressions = [] as FunctionExpression[];
+
+    /**
+     * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
+     * and ending with the last n' in 'end function' or 'b' in 'end sub'
+     */
     public get range() {
         return Range.create(
             (this.functionType ?? this.leftParen).range.start,
@@ -334,11 +344,14 @@ export class LiteralExpression extends Expression {
         this.range = range ?? Range.create(-1, -1, -1, -1);
     }
 
+
+    public readonly range: Range;
+
     transpile(state: TranspileState) {
         let text: string;
         if (this.value.kind === ValueKind.String) {
             //escape quote marks with another quote mark
-            text = `"${this.value.toString().replace(/"/g, '""')}"`;
+            text = `"${this.value.value.replace(/"/g, '""')}"`;
         } else {
             text = this.value.toString();
         }
@@ -354,7 +367,31 @@ export class LiteralExpression extends Expression {
     }
 }
 
-export class ArrayLiteralExpression extends Expression {
+/**
+ * This is a special expression only used within template strings. It exists so we can prevent producing lots of empty strings
+ * during template string transpile by identifying these expressions explicitly and skipping the bslib_toString around them
+ */
+export class EscapedCharCodeLiteral extends Expression {
+    constructor(
+        readonly token: Token & { charCode: number }
+    ) {
+        this.range = token.range;
+    }
+    readonly range: Range;
+
+    transpile(state: TranspileState) {
+        return [
+            new SourceNode(
+                this.range.start.line + 1,
+                this.range.start.character,
+                state.pathAbsolute,
+                `chr(${this.token.charCode})`
+            )
+        ];
+    }
+}
+
+export class ArrayLiteralExpression implements Expression {
     constructor(
         readonly elements: Array<Expression>,
         readonly open: Token,
@@ -603,6 +640,80 @@ export class VariableExpression extends Expression {
     }
 }
 
+export class SourceLiteralExpression implements Expression {
+    constructor(
+        readonly token: Token
+    ) {
+        this.range = token.range;
+    }
+
+    public readonly range: Range;
+
+    private getFunctionName(state: TranspileState, parseMode: ParseMode) {
+        let func = state.file.getFunctionScopeAtPosition(this.token.range.start).func;
+        let nameParts = [];
+        while (func.parentFunction) {
+            let index = func.parentFunction.childFunctionExpressions.indexOf(func);
+            nameParts.unshift(`anon${index}`);
+            func = func.parentFunction;
+        }
+        //get the index of this function in its parent
+        nameParts.unshift(
+            func.functionStatement.getName(parseMode)
+        );
+        return nameParts.join('$');
+    }
+
+    transpile(state: TranspileState) {
+        let text: string;
+        switch (this.token.kind) {
+            case TokenKind.SourceFilePathLiteral:
+                text = `"${fileUrl(state.pathAbsolute)}"`;
+                break;
+            case TokenKind.SourceLineNumLiteral:
+                text = `${this.token.range.start.line + 1}`;
+                break;
+            case TokenKind.FunctionNameLiteral:
+                text = `"${this.getFunctionName(state, ParseMode.BrightScript)}"`;
+                break;
+            case TokenKind.SourceFunctionNameLiteral:
+                text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
+                break;
+            case TokenKind.SourceLocationLiteral:
+                text = `"${fileUrl(state.pathAbsolute)}:${this.token.range.start.line + 1}"`;
+                break;
+            case TokenKind.PkgPathLiteral:
+                let pkgPath1 = `pkg:/${state.file.pkgPath}`
+                    .replace(/\\/g, '/')
+                    .replace(/\.bs$/i, '.brs');
+
+                text = `"${pkgPath1}"`;
+                break;
+            case TokenKind.PkgLocationLiteral:
+                let pkgPath2 = `pkg:/${state.file.pkgPath}`
+                    .replace(/\\/g, '/')
+                    .replace(/\.bs$/i, '.brs');
+
+                text = `"${pkgPath2}:" + str(LINE_NUM)`;
+                break;
+            case TokenKind.LineNumLiteral:
+            default:
+                //use the original text (because it looks like a variable)
+                text = this.token.text;
+                break;
+
+        }
+        return [
+            new SourceNode(
+                this.range.start.line + 1,
+                this.range.start.character,
+                state.pathAbsolute,
+                text
+            )
+        ];
+    }
+}
+
 /**
  * This expression transpiles and acts exactly like a CallExpression,
  * except we need to uniquely identify these statements so we can
@@ -697,6 +808,190 @@ export class CallfuncExpression extends Expression {
         this.callee.getAllExpressions(expressions);
 
         return expressions;
+    }
+}
+
+/**
+ * Since template strings can contain newlines, we need to concatenate multiple strings together with chr() calls.
+ * This is a single expression that represents the string contatenation of all parts of a single quasi.
+ */
+export class TemplateStringQuasiExpression extends Expression {
+    constructor(
+        readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteral>
+    ) {
+        this.range = Range.create(
+            this.expressions[0].range.start,
+            this.expressions[this.expressions.length - 1].range.end
+        );
+    }
+    readonly range: Range;
+
+    transpile(state: TranspileState, skipEmptyStrings = true) {
+        let result = [];
+        let plus = '';
+        for (let expression of this.expressions) {
+            //skip empty strings
+            if (((expression as LiteralExpression)?.value as BrsString)?.value === '' && skipEmptyStrings === true) {
+                continue;
+            }
+            result.push(
+                plus,
+                ...expression.transpile(state)
+            );
+            plus = ' + ';
+        }
+        return result;
+    }
+}
+
+export class TemplateStringExpression extends Expression {
+    constructor(
+        readonly openingBacktick: Token,
+        readonly quasis: TemplateStringQuasiExpression[],
+        readonly expressions: Expression[],
+        readonly closingBacktick: Token
+    ) {
+        this.range = Range.create(
+            quasis[0].range.start,
+            quasis[quasis.length - 1].range.end
+        );
+    }
+
+    public readonly range: Range;
+
+    transpile(state: TranspileState) {
+        if (this.quasis.length === 1 && this.expressions.length === 0) {
+            return this.quasis[0].transpile(state);
+        }
+        let result = [];
+        //wrap the expression in parens to readability
+        // result.push(
+        //     new SourceNode(
+        //         this.openingBacktick.range.start.line + 1,
+        //         this.openingBacktick.range.start.character,
+        //         state.pathAbsolute,
+        //         '('
+        //     )
+        // );
+        let plus = '';
+        //helper function to figure out when to include the plus
+        function add(...items) {
+            if (items.length > 0) {
+                result.push(
+                    plus,
+                    ...items
+                );
+            }
+            plus = ' + ';
+        }
+
+        for (let i = 0; i < this.quasis.length; i++) {
+            let quasi = this.quasis[i];
+            let expression = this.expressions[i];
+
+            add(
+                ...quasi.transpile(state)
+            );
+            if (expression) {
+                //skip the toString wrapper around certain expressions
+                if (
+                    expression instanceof EscapedCharCodeLiteral ||
+                    (expression instanceof LiteralExpression && expression.value.kind === ValueKind.String)
+                ) {
+                    add(
+                        ...expression.transpile(state)
+                    );
+
+                    //wrap all other expressions with a bslib_toString call to prevent runtime type mismatch errors
+                } else {
+                    add(
+                        'bslib_toString(',
+                        ...expression.transpile(state),
+                        ')'
+                    );
+                }
+            }
+        }
+
+        //wrap the expression in parens to readability
+        // result.push(
+        //     new SourceNode(
+        //         this.openingBacktick.range.end.line + 1,
+        //         this.openingBacktick.range.end.character,
+        //         state.pathAbsolute,
+        //         ')'
+        //     )
+        // );
+        return result;
+    }
+}
+
+export class TaggedTemplateStringExpression extends Expression {
+    constructor(
+        readonly tagName: Identifier,
+        readonly openingBacktick: Token,
+        readonly quasis: TemplateStringQuasiExpression[],
+        readonly expressions: Expression[],
+        readonly closingBacktick: Token
+    ) {
+        this.range = Range.create(
+            quasis[0].range.start,
+            quasis[quasis.length - 1].range.end
+        );
+    }
+
+    public readonly range: Range;
+
+    transpile(state: TranspileState) {
+        let result = [];
+        result.push(
+            new SourceNode(
+                this.tagName.range.start.line + 1,
+                this.tagName.range.start.character,
+                state.pathAbsolute,
+                this.tagName.text
+            ),
+            '(['
+        );
+
+        //add quasis as the first array
+        for (let i = 0; i < this.quasis.length; i++) {
+            let quasi = this.quasis[i];
+            //separate items with a comma
+            if (i > 0) {
+                result.push(
+                    ', '
+                );
+            }
+            result.push(
+                ...quasi.transpile(state, false)
+            );
+        }
+        result.push(
+            '], ['
+        );
+
+        //add expressions as the second array
+        for (let i = 0; i < this.expressions.length; i++) {
+            let expression = this.expressions[i];
+            if (i > 0) {
+                result.push(
+                    ', '
+                );
+            }
+            result.push(
+                ...expression.transpile(state)
+            );
+        }
+        result.push(
+            new SourceNode(
+                this.closingBacktick.range.end.line + 1,
+                this.closingBacktick.range.end.character,
+                state.pathAbsolute,
+                '])'
+            )
+        );
+        return result;
     }
 }
 

@@ -44,10 +44,14 @@ export enum TokenKind {
     // literals
     Identifier = 'Identifier',
     StringLiteral = 'StringLiteral',
+    TemplateStringQuasi = 'TemplateStringQuasi',
+    TemplateStringExpressionBegin = 'TemplateStringExpressionBegin',
+    TemplateStringExpressionEnd = 'TemplateStringExpressionEnd',
     IntegerLiteral = 'IntegerLiteral',
     FloatLiteral = 'FloatLiteral',
     DoubleLiteral = 'DoubleLiteral',
     LongIntegerLiteral = 'LongIntegerLiteral',
+    EscapedCharCodeLiteral = 'EscapedCharCodeLiteral', //this is used to capture things like `\n`, `\r\n` in template strings
 
     //types
     Void = 'Void',
@@ -70,6 +74,9 @@ export enum TokenKind {
     At = 'At', // @
     Callfunc = 'Callfunc', // @.
     QuestionMark = 'QuestionMark', // ?
+
+
+    BackTick = 'BackTick', // `
 
 
     // conditional compilation
@@ -130,6 +137,7 @@ export enum TokenKind {
 
     //misc
     Library = 'Library',
+    Dollar = '$',
 
     //brighterscript keywords
     Class = 'Class',
@@ -144,6 +152,15 @@ export enum TokenKind {
     Override = 'Override',
     Import = 'Import',
 
+    //brighterscript source literals
+    LineNumLiteral = 'LineNumLiteral',
+    SourceFilePathLiteral = 'SourceFilePathLiteral',
+    SourceLineNumLiteral = 'SourceLineNumLiteral',
+    FunctionNameLiteral = 'FunctionNameLiteral',
+    SourceFunctionNameLiteral = 'SourceFunctionNameLiteral',
+    SourceLocationLiteral = 'SourceLocationLiteral',
+    PkgPathLiteral = 'PkgPathLiteral',
+    PkgLocationLiteral = 'PkgLocationLiteral',
 
     //comments
     Comment = 'Comment',
@@ -182,7 +199,6 @@ export const ReservedWords = new Set([
     'if',
     'invalid',
     'let',
-    'line_num',
     'next',
     'not',
     'objfun',
@@ -275,7 +291,15 @@ export const Keywords: { [key: string]: TokenKind } = {
     namespace: TokenKind.Namespace,
     endnamespace: TokenKind.EndNamespace,
     'end namespace': TokenKind.EndNamespace,
-    import: TokenKind.Import
+    import: TokenKind.Import,
+    'line_num': TokenKind.LineNumLiteral,
+    'source_file_path': TokenKind.SourceFilePathLiteral,
+    'source_line_num': TokenKind.SourceLineNumLiteral,
+    'function_name': TokenKind.FunctionNameLiteral,
+    'source_function_name': TokenKind.SourceFunctionNameLiteral,
+    'source_location': TokenKind.SourceLocationLiteral,
+    'pkg_path': TokenKind.PkgPathLiteral,
+    'pkg_location': TokenKind.PkgLocationLiteral
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
@@ -382,7 +406,15 @@ export const AllowedProperties = [
     TokenKind.Override,
     TokenKind.Namespace,
     TokenKind.EndNamespace,
-    TokenKind.Import
+    TokenKind.Import,
+    TokenKind.LineNumLiteral,
+    TokenKind.SourceFilePathLiteral,
+    TokenKind.SourceLineNumLiteral,
+    TokenKind.FunctionNameLiteral,
+    TokenKind.SourceFunctionNameLiteral,
+    TokenKind.SourceLocationLiteral,
+    TokenKind.PkgPathLiteral,
+    TokenKind.PkgLocationLiteral
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -412,6 +444,16 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Namespace,
     TokenKind.EndNamespace,
     TokenKind.Import
+];
+
+export const BrighterScriptSourceLiterals = [
+    TokenKind.SourceFilePathLiteral,
+    TokenKind.SourceLineNumLiteral,
+    TokenKind.FunctionNameLiteral,
+    TokenKind.SourceFunctionNameLiteral,
+    TokenKind.SourceLocationLiteral,
+    TokenKind.PkgPathLiteral,
+    TokenKind.PkgLocationLiteral
 ];
 
 /**
@@ -460,11 +502,18 @@ export const DisallowedLocalIdentifiers = [
     TokenKind.To,
     TokenKind.True,
     TokenKind.Type,
-    TokenKind.While
+    TokenKind.While,
+    TokenKind.LineNumLiteral,
+    TokenKind.SourceFilePathLiteral,
+    TokenKind.SourceLineNumLiteral,
+    TokenKind.FunctionNameLiteral,
+    TokenKind.SourceFunctionNameLiteral,
+    TokenKind.SourceLocationLiteral,
+    TokenKind.PkgPathLiteral,
+    TokenKind.PkgLocationLiteral
 ];
 
 export const DisallowedLocalIdentifiersText = new Set([
     'run',
-    'line_num',
     ...DisallowedLocalIdentifiers.map(x => x.toLowerCase())
 ]);

@@ -1,6 +1,6 @@
 {
     "name": "brighterscript",
-    "version": "0.10.10",
+    "version": "0.12.2",
     "description": "A superset of Roku's BrightScript language.",
     "scripts": {
         "preversion": "npm run build && npm run lint && npm run test",
@@ -86,7 +86,6 @@
         "benchmark": "^2.1.4",
         "chai": "^4.2.0",
         "chai-files": "^1.4.0",
-        "codecov": "^3.1.0",
         "coveralls": "^3.0.0",
         "eslint": "^6.8.0",
         "madge": "^3.4.4",
@@ -101,32 +100,33 @@
         "testdouble": "^3.5.2",
         "ts-node": "8.9.1",
         "typescript": "^3.9.2",
-        "vscode-jsonrpc": "^5.0.1",
-        "yargs": "^15.3.1"
+        "vscode-jsonrpc": "^5.0.1"
     },
     "dependencies": {
         "array-flat-polyfill": "^1.0.1",
         "chalk": "^2.4.2",
         "chokidar": "^3.0.2",
         "clear": "^0.1.0",
-        "command-line-args": "^5.0.2",
-        "command-line-usage": "^5.0.5",
         "cross-platform-clear-console": "^2.3.0",
         "debounce-promise": "^3.1.0",
         "eventemitter3": "^4.0.0",
+        "file-url": "^3.0.0",
         "fs-extra": "^7.0.1",
         "glob": "^7.1.6",
-        "jsonc-parser": "^2.1.1",
+        "jsonc-parser": "^2.3.0",
         "long": "^3.2.0",
         "luxon": "^1.8.3",
         "minimatch": "^3.0.4",
         "moment": "^2.23.0",
         "p-settle": "^2.1.0",
-        "roku-deploy": "^3.0.2",
+        "parse-ms": "^2.1.0",
+        "roku-deploy": "^3.2.2",
+        "serialize-error": "^7.0.1",
         "source-map": "^0.7.3",
         "vscode-languageserver": "^6.1.1",
         "vscode-languageserver-textdocument": "^1.0.1",
         "vscode-uri": "^2.1.1",
-        "xml2js": "^0.4.19"
+        "xml2js": "^0.4.19",
+        "yargs": "^15.4.0"
     }
 }

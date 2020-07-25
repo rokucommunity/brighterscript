@@ -6,13 +6,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.10.10]
+## [0.12.2] - 2020-07=16
+### Added
+ - Expose `ProgramBuilder.transpile()` method to make it easier for tools to transpile programmatically. [#154](https://github.com/rokucommunity/brighterscript/issues/154)
+### Fixed
+ - bug on Windows when transpiling BrighterScript import statements into xml script tags that would use the wrong path separator sometimes.
+
+
+
+## [0.12.1] - 2020-07-15
+### Changed
+ - upgraded to [roku-deploy@3.2.2](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#322---2020-07-14)
+### Fixed
+ - bug in roku-deploy when when loading `stagingFolderPath` from `rokudeploy.json` or `bsconfig.json` that would crash the language server
+
+
+
+## [0.12.0] - 2020-07-09
+### Added
+ - `diagnosticLevel` option to limit/control the noise in the console diagnostics
+### Changed
+ - Move away from `command-line-args` in favor of `yargs` for CLI support 
+### Fixed
+ - Throttle LanguageServer validation to prevent running too many validations in a row. 
+ - Bug in CLI preventing ability to provide false values to certain flags
+ - Do not print `info` and `hint` diagnostics from the CLI by default.
+
+
+
+## [0.11.2] - 2020-07-09
+### Changed
+ - add 350ms debounce in LanguageServer `onDidChangeWatchedFiles` to increase performance by reducing the number of times a file is parsed and validated.
+### Fixed
+ - bug in the log output that wasn't casting string log levels into their numeric enum versions, causing messages to be lost at certain log levels.
+ - load manifest file exactly one time per program rather than every time a file gets parsed.
+ - bug in `info` logging that wasn't showing the proper parse times for files on first run.
+
+
+
+## [0.11.1] - 2020-07-07
+### Added
+ - diagnostic for unknown file reference in import statements ([#139](https://github.com/rokucommunity/brighterscript/pull/139))
+### Changed
+ - upgraded to [roku-deploy@3.2.1](https://www.npmjs.com/package/roku-deploy/v/3.2.1)
+ - upgraded to jsonc-parser@2.3.0
+ - add begin and end template string literal tokens so we can better format and understand the code downstream. ([#138](https://github.com/rokucommunity/brighterscript/pull/138))
+### Fixed
+ - roku-deploy bug that would fail to load `bsconfig.json` files with comments in them.
+ - bug in parser that would fail to find function calls in certain situations, killing the rest of the parse.
+
+
+
+## [0.11.0] - 2020-07-06
+### Added
+ - [Source literals feature](https://github.com/rokucommunity/brighterscript/blob/master/docs/source-literals.md) which adds new literals such as `SOURCE_FILE_PATH`, `SOURCE_LINE_NUM`, `FUNCTION_NAME`, and more. ([#13](https://github.com/rokucommunity/brighterscript/issues/13))
+ - `sourceRoot` config option to fix sourcemap paths for projects that use a temporary staging folder before calling the BrighterScript compiler. ([#134](https://github.com/rokucommunity/brighterscript/commit/e5b73ca37016d5015a389257fb259573c4721e7a))
+ - [Template string feature](https://github.com/rokucommunity/brighterscript/blob/master/docs/template-strings.md) which brings template string support to BrighterScript. ([#98](https://github.com/rokucommunity/brighterscript/issues/98))
+### Fixed
+ - Do not show BS1010 diagnostic `hint`s for the same script imported for parent and child. ([#113](https://github.com/rokucommunity/brighterscript/issues/113))
+
+
+
+## [0.10.11] - 2020-07-05
+ - Fix bug that would fail to copy files to staging without explicitly specifying `stagingFolderpath`. [#129](https://github.com/rokucommunity/brighterscript/issues/129)
+
+
+
+## [0.10.10] - 2020-06-12
 ### Fixed
  - include the missing `bslib.brs` file in the npm package which was causing errors during transpile. 
 
 
 
-## [0.10.9]
+## [0.10.9] 2020-06-12
 ### Added
  - bslib.brs gets copied to `pkg:/source` and added as an import to every component on transpile.
  - several timing logs under the `"info"` log level.
@@ -363,8 +429,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.12.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.12.1...v0.12.2
+[0.12.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.12.0...v0.12.1
+[0.12.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.3...v0.12.0
+[0.11.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.2...v0.11.3
+[0.11.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.1...v0.11.2
+[0.11.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.0...v0.11.1
+[0.11.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.10...v0.11.0
 [0.10.10]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.9...v0.10.10
 [0.10.9]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.8...v0.10.9
+[0.10.8]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.7...v0.10.8
 [0.10.7]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.6...v0.10.7
 [0.10.6]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.5...v0.10.6
 [0.10.5]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.4...v0.10.5

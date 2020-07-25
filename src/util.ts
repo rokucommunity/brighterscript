@@ -3,7 +3,7 @@ import * as fsExtra from 'fs-extra';
 import { parse as parseJsonc, ParseError, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import { Position, Range, Diagnostic } from 'vscode-languageserver';
+import { Position, Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 
@@ -68,7 +68,7 @@ export class Util {
      * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
      */
     public getRokuPkgPath(pkgPath: string) {
-        pkgPath = pkgPath.replace('\\', '/');
+        pkgPath = pkgPath.replace(/\\/g, '/');
         return 'pkg:/' + pkgPath;
     }
 
@@ -268,6 +268,8 @@ export class Util {
         config.diagnosticFilters = config.diagnosticFilters ?? [];
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
+        config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
+        config.cwd = config.cwd ?? process.cwd();
         if (typeof config.logLevel === 'string') {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
         }
@@ -460,56 +462,6 @@ export class Util {
                 break;
             }
         }
-    }
-
-    /**
-     * Given a diagnostic, compute the range for the squiggly
-     */
-    public getDiagnosticSquigglyText(diagnostic: Diagnostic, line: string) {
-        let squiggle: string;
-        //fill the entire line
-        if (
-            //there is no range
-            !diagnostic.range ||
-            //there is no line
-            !line ||
-            //both positions point to same location
-            diagnostic.range.start.character === diagnostic.range.end.character ||
-            //the diagnostic starts after the end of the line
-            diagnostic.range.start.character >= line.length
-        ) {
-            squiggle = ''.padStart(line?.length ?? 0, '~');
-        } else {
-
-            let endIndex = Math.max(diagnostic.range?.end.character, line.length);
-            endIndex = endIndex > 0 ? endIndex : 0;
-            if (line?.length < endIndex) {
-                endIndex = line.length;
-            }
-
-            let leadingWhitespaceLength = diagnostic.range.start.character;
-            let squiggleLength: number;
-            if (diagnostic.range.end.character === Number.MAX_VALUE) {
-                squiggleLength = line.length - leadingWhitespaceLength;
-            } else {
-                squiggleLength = diagnostic.range.end.character - diagnostic.range.start.character;
-            }
-            let trailingWhitespaceLength = endIndex - diagnostic.range.end.character;
-
-            //opening whitespace
-            squiggle =
-                ''.padStart(leadingWhitespaceLength, ' ') +
-                //squiggle
-                ''.padStart(squiggleLength, '~') +
-                //trailing whitespace
-                ''.padStart(trailingWhitespaceLength, ' ');
-
-            //trim the end of the squiggle so it doesn't go longer than the end of the line
-            if (squiggle.length > endIndex) {
-                squiggle = squiggle.slice(0, endIndex);
-            }
-        }
-        return squiggle;
     }
 
     /**

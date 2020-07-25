@@ -4,10 +4,12 @@ import {
     AssignmentOperators,
     BlockTerminator,
     DisallowedLocalIdentifiersText,
+    AllowedProperties,
     Identifier,
     Lexer,
     Token,
     TokenKind
+    BrighterScriptSourceLiterals
 } from '../lexer';
 
 import {
@@ -60,7 +62,6 @@ import {
     BinaryExpression,
     CallExpression,
     CallfuncExpression,
-    TernaryExpression,
     DottedGetExpression,
     Expression,
     FunctionExpression,
@@ -69,13 +70,19 @@ import {
     LiteralExpression,
     NamespacedVariableNameExpression,
     NewExpression,
+	TernaryExpression,
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression,
-    CommentExpression
+    TemplateStringExpression,
+    EscapedCharCodeLiteral,
+    TemplateStringQuasiExpression,
+    TaggedTemplateStringExpression,
+    SourceLiteralExpression
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
+import { Logger } from '../Logger';
 
 export class Parser {
     /**
@@ -167,6 +174,12 @@ export class Parser {
     private currentFunctionExpression: FunctionExpression;
 
     /**
+     * A list of allowed local identifiers. We store this in a property because we augment the list in the constructor
+     * based on the parse mode
+     */
+    private allowedLocalIdentifiers: TokenKind[];
+
+    /**
      * Get the currently active global terminators
      */
     private peekGlobalTerminators() {
@@ -194,8 +207,14 @@ export class Parser {
      * @returns the same instance of the parser which contains the diagnostics and statements
      */
     public parse(tokens: Token[], options?: ParseOptions) {
+        this.logger = options?.logger ?? new Logger();
         this.tokens = tokens;
         this.options = this.sanitizeParseOptions(options);
+        this.allowedLocalIdentifiers = [
+            ...AllowedLocalIdentifiers,
+            //when in plain brightscript mode, the BrighterScript source literals can be used as regular variables
+            ...(this.options.mode === ParseMode.BrightScript ? BrighterScriptSourceLiterals : [])
+        ];
         this.current = 0;
         this.diagnostics = [];
         this.namespaceAndFunctionDepth = 0;
@@ -205,6 +224,8 @@ export class Parser {
 
         return this;
     }
+
+    private logger: Logger;
 
     private body() {
         let body = new Body([]);
@@ -260,7 +281,9 @@ export class Parser {
      * Throws an exception using the last diagnostic message
      */
     private lastDiagnosticAsError() {
-        return new Error(this.diagnostics[this.diagnostics.length - 1]?.message);
+        let error = new Error(this.diagnostics[this.diagnostics.length - 1]?.message);
+        (error as any).isDiagnostic = true;
+        return error;
     }
 
     private declaration(...additionalTerminators: BlockTerminator[]): Statement | undefined {
@@ -288,7 +311,7 @@ export class Parser {
             // `let`, (...) keyword. As such, we must check the token *after* an identifier to figure
             // out what to do with it.
             if (
-                this.check(TokenKind.Identifier, ...AllowedLocalIdentifiers) &&
+                this.check(TokenKind.Identifier, ...this.allowedLocalIdentifiers) &&
                 this.checkNext(...AssignmentOperators)
             ) {
                 return this.assignment(...additionalTerminators);
@@ -310,6 +333,10 @@ export class Parser {
 
             return this.statement(...additionalTerminators);
         } catch (error) {
+            //if the error is not a diagnostic, then log the error for debugging purposes
+            if (!error.isDiagnostic) {
+                this.logger.error(error);
+            }
             this.synchronize();
         }
     }
@@ -327,7 +354,7 @@ export class Parser {
         let parentClassName: NamespacedVariableNameExpression;
 
         //get the class name
-        let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier, ...AllowedLocalIdentifiers) as Identifier;
+        let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
 
         //see if the class inherits from parent
         if (this.peek().text.toLowerCase() === 'extends') {
@@ -634,6 +661,10 @@ export class Parser {
                 typeToken,
                 this.currentFunctionExpression
             );
+            //if there is a parent function, register this function with the parent
+            if (this.currentFunctionExpression) {
+                this.currentFunctionExpression.childFunctionExpressions.push(func);
+            }
 
             this.functionExpressions.push(func);
 
@@ -681,6 +712,7 @@ export class Parser {
                 while (this.match(TokenKind.Newline)) {
                 }
                 let result = new FunctionStatement(name, func, this.currentNamespaceName);
+                func.functionStatement = result;
                 this.functionStatements.push(result);
                 return result;
             }
@@ -692,7 +724,7 @@ export class Parser {
     }
 
     private functionParameter(): FunctionParameter {
-        if (!this.check(TokenKind.Identifier, ...AllowedLocalIdentifiers)) {
+        if (!this.check(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedParameterNameButFound(this.peek().text),
                 range: this.peek().range
@@ -1111,7 +1143,7 @@ export class Parser {
         let firstIdentifier = this.consume(
             DiagnosticMessages.expectedIdentifierAfterKeyword(this.previous().text),
             TokenKind.Identifier,
-            ...AllowedLocalIdentifiers
+            ...this.allowedLocalIdentifiers
         ) as Identifier;
 
         let expr: DottedGetExpression | VariableExpression;
@@ -1133,7 +1165,7 @@ export class Parser {
                 let identifier = this.tryConsume(
                     DiagnosticMessages.expectedIdentifier(),
                     TokenKind.Identifier,
-                    ...AllowedLocalIdentifiers,
+                    ...this.allowedLocalIdentifiers,
                     ...AllowedProperties
                 ) as Identifier;
                 // force it into an identifier so the AST makes some sense
@@ -1248,6 +1280,83 @@ export class Parser {
                 });
             }
             return new TernaryExpression(test, consequent, alternate);
+        }
+    }
+
+    private templateString(isTagged: boolean): TemplateStringExpression | TaggedTemplateStringExpression {
+        this.warnIfNotBrighterScriptMode('template string');
+
+        //get the tag name
+        let tagName: Identifier;
+        if (isTagged) {
+            tagName = this.consume(DiagnosticMessages.expectedIdentifier(), TokenKind.Identifier, ...AllowedProperties) as Identifier;
+            // force it into an identifier so the AST makes some sense
+            tagName.kind = TokenKind.Identifier;
+        }
+
+        let quasis = [] as TemplateStringQuasiExpression[];
+        let expressions = [];
+        let openingBacktick = this.peek();
+        this.advance();
+        let currentQuasiExpressionParts = [];
+        while (!this.isAtEnd() && !this.check(TokenKind.BackTick)) {
+            let next = this.peek();
+            if (next.kind === TokenKind.TemplateStringQuasi) {
+                //a quasi can actually be made up of multiple quasis when it includes char literals
+                currentQuasiExpressionParts.push(
+                    new LiteralExpression(next.literal, next.range)
+                );
+                this.advance();
+            } else if (next.kind === TokenKind.EscapedCharCodeLiteral) {
+                currentQuasiExpressionParts.push(
+                    new EscapedCharCodeLiteral(<any>next)
+                );
+                this.advance();
+            } else {
+                //finish up the current quasi
+                quasis.push(
+                    new TemplateStringQuasiExpression(currentQuasiExpressionParts)
+                );
+                currentQuasiExpressionParts = [];
+
+                if (next.kind === TokenKind.TemplateStringExpressionBegin) {
+                    this.advance();
+                }
+                //now keep this expression
+                expressions.push(this.expression());
+                if (!this.isAtEnd() && this.check(TokenKind.TemplateStringExpressionEnd)) {
+                    //TODO is it an error if this is not present?
+                    this.advance();
+                } else {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.unterminatedTemplateExpression(),
+                        range: util.getRange(openingBacktick, this.peek())
+                    });
+                    throw this.lastDiagnosticAsError();
+                }
+            }
+        }
+
+        //store the final set of quasis
+        quasis.push(
+            new TemplateStringQuasiExpression(currentQuasiExpressionParts)
+        );
+
+        if (this.isAtEnd()) {
+            //error - missing backtick
+            this.diagnostics.push({
+                ...DiagnosticMessages.unterminatedTemplateStringAtEndOfFile(),
+                range: util.getRange(openingBacktick, this.peek())
+            });
+            throw this.lastDiagnosticAsError();
+
+        } else {
+            let closingBacktick = this.advance();
+            if (isTagged) {
+                return new TaggedTemplateStringExpression(tagName, openingBacktick, quasis, expressions, closingBacktick);
+            } else {
+                return new TemplateStringExpression(openingBacktick, quasis, expressions, closingBacktick);
+            }
         }
     }
 
@@ -1765,10 +1874,17 @@ export class Parser {
             expr = this.boolean();
         }
 
-        if (this.check(TokenKind.QuestionMark)) {
+		//template string
+        if (this.check(TokenKind.BackTick)) {
+            return this.templateString(false);
+            //tagged template string (currently we do not support spaces between the identifier and the backtick
+        } else if (this.check(TokenKind.Identifier, ...AllowedLocalIdentifiers) && this.checkNext(TokenKind.BackTick)) {
+            return this.templateString(true);
+        } else if (this.check(TokenKind.QuestionMark)) {
             expr = this.conditionalOrCoalescingExpression(expr);
-        }
-        return expr;
+		}
+
+        return this.boolean();
     }
 
     private boolean(): Expression {
@@ -1907,7 +2023,7 @@ export class Parser {
     }
 
     private call(): Expression {
-        if (this.check(TokenKind.New) && this.checkNext(TokenKind.Identifier, ...AllowedLocalIdentifiers)) {
+        if (this.check(TokenKind.New) && this.checkNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
             return this.newExpression();
         }
         let expr = this.primary();
@@ -2004,7 +2120,10 @@ export class Parser {
                 TokenKind.StringLiteral
             ):
                 return new LiteralExpression(this.previous().literal, this.previous().range);
-            case this.match(TokenKind.Identifier, ...AllowedLocalIdentifiers):
+            //capture source literals (LINE_NUM if brightscript, or a bunch of them if brighterscript
+            case this.match(TokenKind.LineNumLiteral, ...(this.options.mode === ParseMode.BrightScript ? [] : BrighterScriptSourceLiterals)):
+                return new SourceLiteralExpression(this.previous());
+            case this.match(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
                 return new VariableExpression(this.previous() as Identifier, this.currentNamespaceName);
             case this.match(TokenKind.LeftParen):
                 let left = this.previous();
@@ -2191,7 +2310,9 @@ export class Parser {
         if (token) {
             return token;
         } else {
-            throw new Error(diagnosticInfo.message);
+            let error = new Error(diagnosticInfo.message);
+            (error as any).isDiagnostic = true;
+            throw error;
         }
     }
 
@@ -2307,4 +2428,8 @@ export interface ParseOptions {
      * The parse mode. When in 'BrightScript' mode, no BrighterScript syntax is allowed, and will emit diagnostics.
      */
     mode: ParseMode;
+    /**
+     * A logger that should be used for logging. If omitted, a default logger is used
+     */
+    logger?: Logger;
 }

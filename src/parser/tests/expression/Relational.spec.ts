@@ -20,7 +20,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses less-than-or-equal-to expressions', () => {
@@ -36,7 +35,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses greater-than expressions', () => {
@@ -52,7 +50,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses greater-than-or-equal-to expressions', () => {
@@ -67,7 +64,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses equality expressions', () => {
@@ -83,7 +79,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses inequality expressions', () => {
@@ -98,7 +93,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 });

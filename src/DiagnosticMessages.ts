@@ -578,6 +578,14 @@ export let DiagnosticMessages = {
     malformedTernaryOperator: () => ({
         message: `Ternary '?' operator must be of form: test ? true value : false value`,
         code: 1112,
+    unterminatedTemplateStringAtEndOfFile: () => ({
+        message: `Unterminated template string at end of file`,
+        code: 1113,
+        severity: DiagnosticSeverity.Error
+    }),
+    unterminatedTemplateExpression: () => ({
+        message: `Unterminated template string expression. '\${' must be followed by expression, then '}'`,
+        code: 1114,
         severity: DiagnosticSeverity.Error
     })
 

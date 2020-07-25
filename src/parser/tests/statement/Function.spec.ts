@@ -22,7 +22,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(1);
             expect(statements).to.length.greaterThan(0);
 
-            //expect({ errors, statements }).toMatchSnapshot();
         });
 
         it('parses minimal empty function declarations', () => {
@@ -39,7 +38,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses non-empty function declarations', () => {
@@ -59,7 +57,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with implicit-dynamic arguments', () => {
@@ -79,7 +76,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with typed arguments', () => {
@@ -103,7 +99,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with default argument expressions', () => {
@@ -137,7 +132,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with typed arguments and default expressions', () => {
@@ -170,7 +164,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses return types', () => {
@@ -189,7 +182,6 @@ describe('parser', () => {
             expect(diagnostics[0]?.message).to.not.exist;
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('does not allow type designators at end of name', () => {
@@ -214,7 +206,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(4);
             expect(statements).to.length.greaterThan(0);
 
-            //expect({ errors, statements }).toMatchSnapshot();
         });
     });
 
@@ -233,7 +224,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(1);
             expect(statements).to.length.greaterThan(0);
 
-            //expect({ errors, statements }).toMatchSnapshot();
         });
 
         it('parses minimal sub declarations', () => {
@@ -250,7 +240,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses non-empty sub declarations', () => {
@@ -270,7 +259,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with implicit-dynamic arguments', () => {
@@ -290,7 +278,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with typed arguments', () => {
@@ -314,7 +301,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with default argument expressions', () => {
@@ -347,7 +333,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with typed arguments and default expressions', () => {
@@ -379,7 +364,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('does not allow type designators at end of name', () => {
@@ -399,7 +383,6 @@ describe('parser', () => {
             const { statements, diagnostics } = Parser.parse(tokens);
             expect(diagnostics).to.be.lengthOf(4);
             expect(statements).to.length.greaterThan(0);
-            //expect({ errors, statements }).toMatchSnapshot();
         });
     });
 });

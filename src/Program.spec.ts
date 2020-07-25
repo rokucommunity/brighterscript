@@ -854,182 +854,6 @@ describe('Program', () => {
         });
     });
 
-    describe('import statements', () => {
-        it('still transpiles import statements if found at bottom of file', async () => {
-            await program.addOrReplaceFile('components/ChildScene.xml', `
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene" extends="Scene">
-                    <script type="text/brighterscript" uri="pkg:/source/lib.bs" />
-                </component>
-            `);
-
-            await program.addOrReplaceFile('source/lib.bs', `
-                function toLower(strVal as string)
-                    return StringToLower(strVal)
-                end function
-                'this import is purposefully at the bottom just to prove the transpile still works
-                import "stringOps.bs"
-            `);
-
-            await program.addOrReplaceFile('source/stringOps.bs', `
-                function StringToLower(strVal as string)
-                    return true
-                end function
-            `);
-            let files = Object.keys(program.files).map(x => program.getFileByPathAbsolute(x)).filter(x => !!x).map(x => {
-                return {
-                    src: x.pathAbsolute,
-                    dest: x.pkgPath
-                };
-            });
-            await program.transpile(files, stagingFolderPath);
-            expect(
-                fsExtra.readFileSync(`${stagingFolderPath}/components/ChildScene.xml`).toString()
-            ).to.equal(`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
-                    <script type="text/brightscript" uri="pkg:/source/stringOps.brs" />
-                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
-                </component>
-            `);
-        });
-
-        it('finds function loaded in by import multiple levels deep', async () => {
-            //create child component
-            let component = await program.addOrReplaceFile('components/ChildScene.xml', `
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene" extends="ParentScene">
-                    <script type="text/brighterscript" uri="pkg:/source/lib.bs" />
-                </component>
-            `);
-            await program.addOrReplaceFile('source/lib.bs', `
-                import "stringOps.bs"
-                function toLower(strVal as string)
-                    return StringToLower(strVal)
-                end function
-            `);
-            await program.addOrReplaceFile('source/stringOps.bs', `
-                import "intOps.bs"
-                function StringToLower(strVal as string)
-                    return isInt(strVal)
-                end function
-            `);
-            await program.addOrReplaceFile('source/intOps.bs', `
-                function isInt(strVal as dynamic)
-                    return true
-                end function
-            `);
-            await program.validate();
-            expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
-            expect(
-                (component as XmlFile).getAvailableScriptImports().sort()
-            ).to.eql([
-                s`source/intOps.bs`,
-                s`source/lib.bs`,
-                s`source/stringOps.bs`
-            ]);
-        });
-
-        it('supports importing brs files', async () => {
-            //create child component
-            let component = await program.addOrReplaceFile('components/ChildScene.xml', `
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene" extends="ParentScene">
-                    <script type="text/brighterscript" uri="pkg:/source/lib.bs" />
-                </component>
-            `);
-            await program.addOrReplaceFile('source/lib.bs', `
-                import "stringOps.brs"
-                function toLower(strVal as string)
-                    return StringToLower(strVal)
-                end function
-            `);
-            await program.addOrReplaceFile('source/stringOps.brs', `
-                function StringToLower(strVal as string)
-                    return lcase(strVal)
-                end function
-            `);
-            await program.validate();
-            expect(program.getDiagnostics().map(x => x.message)[0]).to.not.exist;
-            expect(
-                (component as XmlFile).getAvailableScriptImports()
-            ).to.eql([
-                s`source/lib.bs`,
-                s`source/stringOps.brs`
-            ]);
-        });
-
-        it('detects when dependency contents have changed', async () => {
-            //create child component
-            await program.addOrReplaceFile('components/ChildScene.xml', `
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene" extends="ParentScene">
-                    <script type="text/brighterscript" uri="lib.bs" />
-                </component>
-            `);
-            await program.addOrReplaceFile('components/lib.bs', `
-                import "animalActions.bs"
-                function init1(strVal as string)
-                    Waddle()
-                end function
-            `);
-            //add the empty dependency
-            await program.addOrReplaceFile('components/animalActions.bs', ``);
-
-            //there should be an error because that function doesn't exist
-            await program.validate();
-
-            expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                DiagnosticMessages.callToUnknownFunction('Waddle', s`components/ChildScene.xml`).message
-            ]);
-
-            //change the dependency to now contain the file. the scope should re-validate
-            await program.addOrReplaceFile('components/animalActions.bs', `
-                sub Waddle()
-                    print "Waddling"
-                end sub
-            `);
-
-            //validate again
-            await program.validate();
-
-            //the error should be gone
-            expect(program.getDiagnostics()).to.be.empty;
-
-        });
-
-        it('adds brs imports to xml file during transpile', async () => {
-            //create child component
-            let component = await program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, `
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene" extends="ParentScene">
-                    <script type="text/brightscript" uri="pkg:/source/lib.bs" />
-                </component>
-            `);
-            await program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: 'source/lib.bs' }, `
-                import "stringOps.brs"
-                function toLower(strVal as string)
-                    return StringToLower(strVal)
-                end function
-            `);
-            await program.addOrReplaceFile({ src: s`${rootDir}/source/stringOps.brs`, dest: 'source/stringOps.brs' }, `
-                function StringToLower(strVal as string)
-                    return isInt(strVal)
-                end function
-            `);
-            await program.validate();
-            expect(component.transpile().code).to.equal(`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene" extends="ParentScene">
-                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
-                    <script type="text/brightscript" uri="pkg:/source/stringOps.brs" />
-                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
-                </component>
-            `);
-        });
-    });
-
     describe('xml inheritance', () => {
         it('handles parent-child attach and detach', async () => {
             //create parent component
@@ -1136,11 +960,13 @@ describe('Program', () => {
             await program.validate();
             let diagnostics = program.getDiagnostics();
 
+            //the children shouldn't have diagnostics about shadowing their parent lib.brs file.
             let shadowedDiagnositcs = diagnostics.filter((x) => x.code === DiagnosticMessages.overridesAncestorFunction('', '', '', '').code);
+            expect(shadowedDiagnositcs).to.be.lengthOf(0);
 
-            //the children should all have diagnostics about shadowing their parent lib.brs file.
-            //If not, then the parent-child attachment was severed somehow
-            expect(shadowedDiagnositcs).to.be.lengthOf(childCount);
+            //the children all include a redundant import of lib.brs file which is imported by the parent.
+            let importDiagnositcs = diagnostics.filter((x) => x.code === DiagnosticMessages.unnecessaryScriptImportInChildFromParent('').code);
+            expect(importDiagnositcs).to.be.lengthOf(childCount);
         });
 
         it('detects script import changes', async () => {
@@ -1379,6 +1205,58 @@ describe('Program', () => {
         await program.transpile([], program.options.stagingFolderPath);
 
         expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/bslib.brs`)).is.true;
+    });
+
+    describe('transpile', () => {
+        it('uses sourceRoot when provided for brs files', async () => {
+            let sourceRoot = s`${tmpPath}/sourceRootFolder`;
+            program = new Program({
+                rootDir: rootDir,
+                stagingFolderPath: stagingFolderPath,
+                sourceRoot: sourceRoot
+            });
+            await program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                end sub
+            `);
+            await program.transpile([{
+                src: s`${rootDir}/source/main.brs`,
+                dest: s`source/main.brs`
+            }], stagingFolderPath);
+
+            let contents = fsExtra.readFileSync(s`${stagingFolderPath}/source/main.brs.map`).toString();
+            let map = JSON.parse(contents);
+            expect(
+                s`${map.sources[0]}`
+            ).to.eql(
+                s`${sourceRoot}/source/main.brs`
+            );
+        });
+
+        it('uses sourceRoot when provided for bs files', async () => {
+            let sourceRoot = s`${tmpPath}/sourceRootFolder`;
+            program = new Program({
+                rootDir: rootDir,
+                stagingFolderPath: stagingFolderPath,
+                sourceRoot: sourceRoot
+            });
+            await program.addOrReplaceFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            await program.transpile([{
+                src: s`${rootDir}/source/main.bs`,
+                dest: s`source/main.bs`
+            }], stagingFolderPath);
+
+            let contents = fsExtra.readFileSync(s`${stagingFolderPath}/source/main.brs.map`).toString();
+            let map = JSON.parse(contents);
+            expect(
+                s`${map.sources[0]}`
+            ).to.eql(
+                s`${sourceRoot}/source/main.bs`
+            );
+        });
     });
 
 });

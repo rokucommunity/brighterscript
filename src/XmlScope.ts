@@ -1,7 +1,7 @@
 import { Location, Position, Range } from 'vscode-languageserver';
 
 import { Scope } from './Scope';
-import { DiagnosticInfo, DiagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
 import { FileReference } from './interfaces';
@@ -42,9 +42,6 @@ export class XmlScope extends Scope {
 
             //detect when the child imports a script that its ancestor also imports
             this.diagnosticDetectDuplicateAncestorScriptImports();
-
-            //detect script imports to files that are not loaded in this scope
-            this.diagnosticValidateScriptImportPaths();
 
             (this as any).isValidated = true;
         }
@@ -118,37 +115,5 @@ export class XmlScope extends Scope {
             });
         }
         return results;
-    }
-
-    /**
-     * Verify that all of the scripts ipmorted by
-     */
-    private diagnosticValidateScriptImportPaths() {
-        //verify every script import
-        for (let scriptImport of this.xmlFile.scriptTagImports) {
-            let referencedFile = this.getFileByRelativePath(scriptImport.pkgPath);
-            //if we can't find the file
-            if (!referencedFile) {
-                let dInfo: DiagnosticInfo;
-                if (scriptImport.text.trim().length === 0) {
-                    dInfo = DiagnosticMessages.scriptSrcCannotBeEmpty();
-                } else {
-                    dInfo = DiagnosticMessages.referencedFileDoesNotExist();
-                }
-
-                this.diagnostics.push({
-                    ...dInfo,
-                    range: scriptImport.filePathRange,
-                    file: this.xmlFile
-                });
-                //if the character casing of the script import path does not match that of the actual path
-            } else if (scriptImport.pkgPath !== referencedFile.pkgPath) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.pkgPath),
-                    range: scriptImport.filePathRange,
-                    file: this.xmlFile
-                });
-            }
-        }
     }
 }

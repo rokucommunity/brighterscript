@@ -23,7 +23,6 @@ describe('parser return statements', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.ok;
-        // //expect(statements).toMatchSnapshot();
     });
 
     it('parses literal returns', () => {
@@ -42,7 +41,6 @@ describe('parser return statements', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.ok;
-        // //expect(statements).toMatchSnapshot();
     });
 
     it('parses expression returns', () => {
@@ -63,7 +61,6 @@ describe('parser return statements', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.ok;
-        // //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {

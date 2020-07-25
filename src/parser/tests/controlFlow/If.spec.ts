@@ -117,7 +117,6 @@ describe('parser if statements', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses if-else', () => {
@@ -140,7 +139,6 @@ describe('parser if statements', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses if-elseif-else', () => {
@@ -171,7 +169,6 @@ describe('parser if statements', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('allows \'then\' to be skipped', () => {
@@ -200,7 +197,6 @@ describe('parser if statements', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 
@@ -217,7 +213,6 @@ describe('parser if statements', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses if-else', () => {
@@ -234,7 +229,6 @@ describe('parser if statements', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses if-elseif-else', () => {
@@ -253,7 +247,6 @@ describe('parser if statements', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('allows \'then\' to be skipped', () => {
@@ -272,7 +265,6 @@ describe('parser if statements', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('sets endif token properly', () => {
@@ -312,7 +304,6 @@ describe('parser if statements', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('supports trailing colons for one-line if statements', () => {
@@ -322,7 +313,6 @@ describe('parser if statements', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('catches one-line if statement missing first colon', () => {
@@ -333,7 +323,6 @@ describe('parser if statements', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.length.greaterThan(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('catches one-line if statement missing second colon', () => {
@@ -344,7 +333,6 @@ describe('parser if statements', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.length.greaterThan(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('catches one-line if statement with else missing colons', () => {
@@ -355,7 +343,6 @@ describe('parser if statements', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.length.greaterThan(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('catches one-line if statement with colon and missing end if', () => {
@@ -366,7 +353,6 @@ describe('parser if statements', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.length.greaterThan(0);
         expect(statements).to.be.lengthOf(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('catches one-line if statement with colon and missing end if inside a function', () => {
@@ -379,7 +365,6 @@ describe('parser if statements', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(1);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('supports if statement with condition and action on one line, but end if on separate line', () => {
@@ -390,7 +375,6 @@ describe('parser if statements', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('supports colon after return in single-line if statement', () => {
@@ -400,7 +384,6 @@ describe('parser if statements', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('supports if elseif endif single line', () => {
@@ -410,7 +393,6 @@ describe('parser if statements', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('supports one-line functions inside of one-line if statement', () => {
@@ -420,8 +402,5 @@ describe('parser if statements', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
-
-    // TODO: Improve `if` statement structure to allow a linter to require a `then` keyword for
 });

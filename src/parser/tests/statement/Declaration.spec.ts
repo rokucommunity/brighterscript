@@ -48,7 +48,6 @@ describe('parser variable declarations', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses evaluated value assignments', () => {
@@ -64,7 +63,6 @@ describe('parser variable declarations', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses variable aliasing', () => {
@@ -78,7 +76,6 @@ describe('parser variable declarations', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {

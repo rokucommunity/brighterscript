@@ -44,6 +44,12 @@ describe('util', () => {
         });
     });
 
+    describe('getRokuPkgPath', () => {
+        it('replaces more than one windows slash in a path', () => {
+            expect(util.getRokuPkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
+        });
+    });
+
     describe('loadConfigFile', () => {
         it('returns proper list of ancestor project paths', async () => {
             vfs[n(`${cwd}/child.json`)] = `{"extends": "parent.json"}`;
@@ -390,81 +396,6 @@ describe('util', () => {
                     text: '123'
                 }]);
             });
-        });
-    });
-
-    describe('getDiagnosticSquiggly', () => {
-        it('works for normal cases', () => {
-            expect(util.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 0, 0, 4)
-            }, 'asdf')).to.equal('~~~~');
-        });
-
-        it('highlights whole line if no range', () => {
-            expect(util.getDiagnosticSquigglyText(<any>{
-            }, ' asdf ')).to.equal('~~~~~~');
-        });
-
-        it('returns empty string when no line is found', () => {
-            expect(util.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 0, 0, 10)
-            }, '')).to.equal('');
-
-            expect(util.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 0, 0, 10)
-            }, undefined)).to.equal('');
-        });
-
-        it('supports diagnostic not at start of line', () => {
-            expect(util.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 2, 0, 6)
-            }, '  asdf')).to.equal('  ~~~~');
-        });
-
-        it('supports diagnostic that does not finish at end of line', () => {
-            expect(util.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 0, 0, 4)
-            }, 'asdf  ')).to.equal('~~~~  ');
-        });
-
-        it('supports diagnostic with space on both sides', () => {
-            expect(util.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 2, 0, 6)
-            }, '  asdf  ')).to.equal('  ~~~~  ');
-        });
-
-        it('handles diagnostic that starts and stops on the same position', () => {
-            expect(util.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 2, 0, 2)
-            }, 'abcde')).to.equal('~~~~~');
-        });
-
-        it('handles single-character diagnostic', () => {
-            expect(util.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 2, 0, 3)
-            }, 'abcde')).to.equal('  ~  ');
-        });
-
-        it('handles diagnostics that are longer than the line', () => {
-            expect(util.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 0, 0, 10)
-            }, 'abcde')).to.equal('~~~~~');
-
-            expect(util.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 2, 0, 10)
-            }, 'abcde')).to.equal('  ~~~');
-        });
-
-        it('handles Number.MAX_VALUE for end character', () => {
-            expect(util.getDiagnosticSquigglyText(<any>{
-                range: Range.create(0, 0, 0, Number.MAX_VALUE)
-            }, 'abcde')).to.equal('~~~~~');
-        });
-
-        it.skip('handles edge cases', () => {
-            expect(util.getDiagnosticSquigglyText(<any>{
-                range: Range.create(5, 16, 5, 18)
-            }, 'end functionasdf')).to.equal('            ~~~~');
         });
     });
 

@@ -486,17 +486,17 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports line_num as global variable', async () => {
-            await file.parse(`
+        it('supports line_num as global variable', () => {
+            file.parse(`
                 sub Main()
                     print LINE_NUM
                 end sub
             `);
-            expect(file.getDiagnostics()).to.be.lengthOf(0);
+            expect(file.getDiagnostics()[0]?.message).not.to.exist;
         });
 
-        it('supports many keywords as object property names', async () => {
-            await file.parse(`
+        it('supports many keywords as object property names', () => {
+            file.parse(`
                 sub Main()
                     person = {}
                     person.and = true
@@ -561,8 +561,8 @@ describe('BrsFile', () => {
             `);
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
-        it('does not error on numeric literal type designators', async () => {
-            await file.parse(`
+        it('does not error on numeric literal type designators', () => {
+            file.parse(`
                 sub main()
                     print &he2
                     print 1.2E+2
@@ -576,8 +576,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('does not error when encountering sub with return type', async () => {
-            await file.parse(`
+        it('does not error when encountering sub with return type', () => {
+            file.parse(`
                 sub main() as integer
                     return
                 end sub
@@ -585,8 +585,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('does not lose function scopes when mismatched end sub', async () => {
-            await file.parse(`
+        it('does not lose function scopes when mismatched end sub', () => {
+            file.parse(`
                 sub main()
                     sayHi()
                 end function
@@ -598,8 +598,8 @@ describe('BrsFile', () => {
             expect(file.functionScopes).to.be.lengthOf(2);
         });
 
-        it('does not lose sub scope when mismatched end function', async () => {
-            await file.parse(`
+        it('does not lose sub scope when mismatched end function', () => {
+            file.parse(`
                 function main()
                     sayHi()
                 end sub
@@ -611,8 +611,8 @@ describe('BrsFile', () => {
             expect(file.functionScopes).to.be.lengthOf(2);
         });
 
-        it('does not error with boolean in RHS of set statement', async () => {
-            await file.parse(`
+        it('does not error with boolean in RHS of set statement', () => {
+            file.parse(`
                 sub main()
                     foo = {
                         bar: false
@@ -623,8 +623,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('does not error with boolean in RHS of set statement', async () => {
-            await file.parse(`
+        it('does not error with boolean in RHS of set statement', () => {
+            file.parse(`
                 sub main()
                     m = {
                         isTrue: false
@@ -637,8 +637,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports variable names ending with type designators', async () => {
-            await file.parse(`
+        it('supports variable names ending with type designators', () => {
+            file.parse(`
                 sub main()
                   name$ = "bob"
                   age% = 1
@@ -650,8 +650,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports multiple spaces between two-word keywords', async () => {
-            await file.parse(`
+        it('supports multiple spaces between two-word keywords', () => {
+            file.parse(`
                 sub main()
                     if true then
                         print "true"
@@ -663,8 +663,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('does not error with `stop` as object key', async () => {
-            await file.parse(`
+        it('does not error with `stop` as object key', () => {
+            file.parse(`
                 function GetObject()
                     obj = {
                         stop: function() as void
@@ -677,8 +677,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('does not error with `run` as object key', async () => {
-            await file.parse(`
+        it('does not error with `run` as object key', () => {
+            file.parse(`
                 function GetObject()
                     obj = {
                         run: function() as void
@@ -691,8 +691,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports assignment operators', async () => {
-            await file.parse(`
+        it('supports assignment operators', () => {
+            file.parse(`
                 function Main()
                     x = 1
                     x += 1
@@ -709,8 +709,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports `then` as object property', async () => {
-            await file.parse(`
+        it('supports `then` as object property', () => {
+            file.parse(`
                 function Main()
                     promise = {
                         then: sub()
@@ -722,8 +722,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports function as parameter type', async () => {
-            await file.parse(`
+        it('supports function as parameter type', () => {
+            file.parse(`
                 sub Main()
                     doWork = function(callback as function)
                     end function
@@ -732,8 +732,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports increment operator', async () => {
-            await file.parse(`
+        it('supports increment operator', () => {
+            file.parse(`
                 function Main()
                     x = 3
                     x++
@@ -743,8 +743,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports decrement operator', async () => {
-            await file.parse(`
+        it('supports decrement operator', () => {
+            file.parse(`
                 function Main()
                     x = 3
                     x--
@@ -754,8 +754,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports writing numbers with decimal but no trailing digit', async () => {
-            await file.parse(`
+        it('supports writing numbers with decimal but no trailing digit', () => {
+            file.parse(`
                 function Main()
                     x = 3.
                     print x
@@ -764,8 +764,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports assignment operators against object properties', async () => {
-            await file.parse(`
+        it('supports assignment operators against object properties', () => {
+            file.parse(`
                 function Main()
                     m.age = 1
 
@@ -788,8 +788,8 @@ describe('BrsFile', () => {
         });
 
         //skipped until `brs` supports this
-        it('supports bitshift assignment operators', async () => {
-            await file.parse(`
+        it('supports bitshift assignment operators', () => {
+            file.parse(`
                 function Main()
                     x = 1
                     x <<= 8
@@ -801,8 +801,8 @@ describe('BrsFile', () => {
         });
 
         //skipped until `brs` supports this
-        it('supports bitshift assignment operators on objects', async () => {
-            await file.parse(`
+        it('supports bitshift assignment operators on objects', () => {
+            file.parse(`
                     function Main()
                         m.x = 1
                         m.x <<= 1
@@ -813,8 +813,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports leading and trailing periods for numeric literals', async () => {
-            await file.parse(`
+        it('supports leading and trailing periods for numeric literals', () => {
+            file.parse(`
                 function Main()
                     one = 1.
                     print one
@@ -825,8 +825,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports bitshift assignment operators on object properties accessed by array syntax', async () => {
-            await file.parse(`
+        it('supports bitshift assignment operators on object properties accessed by array syntax', () => {
+            file.parse(`
                     function Main()
                         m.x = 1
                         'm['x'] << 1
@@ -837,8 +837,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports weird period AA accessor', async () => {
-            await file.parse(`
+        it('supports weird period AA accessor', () => {
+            file.parse(`
                 function Main()
                     m._uuid = "123"
                     print m.["_uuid"]
@@ -847,8 +847,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('adds error for library statements NOT at top of file', async () => {
-            await file.parse(`
+        it('adds error for library statements NOT at top of file', () => {
+            file.parse(`
                 sub main()
                 end sub
                 import "file.brs"
@@ -860,15 +860,15 @@ describe('BrsFile', () => {
             ]);
         });
 
-        it('supports library imports', async () => {
-            await file.parse(`
+        it('supports library imports', () => {
+            file.parse(`
                 Library "v30/bslCore.brs"
             `);
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('adds error for library statements NOT at top of file', async () => {
-            await file.parse(`
+        it('adds error for library statements NOT at top of file', () => {
+            file.parse(`
                 sub main()
                 end sub
                 Library "v30/bslCore.brs"
@@ -878,11 +878,10 @@ describe('BrsFile', () => {
             ).to.eql([
                 DiagnosticMessages.libraryStatementMustBeDeclaredAtTopOfFile().message
             ]);
-            //expect({ diagnostics: diagnostics, statements: statements }).toMatchSnapshot();
         });
 
-        it('adds error for library statements inside of function body', async () => {
-            await file.parse(`
+        it('adds error for library statements inside of function body', () => {
+            file.parse(`
                 sub main()
                     Library "v30/bslCore.brs"
                 end sub
@@ -894,8 +893,8 @@ describe('BrsFile', () => {
             ]);
         });
 
-        it('supports colons as separators in associative array properties', async () => {
-            await file.parse(`
+        it('supports colons as separators in associative array properties', () => {
+            file.parse(`
                 sub Main()
                     obj = {x:0 : y: 1}
                 end sub
@@ -903,8 +902,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('succeeds when finding variables with "sub" in them', async () => {
-            await file.parse(`
+        it('succeeds when finding variables with "sub" in them', () => {
+            file.parse(`
                 function DoSomething()
                     return value.subType()
                 end function
@@ -915,17 +914,17 @@ describe('BrsFile', () => {
             });
         });
 
-        it('succeeds when finding variables with the word "function" in them', async () => {
-            await file.parse(`
+        it('succeeds when finding variables with the word "function" in them', () => {
+            file.parse(`
                 function Test()
                     typeCheckFunction = RBS_CMN_GetFunction(invalid, methodName)
                 end function
             `);
         });
 
-        it('finds line and column numbers for functions', async () => {
+        it('finds line and column numbers for functions', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
-            await file.parse(`
+            file.parse(`
                 function DoA()
                     print "A"
                 end function
@@ -941,20 +940,20 @@ describe('BrsFile', () => {
             expect(file.callables[1].nameRange).to.eql(Range.create(5, 26, 5, 29));
         });
 
-        it('throws an error if the file has already been parsed', async () => {
+        it('throws an error if the file has already been parsed', () => {
             let file = new BrsFile('abspath', 'relpath', program);
-            await file.parse(`'a comment`);
+            file.parse(`'a comment`);
             try {
-                await file.parse(`'a new comment`);
+                file.parse(`'a new comment`);
                 assert.fail(null, null, 'Should have thrown an exception, but did not');
             } catch (e) {
                 //test passes
             }
         });
 
-        it('finds and registers duplicate callables', async () => {
+        it('finds and registers duplicate callables', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
-            await file.parse(`
+            file.parse(`
                 function DoA()
                     print "A"
                 end function
@@ -971,9 +970,9 @@ describe('BrsFile', () => {
             expect(file.callables[1].nameRange.start.line).to.equal(5);
         });
 
-        it('finds function call line and column numbers', async () => {
+        it('finds function call line and column numbers', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
-            await file.parse(`
+            file.parse(`
                 function DoA()
                     DoB("a")
                 end function
@@ -990,9 +989,9 @@ describe('BrsFile', () => {
             expect(file.functionCalls[1].nameRange).to.eql(Range.create(5, 20, 5, 23));
         });
 
-        it('sanitizes brs errors', async () => {
+        it('sanitizes brs errors', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
-            await file.parse(`
+            file.parse(`
                 function DoSomething
                 end function
             `);
@@ -1003,9 +1002,9 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()[0].range.start.line).to.equal(1);
         });
 
-        it('supports using the `next` keyword in a for loop', async () => {
+        it('supports using the `next` keyword in a for loop', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
-            await file.parse(`
+            file.parse(`
                 sub countit()
                     for each num in [1,2,3]
                         print num
@@ -1016,9 +1015,9 @@ describe('BrsFile', () => {
         });
 
         //test is not working yet, but will be enabled when brs supports this syntax
-        it('supports assigning functions to objects', async () => {
+        it('supports assigning functions to objects', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
-            await file.parse(`
+            file.parse(`
                 function main()
                     o = CreateObject("roAssociativeArray")
                     o.sayHello = sub()
@@ -1031,9 +1030,9 @@ describe('BrsFile', () => {
     });
 
     describe('findCallables', () => {
-        it('finds range', async () => {
+        it('finds range', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
-            await file.parse(`
+            file.parse(`
                 sub Sum()
                     print "hello world"
                 end sub
@@ -1042,9 +1041,9 @@ describe('BrsFile', () => {
             expect(callable.range).to.eql(Range.create(1, 16, 3, 23));
         });
 
-        it('finds correct body range even with inner function', async () => {
+        it('finds correct body range even with inner function', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
-            await file.parse(`
+            file.parse(`
                 sub Sum()
                     sayHi = sub()
                         print "Hi"
@@ -1056,9 +1055,9 @@ describe('BrsFile', () => {
             expect(callable.range).to.eql(Range.create(1, 16, 6, 23));
         });
 
-        it('finds callable parameters', async () => {
+        it('finds callable parameters', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
-            await file.parse(`
+            file.parse(`
                 function Sum(a, b, c)
 
                 end function
@@ -1086,9 +1085,9 @@ describe('BrsFile', () => {
             expect(callable.params[2].type).instanceof(DynamicType);
         });
 
-        it('finds optional parameters', async () => {
+        it('finds optional parameters', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
-            await file.parse(`
+            file.parse(`
                 function Sum(a=2)
 
                 end function
@@ -1102,9 +1101,9 @@ describe('BrsFile', () => {
             expect(callable.params[0].type).instanceof(DynamicType);
         });
 
-        it('finds parameter types', async () => {
+        it('finds parameter types', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
-            await file.parse(`
+            file.parse(`
                 function Sum(a, b as integer, c as string)
 
                 end function
@@ -1134,9 +1133,9 @@ describe('BrsFile', () => {
     });
 
     describe('findCallableInvocations', () => {
-        it('finds arguments with literal values', async () => {
+        it('finds arguments with literal values', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
-            await file.parse(`
+            file.parse(`
                 function Sum()
                     DoSomething("name", 12, true)
                 end function
@@ -1174,9 +1173,9 @@ describe('BrsFile', () => {
             );
         });
 
-        it('finds arguments with variable values', async () => {
+        it('finds arguments with variable values', () => {
             let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
-            await file.parse(`
+            file.parse(`
                 function Sum()
                     count = 1
                     name = "John"
@@ -1202,15 +1201,15 @@ describe('BrsFile', () => {
 
     describe('findCallables', () => {
         //this test is to help with code coverage
-        it('skips top-level statements', async () => {
+        it('skips top-level statements', () => {
             let file = new BrsFile('absolute', 'relative', program);
-            await file.parse('name = "Bob"');
+            file.parse('name = "Bob"');
             expect(file.callables.length).to.equal(0);
         });
 
-        it('finds return type', async () => {
+        it('finds return type', () => {
             let file = new BrsFile('absolute', 'relative', program);
-            await file.parse(`
+            file.parse(`
                 function DoSomething() as string
                 end function
             `);
@@ -1225,8 +1224,8 @@ describe('BrsFile', () => {
     });
 
     describe('createFunctionScopes', () => {
-        it('creates range properly', async () => {
-            await file.parse(`
+        it('creates range properly', () => {
+            file.parse(`
                 sub Main()
                     name = 'bob"
                 end sub
@@ -1234,8 +1233,8 @@ describe('BrsFile', () => {
             expect(file.functionScopes[0].range).to.eql(Range.create(1, 16, 3, 23));
         });
 
-        it('creates scopes for parent and child functions', async () => {
-            await file.parse(`
+        it('creates scopes for parent and child functions', () => {
+            file.parse(`
                 sub Main()
                     sayHi = sub()
                         print "hi"
@@ -1249,8 +1248,8 @@ describe('BrsFile', () => {
             expect(file.functionScopes).to.length(3);
         });
 
-        it('outer function does not capture inner statements', async () => {
-            await file.parse(`
+        it('outer function does not capture inner statements', () => {
+            file.parse(`
                 sub Main()
                     name = "john"
                     sayHi = sub()
@@ -1265,8 +1264,8 @@ describe('BrsFile', () => {
             expect(innerScope.variableDeclarations).to.be.lengthOf(1);
         });
 
-        it('finds variables declared in function scopes', async () => {
-            await file.parse(`
+        it('finds variables declared in function scopes', () => {
+            file.parse(`
                 sub Main()
                     sayHi = sub()
                         age = 12
@@ -1299,8 +1298,8 @@ describe('BrsFile', () => {
             expect(file.functionScopes[2].variableDeclarations[0].type).instanceof(StringType);
         });
 
-        it('finds variable declarations inside of if statements', async () => {
-            await file.parse(`
+        it('finds variable declarations inside of if statements', () => {
+            file.parse(`
                 sub Main()
                     if true then
                         theLength = 1
@@ -1312,8 +1311,8 @@ describe('BrsFile', () => {
             expect(scope.variableDeclarations[0].name).to.equal('theLength');
         });
 
-        it('finds value from global return', async () => {
-            await file.parse(`
+        it('finds value from global return', () => {
+            file.parse(`
                 sub Main()
                    myName = GetName()
                 end sub
@@ -1331,8 +1330,8 @@ describe('BrsFile', () => {
             expect(file.functionScopes[0].variableDeclarations[0].type).instanceof(StringType);
         });
 
-        it('finds variable type from other variable', async () => {
-            await file.parse(`
+        it('finds variable type from other variable', () => {
+            file.parse(`
                 sub Main()
                    name = "bob"
                    nameCopy = name
@@ -1347,8 +1346,8 @@ describe('BrsFile', () => {
             expect(file.functionScopes[0].variableDeclarations[1].type).instanceof(StringType);
         });
 
-        it('sets proper range for functions', async () => {
-            await file.parse(`
+        it('sets proper range for functions', () => {
+            file.parse(`
                 sub Main()
                     getName = function()
                         return "bob"
@@ -2053,14 +2052,13 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
         await program.validate();
         let diagnostics = file.getDiagnostics();
         if (diagnostics.length > 0 && failOnDiagnostic !== false) {
-
-            expect(
+            throw new Error(
                 diagnostics[0].range.start.line +
                 ':' +
                 diagnostics[0].range.start.character +
                 ' ' +
                 diagnostics[0]?.message
-            ).to.not.exist;
+            );
         }
         let transpiled = file.transpile();
 

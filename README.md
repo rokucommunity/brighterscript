@@ -11,6 +11,11 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
 The BrighterScript language provides new features and syntax enhancements to Roku's BrightScript language. Because the language is a superset of BrightScript, the parser and associated tools (VSCode integration, cli, etc...) work with standard BrightScript (.brs) files. This means you will get benefits (as described in the following section) from using the BrighterScript compiler, whether your project contains BrighterScript (.bs) files or not. The BrighterScript language transpiles to standard BrightScript, so your code is fully compatible with all roku devices.
 
+## Features
+BrighterScript adds several new features to the BrightScript language such as Namespaces, classes, import statements, and more. Take a look at the language specification docs for more information. 
+
+[BrighterScript Language Specification](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md)
+
 ## Why use the BrighterScript compiler/CLI?
 
  - Check the entire project for syntax and program errors without needing to run on an actual Roku device.
@@ -64,12 +69,6 @@ The name BrighterScript is a compliment to everything that is great about Roku's
 
 We want to honor BrightScript, the language that BrighterScript is based off of, and could think of no better way than to use _most_ of its name in our name. 
 
-## Features
-BrighterScript adds several new features to the BrightScript language such as Namespaces, classes, import statements, and more. Take a look at the language specification docs for more information. 
-
-[BrighterScript Language Specification](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md)
-
-
 ## Installation
 
 ### npm
@@ -120,6 +119,12 @@ If you need to configure `bsc`, you can do so in two ways:
     ```bash
     bsc --project ./some_folder/bsconfig.json
     ```
+
+5. Run the compiler as a **linter** only (watch mode supported)
+    ```bash
+    bsc --create-package false --copy-to-staging false
+    ```
+
 ## bsconfig.json
 
 ### Overview
@@ -178,7 +183,11 @@ These are the options available in the `bsconfig.json` file.
             "codes": [1000, 1011] //ignore these specific codes from vendor libraries 
         }]
         ```
+ - **diagnosticLevel**: `'hint' | 'info' | 'warn' | 'error'` - Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to 'warn'
+
  - **autoImportComponentScript**: `bool` - BrighterScript only: will automatically import a script at transpile-time for a component with the same name if it exists.
+
+ - **sourceRoot*: `string` - Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
 
 
 ## Ignore errors and warnings on a per-line basis

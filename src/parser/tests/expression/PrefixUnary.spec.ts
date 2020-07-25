@@ -19,7 +19,6 @@ describe('parser prefix unary expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses consecutive unary \'not\'', () => {
@@ -37,7 +36,6 @@ describe('parser prefix unary expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses unary \'-\'', () => {
@@ -51,7 +49,6 @@ describe('parser prefix unary expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses consecutive unary \'-\'', () => {
@@ -69,7 +66,6 @@ describe('parser prefix unary expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {
