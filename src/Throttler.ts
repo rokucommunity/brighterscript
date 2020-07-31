@@ -35,7 +35,7 @@ export class Throttler {
     public onIdle(callback) {
         this.emitter.on('idle', callback);
         return () => {
-            this.emitter.off('idle');
+            this.emitter.off('idle', callback);
         };
     }
 
