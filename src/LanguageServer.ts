@@ -33,7 +33,7 @@ import { standardizePath as s, util } from './util';
 import { BsDiagnostic } from './interfaces';
 import { Logger } from './Logger';
 import { KeyedDebouncer } from './KeyedDebouncer';
-import { Throttler } from './TaskThrottler';
+import { Throttler } from './Throttler';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case

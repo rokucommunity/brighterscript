@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { expect } from 'chai';
-import { Throttler } from './TaskThrottler';
+import { Throttler } from './Throttler';
 import { createSandbox, fake } from 'sinon';
 
 let sinon = createSandbox();
