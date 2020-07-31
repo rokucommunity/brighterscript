@@ -33,7 +33,7 @@ import { standardizePath as s, util } from './util';
 import { BsDiagnostic } from './interfaces';
 import { Logger } from './Logger';
 import { KeyedDebouncer } from './KeyedDebouncer';
-import { TaskThrottler } from './TaskThrottler';
+import { Throttler } from './TaskThrottler';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
@@ -75,7 +75,12 @@ export class LanguageServer {
 
     private debouncer = new KeyedDebouncer<string>();
 
-    private throttledValidation = new TaskThrottler(this.validateAll.bind(this));
+    public validateThrottler = new Throttler(0);
+    private boundValidateAll = this.validateAll.bind(this);
+
+    private validateAllThrottled() {
+        return this.validateThrottler.run(this.boundValidateAll);
+    }
 
     //run the server
     public run() {
@@ -578,7 +583,7 @@ export class LanguageServer {
         await this.waitAllProgramFirstRuns();
 
         // valdiate all workspaces
-        this.throttledValidation.run();
+        this.validateAllThrottled(); //eslint-disable-line
     }
 
     private getRootDir(workspace: Workspace) {
@@ -741,7 +746,7 @@ export class LanguageServer {
             );
 
             //valdiate all workspaces
-            this.throttledValidation.run();
+            await this.validateAllThrottled();
         }
         this.connection.sendNotification('build-status', 'success');
     }
@@ -875,7 +880,7 @@ export class LanguageServer {
             );
 
             // valdiate all workspaces
-            this.throttledValidation.run();
+            this.validateAllThrottled(); //eslint-disable-line
         } catch (e) {
             this.connection.tracer.log(e);
             this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
@@ -1028,6 +1033,7 @@ export class LanguageServer {
 
     public dispose() {
         this.loggerSubscription?.();
+        this.validateThrottler.dispose();
     }
 }
 
