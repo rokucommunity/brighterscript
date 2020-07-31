@@ -32,8 +32,8 @@ import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { BsDiagnostic } from './interfaces';
 import { Logger } from './Logger';
-import { KeyedDebouncer } from './KeyedDebouncer';
 import { Throttler } from './Throttler';
+import { KeyedThrottler } from './KeyedThrottler';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
@@ -73,7 +73,7 @@ export class LanguageServer {
 
     private loggerSubscription;
 
-    private debouncer = new KeyedDebouncer<string>();
+    private keyedThrottler = new KeyedThrottler(this.debounceTimeout);
 
     public validateThrottler = new Throttler(0);
     private boundValidateAll = this.validateAll.bind(this);
@@ -498,6 +498,9 @@ export class LanguageServer {
 
         let filePath = util.uriToPath(uri);
 
+        //wait until the fle has settled
+        await this.keyedThrottler.onIdleOnce(filePath, true);
+
         let workspaceCompletionPromises = [] as Array<Promise<CompletionItem[]>>;
         let workspaces = this.getWorkspaces();
         //get completions from every workspace
@@ -677,11 +680,6 @@ export class LanguageServer {
 
         let keys = changes.map(x => x.pathAbsolute);
 
-        //Debounce the list of keys so we avoid duplicate parsing. This will return only the keys
-        //that made it through the debounce (i.e. no other method debounced those keys again).
-        //Any that are not present will be handled by the later listener that debouced it.
-        keys = await this.debouncer.debounce(keys, this.debounceTimeout);
-
         //filter the list of changes to only the ones that made it through the debounce unscathed
         changes = changes.filter(x => keys.includes(x.pathAbsolute));
 
@@ -757,53 +755,62 @@ export class LanguageServer {
      * @param changes
      */
     public async handleFileChanges(workspace: Workspace, changes: { type: FileChangeType; pathAbsolute: string }[]) {
+        //this loop assumes paths are both file paths and folder paths, which eliminates the need to detect.
+        //All functions below can handle being given a file path AND a folder path, and will only operate on the one they are looking for
+        await Promise.all(changes.map(async (change) => {
+            await this.keyedThrottler.run(change.pathAbsolute, async () => {
+                await this.handleFileChange(workspace, change);
+            });
+        }));
+    }
+
+    /**
+     * This only operates on files that match the specified files globs, so it is safe to throw
+     * any file changes you receive with no unexpected side-effects
+     * @param changes
+     */
+    private async handleFileChange(workspace: Workspace, change: { type: FileChangeType; pathAbsolute: string }) {
         const program = workspace.builder.program;
         const options = workspace.builder.options;
         const rootDir = workspace.builder.rootDir;
+        //deleted
+        if (change.type === FileChangeType.Deleted) {
+            //try to act on this path as a directory
+            workspace.builder.removeFilesInFolder(change.pathAbsolute);
 
-        //this loop assumes paths are both file paths and folder paths,
-        //Which eliminates the need to detect. All functions below can handle being given
-        //a file path AND a folder path, and will only operate on the one they are looking for
-        for (let change of changes) {
-            //deleted
-            if (change.type === FileChangeType.Deleted) {
-                //try to act on this path as a directory
-                workspace.builder.removeFilesInFolder(change.pathAbsolute);
+            //if this is a file loaded in the program, remove it
+            if (program.hasFile(change.pathAbsolute)) {
+                program.removeFile(change.pathAbsolute);
+            }
 
-                //if this is a file loaded in the program, remove it
-                if (program.hasFile(change.pathAbsolute)) {
-                    program.removeFile(change.pathAbsolute);
-                }
+            //created
+        } else if (change.type === FileChangeType.Created) {
+            // thanks to `onDidChangeWatchedFiles`, we can safely assume that all "Created" changes are file paths, (not directories)
 
-                //created
-            } else if (change.type === FileChangeType.Created) {
-                // thanks to `onDidChangeWatchedFiles`, we can safely assume that all "Created" changes are file paths, (not directories)
+            //get the dest path for this file.
+            let destPath = rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir);
 
-                //get the dest path for this file.
-                let destPath = rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir);
+            //if we got a dest path, then the program wants this file
+            if (destPath) {
+                await program.addOrReplaceFile({
+                    src: change.pathAbsolute,
+                    dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
+                });
+            } else {
+                //no dest path means the program doesn't want this file
+            }
 
-                //if we got a dest path, then the program wants this file
-                if (destPath) {
-                    await program.addOrReplaceFile({
-                        src: change.pathAbsolute,
-                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
-                    });
-                } else {
-                    //no dest path means the program doesn't want this file
-                }
-
-                //changed
-            } else if (program.hasFile(change.pathAbsolute)) {
-                //sometimes "changed" events are emitted on files that were actually deleted,
-                //so determine file existance and act accordingly
-                if (await util.fileExists(change.pathAbsolute)) {
-                    await program.addOrReplaceFile({
-                        src: change.pathAbsolute,
-                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
-                    });
-                } else {
-                    program.removeFile(change.pathAbsolute);
-                }
+            //changed
+        } else if (program.hasFile(change.pathAbsolute)) {
+            //sometimes "changed" events are emitted on files that were actually deleted,
+            //so determine file existance and act accordingly
+            if (await util.fileExists(change.pathAbsolute)) {
+                await program.addOrReplaceFile({
+                    src: change.pathAbsolute,
+                    dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
+                });
+            } else {
+                program.removeFile(change.pathAbsolute);
             }
         }
     }
@@ -853,38 +860,38 @@ export class LanguageServer {
         await this.waitAllProgramFirstRuns();
 
         let filePath = URI.parse(textDocument.uri).fsPath;
-        let keys = await this.debouncer.debounce([textDocument.uri], this.debounceTimeout);
-        //skip parsing the file because some other iteration debounced the file after us so they will handle it
-        if (keys.length === 0) {
-            return;
-        }
 
-        this.connection.sendNotification('build-status', 'building');
-
-        let documentText = textDocument.getText();
-        let workspaces = this.getWorkspaces();
         try {
-            await Promise.all(
-                workspaces.map(async (x) => {
-                    //only add or replace existing files. All of the files in the project should
-                    //have already been loaded by other means
-                    if (x.builder.program.hasFile(filePath)) {
-                        let rootDir = x.builder.program.options.rootDir ?? x.builder.program.options.cwd;
-                        let dest = rokuDeploy.getDestPath(filePath, x.builder.program.options.files, rootDir);
-                        await x.builder.program.addOrReplaceFile({
-                            src: filePath,
-                            dest: dest
-                        }, documentText);
-                    }
-                })
-            );
 
+            //throttle file processing. first call is run immediately, and then the last call is processed.
+            await this.keyedThrottler.run(filePath, async () => {
+
+                this.connection.sendNotification('build-status', 'building');
+
+                let documentText = textDocument.getText();
+                let workspaces = this.getWorkspaces();
+                await Promise.all(
+                    workspaces.map(async (x) => {
+                        //only add or replace existing files. All of the files in the project should
+                        //have already been loaded by other means
+                        if (x.builder.program.hasFile(filePath)) {
+                            let rootDir = x.builder.program.options.rootDir ?? x.builder.program.options.cwd;
+                            let dest = rokuDeploy.getDestPath(filePath, x.builder.program.options.files, rootDir);
+                            await x.builder.program.addOrReplaceFile({
+                                src: filePath,
+                                dest: dest
+                            }, documentText);
+                        }
+                    })
+                );
+            });
             // valdiate all workspaces
-            this.validateAllThrottled(); //eslint-disable-line
+            await this.validateAllThrottled();
         } catch (e) {
             this.connection.tracer.log(e);
             this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
         }
+        console.log('Validate done');
     }
 
     private async validateAll() {
