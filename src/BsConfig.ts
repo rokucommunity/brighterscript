@@ -135,9 +135,8 @@ export interface BsConfig {
      * consequent(true part) and alternate (false part) will be wrapped. This is to prevent accidental code access
      * e.g, given `myValue = isTrue ? "say hello" : doSomeFunction()` ; the brs code will execute doSomeFunction() to evaluate it's value.
      * This can lead to unexpected side effects.
-     * When function-calls, consequent and alternate will be wrapped in a scoping function, any function calls (e.g. someNode.getValue())
-     * to prevent side effects.
-     * When never, consequent and alternate are left, as is. This is not advised.
+     * When safe, consequent and alternate will be wrapped in an inline function, if any function calls (e.g. someNode.getValue()) or dotted gets, (e.g. user.name) are present in the consequent or alternate, to prevent side effects.
+     * When none, consequent and alternate are left, as is. This is not advised.
      */
-    conditionalScopeProtection?: 'function-calls' | 'never';
+    conditionalScopeProtection?: 'safe' | 'none';
 }

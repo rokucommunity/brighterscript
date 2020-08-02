@@ -106,17 +106,17 @@ export class FunctionExpression extends Expression {
         readonly asToken?: Token,
         readonly returnTypeToken?: Token,
         /**
-     * If this function is enclosed within another function, this will reference that parent function
-     */
+         * If this function is enclosed within another function, this will reference that parent function
+         */
         readonly parentFunction?: FunctionExpression
     ) {
         super();
     }
 
     /**
-   * The list of function calls that are declared within this function scope. This excludes CallExpressions
-   * declared in child functions
-   */
+     * The list of function calls that are declared within this function scope. This excludes CallExpressions
+     * declared in child functions
+     */
     public callExpressions = [] as CallExpression[];
 
     /**
@@ -728,8 +728,8 @@ export class NewExpression extends Expression {
     }
 
     /**
-   * The name of the class to initialize (with optional namespace prefixed)
-   */
+     * The name of the class to initialize (with optional namespace prefixed)
+     */
     public get className() {
     //the parser guarantees the callee of a new statement's call object will be
     //a NamespacedVariableNameExpression
@@ -894,7 +894,7 @@ export class TemplateStringExpression extends Expression {
                 //skip the toString wrapper around certain expressions
                 if (
                     expression instanceof EscapedCharCodeLiteral ||
-                    (expression instanceof LiteralExpression && expression.value.kind === ValueKind.String)
+          (expression instanceof LiteralExpression && expression.value.kind === ValueKind.String)
                 ) {
                     add(
                         ...expression.transpile(state)
@@ -1011,10 +1011,9 @@ export class TernaryExpression extends Expression {
         let consequentInfo = getExpressionInfo(this.consequent);
         let alternateInfo = getExpressionInfo(this.alternate);
 
-        let allExpressions = [...testInfo.expressions, ...consequentInfo.expressions, ...alternateInfo.expressions];
         let allUniqueVarNames = [...new Set([...testInfo.uniqueVarNames, ...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])];
-
-        let mutatingExpressions = state.options.conditionalScopeProtection === 'function-calls' ? allExpressions.filter(e => e instanceof CallExpression || e instanceof CallfuncExpression) : [];
+        let allExpressions = [...testInfo.expressions, ...consequentInfo.expressions, ...alternateInfo.expressions];
+        let mutatingExpressions = state.options.conditionalScopeProtection === 'safe' ? allExpressions.filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression) : [];
 
         if (mutatingExpressions.length > 0) {
             //we need to do a scope-safe ternary operation

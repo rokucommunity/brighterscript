@@ -294,10 +294,10 @@ describe('transpilation', () => {
         });
     });
 
-    describe('conditionalScopeProtection: function-calls', () => {
+    describe('conditionalScopeProtection: safe', () => {
 
         beforeEach(() => {
-            program = new Program({ rootDir: rootDir, conditionalScopeProtection: 'function-calls' });
+            program = new Program({ rootDir: rootDir, conditionalScopeProtection: 'safe' });
             testTranspile = getTestTranspile(() => [program, rootDir]);
         });
 
