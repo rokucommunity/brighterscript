@@ -108,3 +108,27 @@ transpiles to:
 ```BrightScript
 a = bslib_simpleTernary(user = invalid, getNoNameMessage(m.config), user.name + m.accountType)
 ```
+
+## Library functions
+
+The following library functions are called in the transpiled code:
+
+```
+function bslib_simpleTernary(isTrue, trueValue, falseValue)
+    if isTrue then
+        return trueValue
+    else
+        return falseValue
+    end if
+end function
+
+function bslib_scopeSafeTernary(isTrue, scope, trueFunc, falseFunc)
+    if isTrue then
+        return trueFunc(scope)
+    else
+        return falseFunc(scope)
+    end if
+end function
+
+```
+
