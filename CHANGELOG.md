@@ -6,7 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.12.2] - 2020-07=16
+## [0.12.3] - 2020-08-03
+### Fixed
+ - bug in the language server that would provide stale completions due to the file throttling introduced in v0.11.2. Now the language server will wait for the throttled parsing to complete before serving completion results. 
+
+
+
+## [0.12.2] - 2020-07-16
 ### Added
  - Expose `ProgramBuilder.transpile()` method to make it easier for tools to transpile programmatically. [#154](https://github.com/rokucommunity/brighterscript/issues/154)
 ### Fixed
@@ -429,6 +435,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.12.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.12.2...v0.12.3
 [0.12.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.12.1...v0.12.2
 [0.12.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.12.0...v0.12.1
 [0.12.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.3...v0.12.0
