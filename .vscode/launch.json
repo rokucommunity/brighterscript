@@ -11,6 +11,7 @@
             // "preLaunchTask": "build",
             "smartStep": false,
             "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
+            "sourceMaps": true,
             "args": [
                 "${file}"
             ],
