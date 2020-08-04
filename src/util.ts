@@ -799,7 +799,12 @@ export class Util {
      */
     public sleep(milliseconds: number) {
         return new Promise((resolve) => {
-            setTimeout(resolve, milliseconds);
+            //if milliseconds is 0, don't actually timeout (improves unit test throughput)
+            if (milliseconds === 0) {
+                process.nextTick(resolve);
+            } else {
+                setTimeout(resolve, milliseconds);
+            }
         });
     }
 
