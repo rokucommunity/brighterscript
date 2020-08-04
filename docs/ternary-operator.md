@@ -10,7 +10,7 @@ a = user = invalid ? "no user" : "logged in"
 transpiles to: 
 
 ```BrightScript
-a = bslib_simpleTernary(user = invalid, "no user", "logged in")
+a = bslib_simpleTernary(user = invalid, "no user", "logged in") 
 ```
 
 The `bslib_simpleTernary` function checks the condition, and returns either the consequent or alternate.
@@ -25,7 +25,7 @@ Consider:
 
 transpiles to:
 ```BrightScript
-a = bslib_simpleTernary(user = invalid, "no name", user.invalid)
+a = bslib_simpleTernary(user = invalid, "no name", user.name) 
 ```
 
 This code will crash because `user.invalid` will be evaluated.
@@ -55,16 +55,15 @@ The default setting is `safe`.
 transpiles to: 
 
 ```BrightScript
-a = bslib_scopeSafeTernary(user, {
+a = bslib_scopeSafeTernary(user = invalid, {
   "user": user
 },function(scope)
-  user = scope.user
   return "no name"
 end function
  function(scope)
   user = scope.user
   return user.name
- end function) 
+end function) 
 ```
 
 ```BrighterScript
@@ -74,19 +73,57 @@ a = user = invalid ? getNoNameMessage(m.config) : user.name + m.accountType
 transpiles to: 
 
 ```BrightScript
-a = bslib_scopeSafeTernary(user, {
+a = bslib_scopeSafeTernary(user = invalid, {
   "user": user
   "m": m
+  "getNoNameMessage": getNoNameMessage
 },function(scope)
-  user = scope.user
   m = scope.m
-  return getNonNameMessage(m.config)
+  getNoNameMessage = scope.getNoNameMessage
+  return getNoNameMessage(m.config)
 end function
  function(scope)
   user = scope.user
   m = scope.m
   return user.name + m.accountType
- end function) 
+end function) 
+```
+
+### nested scope protection
+The scope protection works for multiple levels as well
+```BrighterScript
+m.count = 1
+m.increment = function ()
+    m.count++
+    return m.count
+end function
+result = (m.increment() = 1 ? m.increment() : -1) = -1 ? m.increment(): -1
+```
+
+transpiles to: 
+```BrightScript
+m.count = 1
+m.increment = function()
+    m.count++
+    return m.count
+end function
+result = bslib_scopeSafeTernary((bslib_scopeSafeTernary(m.increment() = 1, {
+  "m": m
+},function(scope)
+  m = scope.m
+  return m.increment()
+end function
+ function(scope)
+  return - 1
+end function) ) = - 1, {
+  "m": m
+},function(scope)
+  m = scope.m
+  return m.increment()
+end function
+ function(scope)
+  return - 1
+end function) 
 ```
 
 ### conditionalScopeProtection: none
@@ -100,7 +137,7 @@ a = user = invalid ? getNoNameMessage() : user.name
 transpiles to: 
 
 ```BrightScript
-a = bslib_simpleTernary(user = invalid, getNoNameMessage(), user.name)
+a = bslib_simpleTernary(user = invalid, getNoNameMessage(), user.name) 
 ```
 
 ```BrighterScript
@@ -110,7 +147,7 @@ a = user = invalid ? getNoNameMessage(m.config) : user.name + m.accountType
 transpiles to: 
 
 ```BrightScript
-a = bslib_simpleTernary(user = invalid, getNoNameMessage(m.config), user.name + m.accountType)
+a = bslib_simpleTernary(user = invalid, getNoNameMessage(m.config), user.name + m.accountType) 
 ```
 
 ## Library functions

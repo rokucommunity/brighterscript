@@ -33,8 +33,9 @@ class DocCompiler {
      * These bsconfig comments change the compile options for the rest of the file, unless another comment is found
      */
     private checkForBsConfigChanges() {
-        if (this.currentLine.includes(`[bsconfig.json]`)) {
-            let text = this.currentLine.split('#')[1].trim();
+        const match = /<!--\s*bsconfig\.json\s*:\s*(.*)\s*-->/.exec(this.currentLine);
+        if (match) {
+            let text = match[1];
 
             let parseErrors = [] as ParseError[];
             this.bsconfig = parseJsonc(text, parseErrors) as BsConfig;
