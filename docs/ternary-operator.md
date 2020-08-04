@@ -46,6 +46,8 @@ The default setting is `safe`.
 
 ### conditionalScopeProtection: safe
 
+<!-- bsconfig.json: { "conditionalScopeProtection": "safe"} -->
+
 ```BrighterScript
   a = user = invalid ? "no name" : user.name
 ```
@@ -88,6 +90,8 @@ end function
 ```
 
 ### conditionalScopeProtection: none
+
+<!-- bsconfig.json: { "conditionalScopeProtection": "none"} -->
 
 ```BrighterScript
 a = user = invalid ? getNoNameMessage() : user.name

@@ -3,8 +3,10 @@ import * as glob from 'glob';
 import * as path from 'path';
 import { Range } from 'vscode-languageserver';
 import { Program } from '../src/Program';
+import { BsConfig } from '../src';
+import { parse as parseJsonc, ParseError, printParseErrorCode } from 'jsonc-parser';
 
-const enableDebugLogging = true;
+const enableDebugLogging = false;
 
 class DocCompiler {
 
@@ -16,12 +18,35 @@ class DocCompiler {
     }
     private lines: string[];
     private index: number;
+    private bsconfig: BsConfig;
 
     //move to the next line, and return that next line
     private advance() {
         this.index++;
         this.printLine(this.index);
+        this.checkForBsConfigChanges();
         return this.currentLine;
+    }
+
+    /**
+     * Look for special bsconfig "comments" in the markdown, and update the current bsconfig.json accordingly. 
+     * These bsconfig comments change the compile options for the rest of the file, unless another comment is found
+     */
+    private checkForBsConfigChanges() {
+        if (this.currentLine.includes(`[bsconfig.json]`)) {
+            let text = this.currentLine.split('#')[1].trim();
+
+            let parseErrors = [] as ParseError[];
+            this.bsconfig = parseJsonc(text, parseErrors) as BsConfig;
+            if (parseErrors.length > 0) {
+                throw new Error(
+                    'bsconfig.json parse error ' +
+                    printParseErrorCode(parseErrors[0].error) +
+                    ' at json offset ' + parseErrors[0].offset +
+                    ` at location ${this.docPath}:${this.index + 1}`
+                );
+            }
+        }
     }
 
     private get currentLine() {
@@ -154,7 +179,9 @@ class DocCompiler {
             rootDir: `${__dirname}/rootDir`,
             files: [
                 'source/main.brs'
-            ]
+            ],
+            //use the current bsconfig
+            ...(this.bsconfig ?? {})
         });
         var file = await program.addOrReplaceFile({ src: `${__dirname}/rootDir/source/main.bs`, dest: 'source/main.bs' }, code)
         await program.validate();
