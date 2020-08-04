@@ -131,12 +131,13 @@ export interface BsConfig {
     sourceRoot?: string;
 
     /**
-     * Specify how to guard against accidental execution of code, when using ternary opertator. This option changes how the
+     * Specify how to guard against accidental execution of code, when using ternary operator. This option changes how the
      * consequent(true part) and alternate (false part) will be wrapped. This is to prevent accidental code access
-     * e.g, given `myValue = isTrue ? "say hello" : doSomeFunction()` ; the brs code will execute doSomeFunction() to evaluate it's value.
+     * e.g, given `myValue = isTrue ? "say hello" : doSomeFunction()` ; the brs code will execute `doSomeFunction()` to evaluate it's value.
      * This can lead to unexpected side effects.
-     * When safe, consequent and alternate will be wrapped in an inline function, if any function calls (e.g. someNode.getValue()) or dotted gets, (e.g. user.name) are present in the consequent or alternate, to prevent side effects.
-     * When none, consequent and alternate are left, as is. This is not advised.
+     * When `"safe"`, consequent and alternate will be wrapped in an inline function to prevent side effects if any function calls (e.g. s`omeNode.getValue()`)
+     * or dotted gets, (e.g. `user.name`) are present in the consequent or alternate.
+     * When `"none"`, consequent and alternate are left as is. This is not advised.
      */
     conditionalScopeProtection?: 'safe' | 'none';
 }
