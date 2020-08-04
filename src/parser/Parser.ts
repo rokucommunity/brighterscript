@@ -1627,7 +1627,7 @@ export class Parser {
         ...additionalTerminators: BlockTerminator[]
     ): DottedSetStatement | IndexedSetStatement | ExpressionStatement | IncrementStatement {
         /**
-         * Attempts to find an expression-statement, conditional-expressoin or an increment statement.
+         * Attempts to find an expression-statement, conditional-expression, or an increment statement.
          * While calls are valid expressions _and_ statements, increment (e.g. `foo++`)
          * statements aren't valid expressions. They _do_ however fall under the same parsing
          * priority as standalone function calls though, so we can parse them in the same way.
