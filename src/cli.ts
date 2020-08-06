@@ -37,7 +37,6 @@ let options = yargs
     .argv;
 
 let builder = new ProgramBuilder();
-console.log(options);
 builder.run(<any>options).then(() => {
     //if this is a single run (i.e. not watch mode) and there are error diagnostics, return an error code
     const hasError = !!builder.getDiagnostics().find(x => x.severity === DiagnosticSeverity.Error);
