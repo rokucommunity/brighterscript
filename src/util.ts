@@ -10,7 +10,7 @@ import * as xml2js from 'xml2js';
 import { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
-import { CallableContainer, ValueKind, BsDiagnostic, FileReference } from './interfaces';
+import { CallableContainer, ValueKind, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { BrsType } from './types/BrsType';
 import { DoubleType } from './types/DoubleType';
@@ -28,6 +28,7 @@ import { ParseMode } from './parser/Parser';
 import { DottedGetExpression, VariableExpression } from './parser/Expression';
 import { LogLevel } from './Logger';
 import { TokenKind, Token } from './lexer';
+import { CompilerPlugin } from '.';
 
 export class Util {
 
@@ -165,6 +166,7 @@ export class Util {
                 } as BsDiagnostic;
                 throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
+            this.resolvePluginPaths(projectConfig, configFilePath);
 
             //set working directory to the location of the project file
             process.chdir(path.dirname(configFilePath));
@@ -196,6 +198,28 @@ export class Util {
             //restore working directory
             process.chdir(cwd);
             return result;
+        }
+    }
+
+    /**
+     * Relative paths to scripts in plugins should be resolved relatively to the bsconfig file
+     * and de-duplicated
+     * @param config Parsed configuration
+     * @param configFilePath Path of the configuration file
+     */
+    public resolvePluginPaths(config: BsConfig, configFilePath: string) {
+        if (config.plugins?.length > 0) {
+            const relPath = path.dirname(configFilePath);
+            const exists: { [key: string]: boolean } = {};
+            config.plugins = config.plugins.map(p => {
+                return p?.startsWith('.') ? path.resolve(relPath, p) : p;
+            }).filter(p => {
+                if (!p || exists[p]) {
+                    return false;
+                }
+                exists[p] = true;
+                return true;
+            });
         }
     }
 
@@ -275,6 +299,7 @@ export class Util {
         config.copyToStaging = config.copyToStaging === false ? false : true;
         config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
         config.diagnosticFilters = config.diagnosticFilters ?? [];
+        config.plugins = config.plugins ?? [];
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
@@ -354,7 +379,7 @@ export class Util {
      */
     public getCallableContainersByLowerName(callables: CallableContainer[]) {
         //find duplicate functions
-        let result = {} as { [name: string]: CallableContainer[] };
+        let result = {} as CallableContainerMap;
 
         for (let callableContainer of callables) {
             let lowerName = callableContainer.callable.getName(ParseMode.BrightScript).toLowerCase();
@@ -940,6 +965,29 @@ export function standardizePath(stringParts, ...expressions: any[]) {
             result.join('')
         )
     );
+}
+
+export function loadPlugins(pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
+    return pathOrModules.reduce((acc, pathOrModule) => {
+        if (typeof pathOrModule === 'string') {
+            try {
+                // eslint-disable-next-line
+                let loaded = require(pathOrModule);
+                let plugin: CompilerPlugin = loaded.default ? loaded.default : loaded;
+                if (!plugin.name) {
+                    plugin.name = pathOrModule;
+                }
+                acc.push(plugin);
+            } catch (err) {
+                if (onError) {
+                    onError(pathOrModule, err);
+                } else {
+                    throw err;
+                }
+            }
+        }
+        return acc;
+    }, [] as CompilerPlugin[]);
 }
 
 export let util = new Util();

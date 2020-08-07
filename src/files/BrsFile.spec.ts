@@ -15,6 +15,8 @@ import { TokenKind, Lexer, Keywords } from '../lexer';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { StandardizedFileEntry } from 'roku-deploy';
 import { standardizePath as s } from '../util';
+import PluginInterface from '../PluginInterface';
+import { loadPlugins } from '..';
 
 let sinon = sinonImport.createSandbox();
 
@@ -48,6 +50,17 @@ describe('BrsFile', () => {
         expect(new BrsFile(`${rootDir}/source/main.brs`, 'source/main.brs', program).needsTranspiled).to.be.false;
         //BrighterScript
         expect(new BrsFile(`${rootDir}/source/main.bs`, 'source/main.bs', program).needsTranspiled).to.be.true;
+    });
+
+    it('allows adding diagnostics', () => {
+        const expected = [{
+            message: 'message',
+            file: undefined,
+            range: undefined
+        }];
+        file.addDiagnostics(expected);
+        const actual = file.getDiagnostics();
+        expect(actual).deep.equal(expected);
     });
 
     describe('getPartialVariableName', () => {
@@ -2038,6 +2051,67 @@ describe('BrsFile', () => {
                     end sub
                 `);
             });
+        });
+    });
+
+    describe('transform callback', () => {
+        function parseFileWithCallback(ext: string, onParsed: () => void) {
+            const rootDir = process.cwd();
+            const program = new Program({
+                rootDir: rootDir
+            });
+            const file = new BrsFile(`absolute_path/file${ext}`, `relative_path/file${ext}`, program);
+            expect(file.extension).to.equal(ext);
+            file.parse(`
+                sub Sum()
+                    print "hello world"
+                end sub
+            `, onParsed);
+            return file;
+        }
+
+        it('called for BRS file', () => {
+            const onParsed = sinon.spy();
+            parseFileWithCallback('.brs', onParsed);
+            expect(onParsed.callCount).to.equal(1);
+        });
+
+        it('called for BR file', () => {
+            const onParsed = sinon.spy();
+            parseFileWithCallback('.bs', onParsed);
+            expect(onParsed.callCount).to.equal(1);
+        });
+    });
+
+    describe('Plugins', () => {
+        it('can loads a plugin which transforms the AST', async () => {
+            const rootDir = process.cwd();
+            program.plugins = new PluginInterface(
+                loadPlugins([`${rootDir}/testProjects/plugins/removePrint.js`]),
+                undefined
+            );
+            await testTranspile(`
+                sub main()
+                    sayHello(sub()
+                        print "sub hello"
+                    end sub)
+                    print "something"
+                end sub
+
+                sub sayHello(fn)
+                    fn()
+                    print "hello"
+                end sub
+            `, `
+                sub main()
+                    sayHello(sub()
+                        \n                    end sub)
+                    \n                end sub
+
+                sub sayHello(fn)
+                    fn()
+                    \n                end sub
+            `);
         });
     });
 });

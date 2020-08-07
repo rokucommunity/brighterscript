@@ -28,6 +28,20 @@ describe('XmlFile', () => {
     });
 
     describe('parse', () => {
+        it('allows modifying the parsed XML model', async () => {
+            const expected = 'OtherName';
+            file = new XmlFile('abs', 'rel', program);
+            await file.parse(`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="Scene">
+                    <script type="text/brightscript" uri="ChildScene1.brs" /> <script type="text/brightscript" uri="ChildScene2.brs" /> <script type="text/brightscript" uri="ChildScene3.brs" />
+                </component>
+            `, () => {
+                file.parsedXml.component.$.name = expected;
+            });
+            expect(file.componentName).to.equal(expected);
+        });
+
         it('supports importing BrighterScript files', async () => {
             file = await program.addOrReplaceFile({ src: `${rootDir}/components/custom.xml`, dest: 'components/custom.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -318,7 +332,7 @@ describe('XmlFile', () => {
             file = await program.addOrReplaceFile({
                 src: `${rootDir}/components/comp1.xml`,
                 dest: `components/comp1.xml`
-            }, `  
+            }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="BaseScene">
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
@@ -334,7 +348,7 @@ describe('XmlFile', () => {
         let xmlFile = await program.addOrReplaceFile({
             src: `${rootDir}/components/comp1.xml`,
             dest: `components/comp1.xml`
-        }, `  
+        }, `
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="BaseScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.bs" />
@@ -387,7 +401,7 @@ describe('XmlFile', () => {
         let xmlFile1 = await program.addOrReplaceFile({
             src: `${rootDir}/components/comp1.xml`,
             dest: `components/comp1.xml`
-        }, `  
+        }, `
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene1" extends="BaseScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.brs" />
@@ -397,7 +411,7 @@ describe('XmlFile', () => {
         let xmlFile2 = await program.addOrReplaceFile({
             src: `${rootDir}/components/comp2.xml`,
             dest: `components/comp2.xml`
-        }, `  
+        }, `
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene2" extends="BaseScene">
             </component>
@@ -415,6 +429,17 @@ describe('XmlFile', () => {
         }, ``);
         expect(program.getScopesForFile(xmlFile1)[0].isValidated).to.be.false;
         expect(program.getScopesForFile(xmlFile2)[0].isValidated).to.be.true;
+    });
+
+    it('allows adding diagnostics', () => {
+        const expected = [{
+            message: 'message',
+            file: undefined,
+            range: undefined
+        }];
+        file.addDiagnostics(expected);
+        const actual = file.getDiagnostics();
+        expect(actual).deep.equal(expected);
     });
 
     describe('findExtendsPosition', () => {
@@ -550,5 +575,28 @@ describe('XmlFile', () => {
         expect(program.getDiagnostics()[0]?.message).to.exist.and.to.equal(
             DiagnosticMessages.brighterscriptScriptTagMissingTypeAttribute().message
         );
+    });
+
+    describe('Transform plugins', () => {
+        async function parseFileWithPlugins(validateXml: (file: XmlFile) => void) {
+            const rootDir = process.cwd();
+            const program = new Program({
+                rootDir: rootDir
+            });
+            file = new XmlFile('abs', 'rel', program);
+            await file.parse(`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Cmp1" extends="Scene">
+                </component>
+            `, () => validateXml(file));
+            return file;
+        }
+
+        it('Calls XML file validation plugins', async () => {
+            const validateXml = sinon.spy();
+            const file = await parseFileWithPlugins(validateXml);
+            expect(validateXml.callCount).to.equal(1);
+            expect(validateXml.calledWith(file)).to.be.true;
+        });
     });
 });

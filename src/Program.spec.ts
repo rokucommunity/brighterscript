@@ -10,6 +10,7 @@ import { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { URI } from 'vscode-uri';
+import PluginInterface from './PluginInterface';
 
 let testProjectsPath = s`${__dirname}/../testProjects`;
 
@@ -27,6 +28,7 @@ describe('Program', () => {
             rootDir: rootDir,
             stagingFolderPath: stagingFolderPath
         });
+        program.createSourceScope(); //ensure source scope is created
     });
     afterEach(() => {
         sinon.restore();
@@ -183,6 +185,61 @@ describe('Program', () => {
             // let componentPath = path.resolve(`${rootDir}/components/component1.xml`);
             // await program.loadOrReloadFile('components', '')
         });
+
+        it(`emits events for scope and file creation`, async () => {
+            const programValidateStart = sinon.spy();
+            const programValidateEnd = sinon.spy();
+            const scopeCreated = sinon.spy();
+            const scopeValidateStart = sinon.spy();
+            const scopeValidateEnd = sinon.spy();
+            const fileSourceLoaded = sinon.spy();
+            const fileParsed = sinon.spy();
+            const fileValidation = sinon.spy();
+            const componentSourceLoaded = sinon.spy();
+            const componentParsed = sinon.spy();
+            const componentValidation = sinon.spy();
+            program.plugins = new PluginInterface([{
+                name: 'emits events for scope and file creation',
+                programValidateStart: programValidateStart,
+                programValidateEnd: programValidateEnd,
+                scopeCreated: scopeCreated,
+                scopeValidateStart: scopeValidateStart,
+                scopeValidateEnd: scopeValidateEnd,
+                fileSourceLoaded: fileSourceLoaded,
+                fileParsed: fileParsed,
+                fileValidation: fileValidation,
+                componentSourceLoaded: componentSourceLoaded,
+                componentParsed: componentParsed,
+                componentValidation: componentValidation
+            }], undefined);
+
+            let mainPath = s`${rootDir}/source/main.brs`;
+            //add a new source file
+            await program.addOrReplaceFile({ src: mainPath, dest: 'source/main.brs' }, '');
+            //add a component file
+            await program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/components/lib.brs" />
+                </component>`);
+            await program.validate();
+
+            //program events
+            expect(programValidateStart.callCount).to.equal(1);
+            expect(programValidateEnd.callCount).to.equal(1);
+            //scope events
+            //(we get component scope event only because source is created in beforeEach)
+            expect(scopeCreated.callCount).to.equal(1);
+            expect(scopeValidateStart.callCount).to.equal(2);
+            expect(scopeValidateEnd.callCount).to.equal(2);
+            //file events
+            expect(fileSourceLoaded.callCount).to.equal(1);
+            expect(fileParsed.callCount).to.equal(1);
+            expect(fileValidation.callCount).to.equal(1);
+            expect(componentSourceLoaded.callCount).to.equal(1);
+            expect(componentParsed.callCount).to.equal(1);
+            expect(componentValidation.callCount).to.equal(1);
+        });
     });
 
     describe('validate', () => {
@@ -224,6 +281,17 @@ describe('Program', () => {
                     message: 'Also defined here'
                 }]
             }]);
+        });
+
+        it('allows adding diagnostics', () => {
+            const expected = [{
+                message: 'message',
+                file: undefined,
+                range: undefined
+            }];
+            program.addDiagnostics(expected);
+            const actual = (program as any).diagnostics;
+            expect(actual).to.deep.equal(expected);
         });
 
         it('does not produce duplicate parse errors for different component scopes', async () => {

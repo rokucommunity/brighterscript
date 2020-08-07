@@ -7,6 +7,7 @@ import { FunctionScope } from './FunctionScope';
 import { BrsType } from './types/BrsType';
 import { FunctionType } from './types/FunctionType';
 import { ParseMode } from './parser/Parser';
+import { Program, SourceInfo, TranspileEntry } from './Program';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
@@ -150,6 +151,10 @@ export interface CallableContainer {
     scope: Scope;
 }
 
+export interface CallableContainerMap {
+    [name: string]: CallableContainer[];
+}
+
 export interface CommentFlag {
     file: BrsFile;
     /**
@@ -161,4 +166,28 @@ export interface CommentFlag {
      */
     affectedRange: Range;
     codes: number[] | null;
+}
+
+type ValidateHandler = (scope: Scope, files: (BrsFile | XmlFile)[], callables: CallableContainerMap) => void;
+
+export interface CompilerPlugin {
+    name: string;
+    beforePrepublish?: (files: FileObj[]) => void;
+    beforePublish?: (files: FileObj[]) => void;
+    afterPublish?: (files: FileObj[]) => void;
+    programCreated?: (program: Program) => void;
+    programValidateStart?: (program: Program) => void;
+    programValidateEnd?: (program: Program) => void;
+    scopeCreated?: (scope: Scope) => void;
+    scopeDisposed?: (scope: Scope) => void;
+    scopeValidateStart?: ValidateHandler;
+    scopeValidateEnd?: ValidateHandler;
+    fileSourceLoaded?: (source: SourceInfo) => void;
+    fileParsed?: (file: BrsFile) => void;
+    fileValidation?: (file: BrsFile) => void;
+    componentSourceLoaded?: (source: SourceInfo) => void;
+    componentParsed?: (file: XmlFile) => void;
+    componentValidation?: (file: XmlFile) => void;
+    beforeTranspile?: (entries: TranspileEntry[]) => void;
+    afterTranspile?: (entries: TranspileEntry[]) => void;
 }

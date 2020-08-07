@@ -170,4 +170,19 @@ describe('ProgramBuilder', () => {
             createPackage: false
         });
     });
+
+    it('forwards program events', async () => {
+        const programValidateStart = sinon.spy();
+        const programValidateEnd = sinon.spy();
+        builder.addPlugin({
+            name: 'forwards program events',
+            programValidateStart: programValidateStart,
+            programValidateEnd: programValidateEnd
+        });
+        await builder.run({
+            createPackage: false
+        });
+        expect(programValidateStart.callCount).to.equal(1);
+        expect(programValidateEnd.callCount).to.equal(1);
+    });
 });
