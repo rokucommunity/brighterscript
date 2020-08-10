@@ -170,7 +170,6 @@ export class Util {
             process.chdir(path.dirname(configFilePath));
 
             let result: BsConfig;
-            debugger;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
                 let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath]);
