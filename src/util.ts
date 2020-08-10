@@ -133,6 +133,15 @@ export class Util {
         let cwd = process.cwd();
 
         if (configFilePath) {
+
+            //if the config file path starts with question mark, then it's optional. return undefined if it doesn't exist
+            if (configFilePath.startsWith('?')) {
+                //remove leading question mark
+                configFilePath = configFilePath.substring(1);
+                if (await fsExtra.pathExists(configFilePath) === false) {
+                    return undefined;
+                }
+            }
             //keep track of the inheritance chain
             parentProjectPaths = parentProjectPaths ? parentProjectPaths : [];
             configFilePath = path.resolve(configFilePath);
@@ -161,6 +170,7 @@ export class Util {
             process.chdir(path.dirname(configFilePath));
 
             let result: BsConfig;
+            debugger;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
                 let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath]);

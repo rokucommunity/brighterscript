@@ -142,6 +142,36 @@ The `files` property from the inheriting config file overwrite those from the ba
 
 All relative paths found in the configuration file will be resolved relative to the configuration file they originated in.
 
+### Optional `extends` and `project`
+There are situations where you want to store some compiler settings in a config file, but not fail if that config file doesn't exist. To do this, you can denote that your `extends` or `project` path is optional by prefixing it with a question mark (`?`). For example:
+
+ - **bsconfig.json** `extends`
+    ```json
+    {
+      "extends": "?path/to/optional/bsconfig.json"
+    }
+    ```
+ - CLI "extends"
+    ```
+    bsc --extends "?path/to/optional/bsconfig.json"
+    ```
+ 
+ - CLI `project` argument
+    ```
+    bsc --project "?path/to/optional/bsconfig.json"
+    ```
+ - Node.js API `extends`
+    ```
+    var programBuilder = new ProgramBuilder({
+        "extends": "?path/to/optional/bsconfig.json"
+    });
+    ```
+ - Node.js API `project`
+    ```
+    var programBuilder = new ProgramBuilder({
+        "project": "?path/to/optional/bsconfig.json"
+    });
+    ```
 
 ### bsconfig.json options
 
