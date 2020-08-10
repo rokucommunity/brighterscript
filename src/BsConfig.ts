@@ -7,12 +7,14 @@ export interface BsConfig {
     _ancestors?: string[];
 
     /**
-     * A path to a project file. This is really only passed in from the command line, and should not be present in bsconfig.json files
+     * A path to a project file. This is really only passed in from the command line, and should not be present in bsconfig.json files.
+     * Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.
      */
     project?: string;
 
     /**
-     * Relative or absolute path to another bsconfig.json file that this file should import and then override
+     * Relative or absolute path to another bsconfig.json file that this file should import and then override.
+     * Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.
      */
     extends?: string;
 

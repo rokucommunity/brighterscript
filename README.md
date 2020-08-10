@@ -177,9 +177,9 @@ There are situations where you want to store some compiler settings in a config 
 
 These are the options available in the `bsconfig.json` file. 
 
- - **project**: `string` - A path to a project file. This is really only passed in from the command line, and should not be present in `bsconfig.json` files
+ - **project**: `string` - A path to a project file. This is really only passed in from the command line or the NodeJS API, and should not be present in `bsconfig.json` files. Prefix with a question mark (?) to prevent throwing an exception when the file does not exist.
 
- - **extends**: `string` - Relative or absolute path to another `bsconfig.json` file that this `bsconfig.json` file should import and then override
+ - **extends**: `string` - Relative or absolute path to another `bsconfig.json` file that this `bsconfig.json` file should import and then override. Prefix with a question mark (?) to prevent throwing an exception when the file does not exist.
 
  - **cwd**: `string` - Override the current working directory
 
