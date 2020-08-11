@@ -142,6 +142,39 @@ describe('util', () => {
 
     });
 
+    describe('normalizeAndResolveConfig', () => {
+        it('throws for missing project file', async () => {
+            await expectThrowAsync(async () => {
+                await util.normalizeAndResolveConfig({ project: 'path/does/not/exist/bsconfig.json' });
+            });
+        });
+
+        it('does not throw for optional missing', async () => {
+            await expectNotThrowAsync(async () => {
+                await util.normalizeAndResolveConfig({ project: '?path/does/not/exist/bsconfig.json' });
+
+            });
+        });
+
+        it('throws for missing extends file', async () => {
+            vfs[rootConfigPath] = `{"extends": "path/does/not/exist/bsconfig.json"}`;
+            await expectThrowAsync(async () => {
+                await util.normalizeAndResolveConfig({
+                    project: rootConfigPath
+                });
+            });
+        });
+
+        it('throws for missing extends file', async () => {
+            vfs[rootConfigPath] = `{"extends": "?path/does/not/exist/bsconfig.json"}`;
+            await expectNotThrowAsync(async () => {
+                await util.normalizeAndResolveConfig({
+                    project: rootConfigPath
+                });
+            });
+        });
+    });
+
     describe('normalizeConfig', () => {
         it('loads project from disc', async () => {
             vfs[rootConfigPath] = `{"outFile": "customOutDir/pkg.zip"}`;
@@ -455,3 +488,23 @@ describe('util', () => {
         });
     });
 });
+
+async function expectThrowAsync(callback) {
+    let ex;
+    try {
+        await Promise.resolve(callback());
+    } catch (e) {
+        ex = e;
+    }
+    expect(ex, 'Expected to throw error').to.exist;
+}
+
+async function expectNotThrowAsync(callback) {
+    let ex;
+    try {
+        await Promise.resolve(callback());
+    } catch (e) {
+        ex = e;
+    }
+    expect(ex, 'Expected not to throw error').not.to.exist;
+}
