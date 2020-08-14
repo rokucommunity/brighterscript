@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.13.1] - 2020-08-14
+### Changed
+ - upgraded to [roku-deploy@3.2.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#323---2020-08-14)
+ - throw exception when copying to staging folder and `rootDir` does not exist in the file system
+ - throw exception when zipping package and `${stagingFolder}/manifest` does not exist in the file system
+
+
+
 ## [0.13.0] - 2020-08-10
 ### Added
  - ability to mark the `extends` and `project` options in `bsconfig.json`, API and CLI as optional. 
@@ -448,6 +456,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+[0.13.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.13.0...v0.13.1
 [0.13.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.12.4...v0.13.0
 [0.12.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.12.3...v0.12.4
 [0.12.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.12.2...v0.12.3
