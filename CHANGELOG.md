@@ -315,7 +315,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
  - ability to filter out diagnostics by using the `diagnosticFilters` option in bsconfig
 ### Changed
- - depricated the `ignoreErrorCodes` in favor of `diagnosticFilters`
+ - deprecated the `ignoreErrorCodes` in favor of `diagnosticFilters`
 ### Fixed
  - Bug in the language server that wasn't reloading the project when changing the `bsconfig.json`
 
@@ -439,7 +439,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
  - bsconfig.json validation
  - slightly smarter intellisense that knows when you're trying to complete an object property.
- - diagnostic for depricated brsconfig.json
+ - diagnostic for deprecated brsconfig.json
  - basic transpile support including sourcemaps. Most lines also support transpiling including comments, but there may still be bugs
  - parser now includes all comments as tokens in the AST.
 

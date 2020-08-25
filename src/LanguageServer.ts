@@ -328,7 +328,7 @@ export class LanguageServer {
             return configFilePath;
         }
 
-        //look for the depricated `brsconfig.json` file
+        //look for the deprecated `brsconfig.json` file
         configFilePath = path.resolve(workspacePath, 'brsconfig.json');
         if (await util.fileExists(configFilePath)) {
             return configFilePath;
@@ -399,10 +399,10 @@ export class LanguageServer {
             newWorkspace.isFirstRunComplete = true;
             newWorkspace.isFirstRunSuccessful = false;
         }).then(() => {
-            //if we found a depricated brsconfig.json, add a diagnostic warning the user
+            //if we found a deprecated brsconfig.json, add a diagnostic warning the user
             if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
                 builder.addDiagnostic(configFilePath, {
-                    ...DiagnosticMessages.brsConfigJsonIsDepricated(),
+                    ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
                     range: Range.create(0, 0, 0, 0)
                 });
                 return this.sendDiagnostics();
