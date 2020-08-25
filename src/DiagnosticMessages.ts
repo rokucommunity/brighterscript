@@ -109,8 +109,8 @@ export let DiagnosticMessages = {
         code: 1019,
         severity: DiagnosticSeverity.Error
     }),
-    brsConfigJsonIsDepricated: () => ({
-        message: `'brsconfig.json' is depricated. Please rename to 'bsconfig.json'`,
+    brsConfigJsonIsDeprecated: () => ({
+        message: `'brsconfig.json' is deprecated. Please rename to 'bsconfig.json'`,
         code: 1020,
         severity: DiagnosticSeverity.Warning
     }),
