@@ -536,12 +536,12 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Warning
     }),
     localVarShadowedByScopedFunction: () => ({
-        message: `Local variable will not be accessible because it has the same name as scoped function`,
+        message: `Local variable will not be accessible because it has the same name as a scoped function`,
         code: 1104,
         severity: DiagnosticSeverity.Error
     }),
     scopeFunctionShadowedByBuiltInFunction: () => ({
-        message: `Scope function will not be accessible because it has the same name as built-in function`,
+        message: `Scope function will not be accessible because it has the same name as a built-in function`,
         code: 1105,
         severity: DiagnosticSeverity.Error
     }),
