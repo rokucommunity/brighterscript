@@ -536,14 +536,14 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Warning
     }),
     localVarShadowedByScopedFunction: () => ({
-        message: `Local var has same name as scoped function and will not be accessible`,
+        message: `Local variable will not be accessible because it has the same name as scoped function`,
         code: 1104,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Error
     }),
     scopeFunctionShadowedByBuiltInFunction: () => ({
-        message: `Scope function has same name as built-in function and will not be accessible`,
+        message: `Scope function will not be accessible because it has the same name as built-in function`,
         code: 1105,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Error
     }),
     brighterscriptScriptTagMissingTypeAttribute: () => ({
         message: `All BrighterScript script tags must include the type="text/brighterscript" attribute`,
