@@ -536,7 +536,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Warning
     }),
     localVarShadowedByScopedFunction: () => ({
-        message: `Local variable will not be accessible because it has the same name as a scoped function`,
+        message: `Declaring a local variable with same name as scoped function can result in unexpected behavior`,
         code: 1104,
         severity: DiagnosticSeverity.Error
     }),
