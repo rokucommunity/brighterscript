@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.13.2] - 2020-08-31
+### Changed
+ - Upgraded BS1104 to error (previously a warning) and refined the messaging.
+
+
+
 ## [0.13.1] - 2020-08-14
 ### Changed
  - upgraded to [roku-deploy@3.2.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#323---2020-08-14)
@@ -16,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.13.0] - 2020-08-10
 ### Added
- - ability to mark the `extends` and `project` options in `bsconfig.json`, API and CLI as optional. 
+ - ability to mark the `extends` and `project` options in `bsconfig.json`, API and CLI as optional.
 
 
 
@@ -29,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.12.3] - 2020-08-03
 ### Fixed
- - bug in the language server that would provide stale completions due to the file throttling introduced in v0.11.2. Now the language server will wait for the throttled parsing to complete before serving completion results. 
+ - bug in the language server that would provide stale completions due to the file throttling introduced in v0.11.2. Now the language server will wait for the throttled parsing to complete before serving completion results.
 
 
 
@@ -53,9 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
  - `diagnosticLevel` option to limit/control the noise in the console diagnostics
 ### Changed
- - Move away from `command-line-args` in favor of `yargs` for CLI support 
+ - Move away from `command-line-args` in favor of `yargs` for CLI support
 ### Fixed
- - Throttle LanguageServer validation to prevent running too many validations in a row. 
+ - Throttle LanguageServer validation to prevent running too many validations in a row.
  - Bug in CLI preventing ability to provide false values to certain flags
  - Do not print `info` and `hint` diagnostics from the CLI by default.
 
@@ -101,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.10.10] - 2020-06-12
 ### Fixed
- - include the missing `bslib.brs` file in the npm package which was causing errors during transpile. 
+ - include the missing `bslib.brs` file in the npm package which was causing errors during transpile.
 
 
 
@@ -159,8 +165,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.10.2] - 2020-05-23
-### Added 
- - language server command `TranspileFile` which will return the transpiled contents of the requested file. 
+### Added
+ - language server command `TranspileFile` which will return the transpiled contents of the requested file.
 ### Fixed
  - quotemarks in string literals were not being properly escaped during transpile ([#89](https://github.com/rokucommunity/brighterscript/issues/89))
  - Bug that was only validating calls at top level. Now calls found anywhere in a function are validated
@@ -176,8 +182,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.10.0] - 2020-05-19
-### Added 
- - new callfunc operator. 
+### Added
+ - new callfunc operator.
 
 
 
@@ -205,7 +211,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - additional messages during cli run
 ### Changed
  - don't terminate bsc on warning diagnostics
- - removed extraneous log statements from the util module 
+ - removed extraneous log statements from the util module
 ### Fixed
  - fixed bugs when printing diagnostics to the console that wouldn't show the proper squiggly line location.
 
@@ -213,7 +219,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.5] - 2020-05-06
 ### Added
- - new config option called `showDiagnosticsInConsole` which disables printing diagnostics to the console 
+ - new config option called `showDiagnosticsInConsole` which disables printing diagnostics to the console
 ### Fixed
  - bug in lexer that was capturing the carriage return character (`\n`) at the end of comment statements
  - bug in transpiler that wouldn't include a newline after the final comment statement
@@ -229,7 +235,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
  - bug that was flagging namespaced functions with the same name as a stdlib function.
  - bug that was not properly transpiling brighterscript script tags in xml components.
- - several performance issues introduced in v0.8.2. 
+ - several performance issues introduced in v0.8.2.
  - Replace `type="text/brighterscript"` with `type="text/brightscript"` in xml script imports during transpile. ([#73](https://github.com/rokucommunity/brighterscript/issues/73))
 
 
@@ -355,11 +361,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0] - 2020-04-10
 ### Added
- - several new diagnostics for conditional compiles. Some of them allow the parser to recover and continue. 
+ - several new diagnostics for conditional compiles. Some of them allow the parser to recover and continue.
  - experimental class transpile support. There is still no intellisense for classes yet though.
 ### Changed
    - All errors are now stored as vscode-languageserver `Diagnostic` objects instead of a custom error structure.
-   - Token, AST node, and diagnostic locations are now stored as `Range` objects, which use zero-based lines instead of the previous one-based line numbers. 
+   - Token, AST node, and diagnostic locations are now stored as `Range` objects, which use zero-based lines instead of the previous one-based line numbers.
    - All parser diagnostics have been broken out into their own error codes, removing the use of error code 1000 for a generic catch-all. That code still exists and will hold runtime errors from the parser.
 ### Fixed
  - bug in parser that was flagging the new class keywords (`new`, `class`, `public`, `protected`, `private`, `override`) as parse errors. These are now allowed as both local variables and property names.
@@ -391,15 +397,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.4.0] - 2020-01-07
-### Added 
- - ability to specify the pkgPath of a file when adding to the project. 
+### Added
+ - ability to specify the pkgPath of a file when adding to the project.
 ### Changed
  - upgraded to [roku-deploy@3.0.0-beta.6](https://www.npmjs.com/package/roku-deploy/v/3.0.0-beta.6)
 ### Fixed
  - bug that was showing duplicate function warnings when multiple files target the same `pkgPath`. Now roku-deploy will only keep the last referenced file for each `pkgPath`
  - reduced memory consumtion and FS calls during file watcher events
  - issue in getFileByPkgPath related to path separator mismatches
- - bugs related to standalone workspaces causing issues for other workspaces. 
+ - bugs related to standalone workspaces causing issues for other workspaces.
 
 
 
@@ -412,7 +418,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.0] - 2019-10-03
 ### Added
- - support for parsing opened files not included in any project. 
+ - support for parsing opened files not included in any project.
 ### Fixed
  - parser bug that was preventing comments as their own lines inside associative array literals. ([#29](https://github.com/rokucommunity/brighterscript/issues/28))
 
@@ -430,7 +436,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
  - crash when parsing the workspace path to read the config on startup.
  - auto complete options not always returning results when it should.
- - windows bug relating to the drive letter being different, and so then not matching the file list. 
+ - windows bug relating to the drive letter being different, and so then not matching the file list.
  - many bugs related to mismatched file path comparisons.
 
 
@@ -509,3 +515,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.12.3...v0.12.4
 [0.13.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.12.4...v0.13.0
 [0.13.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.13.0...v0.13.1
+[0.13.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.13.1...v0.13.2
