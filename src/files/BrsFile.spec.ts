@@ -110,7 +110,7 @@ describe('BrsFile', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
-                    
+
                 end sub
             `);
 
@@ -1557,15 +1557,13 @@ describe('BrsFile', () => {
             });
         });
         it('includes all text to end of line for a non-terminated string', async () => {
-            await testTranspile(`
-                sub main()
-                    name = "john 
-                end sub
-            `, `
-                sub main()
-                    name = "john "
-                end sub
-            `, 'trim', 'source/main.bs', false);
+            await testTranspile(
+                'sub main()\n    name = "john \nend sub',
+                'sub main()\n    name = "john "\nend sub',
+                null,
+                'source/main.bs',
+                false
+            );
         });
         it('escapes quotes in string literals', async () => {
             await testTranspile(`
@@ -1623,14 +1621,14 @@ describe('BrsFile', () => {
                 namespace Vertibrates.Birds
                     function GetAllBirds()
                         return [
-                            GetDuck(), 
+                            GetDuck(),
                             GetGoose()
                         ]
                     end function
-                
+
                     function GetDuck()
                     end function
-                    
+
                     function GetGoose()
                     end function
                 end namespace

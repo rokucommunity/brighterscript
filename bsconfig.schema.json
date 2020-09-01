@@ -10,7 +10,7 @@
     },
     "properties": {
         "extends": {
-            "description": "Relative or absolute path to another bsconfig.json file that this file should use as a base, and then override",
+            "description": "Relative or absolute path to another bsconfig.json file that this file should use as a base and then override. Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.",
             "type": "string"
         },
         "cwd": {

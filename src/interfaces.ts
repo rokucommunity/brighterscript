@@ -37,7 +37,7 @@ export interface Callable {
      * The range of the name of this callable
      */
     nameRange?: Range;
-    isDepricated?: boolean;
+    isDeprecated?: boolean;
     getName: (parseMode: ParseMode) => string;
     /**
      * Indicates whether or not this callable has an associated namespace

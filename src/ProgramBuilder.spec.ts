@@ -8,7 +8,7 @@ import { Logger, LogLevel } from './Logger';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
-let rootDir = s`${tmpPath}/rootDir}`;
+let rootDir = s`${tmpPath}/rootDir`;
 let stagingFolderPath = s`${tmpPath}/staging`;
 
 describe('ProgramBuilder', () => {
@@ -166,7 +166,8 @@ describe('ProgramBuilder', () => {
         }`);
         let builder = new ProgramBuilder();
         await builder.run({
-            cwd: rootDir
+            cwd: rootDir,
+            createPackage: false
         });
     });
 });

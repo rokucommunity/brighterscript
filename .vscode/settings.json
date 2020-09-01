@@ -1,26 +1,27 @@
 {
-  "files.exclude": {
-      "**/.git": true,
-      "**/.svn": true,
-      "**/.hg": true,
-      "**/CVS": true,
-      "**/.DS_Store": true,
-      "**/node_modules": true,
-      "**/.nyc_output": true,
-      "**/coverage": true,
-      "**/dist": true
-  },
-  "search.exclude": {
-      "**/node_modules": true,
-      "**/bower_components": true,
-      "**/dist": true
-  },
-  "mocha.logVerbose": true,
-  "mocha.files.glob": "src/**/*.ts",
-  "mocha.requires": [
-      "ts-node/register"
-  ],
-  "mocha.env": {
-      "TS_NODE_TYPE_CHECK": false
-  }
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/node_modules": true,
+        "**/.nyc_output": true,
+        "**/coverage": true,
+        "**/dist": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/bower_components": true,
+        "**/dist": true
+    },
+    "mocha.logVerbose": true,
+    "mocha.files.glob": "src/**/*.ts",
+    "mocha.requires": [
+        "ts-node/register"
+    ],
+    "mocha.env": {
+        "TS_NODE_TYPE_CHECK": false
+    },
+    "files.trimTrailingWhitespace": true
 }
