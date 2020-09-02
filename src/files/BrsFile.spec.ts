@@ -2078,6 +2078,8 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
                     if (lines[lineIndex].length > 0 && i === 1) {
                         lines[lineIndex] = lines[lineIndex].substring(trimStartIndex);
                     }
+                    //trim trailing whitespace as well
+                    lines[lineIndex] = lines[lineIndex].trimEnd();
                 }
                 //trim trailing newlines
                 while (lines[lines.length - 1].length === 0) {

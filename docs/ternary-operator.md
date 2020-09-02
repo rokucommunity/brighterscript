@@ -7,15 +7,15 @@ The conditional (ternary) operator is the only BrighterScript operator that take
 a = user = invalid ? "no user" : "logged in"
 ```
 
-transpiles to: 
+transpiles to:
 
 ```BrightScript
-a = bslib_simpleTernary(user = invalid, "no user", "logged in") 
+a = bslib_ternarySimple(user = invalid, "no user", "logged in")
 ```
 
-The `bslib_simpleTernary` function checks the condition, and returns either the consequent or alternate.
+The `bslib_ternarySimple` function checks the condition, and returns either the consequent or alternate.
 
-There are some important implications to consider for code execution order and side effects. Since both the consequent and alternate must be passed into the `bslib_simpleTernary` function, this means that both the consequent and alternate will be executed, which is certainly not what most developers intend.
+There are some important implications to consider for code execution order and side effects. Since both the consequent and alternate must be passed into the `bslib_ternarySimple` function, this means that both the consequent and alternate will be executed, which is certainly not what most developers intend.
 
 Consider:
 
@@ -25,34 +25,50 @@ Consider:
 
 transpiles to:
 ```BrightScript
-a = bslib_simpleTernary(user = invalid, "no name", user.name) 
+a = bslib_ternarySimple(user = invalid, "no name", user.name)
 ```
 
 This code will crash because `user.invalid` will be evaluated.
 
-To avoid this problem the transpiler provides conditional scope protection settings, as discussed in the following section.
+To avoid this problem the transpiler provides conditional scope protection, as discussed in the following section.
 
 ## Scope protection
 
-For conditional language features such as the _conditional (ternary) operator_, BrighterScript provides a `conditionalScopeProtection` config setting, to allow the developer to specify how to handle transpilation.
+For conditional language features such as the _conditional (ternary) operator_, BrighterScript sometimes needs to protect against unintended performance hits.
 
-There are 2 possible setting:
+There are 2 possible ways that your code can be transpiled:
 
-  * `safe` - consequent and alternate will be wrapped in an inline function to prevent side effects if any function calls (e.g. `someNode.getValue()`) or dotted gets (e.g. `user.name`) are present in either the consequent or alternate.
-  * `none` - consequent and alternate are not wrapped in a function. This is not advised.
+### Simple
+In this situation, BrighterScript has determined that both the consequent and the alternate are side-effect free and will not cause rendezvous. This means BrighterScript can use a simpler and more performant transpile target.
 
-The default setting is `safe`.
+```BrighterScript
+a = user = invalid ? "not logged in" : "logged in"
+```
 
+transpiles to:
 
-### conditionalScopeProtection: safe
+```BrightScript
+a = bslib_ternarySimple(user = invalid, "not logged in", "logged in")
+```
 
-<!-- bsconfig.json: { "conditionalScopeProtection": "safe"} -->
+```BrighterScript
+a = user = invalid ? defaultUser : user
+```
+
+transpiles to:
+
+```BrightScript
+a = bslib_ternarySimple(user = invalid, defaultuser, user)
+```
+
+### Scope capturing
+In this situation, BrighterScript has detected that your ternary operation will have side-effects or could possibly result in a rendezvous. BrighterScript will create an immediately-invoked-function-expression to capture all of the referenced local variables. This is in order to only execute the consequent if the condition is true, and only execute the alternate if the condition is false.
 
 ```BrighterScript
   a = user = invalid ? "no name" : user.name
 ```
 
-transpiles to: 
+transpiles to:
 
 ```BrightScript
 a = bslib_scopeSafeTernary(user = invalid, {
@@ -63,14 +79,14 @@ end function
  function(scope)
   user = scope.user
   return user.name
-end function) 
+end function)
 ```
 
 ```BrighterScript
 a = user = invalid ? getNoNameMessage(m.config) : user.name + m.accountType
 ```
 
-transpiles to: 
+transpiles to:
 
 ```BrightScript
 a = bslib_scopeSafeTernary(user = invalid, {
@@ -86,7 +102,7 @@ end function
   user = scope.user
   m = scope.m
   return user.name + m.accountType
-end function) 
+end function)
 ```
 
 ### nested scope protection
@@ -100,7 +116,7 @@ end function
 result = (m.increment() = 1 ? m.increment() : -1) = -1 ? m.increment(): -1
 ```
 
-transpiles to: 
+transpiles to:
 ```BrightScript
 m.count = 1
 m.increment = function()
@@ -123,39 +139,16 @@ end function) ) = - 1, {
 end function
  function(scope)
   return - 1
-end function) 
+end function)
 ```
 
-### conditionalScopeProtection: none
-
-<!-- bsconfig.json: { "conditionalScopeProtection": "none"} -->
-
-```BrighterScript
-a = user = invalid ? getNoNameMessage() : user.name
-```
-
-transpiles to: 
-
-```BrightScript
-a = bslib_simpleTernary(user = invalid, getNoNameMessage(), user.name) 
-```
-
-```BrighterScript
-a = user = invalid ? getNoNameMessage(m.config) : user.name + m.accountType
-```
-
-transpiles to: 
-
-```BrightScript
-a = bslib_simpleTernary(user = invalid, getNoNameMessage(m.config), user.name + m.accountType) 
-```
 
 ## Library functions
 
 The following library functions are called in the transpiled code:
 
 ```
-function bslib_simpleTernary(isTrue, trueValue, falseValue)
+function bslib_ternarySimple(isTrue, trueValue, falseValue)
     if isTrue then
         return trueValue
     else
@@ -174,7 +167,7 @@ end function
 ```
 
 ## No standalone statements
-The BrighterScript ternary operator differs from languages like C# and JavaScript in that you cannot use ternary expressions as standalone expressions. This is due to the fact that BrightScript uses `=` for both assignment and equality. As such, ternary expressions must always be part of an assignment or method call. Take a look at the following expression: 
+The BrighterScript ternary operator differs from languages like C# and JavaScript in that you cannot use ternary expressions as standalone expressions. This is due to the fact that BrightScript uses `=` for both assignment and equality. As such, ternary expressions must always be part of an assignment or method call. Take a look at the following expression:
 ```
 a = myValue ? "a" : "b"
 ```

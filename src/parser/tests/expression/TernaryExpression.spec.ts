@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-for-in-array */
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { TokenKind, Lexer } from '../../../lexer';
+import { TokenKind } from '../../../lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { token, EOF } from '../Parser.spec';
 import { BrsString, BrsBoolean } from '../../../brsTypes';
@@ -16,171 +16,128 @@ import {
 import { Program } from '../../../Program';
 import { getTestTranspile } from '../../../files/BrsFile.spec';
 
-describe('parser ternary expressions', () => {
+describe('ternary expressions', () => {
     it('throws exception when used in brightscript scope', () => {
-        let { tokens } = Lexer.scan(`a = true ? "human" : "Zombie"`);
-        let { diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrightScript });
+        let { diagnostics } = Parser.parse(`a = true ? "human" : "Zombie"`, { mode: ParseMode.BrightScript });
         expect(diagnostics[0]?.message).to.equal(DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('ternary operator').message);
     });
 
-    describe('ternary expressions as statements are not supported', () => {
-        it('basic statement', () => {
-            let { statements, diagnostics } = Parser.parse([
-                token(TokenKind.True, 'true', BrsBoolean.True),
-                token(TokenKind.QuestionMark, '?'),
-                token(TokenKind.StringLiteral, 'Human', new BrsString('Human')),
-                token(TokenKind.Colon, ':'),
-                token(TokenKind.StringLiteral, 'Zombie', new BrsString('Zombie')),
-                EOF
-            ], { mode: ParseMode.BrighterScript });
+    it('cannot be used as a statement', () => {
+        let { diagnostics } = Parser.parse([
+            token(TokenKind.True, 'true', BrsBoolean.True),
+            token(TokenKind.QuestionMark, '?'),
+            token(TokenKind.StringLiteral, 'Human', new BrsString('Human')),
+            token(TokenKind.Colon, ':'),
+            token(TokenKind.StringLiteral, 'Zombie', new BrsString('Zombie')),
+            EOF
+        ], { mode: ParseMode.BrighterScript });
 
-            expect(diagnostics).to.not.be.empty;
-            expect(statements).to.exist;
-            expect(statements).to.be.empty;
-        });
-
-        it(`does not supports various tests with primitive values:`, () => {
-        //test as property
-            for (const test in [
-                'true',
-                'false',
-                'len("person") = 10',
-                'm.getResponse()',
-                'm.myZombies[3].ifFed = true'
-            ]) {
-
-                let { tokens } = Lexer.scan(`${test} ? "human" : "zombie"`);
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-                expect(diagnostics).to.not.be.empty;
-                expect(statements).to.exist;
-                expect(statements).to.be.empty;
-            }
-        });
+        expect(diagnostics).not.to.be.empty;
     });
 
-    it(`supports simple assign:`, () => {
-        let { tokens } = Lexer.scan(`being = isZombie = false ? "human" : "zombie"`);
-        let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+    it(`cannot be used as a statement`, () => {
+        expect(parseBs(`true ? true : "zombie"`).diagnostics).not.to.be.empty;
+        expect(parseBs(`false ? true : "zombie"`).diagnostics).not.to.be.empty;
+        expect(parseBs(`len("person") = 10 ? true : "zombie"`).diagnostics).not.to.be.empty;
+        expect(parseBs(`m.getResponse() ? true : "zombie"`).diagnostics).not.to.be.empty;
+    });
+
+    it(`supports boolean expression condition`, () => {
+        let { statements, diagnostics } = parseBs(`being = isZombie = false ? "human" : "zombie"`);
+        expect(statements[0]).to.be.instanceof(AssignmentStatement);
+        expect((statements[0] as AssignmentStatement).value).to.be.instanceof(TernaryExpression);
         expect(diagnostics).to.be.empty;
-        expect(statements).to.exist;
-        expect(statements).to.not.be.empty;
     });
-    it(`supports complex test:`, () => {
-        let { tokens } = Lexer.scan(`a = user.getAccount() ? "logged in" : "not logged in"`);
-        let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+
+    it(`supports function condition`, () => {
+        let { statements, diagnostics } = parseBs(`a = user.getAccount() ? "logged in" : "not logged in"`);
+        expect(statements[0]).to.be.instanceof(AssignmentStatement);
+        expect((statements[0] as AssignmentStatement).value).to.be.instanceof(TernaryExpression);
         expect(diagnostics).to.be.empty;
-        expect(statements).to.exist;
-        expect(statements).to.not.be.empty;
     });
 
-    describe('ternary expressions - variety of test cases', () => {
-        it(`does not supports various tests with primitive values:`, () => {
-            //test as property
-            for (const test in [
-                'result = true',
-                'result = false',
-                'result = len("person") = 10',
-                'result = m.getResponse()',
-                'result = m.myZombies[3].ifFed = true'
-            ]) {
-
-                let { tokens } = Lexer.scan(`${test} ? "human" : "zombie"`);
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-                expect(diagnostics).to.not.be.empty;
-                expect(statements).to.exist;
-                expect(statements).to.be.empty;
-            }
-        });
-
-        it(`supports non-primitive consequents:`, () => {
-        //test as property
-            for (const consequent in [
-                'true',
-                'false',
-                'len("person") = 10',
-                'm.getResponse()',
-                'm.myZombies[3].ifFed = true',
-                'getZombieName'
-            ]) {
-
-                let { tokens } = Lexer.scan(`result = true ? ${consequent} : "zombie"`);
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-                expect(diagnostics).to.be.lengthOf(0);
-                expect(statements[0]).instanceof(AssignmentStatement);
-                expect((statements[0] as AssignmentStatement).value).instanceof(TernaryExpression);
-
-            }
-        });
-
-        it(`supports non-primitive alternates:`, () => {
-        //test as property
-            for (const alternate in [
-                'true',
-                'false',
-                'len("person") = 10',
-                'm.getResponse()',
-                'm.myZombies[3].ifFed = true',
-                'getZombieName'
-            ]) {
-
-                let { tokens } = Lexer.scan(`result = true ? "zombie" : ${alternate}`);
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-                expect(diagnostics).to.be.lengthOf(0);
-                expect(statements[0]).instanceof(AssignmentStatement);
-                expect((statements[0] as AssignmentStatement).value).instanceof(TernaryExpression);
-            }
-        });
+    it(`supports various tests with primitive values:`, () => {
+        expect(parseBs(`result = true ? "human" : "zombie"`).diagnostics).to.be.empty;
+        expect(parseBs(`result = false ? "human" : "zombie"`).diagnostics).to.be.empty;
+        expect(parseBs(`result = len("person") = 10 ? "human" : "zombie"`).diagnostics).to.be.empty;
+        expect(parseBs(`result = m.getResponse() ? "human" : "zombie"`).diagnostics).to.be.empty;
+        expect(parseBs(`result = m.myZombies[3].hasEaten = true ? "human" : "zombie"`).diagnostics).to.be.empty;
     });
+
+    it(`supports simple consequents`, () => {
+        expect(parseBs(`result = true ? true : "zombie"`).diagnostics).to.be.empty;
+        expect(parseBs(`result = true ? false : "zombie"`).diagnostics).to.be.empty;
+        expect(parseBs(`result = true ? len("person") = 10 : "zombie"`).diagnostics).to.be.empty;
+        expect(parseBs(`result = true ? m.getResponse() : "zombie"`).diagnostics).to.be.empty;
+        expect(parseBs(`result = true ? m.myZombies[3].hasEaten = true : "zombie"`).diagnostics).to.be.empty;
+        expect(parseBs(`result = true ? getZombieName : "zombie"`).diagnostics).to.be.empty;
+    });
+
+    it(`supports simple alternates`, () => {
+        expect(parseBs(`result = true ? "zombie": true`).diagnostics).to.be.empty;
+        expect(parseBs(`result = true ? "zombie": false`).diagnostics).to.be.empty;
+        expect(parseBs(`result = true ? "zombie": len("person") = 10`).diagnostics).to.be.empty;
+        expect(parseBs(`result = true ? "zombie": m.getResponse()`).diagnostics).to.be.empty;
+        expect(parseBs(`result = true ? "zombie": m.myZombies[3].hasEaten = true`).diagnostics).to.be.empty;
+        expect(parseBs(`result = true ? "zombie": getZombieName`).diagnostics).to.be.empty;
+        expect(parseBs(`result = true ? "zombie": true`).diagnostics).to.be.empty;
+    });
+
     describe('in assignment', () => {
         it(`simple case`, () => {
-            let { tokens } = Lexer.scan(`a = true ? "human" : "zombie"`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { statements, diagnostics } = parseBs(`a = true ? "human" : "zombie"`);
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`multi line arrays case`, () => {
-            let { tokens } = Lexer.scan(`a = true ? [
-          "one"
-          "two"
-          "three"] : [
-          "one"
-          "two"
-          "three"]`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { statements, diagnostics } = parseBs(`
+                a = true ? [
+                        "one"
+                        "two"
+                        "three"
+                    ] : [
+                        "one"
+                        "two"
+                        "three"
+                    ]
+            `);
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements[0]).instanceof(AssignmentStatement);
         });
+
         it(`single line assoc array`, () => {
-            let { tokens } = Lexer.scan(`a = true ? {"a":"a"} : {}`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            expect(diagnostics).to.be.lengthOf(0);
+            let { statements, diagnostics } = parseBs(`a = true ? {"a":"a"} : {}`);
+            expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(AssignmentStatement);
         });
+
         it(`multi line assoc array`, () => {
-            let { tokens } = Lexer.scan(`a = true ? {"a":"a"} : {
-          "b": "test"
-          }`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            expect(diagnostics).to.be.lengthOf(0);
+            let { statements, diagnostics } = parseBs(`
+                a = true ? {"a":"a"} : {
+                    "b": "test"
+                }`
+            );
+            expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(AssignmentStatement);
         });
+
         it(`multi line assoc array - both sides`, () => {
-            let { tokens } = Lexer.scan(`a = true ? {
-          "a":"a"
-          "b":"b"
-          } : {
-          "b": "test"
-          }`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { statements, diagnostics } = parseBs(`
+                a = true ? {
+                        "a":"a"
+                        "b":"b"
+                    } : {
+                        "b": "test"
+                    }
+            `);
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`in func call with array args`, () => {
-            let { tokens } = Lexer.scan(`m.eatBrains(a.count() > 10 ? ["a","B"] : ["c", "d"])`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            expect(diagnostics).to.be.lengthOf(0);
+            let { statements, diagnostics } = parseBs(`m.eatBrains(a.count() > 10 ? ["a","B"] : ["c", "d"])`);
+            expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(ExpressionStatement);
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
@@ -189,9 +146,8 @@ describe('parser ternary expressions', () => {
         });
 
         it(`in func call with aa args`, () => {
-            let { tokens } = Lexer.scan(`m.eatBrains(a.count() > 10 ? {"a":1} : {"b": ["c", "d"]})`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            expect(diagnostics).to.be.lengthOf(0);
+            let { statements, diagnostics } = parseBs(`m.eatBrains(a.count() > 10 ? {"a":1} : {"b": ["c", "d"]})`);
+            expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(ExpressionStatement);
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
@@ -200,9 +156,8 @@ describe('parser ternary expressions', () => {
         });
 
         it(`in simple func call`, () => {
-            let { tokens } = Lexer.scan(`m.eatBrains(a = true ? "a" : "b")`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            expect(diagnostics).to.be.lengthOf(0);
+            let { statements, diagnostics } = parseBs(`m.eatBrains(a = true ? "a" : "b")`);
+            expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(ExpressionStatement);
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
@@ -211,9 +166,8 @@ describe('parser ternary expressions', () => {
         });
 
         it(`in func call with more args`, () => {
-            let { tokens } = Lexer.scan(`m.eatBrains(a = true ? "a" : "b", true, 12)`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            expect(diagnostics).to.be.lengthOf(0);
+            let { statements, diagnostics } = parseBs(`m.eatBrains(a = true ? "a" : "b", true, 12)`);
+            expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(ExpressionStatement);
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
@@ -222,9 +176,8 @@ describe('parser ternary expressions', () => {
         });
 
         it(`in func call with more args, and comparing value`, () => {
-            let { tokens } = Lexer.scan(`m.eatBrains((a = true ? "a" : "b").count() = 3, true, 12)`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            expect(diagnostics).to.be.lengthOf(0);
+            let { statements, diagnostics } = parseBs(`m.eatBrains((a = true ? "a" : "b").count() = 3, true, 12)`);
+            expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(ExpressionStatement);
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
@@ -232,19 +185,18 @@ describe('parser ternary expressions', () => {
         });
 
         it(`in array`, () => {
-            let { tokens } = Lexer.scan(`a = [a = true ? {"a":"a"} : {"b":"b"}, "c"]`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            expect(diagnostics).to.be.lengthOf(0);
+            let { statements, diagnostics } = parseBs(`a = [a = true ? {"a":"a"} : {"b":"b"}, "c"]`);
+            expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(AssignmentStatement);
             expect((statements[0] as AssignmentStatement).value).instanceof(ArrayLiteralExpression);
             let literalExpression = (statements[0] as AssignmentStatement).value as ArrayLiteralExpression;
             expect(literalExpression.elements[0]).instanceOf(TernaryExpression);
             expect(literalExpression.elements[1]).instanceOf(LiteralExpression);
         });
+
         it(`in aa`, () => {
-            let { tokens } = Lexer.scan(`a = {"v1": a = true ? {"a":"a"} : {"b":"b"}, "v2": "c"}`);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            expect(diagnostics).to.be.lengthOf(0);
+            let { statements, diagnostics } = parseBs(`a = {"v1": a = true ? {"a":"a"} : {"b":"b"}, "v2": "c"}`);
+            expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(AssignmentStatement);
             expect((statements[0] as AssignmentStatement).value).instanceof(AALiteralExpression);
             let literalExpression = (statements[0] as AssignmentStatement).value as AALiteralExpression;
@@ -253,60 +205,165 @@ describe('parser ternary expressions', () => {
             expect((literalExpression.elements[1] as any).key.value).is.equal('v2');
             expect((literalExpression.elements[1] as any).value).instanceOf(LiteralExpression);
         });
+
         it(`in for each`, () => {
-            let { tokens } = Lexer.scan(`for each person in isZombieMode ? zombies : humans
-                ? "person is " ; person
-            end for
+            let { statements, diagnostics } = parseBs(
+                `for each person in isZombieMode ? zombies : humans
+                    ? "person is " ; person
+                end for
             `);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            expect(diagnostics).to.be.lengthOf(0);
+            expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(ForEachStatement);
             expect((statements[0] as ForEachStatement).target).instanceof(TernaryExpression);
         });
 
     });
-});
 
-
-describe('transpilation', () => {
-    let rootDir = process.cwd();
-    let program: Program;
-    let testTranspile = getTestTranspile(() => [program, rootDir]);
-
-    beforeEach(() => {
-        program = new Program({ rootDir: rootDir });
-    });
-    afterEach(() => {
-        program.dispose();
-    });
-
-    it('properly transpiles ternary assignments - simple', async () => {
-        await testTranspile(`a = user = invalid ? "no user" : "logged in"`, `a = bslib_simpleTernary(user = invalid, "no user", "logged in") `, 'none');
-    });
-
-    describe('conditionalScopeProtection: none', () => {
-        it('properly transpiles ternary assignments - complex consequent ', async () => {
-            await testTranspile(`a = user.getAccount() ? "logged in" : "not logged in"`, 'a = bslib_simpleTernary(user.getAccount(), "logged in", "not logged in") ', 'none');
-        });
-
-        it('properly transpiles ternary assignments - complex alternate', async () => {
-            await testTranspile(`a = user ? m.defaults.getAccount(settings.name) : "no"`, 'a = bslib_simpleTernary(user, m.defaults.getAccount(settings.name), "no") ', 'none');
-        });
-    });
-
-    describe('conditionalScopeProtection: safe', () => {
+    describe('transpilation', () => {
+        let rootDir = process.cwd();
+        let program: Program;
+        let testTranspile = getTestTranspile(() => [program, rootDir]);
 
         beforeEach(() => {
-            program = new Program({ rootDir: rootDir, conditionalScopeProtection: 'safe' });
-            testTranspile = getTestTranspile(() => [program, rootDir]);
+            program = new Program({ rootDir: rootDir });
+        });
+        afterEach(() => {
+            program.dispose();
         });
 
-        it('properly transpiles ternary assignments - complex consequent', async () => {
-            await testTranspile(`a = user.getAccount() ? "logged in" : "not logged in"`, 'a = bslib_scopeSafeTernary(user.getAccount(), {\n  "user": user\n},function(scope)\n  return "logged in"\nend function\n function(scope)\n  return "not logged in"\nend function) ', 'none');
+        it('simple consequents', async () => {
+            await testTranspile(
+                `a = user = invalid ? "no user" : "logged in"`,
+                `a = bslib_ternarySimple(user = invalid, "no user", "logged in")`
+            );
+
+            await testTranspile(
+                `a = user = invalid ? 1 : "logged in"`,
+                `a = bslib_ternarySimple(user = invalid, 1, "logged in")`
+            );
+
+            await testTranspile(
+                `a = user = invalid ? 1.2 : "logged in"`,
+                `a = bslib_ternarySimple(user = invalid, 1.2, "logged in")`
+            );
+
+            await testTranspile(
+                `a = user = invalid ? [] : "logged in"`,
+                `a = bslib_ternarySimple(user = invalid, [], "logged in")`
+            );
+
+            await testTranspile(
+                `a = user = invalid ? {} : "logged in"`,
+                `a = bslib_ternarySimple(user = invalid, {}, "logged in")`
+            );
         });
 
-        it('properly transpiles ternary assignments - complex alternate', async () => {
-            await testTranspile(`a = user ? m.defaults.getAccount(settings.name) : "no"`, 'a = bslib_scopeSafeTernary(user, {\n  "user": user\n  "settings": settings\n  "m": m\n},function(scope)\n  settings = scope.settings\n  m = scope.m\n  return m.defaults.getAccount(settings.name)\nend function\n function(scope)\n  return "no"\nend function) ', 'none');
+        it('simple alternates', async () => {
+            await testTranspile(
+                `a = user = invalid ? "logged in" : "no user" `,
+                `a = bslib_ternarySimple(user = invalid, "logged in", "no user")`
+            );
+
+            await testTranspile(
+                `a = user = invalid ? "logged in" : 1 `,
+                `a = bslib_ternarySimple(user = invalid, "logged in", 1)`
+            );
+
+            await testTranspile(
+                `a = user = invalid ? "logged in" : 1.2 `,
+                `a = bslib_ternarySimple(user = invalid, "logged in", 1.2)`
+            );
+
+            await testTranspile(
+                `a = user = invalid ? "logged in" :  [] `,
+                `a = bslib_ternarySimple(user = invalid, "logged in", [])`
+            );
+
+            await testTranspile(
+                `a = user = invalid ? "logged in" :  {} `,
+                `a = bslib_ternarySimple(user = invalid, "logged in", {})`
+            );
+        });
+
+        it('complex conditions do not cause scope capture', async () => {
+            await testTranspile(
+                `a = IsTrue() = true ? true : false `,
+                `a = bslib_ternarySimple(IsTrue() = true, true, false)`
+            );
+
+            await testTranspile(
+                `a = m.top.service.IsTrue() ? true : false `,
+                `a = bslib_ternarySimple(m.top.service.IsTrue(), true, false)`
+            );
+
+            await testTranspile(
+                `a = First(second(third(fourth(m.fifth()[123].truthy(1))))) ? true : false `,
+                `a = bslib_ternarySimple(First(second(third(fourth(m.fifth()[123].truthy(1))))), true, false)`
+            );
+        });
+
+        it('captures scope for function call conseqent', async () => {
+            await testTranspile(
+                `name = zombie.getName() <> invalid ? zombie.GetName() : "zombie"`,
+                `
+                    name = (function(condition, zombie)
+                            if condition then
+                                return zombie.GetName()
+                            else
+                                return "zombie"
+                            end if
+                        end function)(zombie.getName() <> invalid, zombie)
+                `
+            );
+        });
+
+        it('captures scope for function call alternate', async () => {
+            await testTranspile(
+                `name = zombie.getName() = invalid ? "zombie" :  zombie.GetName()`,
+                `
+                    name = (function(condition, zombie)
+                            if condition then
+                                return "zombie"
+                            else
+                                return zombie.GetName()
+                            end if
+                        end function)(zombie.getName() = invalid, zombie)
+                `
+            );
+        });
+
+        it('captures scope for complex consequent', async () => {
+            await testTranspile(
+                `name = isLoggedIn ? m.defaults.getAccount(settings.name) : "no"`,
+                `
+                    name = (function(condition, m, settings)
+                            if condition then
+                                return m.defaults.getAccount(settings.name)
+                            else
+                                return "no"
+                            end if
+                        end function)(isLoggedIn, m, settings)
+                `
+            );
+        });
+
+        it('supports scope-captured outer, and simple inner', async () => {
+            await testTranspile(
+                `name = zombie <> invalid ? zombie.Attack(human <> invalid ? human: zombie) : "zombie"`,
+                `
+                    name = (function(condition, human, zombie)
+                            if condition then
+                                return zombie.Attack(bslib_ternarySimple(human <> invalid, human, zombie) )
+                            else
+                                return "zombie"
+                            end if
+                        end function)(zombie <> invalid, human, zombie)
+                `
+            );
         });
     });
 });
+
+function parseBs(text: string) {
+    return Parser.parse(text, { mode: ParseMode.BrighterScript });
+}

@@ -22,3 +22,15 @@ function bslib_toString(value)
     'when all else fails, just return the type
     return "<" + valueType + ">"
 end function
+
+'
+' Simple ternary function. Given a condition, return the
+' consequent if true, and the alternate if false
+'
+function bslib_ternarySimple(condition, consequent, alternate)
+    if condition then
+        return consequent
+    else
+        return alternate
+    end if
+end function

@@ -198,7 +198,7 @@ export class FunctionExpression extends Expression {
 
 export class NamespacedVariableNameExpression extends Expression {
     constructor(
-    //if this is a `DottedGetExpression`, it must be comprised only of `VariableExpression`s
+        //if this is a `DottedGetExpression`, it must be comprised only of `VariableExpression`s
         readonly expression: DottedGetExpression | VariableExpression
     ) {
         super();
@@ -255,7 +255,7 @@ export class DottedGetExpression extends Expression {
     }
 
     transpile(state: TranspileState) {
-    //if the callee starts with a namespace name, transpile the name
+        //if the callee starts with a namespace name, transpile the name
         if (state.file.calleeStartsWithNamespace(this)) {
             return new NamespacedVariableNameExpression(this as DottedGetExpression | VariableExpression).transpile(state);
         } else {
@@ -507,7 +507,7 @@ export class AALiteralExpression extends Expression {
 
             //don't indent if comment is same-line
             if (element instanceof CommentExpression &&
-        (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element))
+                (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element))
             ) {
                 result.push(' ');
 
@@ -731,8 +731,8 @@ export class NewExpression extends Expression {
      * The name of the class to initialize (with optional namespace prefixed)
      */
     public get className() {
-    //the parser guarantees the callee of a new statement's call object will be
-    //a NamespacedVariableNameExpression
+        //the parser guarantees the callee of a new statement's call object will be
+        //a NamespacedVariableNameExpression
         return this.call.callee as NamespacedVariableNameExpression;
     }
 
@@ -894,7 +894,7 @@ export class TemplateStringExpression extends Expression {
                 //skip the toString wrapper around certain expressions
                 if (
                     expression instanceof EscapedCharCodeLiteral ||
-          (expression instanceof LiteralExpression && expression.value.kind === ValueKind.String)
+                    (expression instanceof LiteralExpression && expression.value.kind === ValueKind.String)
                 ) {
                     add(
                         ...expression.transpile(state)
@@ -1007,32 +1007,52 @@ export class TernaryExpression extends Expression {
 
     transpile(state: TranspileState) {
         let result = [];
-        let testInfo = getExpressionInfo(this.test);
         let consequentInfo = getExpressionInfo(this.consequent);
         let alternateInfo = getExpressionInfo(this.alternate);
 
-        let allUniqueVarNames = [...new Set([...testInfo.uniqueVarNames, ...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])];
-        let allExpressions = [...testInfo.expressions, ...consequentInfo.expressions, ...alternateInfo.expressions];
-        let mutatingExpressions = state.options.conditionalScopeProtection === 'safe' ? allExpressions.filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression) : [];
+        //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
+        let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
+        let mutatingExpressions = [
+            ...consequentInfo.expressions,
+            ...alternateInfo.expressions
+        ].filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression);
 
         if (mutatingExpressions.length > 0) {
-            //we need to do a scope-safe ternary operation
-            let scope = '{';
-            // eslint-disable-next-line no-return-assign
-            for (let name of allUniqueVarNames) {
-                scope += `\n  "${name}": ${name}`;
-            }
-            scope += '\n}';
-
-            result.push(`bslib_scopeSafeTernary(`);
-            result.push(...this.test.transpile(state));
-            result.push(`, ${scope},`);
-            result.push(...getScopedFunction(state, this.consequent, consequentInfo.uniqueVarNames));
-            result.push('\n ');
-            result.push(...getScopedFunction(state, this.alternate, alternateInfo.uniqueVarNames));
-            result.push(') ');
+            result.push(
+                `(function(condition, `,
+                //write all the scope variables as parameters.
+                //TODO handle there are more than 31 parameters
+                ...allUniqueVarNames.join(', '),
+                ')',
+                state.newline(),
+                //double indent so our `end function` line is still indented one at the end
+                state.indent(2),
+                `if condition then`,
+                state.newline(),
+                state.indent(1),
+                'return ',
+                ...this.consequent.transpile(state),
+                state.newline(),
+                state.indent(-1),
+                'else',
+                state.newline(),
+                state.indent(1),
+                'return ',
+                ...this.alternate.transpile(state),
+                state.newline(),
+                state.indent(-1),
+                'end if',
+                state.newline(),
+                state.indent(-1),
+                'end function)(',
+                ...this.test.transpile(state),
+                ', ',
+                allUniqueVarNames.join(', '),
+                ')'
+            );
+            state.blockDepth--;
         } else {
-            result.push(`bslib_simpleTernary(`);
+            result.push(`bslib_ternarySimple(`);
             result.push(...this.test.transpile(state));
             result.push(`, `);
             result.push(...this.consequent.transpile(state));
@@ -1062,20 +1082,6 @@ function getExpressionInfo(expression: Expression): {
     const uniqueVarNames = [...new Set(varExpressions.map(e => e.name.text))];
     return { expressions: expressions, varExpressions: varExpressions, uniqueVarNames: uniqueVarNames };
 }
-
-function getScopedFunction(state: TranspileState, alternate: Expression, scopeVarNames: string[]): Array<string | SourceNode> {
-    let result = [];
-    let text = 'function(scope)\n';
-    for (let name of scopeVarNames) {
-        text += `  ${name} = scope.${name}\n`;
-    }
-    result.push(text);
-    result.push('  return ');
-    result.push(...alternate.transpile(state));
-    result.push('\nend function');
-    return result;
-}
-
 
 export class CommentExpression extends Expression {
     constructor(
