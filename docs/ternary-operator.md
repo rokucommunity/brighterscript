@@ -25,7 +25,13 @@ Consider:
 
 transpiles to:
 ```BrightScript
-a = bslib_ternarySimple(user = invalid, "no name", user.name)
+a = (function(condition, user)
+        if condition then
+            return "no name"
+        else
+            return user.name
+        end if
+    end function)(user = invalid, user)
 ```
 
 This code will crash because `user.invalid` will be evaluated.
@@ -58,7 +64,7 @@ a = user = invalid ? defaultUser : user
 transpiles to:
 
 ```BrightScript
-a = bslib_ternarySimple(user = invalid, defaultuser, user)
+a = bslib_ternarySimple(user = invalid, defaultUser, user)
 ```
 
 ### Scope capturing
@@ -71,15 +77,13 @@ In this situation, BrighterScript has detected that your ternary operation will 
 transpiles to:
 
 ```BrightScript
-a = bslib_scopeSafeTernary(user = invalid, {
-  "user": user
-},function(scope)
-  return "no name"
-end function
- function(scope)
-  user = scope.user
-  return user.name
-end function)
+a = (function(condition, user)
+        if condition then
+            return "no name"
+        else
+            return user.name
+        end if
+    end function)(user = invalid, user)
 ```
 
 ```BrighterScript
@@ -89,20 +93,13 @@ a = user = invalid ? getNoNameMessage(m.config) : user.name + m.accountType
 transpiles to:
 
 ```BrightScript
-a = bslib_scopeSafeTernary(user = invalid, {
-  "user": user
-  "m": m
-  "getNoNameMessage": getNoNameMessage
-},function(scope)
-  m = scope.m
-  getNoNameMessage = scope.getNoNameMessage
-  return getNoNameMessage(m.config)
-end function
- function(scope)
-  user = scope.user
-  m = scope.m
-  return user.name + m.accountType
-end function)
+a = (function(condition, getNoNameMessage, m, user)
+        if condition then
+            return getNoNameMessage(m.config)
+        else
+            return user.name + m.accountType
+        end if
+    end function)(user = invalid, getNoNameMessage, m, user)
 ```
 
 ### nested scope protection
@@ -123,23 +120,19 @@ m.increment = function()
     m.count++
     return m.count
 end function
-result = bslib_scopeSafeTernary((bslib_scopeSafeTernary(m.increment() = 1, {
-  "m": m
-},function(scope)
-  m = scope.m
-  return m.increment()
-end function
- function(scope)
-  return - 1
-end function) ) = - 1, {
-  "m": m
-},function(scope)
-  m = scope.m
-  return m.increment()
-end function
- function(scope)
-  return - 1
-end function)
+result = (function(condition, m)
+        if condition then
+            return m.increment()
+        else
+            return - 1
+        end if
+    end function)(((function(condition, m)
+            if condition then
+                return m.increment()
+            else
+                return - 1
+            end if
+        end function)(m.increment() = 1, m)) = - 1, m)
 ```
 
 
