@@ -1058,7 +1058,7 @@ export class TernaryExpression extends Expression {
             result.push(...this.consequent.transpile(state));
             result.push(`, `);
             result.push(...this.alternate.transpile(state));
-            result.push(`) `);
+            result.push(`)`);
         }
         return result;
     }

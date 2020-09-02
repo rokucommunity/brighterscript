@@ -353,7 +353,7 @@ describe('ternary expressions', () => {
                 `
                     name = (function(condition, human, zombie)
                             if condition then
-                                return zombie.Attack(bslib_ternarySimple(human <> invalid, human, zombie) )
+                                return zombie.Attack(bslib_ternarySimple(human <> invalid, human, zombie))
                             else
                                 return "zombie"
                             end if
