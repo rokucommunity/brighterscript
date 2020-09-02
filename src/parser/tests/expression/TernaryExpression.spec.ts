@@ -361,6 +361,22 @@ describe('ternary expressions', () => {
                 `
             );
         });
+
+        it('uses scope capture for property access', async () => {
+            await testTranspile(
+                `name = person <> invalid ? person.name : "John Doe"`,
+                `
+                    name = (function(condition, person)
+                            if condition then
+                                return person.name
+                            else
+                                return "John Doe"
+                            end if
+                        end function)(person <> invalid, person)
+                `
+            );
+        });
+
     });
 });
 
