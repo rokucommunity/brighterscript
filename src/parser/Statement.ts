@@ -879,7 +879,7 @@ export class ImportStatement implements Statement {
                 this.range.start.line + 1,
                 this.range.start.character,
                 state.file.pathAbsolute,
-                `'${this.importToken.text} "${this.filePathToken.text}"`
+                `'${this.importToken.text} ${this.filePathToken.text}`
             )
         ];
     }
