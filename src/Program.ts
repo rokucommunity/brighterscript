@@ -3,7 +3,7 @@ import { EventEmitter } from 'eventemitter3';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import { StandardizedFileEntry } from 'roku-deploy';
-import { CompletionItem, Location, Position, Range, CompletionItemKind } from 'vscode-languageserver';
+import { CompletionItem, Location, Position, Range, CompletionItemKind, DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -18,6 +18,7 @@ import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
 import { globalFile } from './globalCallables';
 import { parseManifest, ManifestValue } from './preprocessor/Manifest';
+import { URI } from 'vscode-uri';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export class Program {
@@ -456,6 +457,7 @@ export class Program {
             //find any files NOT loaded into a scope
             for (let filePath in this.files) {
                 let file = this.files[filePath];
+
                 if (!this.fileIsIncludedInAnyScope(file)) {
                     this.logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.pkgPath));
                     //the file is not loaded in any scope
@@ -466,8 +468,50 @@ export class Program {
                     });
                 }
             }
+
+            this.detectDuplicateComponentNames();
             await Promise.resolve();
         });
+    }
+
+    /**
+     * Flag all duplicate component names
+     */
+    private detectDuplicateComponentNames() {
+        const componentsByName = Object.keys(this.files).reduce((map, filePath) => {
+            const file = this.files[filePath];
+            if (file instanceof XmlFile) {
+                let lowerName = file.componentName.toLowerCase();
+                if (!map[lowerName]) {
+                    map[lowerName] = [];
+                }
+                map[lowerName].push(file);
+            }
+            return map;
+        }, {} as { [lowerComponentName: string]: XmlFile[] });
+
+        for (let componentName in componentsByName) {
+            let xmlFiles = componentsByName[componentName];
+            //add diagnostics for every duplicate component with this name
+            if (xmlFiles.length > 1) {
+                for (let xmlFile of xmlFiles) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.duplicateComponentName(xmlFile.componentName),
+                        range: xmlFile.componentNameRange,
+                        file: xmlFile,
+                        relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
+                            return {
+                                location: Location.create(
+                                    URI.file(xmlFile.pathAbsolute).toString(),
+                                    x.componentNameRange
+                                ),
+                                message: 'Also defined here'
+                            };
+                        })
+                    });
+                }
+            }
+        }
     }
 
     /**
