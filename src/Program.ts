@@ -3,7 +3,7 @@ import { EventEmitter } from 'eventemitter3';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import { StandardizedFileEntry } from 'roku-deploy';
-import { CompletionItem, Location, Position, Range, CompletionItemKind, DiagnosticRelatedInformation } from 'vscode-languageserver';
+import { CompletionItem, Location, Position, Range, CompletionItemKind } from 'vscode-languageserver';
 import { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
