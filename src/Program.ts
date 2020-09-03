@@ -491,7 +491,7 @@ export class Program {
         }, {} as { [lowerComponentName: string]: XmlFile[] });
 
         for (let componentName in componentsByName) {
-            let xmlFiles = componentsByName[componentName];
+            const xmlFiles = componentsByName[componentName];
             //add diagnostics for every duplicate component with this name
             if (xmlFiles.length > 1) {
                 for (let xmlFile of xmlFiles) {

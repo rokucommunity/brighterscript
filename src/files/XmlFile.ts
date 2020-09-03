@@ -184,8 +184,8 @@ export class XmlFile {
                             Position.create(lineIndex, idx),
                             Position.create(lineIndex, idx + 10)
                         );
-                        //calculate the rane of the component's name (if it exists)
-                        let match = /(.*?name\s*=\s*(?:'|"))(.*?)('|")/.exec(this.lines[lineIndex]);
+                        //calculate the range of the component's name (if it exists)
+                        const match = /(.*?name\s*=\s*(?:'|"))(.*?)('|")/.exec(this.lines[lineIndex]);
                         if (match) {
                             this.componentNameRange = Range.create(
                                 lineIndex,

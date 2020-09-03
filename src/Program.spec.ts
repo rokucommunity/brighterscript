@@ -195,7 +195,7 @@ describe('Program', () => {
             `);
             await program.addOrReplaceFile({ src: `${rootDir}/components/component2.xml`, dest: 'components/component2.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="Component1" extends="Scene" extends="Scene">
+                <component name="Component1" extends="Scene">
                 </component>
             `);
             await program.validate();
