@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.14.0] - 2020-09-04
+### Changed
+ - Add error diagnostic BS1115 which flags duplicate component names [#186](https://github.com/rokucommunity/brighterscript/pull/186)
+
+
+
 ## [0.13.2] - 2020-08-31
 ### Changed
  - Upgraded BS1104 to error (previously a warning) and refined the messaging.
@@ -516,3 +522,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.13.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.12.4...v0.13.0
 [0.13.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.13.0...v0.13.1
 [0.13.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.13.1...v0.13.2
+[0.14.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.13.2...v0.14.0
