@@ -584,6 +584,11 @@ export let DiagnosticMessages = {
         message: `Unterminated template string expression. '\${' must be followed by expression, then '}'`,
         code: 1114,
         severity: DiagnosticSeverity.Error
+    }),
+    duplicateComponentName: (componentName: string) => ({
+        message: `There are multiple components with the name '${componentName}'`,
+        code: 1115,
+        severity: DiagnosticSeverity.Error
     })
 
 };

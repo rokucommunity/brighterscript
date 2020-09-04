@@ -41,6 +41,14 @@ export class XmlFile {
      */
     private unsubscribeFromDependencyGraph: () => void;
 
+    /**
+     * The range of the component's name value
+     */
+    public componentNameRange: Range;
+
+    /**
+     * The range of the component's parent name (if exist
+     */
     public parentNameRange: Range;
 
     /**
@@ -176,6 +184,16 @@ export class XmlFile {
                             Position.create(lineIndex, idx),
                             Position.create(lineIndex, idx + 10)
                         );
+                        //calculate the range of the component's name (if it exists)
+                        const match = /(.*?name\s*=\s*(?:'|"))(.*?)('|")/.exec(this.lines[lineIndex]);
+                        if (match) {
+                            this.componentNameRange = Range.create(
+                                lineIndex,
+                                match[1].length,
+                                lineIndex,
+                                match[1].length + match[2].length
+                            );
+                        }
                         break;
                     }
                 }
@@ -192,6 +210,7 @@ export class XmlFile {
                         file: this
                     });
                 }
+
                 //parent component name not defined
                 if (!this.parentComponentName) {
                     this.diagnostics.push({
