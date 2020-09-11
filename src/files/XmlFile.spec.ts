@@ -290,7 +290,7 @@ describe('XmlFile', () => {
 
             let xmlFile = new XmlFile(s`${rootDir}/components/component1/component1.xml`, s`components/component1/component1.xml`, <any>program);
             xmlFile.scriptTagImports.push({
-                pkgPath: s`components/component1/component1..brs`,
+                pkgPath: s`components/component1/component1.brs`,
                 text: 'component1.brs',
                 filePathRange: Range.create(1, 1, 1, 1),
                 sourceFile: xmlFile

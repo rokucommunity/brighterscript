@@ -346,7 +346,7 @@ export class Scope {
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
             let files = this.getFiles();
 
-            this.program.plugins.emit('scopeValidateStart', this, files, callableContainerMap);
+            this.program.plugins.emit('beforeScopeValidate', this, files, callableContainerMap);
 
             //find all duplicate function declarations
             this.diagnosticFindDuplicateFunctionDeclarations(callableContainerMap);
@@ -366,7 +366,7 @@ export class Scope {
                 this.detectVariableNamespaceCollisions(file);
             }
 
-            this.program.plugins.emit('scopeValidateEnd', this, files, callableContainerMap);
+            this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
 
             (this as any).isValidated = true;
         });

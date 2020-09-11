@@ -2,7 +2,7 @@ import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
 import { BsConfig } from './BsConfig';
-import { BsDiagnostic, File, FileObj, CompilerPlugin } from './interfaces';
+import { BsDiagnostic, File, FileObj } from './interfaces';
 import { FileResolver, Program } from './Program';
 import { standardizePath as s, util, loadPlugins } from './util';
 import { Watcher } from './Watcher';
@@ -25,21 +25,13 @@ export class ProgramBuilder {
     private watcher: Watcher;
     public program: Program;
     public logger = new Logger();
-    public plugins: PluginInterface;
-    private pluginModules = [] as CompilerPlugin[];
+    public plugins: PluginInterface = new PluginInterface([], this.logger);
     private fileResolvers = [] as FileResolver[];
 
     public addFileResolver(fileResolver: FileResolver) {
         this.fileResolvers.push(fileResolver);
         if (this.program) {
             this.program.fileResolvers.push(fileResolver);
-        }
-    }
-
-    public addPlugin(plugin: CompilerPlugin) {
-        this.pluginModules.push(plugin);
-        if (this.program) {
-            this.program.plugins.add(plugin);
         }
     }
 
@@ -79,6 +71,7 @@ export class ProgramBuilder {
         this.isRunning = true;
         try {
             this.options = await util.normalizeAndResolveConfig(options);
+            this.loadPlugins();
         } catch (e) {
             if (e?.file && e.message && e.code) {
                 let err = e as BsDiagnostic;
@@ -111,25 +104,20 @@ export class ProgramBuilder {
     }
 
     protected createProgram() {
-        this.plugins = this.loadPlugins();
         const program = new Program(this.options, undefined, this.plugins);
 
         //add the initial FileResolvers
         program.fileResolvers.push(...this.fileResolvers);
 
-        this.plugins.emit('programCreated', program);
+        this.plugins.emit('afterProgramCreate', program);
         return program;
     }
 
     protected loadPlugins() {
-        const plugins = [
-            ...loadPlugins(
-                this.options.plugins,
-                (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
-            ),
-            ...this.pluginModules
-        ];
-        return new PluginInterface(plugins, this.logger);
+        loadPlugins(
+            this.options.plugins,
+            (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
+        ).forEach(plugin => this.plugins.add(plugin));
     }
 
     private clearConsole() {

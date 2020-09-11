@@ -172,17 +172,17 @@ describe('ProgramBuilder', () => {
     });
 
     it('forwards program events', async () => {
-        const programValidateStart = sinon.spy();
-        const programValidateEnd = sinon.spy();
-        builder.addPlugin({
+        const beforeProgramValidate = sinon.spy();
+        const afterProgramValidate = sinon.spy();
+        builder.plugins.add({
             name: 'forwards program events',
-            programValidateStart: programValidateStart,
-            programValidateEnd: programValidateEnd
+            beforeProgramValidate: beforeProgramValidate,
+            afterProgramValidate: afterProgramValidate
         });
         await builder.run({
             createPackage: false
         });
-        expect(programValidateStart.callCount).to.equal(1);
-        expect(programValidateEnd.callCount).to.equal(1);
+        expect(beforeProgramValidate.callCount).to.equal(1);
+        expect(afterProgramValidate.callCount).to.equal(1);
     });
 });

@@ -116,7 +116,7 @@ export class Program {
 
     protected addScope(scope: Scope) {
         this.scopes[scope.name] = scope;
-        this.plugins.emit('scopeCreated', scope);
+        this.plugins.emit('afterScopeCreate', scope);
     }
 
     /**
@@ -338,19 +338,19 @@ export class Program {
                     pathAbsolute: pathAbsolute,
                     src: await getFileContents()
                 };
-                this.plugins.emit('fileSourceLoaded', fileContents);
+                this.plugins.emit('beforeFileParse', fileContents);
 
                 this.logger.time(LogLevel.info, ['parse', chalk.green(pathAbsolute)], () => {
                     brsFile.parse(
                         fileContents.src,
-                        () => this.plugins.emit('fileParsed', brsFile)
+                        () => this.plugins.emit('afterFileParse', brsFile)
                     );
                 });
                 file = brsFile;
 
                 this.dependencyGraph.addOrReplace(brsFile.dependencyGraphKey, brsFile.ownScriptImports.map(x => x.pkgPath.toLowerCase()));
 
-                this.plugins.emit('fileValidation', brsFile);
+                this.plugins.emit('beforeFileValidate', brsFile);
             } else if (
                 //is xml file
                 fileExtension === '.xml' &&
@@ -364,14 +364,14 @@ export class Program {
                     pathAbsolute: pathAbsolute,
                     src: await getFileContents()
                 };
-                this.plugins.emit('componentSourceLoaded', fileContents);
+                this.plugins.emit('beforeFileParse', fileContents);
                 await xmlFile.parse(
                     fileContents.src,
-                    () => this.plugins.emit('componentParsed', xmlFile)
+                    () => this.plugins.emit('afterFileParse', xmlFile)
                 );
 
                 file = xmlFile;
-                this.plugins.emit('componentValidation', xmlFile);
+                this.plugins.emit('beforeFileValidate', xmlFile);
 
                 //create a new scope for this xml file
                 let scope = new XmlScope(xmlFile, this);
@@ -400,7 +400,7 @@ export class Program {
 
     /**
      * Ensure source scope is created.
-     * Note: automatically called internally, and no-op is it exists already.
+     * Note: automatically called internally, and no-op if it exists already.
      */
     public createSourceScope() {
         if (!this.scopes.source) {
@@ -472,7 +472,7 @@ export class Program {
             let scope = this.scopes[file.pkgPath];
             if (scope) {
                 scope.dispose();
-                this.plugins.emit('scopeDisposed', scope);
+                this.plugins.emit('afterScopeDispose', scope);
                 //notify dependencies of this scope that it has been removed
                 this.dependencyGraph.remove(scope.dependencyGraphKey);
                 delete this.scopes[file.pkgPath];
@@ -501,7 +501,7 @@ export class Program {
     public async validate() {
         await this.logger.time(LogLevel.debug, ['Program.validate()'], async () => {
             this.diagnostics = [];
-            this.plugins.emit('programValidateStart', this);
+            this.plugins.emit('beforeProgramValidate', this);
 
             for (let scopeName in this.scopes) {
                 let scope = this.scopes[scopeName];
@@ -525,7 +525,7 @@ export class Program {
 
             this.detectDuplicateComponentNames();
 
-            this.plugins.emit('programValidateEnd', this);
+            this.plugins.emit('afterProgramValidate', this);
             await Promise.resolve();
         });
     }

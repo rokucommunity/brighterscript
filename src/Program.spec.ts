@@ -187,30 +187,24 @@ describe('Program', () => {
         });
 
         it(`emits events for scope and file creation`, async () => {
-            const programValidateStart = sinon.spy();
-            const programValidateEnd = sinon.spy();
-            const scopeCreated = sinon.spy();
-            const scopeValidateStart = sinon.spy();
-            const scopeValidateEnd = sinon.spy();
-            const fileSourceLoaded = sinon.spy();
-            const fileParsed = sinon.spy();
-            const fileValidation = sinon.spy();
-            const componentSourceLoaded = sinon.spy();
-            const componentParsed = sinon.spy();
-            const componentValidation = sinon.spy();
+            const beforeProgramValidate = sinon.spy();
+            const afterProgramValidate = sinon.spy();
+            const afterScopeCreate = sinon.spy();
+            const beforeScopeValidate = sinon.spy();
+            const afterScopeValidate = sinon.spy();
+            const beforeFileParse = sinon.spy();
+            const afterFileParse = sinon.spy();
+            const beforeFileValidate = sinon.spy();
             program.plugins = new PluginInterface([{
                 name: 'emits events for scope and file creation',
-                programValidateStart: programValidateStart,
-                programValidateEnd: programValidateEnd,
-                scopeCreated: scopeCreated,
-                scopeValidateStart: scopeValidateStart,
-                scopeValidateEnd: scopeValidateEnd,
-                fileSourceLoaded: fileSourceLoaded,
-                fileParsed: fileParsed,
-                fileValidation: fileValidation,
-                componentSourceLoaded: componentSourceLoaded,
-                componentParsed: componentParsed,
-                componentValidation: componentValidation
+                beforeProgramValidate: beforeProgramValidate,
+                afterProgramValidate: afterProgramValidate,
+                afterScopeCreate: afterScopeCreate,
+                beforeScopeValidate: beforeScopeValidate,
+                afterScopeValidate: afterScopeValidate,
+                beforeFileParse: beforeFileParse,
+                afterFileParse: afterFileParse,
+                beforeFileValidate: beforeFileValidate
             }], undefined);
 
             let mainPath = s`${rootDir}/source/main.brs`;
@@ -225,20 +219,17 @@ describe('Program', () => {
             await program.validate();
 
             //program events
-            expect(programValidateStart.callCount).to.equal(1);
-            expect(programValidateEnd.callCount).to.equal(1);
+            expect(beforeProgramValidate.callCount).to.equal(1);
+            expect(afterProgramValidate.callCount).to.equal(1);
             //scope events
             //(we get component scope event only because source is created in beforeEach)
-            expect(scopeCreated.callCount).to.equal(1);
-            expect(scopeValidateStart.callCount).to.equal(2);
-            expect(scopeValidateEnd.callCount).to.equal(2);
+            expect(afterScopeCreate.callCount).to.equal(1);
+            expect(beforeScopeValidate.callCount).to.equal(2);
+            expect(afterScopeValidate.callCount).to.equal(2);
             //file events
-            expect(fileSourceLoaded.callCount).to.equal(1);
-            expect(fileParsed.callCount).to.equal(1);
-            expect(fileValidation.callCount).to.equal(1);
-            expect(componentSourceLoaded.callCount).to.equal(1);
-            expect(componentParsed.callCount).to.equal(1);
-            expect(componentValidation.callCount).to.equal(1);
+            expect(beforeFileParse.callCount).to.equal(2);
+            expect(afterFileParse.callCount).to.equal(2);
+            expect(beforeFileValidate.callCount).to.equal(2);
         });
     });
 

@@ -484,8 +484,8 @@ describe('Scope', () => {
             const compScope = program.getScopeByName('components/comp.xml');
             program.plugins = new PluginInterface([{
                 name: 'Emits validation events',
-                scopeValidateStart: validateStartScope,
-                scopeValidateEnd: validateEndScope
+                beforeScopeValidate: validateStartScope,
+                afterScopeValidate: validateEndScope
             }], undefined);
             await program.validate();
             expect(validateStartScope.callCount).to.equal(2);

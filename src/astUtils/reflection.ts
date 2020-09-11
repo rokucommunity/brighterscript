@@ -3,6 +3,18 @@ import { Token } from '../lexer/Token';
 import { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteral, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
 import { BrsType, BrsString, ValueKind, BrsInvalid, BrsBoolean } from '../brsTypes';
 import { BrsNumber } from '../brsTypes/BrsNumber';
+import { BrsFile } from '../files/BrsFile';
+import { XmlFile } from '../files/XmlFile';
+
+// File reflection
+
+export function isBrsFile(file: (BrsFile | XmlFile)): file is BrsFile {
+    return file.extension === '.brs' || file.extension === '.bs';
+}
+
+export function isXmlFile(file: (BrsFile | XmlFile)): file is XmlFile {
+    return file.extension === '.xml';
+}
 
 // Statements reflection
 
