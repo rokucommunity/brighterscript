@@ -51,22 +51,21 @@ The top level object is the `ProgramBuilder` which runs the overall process: pre
 ```typescript
 export interface CompilerPlugin {
     name: string;
+    beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    afterProgramCreate?: (program: Program) => void;
     beforePrepublish?: (files: FileObj[]) => void;
+    afterPrepublish?: (files: FileObj[]) => void;
     beforePublish?: (files: FileObj[]) => void;
     afterPublish?: (files: FileObj[]) => void;
-    programCreated?: (program: Program) => void;
-    programValidateStart?: (program: Program) => void;
-    programValidateEnd?: (program: Program) => void;
-    scopeCreated?: (scope: Scope) => void;
-    scopeDisposed?: (scope: Scope) => void;
-    scopeValidateStart?: ValidateHandler;
-    scopeValidateEnd?: ValidateHandler;
-    fileSourceLoaded?: (source: SourceInfo) => void;
-    fileParsed?: (file: BrsFile) => void;
-    fileValidation?: (file: BrsFile) => void;
-    componentSourceLoaded?: (source: SourceInfo) => void;
-    componentParsed?: (file: XmlFile) => void;
-    componentValidation?: (file: XmlFile) => void;
+    beforeProgramValidate?: (program: Program) => void;
+    afterProgramValidate?: (program: Program) => void;
+    afterScopeCreate?: (scope: Scope) => void;
+    afterScopeDispose?: (scope: Scope) => void;
+    beforeScopeValidate?: ValidateHandler;
+    afterScopeValidate?: ValidateHandler;
+    beforeFileParse?: (source: SourceInfo) => void;
+    afterFileParse?: (file: (BrsFile | XmlFile)) => void;
+    afterFileValidate?: (file: (BrsFile | XmlFile)) => void;
     beforeTranspile?: (entries: TranspileEntry[]) => void;
     afterTranspile?: (entries: TranspileEntry[]) => void;
 }

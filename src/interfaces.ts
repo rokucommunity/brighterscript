@@ -8,6 +8,7 @@ import { BrsType } from './types/BrsType';
 import { FunctionType } from './types/FunctionType';
 import { ParseMode } from './parser/Parser';
 import { Program, SourceInfo, TranspileEntry } from './Program';
+import { ProgramBuilder } from './ProgramBuilder';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
@@ -172,10 +173,12 @@ type ValidateHandler = (scope: Scope, files: (BrsFile | XmlFile)[], callables: C
 
 export interface CompilerPlugin {
     name: string;
+    beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    afterProgramCreate?: (program: Program) => void;
     beforePrepublish?: (files: FileObj[]) => void;
+    afterPrepublish?: (files: FileObj[]) => void;
     beforePublish?: (files: FileObj[]) => void;
     afterPublish?: (files: FileObj[]) => void;
-    afterProgramCreate?: (program: Program) => void;
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
     afterScopeCreate?: (scope: Scope) => void;
@@ -184,7 +187,7 @@ export interface CompilerPlugin {
     afterScopeValidate?: ValidateHandler;
     beforeFileParse?: (source: SourceInfo) => void;
     afterFileParse?: (file: (BrsFile | XmlFile)) => void;
-    beforeFileValidate?: (file: (BrsFile | XmlFile)) => void;
+    afterFileValidate?: (file: (BrsFile | XmlFile)) => void;
     beforeTranspile?: (entries: TranspileEntry[]) => void;
     afterTranspile?: (entries: TranspileEntry[]) => void;
 }

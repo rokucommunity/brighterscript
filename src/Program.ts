@@ -350,7 +350,7 @@ export class Program {
 
                 this.dependencyGraph.addOrReplace(brsFile.dependencyGraphKey, brsFile.ownScriptImports.map(x => x.pkgPath.toLowerCase()));
 
-                this.plugins.emit('beforeFileValidate', brsFile);
+                this.plugins.emit('afterFileValidate', brsFile);
             } else if (
                 //is xml file
                 fileExtension === '.xml' &&
@@ -371,7 +371,6 @@ export class Program {
                 );
 
                 file = xmlFile;
-                this.plugins.emit('beforeFileValidate', xmlFile);
 
                 //create a new scope for this xml file
                 let scope = new XmlScope(xmlFile, this);
@@ -384,6 +383,8 @@ export class Program {
                 //   a) be regularly notified of changes
                 //   b) immediately emit its own changes
                 xmlFile.attachDependencyGraph(this.dependencyGraph);
+
+                this.plugins.emit('afterFileValidate', xmlFile);
             } else {
                 //TODO do we actually need to implement this? Figure out how to handle img paths
                 // let genericFile = this.files[pathAbsolute] = <any>{

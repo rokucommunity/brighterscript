@@ -194,7 +194,7 @@ describe('Program', () => {
             const afterScopeValidate = sinon.spy();
             const beforeFileParse = sinon.spy();
             const afterFileParse = sinon.spy();
-            const beforeFileValidate = sinon.spy();
+            const afterFileValidate = sinon.spy();
             program.plugins = new PluginInterface([{
                 name: 'emits events for scope and file creation',
                 beforeProgramValidate: beforeProgramValidate,
@@ -204,7 +204,7 @@ describe('Program', () => {
                 afterScopeValidate: afterScopeValidate,
                 beforeFileParse: beforeFileParse,
                 afterFileParse: afterFileParse,
-                beforeFileValidate: beforeFileValidate
+                afterFileValidate: afterFileValidate
             }], undefined);
 
             let mainPath = s`${rootDir}/source/main.brs`;
@@ -229,7 +229,7 @@ describe('Program', () => {
             //file events
             expect(beforeFileParse.callCount).to.equal(2);
             expect(afterFileParse.callCount).to.equal(2);
-            expect(beforeFileValidate.callCount).to.equal(2);
+            expect(afterFileValidate.callCount).to.equal(2);
         });
     });
 

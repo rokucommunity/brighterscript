@@ -118,6 +118,8 @@ export class ProgramBuilder {
             this.options.plugins,
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
         ).forEach(plugin => this.plugins.add(plugin));
+
+        this.plugins.emit('beforeProgramCreate', this);
     }
 
     private clearConsole() {
@@ -353,6 +355,7 @@ export class ProgramBuilder {
             });
         });
 
+        this.plugins.emit('afterPublish', fileMap);
         this.plugins.emit('beforePublish', fileMap);
 
         await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
