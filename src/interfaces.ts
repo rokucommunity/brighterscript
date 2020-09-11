@@ -7,7 +7,7 @@ import { FunctionScope } from './FunctionScope';
 import { BrsType } from './types/BrsType';
 import { FunctionType } from './types/FunctionType';
 import { ParseMode } from './parser/Parser';
-import { Program, SourceInfo, TranspileEntry } from './Program';
+import { Program, SourceObj, TranspileEntry } from './Program';
 import { ProgramBuilder } from './ProgramBuilder';
 
 export interface BsDiagnostic extends Diagnostic {
@@ -185,7 +185,7 @@ export interface CompilerPlugin {
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
     afterScopeValidate?: ValidateHandler;
-    beforeFileParse?: (source: SourceInfo) => void;
+    beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: (BrsFile | XmlFile)) => void;
     afterFileValidate?: (file: (BrsFile | XmlFile)) => void;
     beforeTranspile?: (entries: TranspileEntry[]) => void;

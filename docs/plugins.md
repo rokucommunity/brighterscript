@@ -63,7 +63,7 @@ export interface CompilerPlugin {
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
     afterScopeValidate?: ValidateHandler;
-    beforeFileParse?: (source: SourceInfo) => void;
+    beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: (BrsFile | XmlFile)) => void;
     afterFileValidate?: (file: (BrsFile | XmlFile)) => void;
     beforeTranspile?: (entries: TranspileEntry[]) => void;
@@ -76,9 +76,9 @@ interface FileObj {
     dest: string;
 }
 
-interface SourceInfo {
+interface SourceObj {
     pathAbsolute: string;
-    src: string;
+    source: string;
 }
 
 interface TranspileEntry {

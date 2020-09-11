@@ -20,9 +20,9 @@ import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 const startOfSourcePkgPath = `source${path.sep}`;
 
-export interface SourceInfo {
+export interface SourceObj {
     pathAbsolute: string;
-    src: string;
+    source: string;
 }
 
 export interface TranspileEntry {
@@ -334,15 +334,15 @@ export class Program {
 
                 //add the file to the program
                 this.files[pathAbsolute] = brsFile;
-                let fileContents = {
+                let fileContents: SourceObj = {
                     pathAbsolute: pathAbsolute,
-                    src: await getFileContents()
+                    source: await getFileContents()
                 };
                 this.plugins.emit('beforeFileParse', fileContents);
 
                 this.logger.time(LogLevel.info, ['parse', chalk.green(pathAbsolute)], () => {
                     brsFile.parse(
-                        fileContents.src,
+                        fileContents.source,
                         () => this.plugins.emit('afterFileParse', brsFile)
                     );
                 });
@@ -360,13 +360,13 @@ export class Program {
                 let xmlFile = new XmlFile(pathAbsolute, pkgPath, this);
                 //add the file to the program
                 this.files[pathAbsolute] = xmlFile;
-                let fileContents = {
+                let fileContents: SourceObj = {
                     pathAbsolute: pathAbsolute,
-                    src: await getFileContents()
+                    source: await getFileContents()
                 };
                 this.plugins.emit('beforeFileParse', fileContents);
                 await xmlFile.parse(
-                    fileContents.src,
+                    fileContents.source,
                     () => this.plugins.emit('afterFileParse', xmlFile)
                 );
 
