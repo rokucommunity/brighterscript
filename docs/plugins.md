@@ -52,13 +52,15 @@ The top level object is the `ProgramBuilder` which runs the overall process: pre
 export interface CompilerPlugin {
     name: string;
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterProgramCreate?: (program: Program) => void;
-    beforePrepublish?: (files: FileObj[]) => void;
-    afterPrepublish?: (files: FileObj[]) => void;
-    beforePublish?: (files: FileObj[]) => void;
-    afterPublish?: (files: FileObj[]) => void;
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
+    beforeTranspile?: (entries: TranspileObj[]) => void;
+    afterTranspile?: (entries: TranspileObj[]) => void;
     afterScopeCreate?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
@@ -66,8 +68,6 @@ export interface CompilerPlugin {
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: (BrsFile | XmlFile)) => void;
     afterFileValidate?: (file: (BrsFile | XmlFile)) => void;
-    beforeTranspile?: (entries: TranspileEntry[]) => void;
-    afterTranspile?: (entries: TranspileEntry[]) => void;
 }
 
 // related types:
@@ -81,7 +81,7 @@ interface SourceObj {
     source: string;
 }
 
-interface TranspileEntry {
+interface TranspileObj {
     file: (BrsFile | XmlFile);
     outputPath: string;
 }
@@ -104,7 +104,7 @@ To walk/modify the AST, a number of helpers are provided in `brighterscript/dist
 
 ### Working with TypeScript
 
-It is highly recommended to use TypeScript as intellisence helps greatly writing code against new APIs.
+It is highly recommended to use TypeScript as intellisense helps greatly writing code against new APIs.
 
 ```bash
 # install modules needed to compile a plugin
@@ -119,19 +119,30 @@ npx tsc myPlugin.ts -m commonjs --sourceMap --watch
 
 ### Example diagnostic plugins
 
+Diagnostics must run every time it is relevant:
+
+- Files have one out-of-context validation step (`afterFileValidate`),
+- Scopes are validated once all the the files have been collected (`before/afterScopeValidate`).
+
+Note: in a language-server context, Scope validation happens every time a file changes.
+
 ```typescript
 // myDiagnosticPlugin.ts
-import { CompilerPlugin, BrsFile } from 'brighterscript';
+import { CompilerPlugin, BrsFile, XmlFile } from 'brighterscript';
+import { isBrsFile } from 'brighterscript/dist/parser/ASTUtils';
 
 // entry point
 const pluginInterface: CompilerPlugin = {
     name: 'myDiagnosticPlugin',
-    fileValidated
+    afterFileValidate
 };
 export default pluginInterface;
 
 // file is validated once when parsed
-function fileValidated(file: BrsFile) {
+function afterFileValidate(file: BrsFile | XmlFile) {
+    if (!isBrsFile(file)) {
+        return;
+    }
     // visit function statements and validate their name
     file.parser.functionStatements.forEach((fun) => {
         if (fun.name.text.toLowerCase() === 'main') {
@@ -148,26 +159,33 @@ function fileValidated(file: BrsFile) {
 
 ### Example AST modifier plugin
 
+AST modification can be done after parsing (`afterFileParsed`), but it is recommended to modify the AST only before transpilation (`beforeTranspile`), otherwise it could cause problems if the plugin is used in a language-server context.
+
 ```typescript
 // removePrint.ts
-import { CompilerPlugin, ProgramBuilder, BrsFile } from 'brighterscript';
+import { CompilerPlugin, Program, TranspileObj } from 'brighterscript';
 import { EmptyStatement } from 'brighterscript/dist/parser';
 import { createStatementEditor, editStatements } from 'brighterscript/dist/parser/ASTUtils';
 
 // entry point
 const pluginInterface: CompilerPlugin = {
     name: 'removePrint',
-    fileParsed
+    beforeTranspile
 };
 export default pluginInterface;
 
-function fileParsed(file: BrsFile) {
-    // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-    file.parser.functionExpressions.forEach((fun) => {
-        const visitor = createStatementEditor({
-            PrintStatement: (statement) => new EmptyStatement()
-        });
-        editStatements(fun.body, visitor);
+// transform AST before transpilation
+function beforeTranspile(entries: TranspileObj[]) {
+    entries.forEach(entry => {
+        if (isBrsFile(entry.file)) {
+            // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
+            entry.file.parser.functionExpressions.forEach((fun) => {
+                const visitor = createStatementEditor({
+                    PrintStatement: (statement) => new EmptyStatement()
+                });
+                editStatements(fun.body, visitor);
+            });
+        }
     });
 }
 ```

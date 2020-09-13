@@ -25,7 +25,7 @@ export interface SourceObj {
     source: string;
 }
 
-export interface TranspileEntry {
+export interface TranspileObj {
     file: (BrsFile | XmlFile);
     outputPath: string;
 }

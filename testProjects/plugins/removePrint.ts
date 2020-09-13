@@ -9,6 +9,8 @@ const pluginInterface: CompilerPlugin = {
 };
 export default pluginInterface;
 
+// note: it is normally not recommended to modify the AST too much at this stage,
+// because if the plugin runs in a language-server context it could break intellisense
 function afterFileParse(file: (BrsFile | XmlFile)) {
     if (!isBrsFile(file)) {
         return;

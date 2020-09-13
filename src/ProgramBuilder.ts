@@ -345,7 +345,7 @@ export class ProgramBuilder {
             }
         }
 
-        this.plugins.emit('beforePrepublish', filteredFileMap);
+        this.plugins.emit('beforePrepublish', this, filteredFileMap);
 
         await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
             //prepublish all non-program-loaded files to staging
@@ -355,15 +355,15 @@ export class ProgramBuilder {
             });
         });
 
-        this.plugins.emit('afterPublish', fileMap);
-        this.plugins.emit('beforePublish', fileMap);
+        this.plugins.emit('afterPrepublish', this, filteredFileMap);
+        this.plugins.emit('beforePublish', this, fileMap);
 
         await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
             //transpile any brighterscript files
             await this.program.transpile(fileMap, options.stagingFolderPath);
         });
 
-        this.plugins.emit('afterPublish', fileMap);
+        this.plugins.emit('afterPublish', this, fileMap);
     }
 
     private async deployPackageIfEnabled() {

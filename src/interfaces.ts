@@ -7,7 +7,7 @@ import { FunctionScope } from './FunctionScope';
 import { BrsType } from './types/BrsType';
 import { FunctionType } from './types/FunctionType';
 import { ParseMode } from './parser/Parser';
-import { Program, SourceObj, TranspileEntry } from './Program';
+import { Program, SourceObj, TranspileObj } from './Program';
 import { ProgramBuilder } from './ProgramBuilder';
 
 export interface BsDiagnostic extends Diagnostic {
@@ -174,13 +174,15 @@ type ValidateHandler = (scope: Scope, files: (BrsFile | XmlFile)[], callables: C
 export interface CompilerPlugin {
     name: string;
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterProgramCreate?: (program: Program) => void;
-    beforePrepublish?: (files: FileObj[]) => void;
-    afterPrepublish?: (files: FileObj[]) => void;
-    beforePublish?: (files: FileObj[]) => void;
-    afterPublish?: (files: FileObj[]) => void;
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
+    beforeTranspile?: (entries: TranspileObj[]) => void;
+    afterTranspile?: (entries: TranspileObj[]) => void;
     afterScopeCreate?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
@@ -188,6 +190,4 @@ export interface CompilerPlugin {
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: (BrsFile | XmlFile)) => void;
     afterFileValidate?: (file: (BrsFile | XmlFile)) => void;
-    beforeTranspile?: (entries: TranspileEntry[]) => void;
-    afterTranspile?: (entries: TranspileEntry[]) => void;
 }
