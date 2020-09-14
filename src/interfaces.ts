@@ -181,8 +181,8 @@ export interface CompilerPlugin {
     afterProgramCreate?: (program: Program) => void;
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
-    beforeTranspile?: (entries: TranspileObj[]) => void;
-    afterTranspile?: (entries: TranspileObj[]) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
     afterScopeCreate?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
@@ -190,4 +190,6 @@ export interface CompilerPlugin {
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: (BrsFile | XmlFile)) => void;
     afterFileValidate?: (file: (BrsFile | XmlFile)) => void;
+    beforeFileTranspile?: (entry: TranspileObj) => void;
+    afterFileTranspile?: (entry: TranspileObj) => void;
 }

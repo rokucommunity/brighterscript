@@ -59,8 +59,8 @@ export interface CompilerPlugin {
     afterProgramCreate?: (program: Program) => void;
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
-    beforeTranspile?: (entries: TranspileObj[]) => void;
-    afterTranspile?: (entries: TranspileObj[]) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
     afterScopeCreate?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
@@ -68,6 +68,8 @@ export interface CompilerPlugin {
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: (BrsFile | XmlFile)) => void;
     afterFileValidate?: (file: (BrsFile | XmlFile)) => void;
+    beforeFileTranspile?: (entry: TranspileObj) => void;
+    afterFileTranspile?: (entry: TranspileObj) => void;
 }
 
 // related types:
@@ -159,7 +161,7 @@ function afterFileValidate(file: BrsFile | XmlFile) {
 
 ### Example AST modifier plugin
 
-AST modification can be done after parsing (`afterFileParsed`), but it is recommended to modify the AST only before transpilation (`beforeTranspile`), otherwise it could cause problems if the plugin is used in a language-server context.
+AST modification can be done after parsing (`afterFileParsed`), but it is recommended to modify the AST only before transpilation (`beforeFileTranspile`), otherwise it could cause problems if the plugin is used in a language-server context.
 
 ```typescript
 // removePrint.ts
@@ -170,22 +172,20 @@ import { createStatementEditor, editStatements } from 'brighterscript/dist/parse
 // entry point
 const pluginInterface: CompilerPlugin = {
     name: 'removePrint',
-    beforeTranspile
+    beforeFileTranspile
 };
 export default pluginInterface;
 
 // transform AST before transpilation
-function beforeTranspile(entries: TranspileObj[]) {
-    entries.forEach(entry => {
-        if (isBrsFile(entry.file)) {
-            // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-            entry.file.parser.functionExpressions.forEach((fun) => {
-                const visitor = createStatementEditor({
-                    PrintStatement: (statement) => new EmptyStatement()
-                });
-                editStatements(fun.body, visitor);
+function beforeFileTranspile(entry: TranspileObj) {
+    if (isBrsFile(entry.file)) {
+        // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
+        entry.file.parser.functionExpressions.forEach((fun) => {
+            const visitor = createStatementEditor({
+                PrintStatement: (statement) => new EmptyStatement()
             });
-        }
-    });
+            editStatements(fun.body, visitor);
+        });
+    }
 }
 ```

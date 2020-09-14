@@ -769,9 +769,11 @@ export class Program {
             };
         });
 
-        this.plugins.emit('beforeTranspile', entries);
+        this.plugins.emit('beforeProgramTranspile', this, entries);
 
-        const promises = entries.map(async ({ file, outputPath }) => {
+        const promises = entries.map(async (entry) => {
+            this.plugins.emit('beforeFileTranspile', entry);
+            const { file, outputPath } = entry;
             const result = file.transpile();
 
             //make sure the full dir path exists
@@ -785,6 +787,7 @@ export class Program {
                 fsExtra.writeFile(outputPath, result.code),
                 writeMapPromise
             ]);
+            this.plugins.emit('afterFileTranspile', entry);
         });
 
         //copy the brighterscript stdlib to the output directory
@@ -798,7 +801,7 @@ export class Program {
         );
         await Promise.all(promises);
 
-        this.plugins.emit('afterTranspile', entries);
+        this.plugins.emit('afterProgramTranspile', this, entries);
     }
 
     /**
