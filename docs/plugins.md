@@ -92,19 +92,21 @@ After file addition/removal (note: throttled/debounced):
 
 ## Compiler API
 
-Objects in the brighterscript compiler implement a number of events that you can listen to. These events allow you to peek / modify the objects that the compiler manipulates.
-
-An object re-emits all the events of the child objects it owns.
+Objects in the brighterscript compiler dispatch a number of events that you can listen to. These events allow you to peek / modify the objects that the compiler manipulates.
 
 The top level object is the `ProgramBuilder` which runs the overall process: preparation, running the compiler (`Program`) and producing the output.
 
 `Program` is the compiler itself; it handles the creation of program objects (`Scope`, `BrsFile`, `XmlFile`) and overal validation.
 
-`Scope` is a logical group of files; for instance `source` files, or each component's individual scope (XML definition, related components and imported scripts). A file can be included in multiple scopes.
-
 `BrsFile` is a `.brs` or `.bs` file; its AST can be modified by a plugin.
 
 `XmlFile` is a component; it doesn't have a proper AST currently but it can be "patched".
+
+`Scope` is a logical group of files; for instance `source` files, or each component's individual scope (XML definition, related components and imported scripts). A file can be included in multiple scopes.
+
+> Files are superficially validated after parsing, then re-validated as part of the scope they are included in.
+
+### API definition
 
 ```typescript
 export interface CompilerPlugin {
@@ -161,7 +163,7 @@ interface CallableContainer {
 
 ## Plugin API
 
-Plugins are JavaScript modules dynamically loaded by the compiler. Their entry point is a required `initPlugin` function.
+Plugins are JavaScript modules dynamically loaded by the compiler. Their entry point is a required default object following the `CompilerPlugin` interface and exposing event handlers.
 
 To walk/modify the AST, a number of helpers are provided in `brighterscript/dist/parser/ASTUtils`.
 
@@ -201,7 +203,7 @@ const pluginInterface: CompilerPlugin = {
 };
 export default pluginInterface;
 
-// file is validated once when parsed
+// post-parsing validation
 function afterFileValidate(file: BrsFile | XmlFile) {
     if (!isBrsFile(file)) {
         return;
@@ -228,7 +230,7 @@ AST modification can be done after parsing (`afterFileParsed`), but it is recomm
 // removePrint.ts
 import { CompilerPlugin, Program, TranspileObj } from 'brighterscript';
 import { EmptyStatement } from 'brighterscript/dist/parser';
-import { createStatementEditor, editStatements } from 'brighterscript/dist/parser/ASTUtils';
+import { isBrsFile, createStatementEditor, editStatements } from 'brighterscript/dist/parser/ASTUtils';
 
 // entry point
 const pluginInterface: CompilerPlugin = {
