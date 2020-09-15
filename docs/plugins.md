@@ -32,6 +32,64 @@ builder.addPlugin(myPlugin);
 builder.run(/*...*/);
 ```
 
+## Compiler events
+
+Full compiler lifecycle:
+
+- `beforeProgramCreate`
+- `afterProgramCreate`
+    - `afterScopeCreate` ("source" scope)
+    - For each file:
+        - `beforeFileParse`
+        - `afterFileParse`
+        - `afterScopeCreate` (component scope)
+        - `afterFileValidate`
+    - `beforeProgramValidate`
+    - For each scope:
+        - `beforeScopeValidate`
+        - `afterScopeValidate`
+    - `afterProgramValidate`
+- `beforePrepublish`
+- `afterPrepublish`
+- `beforePublish`
+    - `beforeProgramTranspile`
+    - For each file:
+        - `beforeFileTranspile`
+        - `afterFileTranspile`
+    - `afterProgramTranspile`
+- `afterPublish`
+
+### Language server
+
+Once the program has been validated, the language server runs a special loop - it never reaches the publishing steps.
+
+When a file is removed:
+
+- `beforeFileDispose`
+- `beforeScopeDispose` (component scope)
+- `afterScopeDispose` (component scope)
+- `afterFileDispose`
+
+When a file is added:
+
+- `beforeFileParse`
+- `afterFileParse`
+- `afterScopeCreate` (component scope)
+- `afterFileValidate`
+
+When any file is modified:
+
+- Remove file
+- Add file
+
+After file addition/removal (note: throttled/debounced):
+
+- `beforeProgramValidate`
+- For each invalidated scope:
+    - `beforeScopeValidate`
+    - `afterScopeValidate`
+- `afterProgramValidate`
+
 ## Compiler API
 
 Objects in the brighterscript compiler implement a number of events that you can listen to. These events allow you to peek / modify the objects that the compiler manipulates.
@@ -62,6 +120,7 @@ export interface CompilerPlugin {
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
     afterScopeCreate?: (scope: Scope) => void;
+    beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
     afterScopeValidate?: ValidateHandler;
@@ -70,6 +129,8 @@ export interface CompilerPlugin {
     afterFileValidate?: (file: (BrsFile | XmlFile)) => void;
     beforeFileTranspile?: (entry: TranspileObj) => void;
     afterFileTranspile?: (entry: TranspileObj) => void;
+    beforeFileDispose?: (file: (BrsFile | XmlFile)) => void;
+    afterFileDispose?: (file: (BrsFile | XmlFile)) => void;
 }
 
 // related types:

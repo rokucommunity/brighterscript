@@ -468,15 +468,17 @@ export class Program {
         pathAbsolute = s`${pathAbsolute}`;
         let file = this.getFile(pathAbsolute);
         if (file) {
+            this.plugins.emit('beforeFileDispose', file);
 
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.pkgPath];
             if (scope) {
+                this.plugins.emit('beforeScopeDispose', scope);
                 scope.dispose();
-                this.plugins.emit('afterScopeDispose', scope);
                 //notify dependencies of this scope that it has been removed
                 this.dependencyGraph.remove(scope.dependencyGraphKey);
                 delete this.scopes[file.pkgPath];
+                this.plugins.emit('afterScopeDispose', scope);
             }
             //remove the file from the program
             delete this.files[pathAbsolute];
@@ -492,6 +494,7 @@ export class Program {
             if (file instanceof XmlFile) {
                 this.unregisterComponent(file);
             }
+            this.plugins.emit('afterFileDispose', file);
         }
     }
 
