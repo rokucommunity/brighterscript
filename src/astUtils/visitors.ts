@@ -3,74 +3,39 @@ import { Statement, Body, AssignmentStatement, Block, ExpressionStatement, Comme
 import { Expression } from '../parser/Expression';
 import { isExpression, isBlock, isIfStatement } from './reflection';
 
-/**
- * Create a filtered visitor for use with `walkStatements`
- */
-export function createStatementVisitor(
-    visitor: {
-        Body?: (statement: Body, parent: Statement) => void;
-        AssignmentStatement?: (statement: AssignmentStatement, parent: Statement) => void;
-        Block?: (statement: Block, parent: Statement) => void;
-        ExpressionStatement?: (statement: ExpressionStatement, parent: Statement) => void;
-        CommentStatement?: (statement: CommentStatement, parent: Statement) => void;
-        ExitForStatement?: (statement: ExitForStatement, parent: Statement) => void;
-        ExitWhileStatement?: (statement: ExitWhileStatement, parent: Statement) => void;
-        FunctionStatement?: (statement: FunctionStatement, parent: Statement) => void;
-        IfStatement?: (statement: IfStatement, parent: Statement) => void;
-        IncrementStatement?: (statement: IncrementStatement, parent: Statement) => void;
-        PrintStatement?: (statement: PrintStatement, parent: Statement) => void;
-        GotoStatement?: (statement: GotoStatement, parent: Statement) => void;
-        LabelStatement?: (statement: LabelStatement, parent: Statement) => void;
-        ReturnStatement?: (statement: ReturnStatement, parent: Statement) => void;
-        EndStatement?: (statement: EndStatement, parent: Statement) => void;
-        StopStatement?: (statement: StopStatement, parent: Statement) => void;
-        ForStatement?: (statement: ForStatement, parent: Statement) => void;
-        ForEachStatement?: (statement: ForEachStatement, parent: Statement) => void;
-        WhileStatement?: (statement: WhileStatement, parent: Statement) => void;
-        DottedSetStatement?: (statement: DottedSetStatement, parent: Statement) => void;
-        IndexedSetStatement?: (statement: IndexedSetStatement, parent: Statement) => void;
-        LibraryStatement?: (statement: LibraryStatement, parent: Statement) => void;
-        NamespaceStatement?: (statement: NamespaceStatement, parent: Statement) => void;
-        ImportStatement?: (statement: ImportStatement, parent: Statement) => void;
-    }
-) {
-    return (statement: Statement, parent: Statement) => {
-        visitor[statement.constructor.name]?.(statement, parent);
-    };
-}
 
 /**
  * Create a filtered visitor for use with `editStatements`
  */
-export function createStatementEditor(
+export function createStatementVisitor(
     visitor: {
-        Body?: (statement: Body, parent: Statement) => Statement | undefined;
-        AssignmentStatement?: (statement: AssignmentStatement, parent: Statement) => Statement | undefined;
-        Block?: (statement: Block, parent: Statement) => Statement | undefined;
-        ExpressionStatement?: (statement: ExpressionStatement, parent: Statement) => Statement | undefined;
-        CommentStatement?: (statement: CommentStatement, parent: Statement) => Statement | undefined;
-        ExitForStatement?: (statement: ExitForStatement, parent: Statement) => Statement | undefined;
-        ExitWhileStatement?: (statement: ExitWhileStatement, parent: Statement) => Statement | undefined;
-        FunctionStatement?: (statement: FunctionStatement, parent: Statement) => Statement | undefined;
-        IfStatement?: (statement: IfStatement, parent: Statement) => Statement | undefined;
-        IncrementStatement?: (statement: IncrementStatement, parent: Statement) => Statement | undefined;
-        PrintStatement?: (statement: PrintStatement, parent: Statement) => Statement | undefined;
-        GotoStatement?: (statement: GotoStatement, parent: Statement) => Statement | undefined;
-        LabelStatement?: (statement: LabelStatement, parent: Statement) => Statement | undefined;
-        ReturnStatement?: (statement: ReturnStatement, parent: Statement) => Statement | undefined;
-        EndStatement?: (statement: EndStatement, parent: Statement) => Statement | undefined;
-        StopStatement?: (statement: StopStatement, parent: Statement) => Statement | undefined;
-        ForStatement?: (statement: ForStatement, parent: Statement) => Statement | undefined;
-        ForEachStatement?: (statement: ForEachStatement, parent: Statement) => Statement | undefined;
-        WhileStatement?: (statement: WhileStatement, parent: Statement) => Statement | undefined;
-        DottedSetStatement?: (statement: DottedSetStatement, parent: Statement) => Statement | undefined;
-        IndexedSetStatement?: (statement: IndexedSetStatement, parent: Statement) => Statement | undefined;
-        LibraryStatement?: (statement: LibraryStatement, parent: Statement) => Statement | undefined;
-        NamespaceStatement?: (statement: NamespaceStatement, parent: Statement) => Statement | undefined;
-        ImportStatement?: (statement: ImportStatement, parent: Statement) => Statement | undefined;
+        Body?: (statement: Body, parent: Statement) => Statement | void;
+        AssignmentStatement?: (statement: AssignmentStatement, parent: Statement) => Statement | void;
+        Block?: (statement: Block, parent: Statement) => Statement | void;
+        ExpressionStatement?: (statement: ExpressionStatement, parent: Statement) => Statement | void;
+        CommentStatement?: (statement: CommentStatement, parent: Statement) => Statement | void;
+        ExitForStatement?: (statement: ExitForStatement, parent: Statement) => Statement | void;
+        ExitWhileStatement?: (statement: ExitWhileStatement, parent: Statement) => Statement | void;
+        FunctionStatement?: (statement: FunctionStatement, parent: Statement) => Statement | void;
+        IfStatement?: (statement: IfStatement, parent: Statement) => Statement | void;
+        IncrementStatement?: (statement: IncrementStatement, parent: Statement) => Statement | void;
+        PrintStatement?: (statement: PrintStatement, parent: Statement) => Statement | void;
+        GotoStatement?: (statement: GotoStatement, parent: Statement) => Statement | void;
+        LabelStatement?: (statement: LabelStatement, parent: Statement) => Statement | void;
+        ReturnStatement?: (statement: ReturnStatement, parent: Statement) => Statement | void;
+        EndStatement?: (statement: EndStatement, parent: Statement) => Statement | void;
+        StopStatement?: (statement: StopStatement, parent: Statement) => Statement | void;
+        ForStatement?: (statement: ForStatement, parent: Statement) => Statement | void;
+        ForEachStatement?: (statement: ForEachStatement, parent: Statement) => Statement | void;
+        WhileStatement?: (statement: WhileStatement, parent: Statement) => Statement | void;
+        DottedSetStatement?: (statement: DottedSetStatement, parent: Statement) => Statement | void;
+        IndexedSetStatement?: (statement: IndexedSetStatement, parent: Statement) => Statement | void;
+        LibraryStatement?: (statement: LibraryStatement, parent: Statement) => Statement | void;
+        NamespaceStatement?: (statement: NamespaceStatement, parent: Statement) => Statement | void;
+        ImportStatement?: (statement: ImportStatement, parent: Statement) => Statement | void;
     }
 ) {
-    return (statement: Statement, parent: Statement) => {
+    return (statement: Statement, parent: Statement): Statement | void => {
         return visitor[statement.constructor.name]?.(statement, parent);
     };
 }
@@ -143,26 +108,11 @@ export function createStatementExpressionsVisitor(
 }
 
 /**
- * Superficial walk of the statements of a block and direct sub-blocks
- * Note: does not explore sub-functions
+ * Walks the statements of a block and direct sub-blocks, and allow replacing statements
  */
 export function walkStatements(
     statement: Statement,
-    visitor: (statement: Statement, parent: Statement) => void,
-    cancel?: CancellationToken
-): void {
-    editStatements(statement, (s, p) => {
-        visitor(s, p);
-        return undefined;
-    }, cancel);
-}
-
-/**
- * Walks the statements of a block and direct sub-blocks, and allow replacing statements
- */
-export function editStatements(
-    statement: Statement,
-    visitor: (statement: Statement, parent: Statement) => Statement | undefined,
+    visitor: (statement: Statement, parent: Statement) => Statement | void,
     cancel?: CancellationToken
 ): void {
     recursiveWalkStatements(statement, undefined, visitor, cancel);
@@ -171,13 +121,13 @@ export function editStatements(
 function recursiveWalkStatements(
     statement: Statement,
     parent: Statement,
-    visitor: (statement: Statement, parent: Statement) => Statement | undefined,
+    visitor: (statement: Statement, parent: Statement) => Statement | void,
     cancel: CancellationToken
 ): Statement | undefined {
     if (cancel?.isCancellationRequested) {
         return;
     }
-    const result = visitor(statement, parent);
+    const result = visitor(statement, parent) || undefined;
     if (result?.transpile) {
         // replace statement and don't recurse
         return result;

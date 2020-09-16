@@ -7,7 +7,7 @@ import { BrsFile } from '../files/BrsFile';
 import { Statement, PrintStatement, Block, ReturnStatement } from '../parser/Statement';
 import { Expression } from '../parser/Expression';
 import { TokenKind } from '../lexer';
-import { walkStatements, createStatementVisitor, createStatementExpressionsVisitor, createStatementEditor, editStatements } from './visitors';
+import { walkStatements, createStatementVisitor, createStatementExpressionsVisitor } from './visitors';
 import { isPrintStatement } from './reflection';
 import { createToken } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
@@ -229,10 +229,10 @@ describe('astUtils visitors', () => {
                 printStatement1,
                 new ReturnStatement({ return: createToken(TokenKind.Return, pos) })
             ], Range.create(0, 0, 0, 0));
-            const visitor = createStatementEditor({
+            const visitor = createStatementVisitor({
                 PrintStatement: () => printStatement2
             });
-            editStatements(block, visitor);
+            walkStatements(block, visitor);
             expect(block.statements[0]).to.equal(printStatement2);
         });
     });
