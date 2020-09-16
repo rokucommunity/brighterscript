@@ -97,7 +97,11 @@ describe('astUtils visitors', () => {
                 actual.push(`${s.constructor.name}:${d}`);
             });
             const walker = functionsWalker(visitor);
-            file.parse(PRINTS_SRC, () => walker(file));
+            program.plugins.add({
+                name: 'walker',
+                afterFileParse: () => walker(file)
+            });
+            file.parse(PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block:0',                // Main sub body
                 'PrintStatement:1',       // print 1
@@ -128,7 +132,11 @@ describe('astUtils visitors', () => {
             const cancel = new CancellationTokenSource();
             const actual: string[] = [];
             const walker = functionsWalker(s => actual.push(s.constructor.name), cancel.token);
-            file.parse(PRINTS_SRC, () => walker(file));
+            program.plugins.add({
+                name: 'walker',
+                afterFileParse: () => walker(file)
+            });
+            file.parse(PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block',                // Main sub body
                 'PrintStatement',       // print 1
@@ -167,7 +175,11 @@ describe('astUtils visitors', () => {
                     }
                 }
             }, cancel.token);
-            file.parse(PRINTS_SRC, () => walker(file));
+            program.plugins.add({
+                name: 'walker',
+                afterFileParse: () => walker(file)
+            });
+            file.parse(PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block',                // Main sub body
                 'PrintStatement',       // print 1
@@ -237,7 +249,11 @@ describe('astUtils visitors', () => {
                 actual.push(`${s.constructor.name}:${d}:${e.constructor.name}`);
             }
             const walker = functionsWalker(createStatementExpressionsVisitor(visitor, expression));
-            file.parse(EXPRESSIONS_SRC, () => walker(file));
+            program.plugins.add({
+                name: 'walker',
+                afterFileParse: () => walker(file)
+            });
+            file.parse(EXPRESSIONS_SRC);
             expect(actual).to.deep.equal([
                 'CommentStatement:1:CommentStatement',            // <'comment>
                 'PrintStatement:1:LiteralExpression',             // print <"msg">; 3
@@ -297,7 +313,11 @@ describe('astUtils visitors', () => {
                 }
             }
             const walker = functionsWalker(createStatementExpressionsVisitor(visitor, expression, cancel.token));
-            file.parse(EXPRESSIONS_SRC, () => walker(file));
+            program.plugins.add({
+                name: 'walker',
+                afterFileParse: () => walker(file)
+            });
+            file.parse(EXPRESSIONS_SRC);
             expect(actual).to.deep.equal([
                 'CommentStatement:1:CommentStatement',            // <'comment>
                 'PrintStatement:1:LiteralExpression',             // print <"msg">; 3

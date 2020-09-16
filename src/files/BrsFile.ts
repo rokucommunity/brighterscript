@@ -120,7 +120,7 @@ export class BrsFile {
      * Calculate the AST for this file
      * @param fileContents
      */
-    public parse(fileContents: string, onParsed?: () => void) {
+    public parse(fileContents: string) {
         try {
             this.fileContents = fileContents;
             if (this.parseDeferred.isCompleted) {
@@ -173,7 +173,7 @@ export class BrsFile {
             this.ast = this.parser.ast;
 
             //notify AST ready
-            onParsed?.();
+            this.program.plugins.emit('afterFileParse', this);
 
             //extract all callables from this file
             this.findCallables();

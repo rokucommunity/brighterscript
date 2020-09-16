@@ -31,14 +31,18 @@ describe('XmlFile', () => {
         it('allows modifying the parsed XML model', async () => {
             const expected = 'OtherName';
             file = new XmlFile('abs', 'rel', program);
+            program.plugins.add({
+                name: 'allows modifying the parsed XML model',
+                afterFileParse: () => {
+                    file.parsedXml.component.$.name = expected;
+                }
+            });
             await file.parse(`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="Scene">
                     <script type="text/brightscript" uri="ChildScene1.brs" /> <script type="text/brightscript" uri="ChildScene2.brs" /> <script type="text/brightscript" uri="ChildScene3.brs" />
                 </component>
-            `, () => {
-                file.parsedXml.component.$.name = expected;
-            });
+            `);
             expect(file.componentName).to.equal(expected);
         });
 
@@ -584,11 +588,15 @@ describe('XmlFile', () => {
                 rootDir: rootDir
             });
             file = new XmlFile('abs', 'rel', program);
+            program.plugins.add({
+                name: 'Transform plugins',
+                afterFileParse: () => validateXml(file)
+            });
             await file.parse(`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Cmp1" extends="Scene">
                 </component>
-            `, () => validateXml(file));
+            `);
             return file;
         }
 

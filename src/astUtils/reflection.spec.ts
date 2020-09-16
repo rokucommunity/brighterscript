@@ -5,11 +5,12 @@ import { PrintStatement, Block, Body, AssignmentStatement, CommentStatement, Exi
 import { FunctionExpression, NamespacedVariableNameExpression, BinaryExpression, CallExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, LiteralExpression, EscapedCharCodeLiteral, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, XmlAttributeGetExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
 import { TokenKind, Token } from '../lexer';
 import { BrsString } from '../brsTypes';
-import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isNamespacedVariableNameExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteral, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile } from './reflection';
+import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isNamespacedVariableNameExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteral, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement } from './reflection';
 import { createRange, createToken, createStringLiteral, createIdentifier } from './creators';
 import { Program } from '../Program';
 import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
+import { ClassStatement } from '../parser/ClassStatement';
 
 describe('reflection', () => {
     describe('Files', () => {
@@ -46,6 +47,7 @@ describe('reflection', () => {
         let indexedSet: IndexedSetStatement;
         let library: LibraryStatement;
         let namespace: NamespaceStatement;
+        let cls: ClassStatement;
         let imports: ImportStatement;
 
         before(() => {
@@ -77,6 +79,7 @@ describe('reflection', () => {
             indexedSet = new IndexedSetStatement(expr, expr, expr, token, token);
             library = new LibraryStatement({ library: token, filePath: token });
             namespace = new NamespaceStatement(token, new NamespacedVariableNameExpression(createIdentifier('a', pos)), body, token);
+            cls = new ClassStatement(token, ident, [], token);
             imports = new ImportStatement(token, token);
         });
 
@@ -171,6 +174,10 @@ describe('reflection', () => {
         it('isNamespaceStatement', () => {
             expect(isNamespaceStatement(namespace)).to.be.true;
             expect(isNamespaceStatement(body)).to.be.false;
+        });
+        it('isClassStatement', () => {
+            expect(isClassStatement(cls)).to.be.true;
+            expect(isClassStatement(body)).to.be.false;
         });
         it('isImportStatement', () => {
             expect(isImportStatement(imports)).to.be.true;

@@ -341,10 +341,7 @@ export class Program {
                 this.plugins.emit('beforeFileParse', fileContents);
 
                 this.logger.time(LogLevel.info, ['parse', chalk.green(pathAbsolute)], () => {
-                    brsFile.parse(
-                        fileContents.source,
-                        () => this.plugins.emit('afterFileParse', brsFile)
-                    );
+                    brsFile.parse(fileContents.source);
                 });
                 file = brsFile;
 
@@ -365,10 +362,7 @@ export class Program {
                     source: await getFileContents()
                 };
                 this.plugins.emit('beforeFileParse', fileContents);
-                await xmlFile.parse(
-                    fileContents.source,
-                    () => this.plugins.emit('afterFileParse', xmlFile)
-                );
+                await xmlFile.parse(fileContents.source);
 
                 file = xmlFile;
 

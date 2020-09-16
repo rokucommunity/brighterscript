@@ -1,4 +1,5 @@
 import { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement } from '../parser/Statement';
+import { ClassStatement } from '../parser/ClassStatement';
 import { Token } from '../lexer/Token';
 import { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteral, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
 import { BrsType, BrsString, ValueKind, BrsInvalid, BrsBoolean } from '../brsTypes';
@@ -86,6 +87,9 @@ export function isLibraryStatement(statement: Statement): statement is LibrarySt
 }
 export function isNamespaceStatement(statement: Statement): statement is NamespaceStatement {
     return statement?.constructor?.name === 'NamespaceStatement';
+}
+export function isClassStatement(statement: Statement): statement is ClassStatement {
+    return statement?.constructor?.name === 'ClassStatement';
 }
 export function isImportStatement(statement: Statement): statement is ImportStatement {
     return statement?.constructor?.name === 'ImportStatement';

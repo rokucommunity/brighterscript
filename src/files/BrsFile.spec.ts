@@ -2060,13 +2060,17 @@ describe('BrsFile', () => {
             const program = new Program({
                 rootDir: rootDir
             });
+            program.plugins.add({
+                name: 'transform callback',
+                afterFileParse: onParsed
+            });
             const file = new BrsFile(`absolute_path/file${ext}`, `relative_path/file${ext}`, program);
             expect(file.extension).to.equal(ext);
             file.parse(`
                 sub Sum()
                     print "hello world"
                 end sub
-            `, onParsed);
+            `);
             return file;
         }
 

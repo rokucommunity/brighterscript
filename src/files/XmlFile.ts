@@ -199,7 +199,7 @@ export class XmlFile {
     private uriRangeRegex = /(.*?\s+uri\s*=\s*")(.*?)"/g;
     private scriptTypeRegex = /type\s*=\s*"(.*?)"/gi;
 
-    public async parse(fileContents: string, onParsed?: () => void) {
+    public async parse(fileContents: string) {
         this.fileContents = fileContents;
         if (this.parseDeferred.isCompleted) {
             throw new Error(`File was already processed. Create a new file instead. ${this.pathAbsolute}`);
@@ -217,7 +217,7 @@ export class XmlFile {
             this.parsedXml = (await util.parseXml(fileContents)) || {};
 
             //notify AST ready
-            onParsed?.();
+            this.program.plugins.emit('afterFileParse', this);
 
             if (this.parsedXml.component) {
                 if (this.parsedXml.component.$) {
