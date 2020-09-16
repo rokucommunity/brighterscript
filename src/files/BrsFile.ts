@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { SourceNode } from 'source-map';
-import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
+import { CompletionItem, CompletionItemKind, Location, Hover, Position, Range, DocumentSymbol, SymbolKind, SymbolInformation } from 'vscode-languageserver';
 import chalk from 'chalk';
 import { Scope } from '../Scope';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
@@ -11,7 +11,7 @@ import { FunctionParameter } from '../brsTypes';
 import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
 import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, Expression } from '../parser/Expression';
-import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, ImportStatement } from '../parser/Statement';
+import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, ImportStatement, NamespaceStatement, Statement } from '../parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -95,6 +95,10 @@ export class BrsFile {
      * The AST for this file
      */
     private ast: Body;
+
+    private documentSymbols: DocumentSymbol[];
+
+    private workspaceSymbols: SymbolInformation[];
 
     /**
      * Get the token at the specified position
@@ -478,7 +482,7 @@ export class BrsFile {
     }
 
     /**
-     * Get all ancenstors of an object with the given key
+     * Get all ancestors of an object with the given key
      * @param statements
      * @param key
      */
@@ -938,6 +942,142 @@ export class BrsFile {
         }
         //return the last token
         return tokens[tokens.length - 1];
+    }
+
+    /**
+     * Builds a list of document symbols for this file. Used by LanguageServer's onDocumentSymbol functionality
+     */
+    public async getDocumentSymbols() {
+        if (this.documentSymbols) {
+            return this.documentSymbols;
+        }
+
+        let symbols = [] as DocumentSymbol[];
+        await this.isReady();
+
+        for (const statement of this.ast.statements) {
+            const symbol = this.getDocumentSymbol(statement);
+            if (symbol) {
+                symbols.push(symbol);
+            }
+        }
+        this.documentSymbols = symbols;
+        return symbols;
+    }
+
+    /**
+     * Builds a list of workspace symbols for this file. Used by LanguageServer's onWorkspaceSymbol functionality
+     */
+    public async getWorkspaceSymbols() {
+        if (this.workspaceSymbols) {
+            return this.workspaceSymbols;
+        }
+
+        let symbols = [] as SymbolInformation[];
+        await this.isReady();
+
+        for (const statement of this.ast.statements) {
+            const symbol = this.getWorkspaceSymbol(statement);
+            if (symbol) {
+                symbols.push(symbol);
+            }
+        }
+        this.workspaceSymbols = symbols;
+        return symbols;
+    }
+
+    /**
+     * Builds a single DocumentSymbol object for use by LanguageServer's onDocumentSymbol functionality
+     */
+    private getDocumentSymbol(statement: Statement) {
+        let symbolKind: SymbolKind;
+        let children = [] as DocumentSymbol[];
+        if (statement instanceof FunctionStatement) {
+            symbolKind = SymbolKind.Function;
+        } else if (statement instanceof NamespaceStatement) {
+            symbolKind = SymbolKind.Namespace;
+            for (const childStatement of statement.body.statements) {
+                const symbol = this.getDocumentSymbol(childStatement);
+                if (symbol) {
+                    children.push(symbol);
+                }
+            }
+        } else if (statement instanceof ClassStatement) {
+            symbolKind = SymbolKind.Class;
+        } else {
+            return;
+        }
+
+        const name = statement.getName(ParseMode.BrighterScript);
+        return DocumentSymbol.create(name, '', symbolKind, statement.range, statement.range, children);
+    }
+
+    /**
+     * Builds a single SymbolInformation object for use by LanguageServer's onWorkspaceSymbol functionality
+     */
+    private getWorkspaceSymbol(statement: Statement) {
+        let symbolKind: SymbolKind;
+        if (statement instanceof FunctionStatement) {
+            symbolKind = SymbolKind.Function;
+        } else if (statement instanceof NamespaceStatement) {
+            symbolKind = SymbolKind.Namespace;
+        } else if (statement instanceof ClassStatement) {
+            symbolKind = SymbolKind.Class;
+        } else {
+            return;
+        }
+
+        const name = statement.getName(ParseMode.BrighterScript);
+        const uri = util.pathToUri(this.pathAbsolute);
+        return SymbolInformation.create(name, symbolKind, statement.range, uri);
+    }
+
+    /**
+     * Given a position in a file, if the position is sitting on some type of identifier,
+     * go to the definition of that identifier (where this thing was first defined)
+     */
+    public async getDefinition(position: Position) {
+        await this.isReady();
+
+        let results: Location[] = [];
+
+        //get the token at the position
+        const token = this.getTokenAt(position);
+
+        let definitionTokenTypes = [
+            TokenKind.Identifier
+        ];
+
+        //throw out invalid tokens and the wrong kind of tokens
+        if (!token || !definitionTokenTypes.includes(token.kind)) {
+            return null;
+        }
+
+        const lowerTokenText = token.text.toLowerCase();
+
+        //look through local variables first, get the function scope for this position (if it exists)
+        const functionScope = this.getFunctionScopeAtPosition(position);
+        if (functionScope) {
+            //find any variable with this name
+            for (const varDeclaration of functionScope.variableDeclarations) {
+                //we found a variable declaration with this token text!
+                if (varDeclaration.name.toLowerCase() === lowerTokenText) {
+                    const uri = util.pathToUri(this.pathAbsolute);
+                    results.push(Location.create(uri, varDeclaration.nameRange));
+                }
+            }
+        }
+
+        //look through all callables in relevant scopes
+        for (const scope of this.program.getScopesForFile(this)) {
+            let callable = scope.getCallableByName(lowerTokenText);
+            if (callable) {
+                const uri = util.pathToUri(callable.file.pathAbsolute);
+                results.push(Location.create(uri, callable.range));
+            }
+        }
+
+        return results;
     }
 
     public async getHover(position: Position): Promise<Hover> {

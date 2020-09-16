@@ -153,7 +153,7 @@ export class Program {
     }
 
     /**
-     * Get a list of all files that are inlcuded in the project but are not referenced
+     * Get a list of all files that are included in the project but are not referenced
      * by any scope in the program.
      */
     public getUnreferencedFiles() {
@@ -553,18 +553,40 @@ export class Program {
     }
 
     /**
+     * Goes through each file and builds a list of workspace symbols for the program. Used by LanguageServer's onWorkspaceSymbol functionality
+     */
+    public async getWorkspaceSymbols() {
+        const results = await Promise.all(
+            Object.keys(this.files).map(async key => {
+                const file = this.files[key];
+                if (file instanceof BrsFile) {
+                    return file.getWorkspaceSymbols();
+                }
+                return [];
+            }));
+        const allSymbols = util.flatMap(results, c => c);
+        return allSymbols;
+    }
+
+    /**
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
      */
-    public getDefinition(pathAbsolute: string, position: Position): Location[] {
+    public async getDefinition(pathAbsolute: string, position: Position) {
         let file = this.getFile(pathAbsolute);
         if (!file) {
             return [];
         }
         let results = [] as Location[];
         let scopes = this.getScopesForFile(file);
+
         for (let scope of scopes) {
-            results = results.concat(...scope.getDefinition(file, position));
+            if (file instanceof BrsFile) {
+                const locations = await file.getDefinition(position);
+                results = [...results, ...locations];
+            } else {
+                results = results.concat(...scope.getDefinition(file, position));
+            }
         }
         return results;
     }

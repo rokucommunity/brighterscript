@@ -20,7 +20,10 @@ import {
     TextDocuments,
     Position,
     TextDocumentSyncKind,
-    ExecuteCommandParams
+    ExecuteCommandParams,
+    DocumentSymbolParams,
+    WorkspaceSymbolParams,
+    SymbolInformation
 } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -34,6 +37,7 @@ import { BsDiagnostic } from './interfaces';
 import { Logger } from './Logger';
 import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
+import { BrsFile } from './files/BrsFile';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
@@ -123,6 +127,10 @@ export class LanguageServer {
         // the completion list.
         this.connection.onCompletionResolve(this.onCompletionResolve.bind(this));
 
+        this.connection.onDocumentSymbol(this.onDocumentSymbol.bind(this));
+
+        this.connection.onWorkspaceSymbol(this.onWorkspaceSymbol.bind(this));
+
         this.connection.onDefinition(this.onDefinition.bind(this));
 
         this.connection.onHover(this.onHover.bind(this));
@@ -180,6 +188,8 @@ export class LanguageServer {
                     allCommitCharacters: ['.', '@']
                 },
                 definitionProvider: true,
+                documentSymbolProvider: true,
+                workspaceSymbolProvider: true,
                 hoverProvider: true,
                 executeCommandProvider: {
                     commands: [
@@ -498,7 +508,7 @@ export class LanguageServer {
 
         let filePath = util.uriToPath(uri);
 
-        //wait until the fle has settled
+        //wait until the file has settled
         await this.keyedThrottler.onIdleOnce(filePath, true);
 
         let workspaceCompletionPromises = [] as Array<Promise<CompletionItem[]>>;
@@ -885,7 +895,7 @@ export class LanguageServer {
                     })
                 );
             });
-            // valdiate all workspaces
+            // validate all workspaces
             await this.validateAllThrottled();
         } catch (e) {
             this.connection.tracer.log(e);
@@ -896,8 +906,7 @@ export class LanguageServer {
 
     private async validateAll() {
         try {
-
-            //synchronze parsing for open files that were included/excluded from projects
+            //synchronize parsing for open files that were included/excluded from projects
             await this.synchronizeStandaloneWorkspaces();
 
             let workspaces = this.getWorkspaces();
@@ -916,22 +925,54 @@ export class LanguageServer {
         this.connection.sendNotification('build-status', 'success');
     }
 
-    private async onDefinition(params: TextDocumentPositionParams): Promise<Location[]> {
-        //WARNING: This only works for a few small xml cases because the vscode-brightscript-language extension
-        //already implemented this feature, and I haven't had time to port all of that functionality over to
-        //this codebase
-        //TODO implement for brs/bs also
+    public async onWorkspaceSymbol(params: WorkspaceSymbolParams) {
+        const results = util.flatMap(
+            await Promise.all(this.getWorkspaces().map(workspace => {
+                return workspace.builder.program.getWorkspaceSymbols();
+            })),
+            c => c
+        );
+
+        const allSymbols = Object.values(results.reduce((map, symbol) => {
+            const key = symbol.location.uri + symbol.name;
+            map[key] = symbol;
+            return map;
+        }, {}));
+        return allSymbols as SymbolInformation[];
+    }
+
+    public async onDocumentSymbol(params: DocumentSymbolParams) {
+        const pathAbsolute = util.uriToPath(params.textDocument.uri);
+        for (const workspace of this.getWorkspaces()) {
+            const file = workspace.builder.program.getFileByPathAbsolute(pathAbsolute);
+            if (file instanceof BrsFile) {
+                const symbols = await file.getDocumentSymbols();
+                return symbols;
+            }
+        }
+    }
+
+    private async onDefinition(params: TextDocumentPositionParams) {
         await this.waitAllProgramFirstRuns();
         let results = [] as Location[];
 
         let pathAbsolute = util.uriToPath(params.textDocument.uri);
         let workspaces = this.getWorkspaces();
         for (let workspace of workspaces) {
+            const locations = await workspace.builder.program.getDefinition(pathAbsolute, params.position);
             results = results.concat(
-                ...workspace.builder.program.getDefinition(pathAbsolute, params.position)
+                ...locations
             );
         }
-        return results;
+        // TODO I think this could be optimized better but it does the trick for now
+        const deduplicatedDefinitions = Object.values(results.reduce((map, location) => {
+            const start = location.range.start;
+            const end = location.range.end;
+            const key = `${location.uri}:${start.line}_${start.character}-${end.line}_${end.character}`;
+            map[key] = location;
+            return map;
+        }, {}));
+        return deduplicatedDefinitions as Location[];
     }
 
     /**

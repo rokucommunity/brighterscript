@@ -687,7 +687,7 @@ export class Scope {
     }
 
     /**
-     * Verify that all of the scripts ipmorted by each file in this scope actually exist
+     * Verify that all of the scripts imported by each file in this scope actually exist
      */
     private diagnosticValidateScriptImportPaths() {
         let scriptImports = this.getScriptImports();
@@ -769,7 +769,7 @@ export class Scope {
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
     public getDefinition(file: BrsFile | XmlFile, position: Position): Location[] { //eslint-disable-line
-        //TODO implement for brs files
+        // Overriden in XMLScope. Brs files use implementation in BrsFile
         return [];
     }
 

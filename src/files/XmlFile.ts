@@ -75,7 +75,7 @@ export class XmlFile {
      * coming from:
      *  - script tags
      *  - inferred codebehind file
-     *  - import statements from imported scripts or their descendents
+     *  - import statements from imported scripts or their descendants
      */
     public getAvailableScriptImports() {
         return this.cache.getOrAdd('allAvailableScriptImports', () => {
