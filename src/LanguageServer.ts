@@ -29,7 +29,7 @@ import { BsConfig } from './BsConfig';
 import { Deferred } from './deferred';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
-import { standardizePath as s, util } from './util';
+import { standardizePath as s, standardizePath, util } from './util';
 import { BsDiagnostic } from './interfaces';
 import { Logger } from './Logger';
 import { Throttler } from './Throttler';
@@ -183,7 +183,9 @@ export class LanguageServer {
                 hoverProvider: true,
                 executeCommandProvider: {
                     commands: [
-                        CustomCommands.TranspileFile
+                        CustomCommands.transpileFile,
+                        CustomCommands.getProjectsInfo,
+                        CustomCommands.reloadProject
                     ]
                 }
             } as ServerCapabilities
@@ -231,6 +233,7 @@ export class LanguageServer {
                 });
             }
             await this.waitAllProgramFirstRuns(false);
+            this.sendProjectsChanged();
             workspaceCreatedDeferred.resolve();
             await this.sendDiagnostics();
         } catch (e) {
@@ -248,7 +251,11 @@ export class LanguageServer {
      * Send a critical failure notification to the client, which should show a notification of some kind
      */
     private sendCriticalFailure(message: string) {
-        this.connection.sendNotification('critical-failure', message);
+        this.connection.sendNotification(CustomNotifications.criticalFailure, message);
+    }
+
+    private sendProjectsChanged() {
+        this.connection.sendNotification(CustomNotifications.projectsChanged, null);
     }
 
     /**
@@ -587,6 +594,7 @@ export class LanguageServer {
 
         // valdiate all workspaces
         this.validateAllThrottled(); //eslint-disable-line
+        this.sendProjectsChanged();
     }
 
     private getRootDir(workspace: Workspace) {
@@ -746,6 +754,12 @@ export class LanguageServer {
             //valdiate all workspaces
             await this.validateAllThrottled();
         }
+
+        //notify the client anytime the project creates or deletes files
+        if (changes.find(x => x.type === FileChangeType.Created || x.type === FileChangeType.Deleted)) {
+            this.sendProjectsChanged();
+        }
+
         this.connection.sendNotification('build-status', 'success');
     }
 
@@ -1019,10 +1033,21 @@ export class LanguageServer {
         this.latestDiagnosticsByFile = diagnosticsByFile;
     }
 
+    private getWorkspace(workspacePath: string) {
+        return this.workspaces.find(x => standardizePath(workspacePath) === standardizePath(x.workspacePath));
+    }
+
     public async onExecuteCommand(params: ExecuteCommandParams) {
+        this.connection.console.log('onExecuteCommand: ' + JSON.stringify(params));
         await this.waitAllProgramFirstRuns();
-        if (params.command === CustomCommands.TranspileFile) {
+        if (params.command === CustomCommands.transpileFile) {
             return this.transpileFile(params.arguments[0]);
+        } else if (params.command === CustomCommands.getProjectsInfo) {
+            return this.getProjectsInfo();
+        } else if (params.command === CustomCommands.reloadProject) {
+            return this.reloadWorkspaces([
+                this.getWorkspace(params.arguments[0])
+            ]);
         }
     }
 
@@ -1036,6 +1061,24 @@ export class LanguageServer {
                 return workspace.builder.program.getTranspiledFileContents(pathAbsolute);
             }
         }
+    }
+
+    /**
+     * Returns a list of project information for all projects
+     */
+    private async getProjectsInfo() {
+        await this.waitAllProgramFirstRuns();
+        let result = [];
+        for (let workspace of this.workspaces) {
+            const program = workspace.builder.program;
+            result.push({
+                name: program.getName(),
+                workspaceFolder: program.options.cwd,
+                rootDir: program.options.rootDir,
+                files: Object.keys(program.files).map(src => ({ src: src, dest: program.files[src].pkgPath }))
+            });
+        }
+        return result;
     }
 
     public dispose() {
@@ -1055,5 +1098,23 @@ export interface Workspace {
 }
 
 export enum CustomCommands {
-    TranspileFile = 'TranspileFile'
+    transpileFile = 'transpileFile',
+    getProjectsInfo = 'getProjectsInfo',
+    reloadProject = 'reloadProject'
+}
+
+export interface ProjectInfo {
+    name: string;
+    workspaceFolder: string;
+    rootDir: string;
+    files: ProjectInfoFile[];
+}
+export interface ProjectInfoFile {
+    src: string;
+    dest: string;
+}
+
+export enum CustomNotifications {
+    criticalFailure = 'critical-failure',
+    projectsChanged = 'projects-changed'
 }

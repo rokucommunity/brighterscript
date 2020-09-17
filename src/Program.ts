@@ -48,6 +48,21 @@ export class Program {
         });
     }
 
+    /**
+     * Get the name of the project.
+     * This is the name from the manifest (if manifest.title is set),
+     * or the folder name of cwd otherwise
+     */
+    public getName() {
+        const manifest = this.getManifest();
+
+        if (manifest.has('title')) {
+            return manifest.get('title');
+        } else {
+            return path.basename(this.options.cwd ?? this.options.rootDir);
+        }
+    }
+
     public logger: Logger;
 
     private createGlobalScope() {

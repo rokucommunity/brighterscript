@@ -543,7 +543,7 @@ describe('parser', () => {
 
         it('catchs missing file path', () => {
             let { statements, diagnostics } = parse(`
-                import 
+                import
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).to.equal(
                 DiagnosticMessages.expectedStringLiteralAfterKeyword('import').message
