@@ -2,11 +2,13 @@ import { Token, Identifier, TokenKind } from '../lexer';
 import { BrsType, ValueKind, BrsString, FunctionParameter } from '../brsTypes';
 import { Block, CommentStatement, FunctionStatement } from './Statement';
 import { SourceNode } from 'source-map';
-import { Range } from 'vscode-languageserver';
+import { Range, CancellationToken } from 'vscode-languageserver';
 import util from '../util';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
+
+export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
 /** A BrightScript expression */
 export interface Expression {
@@ -14,6 +16,8 @@ export interface Expression {
     range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string>;
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void;
 }
 
 export class BinaryExpression implements Expression {
@@ -35,6 +39,14 @@ export class BinaryExpression implements Expression {
             ' ',
             new SourceNode(this.right.range.start.line + 1, this.right.range.start.character, state.pathAbsolute, this.right.transpile(state))
         ];
+    }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.left.walk(visitor, this, cancel);
+            this.right.walk(visitor, this, cancel);
+        }
     }
 }
 
@@ -74,6 +86,14 @@ export class CallExpression implements Expression {
             new SourceNode(this.closingParen.range.start.line + 1, this.closingParen.range.start.character, state.pathAbsolute, ')')
         );
         return result;
+    }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            visitor(this.callee, this);
+            this.args.forEach(e => e.walk(visitor, this, cancel));
+        }
     }
 }
 
@@ -176,6 +196,13 @@ export class FunctionExpression implements Expression {
         );
         return results;
     }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.parameters.forEach(p => p.defaultValue?.walk(visitor, this, cancel));
+        }
+    }
 }
 
 export class NamespacedVariableNameExpression implements Expression {
@@ -222,6 +249,13 @@ export class NamespacedVariableNameExpression implements Expression {
             return this.getNameParts().join('_');
         }
     }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.expression.walk(visitor, this, cancel);
+        }
+    }
 }
 
 export class DottedGetExpression implements Expression {
@@ -247,6 +281,13 @@ export class DottedGetExpression implements Expression {
             ];
         }
     }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.obj.walk(visitor, this, cancel);
+        }
+    }
 }
 
 export class XmlAttributeGetExpression implements Expression {
@@ -266,6 +307,13 @@ export class XmlAttributeGetExpression implements Expression {
             '@',
             new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
         ];
+    }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.obj.walk(visitor, this, cancel);
+        }
     }
 }
 
@@ -289,6 +337,14 @@ export class IndexedGetExpression implements Expression {
             new SourceNode(this.closingSquare.range.start.line + 1, this.closingSquare.range.start.character, state.pathAbsolute, ']')
         ];
     }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.obj.walk(visitor, this, cancel);
+            this.index.walk(visitor, this, cancel);
+        }
+    }
 }
 
 export class GroupingExpression implements Expression {
@@ -311,6 +367,13 @@ export class GroupingExpression implements Expression {
             new SourceNode(this.tokens.right.range.start.line + 1, this.tokens.right.range.start.character, state.pathAbsolute, ')')
         ];
     }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.expression.walk(visitor, this, cancel);
+        }
+    }
 }
 
 export class LiteralExpression implements Expression {
@@ -320,7 +383,6 @@ export class LiteralExpression implements Expression {
     ) {
         this.range = range ?? Range.create(-1, -1, -1, -1);
     }
-
 
     public readonly range: Range;
 
@@ -341,6 +403,12 @@ export class LiteralExpression implements Expression {
                 text
             )
         ];
+    }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+        }
     }
 }
 
@@ -365,6 +433,12 @@ export class EscapedCharCodeLiteral implements Expression {
                 `chr(${this.token.charCode})`
             )
         ];
+    }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+        }
     }
 }
 
@@ -433,6 +507,13 @@ export class ArrayLiteralExpression implements Expression {
             new SourceNode(this.close.range.start.line + 1, this.close.range.start.character, state.pathAbsolute, ']')
         );
         return result;
+    }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.elements.forEach(element => element.walk(visitor, this, cancel));
+        }
     }
 }
 
@@ -538,6 +619,19 @@ export class AALiteralExpression implements Expression {
         );
         return result;
     }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.elements.forEach(element => {
+                if (element instanceof CommentStatement) {
+                    element.walk(visitor, this, cancel);
+                } else {
+                    element.value.walk(visitor, this, cancel);
+                }
+            });
+        }
+    }
 }
 
 export class UnaryExpression implements Expression {
@@ -557,6 +651,13 @@ export class UnaryExpression implements Expression {
             ...this.right.transpile(state)
         ];
     }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.right.walk(visitor, this, cancel);
+        }
+    }
 }
 
 export class VariableExpression implements Expression {
@@ -568,6 +669,7 @@ export class VariableExpression implements Expression {
     }
 
     public readonly range: Range;
+    public isCalled: boolean;
 
     public getName(parseMode: ParseMode) {
         return parseMode === ParseMode.BrightScript ? this.name.text : this.name.text;
@@ -593,6 +695,13 @@ export class VariableExpression implements Expression {
             );
         }
         return result;
+    }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.namespaceName?.walk(visitor, this, cancel);
+        }
     }
 }
 
@@ -668,6 +777,12 @@ export class SourceLiteralExpression implements Expression {
             )
         ];
     }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+        }
+    }
 }
 
 /**
@@ -700,6 +815,13 @@ export class NewExpression implements Expression {
 
     public transpile(state: TranspileState) {
         return this.call.transpile(state);
+    }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.call.walk(visitor, this, cancel);
+        }
     }
 }
 
@@ -754,6 +876,14 @@ export class CallfuncExpression implements Expression {
         );
         return result;
     }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.callee.walk(visitor, this, cancel);
+            this.args.forEach(arg => arg.walk(visitor, this, cancel));
+        }
+    }
 }
 
 /**
@@ -787,8 +917,18 @@ export class TemplateStringQuasiExpression implements Expression {
         }
         return result;
     }
-}
 
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.expressions.forEach(element => {
+                if (element instanceof LiteralExpression) {
+                    element.walk(visitor, this, cancel);
+                }
+            });
+        }
+    }
+}
 
 export class TemplateStringExpression implements Expression {
     constructor(
@@ -870,6 +1010,14 @@ export class TemplateStringExpression implements Expression {
         // );
         return result;
     }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.quasis.forEach(e => e.walk(visitor, this, cancel));
+            this.expressions.forEach(e => e.walk(visitor, this, cancel));
+        }
+    }
 }
 
 export class TaggedTemplateStringExpression implements Expression {
@@ -938,5 +1086,13 @@ export class TaggedTemplateStringExpression implements Expression {
             )
         );
         return result;
+    }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+            this.quasis.forEach(e => e.walk(visitor, this, cancel));
+            this.expressions.forEach(e => e.walk(visitor, this, cancel));
+        }
     }
 }

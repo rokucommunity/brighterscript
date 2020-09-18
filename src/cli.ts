@@ -2,6 +2,7 @@
 import * as yargs from 'yargs';
 import { ProgramBuilder } from './ProgramBuilder';
 import { DiagnosticSeverity } from 'vscode-languageserver';
+import util from './util';
 
 let options = yargs
     .usage('$0', 'BrighterScript, a superset of Roku\'s BrightScript language')
@@ -10,6 +11,7 @@ let options = yargs
     .option('cwd', { type: 'string', description: 'Override the current working directory.' })
     .option('copy-to-staging', { type: 'boolean', defaultDescription: 'true', description: 'Copy project files into the staging folder, ready to be packaged.' })
     .option('diagnostic-level', { type: 'string', defaultDescription: '"warn"', description: 'Specify what diagnostic types should be printed to the console. Value can be "error", "warn", "hint", "info".' })
+    .option('plugins', { type: 'array', description: 'A list of scripts or modules to add extra diagnostics or transform the AST.' })
     .option('deploy', { type: 'boolean', defaultDescription: 'false', description: 'Deploy to a Roku device if compilation succeeds. When in watch mode, this will deploy on every change.' })
     .option('emit-full-paths', { type: 'boolean', defaultDescription: 'false', description: 'Emit full paths to files when encountering diagnostics.' })
     .option('files', { type: 'array', description: 'The list of files (or globs) to include in your project. Be sure to wrap these in double quotes when using globs.' })
@@ -32,6 +34,7 @@ let options = yargs
         if (diagnosticLevel && ['error', 'warn', 'hint', 'info'].includes(diagnosticLevel) === false) {
             throw new Error(`Invalid diagnostic level "${diagnosticLevel}". Value can be "error", "warn", "hint", "info".`);
         }
+        util.resolvePluginPaths(argv as any, `${process.cwd()}/cli.json`);
         return true;
     })
     .argv;

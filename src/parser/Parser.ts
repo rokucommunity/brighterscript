@@ -2056,6 +2056,10 @@ export class Parser {
             TokenKind.RightParen
         );
 
+        if (callee instanceof VariableExpression) {
+            callee.isCalled = true;
+        }
+
         let expression = new CallExpression(callee, openingParen, closingParen, args, this.currentNamespaceName);
         this.callExpressions.push(expression);
         return expression;

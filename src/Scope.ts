@@ -1,4 +1,3 @@
-import { EventEmitter } from 'eventemitter3';
 import { CompletionItem, CompletionItemKind, Location, Position, Range } from 'vscode-languageserver';
 import chalk from 'chalk';
 import { DiagnosticMessages, DiagnosticInfo } from './DiagnosticMessages';
@@ -177,6 +176,10 @@ export class Scope {
         return filteredDiagnostics;
     }
 
+    public addDiagnostics(diagnostics: BsDiagnostic[]) {
+        this.diagnostics.push(...diagnostics);
+    }
+
     /**
      * Get the list of callables available in this scope (either declared in this scope or in a parent scope)
      */
@@ -303,22 +306,7 @@ export class Scope {
         return result;
     }
 
-    public emitter = new EventEmitter();
-
-    public on(eventName: 'invalidated', callback: () => void);
-    public on(eventName: string, callback: (data: any) => void) {
-        this.emitter.on(eventName, callback);
-        return () => {
-            this.emitter.removeListener(eventName, callback);
-        };
-    }
-
-    protected emit(name: 'invalidated');
-    protected emit(name: string, data?: any) {
-        this.emitter.emit(name, data);
-    }
-
-    protected logDebug(...args) {
+    protected logDebug(...args: any[]) {
         this.program.logger.debug(this._debugLogComponentName, ...args);
     }
     private _debugLogComponentName: string;
@@ -356,6 +344,9 @@ export class Scope {
 
             //get a list of all callables, indexed by their lower case names
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
+            let files = this.getFiles();
+
+            this.program.plugins.emit('beforeScopeValidate', this, files, callableContainerMap);
 
             //find all duplicate function declarations
             this.diagnosticFindDuplicateFunctionDeclarations(callableContainerMap);
@@ -366,7 +357,6 @@ export class Scope {
             //enforce a series of checks on the bodies of class methods
             this.validateClasses();
 
-            let files = this.getFiles();
             //do many per-file checks
             for (let file of files) {
                 this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
@@ -375,6 +365,8 @@ export class Scope {
                 this.diagnosticDetectFunctionCollisions(file);
                 this.detectVariableNamespaceCollisions(file);
             }
+
+            this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
 
             (this as any).isValidated = true;
         });

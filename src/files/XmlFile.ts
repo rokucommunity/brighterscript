@@ -12,6 +12,47 @@ import chalk from 'chalk';
 import { Cache } from '../Cache';
 import { DependencyGraph } from '../DependencyGraph';
 
+export interface SGAstScript {
+    $?: {
+        uri: string;
+        type?: string;
+    };
+}
+
+export interface SGAstFunction {
+    $?: {
+        name: string;
+    };
+}
+
+export interface SGAstField {
+    $?: {
+        id: string;
+        type?: string;
+        alwaysNotify?: string;
+        onChange?: string;
+    };
+}
+
+export interface SGAstInterface {
+    function?: SGAstFunction[];
+    field?: SGAstField[];
+}
+
+export interface SGAstComponent {
+    $?: {
+        name: string;
+        extends: string;
+    };
+    script?: SGAstScript[];
+    interface?: SGAst;
+    children?: any;
+}
+
+export interface SGAst {
+    component?: SGAstComponent;
+}
+
 export class XmlFile {
     constructor(
         public pathAbsolute: string,
@@ -99,7 +140,11 @@ export class XmlFile {
     }
 
     public getDiagnostics() {
-        return this.diagnostics;
+        return [...this.diagnostics];
+    }
+
+    public addDiagnostics(diagnostics: BsDiagnostic[]) {
+        this.diagnostics.push(...diagnostics);
     }
 
     /**
@@ -110,6 +155,7 @@ export class XmlFile {
     public diagnostics = [] as BsDiagnostic[];
 
     //TODO implement parsing
+    public parsedXml: SGAst;
     public parser = new Parser();
 
     //TODO implement the xml CDATA parsing, which would populate this list
@@ -166,13 +212,17 @@ export class XmlFile {
         //create a range of the entire file
         this.fileRange = Range.create(0, 0, this.lines.length, this.lines[this.lines.length - 1].length - 1);
 
-        let parsedXml;
+        this.parsedXml = {};
         try {
-            parsedXml = await util.parseXml(fileContents);
-            if (parsedXml?.component) {
-                if (parsedXml.component.$) {
-                    this.componentName = parsedXml.component.$.name;
-                    this.parentComponentName = parsedXml.component.$.extends;
+            this.parsedXml = (await util.parseXml(fileContents)) || {};
+
+            //notify AST ready
+            this.program.plugins.emit('afterFileParse', this);
+
+            if (this.parsedXml.component) {
+                if (this.parsedXml.component.$) {
+                    this.componentName = this.parsedXml.component.$.name;
+                    this.parentComponentName = this.parsedXml.component.$.extends;
                 }
                 let componentRange: Range;
 
@@ -240,7 +290,6 @@ export class XmlFile {
         } catch (e) {
             let match = /(.*)\r?\nLine:\s*(\d+)\r?\nColumn:\s*(\d+)\r?\nChar:\s*(\d*)/gi.exec(e.message);
             if (match) {
-
                 let lineIndex = parseInt(match[2]);
                 let columnIndex = parseInt(match[3]) - 1;
                 //add basic xml parse diagnostic errors
@@ -258,13 +307,12 @@ export class XmlFile {
         }
 
         //find script imports
-        if (parsedXml?.component) {
-
-            let scripts = parsedXml.component.script ? parsedXml.component.script : [];
+        if (this.parsedXml.component) {
+            let scripts = this.parsedXml.component.script || [];
             let scriptImports = [] as FileReference[];
             //get a list of all scripts
             for (let script of scripts) {
-                let uri = script.$.uri;
+                let uri = script.$?.uri;
                 if (typeof uri === 'string') {
                     scriptImports.push({
                         filePathRange: null,

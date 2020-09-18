@@ -1,15 +1,13 @@
 import * as assert from 'assert';
-import { EventEmitter } from 'eventemitter3';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import { StandardizedFileEntry } from 'roku-deploy';
 import { CompletionItem, Location, Position, Range, CompletionItemKind } from 'vscode-languageserver';
 import { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import { BsDiagnostic, File, FileReference } from './interfaces';
+import { BsDiagnostic, File, FileReference, FileObj } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -19,7 +17,18 @@ import chalk from 'chalk';
 import { globalFile } from './globalCallables';
 import { parseManifest, ManifestValue } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
+import PluginInterface from './PluginInterface';
 const startOfSourcePkgPath = `source${path.sep}`;
+
+export interface SourceObj {
+    pathAbsolute: string;
+    source: string;
+}
+
+export interface TranspileObj {
+    file: (BrsFile | XmlFile);
+    outputPath: string;
+}
 
 export class Program {
     constructor(
@@ -27,19 +36,17 @@ export class Program {
          * The root directory for this program
          */
         public options: BsConfig,
-        logger?: Logger
+        logger?: Logger,
+        plugins?: PluginInterface
     ) {
         this.options = util.normalizeConfig(options);
-        this.logger = logger ? logger : new Logger(options.logLevel as LogLevel);
+        this.logger = logger || new Logger(options.logLevel as LogLevel);
+        this.plugins = plugins || new PluginInterface([], undefined);
 
         //normalize the root dir path
         this.options.rootDir = util.getRootDir(this.options);
 
         this.createGlobalScope();
-
-        //create the "source" scope
-        let sourceScope = new Scope('source', 'scope:source', this);
-        this.scopes.source = sourceScope;
 
         //add the default file resolver (used by this program to load source file contents).
         this.fileResolvers.push(async (pathAbsolute) => {
@@ -90,6 +97,11 @@ export class Program {
     public globalScope: Scope;
 
     /**
+     * Plugins which can provide extra diagnostics or transform AST
+     */
+    public plugins: PluginInterface;
+
+    /**
      * A set of diagnostics. This does not include any of the scope diagnostics.
      * Should only be set from `this.validate()`
      */
@@ -102,12 +114,15 @@ export class Program {
 
     private scopes = {} as { [name: string]: Scope };
 
+    protected addScope(scope: Scope) {
+        this.scopes[scope.name] = scope;
+        this.plugins.emit('afterScopeCreate', scope);
+    }
+
     /**
      * A map of every component currently loaded into the program, indexed by the component name
      */
     private components = {} as { [lowerComponentName: string]: { file: XmlFile; scope: XmlScope } };
-
-    private readonly emitter = new EventEmitter();
 
     /**
      * Get the component with the specified name
@@ -200,6 +215,9 @@ export class Program {
         return finalDiagnostics;
     }
 
+    public addDiagnostics(diagnostics: BsDiagnostic[]) {
+        this.diagnostics.push(...diagnostics);
+    }
 
     /**
      * Determine if the specified file is loaded in this program right now.
@@ -216,7 +234,7 @@ export class Program {
      * contents from the file system.
      * @param filePaths
      */
-    public async addOrReplaceFiles(fileObjects: Array<StandardizedFileEntry>) {
+    public async addOrReplaceFiles(fileObjects: Array<FileObj>) {
         let promises = [];
         for (let fileObject of fileObjects) {
             promises.push(
@@ -246,6 +264,13 @@ export class Program {
     }
 
     /**
+     * Return all scopes
+     */
+    public getScopes() {
+        return Object.values(this.scopes);
+    }
+
+    /**
      * Find the scope for the specified component
      */
     public getComponentScope(componentName: string) {
@@ -265,8 +290,8 @@ export class Program {
      * @param fileEntry an object that specifies src and dest for the file.
      * @param fileContents the file contents. If not provided, the file will be loaded from disk
      */
-    public async addOrReplaceFile(fileEntry: StandardizedFileEntry, fileContents?: string): Promise<XmlFile | BrsFile>;
-    public async addOrReplaceFile(fileParam: StandardizedFileEntry | string, fileContents?: string): Promise<XmlFile | BrsFile> {
+    public async addOrReplaceFile(fileEntry: FileObj, fileContents?: string): Promise<XmlFile | BrsFile>;
+    public async addOrReplaceFile(fileParam: FileObj | string, fileContents?: string): Promise<XmlFile | BrsFile> {
         assert.ok(fileParam, 'fileEntry is required');
         let pathAbsolute: string;
         let pkgPath: string;
@@ -303,20 +328,26 @@ export class Program {
 
                 //add file to the `source` dependency list
                 if (brsFile.pkgPath.startsWith(startOfSourcePkgPath)) {
+                    this.createSourceScope();
                     this.dependencyGraph.addDependency('scope:source', brsFile.dependencyGraphKey);
                 }
 
                 //add the file to the program
                 this.files[pathAbsolute] = brsFile;
-                let fileContents = await getFileContents();
+                let fileContents: SourceObj = {
+                    pathAbsolute: pathAbsolute,
+                    source: await getFileContents()
+                };
+                this.plugins.emit('beforeFileParse', fileContents);
+
                 this.logger.time(LogLevel.info, ['parse', chalk.green(pathAbsolute)], () => {
-                    brsFile.parse(fileContents);
+                    brsFile.parse(fileContents.source);
                 });
                 file = brsFile;
 
                 this.dependencyGraph.addOrReplace(brsFile.dependencyGraphKey, brsFile.ownScriptImports.map(x => x.pkgPath.toLowerCase()));
 
-
+                this.plugins.emit('afterFileValidate', brsFile);
             } else if (
                 //is xml file
                 fileExtension === '.xml' &&
@@ -326,15 +357,18 @@ export class Program {
                 let xmlFile = new XmlFile(pathAbsolute, pkgPath, this);
                 //add the file to the program
                 this.files[pathAbsolute] = xmlFile;
-                let fileContents = await getFileContents();
-                await xmlFile.parse(fileContents);
+                let fileContents: SourceObj = {
+                    pathAbsolute: pathAbsolute,
+                    source: await getFileContents()
+                };
+                this.plugins.emit('beforeFileParse', fileContents);
+                await xmlFile.parse(fileContents.source);
 
                 file = xmlFile;
 
                 //create a new scope for this xml file
                 let scope = new XmlScope(xmlFile, this);
-
-                this.scopes[scope.name] = scope;
+                this.addScope(scope);
 
                 //register this compoent now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
@@ -344,6 +378,7 @@ export class Program {
                 //   b) immediately emit its own changes
                 xmlFile.attachDependencyGraph(this.dependencyGraph);
 
+                this.plugins.emit('afterFileValidate', xmlFile);
             } else {
                 //TODO do we actually need to implement this? Figure out how to handle img paths
                 // let genericFile = this.files[pathAbsolute] = <any>{
@@ -356,6 +391,17 @@ export class Program {
             return file;
         });
         return file;
+    }
+
+    /**
+     * Ensure source scope is created.
+     * Note: automatically called internally, and no-op if it exists already.
+     */
+    public createSourceScope() {
+        if (!this.scopes.source) {
+            const sourceScope = new Scope('source', 'scope:source', this);
+            this.addScope(sourceScope);
+        }
     }
 
     /**
@@ -416,14 +462,17 @@ export class Program {
         pathAbsolute = s`${pathAbsolute}`;
         let file = this.getFile(pathAbsolute);
         if (file) {
+            this.plugins.emit('beforeFileDispose', file);
 
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.pkgPath];
             if (scope) {
+                this.plugins.emit('beforeScopeDispose', scope);
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
                 this.dependencyGraph.remove(scope.dependencyGraphKey);
                 delete this.scopes[file.pkgPath];
+                this.plugins.emit('afterScopeDispose', scope);
             }
             //remove the file from the program
             delete this.files[pathAbsolute];
@@ -439,6 +488,7 @@ export class Program {
             if (file instanceof XmlFile) {
                 this.unregisterComponent(file);
             }
+            this.plugins.emit('afterFileDispose', file);
         }
     }
 
@@ -449,6 +499,8 @@ export class Program {
     public async validate() {
         await this.logger.time(LogLevel.debug, ['Program.validate()'], async () => {
             this.diagnostics = [];
+            this.plugins.emit('beforeProgramValidate', this);
+
             for (let scopeName in this.scopes) {
                 let scope = this.scopes[scopeName];
                 scope.validate();
@@ -470,6 +522,8 @@ export class Program {
             }
 
             this.detectDuplicateComponentNames();
+
+            this.plugins.emit('afterProgramValidate', this);
             await Promise.resolve();
         });
     }
@@ -696,32 +750,41 @@ export class Program {
         };
     }
 
-    public async transpile(fileEntries: StandardizedFileEntry[], stagingFolderPath: string) {
-        let promises = Object.keys(this.files).map(async (filePath) => {
-            let file = this.files[filePath];
-            let filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
+    public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
+        const entries = Object.values(this.files).map(file => {
+            const filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
             if (!filePathObj) {
                 throw new Error(`Cannot find fileMap record in fileMaps for '${file.pathAbsolute}'`);
             }
             //replace the file extension
-            let outputCodePath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
+            let outputPath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
             //prepend the staging folder path
-            outputCodePath = s`${stagingFolderPath}/${outputCodePath}`;
-            let outputCodeMapPath = outputCodePath + '.map';
+            outputPath = s`${stagingFolderPath}/${outputPath}`;
+            return {
+                file: file,
+                outputPath: outputPath
+            };
+        });
 
-            let result = file.transpile();
+        this.plugins.emit('beforeProgramTranspile', this, entries);
+
+        const promises = entries.map(async (entry) => {
+            this.plugins.emit('beforeFileTranspile', entry);
+            const { file, outputPath } = entry;
+            const result = file.transpile();
 
             //make sure the full dir path exists
-            await fsExtra.ensureDir(path.dirname(outputCodePath));
+            await fsExtra.ensureDir(path.dirname(outputPath));
 
-            if (await fsExtra.pathExists(outputCodePath)) {
-                throw new Error(`Error while transpiling "${filePath}". A file already exists at "${outputCodePath}" and will not be overwritten.`);
+            if (await fsExtra.pathExists(outputPath)) {
+                throw new Error(`Error while transpiling "${file.pathAbsolute}". A file already exists at "${outputPath}" and will not be overwritten.`);
             }
-            let writeMapPromise = result.map ? fsExtra.writeFile(outputCodeMapPath, result.map.toString()) : null;
+            const writeMapPromise = result.map ? fsExtra.writeFile(`${outputPath}.map`, result.map.toString()) : null;
             await Promise.all([
-                fsExtra.writeFile(outputCodePath, result.code),
+                fsExtra.writeFile(outputPath, result.code),
                 writeMapPromise
             ]);
+            this.plugins.emit('afterFileTranspile', entry);
         });
 
         //copy the brighterscript stdlib to the output directory
@@ -734,6 +797,8 @@ export class Program {
             })
         );
         await Promise.all(promises);
+
+        this.plugins.emit('afterProgramTranspile', this, entries);
     }
 
     /**
@@ -759,7 +824,6 @@ export class Program {
     private _manifest: Map<string, ManifestValue>;
 
     public dispose() {
-        this.emitter.removeAllListeners();
         for (let filePath in this.files) {
             this.files[filePath].dispose();
         }
