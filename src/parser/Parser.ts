@@ -119,11 +119,6 @@ export class Parser {
     private globalTerminators = [] as TokenKind[][];
 
     /**
-     * All function statements defined in this file
-     */
-    public functionStatements = [] as FunctionStatement[];
-
-    /**
      * All function expressions defined in this file
      */
     public functionExpressions = [] as FunctionExpression[];
@@ -383,7 +378,6 @@ export class Parser {
 
                     //remove this function from the lists because it's a class method
                     this.functionExpressions.pop();
-                    this.functionStatements.pop();
 
                     //if we have an overrides keyword AND this method is called 'new', that's not allowed
                     if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
@@ -700,7 +694,6 @@ export class Parser {
                 }
                 let result = new FunctionStatement(name, func, this.currentNamespaceName);
                 func.functionStatement = result;
-                this.functionStatements.push(result);
                 return result;
             }
         } finally {

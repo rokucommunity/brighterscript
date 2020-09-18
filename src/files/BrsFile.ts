@@ -574,7 +574,7 @@ export class BrsFile {
     }
 
     private findCallables() {
-        for (let statement of this.parser.functionStatements) {
+        for (let statement of this.declarations?.functionStatements ?? []) {
 
             let functionType = new FunctionType(util.valueKindToBrsType(statement.func.returns));
             functionType.setName(statement.name.text);
@@ -1072,4 +1072,5 @@ export const KeywordCompletions = Object.keys(Keywords)
 export interface BrsFileDeclarations {
     classStatements: ClassStatement[];
     namespaceStatements: NamespaceStatement[];
+    functionStatements: FunctionStatement[];
 }

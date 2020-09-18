@@ -915,8 +915,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('succeeds when finding variables with "sub" in them', () => {
-            file.parse(`
+        it('succeeds when finding variables with "sub" in them', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 function DoSomething()
                     return value.subType()
                 end function
@@ -1220,9 +1220,8 @@ describe('BrsFile', () => {
             expect(file.callables.length).to.equal(0);
         });
 
-        it('finds return type', () => {
-            let file = new BrsFile('absolute', 'relative', program);
-            file.parse(`
+        it('finds return type', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 function DoSomething() as string
                 end function
             `);
@@ -1324,8 +1323,8 @@ describe('BrsFile', () => {
             expect(scope.variableDeclarations[0].name).to.equal('theLength');
         });
 
-        it('finds value from global return', () => {
-            file.parse(`
+        it('finds value from global return', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 sub Main()
                    myName = GetName()
                 end sub
