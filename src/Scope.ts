@@ -88,7 +88,7 @@ export class Scope {
         let namespaceNameLower = namespaceName.toLowerCase();
         let files = this.getFiles();
         for (let file of files) {
-            for (let namespace of file.parser.namespaceStatements) {
+            for (let namespace of file.declarations.namespaceStatements) {
                 let loopNamespaceNameLower = namespace.name.toLowerCase();
                 if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
                     return true;
@@ -237,7 +237,7 @@ export class Scope {
         let namespaceLookup = {} as { [namespaceName: string]: NamespaceContainer };
         let files = this.getFiles();
         for (let file of files) {
-            for (let namespace of file.parser.namespaceStatements) {
+            for (let namespace of file.declarations?.namespaceStatements ?? []) {
                 //TODO should we handle non-brighterscript?
                 let name = namespace.nameExpression.getName(ParseMode.BrighterScript);
                 let nameParts = name.split('.');
@@ -301,7 +301,7 @@ export class Scope {
         let result = [] as NamespaceStatement[];
         let files = this.getFiles();
         for (let file of files) {
-            result.push(...file.parser.namespaceStatements);
+            result.push(...file.declarations.namespaceStatements);
         }
         return result;
     }

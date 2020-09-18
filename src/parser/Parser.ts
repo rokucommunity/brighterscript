@@ -119,11 +119,6 @@ export class Parser {
     private globalTerminators = [] as TokenKind[][];
 
     /**
-     * All namespace statements defined in this file
-     */
-    public namespaceStatements = [] as NamespaceStatement[];
-
-    /**
      * All function statements defined in this file
      */
     public functionStatements = [] as FunctionStatement[];
@@ -1124,7 +1119,6 @@ export class Parser {
 
         this.namespaceAndFunctionDepth--;
         let result = new NamespaceStatement(keyword, name, body, endKeyword);
-        this.namespaceStatements.push(result);
 
         return result;
     }

@@ -9,7 +9,7 @@ import { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiag
 import { Deferred } from '../deferred';
 import { FunctionParameter } from '../brsTypes';
 import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers, Keywords } from '../lexer';
-import { Parser, ParseMode, Statement } from '../parser';
+import { Parser, ParseMode, Statement, NamespaceStatement } from '../parser';
 import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, Expression } from '../parser/Expression';
 import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, ImportStatement } from '../parser/Statement';
 import { Program } from '../Program';
@@ -1071,4 +1071,5 @@ export const KeywordCompletions = Object.keys(Keywords)
 
 export interface BrsFileDeclarations {
     classStatements: ClassStatement[];
+    namespaceStatements: NamespaceStatement[];
 }
