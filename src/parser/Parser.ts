@@ -134,11 +134,6 @@ export class Parser {
     public assignmentStatements = [] as AssignmentStatement[];
 
     /**
-     * All library statements in this file
-     */
-    public libraryStatements = [] as LibraryStatement[];
-
-    /**
      * When a namespace has been started, this gets set. When it's done, this gets unset.
      * It is useful for passing the namespace into certain statements that need it
      */
@@ -1197,7 +1192,6 @@ export class Parser {
 
         //consume to the next newline, eof, or colon
         while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
-        this.libraryStatements.push(libStatement);
         return libStatement;
     }
 

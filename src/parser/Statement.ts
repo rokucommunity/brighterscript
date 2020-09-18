@@ -243,9 +243,9 @@ export class ExitWhileStatement implements Statement {
 
 export class FunctionStatement implements Statement {
     constructor(
-        readonly name: Identifier,
-        readonly func: FunctionExpression,
-        readonly namespaceName: NamespacedVariableNameExpression
+        public name: Identifier,
+        public func: FunctionExpression,
+        public namespaceName: NamespacedVariableNameExpression
     ) {
         this.range = this.func.range;
     }

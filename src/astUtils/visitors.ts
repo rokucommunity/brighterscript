@@ -1,7 +1,7 @@
 import { CancellationToken } from 'vscode-languageserver';
 import { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement } from '../parser/Statement';
 import { Expression } from '../parser/Expression';
-import { isExpression, isBlock, isIfStatement, isNamespaceStatement, isBody } from './reflection';
+import { isExpression, isBlock, isIfStatement, isNamespaceStatement, isBody, isFunctionStatement, isFunctionExpression } from './reflection';
 
 
 /**
@@ -118,6 +118,9 @@ export function walkStatements(
     recursiveWalkStatements(statement, undefined, visitor, cancel);
 }
 
+/**
+ * Walk recursively within the branches of a Block, but doesn't enter sub functions.
+ */
 function recursiveWalkStatements(
     statement: Statement,
     parent: Statement,

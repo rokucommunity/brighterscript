@@ -880,8 +880,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('adds error for library statements NOT at top of file', () => {
-            file.parse(`
+        it('adds error for library statements NOT at top of file', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 sub main()
                 end sub
                 Library "v30/bslCore.brs"
@@ -893,8 +893,8 @@ describe('BrsFile', () => {
             ]);
         });
 
-        it('adds error for library statements inside of function body', () => {
-            file.parse(`
+        it('adds error for library statements inside of function body', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     Library "v30/bslCore.brs"
                 end sub

@@ -106,7 +106,7 @@ export function isBinaryExpression(expression: Expression | Token): expression i
 export function isCallExpression(expression: Expression | Token): expression is CallExpression {
     return expression?.constructor.name === 'CallExpression';
 }
-export function isFunctionExpression(expression: Expression | Token): expression is FunctionExpression {
+export function isFunctionExpression(expression: Expression | Token | Statement): expression is FunctionExpression {
     return expression?.constructor.name === 'FunctionExpression';
 }
 export function isNamespacedVariableNameExpression(expression: Expression | Token): expression is NamespacedVariableNameExpression {
