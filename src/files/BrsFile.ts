@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { SourceNode } from 'source-map';
-import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
+import { CancellationToken, CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
 import chalk from 'chalk';
 import { Scope } from '../Scope';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
@@ -9,7 +9,7 @@ import { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiag
 import { Deferred } from '../deferred';
 import { FunctionParameter } from '../brsTypes';
 import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers, Keywords } from '../lexer';
-import { Parser, ParseMode } from '../parser';
+import { Parser, ParseMode, Statement } from '../parser';
 import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, Expression } from '../parser/Expression';
 import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, ImportStatement } from '../parser/Statement';
 import { Program } from '../Program';
@@ -24,6 +24,7 @@ import { ClassStatement } from '../parser/ClassStatement';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
+import { walkStatements } from '../astUtils/visitors';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -98,7 +99,7 @@ export class BrsFile {
     /**
      * The AST for this file
      */
-    private ast: Body;
+    public ast: Body;
 
     /**
      * Get the token at the specified position
@@ -112,9 +113,23 @@ export class BrsFile {
         }
     }
 
+    public declarations: BrsFileDeclarations | undefined;
+
     public parser: Parser;
 
     public fileContents: string;
+
+    /**
+     * Walk all statements in this program (recursively)
+     */
+    public walkStatements(
+        visitor: (statement: Statement, parent: Statement) => Statement | void,
+        cancel?: CancellationToken
+    ) {
+        for (let statement of this.ast.statements) {
+            walkStatements(statement, visitor, cancel);
+        }
+    }
 
     /**
      * Calculate the AST for this file
@@ -1052,3 +1067,8 @@ export const KeywordCompletions = Object.keys(Keywords)
             kind: CompletionItemKind.Keyword
         } as CompletionItem;
     });
+
+
+export interface BrsFileDeclarations {
+    classStatements: ClassStatement[];
+}

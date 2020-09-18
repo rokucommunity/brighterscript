@@ -18,6 +18,7 @@ import { globalFile } from './globalCallables';
 import { parseManifest, ManifestValue } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
+import { DeclarationResolver } from './plugins/DeclarationResolver';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {
@@ -42,6 +43,9 @@ export class Program {
         this.options = util.normalizeConfig(options);
         this.logger = logger || new Logger(options.logLevel as LogLevel);
         this.plugins = plugins || new PluginInterface([], undefined);
+
+        //add some internal plugins
+        this.plugins.add(new DeclarationResolver());
 
         //normalize the root dir path
         this.options.rootDir = util.getRootDir(this.options);

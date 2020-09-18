@@ -290,7 +290,7 @@ export class Scope {
         let lookup = {} as { [lowerName: string]: ClassStatement };
         let files = this.getFiles();
         for (let file of files) {
-            for (let cls of file.parser.classStatements) {
+            for (let cls of file.declarations?.classStatements || []) {
                 lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
             }
         }

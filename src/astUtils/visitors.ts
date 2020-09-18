@@ -1,7 +1,7 @@
 import { CancellationToken } from 'vscode-languageserver';
 import { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement } from '../parser/Statement';
 import { Expression } from '../parser/Expression';
-import { isExpression, isBlock, isIfStatement } from './reflection';
+import { isExpression, isBlock, isIfStatement, isNamespaceStatement, isBody } from './reflection';
 
 
 /**
@@ -132,7 +132,7 @@ function recursiveWalkStatements(
         // replace statement and don't recurse
         return result;
     }
-    if (isBlock(statement)) {
+    if (isBlock(statement) || isBody(statement)) {
         statement.statements.forEach((s, index) => {
             const result = recursiveWalkStatements(s, statement, visitor, cancel);
             if (result) {
@@ -155,6 +155,11 @@ function recursiveWalkStatements(
             if (result instanceof Block) {
                 (statement as any).elseBranch = result;
             }
+        }
+    } else if (isNamespaceStatement(statement)) {
+        const result = recursiveWalkStatements(statement.body, statement, visitor, cancel);
+        if (result instanceof Body) {
+            statement.body = result;
         }
     } else if (hasBody(statement)) { // for/while...
         const result = recursiveWalkStatements(statement.body, statement, visitor, cancel);

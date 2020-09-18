@@ -119,11 +119,6 @@ export class Parser {
     private globalTerminators = [] as TokenKind[][];
 
     /**
-     * All class statements defined in this file
-     */
-    public classStatements = [] as ClassStatement[];
-
-    /**
      * All namespace statements defined in this file
      */
     public namespaceStatements = [] as NamespaceStatement[];
@@ -476,7 +471,6 @@ export class Parser {
             parentClassName,
             this.currentNamespaceName
         );
-        this.classStatements.push(result);
         return result;
     }
 
