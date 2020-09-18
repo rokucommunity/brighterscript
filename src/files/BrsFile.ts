@@ -238,7 +238,7 @@ export class BrsFile {
 
         let statements = [
             ...this.parser.libraryStatements,
-            ...this.parser.importStatements
+            ...this.declarations?.importStatements ?? []
         ];
         for (let result of statements) {
             //register import statements
@@ -1073,4 +1073,5 @@ export interface BrsFileDeclarations {
     classStatements: ClassStatement[];
     namespaceStatements: NamespaceStatement[];
     functionStatements: FunctionStatement[];
+    importStatements: ImportStatement[];
 }

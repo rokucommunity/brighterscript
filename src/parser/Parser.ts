@@ -134,11 +134,6 @@ export class Parser {
     public assignmentStatements = [] as AssignmentStatement[];
 
     /**
-     * All import statements in this file
-     */
-    public importStatements = [] as ImportStatement[];
-
-    /**
      * All library statements in this file
      */
     public libraryStatements = [] as LibraryStatement[];
@@ -1222,7 +1217,6 @@ export class Parser {
 
         //consume to the next newline, eof, or colon
         while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
-        this.importStatements.push(importStatement);
         return importStatement;
     }
 

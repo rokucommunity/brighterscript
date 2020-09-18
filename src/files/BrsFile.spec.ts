@@ -860,8 +860,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('adds error for library statements NOT at top of file', () => {
-            file.parse(`
+        it('adds error for library statements NOT at top of file', async () => {
+            let file = await program.addOrReplaceFile('source/main.bs', `
                 sub main()
                 end sub
                 import "file.brs"

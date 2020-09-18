@@ -1,4 +1,4 @@
-import { isBrsFile, isClassStatement, isFunctionStatement, isNamespaceStatement } from '../astUtils';
+import { isBrsFile, isClassStatement, isFunctionStatement, isImportStatement, isNamespaceStatement } from '../astUtils';
 import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
 import { CompilerPlugin } from '../interfaces';
@@ -15,7 +15,8 @@ export class DeclarationResolver implements CompilerPlugin {
         file.declarations = {
             classStatements: [],
             namespaceStatements: [],
-            functionStatements: []
+            functionStatements: [],
+            importStatements: []
         };
 
         file.walkStatements((statement, parent) => {
@@ -25,6 +26,8 @@ export class DeclarationResolver implements CompilerPlugin {
                 file.declarations.namespaceStatements.push(statement);
             } else if (isFunctionStatement(statement)) {
                 file.declarations.functionStatements.push(statement);
+            } else if (isImportStatement(statement)) {
+                file.declarations.importStatements.push(statement);
             }
         });
     }
