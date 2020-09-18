@@ -1,8 +1,8 @@
 import { Token, Identifier, TokenKind, CompoundAssignmentOperators } from '../lexer';
 import { SourceNode } from 'source-map';
-import { Expression, FunctionExpression, NamespacedVariableNameExpression, BinaryExpression } from './Expression';
+import { Expression, FunctionExpression, NamespacedVariableNameExpression, BinaryExpression, ExpressionVisitor } from './Expression';
 import { util } from '../util';
-import { Range, Position } from 'vscode-languageserver';
+import { Range, Position, CancellationToken } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 
@@ -16,6 +16,14 @@ export interface Statement {
     range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string>;
+}
+
+export class EmptyStatement {
+    range: Range;
+
+    transpile(state: TranspileState) {
+        return [];
+    }
 }
 
 export class Body implements Statement {
@@ -188,6 +196,12 @@ export class CommentStatement implements Statement, Expression {
             }
         }
         return result;
+    }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken) {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+        }
     }
 }
 

@@ -2,13 +2,14 @@ import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
 import { BsConfig } from './BsConfig';
-import { BsDiagnostic, File } from './interfaces';
+import { BsDiagnostic, File, FileObj } from './interfaces';
 import { FileResolver, Program } from './Program';
-import { standardizePath as s, util } from './util';
+import { standardizePath as s, util, loadPlugins } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { Logger, LogLevel } from './Logger';
 import { getPrintDiagnosticOptions, printDiagnostic } from './diagnosticUtils';
+import PluginInterface from './PluginInterface';
 
 /**
  * A runner class that handles
@@ -24,7 +25,9 @@ export class ProgramBuilder {
     private watcher: Watcher;
     public program: Program;
     public logger = new Logger();
+    public plugins: PluginInterface = new PluginInterface([], this.logger);
     private fileResolvers = [] as FileResolver[];
+
     public addFileResolver(fileResolver: FileResolver) {
         this.fileResolvers.push(fileResolver);
         if (this.program) {
@@ -68,6 +71,7 @@ export class ProgramBuilder {
         this.isRunning = true;
         try {
             this.options = await util.normalizeAndResolveConfig(options);
+            this.loadPlugins();
         } catch (e) {
             if (e?.file && e.message && e.code) {
                 let err = e as BsDiagnostic;
@@ -84,9 +88,7 @@ export class ProgramBuilder {
         }
         this.logger.logLevel = this.options.logLevel as LogLevel;
 
-        this.program = new Program(this.options);
-        //add the initial FileResolvers
-        this.program.fileResolvers.push(...this.fileResolvers);
+        this.program = this.createProgram();
 
         //parse every file in the entire project
         this.logger.log('Parsing files');
@@ -99,6 +101,25 @@ export class ProgramBuilder {
         } else {
             await this.runOnce();
         }
+    }
+
+    protected createProgram() {
+        const program = new Program(this.options, undefined, this.plugins);
+
+        //add the initial FileResolvers
+        program.fileResolvers.push(...this.fileResolvers);
+
+        this.plugins.emit('afterProgramCreate', program);
+        return program;
+    }
+
+    protected loadPlugins() {
+        loadPlugins(
+            this.options.plugins,
+            (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
+        ).forEach(plugin => this.plugins.add(plugin));
+
+        this.plugins.emit('beforeProgramCreate', this);
     }
 
     private clearConsole() {
@@ -317,12 +338,14 @@ export class ProgramBuilder {
         let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
 
         //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
-        let filteredFileMap = [];
+        let filteredFileMap = [] as FileObj[];
         for (let fileEntry of fileMap) {
             if (this.program.hasFile(fileEntry.src) === false) {
                 filteredFileMap.push(fileEntry);
             }
         }
+
+        this.plugins.emit('beforePrepublish', this, filteredFileMap);
 
         await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
             //prepublish all non-program-loaded files to staging
@@ -332,10 +355,15 @@ export class ProgramBuilder {
             });
         });
 
+        this.plugins.emit('afterPrepublish', this, filteredFileMap);
+        this.plugins.emit('beforePublish', this, fileMap);
+
         await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
             //transpile any brighterscript files
             await this.program.transpile(fileMap, options.stagingFolderPath);
         });
+
+        this.plugins.emit('afterPublish', this, fileMap);
     }
 
     private async deployPackageIfEnabled() {

@@ -73,6 +73,10 @@ export class BrsFile {
         return [...this.diagnostics];
     }
 
+    public addDiagnostics(diagnostics: BsDiagnostic[]) {
+        this.diagnostics.push(...diagnostics);
+    }
+
     public commentFlags = [] as CommentFlag[];
 
     public callables = [] as Callable[];
@@ -167,6 +171,9 @@ export class BrsFile {
             );
 
             this.ast = this.parser.ast;
+
+            //notify AST ready
+            this.program.plugins.emit('afterFileParse', this);
 
             //extract all callables from this file
             this.findCallables();

@@ -5,6 +5,7 @@ import { standardizePath as s } from './util';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
+import PluginInterface from './PluginInterface';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -14,6 +15,7 @@ describe('Scope', () => {
         program = new Program({
             rootDir: rootDir
         });
+        program.createSourceScope();
     });
     afterEach(() => {
         sinon.restore();
@@ -66,6 +68,23 @@ describe('Scope', () => {
             DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea').message,
             DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA').message
         ]);
+    });
+
+    it('allows adding diagnostics', () => {
+        const source = program.getScopeByName('source');
+        const expected = [{
+            message: 'message',
+            file: undefined,
+            range: undefined
+        }];
+        source.addDiagnostics(expected);
+        const actual = source.getDiagnostics();
+        expect(actual).to.deep.equal(expected);
+    });
+
+    it('allows getting all scopes', () => {
+        const scopes = program.getScopes();
+        expect(scopes.length).to.equal(2);
     });
 
     describe('addFile', () => {
@@ -237,7 +256,7 @@ describe('Scope', () => {
                         end function
                         print getHello() 'prints "hello" (i.e. our local variable is never called)
                     end sub
-                    
+
                     function getHello()
                         return "hello"
                     end function
@@ -448,6 +467,33 @@ describe('Scope', () => {
             expect(program.getDiagnostics().map(x => x.message)).to.include(
                 DiagnosticMessages.mismatchArgumentCount(1, 2).message
             );
+        });
+
+        it('Emits validation events', async () => {
+            const validateStartScope = sinon.spy();
+            const validateEndScope = sinon.spy();
+            await program.addOrReplaceFile('source/file.brs', ``);
+            await program.addOrReplaceFile('components/comp.xml', `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Scene">
+                    <script uri="comp.brs"/>
+                </component>
+            `);
+            await program.addOrReplaceFile(s`components/comp.brs`, ``);
+            const sourceScope = program.getScopeByName('source');
+            const compScope = program.getScopeByName('components/comp.xml');
+            program.plugins = new PluginInterface([{
+                name: 'Emits validation events',
+                beforeScopeValidate: validateStartScope,
+                afterScopeValidate: validateEndScope
+            }], undefined);
+            await program.validate();
+            expect(validateStartScope.callCount).to.equal(2);
+            expect(validateStartScope.calledWith(sourceScope)).to.be.true;
+            expect(validateStartScope.calledWith(compScope)).to.be.true;
+            expect(validateEndScope.callCount).to.equal(2);
+            expect(validateEndScope.calledWith(sourceScope)).to.be.true;
+            expect(validateEndScope.calledWith(compScope)).to.be.true;
         });
     });
 

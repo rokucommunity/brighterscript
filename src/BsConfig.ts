@@ -109,6 +109,11 @@ export interface BsConfig {
     diagnosticLevel?: 'info' | 'hint' | 'warn' | 'error';
 
     /**
+     * A list of scripts or modules to add extra diagnostics or transform the AST
+     */
+    plugins?: Array<string>;
+
+    /**
      * When enabled, every xml component will search for a .bs or .brs file with the same name
      * in the same folder, and add it as a script import if found. Disabled by default"
      */
