@@ -167,13 +167,13 @@
             }
         },
         "plugins": {
-            "description": "A list of scripts or modules to add extra diagnostics or transform the AST.",
+            "description": "A list of node scripts or npm modules to add extra diagnostics or transform the AST.",
             "type": "array",
             "items": {
                 "anyOf": [
                     {
                         "type": "string",
-                        "description": "a path or npm module to load dynamically"
+                        "description": "a path to a node script or an npm module to load dynamically"
                     }
                 ]
             }

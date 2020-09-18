@@ -2,11 +2,13 @@
 
 The brighterscript compiler is extensible using **JavaScript** plugins.
 
+**NOTE**: The plugin system is currently in `alpha`. It's brand new, and while we hope there won't be any significant changes to the API, we reserve the right to change things before moving the plugin system out of `alpha`.
+
 ## Configuration
 
 ### Declarative configuration
 
-You can refer to scripts / npm modules directly in the `bsconfig.json`.
+You can refer to node scripts / npm modules directly in the `bsconfig.json`.
 
 Those plugins will be loaded by the VSCode extension and can provide live diagnostics within the editor.
 
