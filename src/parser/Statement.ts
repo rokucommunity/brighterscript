@@ -5,6 +5,7 @@ import { util } from '../util';
 import { Range, Position, CancellationToken } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
+import { walkAll, WalkAllVisitor } from '../astUtils/visitors';
 
 /**
  * A BrightScript statement
@@ -16,14 +17,16 @@ export interface Statement {
     range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string>;
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken);
 }
 
-export class EmptyStatement {
+export class EmptyStatement implements Statement {
     range: Range;
 
     transpile(state: TranspileState) {
         return [];
     }
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) { }
 }
 
 export class Body implements Statement {
@@ -71,6 +74,12 @@ export class Body implements Statement {
         }
         return result;
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        for (let i = 0; i < this.statements.length; i++) {
+            walkAll(this.statements, i, visitor, cancel, this);
+        }
+    }
 }
 
 export class AssignmentStatement implements Statement {
@@ -98,6 +107,10 @@ export class AssignmentStatement implements Statement {
                 ...this.value.transpile(state)
             ];
         }
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'value', visitor, cancel);
     }
 }
 
@@ -148,6 +161,12 @@ export class Block implements Statement {
         state.blockDepth--;
         return results;
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        for (let i = 0; i < this.statements.length; i++) {
+            walkAll(this.statements, i, visitor, cancel, this);
+        }
+    }
 }
 
 export class ExpressionStatement implements Statement {
@@ -162,16 +181,22 @@ export class ExpressionStatement implements Statement {
     transpile(state: TranspileState) {
         return this.expression.transpile(state);
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'expression', visitor, cancel);
+    }
 }
 
 export class CommentStatement implements Statement, Expression {
     constructor(
         public comments: Token[]
     ) {
-        this.range = Range.create(
-            this.comments[0].range.start,
-            this.comments[this.comments.length - 1].range.end
-        );
+        if (this.comments?.length > 0) {
+            this.range = Range.create(
+                this.comments[0].range.start,
+                this.comments[this.comments.length - 1].range.end
+            );
+        }
     }
 
     public range: Range;
@@ -203,6 +228,10 @@ export class CommentStatement implements Statement, Expression {
             visitor(this, parent);
         }
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //nothing to walk
+    }
 }
 
 export class ExitForStatement implements Statement {
@@ -221,6 +250,10 @@ export class ExitForStatement implements Statement {
             new SourceNode(this.tokens.exitFor.range.start.line + 1, this.tokens.exitFor.range.start.character, state.pathAbsolute, 'exit for')
         ];
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //nothing to walk
+    }
 }
 
 export class ExitWhileStatement implements Statement {
@@ -238,6 +271,10 @@ export class ExitWhileStatement implements Statement {
         return [
             new SourceNode(this.tokens.exitWhile.range.start.line + 1, this.tokens.exitWhile.range.start.character, state.pathAbsolute, 'exit while')
         ];
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //nothing to walk
     }
 }
 
@@ -274,6 +311,10 @@ export class FunctionStatement implements Statement {
         };
 
         return this.func.transpile(state, nameToken);
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken, parent?: Statement | Expression) {
+        walkAll(this, 'func', visitor, cancel);
     }
 }
 
@@ -391,6 +432,20 @@ export class IfStatement implements Statement {
 
         return results;
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'condition', visitor, cancel);
+        walkAll(this, 'thenBranch', visitor, cancel);
+
+        for (let i = 0; i < this.elseIfs.length; i++) {
+            walkAll(this.elseIfs[i], 'condition', visitor, cancel, this);
+            walkAll(this.elseIfs[i], 'thenBranch', visitor, cancel, this);
+        }
+
+        if (this.elseBranch) {
+            walkAll(this, 'elseBranch', visitor, cancel);
+        }
+    }
 }
 
 export class IncrementStatement implements Statement {
@@ -409,6 +464,10 @@ export class IncrementStatement implements Statement {
             ...this.value.transpile(state),
             new SourceNode(this.operator.range.start.line + 1, this.operator.range.start.character, state.pathAbsolute, this.operator.text)
         ];
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'value', visitor, cancel);
     }
 }
 
@@ -466,6 +525,11 @@ export class PrintStatement implements Statement {
         }
         return result;
     }
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        for (let i = 0; i < this.expressions.length; i++) {
+            walkAll(this.expressions, i, visitor, cancel, this);
+        }
+    }
 }
 
 export class GotoStatement implements Statement {
@@ -487,6 +551,10 @@ export class GotoStatement implements Statement {
             new SourceNode(this.tokens.label.range.start.line + 1, this.tokens.label.range.start.character, state.pathAbsolute, this.tokens.label.text)
         ];
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //nothing to walk
+    }
 }
 
 export class LabelStatement implements Statement {
@@ -507,6 +575,10 @@ export class LabelStatement implements Statement {
             new SourceNode(this.tokens.colon.range.start.line + 1, this.tokens.colon.range.start.character, state.pathAbsolute, ':')
 
         ];
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //nothing to walk
     }
 }
 
@@ -536,6 +608,10 @@ export class ReturnStatement implements Statement {
         }
         return result;
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'value', visitor, cancel);
+    }
 }
 
 export class EndStatement implements Statement {
@@ -554,6 +630,10 @@ export class EndStatement implements Statement {
             new SourceNode(this.tokens.end.range.start.line + 1, this.tokens.end.range.start.character, state.pathAbsolute, 'end')
         ];
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //nothing to walk
+    }
 }
 
 export class StopStatement implements Statement {
@@ -571,6 +651,10 @@ export class StopStatement implements Statement {
         return [
             new SourceNode(this.tokens.stop.range.start.line + 1, this.tokens.stop.range.start.character, state.pathAbsolute, 'stop')
         ];
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //nothing to walk
     }
 }
 
@@ -635,6 +719,13 @@ export class ForStatement implements Statement {
 
         return result;
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'counterDeclaration', visitor, cancel);
+        walkAll(this, 'finalValue', visitor, cancel);
+        walkAll(this, 'increment', visitor, cancel);
+        walkAll(this, 'body', visitor, cancel);
+    }
 }
 
 export class ForEachStatement implements Statement {
@@ -686,6 +777,11 @@ export class ForEachStatement implements Statement {
         );
         return result;
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'target', visitor, cancel);
+        walkAll(this, 'body', visitor, cancel);
+    }
 }
 
 export class WhileStatement implements Statement {
@@ -729,6 +825,11 @@ export class WhileStatement implements Statement {
 
         return result;
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'condition', visitor, cancel);
+        walkAll(this, 'body', visitor, cancel);
+    }
 }
 
 export class DottedSetStatement implements Statement {
@@ -758,6 +859,11 @@ export class DottedSetStatement implements Statement {
                 ...this.value.transpile(state)
             ];
         }
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'obj', visitor, cancel);
+        walkAll(this, 'value', visitor, cancel);
     }
 }
 
@@ -795,6 +901,12 @@ export class IndexedSetStatement implements Statement {
             ];
         }
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'obj', visitor, cancel);
+        walkAll(this, 'index', visitor, cancel);
+        walkAll(this, 'value', visitor, cancel);
+    }
 }
 
 export class LibraryStatement implements Statement {
@@ -825,6 +937,10 @@ export class LibraryStatement implements Statement {
             );
         }
         return result;
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //nothing to walk
     }
 }
 
@@ -858,6 +974,12 @@ export class NamespaceStatement implements Statement {
     transpile(state: TranspileState) {
         //namespaces don't actually have any real content, so just transpile their bodies
         return this.body.transpile(state);
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        if (this.body.statements.length > 0) {
+            walkAll(this, 'body', visitor, cancel);
+        }
     }
 }
 
@@ -896,5 +1018,9 @@ export class ImportStatement implements Statement {
                 `'${this.importToken.text} ${this.filePathToken.text}`
             )
         ];
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //nothing to walk
     }
 }

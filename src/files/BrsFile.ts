@@ -11,7 +11,7 @@ import { FunctionParameter } from '../brsTypes';
 import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode, Statement, NamespaceStatement } from '../parser';
 import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, Expression } from '../parser/Expression';
-import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, ImportStatement } from '../parser/Statement';
+import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, ImportStatement } from '../parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -99,7 +99,9 @@ export class BrsFile {
     /**
      * The AST for this file
      */
-    public ast: Body;
+    public get ast() {
+        return this.parser.ast;
+    }
 
     /**
      * Get the token at the specified position
@@ -184,8 +186,6 @@ export class BrsFile {
                 ...preprocessor.diagnostics as BsDiagnostic[],
                 ...this.parser.diagnostics as BsDiagnostic[]
             );
-
-            this.ast = this.parser.ast;
 
             //notify AST ready
             this.program.plugins.emit('afterFileParse', this);

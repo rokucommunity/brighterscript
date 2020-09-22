@@ -4,9 +4,10 @@ import { FunctionExpression, CallExpression, VariableExpression, DottedGetExpres
 import { SourceNode } from 'source-map';
 import { TranspileState } from './TranspileState';
 import { Parser, ParseMode } from './Parser';
-import { Range } from 'vscode-languageserver';
+import { CancellationToken, Range } from 'vscode-languageserver';
 import util from '../util';
 import { BrsInvalid } from '../brsTypes/BrsType';
+import { walkAll, WalkAllVisitor } from '../astUtils';
 
 export class ClassStatement implements Statement {
 
@@ -327,6 +328,12 @@ export class ClassStatement implements Statement {
         result.push(`end function`);
         return result;
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken, parent?: Expression | Statement) {
+        for (let i = 0; i < this.body.length; i++) {
+            walkAll(this.body, i, visitor, cancel, this);
+        }
+    }
 }
 
 export class ClassMethodStatement implements Statement {
@@ -466,6 +473,10 @@ export class ClassMethodStatement implements Statement {
         }
         this.func.body.statements.splice(startingIndex, 0, ...newStatements);
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken, parent?: Expression | Statement) {
+        walkAll(this, 'func', visitor, cancel);
+    }
 }
 
 export class ClassFieldStatement implements Statement {
@@ -488,6 +499,12 @@ export class ClassFieldStatement implements Statement {
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken, parent?: Expression | Statement) {
+        if (this.initialValue) {
+            walkAll(this, 'initialValue', visitor, cancel);
+        }
     }
 }
 export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;

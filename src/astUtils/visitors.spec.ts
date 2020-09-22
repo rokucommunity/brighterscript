@@ -331,4 +331,478 @@ describe('astUtils visitors', () => {
             ]);
         });
     });
+
+    describe('walkAll', () => {
+        async function testWalk(text: string, expectedConstructors: string[]) {
+            const file = await program.addOrReplaceFile('source/main.bs', text) as BrsFile;
+            const items = [];
+            let index = 1;
+            file.ast.walkAll((stmtExpr: any) => {
+                stmtExpr._testId = index++;
+                items.push(stmtExpr);
+            });
+            index = 1;
+            expect(items.map(x => `${x.constructor.name}:${x._testId}`)).to.eql(expectedConstructors.map(x => `${x}:${index++}`));
+        }
+
+        it('walks if statement', async () => {
+            await testWalk(`
+                sub main()
+                    if true then
+                        print "true"
+                    else if true then
+                        print "true"
+                    else
+                        print "true"
+                    end if
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                //if
+                'IfStatement',
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression',
+                //else if
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression',
+                //else
+                'Block',
+                'PrintStatement',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks if statement without else', async () => {
+            await testWalk(`
+                sub main()
+                    if true then
+                        print "true"
+                    end if
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'IfStatement',
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks increment statement', async () => {
+            await testWalk(`
+                sub main()
+                    age = 12
+                    age++
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'AssignmentStatement',
+                'LiteralExpression',
+                'IncrementStatement',
+                'VariableExpression'
+            ]);
+        });
+
+        it('walks ForStatement', async () => {
+            await testWalk(`
+                sub main()
+                    for i = 0 to 10 step 1
+                        print i
+                    end for
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'ForStatement',
+                'AssignmentStatement',
+                'LiteralExpression',
+                'LiteralExpression',
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'VariableExpression'
+            ]);
+        });
+
+        it('walks ForEachStatement', async () => {
+            await testWalk(`
+                sub main()
+                    for each item in [1,2,3]
+                        print item
+                    end for
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'ForEachStatement',
+                'ArrayLiteralExpression',
+                'LiteralExpression',
+                'LiteralExpression',
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'VariableExpression'
+            ]);
+        });
+
+        it('walks dotted and indexed set statements', async () => {
+            await testWalk(`
+                sub main()
+                    person = {}
+                    person.name = "person"
+                    person["age"] = 12
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'AssignmentStatement',
+                'AALiteralExpression',
+                'DottedSetStatement',
+                'VariableExpression',
+                'LiteralExpression',
+                'IndexedSetStatement',
+                'VariableExpression',
+                'LiteralExpression',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks while loop', async () => {
+            await testWalk(`
+                sub main()
+                    while 1 + 1 = 2
+                        print "infinite"
+                    end while
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'WhileStatement',
+                'BinaryExpression',
+                'BinaryExpression',
+                'LiteralExpression',
+                'LiteralExpression',
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks namespace', async () => {
+            await testWalk(`
+               namespace NameA.NameB
+               end namespace
+            `, [
+                'NamespaceStatement'
+            ]);
+        });
+
+        it('walks nested functions', async () => {
+            await testWalk(`
+                sub main()
+                    print "main"
+                    inner1 = sub()
+                        print "inner1"
+                        inner2 = sub()
+                            print "inner2"
+                            inner3 = sub()
+                                print "inner3"
+                            end sub
+                        end sub
+                    end sub
+                end sub
+            `, [
+                //sub main()
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression',
+
+                //inner1 = sub()
+                'AssignmentStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression',
+
+                //inner2 = sub()
+                'AssignmentStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression',
+
+                //inner3 = sub
+                'AssignmentStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks CallExpression', async () => {
+            await testWalk(`
+                sub main()
+                    Sleep(123)
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'ExpressionStatement',
+                'CallExpression',
+                'VariableExpression',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks function parameters', async () => {
+            await testWalk(`
+                sub main(arg1)
+                    speak = sub(arg1, arg2)
+                    end sub
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'FunctionParameter',
+                'Block',
+                'AssignmentStatement',
+                'FunctionExpression',
+                'FunctionParameter',
+                'FunctionParameter',
+                'Block'
+            ]);
+        });
+
+        it('walks DottedGetExpression', async () => {
+            await testWalk(`
+                sub main()
+                    print person.name
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'DottedGetExpression',
+                'VariableExpression'
+            ]);
+        });
+
+        it('walks XmlAttributeGetExpression', async () => {
+            await testWalk(`
+                sub main()
+                    print person@name
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'XmlAttributeGetExpression',
+                'VariableExpression'
+            ]);
+        });
+
+        it('walks IndexedGetExpression', async () => {
+            await testWalk(`
+                sub main()
+                    print person["name"]
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'IndexedGetExpression',
+                'VariableExpression',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks GroupingExpression', async () => {
+            await testWalk(`
+                sub main()
+                    print 1 + ( 1 + 2 )
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'BinaryExpression',
+                'LiteralExpression',
+                'GroupingExpression',
+                'BinaryExpression',
+                'LiteralExpression',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks AALiteralExpression', async () => {
+            await testWalk(`
+                sub main()
+                    person = {
+                        'comment
+                        "name": "John Doe"
+                    }
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'AssignmentStatement',
+                'AALiteralExpression',
+                'CommentStatement',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks UnaryExpression', async () => {
+            await testWalk(`
+                sub main()
+                   isAlive = not isDead
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'AssignmentStatement',
+                'UnaryExpression',
+                'VariableExpression'
+            ]);
+        });
+
+        it('walks TemplateStringExpression', async () => {
+            await testWalk(`
+                sub main()
+                   print \`Hello \${worldVar}\`
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'TemplateStringExpression',
+                'TemplateStringQuasiExpression',
+                'LiteralExpression',
+                'VariableExpression',
+                'TemplateStringQuasiExpression',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks TaggedTemplateStringExpression', async () => {
+            await testWalk(`
+                sub main()
+                   print tag\`Hello \${worldVar}\`
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'TaggedTemplateStringExpression',
+                'TemplateStringQuasiExpression',
+                'LiteralExpression',
+                'VariableExpression',
+                'TemplateStringQuasiExpression',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks CharCodeLiteral expression within TemplateLiteralExpression', async () => {
+            await testWalk(`
+                sub main()
+                   print \`\\n\`
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'TemplateStringExpression',
+                'TemplateStringQuasiExpression',
+                'LiteralExpression',
+                'EscapedCharCodeLiteral',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks NewExpression', async () => {
+            await testWalk(`
+                sub main()
+                  person = new Person()
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'AssignmentStatement',
+                'NewExpression',
+                'CallExpression',
+                'NamespacedVariableNameExpression',
+                'VariableExpression'
+            ]);
+        });
+
+        it('walks CallfuncExpression', async () => {
+            await testWalk(`
+                sub main()
+                  person@.doSomething("arg1")
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'ExpressionStatement',
+                'CallfuncExpression',
+                'VariableExpression',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks ClassStatement', async () => {
+            await testWalk(`
+                class Person
+                    name as string
+                    age as integer = 1
+                    function getName()
+                        return m.name
+                    end function
+                end class
+            `, [
+                'ClassStatement',
+                'ClassFieldStatement',
+                'ClassFieldStatement',
+                'LiteralExpression',
+                'ClassMethodStatement',
+                'FunctionExpression',
+                'Block',
+                'ReturnStatement',
+                'DottedGetExpression',
+                'VariableExpression'
+            ]);
+        });
+
+    });
 });
