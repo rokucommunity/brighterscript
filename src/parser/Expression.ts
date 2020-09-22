@@ -225,7 +225,7 @@ export class FunctionExpression implements Expression {
             walkAll(this.parameters, i, visitor, cancel, this);
         }
         //This call is the core of the walkAll functionality...it allows us to cross into sub functions
-        this.body.walkAll(visitor, cancel);
+        walkAll(this, 'body', visitor, cancel);
     }
 }
 

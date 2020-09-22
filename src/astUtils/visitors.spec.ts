@@ -332,7 +332,7 @@ describe('astUtils visitors', () => {
         });
     });
 
-    describe.only('walk', () => {
+    describe('walkAll', () => {
         async function testWalk(text: string, expectedConstructors: string[]) {
             const file = await program.addOrReplaceFile('source/main.brs', text) as BrsFile;
             const items = [];
@@ -358,6 +358,8 @@ describe('astUtils visitors', () => {
                 end sub
             `, [
                 'FunctionStatement',
+                'FunctionExpression',
+                'Block',
                 //if
                 'IfStatement',
                 'LiteralExpression',
@@ -385,6 +387,8 @@ describe('astUtils visitors', () => {
                 end sub
             `, [
                 'FunctionStatement',
+                'FunctionExpression',
+                'Block',
                 'IfStatement',
                 'LiteralExpression',
                 'Block',
@@ -401,6 +405,8 @@ describe('astUtils visitors', () => {
                 end sub
             `, [
                 'FunctionStatement',
+                'FunctionExpression',
+                'Block',
                 'AssignmentStatement',
                 'LiteralExpression',
                 'IncrementStatement',
@@ -408,7 +414,7 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it.only('walks ForStatement', async () => {
+        it('walks ForStatement', async () => {
             await testWalk(`
                 sub main()
                     for i = 0 to 10 step 1
@@ -417,6 +423,8 @@ describe('astUtils visitors', () => {
                 end sub
             `, [
                 'FunctionStatement',
+                'FunctionExpression',
+                'Block',
                 'ForStatement',
                 'AssignmentStatement',
                 'LiteralExpression',
@@ -428,55 +436,125 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks all statements and expressions', async () => {
-            const file = await program.addOrReplaceFile('source/main.brs', `
+        it('walks ForEachStatement', async () => {
+            await testWalk(`
                 sub main()
-                    'ForEachStatement
                     for each item in [1,2,3]
                         print item
                     end for
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'ForEachStatement',
+                'ArrayLiteralExpression',
+                'LiteralExpression',
+                'LiteralExpression',
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'VariableExpression'
+            ]);
+        });
 
-                    'DottedSetStatement
+        it('walks dotted and indexed set statements', async () => {
+            await testWalk(`
+                sub main()
                     person = {}
                     person.name = "person"
                     person["age"] = 12
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'AssignmentStatement',
+                'AALiteralExpression',
+                'DottedSetStatement',
+                'VariableExpression',
+                'LiteralExpression',
+                'IndexedSetStatement',
+                'VariableExpression',
+                'LiteralExpression',
+                'LiteralExpression'
+            ]);
+        });
 
+        it('walks while loop', async () => {
+            await testWalk(`
+                sub main()
                     while 1 + 1 = 2
                         print "infinite"
                     end while
-
-                    speak = sub(message)
-                        getMessage = function(msg)
-
-                            return msg
-                        end function
-                        print getMessage(message)
-                    end sub
-                    speak("Hello")
                 end sub
-                function GetNumber()
-                    return 1
-                end function
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'WhileStatement',
+                'BinaryExpression',
+                'BinaryExpression',
+                'LiteralExpression',
+                'LiteralExpression',
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression'
+            ]);
+        });
 
-                'NamespaceStatement
-                namespace A.B.C
-                end namespace
-            `) as BrsFile;
-            //tag each of the desired AST nodes so we can easily identify them in the expect
-            let ast = file.ast as any;
-            ast.id = 'body';
-            ast.statements[0].id = 'main';
-            ast.statements[0].func.body.statements[0].id = 'speakVar';
-            ast.statements[1].id = 'GetNumber';
-            const items = [];
-            file.ast.walkAll((stmtExpr) => {
-                items.push(stmtExpr);
-            });
-            expect(items.map(x => x.id)).to.equal([
-                'body',
-                'main',
-                'speakVar',
-                'GetNumber'
+        it('walks namespace', async () => {
+            await testWalk(`
+               namespace NameA.NameB
+               end namespace
+            `, [
+                'NamespaceStatement'
+            ]);
+        });
+
+        it('walks nested functions', async () => {
+            await testWalk(`
+                sub main()
+                    print "main"
+                    inner1 = sub()
+                        print "inner1"
+                        inner2 = sub()
+                            print "inner2"
+                            inner3 = sub()
+                                print "inner3"
+                            end sub
+                        end sub
+                    end sub
+                end sub
+            `, [
+                //sub main()
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression',
+
+                //inner1 = sub()
+                'AssignmentStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression',
+
+                //inner2 = sub()
+                'AssignmentStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression',
+
+                //inner3 = sub
+                'AssignmentStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression'
             ]);
         });
     });

@@ -314,7 +314,7 @@ export class FunctionStatement implements Statement {
     }
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken, parent?: Statement | Expression) {
-        this.func.walkAll(visitor, cancel);
+        walkAll(this, 'func', visitor, cancel);
     }
 }
 
@@ -977,8 +977,9 @@ export class NamespaceStatement implements Statement {
     }
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'nameExpression', visitor, cancel);
-        walkAll(this, 'body', visitor, cancel);
+        if (this.body.statements.length > 0) {
+            walkAll(this, 'body', visitor, cancel);
+        }
     }
 }
 
