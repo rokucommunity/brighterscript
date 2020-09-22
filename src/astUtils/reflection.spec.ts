@@ -2,7 +2,7 @@
 import { Position } from 'vscode-languageserver';
 import { expect } from 'chai';
 import { PrintStatement, Block, Body, AssignmentStatement, CommentStatement, ExitForStatement, ExitWhileStatement, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement } from '../parser/Statement';
-import { FunctionExpression, NamespacedVariableNameExpression, BinaryExpression, CallExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, LiteralExpression, EscapedCharCodeLiteral, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, XmlAttributeGetExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
+import { FunctionExpression, NamespacedVariableNameExpression, BinaryExpression, CallExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, LiteralExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, XmlAttributeGetExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
 import { TokenKind, Token } from '../lexer';
 import { BrsString } from '../brsTypes';
 import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isNamespacedVariableNameExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteral, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement } from './reflection';
@@ -195,7 +195,7 @@ describe('reflection', () => {
         let indexedGet: IndexedGetExpression;
         let grouping: GroupingExpression;
         let literal: LiteralExpression;
-        let escapedCarCode: EscapedCharCodeLiteral;
+        let escapedCarCode: EscapedCharCodeLiteralExpression;
         let arrayLit: ArrayLiteralExpression;
         let aaLit: AALiteralExpression;
         let unary: UnaryExpression;
@@ -231,7 +231,7 @@ describe('reflection', () => {
             indexedGet = new IndexedGetExpression(expr, expr, token, token);
             grouping = new GroupingExpression({ left: token, right: token }, expr);
             literal = new LiteralExpression(value, range);
-            escapedCarCode = new EscapedCharCodeLiteral(charCode);
+            escapedCarCode = new EscapedCharCodeLiteralExpression(charCode);
             arrayLit = new ArrayLiteralExpression([], token, token);
             aaLit = new AALiteralExpression([], token, token);
             unary = new UnaryExpression(token, expr);

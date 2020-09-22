@@ -1,6 +1,6 @@
 import { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement } from '../parser/Statement';
-import { ClassStatement } from '../parser/ClassStatement';
-import { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteral, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
+import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from '../parser/ClassStatement';
+import { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
 import { BrsString, ValueKind, BrsInvalid, BrsBoolean } from '../brsTypes';
 import { BrsNumber } from '../brsTypes/BrsNumber';
 import { BrsFile } from '../files/BrsFile';
@@ -93,6 +93,12 @@ export function isClassStatement(statement: any): statement is ClassStatement {
 export function isImportStatement(statement: any): statement is ImportStatement {
     return statement?.constructor?.name === 'ImportStatement';
 }
+export function isClassMethod(statement: any): statement is ClassMethodStatement {
+    return statement?.constructor.name === 'ClassMethodStatement';
+}
+export function isClassField(statement: any): statement is ClassFieldStatement {
+    return statement?.constructor.name === 'ClassFieldStatement';
+}
 
 // Expressions reflection
 
@@ -126,8 +132,8 @@ export function isGroupingExpression(expression: any): expression is GroupingExp
 export function isLiteralExpression(expression: any): expression is LiteralExpression {
     return expression?.constructor.name === 'LiteralExpression';
 }
-export function isEscapedCharCodeLiteral(expression: any): expression is EscapedCharCodeLiteral {
-    return expression?.constructor.name === 'EscapedCharCodeLiteral';
+export function isEscapedCharCodeLiteral(expression: any): expression is EscapedCharCodeLiteralExpression {
+    return expression?.constructor.name === 'EscapedCharCodeLiteralExpression';
 }
 export function isArrayLiteralExpression(expression: any): expression is ArrayLiteralExpression {
     return expression?.constructor.name === 'ArrayLiteralExpression';

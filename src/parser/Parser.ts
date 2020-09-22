@@ -73,7 +73,7 @@ import {
     VariableExpression,
     XmlAttributeGetExpression,
     TemplateStringExpression,
-    EscapedCharCodeLiteral,
+    EscapedCharCodeLiteralExpression,
     TemplateStringQuasiExpression,
     TaggedTemplateStringExpression,
     SourceLiteralExpression
@@ -81,6 +81,8 @@ import {
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
 import { Logger } from '../Logger';
+import { isClassMethod } from '../astUtils/reflection';
+import { createVisitor } from '../astUtils/visitors';
 
 export class Parser {
     /**
@@ -98,8 +100,22 @@ export class Parser {
      */
     public ast: Body;
 
-    //TODO remove this once we have verified all of the tests.
-    public statements: Statement[];
+    public get statements() {
+        return this.ast.statements;
+    }
+
+    /**
+     * A list of references for various important statements/expressions in the parser.
+     * These are extracted during parse-time to improve performance later on when looking for the various items.
+     */
+    public references: References = {
+        classStatements: [],
+        functionStatements: [],
+        functionExpressions: [],
+        importStatements: [],
+        libraryStatements: [],
+        namespaceStatements: []
+    };
 
     /**
      * The list of diagnostics found during the parse process
@@ -117,11 +133,6 @@ export class Parser {
     public options: ParseOptions;
 
     private globalTerminators = [] as TokenKind[][];
-
-    /**
-     * All function expressions defined in this file
-     */
-    public functionExpressions = [] as FunctionExpression[];
 
     /**
      * All `new <ClassName>` expressions defined in this file
@@ -193,7 +204,6 @@ export class Parser {
         this.namespaceAndFunctionDepth = 0;
 
         this.ast = this.body();
-        this.statements = this.ast.statements;
 
         return this;
     }
@@ -367,7 +377,8 @@ export class Parser {
                     let funcDeclaration = this.functionDeclaration(false);
 
                     //remove this function from the lists because it's a class method
-                    this.functionExpressions.pop();
+                    this.references.functionExpressions.pop();
+                    this.references.functionStatements.pop();
 
                     //if we have an overrides keyword AND this method is called 'new', that's not allowed
                     if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
@@ -450,6 +461,7 @@ export class Parser {
             parentClassName,
             this.currentNamespaceName
         );
+        this.references.classStatements.push(result);
         return result;
     }
 
@@ -637,7 +649,7 @@ export class Parser {
                 this.currentFunctionExpression.childFunctionExpressions.push(func);
             }
 
-            this.functionExpressions.push(func);
+            this.references.functionExpressions.push(func);
 
             let previousFunctionExpression = this.currentFunctionExpression;
             this.currentFunctionExpression = func;
@@ -684,6 +696,7 @@ export class Parser {
                 }
                 let result = new FunctionStatement(name, func, this.currentNamespaceName);
                 func.functionStatement = result;
+                this.references.functionStatements.push(result);
                 return result;
             }
         } finally {
@@ -1102,6 +1115,7 @@ export class Parser {
 
         this.namespaceAndFunctionDepth--;
         let result = new NamespaceStatement(keyword, name, body, endKeyword);
+        this.references.namespaceStatements.push(result);
 
         return result;
     }
@@ -1192,6 +1206,7 @@ export class Parser {
 
         //consume to the next newline, eof, or colon
         while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
+        this.references.libraryStatements.push(libStatement);
         return libStatement;
     }
 
@@ -1211,6 +1226,7 @@ export class Parser {
 
         //consume to the next newline, eof, or colon
         while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
+        this.references.importStatements.push(importStatement);
         return importStatement;
     }
 
@@ -1240,7 +1256,7 @@ export class Parser {
                 this.advance();
             } else if (next.kind === TokenKind.EscapedCharCodeLiteral) {
                 currentQuasiExpressionParts.push(
-                    new EscapedCharCodeLiteral(<any>next)
+                    new EscapedCharCodeLiteralExpression(<any>next)
                 );
                 this.advance();
             } else {
@@ -2344,6 +2360,58 @@ export class Parser {
         }
     }
 
+    /**
+     * Clears the references. This should be called anytime the AST has been manipulated.
+     * `findReferences()` should be called before accessing `this.references` after this call.
+     */
+    clearReferences() {
+        this.references = undefined;
+    }
+
+    /**
+     * References are found during the initial parse.
+     * However, sometimes plugins can modify the AST, requiring a full walk to re-compute all references.
+     * This does that walk.
+     */
+    findReferences() {
+        //skip finding declarations if they already exist
+        if (this.references) {
+            return;
+        }
+
+        this.references = {
+            classStatements: [],
+            namespaceStatements: [],
+            functionStatements: [],
+            functionExpressions: [],
+            importStatements: [],
+            libraryStatements: []
+        };
+
+        this.ast.walkAll(createVisitor({
+            ClassStatement: s => {
+                this.references.classStatements.push(s);
+            },
+            NamespaceStatement: s => {
+                this.references.namespaceStatements.push(s);
+            },
+            FunctionStatement: s => {
+                this.references.functionStatements.push(s);
+            },
+            ImportStatement: s => {
+                this.references.importStatements.push(s);
+            },
+            LibraryStatement: s => {
+                this.references.libraryStatements.push(s);
+            },
+            FunctionExpression: (expression, parent) => {
+                if (!isClassMethod(parent)) {
+                    this.references.functionExpressions.push(expression);
+                }
+            }
+        }));
+    }
+
     public dispose() {
     }
 }
@@ -2362,4 +2430,14 @@ export interface ParseOptions {
      * A logger that should be used for logging. If omitted, a default logger is used
      */
     logger?: Logger;
+}
+
+
+export interface References {
+    classStatements: ClassStatement[];
+    namespaceStatements: NamespaceStatement[];
+    functionStatements: FunctionStatement[];
+    functionExpressions: FunctionExpression[];
+    importStatements: ImportStatement[];
+    libraryStatements: LibraryStatement[];
 }

@@ -88,7 +88,7 @@ export class Scope {
         let namespaceNameLower = namespaceName.toLowerCase();
         let files = this.getFiles();
         for (let file of files) {
-            for (let namespace of file.declarations.namespaceStatements) {
+            for (let namespace of file.parser.references.namespaceStatements) {
                 let loopNamespaceNameLower = namespace.name.toLowerCase();
                 if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
                     return true;
@@ -237,7 +237,7 @@ export class Scope {
         let namespaceLookup = {} as { [namespaceName: string]: NamespaceContainer };
         let files = this.getFiles();
         for (let file of files) {
-            for (let namespace of file.declarations?.namespaceStatements ?? []) {
+            for (let namespace of file.parser.references?.namespaceStatements ?? []) {
                 //TODO should we handle non-brighterscript?
                 let name = namespace.nameExpression.getName(ParseMode.BrighterScript);
                 let nameParts = name.split('.');
@@ -290,7 +290,7 @@ export class Scope {
         let lookup = {} as { [lowerName: string]: ClassStatement };
         let files = this.getFiles();
         for (let file of files) {
-            for (let cls of file.declarations?.classStatements || []) {
+            for (let cls of file.parser.references?.classStatements || []) {
                 lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
             }
         }
@@ -301,7 +301,7 @@ export class Scope {
         let result = [] as NamespaceStatement[];
         let files = this.getFiles();
         for (let file of files) {
-            result.push(...file.declarations.namespaceStatements);
+            result.push(...file.parser.references.namespaceStatements);
         }
         return result;
     }
@@ -383,7 +383,7 @@ export class Scope {
 
     private detectVariableNamespaceCollisions(file: BrsFile | XmlFile) {
         //find all function parameters
-        for (let func of file.parser.functionExpressions) {
+        for (let func of file.parser.references.functionExpressions) {
             for (let param of func.parameters) {
                 let lowerParamName = param.name.text.toLowerCase();
                 let namespace = this.namespaceLookup[lowerParamName];

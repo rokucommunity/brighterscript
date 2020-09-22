@@ -466,7 +466,7 @@ export class LiteralExpression implements Expression {
  * This is a special expression only used within template strings. It exists so we can prevent producing lots of empty strings
  * during template string transpile by identifying these expressions explicitly and skipping the bslib_toString around them
  */
-export class EscapedCharCodeLiteral implements Expression {
+export class EscapedCharCodeLiteralExpression implements Expression {
     constructor(
         readonly token: Token & { charCode: number }
     ) {
@@ -985,7 +985,7 @@ export class CallfuncExpression implements Expression {
  */
 export class TemplateStringQuasiExpression implements Expression {
     constructor(
-        readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteral>
+        readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>
     ) {
         this.range = Range.create(
             this.expressions[0].range.start,
@@ -1080,7 +1080,7 @@ export class TemplateStringExpression implements Expression {
             if (expression) {
                 //skip the toString wrapper around certain expressions
                 if (
-                    expression instanceof EscapedCharCodeLiteral ||
+                    expression instanceof EscapedCharCodeLiteralExpression ||
                     (expression instanceof LiteralExpression && expression.value.kind === ValueKind.String)
                 ) {
                     add(

@@ -259,7 +259,7 @@ export class BsClassValidator {
         let files = this.scope.getFiles();
 
         for (let file of files) {
-            for (let x of file.declarations?.classStatements ?? []) {
+            for (let x of file.parser.references?.classStatements ?? []) {
                 let classStatement = x as AugmentedClassStatement;
                 let name = classStatement.getName(ParseMode.BrighterScript);
                 //skip this class if it doesn't have a name

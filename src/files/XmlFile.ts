@@ -11,7 +11,6 @@ import { Parser } from '../parser/Parser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import { DependencyGraph } from '../DependencyGraph';
-import { BrsFileDeclarations } from './BrsFile';
 
 export interface SGAstScript {
     $?: {
@@ -191,8 +190,6 @@ export class XmlFile {
      * The full file contents
      */
     public fileContents: string;
-
-    public declarations: BrsFileDeclarations | undefined;
 
     /**
      * TODO: do we need this for xml files?

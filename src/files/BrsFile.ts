@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { SourceNode } from 'source-map';
-import { CancellationToken, CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
+import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
 import chalk from 'chalk';
 import { Scope } from '../Scope';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
@@ -9,7 +9,7 @@ import { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiag
 import { Deferred } from '../deferred';
 import { FunctionParameter } from '../brsTypes';
 import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers, Keywords } from '../lexer';
-import { Parser, ParseMode, Statement, NamespaceStatement } from '../parser';
+import { Parser, ParseMode } from '../parser';
 import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, Expression } from '../parser/Expression';
 import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, ImportStatement } from '../parser/Statement';
 import { Program } from '../Program';
@@ -24,7 +24,6 @@ import { ClassStatement } from '../parser/ClassStatement';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { walkStatements } from '../astUtils/visitors';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -115,23 +114,10 @@ export class BrsFile {
         }
     }
 
-    public declarations: BrsFileDeclarations | undefined;
 
     public parser: Parser;
 
     public fileContents: string;
-
-    /**
-     * Walk all statements in this program (recursively)
-     */
-    public walkStatements(
-        visitor: (statement: Statement, parent: Statement) => Statement | void,
-        cancel?: CancellationToken
-    ) {
-        for (let statement of this.ast.statements) {
-            walkStatements(statement, visitor, cancel);
-        }
-    }
 
     /**
      * Calculate the AST for this file
@@ -237,8 +223,8 @@ export class BrsFile {
         }
 
         let statements = [
-            ...this.declarations?.libraryStatements ?? [],
-            ...this.declarations?.importStatements ?? []
+            ...this.parser.references?.libraryStatements ?? [],
+            ...this.parser.references?.importStatements ?? []
         ];
         for (let result of statements) {
             //register import statements
@@ -445,7 +431,7 @@ export class BrsFile {
      */
     private createFunctionScopes() {
         //find every function
-        let functions = this.parser.functionExpressions;
+        let functions = this.parser.references.functionExpressions;
 
         //create a functionScope for every function
         for (let func of functions) {
@@ -574,7 +560,7 @@ export class BrsFile {
     }
 
     private findCallables() {
-        for (let statement of this.declarations?.functionStatements ?? []) {
+        for (let statement of this.parser.references.functionStatements ?? []) {
 
             let functionType = new FunctionType(util.valueKindToBrsType(statement.func.returns));
             functionType.setName(statement.name.text);
@@ -614,7 +600,7 @@ export class BrsFile {
     private findFunctionCalls() {
         this.functionCalls = [];
         //for every function in the file
-        for (let func of this.parser.functionExpressions) {
+        for (let func of this.parser.references.functionExpressions) {
             //for all function calls in this function
             for (let expression of func.callExpressions) {
 
@@ -1048,6 +1034,11 @@ export class BrsFile {
         }
     }
 
+    clearParserReferences() {
+        this.parser.references = undefined;
+    }
+
+
     public dispose() {
         this.parser?.dispose();
     }
@@ -1067,12 +1058,3 @@ export const KeywordCompletions = Object.keys(Keywords)
             kind: CompletionItemKind.Keyword
         } as CompletionItem;
     });
-
-
-export interface BrsFileDeclarations {
-    classStatements: ClassStatement[];
-    namespaceStatements: NamespaceStatement[];
-    functionStatements: FunctionStatement[];
-    importStatements: ImportStatement[];
-    libraryStatements: LibraryStatement[]
-}

@@ -82,7 +82,7 @@ describe('astUtils visitors', () => {
 
     function functionsWalker(visitor: (s: Statement, p: Statement) => void, cancel?: CancellationToken) {
         return (file: BrsFile) => {
-            file.parser.functionExpressions.some(f => {
+            file.parser.references.functionExpressions.some(f => {
                 walkStatements(f.body, (s, p) => visitor(s, p), cancel);
                 return cancel?.isCancellationRequested;
             });
@@ -743,7 +743,7 @@ describe('astUtils visitors', () => {
                 'TemplateStringExpression',
                 'TemplateStringQuasiExpression',
                 'LiteralExpression',
-                'EscapedCharCodeLiteral',
+                'EscapedCharCodeLiteralExpression',
                 'LiteralExpression'
             ]);
         });

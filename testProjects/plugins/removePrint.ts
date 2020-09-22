@@ -16,7 +16,7 @@ function afterFileParse(file: (BrsFile | XmlFile)) {
         return;
     }
     // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-    file.parser.functionExpressions.forEach((fun) => {
+    file.parser.references.functionExpressions.forEach((fun) => {
         const visitor = createStatementVisitor({
             PrintStatement: (statement) => new EmptyStatement()
         });
