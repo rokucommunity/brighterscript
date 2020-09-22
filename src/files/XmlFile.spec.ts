@@ -607,4 +607,31 @@ describe('XmlFile', () => {
             expect(validateXml.calledWith(file)).to.be.true;
         });
     });
+
+    it('plugin diagnostics work for xml files', async () => {
+        program.plugins.add({
+            name: 'Xml diagnostic test',
+            afterFileParse: (file) => {
+                if (file.pathAbsolute.endsWith('.xml')) {
+                    file.addDiagnostics([{
+                        file: file,
+                        message: 'Test diagnostic',
+                        range: Range.create(0, 0, 0, 0),
+                        code: 9999
+                    }]);
+                }
+            }
+        });
+
+        await program.addOrReplaceFile('components/comp.xml', `
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Cmp1" extends="Scene">
+            </component>
+        `);
+        await program.validate();
+        expect(program.getDiagnostics().map(x => ({ message: x.message, code: x.code }))).to.eql([{
+            message: 'Test diagnostic',
+            code: 9999
+        }]);
+    });
 });
