@@ -1,7 +1,7 @@
 import { CancellationToken } from 'vscode-languageserver';
 import { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement } from '../parser/Statement';
 import { Expression } from '../parser/Expression';
-import { isExpression, isBlock, isIfStatement } from './reflection';
+import { isExpression, isBlock, isIfStatement, isBody, isFunctionExpression, isFunctionStatement } from './reflection';
 
 
 /**
@@ -108,7 +108,7 @@ export function createStatementExpressionsVisitor(
 }
 
 /**
- * Walks the statements of a block and direct sub-blocks, and allow replacing statements
+ * Walks the statements of a block and descendent sub-blocks, and allow replacing statements
  */
 export function walkStatements(
     statement: Statement,
@@ -132,13 +132,13 @@ function recursiveWalkStatements(
         // replace statement and don't recurse
         return result;
     }
-    if (isBlock(statement)) {
-        statement.statements.forEach((s, index) => {
-            const result = recursiveWalkStatements(s, statement, visitor, cancel);
+    if (isBlock(statement) || isBody(statement)) {
+        for (let i = 0; i < statement.statements.length; i++) {
+            const result = recursiveWalkStatements(statement.statements[i], statement, visitor, cancel);
             if (result) {
-                statement.statements[index] = result;
+                statement.statements[i] = result;
             }
-        });
+        }
     } else if (isIfStatement(statement)) {
         const result = recursiveWalkStatements(statement.thenBranch, statement, visitor, cancel);
         if (result instanceof Block) {
@@ -166,4 +166,24 @@ function recursiveWalkStatements(
 
 function hasBody(statement: Statement): statement is Statement & { body: Block } {
     return statement && isBlock((statement as any).body);
+}
+
+export type WalkAllVisitor = <T = Statement | Expression>(stmtExpr: Statement | Expression, parent: Statement | Expression) => void | T;
+
+export function walkAll<T>(keyParent: T, key: keyof T, visitor: WalkAllVisitor, cancel?: CancellationToken, parent?: Expression | Statement) {
+    //notify the visitor of this expression
+    (keyParent as any)[key] = visitor(keyParent[key] as any, parent ?? keyParent as any) ?? keyParent[key];
+    if (cancel?.isCancellationRequested) {
+        return;
+    }
+
+    const expression = keyParent[key] as any as Expression;
+    if (!expression) {
+        throw new Error(`Index "${key}" for ${keyParent.constructor.name} is undefined`);
+    }
+    if (!expression.walkAll) {
+        throw new Error(`${keyParent.constructor.name}["${key}"]${parent ? ` for ${parent.constructor.name}` : ''} does not contain a "walkAll" method`);
+    }
+    //walk the child expressions
+    expression.walkAll(visitor, cancel);
 }

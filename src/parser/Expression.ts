@@ -7,6 +7,7 @@ import util from '../util';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
+import { walkAll, WalkAllVisitor } from '../astUtils/visitors';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -18,13 +19,15 @@ export interface Expression {
     transpile(state: TranspileState): Array<SourceNode | string>;
 
     walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void;
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken);
 }
 
 export class BinaryExpression implements Expression {
     constructor(
-        readonly left: Expression,
-        readonly operator: Token,
-        readonly right: Expression
+        public left: Expression,
+        public operator: Token,
+        public right: Expression
     ) {
         this.range = Range.create(this.left.range.start, this.right.range.end);
     }
@@ -47,6 +50,11 @@ export class BinaryExpression implements Expression {
             this.left.walk(visitor, this, cancel);
             this.right.walk(visitor, this, cancel);
         }
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'left', visitor, cancel);
+        walkAll(this, 'right', visitor, cancel);
     }
 }
 
@@ -93,6 +101,14 @@ export class CallExpression implements Expression {
             visitor(this, parent);
             visitor(this.callee, this);
             this.args.forEach(e => e.walk(visitor, this, cancel));
+        }
+    }
+
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'callee', visitor, cancel);
+        for (let i = 0; i < this.args.length; i++) {
+            walkAll(this.args, i, visitor, cancel, this);
         }
     }
 }
@@ -203,6 +219,14 @@ export class FunctionExpression implements Expression {
             this.parameters.forEach(p => p.defaultValue?.walk(visitor, this, cancel));
         }
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        for (let i = 0; i < this.parameters.length; i++) {
+            walkAll(this.parameters, i, visitor, cancel, this);
+        }
+        //This call is the core of the walkAll functionality...it allows us to cross into sub functions
+        this.body.walkAll(visitor, cancel);
+    }
 }
 
 export class NamespacedVariableNameExpression implements Expression {
@@ -256,6 +280,10 @@ export class NamespacedVariableNameExpression implements Expression {
             this.expression.walk(visitor, this, cancel);
         }
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'expression', visitor, cancel);
+    }
 }
 
 export class DottedGetExpression implements Expression {
@@ -288,6 +316,10 @@ export class DottedGetExpression implements Expression {
             this.obj.walk(visitor, this, cancel);
         }
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'obj', visitor, cancel);
+    }
 }
 
 export class XmlAttributeGetExpression implements Expression {
@@ -314,6 +346,10 @@ export class XmlAttributeGetExpression implements Expression {
             visitor(this, parent);
             this.obj.walk(visitor, this, cancel);
         }
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'obj', visitor, cancel);
     }
 }
 
@@ -345,6 +381,11 @@ export class IndexedGetExpression implements Expression {
             this.index.walk(visitor, this, cancel);
         }
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'obj', visitor, cancel);
+        walkAll(this, 'index', visitor, cancel);
+    }
 }
 
 export class GroupingExpression implements Expression {
@@ -353,7 +394,7 @@ export class GroupingExpression implements Expression {
             left: Token;
             right: Token;
         },
-        readonly expression: Expression
+        public expression: Expression
     ) {
         this.range = Range.create(this.tokens.left.range.start, this.tokens.right.range.end);
     }
@@ -373,6 +414,10 @@ export class GroupingExpression implements Expression {
             visitor(this, parent);
             this.expression.walk(visitor, this, cancel);
         }
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'expression', visitor, cancel);
     }
 }
 
@@ -410,6 +455,8 @@ export class LiteralExpression implements Expression {
             visitor(this, parent);
         }
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) { }
 }
 
 /**
@@ -440,6 +487,8 @@ export class EscapedCharCodeLiteral implements Expression {
             visitor(this, parent);
         }
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) { }
 }
 
 export class ArrayLiteralExpression implements Expression {
@@ -513,6 +562,12 @@ export class ArrayLiteralExpression implements Expression {
         if (!cancel?.isCancellationRequested) {
             visitor(this, parent);
             this.elements.forEach(element => element.walk(visitor, this, cancel));
+        }
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        for (let i = 0; i < this.elements.length; i++) {
+            walkAll(this.elements, i, visitor, cancel, this);
         }
     }
 }
@@ -632,12 +687,18 @@ export class AALiteralExpression implements Expression {
             });
         }
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        for (let i = 0; i < this.elements.length; i++) {
+            walkAll(this.elements, i, visitor, cancel, this);
+        }
+    }
 }
 
 export class UnaryExpression implements Expression {
     constructor(
-        readonly operator: Token,
-        readonly right: Expression
+        public operator: Token,
+        public right: Expression
     ) {
         this.range = Range.create(this.operator.range.start, this.right.range.end);
     }
@@ -657,6 +718,10 @@ export class UnaryExpression implements Expression {
             visitor(this, parent);
             this.right.walk(visitor, this, cancel);
         }
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'right', visitor, cancel);
     }
 }
 
@@ -702,6 +767,10 @@ export class VariableExpression implements Expression {
             visitor(this, parent);
             this.namespaceName?.walk(visitor, this, cancel);
         }
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //do nothing
     }
 }
 
@@ -783,6 +852,8 @@ export class SourceLiteralExpression implements Expression {
             visitor(this, parent);
         }
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) { }
 }
 
 /**
@@ -822,6 +893,10 @@ export class NewExpression implements Expression {
             visitor(this, parent);
             this.call.walk(visitor, this, cancel);
         }
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'call', visitor, cancel);
     }
 }
 
@@ -884,6 +959,13 @@ export class CallfuncExpression implements Expression {
             this.args.forEach(arg => arg.walk(visitor, this, cancel));
         }
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        walkAll(this, 'callee', visitor, cancel);
+        for (let i = 0; i < this.args.length; i++) {
+            walkAll(this.args, i, visitor, cancel, this);
+        }
+    }
 }
 
 /**
@@ -926,6 +1008,12 @@ export class TemplateStringQuasiExpression implements Expression {
                     element.walk(visitor, this, cancel);
                 }
             });
+        }
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        for (let i = 0; i < this.expressions.length; i++) {
+            walkAll(this.expressions, i, visitor, cancel, this);
         }
     }
 }
@@ -1018,6 +1106,15 @@ export class TemplateStringExpression implements Expression {
             this.expressions.forEach(e => e.walk(visitor, this, cancel));
         }
     }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        for (let i = 0; i < this.quasis.length; i++) {
+            walkAll(this.quasis, i, visitor, cancel, this);
+        }
+        for (let i = 0; i < this.expressions.length; i++) {
+            walkAll(this.expressions, i, visitor, cancel, this);
+        }
+    }
 }
 
 export class TaggedTemplateStringExpression implements Expression {
@@ -1093,6 +1190,15 @@ export class TaggedTemplateStringExpression implements Expression {
             visitor(this, parent);
             this.quasis.forEach(e => e.walk(visitor, this, cancel));
             this.expressions.forEach(e => e.walk(visitor, this, cancel));
+        }
+    }
+
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        for (let i = 0; i < this.quasis.length; i++) {
+            walkAll(this.quasis, i, visitor, cancel, this);
+        }
+        for (let i = 0; i < this.expressions.length; i++) {
+            walkAll(this.expressions, i, visitor, cancel, this);
         }
     }
 }

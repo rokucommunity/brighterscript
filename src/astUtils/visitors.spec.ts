@@ -331,4 +331,153 @@ describe('astUtils visitors', () => {
             ]);
         });
     });
+
+    describe.only('walk', () => {
+        async function testWalk(text: string, expectedConstructors: string[]) {
+            const file = await program.addOrReplaceFile('source/main.brs', text) as BrsFile;
+            const items = [];
+            let index = 1;
+            file.ast.walkAll((stmtExpr: any) => {
+                stmtExpr._testId = index++;
+                items.push(stmtExpr);
+            });
+            index = 1;
+            expect(items.map(x => `${x.constructor.name}:${x._testId}`)).to.eql(expectedConstructors.map(x => `${x}:${index++}`));
+        }
+
+        it('walks if statement', async () => {
+            await testWalk(`
+                sub main()
+                    if true then
+                        print "true"
+                    else if true then
+                        print "true"
+                    else
+                        print "true"
+                    end if
+                end sub
+            `, [
+                'FunctionStatement',
+                //if
+                'IfStatement',
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression',
+                //else if
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression',
+                //else
+                'Block',
+                'PrintStatement',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks if statement without else', async () => {
+            await testWalk(`
+                sub main()
+                    if true then
+                        print "true"
+                    end if
+                end sub
+            `, [
+                'FunctionStatement',
+                'IfStatement',
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks increment statement', async () => {
+            await testWalk(`
+                sub main()
+                    age = 12
+                    age++
+                end sub
+            `, [
+                'FunctionStatement',
+                'AssignmentStatement',
+                'LiteralExpression',
+                'IncrementStatement',
+                'VariableExpression'
+            ]);
+        });
+
+        it.only('walks ForStatement', async () => {
+            await testWalk(`
+                sub main()
+                    for i = 0 to 10 step 1
+                        print i
+                    end for
+                end sub
+            `, [
+                'FunctionStatement',
+                'ForStatement',
+                'AssignmentStatement',
+                'LiteralExpression',
+                'LiteralExpression',
+                'LiteralExpression',
+                'Block',
+                'PrintStatement',
+                'VariableExpression'
+            ]);
+        });
+
+        it('walks all statements and expressions', async () => {
+            const file = await program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    'ForEachStatement
+                    for each item in [1,2,3]
+                        print item
+                    end for
+
+                    'DottedSetStatement
+                    person = {}
+                    person.name = "person"
+                    person["age"] = 12
+
+                    while 1 + 1 = 2
+                        print "infinite"
+                    end while
+
+                    speak = sub(message)
+                        getMessage = function(msg)
+
+                            return msg
+                        end function
+                        print getMessage(message)
+                    end sub
+                    speak("Hello")
+                end sub
+                function GetNumber()
+                    return 1
+                end function
+
+                'NamespaceStatement
+                namespace A.B.C
+                end namespace
+            `) as BrsFile;
+            //tag each of the desired AST nodes so we can easily identify them in the expect
+            let ast = file.ast as any;
+            ast.id = 'body';
+            ast.statements[0].id = 'main';
+            ast.statements[0].func.body.statements[0].id = 'speakVar';
+            ast.statements[1].id = 'GetNumber';
+            const items = [];
+            file.ast.walkAll((stmtExpr) => {
+                items.push(stmtExpr);
+            });
+            expect(items.map(x => x.id)).to.equal([
+                'body',
+                'main',
+                'speakVar',
+                'GetNumber'
+            ]);
+        });
+    });
 });
