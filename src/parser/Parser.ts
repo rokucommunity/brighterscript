@@ -105,10 +105,20 @@ export class Parser {
     }
 
     /**
-     * A list of references for various important statements/expressions in the parser.
-     * These are extracted during parse-time to improve performance later on when looking for the various items.
+     * References for significant statements/expressions in the parser.
+     * These are initially extracted during parse-time to improve performance, but will also be dynamically regenerated if need be.
+     *
+     * If a plugin modifies the AST, then the plugin should call Parser#clearReferences() to force this list to refresh
      */
-    public references: References = {
+    public get references() {
+        //build the references object if it's missing.
+        if (!this._references) {
+            this._references = this.findReferences();
+        }
+        return this._references;
+    }
+
+    private _references: References = {
         classStatements: [],
         functionStatements: [],
         functionExpressions: [],
@@ -116,6 +126,13 @@ export class Parser {
         libraryStatements: [],
         namespaceStatements: []
     };
+
+    /**
+     * Clears the references. This should be called anytime the AST has been manipulated.
+     */
+    clearReferences() {
+        this._references = undefined;
+    }
 
     /**
      * The list of diagnostics found during the parse process
@@ -377,8 +394,8 @@ export class Parser {
                     let funcDeclaration = this.functionDeclaration(false);
 
                     //remove this function from the lists because it's a class method
-                    this.references.functionExpressions.pop();
-                    this.references.functionStatements.pop();
+                    this._references.functionExpressions.pop();
+                    this._references.functionStatements.pop();
 
                     //if we have an overrides keyword AND this method is called 'new', that's not allowed
                     if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
@@ -461,7 +478,7 @@ export class Parser {
             parentClassName,
             this.currentNamespaceName
         );
-        this.references.classStatements.push(result);
+        this._references.classStatements.push(result);
         return result;
     }
 
@@ -649,7 +666,7 @@ export class Parser {
                 this.currentFunctionExpression.childFunctionExpressions.push(func);
             }
 
-            this.references.functionExpressions.push(func);
+            this._references.functionExpressions.push(func);
 
             let previousFunctionExpression = this.currentFunctionExpression;
             this.currentFunctionExpression = func;
@@ -696,7 +713,7 @@ export class Parser {
                 }
                 let result = new FunctionStatement(name, func, this.currentNamespaceName);
                 func.functionStatement = result;
-                this.references.functionStatements.push(result);
+                this._references.functionStatements.push(result);
                 return result;
             }
         } finally {
@@ -1115,7 +1132,7 @@ export class Parser {
 
         this.namespaceAndFunctionDepth--;
         let result = new NamespaceStatement(keyword, name, body, endKeyword);
-        this.references.namespaceStatements.push(result);
+        this._references.namespaceStatements.push(result);
 
         return result;
     }
@@ -1206,7 +1223,7 @@ export class Parser {
 
         //consume to the next newline, eof, or colon
         while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
-        this.references.libraryStatements.push(libStatement);
+        this._references.libraryStatements.push(libStatement);
         return libStatement;
     }
 
@@ -1226,7 +1243,7 @@ export class Parser {
 
         //consume to the next newline, eof, or colon
         while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
-        this.references.importStatements.push(importStatement);
+        this._references.importStatements.push(importStatement);
         return importStatement;
     }
 
@@ -2361,25 +2378,12 @@ export class Parser {
     }
 
     /**
-     * Clears the references. This should be called anytime the AST has been manipulated.
-     * `findReferences()` should be called before accessing `this.references` after this call.
-     */
-    clearReferences() {
-        this.references = undefined;
-    }
-
-    /**
      * References are found during the initial parse.
      * However, sometimes plugins can modify the AST, requiring a full walk to re-compute all references.
      * This does that walk.
      */
     findReferences() {
-        //skip finding declarations if they already exist
-        if (this.references) {
-            return;
-        }
-
-        this.references = {
+        const references: References = {
             classStatements: [],
             namespaceStatements: [],
             functionStatements: [],
@@ -2390,26 +2394,27 @@ export class Parser {
 
         this.ast.walkAll(createVisitor({
             ClassStatement: s => {
-                this.references.classStatements.push(s);
+                references.classStatements.push(s);
             },
             NamespaceStatement: s => {
-                this.references.namespaceStatements.push(s);
+                references.namespaceStatements.push(s);
             },
             FunctionStatement: s => {
-                this.references.functionStatements.push(s);
+                references.functionStatements.push(s);
             },
             ImportStatement: s => {
-                this.references.importStatements.push(s);
+                references.importStatements.push(s);
             },
             LibraryStatement: s => {
-                this.references.libraryStatements.push(s);
+                references.libraryStatements.push(s);
             },
             FunctionExpression: (expression, parent) => {
                 if (!isClassMethod(parent)) {
-                    this.references.functionExpressions.push(expression);
+                    references.functionExpressions.push(expression);
                 }
             }
         }));
+        return references;
     }
 
     public dispose() {
