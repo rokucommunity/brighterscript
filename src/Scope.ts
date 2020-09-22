@@ -445,7 +445,7 @@ export class Scope {
         let result = [] as AugmentedNewExpression[];
         let files = this.getFiles();
         for (let file of files) {
-            let expressions = file.parser.newExpressions as AugmentedNewExpression[];
+            let expressions = file.parser.references.newExpressions as AugmentedNewExpression[];
             for (let expression of expressions) {
                 expression.file = file;
                 result.push(expression);

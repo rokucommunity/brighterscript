@@ -1034,11 +1034,6 @@ export class BrsFile {
         }
     }
 
-    clearParserReferences() {
-        this.parser.references = undefined;
-    }
-
-
     public dispose() {
         this.parser?.dispose();
     }

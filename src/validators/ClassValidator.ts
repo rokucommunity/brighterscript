@@ -44,7 +44,7 @@ export class BsClassValidator {
     private verifyNewExpressions() {
         let files = this.scope.getFiles();
         for (let file of files) {
-            let newExpressions = file.parser.newExpressions;
+            let newExpressions = file.parser.references.newExpressions;
             for (let newExpression of newExpressions) {
                 let className = newExpression.className.getName(ParseMode.BrighterScript);
                 let newableClass = this.getClassByName(

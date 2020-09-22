@@ -124,7 +124,8 @@ export class Parser {
         functionExpressions: [],
         importStatements: [],
         libraryStatements: [],
-        namespaceStatements: []
+        namespaceStatements: [],
+        newExpressions: []
     };
 
     /**
@@ -150,11 +151,6 @@ export class Parser {
     public options: ParseOptions;
 
     private globalTerminators = [] as TokenKind[][];
-
-    /**
-     * All `new <ClassName>` expressions defined in this file
-     */
-    public newExpressions = [] as NewExpression[];
 
     /**
      * All assignment statements in this file
@@ -1962,7 +1958,7 @@ export class Parser {
         //pop the call from the  callExpressions list because this is technically something else
         this.callExpressions.pop();
         let result = new NewExpression(newToken, call);
-        this.newExpressions.push(result);
+        this._references.newExpressions.push(result);
         return result;
     }
 
@@ -2389,7 +2385,8 @@ export class Parser {
             functionStatements: [],
             functionExpressions: [],
             importStatements: [],
-            libraryStatements: []
+            libraryStatements: [],
+            newExpressions: []
         };
 
         this.ast.walkAll(createVisitor({
@@ -2412,6 +2409,9 @@ export class Parser {
                 if (!isClassMethod(parent)) {
                     references.functionExpressions.push(expression);
                 }
+            },
+            NewExpression: e => {
+                references.newExpressions.push(e);
             }
         }));
         return references;
@@ -2445,4 +2445,5 @@ export interface References {
     functionExpressions: FunctionExpression[];
     importStatements: ImportStatement[];
     libraryStatements: LibraryStatement[];
+    newExpressions: NewExpression[];
 }
