@@ -502,7 +502,9 @@ export class ClassFieldStatement implements Statement {
     }
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken, parent?: Expression | Statement) {
-        walkAll(this, 'initialValue', visitor, cancel);
+        if (this.initialValue) {
+            walkAll(this, 'initialValue', visitor, cancel);
+        }
     }
 }
 export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;

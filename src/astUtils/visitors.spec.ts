@@ -334,7 +334,7 @@ describe('astUtils visitors', () => {
 
     describe('walkAll', () => {
         async function testWalk(text: string, expectedConstructors: string[]) {
-            const file = await program.addOrReplaceFile('source/main.brs', text) as BrsFile;
+            const file = await program.addOrReplaceFile('source/main.bs', text) as BrsFile;
             const items = [];
             let index = 1;
             file.ast.walkAll((stmtExpr: any) => {
@@ -557,5 +557,252 @@ describe('astUtils visitors', () => {
                 'LiteralExpression'
             ]);
         });
+
+        it('walks CallExpression', async () => {
+            await testWalk(`
+                sub main()
+                    Sleep(123)
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'ExpressionStatement',
+                'CallExpression',
+                'VariableExpression',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks function parameters', async () => {
+            await testWalk(`
+                sub main(arg1)
+                    speak = sub(arg1, arg2)
+                    end sub
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'FunctionParameter',
+                'Block',
+                'AssignmentStatement',
+                'FunctionExpression',
+                'FunctionParameter',
+                'FunctionParameter',
+                'Block'
+            ]);
+        });
+
+        it('walks DottedGetExpression', async () => {
+            await testWalk(`
+                sub main()
+                    print person.name
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'DottedGetExpression',
+                'VariableExpression'
+            ]);
+        });
+
+        it('walks XmlAttributeGetExpression', async () => {
+            await testWalk(`
+                sub main()
+                    print person@name
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'XmlAttributeGetExpression',
+                'VariableExpression'
+            ]);
+        });
+
+        it('walks IndexedGetExpression', async () => {
+            await testWalk(`
+                sub main()
+                    print person["name"]
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'IndexedGetExpression',
+                'VariableExpression',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks GroupingExpression', async () => {
+            await testWalk(`
+                sub main()
+                    print 1 + ( 1 + 2 )
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'BinaryExpression',
+                'LiteralExpression',
+                'GroupingExpression',
+                'BinaryExpression',
+                'LiteralExpression',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks AALiteralExpression', async () => {
+            await testWalk(`
+                sub main()
+                    person = {
+                        'comment
+                        "name": "John Doe"
+                    }
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'AssignmentStatement',
+                'AALiteralExpression',
+                'CommentStatement',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks UnaryExpression', async () => {
+            await testWalk(`
+                sub main()
+                   isAlive = not isDead
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'AssignmentStatement',
+                'UnaryExpression',
+                'VariableExpression'
+            ]);
+        });
+
+        it('walks TemplateStringExpression', async () => {
+            await testWalk(`
+                sub main()
+                   print \`Hello \${worldVar}\`
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'TemplateStringExpression',
+                'TemplateStringQuasiExpression',
+                'LiteralExpression',
+                'VariableExpression',
+                'TemplateStringQuasiExpression',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks TaggedTemplateStringExpression', async () => {
+            await testWalk(`
+                sub main()
+                   print tag\`Hello \${worldVar}\`
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'TaggedTemplateStringExpression',
+                'TemplateStringQuasiExpression',
+                'LiteralExpression',
+                'VariableExpression',
+                'TemplateStringQuasiExpression',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks CharCodeLiteral expression within TemplateLiteralExpression', async () => {
+            await testWalk(`
+                sub main()
+                   print \`\\n\`
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'PrintStatement',
+                'TemplateStringExpression',
+                'TemplateStringQuasiExpression',
+                'LiteralExpression',
+                'EscapedCharCodeLiteral',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks NewExpression', async () => {
+            await testWalk(`
+                sub main()
+                  person = new Person()
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'AssignmentStatement',
+                'NewExpression',
+                'CallExpression',
+                'NamespacedVariableNameExpression',
+                'VariableExpression'
+            ]);
+        });
+
+        it('walks CallfuncExpression', async () => {
+            await testWalk(`
+                sub main()
+                  person@.doSomething("arg1")
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'ExpressionStatement',
+                'CallfuncExpression',
+                'VariableExpression',
+                'LiteralExpression'
+            ]);
+        });
+
+        it('walks ClassStatement', async () => {
+            await testWalk(`
+                class Person
+                    name as string
+                    age as integer = 1
+                    function getName()
+                        return m.name
+                    end function
+                end class
+            `, [
+                'ClassStatement',
+                'ClassFieldStatement',
+                'ClassFieldStatement',
+                'LiteralExpression',
+                'ClassMethodStatement',
+                'FunctionExpression',
+                'Block',
+                'ReturnStatement',
+                'DottedGetExpression',
+                'VariableExpression'
+            ]);
+        });
+
     });
 });

@@ -224,6 +224,7 @@ export class FunctionExpression implements Expression {
         for (let i = 0; i < this.parameters.length; i++) {
             walkAll(this.parameters, i, visitor, cancel, this);
         }
+
         //This call is the core of the walkAll functionality...it allows us to cross into sub functions
         walkAll(this, 'body', visitor, cancel);
     }
@@ -456,7 +457,9 @@ export class LiteralExpression implements Expression {
         }
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) { }
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //nothing to walk
+    }
 }
 
 /**
@@ -488,7 +491,9 @@ export class EscapedCharCodeLiteral implements Expression {
         }
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) { }
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //nothing to walk
+    }
 }
 
 export class ArrayLiteralExpression implements Expression {
@@ -690,7 +695,11 @@ export class AALiteralExpression implements Expression {
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
         for (let i = 0; i < this.elements.length; i++) {
-            walkAll(this.elements, i, visitor, cancel, this);
+            if (this.elements[i] instanceof CommentStatement) {
+                walkAll(this.elements, i, visitor, cancel, this);
+            } else {
+                walkAll((this.elements[i] as AAMemberExpression), 'value', visitor, cancel, this);
+            }
         }
     }
 }
@@ -770,7 +779,7 @@ export class VariableExpression implements Expression {
     }
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        //do nothing
+        //nothing to walk
     }
 }
 
@@ -853,7 +862,9 @@ export class SourceLiteralExpression implements Expression {
         }
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) { }
+    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //nothing to walk
+    }
 }
 
 /**
@@ -1108,11 +1119,14 @@ export class TemplateStringExpression implements Expression {
     }
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //walk the quasis and expressions in left-to-right order
         for (let i = 0; i < this.quasis.length; i++) {
             walkAll(this.quasis, i, visitor, cancel, this);
-        }
-        for (let i = 0; i < this.expressions.length; i++) {
-            walkAll(this.expressions, i, visitor, cancel, this);
+
+            //this skips the final loop iteration since we'll always have one more quasi than expression
+            if (this.expressions[i]) {
+                walkAll(this.expressions, i, visitor, cancel, this);
+            }
         }
     }
 }
@@ -1194,11 +1208,14 @@ export class TaggedTemplateStringExpression implements Expression {
     }
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+        //walk the quasis and expressions in left-to-right order
         for (let i = 0; i < this.quasis.length; i++) {
             walkAll(this.quasis, i, visitor, cancel, this);
-        }
-        for (let i = 0; i < this.expressions.length; i++) {
-            walkAll(this.expressions, i, visitor, cancel, this);
+
+            //this skips the final loop iteration since we'll always have one more quasi than expression
+            if (this.expressions[i]) {
+                walkAll(this.expressions, i, visitor, cancel, this);
+            }
         }
     }
 }

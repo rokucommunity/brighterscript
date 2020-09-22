@@ -183,7 +183,7 @@ export class ExpressionStatement implements Statement {
     }
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        this.expression.walkAll(visitor, cancel);
+        walkAll(this, 'expression', visitor, cancel);
     }
 }
 
@@ -553,7 +553,7 @@ export class GotoStatement implements Statement {
     }
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        //do nothing
+        //nothing to walk
     }
 }
 
@@ -578,7 +578,7 @@ export class LabelStatement implements Statement {
     }
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        //do nothing
+        //nothing to walk
     }
 }
 
@@ -632,7 +632,7 @@ export class EndStatement implements Statement {
     }
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        //do nothing
+        //nothing to walk
     }
 }
 
@@ -654,7 +654,7 @@ export class StopStatement implements Statement {
     }
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        //do nothing
+        //nothing to walk
     }
 }
 
@@ -940,7 +940,7 @@ export class LibraryStatement implements Statement {
     }
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        //do nothing
+        //nothing to walk
     }
 }
 
@@ -1021,6 +1021,6 @@ export class ImportStatement implements Statement {
     }
 
     walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        //do nothing
+        //nothing to walk
     }
 }
