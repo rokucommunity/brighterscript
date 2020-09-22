@@ -466,7 +466,7 @@ export class BrsFile {
         }
 
         //find every variable assignment in the whole file
-        let assignmentStatements = this.parser.assignmentStatements;
+        let assignmentStatements = this.parser.references.assignmentStatements;
 
         for (let statement of assignmentStatements) {
 

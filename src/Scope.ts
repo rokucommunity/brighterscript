@@ -405,7 +405,7 @@ export class Scope {
             }
         }
 
-        for (let assignment of file.parser.assignmentStatements) {
+        for (let assignment of file.parser.references.assignmentStatements) {
             let lowerAssignmentName = assignment.name.text.toLowerCase();
             let namespace = this.namespaceLookup[lowerAssignmentName];
             //see if the param matches any starting namespace part

@@ -119,6 +119,7 @@ export class Parser {
     }
 
     private _references: References = {
+        assignmentStatements: [],
         classStatements: [],
         functionStatements: [],
         functionExpressions: [],
@@ -151,11 +152,6 @@ export class Parser {
     public options: ParseOptions;
 
     private globalTerminators = [] as TokenKind[][];
-
-    /**
-     * All assignment statements in this file
-     */
-    public assignmentStatements = [] as AssignmentStatement[];
 
     /**
      * When a namespace has been started, this gets set. When it's done, this gets unset.
@@ -809,7 +805,7 @@ export class Parser {
                 this.currentFunctionExpression
             );
         }
-        this.assignmentStatements.push(result);
+        this._references.assignmentStatements.push(result);
         return result;
     }
 
@@ -2380,6 +2376,7 @@ export class Parser {
      */
     findReferences() {
         const references: References = {
+            assignmentStatements: [],
             classStatements: [],
             namespaceStatements: [],
             functionStatements: [],
@@ -2390,6 +2387,9 @@ export class Parser {
         };
 
         this.ast.walkAll(createVisitor({
+            AssignmentStatement: s => {
+                references.assignmentStatements.push(s);
+            },
             ClassStatement: s => {
                 references.classStatements.push(s);
             },
@@ -2439,6 +2439,7 @@ export interface ParseOptions {
 
 
 export interface References {
+    assignmentStatements: AssignmentStatement[];
     classStatements: ClassStatement[];
     namespaceStatements: NamespaceStatement[];
     functionStatements: FunctionStatement[];
