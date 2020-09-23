@@ -12,7 +12,7 @@ import { isPrintStatement } from './reflection';
 import { createToken } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 
-describe.only('astUtils visitors', () => {
+describe('astUtils visitors', () => {
     const rootDir = process.cwd();
     let program: Program;
     let file: BrsFile;
@@ -806,6 +806,5 @@ describe.only('astUtils visitors', () => {
                 'VariableExpression'
             ]);
         });
-
     });
 });

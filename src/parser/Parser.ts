@@ -2386,7 +2386,7 @@ export class Parser {
             newExpressions: []
         };
 
-        this.ast.walkAll(createVisitor({
+        this.ast.walk(createVisitor({
             AssignmentStatement: s => {
                 references.assignmentStatements.push(s);
             },

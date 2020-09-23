@@ -4,7 +4,7 @@ import { FunctionExpression, CallExpression, VariableExpression, DottedGetExpres
 import { SourceNode } from 'source-map';
 import { TranspileState } from './TranspileState';
 import { Parser, ParseMode } from './Parser';
-import { CancellationToken, Range } from 'vscode-languageserver';
+import { Range } from 'vscode-languageserver';
 import util from '../util';
 import { BrsInvalid } from '../brsTypes/BrsType';
 import { walk, WalkOptions, WalkVisitor } from '../astUtils';
