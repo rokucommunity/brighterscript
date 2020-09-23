@@ -15,16 +15,27 @@ describe('parser', () => {
     });
 
     describe('findReferences', () => {
-        it('gets called if references are missing', () => {
+        it.only('gets called if references are missing', () => {
             const parser = Parser.parse(`
                 sub main()
                 end sub
+
+                sub UnusedFunction()
+                end sub
             `);
-            expect(parser.references).to.exist;
+            expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
+                'main',
+                'UnusedFunction'
+            ]);
+            //simulate a tree-shaking plugin by removing the `UnusedFunction`
+            parser.ast.statements.splice(1);
+            //tell the parser we modified the AST and need to regenerate references
             parser.clearReferences();
             expect(parser['_references']).not.to.exist;
             //calling `references` automatically regenerates the references
-            expect(parser.references.functionStatements[0]?.name.text).to.eql('main');
+            expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
+                'main'
+            ]);
         });
     });
 
