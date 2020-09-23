@@ -117,19 +117,34 @@ export class BrsFile {
     public fileContents: string;
 
     /**
+     * Contains the full text for the type definitions file (if one was provided)
+     */
+    public typeDefinitionContents?: string;
+
+    /**
+     * If the file was given type definitions during parse
+     */
+    public hasTypeDefinitions() {
+        return !!this.typeDefinitionContents;
+    }
+
+    /**
      * Calculate the AST for this file
      * @param fileContents
+     * @param typeDefinitionContents - a string containing the d.bs file contents (type definitions)
      */
-    public parse(fileContents: string) {
+    public parse(fileContents: string, typeDefinitionContents?: string) {
         try {
             this.fileContents = fileContents;
+            this.typeDefinitionContents = typeDefinitionContents;
             if (this.parseDeferred.isCompleted) {
                 throw new Error(`File was already processed. Create a new instance of BrsFile instead. ${this.pathAbsolute}`);
             }
 
             //tokenize the input file
             let lexer = this.program.logger.time(LogLevel.debug, ['lexer.lex', chalk.green(this.pathAbsolute)], () => {
-                return Lexer.scan(fileContents, {
+                //scan the d.bs file if present, otherwise the fileContents
+                return Lexer.scan(typeDefinitionContents ?? fileContents, {
                     includeWhitespace: false
                 });
             });
@@ -157,8 +172,9 @@ export class BrsFile {
 
             this.parser = new Parser();
             this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.pathAbsolute)], () => {
+                const parseMode = this.extension === '.bs' || this.hasTypeDefinitions ? ParseMode.BrighterScript : ParseMode.BrightScript;
                 this.parser.parse(tokens, {
-                    mode: this.extension === '.brs' ? ParseMode.BrightScript : ParseMode.BrighterScript,
+                    mode: parseMode,
                     logger: this.program.logger
                 });
             });

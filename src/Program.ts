@@ -23,6 +23,7 @@ const startOfSourcePkgPath = `source${path.sep}`;
 export interface SourceObj {
     pathAbsolute: string;
     source: string;
+    definitions?: string;
 }
 
 export interface TranspileObj {
@@ -156,7 +157,7 @@ export class Program {
      * This walks backwards through the file resolvers until we get a value.
      * This allow the language server to provide file contents directly from memory.
      */
-    public async getFileContents(pathAbsolute: string) {
+    public async getFileContents(pathAbsolute: string, throwIfMissing = true) {
         pathAbsolute = s`${pathAbsolute}`;
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
@@ -165,7 +166,9 @@ export class Program {
                 return result;
             }
         }
-        throw new Error(`Could not load file "${pathAbsolute}"`);
+        if (throwIfMissing) {
+            throw new Error(`Could not load file "${pathAbsolute}"`);
+        }
     }
 
     /**
@@ -278,6 +281,27 @@ export class Program {
     }
 
     /**
+     * Get the type definitions for the specified file.
+     * The results are cached for future performance boosts.
+     */
+    private async getTypeDefinitionsForFile(pathAbsolute: string) {
+        //you can only get type definitions for .brs files
+        if (!pathAbsolute.endsWith('.brs')) {
+            return;
+        }
+
+        let typeDefinitionPath = pathAbsolute.replace(/.brs$/, '.d.bs');
+
+        if (this.typeDefinitionCache[typeDefinitionPath] === undefined) {
+            const contents = await this.getFileContents(typeDefinitionPath, false);
+            this.typeDefinitionCache[typeDefinitionPath] = contents ?? null;
+        }
+        return this.typeDefinitionCache[typeDefinitionPath];
+    }
+    private typeDefinitionCache = {} as { [typeDefinitionPath: string]: string };
+
+
+    /**
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
      * @param relativePath the file path relative to the root dir
@@ -322,8 +346,12 @@ export class Program {
                     return fileContents;
                 }
             };
-            //get the extension of the file
-            if (fileExtension === '.brs' || fileExtension === '.bs') {
+
+            //if this is a type definition file, store its contents in the cache
+            if (pathAbsolute.endsWith('.d.bs')) {
+                this.typeDefinitionCache[pathAbsolute] = await getFileContents();
+
+            } else if (fileExtension === '.brs' || fileExtension === '.bs') {
                 let brsFile = new BrsFile(pathAbsolute, pkgPath, this);
 
                 //add file to the `source` dependency list
@@ -332,16 +360,18 @@ export class Program {
                     this.dependencyGraph.addDependency('scope:source', brsFile.dependencyGraphKey);
                 }
 
+
                 //add the file to the program
                 this.files[pathAbsolute] = brsFile;
                 let fileContents: SourceObj = {
                     pathAbsolute: pathAbsolute,
-                    source: await getFileContents()
+                    source: await getFileContents(),
+                    definitions: await this.getTypeDefinitionsForFile(pathAbsolute)
                 };
                 this.plugins.emit('beforeFileParse', fileContents);
 
                 this.logger.time(LogLevel.info, ['parse', chalk.green(pathAbsolute)], () => {
-                    brsFile.parse(fileContents.source);
+                    brsFile.parse(fileContents.source, fileContents.definitions);
                 });
                 file = brsFile;
 
@@ -460,6 +490,12 @@ export class Program {
      */
     public removeFile(pathAbsolute: string) {
         pathAbsolute = s`${pathAbsolute}`;
+
+        if (pathAbsolute.endsWith('.d.bs')) {
+            delete this.typeDefinitionCache[pathAbsolute];
+            return;
+        }
+
         let file = this.getFile(pathAbsolute);
         if (file) {
             this.plugins.emit('beforeFileDispose', file);

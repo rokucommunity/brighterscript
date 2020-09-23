@@ -2087,6 +2087,62 @@ describe('BrsFile', () => {
         });
     });
 
+    describe.only('type definitions', () => {
+        let files: {};
+        beforeEach(() => {
+            files = {};
+            program.fileResolvers.push((filePath: string) => {
+                if (files[filePath]) {
+                    return files[filePath];
+                } else {
+                    throw new Error(`Could not find in-memory file for ${filePath}`);
+                }
+            });
+        });
+
+        it('only exposes defined functions even if source has more', async () => {
+            files[s`${rootDir}/source/main.d.bs`] = `
+                sub main()
+                end sub
+            `;
+
+            const file = await program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                end sub
+                sub speak()
+                end sub
+            `);
+            expect(file.parser.functionStatements.map(x => x.name.text)).to.eql(['main']);
+        });
+
+        it('reads from the cache after first load', async () => {
+            files[s`${rootDir}/source/main.d.bs`] = `
+                sub main()
+                end sub
+            `;
+
+            const spy = sinon.spy(program, 'getFileContents');
+
+            let file = await program.addOrReplaceFile('source/main.brs', ``);
+            expect(spy.callCount).to.equal(1);
+
+            file = await program.addOrReplaceFile('source/main.brs', ``);
+            //the definition file should be in the cache already so no new calls
+            expect(spy.callCount).to.equal(1);
+        });
+
+        it('does not fail when type defs are missing', async () => {
+            program.fileResolvers = [];
+            let file = await program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                end sub
+                sub speak()
+                end sub
+            `);
+            expect(file.parser.functionStatements.map(x => x.name.text)).to.eql(['main', 'speak']);
+        });
+    });
+
     describe('Plugins', () => {
         it('can loads a plugin which transforms the AST', async () => {
             const rootDir = process.cwd();
