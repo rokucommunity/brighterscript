@@ -7,7 +7,7 @@ import { Parser, ParseMode } from './Parser';
 import { CancellationToken, Range } from 'vscode-languageserver';
 import util from '../util';
 import { BrsInvalid } from '../brsTypes/BrsType';
-import { walkAll, WalkAllVisitor } from '../astUtils';
+import { walk, WalkOptions, WalkVisitor } from '../astUtils';
 
 export class ClassStatement implements Statement {
 
@@ -329,9 +329,9 @@ export class ClassStatement implements Statement {
         return result;
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken, parent?: Expression | Statement) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         for (let i = 0; i < this.body.length; i++) {
-            walkAll(this.body, i, visitor, cancel, this);
+            walk(this.body, i, visitor, options, this);
         }
     }
 }
@@ -474,8 +474,10 @@ export class ClassMethodStatement implements Statement {
         this.func.body.statements.splice(startingIndex, 0, ...newStatements);
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken, parent?: Expression | Statement) {
-        walkAll(this, 'func', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'func', visitor, options);
+        }
     }
 }
 
@@ -501,9 +503,9 @@ export class ClassFieldStatement implements Statement {
         throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken, parent?: Expression | Statement) {
-        if (this.initialValue) {
-            walkAll(this, 'initialValue', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions && this.initialValue) {
+            walk(this, 'initialValue', visitor, options);
         }
     }
 }

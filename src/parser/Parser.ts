@@ -167,7 +167,7 @@ export class Parser {
     private currentFunctionExpression: FunctionExpression;
 
     /**
-     * A list of allowed local identifiers. We store this in a property because we augment the list in the constructor
+     * A list of identifiers that are permitted to be used as local variables. We store this in a property because we augment the list in the constructor
      * based on the parse mode
      */
     private allowedLocalIdentifiers: TokenKind[];

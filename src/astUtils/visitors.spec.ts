@@ -7,12 +7,12 @@ import { BrsFile } from '../files/BrsFile';
 import { Statement, PrintStatement, Block, ReturnStatement } from '../parser/Statement';
 import { Expression } from '../parser/Expression';
 import { TokenKind } from '../lexer';
-import { walkStatements, createStatementVisitor, createStatementExpressionsVisitor } from './visitors';
+import { createVisitor, walkStatements } from './visitors';
 import { isPrintStatement } from './reflection';
 import { createToken } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 
-describe('astUtils visitors', () => {
+describe.only('astUtils visitors', () => {
     const rootDir = process.cwd();
     let program: Program;
     let file: BrsFile;
@@ -83,6 +83,7 @@ describe('astUtils visitors', () => {
     function functionsWalker(visitor: (s: Statement, p: Statement) => void, cancel?: CancellationToken) {
         return (file: BrsFile) => {
             file.parser.references.functionExpressions.some(f => {
+                visitor(f.body, f);
                 walkStatements(f.body, (s, p) => visitor(s, p), cancel);
                 return cancel?.isCancellationRequested;
             });
@@ -119,6 +120,7 @@ describe('astUtils visitors', () => {
                 'Block:2',                // while block
                 'PrintStatement:3',       // print 6
                 'ForStatement:1',         // for a = 1 to 10
+                'AssignmentStatement:2',  // a = 1
                 'Block:2',                // for block
                 'PrintStatement:3',       // print 7
                 'Block:0',                // function exec body
@@ -199,7 +201,7 @@ describe('astUtils visitors', () => {
         it('Maps statements to individual handlers', () => {
             const printHandler = sinon.spy();
             const blockHandler = sinon.spy();
-            const visitor = createStatementVisitor({
+            const visitor = createVisitor({
                 PrintStatement: printHandler,
                 Block: blockHandler
             });
@@ -229,7 +231,7 @@ describe('astUtils visitors', () => {
                 printStatement1,
                 new ReturnStatement({ return: createToken(TokenKind.Return, pos) })
             ], Range.create(0, 0, 0, 0));
-            const visitor = createStatementVisitor({
+            const visitor = createVisitor({
                 PrintStatement: () => printStatement2
             });
             walkStatements(block, visitor);
@@ -297,53 +299,51 @@ describe('astUtils visitors', () => {
                 'ReturnStatement:1:LiteralExpression'             // return <invalid>
             ]);
         });
-
-        it('Walks through all expressions until cancelled', () => {
-            const actual = [];
-            const cancel = new CancellationTokenSource();
-            let curr: { s: Statement; d: number };
-            const visitor = createStackedVisitor((s: Statement, stack: Statement[]) => {
-                curr = { s: s, d: stack.length };
-            });
-            function expression(e: Expression) {
-                const { s, d } = curr;
-                actual.push(`${s.constructor.name}:${d}:${e.constructor.name}`);
-                if (e.constructor.name === 'VariableExpression') {
-                    cancel.cancel();
-                }
-            }
-            const walker = functionsWalker(createStatementExpressionsVisitor(visitor, expression, cancel.token));
-            program.plugins.add({
-                name: 'walker',
-                afterFileParse: () => walker(file)
-            });
-            file.parse(EXPRESSIONS_SRC);
-            expect(actual).to.deep.equal([
-                'CommentStatement:1:CommentStatement',            // <'comment>
-                'PrintStatement:1:LiteralExpression',             // print <"msg">; 3
-                'PrintStatement:1:LiteralExpression',             // print "msg"; <3>
-                'PrintStatement:1:TemplateStringExpression',      // print <`expand ${var}`>
-                'PrintStatement:1:TemplateStringQuasiExpression', // print `<expand >${var}`
-                'PrintStatement:1:LiteralExpression',             // print `<"expand ">${var}`
-                'PrintStatement:1:TemplateStringQuasiExpression', // print `expand ${var}<>`
-                'PrintStatement:1:LiteralExpression',             // print `expand ${var}<"">`
-                'PrintStatement:1:VariableExpression'             // print `expand ${<var>}`
-            ]);
-        });
     });
 
-    describe('walkAll', () => {
+    describe('walk', () => {
         async function testWalk(text: string, expectedConstructors: string[]) {
             const file = await program.addOrReplaceFile('source/main.bs', text) as BrsFile;
             const items = [];
             let index = 1;
-            file.ast.walkAll((stmtExpr: any) => {
+            file.ast.walk((stmtExpr: any) => {
                 stmtExpr._testId = index++;
                 items.push(stmtExpr);
+            }, {
+                walkExpressions: true,
+                walkChildFunctions: true
             });
             index = 1;
             expect(items.map(x => `${x.constructor.name}:${x._testId}`)).to.eql(expectedConstructors.map(x => `${x}:${index++}`));
         }
+
+        it('Walks through all expressions until cancelled', async () => {
+            const file = await program.addOrReplaceFile('source/main.bs', `
+                sub logger(message = "nil" as string)
+                    innerLog = sub(message = "nil" as string)
+                        print message
+                    end sub
+                    innerLog(message)
+                end sub
+            `) as BrsFile;
+
+            const cancel = new CancellationTokenSource();
+            let count = 0;
+            const stopIndex = 5;
+
+            file.ast.walk((statement, parent) => {
+                count++;
+                if (count === stopIndex) {
+                    cancel.cancel();
+                }
+            }, {
+                walkExpressions: true,
+                walkChildFunctions: true,
+                cancel: cancel.token
+            });
+
+            expect(count).to.equal(stopIndex);
+        });
 
         it('walks if statement', async () => {
             await testWalk(`
@@ -509,7 +509,10 @@ describe('astUtils visitors', () => {
                namespace NameA.NameB
                end namespace
             `, [
-                'NamespaceStatement'
+                'NamespaceStatement',
+                'NamespacedVariableNameExpression',
+                'DottedGetExpression',
+                'VariableExpression'
             ]);
         });
 

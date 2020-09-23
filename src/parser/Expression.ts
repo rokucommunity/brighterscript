@@ -2,12 +2,12 @@ import { Token, Identifier, TokenKind } from '../lexer';
 import { BrsType, ValueKind, BrsString, FunctionParameter } from '../brsTypes';
 import { Block, CommentStatement, FunctionStatement } from './Statement';
 import { SourceNode } from 'source-map';
-import { Range, CancellationToken } from 'vscode-languageserver';
+import { Range } from 'vscode-languageserver';
 import util from '../util';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
-import { walkAll, WalkAllVisitor } from '../astUtils/visitors';
+import { walk, WalkOptions, WalkVisitor } from '../astUtils/visitors';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -18,9 +18,7 @@ export interface Expression {
 
     transpile(state: TranspileState): Array<SourceNode | string>;
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void;
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken);
+    walk(visitor: WalkVisitor, options?: WalkOptions);
 }
 
 export class BinaryExpression implements Expression {
@@ -44,17 +42,11 @@ export class BinaryExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.left.walk(visitor, this, cancel);
-            this.right.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'left', visitor, options);
+            walk(this, 'right', visitor, options);
         }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'left', visitor, cancel);
-        walkAll(this, 'right', visitor, cancel);
     }
 }
 
@@ -96,19 +88,12 @@ export class CallExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            visitor(this.callee, this);
-            this.args.forEach(e => e.walk(visitor, this, cancel));
-        }
-    }
-
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'callee', visitor, cancel);
-        for (let i = 0; i < this.args.length; i++) {
-            walkAll(this.args, i, visitor, cancel, this);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'callee', visitor, options);
+            for (let i = 0; i < this.args.length; i++) {
+                walk(this.args, i, visitor, options, this);
+            }
         }
     }
 }
@@ -213,20 +198,17 @@ export class FunctionExpression implements Expression {
         return results;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.parameters.forEach(p => p.defaultValue?.walk(visitor, this, cancel));
-        }
-    }
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            for (let i = 0; i < this.parameters.length; i++) {
+                walk(this.parameters, i, visitor, options, this);
+            }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        for (let i = 0; i < this.parameters.length; i++) {
-            walkAll(this.parameters, i, visitor, cancel, this);
+            //This is the core of full-program walking...it allows us to step into sub functions
+            if (options?.walkChildFunctions) {
+                walk(this, 'body', visitor, options);
+            }
         }
-
-        //This call is the core of the walkAll functionality...it allows us to cross into sub functions
-        walkAll(this, 'body', visitor, cancel);
     }
 }
 
@@ -275,15 +257,10 @@ export class NamespacedVariableNameExpression implements Expression {
         }
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.expression.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'expression', visitor, options);
         }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'expression', visitor, cancel);
     }
 }
 
@@ -311,15 +288,10 @@ export class DottedGetExpression implements Expression {
         }
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.obj.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'obj', visitor, options);
         }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'obj', visitor, cancel);
     }
 }
 
@@ -342,15 +314,10 @@ export class XmlAttributeGetExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.obj.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'obj', visitor, options);
         }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'obj', visitor, cancel);
     }
 }
 
@@ -375,17 +342,11 @@ export class IndexedGetExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.obj.walk(visitor, this, cancel);
-            this.index.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'obj', visitor, options);
+            walk(this, 'index', visitor, options);
         }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'obj', visitor, cancel);
-        walkAll(this, 'index', visitor, cancel);
     }
 }
 
@@ -410,15 +371,10 @@ export class GroupingExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.expression.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'expression', visitor, options);
         }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'expression', visitor, cancel);
     }
 }
 
@@ -451,13 +407,7 @@ export class LiteralExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-        }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         //nothing to walk
     }
 }
@@ -485,13 +435,7 @@ export class EscapedCharCodeLiteralExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-        }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         //nothing to walk
     }
 }
@@ -563,16 +507,11 @@ export class ArrayLiteralExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.elements.forEach(element => element.walk(visitor, this, cancel));
-        }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        for (let i = 0; i < this.elements.length; i++) {
-            walkAll(this.elements, i, visitor, cancel, this);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            for (let i = 0; i < this.elements.length; i++) {
+                walk(this.elements, i, visitor, options, this);
+            }
         }
     }
 }
@@ -680,25 +619,14 @@ export class AALiteralExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.elements.forEach(element => {
-                if (element instanceof CommentStatement) {
-                    element.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            for (let i = 0; i < this.elements.length; i++) {
+                if (this.elements[i] instanceof CommentStatement) {
+                    walk(this.elements, i, visitor, options, this);
                 } else {
-                    element.value.walk(visitor, this, cancel);
+                    walk((this.elements[i] as AAMemberExpression), 'value', visitor, options, this);
                 }
-            });
-        }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        for (let i = 0; i < this.elements.length; i++) {
-            if (this.elements[i] instanceof CommentStatement) {
-                walkAll(this.elements, i, visitor, cancel, this);
-            } else {
-                walkAll((this.elements[i] as AAMemberExpression), 'value', visitor, cancel, this);
             }
         }
     }
@@ -722,15 +650,10 @@ export class UnaryExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.right.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'right', visitor, options);
         }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'right', visitor, cancel);
     }
 }
 
@@ -771,14 +694,7 @@ export class VariableExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.namespaceName?.walk(visitor, this, cancel);
-        }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         //nothing to walk
     }
 }
@@ -856,13 +772,7 @@ export class SourceLiteralExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-        }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         //nothing to walk
     }
 }
@@ -899,15 +809,10 @@ export class NewExpression implements Expression {
         return this.call.transpile(state);
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.call.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'call', visitor, options);
         }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'call', visitor, cancel);
     }
 }
 
@@ -963,18 +868,12 @@ export class CallfuncExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.callee.walk(visitor, this, cancel);
-            this.args.forEach(arg => arg.walk(visitor, this, cancel));
-        }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'callee', visitor, cancel);
-        for (let i = 0; i < this.args.length; i++) {
-            walkAll(this.args, i, visitor, cancel, this);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'callee', visitor, options);
+            for (let i = 0; i < this.args.length; i++) {
+                walk(this.args, i, visitor, options, this);
+            }
         }
     }
 }
@@ -1011,20 +910,11 @@ export class TemplateStringQuasiExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.expressions.forEach(element => {
-                if (element instanceof LiteralExpression) {
-                    element.walk(visitor, this, cancel);
-                }
-            });
-        }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        for (let i = 0; i < this.expressions.length; i++) {
-            walkAll(this.expressions, i, visitor, cancel, this);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            for (let i = 0; i < this.expressions.length; i++) {
+                walk(this.expressions, i, visitor, options, this);
+            }
         }
     }
 }
@@ -1110,22 +1000,16 @@ export class TemplateStringExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.quasis.forEach(e => e.walk(visitor, this, cancel));
-            this.expressions.forEach(e => e.walk(visitor, this, cancel));
-        }
-    }
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            //walk the quasis and expressions in left-to-right order
+            for (let i = 0; i < this.quasis.length; i++) {
+                walk(this.quasis, i, visitor, options, this);
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        //walk the quasis and expressions in left-to-right order
-        for (let i = 0; i < this.quasis.length; i++) {
-            walkAll(this.quasis, i, visitor, cancel, this);
-
-            //this skips the final loop iteration since we'll always have one more quasi than expression
-            if (this.expressions[i]) {
-                walkAll(this.expressions, i, visitor, cancel, this);
+                //this skips the final loop iteration since we'll always have one more quasi than expression
+                if (this.expressions[i]) {
+                    walk(this.expressions, i, visitor, options, this);
+                }
             }
         }
     }
@@ -1199,22 +1083,16 @@ export class TaggedTemplateStringExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.quasis.forEach(e => e.walk(visitor, this, cancel));
-            this.expressions.forEach(e => e.walk(visitor, this, cancel));
-        }
-    }
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            //walk the quasis and expressions in left-to-right order
+            for (let i = 0; i < this.quasis.length; i++) {
+                walk(this.quasis, i, visitor, options, this);
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        //walk the quasis and expressions in left-to-right order
-        for (let i = 0; i < this.quasis.length; i++) {
-            walkAll(this.quasis, i, visitor, cancel, this);
-
-            //this skips the final loop iteration since we'll always have one more quasi than expression
-            if (this.expressions[i]) {
-                walkAll(this.expressions, i, visitor, cancel, this);
+                //this skips the final loop iteration since we'll always have one more quasi than expression
+                if (this.expressions[i]) {
+                    walk(this.expressions, i, visitor, options, this);
+                }
             }
         }
     }

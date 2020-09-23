@@ -3,10 +3,10 @@ import * as Brs from '.';
 declare let Scope: any;
 import { Identifier, Token } from '../lexer';
 import { SourceNode } from 'source-map';
-import { CancellationToken, Range } from 'vscode-languageserver';
+import { Range } from 'vscode-languageserver';
 import { TranspileState } from '../parser/TranspileState';
-import { walkAll, WalkAllVisitor } from '../astUtils';
-import { Expression, ExpressionVisitor, LiteralExpression } from '../parser/Expression';
+import { walk, WalkOptions, WalkVisitor } from '../astUtils';
+import { Expression, LiteralExpression } from '../parser/Expression';
 
 /** An argument to a BrightScript `function` or `sub`. */
 export interface Argument {
@@ -100,15 +100,9 @@ export class FunctionParameter implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            visitor(this.defaultValue, this);
-        }
-    }
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        if (this.defaultValue) {
-            walkAll(this, 'defaultValue', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions && this.defaultValue) {
+            walk(this, 'defaultValue', visitor, options);
         }
     }
 }

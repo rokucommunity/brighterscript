@@ -1,11 +1,11 @@
 import { Token, Identifier, TokenKind, CompoundAssignmentOperators } from '../lexer';
 import { SourceNode } from 'source-map';
-import { Expression, FunctionExpression, NamespacedVariableNameExpression, BinaryExpression, ExpressionVisitor } from './Expression';
+import { Expression, FunctionExpression, NamespacedVariableNameExpression, BinaryExpression } from './Expression';
 import { util } from '../util';
-import { Range, Position, CancellationToken } from 'vscode-languageserver';
+import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
-import { walkAll, WalkAllVisitor } from '../astUtils/visitors';
+import { walk, WalkVisitor, WalkOptions } from '../astUtils/visitors';
 
 /**
  * A BrightScript statement
@@ -17,7 +17,7 @@ export interface Statement {
     range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string>;
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken);
+    walk(visitor: WalkVisitor, options?: WalkOptions);
 }
 
 export class EmptyStatement implements Statement {
@@ -26,7 +26,9 @@ export class EmptyStatement implements Statement {
     transpile(state: TranspileState) {
         return [];
     }
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) { }
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        //nothing to walk
+    }
 }
 
 export class Body implements Statement {
@@ -75,9 +77,9 @@ export class Body implements Statement {
         return result;
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         for (let i = 0; i < this.statements.length; i++) {
-            walkAll(this.statements, i, visitor, cancel, this);
+            walk(this.statements, i, visitor, options, this);
         }
     }
 }
@@ -109,8 +111,10 @@ export class AssignmentStatement implements Statement {
         }
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'value', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
     }
 }
 
@@ -162,9 +166,9 @@ export class Block implements Statement {
         return results;
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         for (let i = 0; i < this.statements.length; i++) {
-            walkAll(this.statements, i, visitor, cancel, this);
+            walk(this.statements, i, visitor, options, this);
         }
     }
 }
@@ -182,8 +186,10 @@ export class ExpressionStatement implements Statement {
         return this.expression.transpile(state);
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'expression', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
     }
 }
 
@@ -223,13 +229,7 @@ export class CommentStatement implements Statement, Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken) {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-        }
-    }
-
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         //nothing to walk
     }
 }
@@ -251,9 +251,10 @@ export class ExitForStatement implements Statement {
         ];
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         //nothing to walk
     }
+
 }
 
 export class ExitWhileStatement implements Statement {
@@ -273,7 +274,7 @@ export class ExitWhileStatement implements Statement {
         ];
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         //nothing to walk
     }
 }
@@ -313,8 +314,10 @@ export class FunctionStatement implements Statement {
         return this.func.transpile(state, nameToken);
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken, parent?: Statement | Expression) {
-        walkAll(this, 'func', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'func', visitor, options);
+        }
     }
 }
 
@@ -433,17 +436,21 @@ export class IfStatement implements Statement {
         return results;
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'condition', visitor, cancel);
-        walkAll(this, 'thenBranch', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'condition', visitor, options);
+        }
+        walk(this, 'thenBranch', visitor, options);
 
         for (let i = 0; i < this.elseIfs.length; i++) {
-            walkAll(this.elseIfs[i], 'condition', visitor, cancel, this);
-            walkAll(this.elseIfs[i], 'thenBranch', visitor, cancel, this);
+            if (options?.walkExpressions) {
+                walk(this.elseIfs[i], 'condition', visitor, options, this);
+            }
+            walk(this.elseIfs[i], 'thenBranch', visitor, options, this);
         }
 
         if (this.elseBranch) {
-            walkAll(this, 'elseBranch', visitor, cancel);
+            walk(this, 'elseBranch', visitor, options);
         }
     }
 }
@@ -466,8 +473,10 @@ export class IncrementStatement implements Statement {
         ];
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'value', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
     }
 }
 
@@ -525,9 +534,12 @@ export class PrintStatement implements Statement {
         }
         return result;
     }
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        for (let i = 0; i < this.expressions.length; i++) {
-            walkAll(this.expressions, i, visitor, cancel, this);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            for (let i = 0; i < this.expressions.length; i++) {
+                //TODO the original walk code did an `isExpression()` check before walking. Do we need that?
+                walk(this.expressions, i, visitor, options, this);
+            }
         }
     }
 }
@@ -552,7 +564,7 @@ export class GotoStatement implements Statement {
         ];
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         //nothing to walk
     }
 }
@@ -577,7 +589,7 @@ export class LabelStatement implements Statement {
         ];
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         //nothing to walk
     }
 }
@@ -609,8 +621,10 @@ export class ReturnStatement implements Statement {
         return result;
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'value', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
     }
 }
 
@@ -631,7 +645,7 @@ export class EndStatement implements Statement {
         ];
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         //nothing to walk
     }
 }
@@ -653,7 +667,7 @@ export class StopStatement implements Statement {
         ];
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         //nothing to walk
     }
 }
@@ -720,11 +734,13 @@ export class ForStatement implements Statement {
         return result;
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'counterDeclaration', visitor, cancel);
-        walkAll(this, 'finalValue', visitor, cancel);
-        walkAll(this, 'increment', visitor, cancel);
-        walkAll(this, 'body', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        walk(this, 'counterDeclaration', visitor, options);
+        if (options?.walkExpressions) {
+            walk(this, 'finalValue', visitor, options);
+            walk(this, 'increment', visitor, options);
+        }
+        walk(this, 'body', visitor, options);
     }
 }
 
@@ -778,9 +794,11 @@ export class ForEachStatement implements Statement {
         return result;
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'target', visitor, cancel);
-        walkAll(this, 'body', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'target', visitor, options);
+        }
+        walk(this, 'body', visitor, options);
     }
 }
 
@@ -826,9 +844,11 @@ export class WhileStatement implements Statement {
         return result;
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'condition', visitor, cancel);
-        walkAll(this, 'body', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options.walkExpressions) {
+            walk(this, 'condition', visitor, options);
+        }
+        walk(this, 'body', visitor, options);
     }
 }
 
@@ -861,9 +881,11 @@ export class DottedSetStatement implements Statement {
         }
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'obj', visitor, cancel);
-        walkAll(this, 'value', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'obj', visitor, options);
+            walk(this, 'value', visitor, options);
+        }
     }
 }
 
@@ -902,10 +924,12 @@ export class IndexedSetStatement implements Statement {
         }
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
-        walkAll(this, 'obj', visitor, cancel);
-        walkAll(this, 'index', visitor, cancel);
-        walkAll(this, 'value', visitor, cancel);
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'obj', visitor, options);
+            walk(this, 'index', visitor, options);
+            walk(this, 'value', visitor, options);
+        }
     }
 }
 
@@ -939,7 +963,7 @@ export class LibraryStatement implements Statement {
         return result;
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         //nothing to walk
     }
 }
@@ -976,9 +1000,12 @@ export class NamespaceStatement implements Statement {
         return this.body.transpile(state);
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'nameExpression', visitor, options);
+        }
         if (this.body.statements.length > 0) {
-            walkAll(this, 'body', visitor, cancel);
+            walk(this, 'body', visitor, options);
         }
     }
 }
@@ -1020,7 +1047,7 @@ export class ImportStatement implements Statement {
         ];
     }
 
-    walkAll(visitor: WalkAllVisitor, cancel?: CancellationToken) {
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
         //nothing to walk
     }
 }

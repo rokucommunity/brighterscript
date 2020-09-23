@@ -11,7 +11,7 @@ describe('Statement', () => {
         });
         it('does nothing for walkAll', () => {
             const statement = new EmptyStatement();
-            statement.walkAll(() => {
+            statement.walk(() => {
                 expect(true).to.be.false;
             });
         });
@@ -44,7 +44,7 @@ describe('Statement', () => {
                 cancel.cancel();
                 comment.walk(() => {
                     throw new Error('Should not have been called');
-                }, null, cancel.token);
+                }, { cancel: cancel.token });
             });
         });
     });
