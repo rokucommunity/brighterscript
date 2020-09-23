@@ -237,7 +237,7 @@ export class Scope {
         let namespaceLookup = {} as { [namespaceName: string]: NamespaceContainer };
         let files = this.getFiles();
         for (let file of files) {
-            for (let namespace of file.parser.references?.namespaceStatements ?? []) {
+            for (let namespace of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
                 let name = namespace.nameExpression.getName(ParseMode.BrighterScript);
                 let nameParts = name.split('.');
@@ -290,7 +290,7 @@ export class Scope {
         let lookup = {} as { [lowerName: string]: ClassStatement };
         let files = this.getFiles();
         for (let file of files) {
-            for (let cls of file.parser.references?.classStatements || []) {
+            for (let cls of file.parser.references.classStatements) {
                 lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
             }
         }

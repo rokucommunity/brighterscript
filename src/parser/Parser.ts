@@ -2374,7 +2374,7 @@ export class Parser {
      * However, sometimes plugins can modify the AST, requiring a full walk to re-compute all references.
      * This does that walk.
      */
-    findReferences() {
+    private findReferences() {
         const references: References = {
             assignmentStatements: [],
             classStatements: [],

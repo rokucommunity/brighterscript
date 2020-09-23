@@ -223,8 +223,8 @@ export class BrsFile {
         }
 
         let statements = [
-            ...this.parser.references?.libraryStatements ?? [],
-            ...this.parser.references?.importStatements ?? []
+            ...this.parser.references.libraryStatements,
+            ...this.parser.references.importStatements
         ];
         for (let result of statements) {
             //register import statements
