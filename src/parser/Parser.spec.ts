@@ -15,7 +15,7 @@ describe('parser', () => {
     });
 
     describe('findReferences', () => {
-        it.only('gets called if references are missing', () => {
+        it('gets called if references are missing', () => {
             const parser = Parser.parse(`
                 sub main()
                 end sub
