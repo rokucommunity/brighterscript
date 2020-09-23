@@ -27,7 +27,12 @@ export type WalkVisitor = <T = Statement | Expression>(stmtExpr: Statement | Exp
  */
 export function walk<T>(keyParent: T, key: keyof T, visitor: WalkVisitor, options?: WalkOptions, parent?: Expression | Statement) {
     //notify the visitor of this expression
-    (keyParent as any)[key] = visitor(keyParent[key] as any, parent ?? keyParent as any) ?? keyParent[key];
+    const result = visitor(keyParent[key] as any, parent ?? keyParent as any);
+
+    //Replace the value on the parent if the visitor returned a value (this is how visitors can edit AST)
+    if (result) {
+        (keyParent as any)[key] = result;
+    }
 
     //stop processing if canceled
     if (options?.cancel?.isCancellationRequested) {
