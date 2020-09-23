@@ -2087,7 +2087,7 @@ describe('BrsFile', () => {
         });
     });
 
-    describe.only('type definitions', () => {
+    describe('type definitions', () => {
         let files: {};
         beforeEach(() => {
             files = {};
@@ -2123,10 +2123,10 @@ describe('BrsFile', () => {
 
             const spy = sinon.spy(program, 'getFileContents');
 
-            let file = await program.addOrReplaceFile('source/main.brs', ``);
+            await program.addOrReplaceFile('source/main.brs', ``);
             expect(spy.callCount).to.equal(1);
 
-            file = await program.addOrReplaceFile('source/main.brs', ``);
+            await program.addOrReplaceFile('source/main.brs', ``);
             //the definition file should be in the cache already so no new calls
             expect(spy.callCount).to.equal(1);
         });
