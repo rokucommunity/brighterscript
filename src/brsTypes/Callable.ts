@@ -59,7 +59,7 @@ export class StdlibArgument implements Argument {
     static InternalRange = Range.create(-1, -1, -1, -1);
 }
 
-export class FunctionParameter implements Expression {
+export class FunctionParameter extends Expression {
     constructor(
         public name: Identifier,
         public type: {
@@ -69,8 +69,10 @@ export class FunctionParameter implements Expression {
         public typeToken?: Token,
         public defaultValue?: Expression,
         public asToken?: Token
+    ) {
+        super();
 
-    ) { }
+    }
 
     public get range(): Range {
         return {

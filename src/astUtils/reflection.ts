@@ -1,5 +1,4 @@
-import { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement } from '../parser/Statement';
-import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from '../parser/ClassStatement';
+import { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement } from '../parser/Statement';
 import { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
 import { BrsString, ValueKind, BrsInvalid, BrsBoolean } from '../brsTypes';
 import { BrsNumber } from '../brsTypes/BrsNumber';
@@ -17,6 +16,17 @@ export function isXmlFile(file: (BrsFile | XmlFile)): file is XmlFile {
 }
 
 // Statements reflection
+
+/**
+ * Determine if the variable is a descendent of the Statement base class.
+ * Due to performance restrictions, this expects all statements to directly extend Statement,
+ * so it only checks the immediate parent's class name. For example:
+ * this will work for FunctionStatement -> Statement,
+ * but will not work CustomFunctionStatement -> FunctionStatement -> Statement
+ */
+export function isStatement(statement: any): statement is Statement {
+    return Object.getPrototypeOf(statement?.constructor || 0).name === 'Statement';
+}
 
 export function isBody(statement: any): statement is Body {
     return statement?.constructor?.name === 'Body';
@@ -101,10 +111,17 @@ export function isClassField(statement: any): statement is ClassFieldStatement {
 }
 
 // Expressions reflection
-
+/**
+ * Determine if the variable is a descendent of the Expression base class.
+ * Due to performance restrictions, this expects all statements to directly extend Expression,
+ * so it only checks the immediate parent's class name. For example:
+ * this will work for StringLiteralExpression -> Expression,
+ * but will not work CustomStringLiteralExpression -> StringLiteralExpression -> Expression
+ */
 export function isExpression(expression: any): expression is Expression {
-    return !!(expression?.walk);
+    return Object.getPrototypeOf(expression?.constructor || 0)?.name === 'Expression';
 }
+
 export function isBinaryExpression(expression: any): expression is BinaryExpression {
     return expression?.constructor.name === 'BinaryExpression';
 }

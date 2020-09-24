@@ -12,21 +12,24 @@ import { walk, WalkOptions, WalkVisitor } from '../astUtils/visitors';
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
 /** A BrightScript expression */
-export interface Expression {
-    /** The starting and ending location of the expression. */
-    range: Range;
+export abstract class Expression {
+    /**
+     * The starting and ending location of the expression.
+     */
+    public abstract range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string>;
+    public abstract transpile(state: TranspileState): Array<SourceNode | string>;
 
-    walk(visitor: WalkVisitor, options?: WalkOptions);
+    public abstract walk(visitor: WalkVisitor, options?: WalkOptions);
 }
 
-export class BinaryExpression implements Expression {
+export class BinaryExpression extends Expression {
     constructor(
         public left: Expression,
         public operator: Token,
         public right: Expression
     ) {
+        super();
         this.range = Range.create(this.left.range.start, this.right.range.end);
     }
 
@@ -50,7 +53,7 @@ export class BinaryExpression implements Expression {
     }
 }
 
-export class CallExpression implements Expression {
+export class CallExpression extends Expression {
     static MaximumArguments = 32;
 
     constructor(
@@ -60,6 +63,7 @@ export class CallExpression implements Expression {
         readonly args: Expression[],
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
+        super();
         this.range = Range.create(this.callee.range.start, this.closingParen.range.end);
     }
 
@@ -98,7 +102,7 @@ export class CallExpression implements Expression {
     }
 }
 
-export class FunctionExpression implements Expression {
+export class FunctionExpression extends Expression {
     constructor(
         readonly parameters: FunctionParameter[],
         readonly returns: ValueKind,
@@ -114,6 +118,7 @@ export class FunctionExpression implements Expression {
          */
         readonly parentFunction?: FunctionExpression
     ) {
+        super();
     }
 
     /**
@@ -212,11 +217,12 @@ export class FunctionExpression implements Expression {
     }
 }
 
-export class NamespacedVariableNameExpression implements Expression {
+export class NamespacedVariableNameExpression extends Expression {
     constructor(
         //if this is a `DottedGetExpression`, it must be comprised only of `VariableExpression`s
         readonly expression: DottedGetExpression | VariableExpression
     ) {
+        super();
         this.range = expression.range;
     }
     range: Range;
@@ -264,12 +270,13 @@ export class NamespacedVariableNameExpression implements Expression {
     }
 }
 
-export class DottedGetExpression implements Expression {
+export class DottedGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
         readonly dot: Token
     ) {
+        super();
         this.range = Range.create(this.obj.range.start, this.name.range.end);
     }
 
@@ -295,12 +302,13 @@ export class DottedGetExpression implements Expression {
     }
 }
 
-export class XmlAttributeGetExpression implements Expression {
+export class XmlAttributeGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
         readonly at: Token
     ) {
+        super();
         this.range = Range.create(this.obj.range.start, this.name.range.end);
     }
 
@@ -321,13 +329,14 @@ export class XmlAttributeGetExpression implements Expression {
     }
 }
 
-export class IndexedGetExpression implements Expression {
+export class IndexedGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
         readonly index: Expression,
         readonly openingSquare: Token,
         readonly closingSquare: Token
     ) {
+        super();
         this.range = Range.create(this.obj.range.start, this.closingSquare.range.end);
     }
 
@@ -350,7 +359,7 @@ export class IndexedGetExpression implements Expression {
     }
 }
 
-export class GroupingExpression implements Expression {
+export class GroupingExpression extends Expression {
     constructor(
         readonly tokens: {
             left: Token;
@@ -358,6 +367,7 @@ export class GroupingExpression implements Expression {
         },
         public expression: Expression
     ) {
+        super();
         this.range = Range.create(this.tokens.left.range.start, this.tokens.right.range.end);
     }
 
@@ -378,11 +388,12 @@ export class GroupingExpression implements Expression {
     }
 }
 
-export class LiteralExpression implements Expression {
+export class LiteralExpression extends Expression {
     constructor(
         readonly value: BrsType,
         range: Range
     ) {
+        super();
         this.range = range ?? Range.create(-1, -1, -1, -1);
     }
 
@@ -416,10 +427,11 @@ export class LiteralExpression implements Expression {
  * This is a special expression only used within template strings. It exists so we can prevent producing lots of empty strings
  * during template string transpile by identifying these expressions explicitly and skipping the bslib_toString around them
  */
-export class EscapedCharCodeLiteralExpression implements Expression {
+export class EscapedCharCodeLiteralExpression extends Expression {
     constructor(
         readonly token: Token & { charCode: number }
     ) {
+        super();
         this.range = token.range;
     }
     readonly range: Range;
@@ -440,12 +452,13 @@ export class EscapedCharCodeLiteralExpression implements Expression {
     }
 }
 
-export class ArrayLiteralExpression implements Expression {
+export class ArrayLiteralExpression extends Expression {
     constructor(
         readonly elements: Array<Expression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) {
+        super();
         this.range = Range.create(this.open.range.start, this.close.range.end);
     }
 
@@ -527,12 +540,13 @@ export interface AAMemberExpression {
     range: Range;
 }
 
-export class AALiteralExpression implements Expression {
+export class AALiteralExpression extends Expression {
     constructor(
         readonly elements: Array<AAMemberExpression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) {
+        super();
         this.range = Range.create(this.open.range.start, this.close.range.end);
     }
 
@@ -632,11 +646,12 @@ export class AALiteralExpression implements Expression {
     }
 }
 
-export class UnaryExpression implements Expression {
+export class UnaryExpression extends Expression {
     constructor(
         public operator: Token,
         public right: Expression
     ) {
+        super();
         this.range = Range.create(this.operator.range.start, this.right.range.end);
     }
 
@@ -657,11 +672,12 @@ export class UnaryExpression implements Expression {
     }
 }
 
-export class VariableExpression implements Expression {
+export class VariableExpression extends Expression {
     constructor(
         readonly name: Identifier,
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
+        super();
         this.range = this.name.range;
     }
 
@@ -699,10 +715,11 @@ export class VariableExpression implements Expression {
     }
 }
 
-export class SourceLiteralExpression implements Expression {
+export class SourceLiteralExpression extends Expression {
     constructor(
         readonly token: Token
     ) {
+        super();
         this.range = token.range;
     }
 
@@ -782,11 +799,12 @@ export class SourceLiteralExpression implements Expression {
  * except we need to uniquely identify these statements so we can
  * do more type checking.
  */
-export class NewExpression implements Expression {
+export class NewExpression extends Expression {
     constructor(
         readonly newKeyword: Token,
         readonly call: CallExpression
     ) {
+        super();
         this.range = Range.create(this.newKeyword.range.start, this.call.range.end);
     }
 
@@ -816,7 +834,7 @@ export class NewExpression implements Expression {
     }
 }
 
-export class CallfuncExpression implements Expression {
+export class CallfuncExpression extends Expression {
     constructor(
         readonly callee: Expression,
         readonly operator: Token,
@@ -825,6 +843,7 @@ export class CallfuncExpression implements Expression {
         readonly args: Expression[],
         readonly closingParen: Token
     ) {
+        super();
         this.range = Range.create(
             callee.range.start,
             (closingParen ?? args[args.length - 1] ?? openingParen ?? methodName ?? operator).range.end
@@ -882,10 +901,11 @@ export class CallfuncExpression implements Expression {
  * Since template strings can contain newlines, we need to concatenate multiple strings together with chr() calls.
  * This is a single expression that represents the string contatenation of all parts of a single quasi.
  */
-export class TemplateStringQuasiExpression implements Expression {
+export class TemplateStringQuasiExpression extends Expression {
     constructor(
         readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>
     ) {
+        super();
         this.range = Range.create(
             this.expressions[0].range.start,
             this.expressions[this.expressions.length - 1].range.end
@@ -919,13 +939,14 @@ export class TemplateStringQuasiExpression implements Expression {
     }
 }
 
-export class TemplateStringExpression implements Expression {
+export class TemplateStringExpression extends Expression {
     constructor(
         readonly openingBacktick: Token,
         readonly quasis: TemplateStringQuasiExpression[],
         readonly expressions: Expression[],
         readonly closingBacktick: Token
     ) {
+        super();
         this.range = Range.create(
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end
@@ -1015,7 +1036,7 @@ export class TemplateStringExpression implements Expression {
     }
 }
 
-export class TaggedTemplateStringExpression implements Expression {
+export class TaggedTemplateStringExpression extends Expression {
     constructor(
         readonly tagName: Identifier,
         readonly openingBacktick: Token,
@@ -1023,6 +1044,7 @@ export class TaggedTemplateStringExpression implements Expression {
         readonly expressions: Expression[],
         readonly closingBacktick: Token
     ) {
+        super();
         this.range = Range.create(
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end

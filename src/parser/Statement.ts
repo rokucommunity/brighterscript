@@ -1,26 +1,28 @@
 import { Token, Identifier, TokenKind, CompoundAssignmentOperators } from '../lexer';
 import { SourceNode } from 'source-map';
-import { Expression, FunctionExpression, NamespacedVariableNameExpression, BinaryExpression } from './Expression';
+import { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, CallExpression, VariableExpression, LiteralExpression } from './Expression';
 import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
-import { ParseMode } from './Parser';
+import { ParseMode, Parser } from './Parser';
 import { walk, WalkVisitor, WalkOptions } from '../astUtils/visitors';
+import { isCallExpression, isDottedGetExpression, isExpressionStatement, isVariableExpression } from '../astUtils/reflection';
+import { BrsInvalid } from '../brsTypes/BrsType';
 
 /**
  * A BrightScript statement
  */
-export interface Statement {
+export abstract class Statement {
     /**
      *  The starting and ending location of the statement.
      **/
-    range: Range;
+    public abstract range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string>;
-    walk(visitor: WalkVisitor, options?: WalkOptions);
+    public abstract transpile(state: TranspileState): Array<SourceNode | string>;
+    public abstract walk(visitor: WalkVisitor, options?: WalkOptions);
 }
 
-export class EmptyStatement implements Statement {
+export class EmptyStatement extends Statement {
     range: Range;
 
     transpile(state: TranspileState) {
@@ -31,10 +33,11 @@ export class EmptyStatement implements Statement {
     }
 }
 
-export class Body implements Statement {
+export class Body extends Statement {
     constructor(
         public statements: Statement[] = []
     ) {
+        super();
     }
 
     public get range() {
@@ -84,13 +87,14 @@ export class Body implements Statement {
     }
 }
 
-export class AssignmentStatement implements Statement {
+export class AssignmentStatement extends Statement {
     constructor(
         readonly equals: Token,
         readonly name: Identifier,
         readonly value: Expression,
         readonly containingFunction: FunctionExpression
     ) {
+        super();
         this.range = Range.create(this.name.range.start, this.value.range.end);
     }
 
@@ -118,11 +122,12 @@ export class AssignmentStatement implements Statement {
     }
 }
 
-export class Block implements Statement {
+export class Block extends Statement {
     constructor(
         readonly statements: Statement[],
         readonly startingRange: Range
     ) {
+        super();
         this.range = Range.create(
             this.startingRange.start,
             this.statements.length
@@ -173,10 +178,11 @@ export class Block implements Statement {
     }
 }
 
-export class ExpressionStatement implements Statement {
+export class ExpressionStatement extends Statement {
     constructor(
         readonly expression: Expression
     ) {
+        super();
         this.range = this.expression.range;
     }
 
@@ -193,10 +199,11 @@ export class ExpressionStatement implements Statement {
     }
 }
 
-export class CommentStatement implements Statement, Expression {
+export class CommentStatement extends Statement implements Expression {
     constructor(
         public comments: Token[]
     ) {
+        super();
         if (this.comments?.length > 0) {
             this.range = Range.create(
                 this.comments[0].range.start,
@@ -234,12 +241,13 @@ export class CommentStatement implements Statement, Expression {
     }
 }
 
-export class ExitForStatement implements Statement {
+export class ExitForStatement extends Statement {
     constructor(
         readonly tokens: {
             exitFor: Token;
         }
     ) {
+        super();
         this.range = this.tokens.exitFor.range;
     }
 
@@ -257,12 +265,13 @@ export class ExitForStatement implements Statement {
 
 }
 
-export class ExitWhileStatement implements Statement {
+export class ExitWhileStatement extends Statement {
     constructor(
         readonly tokens: {
             exitWhile: Token;
         }
     ) {
+        super();
         this.range = this.tokens.exitWhile.range;
     }
 
@@ -279,12 +288,13 @@ export class ExitWhileStatement implements Statement {
     }
 }
 
-export class FunctionStatement implements Statement {
+export class FunctionStatement extends Statement {
     constructor(
         public name: Identifier,
         public func: FunctionExpression,
         public namespaceName: NamespacedVariableNameExpression
     ) {
+        super();
         this.range = this.func.range;
     }
 
@@ -328,7 +338,7 @@ export interface ElseIf {
     thenBranch: Block;
 }
 
-export class IfStatement implements Statement {
+export class IfStatement extends Statement {
     constructor(
         readonly tokens: {
             if: Token;
@@ -341,6 +351,7 @@ export class IfStatement implements Statement {
         readonly elseIfs: ElseIf[],
         readonly elseBranch?: Block
     ) {
+        super();
         this.range = Range.create(
             this.tokens.if.range.start,
             (this.tokens.endIf ?? this.elseBranch ?? this.elseIfs?.[this.elseIfs?.length - 1]?.thenBranch ?? this.thenBranch).range.end
@@ -455,11 +466,12 @@ export class IfStatement implements Statement {
     }
 }
 
-export class IncrementStatement implements Statement {
+export class IncrementStatement extends Statement {
     constructor(
         readonly value: Expression,
         readonly operator: Token
     ) {
+        super();
         this.range = Range.create(this.value.range.start, this.operator.range.end);
     }
 
@@ -493,7 +505,7 @@ export interface PrintSeparatorSpace extends Token {
 /**
  * Represents a `print` statement within BrightScript.
  */
-export class PrintStatement implements Statement {
+export class PrintStatement extends Statement {
     /**
      * Creates a new internal representation of a BrightScript `print` statement.
      * @param expressions an array of expressions or `PrintSeparator`s to be
@@ -505,6 +517,7 @@ export class PrintStatement implements Statement {
         },
         readonly expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>
     ) {
+        super();
         this.range = Range.create(
             this.tokens.print.range.start,
             this.expressions.length
@@ -544,13 +557,14 @@ export class PrintStatement implements Statement {
     }
 }
 
-export class GotoStatement implements Statement {
+export class GotoStatement extends Statement {
     constructor(
         readonly tokens: {
             goto: Token;
             label: Token;
         }
     ) {
+        super();
         this.range = Range.create(this.tokens.goto.range.start, this.tokens.label.range.end);
     }
 
@@ -569,13 +583,14 @@ export class GotoStatement implements Statement {
     }
 }
 
-export class LabelStatement implements Statement {
+export class LabelStatement extends Statement {
     constructor(
         readonly tokens: {
             identifier: Token;
             colon: Token;
         }
     ) {
+        super();
         this.range = Range.create(this.tokens.identifier.range.start, this.tokens.colon.range.end);
     }
 
@@ -594,13 +609,14 @@ export class LabelStatement implements Statement {
     }
 }
 
-export class ReturnStatement implements Statement {
+export class ReturnStatement extends Statement {
     constructor(
         readonly tokens: {
             return: Token;
         },
         readonly value?: Expression
     ) {
+        super();
         this.range = Range.create(
             this.tokens.return.range.start,
             (this.value && this.value.range.end) || this.tokens.return.range.end
@@ -628,12 +644,13 @@ export class ReturnStatement implements Statement {
     }
 }
 
-export class EndStatement implements Statement {
+export class EndStatement extends Statement {
     constructor(
         readonly tokens: {
             end: Token;
         }
     ) {
+        super();
         this.range = Range.create(this.tokens.end.range.start, this.tokens.end.range.end);
     }
 
@@ -650,12 +667,13 @@ export class EndStatement implements Statement {
     }
 }
 
-export class StopStatement implements Statement {
+export class StopStatement extends Statement {
     constructor(
         readonly tokens: {
             stop: Token;
         }
     ) {
+        super();
         this.range = Range.create(this.tokens.stop.range.start, this.tokens.stop.range.end);
     }
 
@@ -672,7 +690,7 @@ export class StopStatement implements Statement {
     }
 }
 
-export class ForStatement implements Statement {
+export class ForStatement extends Statement {
     constructor(
         readonly tokens: {
             for: Token;
@@ -685,6 +703,7 @@ export class ForStatement implements Statement {
         readonly increment: Expression,
         readonly body: Block
     ) {
+        super();
         this.range = Range.create(this.tokens.for.range.start, this.tokens.endFor.range.end);
     }
 
@@ -744,7 +763,7 @@ export class ForStatement implements Statement {
     }
 }
 
-export class ForEachStatement implements Statement {
+export class ForEachStatement extends Statement {
     constructor(
         readonly tokens: {
             forEach: Token;
@@ -755,6 +774,7 @@ export class ForEachStatement implements Statement {
         readonly target: Expression,
         readonly body: Block
     ) {
+        super();
         this.range = Range.create(this.tokens.forEach.range.start, this.tokens.endFor.range.end);
     }
 
@@ -802,7 +822,7 @@ export class ForEachStatement implements Statement {
     }
 }
 
-export class WhileStatement implements Statement {
+export class WhileStatement extends Statement {
     constructor(
         readonly tokens: {
             while: Token;
@@ -811,6 +831,7 @@ export class WhileStatement implements Statement {
         readonly condition: Expression,
         readonly body: Block
     ) {
+        super();
         this.range = Range.create(this.tokens.while.range.start, this.tokens.endWhile.range.end);
     }
 
@@ -852,12 +873,13 @@ export class WhileStatement implements Statement {
     }
 }
 
-export class DottedSetStatement implements Statement {
+export class DottedSetStatement extends Statement {
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
         readonly value: Expression
     ) {
+        super();
         this.range = Range.create(this.obj.range.start, this.value.range.end);
     }
 
@@ -889,7 +911,7 @@ export class DottedSetStatement implements Statement {
     }
 }
 
-export class IndexedSetStatement implements Statement {
+export class IndexedSetStatement extends Statement {
     constructor(
         readonly obj: Expression,
         readonly index: Expression,
@@ -897,6 +919,7 @@ export class IndexedSetStatement implements Statement {
         readonly openingSquare: Token,
         readonly closingSquare: Token
     ) {
+        super();
         this.range = Range.create(this.obj.range.start, this.value.range.end);
     }
 
@@ -933,13 +956,14 @@ export class IndexedSetStatement implements Statement {
     }
 }
 
-export class LibraryStatement implements Statement {
+export class LibraryStatement extends Statement {
     constructor(
         readonly tokens: {
             library: Token;
             filePath: Token | undefined;
         }
     ) {
+        super();
         this.range = Range.create(
             this.tokens.library.range.start,
             this.tokens.filePath ? this.tokens.filePath.range.end : this.tokens.library.range.end
@@ -968,7 +992,7 @@ export class LibraryStatement implements Statement {
     }
 }
 
-export class NamespaceStatement implements Statement {
+export class NamespaceStatement extends Statement {
     constructor(
         public keyword: Token,
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
@@ -976,6 +1000,7 @@ export class NamespaceStatement implements Statement {
         public body: Body,
         public endKeyword: Token
     ) {
+        super();
         this.name = this.nameExpression.getName(ParseMode.BrighterScript);
     }
 
@@ -1010,11 +1035,12 @@ export class NamespaceStatement implements Statement {
     }
 }
 
-export class ImportStatement implements Statement {
+export class ImportStatement extends Statement {
     constructor(
         readonly importToken: Token,
         readonly filePathToken: Token
     ) {
+        super();
         this.range = Range.create(
             importToken.range.start,
             (filePathToken ?? importToken).range.end
@@ -1051,3 +1077,507 @@ export class ImportStatement implements Statement {
         //nothing to walk
     }
 }
+
+
+export class ClassStatement extends Statement {
+
+    constructor(
+        readonly classKeyword: Token,
+        /**
+         * The name of the class (without namespace prefix)
+         */
+        readonly name: Identifier,
+        public body: Statement[],
+        readonly end: Token,
+        readonly extendsKeyword?: Token,
+        readonly parentClassName?: NamespacedVariableNameExpression,
+        readonly namespaceName?: NamespacedVariableNameExpression
+    ) {
+        super();
+        this.body = this.body ?? [];
+        for (let statement of this.body) {
+            if (statement instanceof ClassMethodStatement) {
+                this.methods.push(statement);
+                this.memberMap[statement?.name?.text.toLowerCase()] = statement;
+            } else if (statement instanceof ClassFieldStatement) {
+                this.fields.push(statement);
+                this.memberMap[statement?.name?.text.toLowerCase()] = statement;
+            }
+        }
+
+        this.range = Range.create(this.classKeyword.range.start, this.end.range.end);
+    }
+
+    public getName(parseMode: ParseMode) {
+        if (this.name && this.name.text) {
+            if (this.namespaceName) {
+                let namespaceName = this.namespaceName.getName(parseMode);
+                let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
+                return namespaceName + separator + this.name.text;
+            } else {
+                return this.name.text;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this class doesn't have a name
+            return undefined;
+        }
+    }
+
+    public memberMap = {} as { [lowerMemberName: string]: ClassMemberStatement };
+    public methods = [] as ClassMethodStatement[];
+    public fields = [] as ClassFieldStatement[];
+
+
+    public readonly range: Range;
+
+    transpile(state: TranspileState): Array<SourceNode | string> {
+        let result = [];
+        //make the builder
+        result.push(...this.getTranspiledBuilder(state));
+        result.push(
+            '\n',
+            state.indent()
+        );
+        //make the class assembler (i.e. the public-facing class creator method)
+        result.push(...this.getTranspiledClassFunction(state));
+        return result;
+    }
+
+    /**
+     * Find the parent index for this class's parent.
+     * For class inheritance, every class is given an index.
+     * The base class is index 0, its child is index 1, and so on.
+     */
+    public getParentClassIndex(state: TranspileState) {
+        let myIndex = 0;
+        let stmt = this as ClassStatement;
+        while (stmt) {
+            if (stmt.parentClassName) {
+                stmt = state.file.getClassByName(stmt.parentClassName.getName(ParseMode.BrighterScript));
+                myIndex++;
+            } else {
+                break;
+            }
+        }
+        return myIndex - 1;
+    }
+
+    public hasParentClass() {
+        return !!this.parentClassName;
+    }
+
+    /**
+     * Get all ancestor classes, in closest-to-furthest order (i.e. 0 is parent, 1 is grandparent, etc...).
+     * This will return an empty array if no ancestors were found
+     */
+    public getAncestors(state: TranspileState) {
+        let ancestors = [];
+        let stmt = this as ClassStatement;
+        while (stmt) {
+            if (stmt.parentClassName) {
+                let fullyQualifiedClassName = util.getFulllyQualifiedClassName(
+                    stmt.parentClassName.getName(ParseMode.BrighterScript),
+                    this.namespaceName?.getName(ParseMode.BrighterScript)
+                );
+                stmt = state.file.getClassByName(fullyQualifiedClassName);
+                ancestors.push(stmt);
+            } else {
+                break;
+            }
+        }
+        return ancestors;
+    }
+
+    private getBuilderName(name: string) {
+        if (name.includes('.')) {
+            name = name.replace(/\./gi, '_');
+        }
+        return `__${name}_builder`;
+    }
+
+    /**
+     * Get the constructor function for this class (if exists), or undefined if not exist
+     */
+    private getConstructorFunction() {
+        for (let key in this.memberMap) {
+            let member = this.memberMap[key];
+            if (member.name?.text?.toLowerCase() === 'new') {
+                return member as ClassMethodStatement;
+            }
+        }
+    }
+    private getEmptyNewFunction() {
+        let stmt = (Parser.parse(`
+            class UtilClass
+                sub new()
+                end sub
+            end class
+        `, { mode: ParseMode.BrighterScript }).statements[0] as ClassStatement).memberMap['new'] as ClassMethodStatement;
+        //TODO make locations point to 0,0 (might not matter?)
+        return stmt;
+    }
+
+    /**
+     * Determine if the specified field was declared in one of the ancestor classes
+     */
+    public isFieldDeclaredByAncestor(fieldName: string, ancestors: ClassStatement[]) {
+        let lowerFieldName = fieldName.toLowerCase();
+        for (let ancestor of ancestors) {
+            if (ancestor.memberMap[lowerFieldName]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The builder is a function that assigns all of the methods and property names to a class instance.
+     * This needs to be a separate function so that child classes can call the builder from their parent
+     * without instantiating the parent constructor at that point in time.
+     */
+    private getTranspiledBuilder(state: TranspileState) {
+        let result = [];
+        result.push(`function ${this.getBuilderName(this.getName(ParseMode.BrightScript))}()\n`);
+        state.blockDepth++;
+        //indent
+        result.push(state.indent());
+
+        /**
+         * The lineage of this class. index 0 is a direct parent, index 1 is index 0's parent, etc...
+         */
+        let ancestors = this.getAncestors(state);
+
+        //construct parent class or empty object
+        if (ancestors[0]) {
+            let fullyQualifiedClassName = util.getFulllyQualifiedClassName(
+                this.parentClassName.getName(ParseMode.BrighterScript),
+                this.namespaceName?.getName(ParseMode.BrighterScript)
+            );
+            result.push(
+                'instance = ',
+                this.getBuilderName(fullyQualifiedClassName), '()');
+        } else {
+            //use an empty object.
+            result.push('instance = {}');
+        }
+        result.push(
+            state.newline(),
+            state.indent()
+        );
+        let parentClassIndex = this.getParentClassIndex(state);
+
+        //create empty `new` function if class is missing it (simplifies transpile logic)
+        if (!this.getConstructorFunction()) {
+            this.memberMap['new'] = this.getEmptyNewFunction();
+            this.body = [this.memberMap['new'], ...this.body];
+        }
+
+        for (let statement of this.body) {
+            //is field statement
+            if (statement instanceof ClassFieldStatement) {
+                //do nothing with class fields in this situation, they are handled elsewhere
+                continue;
+
+                //methods
+            } else if (statement instanceof ClassMethodStatement) {
+
+                //store overridden parent methods as super{parentIndex}_{methodName}
+                if (
+                    //is override method
+                    statement.overrides ||
+                    //is constructor function in child class
+                    (statement.name.text.toLowerCase() === 'new' && ancestors[0])
+                ) {
+                    result.push(
+                        `instance.super${parentClassIndex}_${statement.name.text} = instance.${statement.name.text}`,
+                        state.newline(),
+                        state.indent()
+                    );
+                }
+
+                state.classStatement = this;
+                result.push(
+                    'instance.',
+                    state.sourceNode(statement.name, statement.name.text),
+                    ' = ',
+                    ...statement.transpile(state),
+                    state.newline(),
+                    state.indent()
+                );
+                delete state.classStatement;
+            } else {
+                //other random statements (probably just comments)
+                result.push(
+                    ...statement.transpile(state),
+                    state.newline(),
+                    state.indent()
+                );
+            }
+        }
+        //return the instance
+        result.push('return instance\n');
+        state.blockDepth--;
+        result.push(state.indent());
+        result.push(`end function`);
+        return result;
+    }
+
+    /**
+     * The class function is the function with the same name as the class. This is the function that
+     * consumers should call to create a new instance of that class.
+     * This invokes the builder, gets an instance of the class, then invokes the "new" function on that class.
+     */
+    private getTranspiledClassFunction(state: TranspileState) {
+        let result = [];
+        const constructorFunction = this.getConstructorFunction();
+        const constructorParams = constructorFunction ? constructorFunction.func.parameters : [];
+
+        result.push(
+            new SourceNode(
+                this.classKeyword.range.start.line + 1,
+                this.classKeyword.range.start.character,
+                state.pathAbsolute,
+                'function'
+            ),
+            new SourceNode(
+                this.classKeyword.range.end.line + 1,
+                this.classKeyword.range.end.character,
+                state.pathAbsolute,
+                ' '
+            ),
+            new SourceNode(
+                this.name.range.start.line + 1,
+                this.name.range.start.character,
+                state.pathAbsolute,
+                this.getName(ParseMode.BrightScript)
+            ),
+            `(`
+        );
+        let i = 0;
+        for (let param of constructorParams) {
+            if (i > 0) {
+                result.push(', ');
+            }
+            result.push(
+                param.transpile(state)
+            );
+            i++;
+        }
+        result.push(
+            ')',
+            '\n'
+        );
+
+        state.blockDepth++;
+        result.push(state.indent());
+        result.push(`instance = ${this.getBuilderName(this.getName(ParseMode.BrightScript))}()\n`);
+
+        result.push(state.indent());
+        result.push(`instance.new(`);
+
+        //append constructor arguments
+        i = 0;
+        for (let param of constructorParams) {
+            if (i > 0) {
+                result.push(', ');
+            }
+            result.push(
+                state.sourceNode(param, param.name.text)
+            );
+            i++;
+        }
+        result.push(
+            ')',
+            '\n'
+        );
+
+        result.push(state.indent());
+        result.push(`return instance\n`);
+
+        state.blockDepth--;
+        result.push(state.indent());
+        result.push(`end function`);
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        for (let i = 0; i < this.body.length; i++) {
+            walk(this.body, i, visitor, options, this);
+        }
+    }
+}
+
+export class ClassMethodStatement implements Statement {
+    constructor(
+        readonly accessModifier: Token,
+        readonly name: Identifier,
+        readonly func: FunctionExpression,
+        readonly overrides: Token
+    ) {
+        this.range = Range.create(
+            (this.accessModifier ?? this.func).range.start,
+            this.func.range.end
+        );
+    }
+
+    public readonly range: Range;
+
+    transpile(state: TranspileState): Array<SourceNode | string> {
+        if (this.name.text.toLowerCase() === 'new') {
+            this.ensureSuperConstructorCall(state);
+            //TODO we need to undo this at the bottom of this method
+            this.injectFieldInitializersForConstructor(state);
+        }
+        //TODO - remove type information from these methods because that doesn't work
+        //convert the `super` calls into the proper methods
+        util.findAllDeep<any>(this.func.body.statements, (value) => {
+            //if this is a method call
+            if (isCallExpression(value)) {
+                let parentClassIndex = state.classStatement.getParentClassIndex(state);
+                //this is the 'super()' call in the new method.
+                if (isVariableExpression(value.callee) && value.callee.name.text.toLowerCase() === 'super') {
+                    value.callee.name.text = `m.super${parentClassIndex}_new`;
+
+                    //this is a super.SomeMethod() call.
+                } else if (isDottedGetExpression(value.callee)) {
+                    let beginningVariable = util.findBeginningVariableExpression(value.callee);
+                    let lowerName = beginningVariable?.getName(ParseMode.BrighterScript).toLowerCase();
+                    if (lowerName === 'super') {
+                        beginningVariable.name.text = 'm';
+                        value.callee.name.text = `super${parentClassIndex}_${value.callee.name.text}`;
+                    }
+                }
+            }
+            return false;
+        });
+        return this.func.transpile(state);
+    }
+
+    /**
+     * All child classes must call the parent constructor. The type checker will warn users when they don't call it in their own class,
+     * but we still need to call it even if they have omitted it. This injects the super call if it's missing
+     */
+    private ensureSuperConstructorCall(state: TranspileState) {
+        //if this class doesn't extend another class, quit here
+        if (state.classStatement.getAncestors(state).length === 0) {
+            return;
+        }
+
+        //if the first statement is a call to super, quit here
+        let firstStatement = this.func.body.statements[0];
+        if (
+            //is a call statement
+            isExpressionStatement(firstStatement) && isCallExpression(firstStatement.expression) &&
+            //is a call to super
+            util.findBeginningVariableExpression(firstStatement?.expression.callee as any).name.text.toLowerCase() === 'super'
+        ) {
+            return;
+        }
+
+        //this is a child class, and the first statement isn't a call to super. Inject one
+        this.func.body.statements.unshift(
+            new ExpressionStatement(
+                new CallExpression(
+                    new VariableExpression(
+                        {
+                            kind: TokenKind.Identifier,
+                            text: 'super',
+                            isReserved: false,
+                            range: state.classStatement.name.range
+                        },
+                        null
+                    ),
+                    {
+                        kind: TokenKind.LeftParen,
+                        text: '(',
+                        isReserved: false,
+                        range: state.classStatement.name.range
+                    },
+                    {
+                        kind: TokenKind.RightParen,
+                        text: ')',
+                        isReserved: false,
+                        range: state.classStatement.name.range
+                    },
+                    [],
+                    null
+                )
+            )
+        );
+    }
+
+    /**
+     * Inject field initializers at the top of the `new` function (after any present `super()` call)
+     */
+    private injectFieldInitializersForConstructor(state: TranspileState) {
+        let startingIndex = state.classStatement.hasParentClass() ? 1 : 0;
+
+        let newStatements = [] as Statement[];
+        //insert the field initializers in order
+        for (let field of state.classStatement.fields) {
+            let thisQualifiedName = { ...field.name };
+            thisQualifiedName.text = 'm.' + field.name.text;
+            if (field.initialValue) {
+                newStatements.push(
+                    new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue, this.func)
+                );
+            } else {
+                //if there is no initial value, set the initial value to `invalid`
+                newStatements.push(
+                    new AssignmentStatement(
+                        {
+                            kind: TokenKind.Equal,
+                            isReserved: false,
+                            range: field.name.range,
+                            text: '='
+                        },
+                        thisQualifiedName,
+                        new LiteralExpression(
+                            BrsInvalid.Instance,
+                            //set the range to the end of the name so locations don't get broken
+                            Range.create(field.name.range.end, field.name.range.end)
+                        ),
+                        this.func
+                    )
+                );
+            }
+        }
+        this.func.body.statements.splice(startingIndex, 0, ...newStatements);
+    }
+
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions) {
+            walk(this, 'func', visitor, options);
+        }
+    }
+}
+
+export class ClassFieldStatement implements Statement {
+
+    constructor(
+        readonly accessModifier?: Token,
+        readonly name?: Identifier,
+        readonly as?: Token,
+        readonly type?: Token,
+        readonly equal?: Token,
+        readonly initialValue?: Expression
+    ) {
+        this.range = Range.create(
+            (this.accessModifier ?? this.name).range.start,
+            (this.initialValue ?? this.type ?? this.as ?? this.name).range.end
+        );
+    }
+
+    public readonly range: Range;
+
+    transpile(state: TranspileState): Array<SourceNode | string> {
+        throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
+    }
+
+    walk(visitor: WalkVisitor, options?: WalkOptions) {
+        if (options?.walkExpressions && this.initialValue) {
+            walk(this, 'initialValue', visitor, options);
+        }
+    }
+}
+export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;

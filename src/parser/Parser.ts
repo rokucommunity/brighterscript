@@ -50,7 +50,7 @@ import {
     StopStatement,
     NamespaceStatement,
     Body,
-    ImportStatement
+    ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement
 } from './Statement';
 import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
@@ -79,7 +79,6 @@ import {
     SourceLiteralExpression
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
-import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
 import { Logger } from '../Logger';
 import { isClassMethod } from '../astUtils/reflection';
 import { createVisitor } from '../astUtils/visitors';

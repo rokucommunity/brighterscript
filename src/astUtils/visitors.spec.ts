@@ -257,7 +257,7 @@ describe('astUtils visitors', () => {
             });
             file.parse(EXPRESSIONS_SRC);
             expect(actual).to.deep.equal([
-                'CommentStatement:1:CommentStatement',            // <'comment>
+                'CommentStatement:1:CommentStatement',            // <'c omment>
                 'PrintStatement:1:LiteralExpression',             // print <"msg">; 3
                 'PrintStatement:1:LiteralExpression',             // print "msg"; <3>
                 'PrintStatement:1:TemplateStringExpression',      // print <`expand ${var}`>

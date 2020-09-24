@@ -1,10 +1,11 @@
 import { Scope } from '../Scope';
-import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from '../parser/ClassStatement';
 import { XmlFile } from '../files/XmlFile';
 import { BrsFile } from '../files/BrsFile';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { BsDiagnostic } from '..';
-import { CallExpression, VariableExpression, ParseMode, ExpressionStatement } from '../parser';
+import { CallExpression, VariableExpression } from '../parser/Expression';
+import { ParseMode } from '../parser/Parser';
+import { ExpressionStatement, ClassMethodStatement, ClassFieldStatement, ClassStatement } from '../parser/Statement';
 import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
