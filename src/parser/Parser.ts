@@ -2412,7 +2412,11 @@ export class Parser {
             NewExpression: e => {
                 references.newExpressions.push(e);
             }
-        }));
+        }), {
+            walkChildFunctions: true,
+            walkExpressions: true,
+            walkStatements: true
+        });
         return references;
     }
 

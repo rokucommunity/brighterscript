@@ -1,6 +1,7 @@
 import { CancellationToken } from 'vscode-languageserver';
 import { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement } from '../parser/Statement';
 import { AALiteralExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, Expression, FunctionExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
+import { isExpression, isStatement } from './reflection';
 
 
 /**
@@ -14,6 +15,7 @@ export function walkStatements(
     statement.walk(visitor as any, {
         walkChildFunctions: false,
         walkExpressions: false,
+        walkStatements: true,
         cancel: cancel
     });
 }
@@ -25,11 +27,16 @@ export type WalkVisitor = <T = Statement | Expression>(stmtExpr: Statement | Exp
  * A helper function for Statement and Expression `walkAll` calls.
  */
 export function walk<T>(keyParent: T, key: keyof T, visitor: WalkVisitor, options?: WalkOptions, parent?: Expression | Statement) {
+    //stop processing if canceled
+    if (options?.cancel?.isCancellationRequested) {
+        return;
+    }
+
     //notify the visitor of this expression
     const result = visitor(keyParent[key] as any, parent ?? keyParent as any);
 
-    //Replace the value on the parent if the visitor returned a value (this is how visitors can edit AST)
-    if (result) {
+    //Replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
+    if (isExpression(result) || isStatement(result)) {
         (keyParent as any)[key] = result;
     }
 
@@ -120,11 +127,14 @@ export interface WalkOptions {
      */
     walkChildFunctions?: boolean;
     /**
-     * If enabled, all expressions will be walked.
-     * If disabled, only statements will be walked
+     * If enabled, expressions will be walked. Otherwise expressoins will be skipped.
      * @default false
      */
     walkExpressions?: boolean;
+    /**
+     * If enabled statements will be walked. Otherwise statements will be skipped
+     */
+    walkStatements?: boolean;
     /**
      * A token that can be used to cancel the walk operation
      */

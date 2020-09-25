@@ -80,11 +80,11 @@ describe('astUtils visitors', () => {
         program.dispose();
     });
 
-    function functionsWalker(visitor: (s: Statement, p: Statement) => void, cancel?: CancellationToken) {
+    function functionsWalker(visitor: (statement: Statement, parent: Statement) => void, cancel?: CancellationToken) {
         return (file: BrsFile) => {
-            file.parser.references.functionExpressions.some(f => {
-                visitor(f.body, f);
-                walkStatements(f.body, (s, p) => visitor(s, p), cancel);
+            file.parser.references.functionExpressions.some(functionExpression => {
+                visitor(functionExpression.body, undefined);
+                walkStatements(functionExpression.body, (statement, parent) => visitor(statement, parent), cancel);
                 return cancel?.isCancellationRequested;
             });
         };
@@ -156,6 +156,7 @@ describe('astUtils visitors', () => {
                 'Block',                // while block
                 'PrintStatement',       // print 6
                 'ForStatement',         // for a = 1 to 10
+                'AssignmentStatement',  // a = 1
                 'Block',                // for block
                 'PrintStatement',       // print 7
                 'Block',                // function exec body
@@ -242,30 +243,38 @@ describe('astUtils visitors', () => {
     describe('Expressions', () => {
         it('Walks through all expressions', () => {
             const actual = [];
-            let curr: { s: Statement; d: number };
-            const visitor = createStackedVisitor((s: Statement, stack: Statement[]) => {
-                curr = { s: s, d: stack.length };
+            let curr: { statement: Statement; depth: number };
+            const statementVisitor = createStackedVisitor((statement: Statement, stack: Statement[]) => {
+                curr = { statement: statement, depth: stack.length };
             });
-            function expression(e: Expression) {
-                const { s, d } = curr;
-                actual.push(`${s.constructor.name}:${d}:${e.constructor.name}`);
+            function expressionVisitor(expression: Expression, parent) {
+                const { statement, depth } = curr;
+                actual.push(`${statement.constructor.name}:${depth}:${expression.constructor.name}`);
             }
-            const walker = functionsWalker(createStatementExpressionsVisitor(visitor, expression));
+            const walker = functionsWalker((statement, parentStatement) => {
+                statementVisitor(statement, parentStatement);
+                statement.walk(expressionVisitor, {
+                    walkStatements: false,
+                    walkExpressions: true
+                });
+            });
             program.plugins.add({
                 name: 'walker',
                 afterFileParse: () => walker(file)
             });
+
             file.parse(EXPRESSIONS_SRC);
             expect(actual).to.deep.equal([
-                'CommentStatement:1:CommentStatement',            // <'c omment>
+                //The comment statement is weird because it can't be both a statement and expression, but is treated that way. Just ignore it for now until we refactor comments.
+                //'CommentStatement:1:CommentStatement',          // '<comment>
                 'PrintStatement:1:LiteralExpression',             // print <"msg">; 3
                 'PrintStatement:1:LiteralExpression',             // print "msg"; <3>
                 'PrintStatement:1:TemplateStringExpression',      // print <`expand ${var}`>
                 'PrintStatement:1:TemplateStringQuasiExpression', // print `<expand >${var}`
                 'PrintStatement:1:LiteralExpression',             // print `<"expand ">${var}`
+                'PrintStatement:1:VariableExpression',            // print `expand ${<var>}`
                 'PrintStatement:1:TemplateStringQuasiExpression', // print `expand ${var}<>`
                 'PrintStatement:1:LiteralExpression',             // print `expand ${var}<"">`
-                'PrintStatement:1:VariableExpression',            // print `expand ${<var>}`
                 'AssignmentStatement:1:LiteralExpression',        // a = <"a">
                 'AssignmentStatement:1:BinaryExpression',         // b = <"b" + "c">
                 'AssignmentStatement:1:LiteralExpression',        // b = <"b"> + c
@@ -282,8 +291,8 @@ describe('astUtils visitors', () => {
                 'ExpressionStatement:1:CallExpression',           // exec("e", <some()>)
                 'ExpressionStatement:1:VariableExpression',       // exec("e", <some>())
                 'ForStatement:1:LiteralExpression',               // for i = <1> to 10
-                'ForStatement:1:LiteralExpression',               // for i = 1 to <10>
                 'ForStatement:1:LiteralExpression',               // for i = 1 to 10 <step 1>
+                'AssignmentStatement:2:LiteralExpression',        // for <i = 1> to 10
                 'ForEachStatement:1:VariableExpression',          // for each n in <aa>
                 'WhileStatement:1:BinaryExpression',              // while <i < 10>
                 'WhileStatement:1:VariableExpression',            // while <i> < 10
@@ -311,7 +320,8 @@ describe('astUtils visitors', () => {
                 items.push(stmtExpr);
             }, {
                 walkExpressions: true,
-                walkChildFunctions: true
+                walkChildFunctions: true,
+                walkStatements: true
             });
             index = 1;
             expect(items.map(x => `${x.constructor.name}:${x._testId}`)).to.eql(expectedConstructors.map(x => `${x}:${index++}`));
@@ -339,6 +349,7 @@ describe('astUtils visitors', () => {
             }, {
                 walkExpressions: true,
                 walkChildFunctions: true,
+                walkStatements: true,
                 cancel: cancel.token
             });
 

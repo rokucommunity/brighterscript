@@ -6,7 +6,7 @@ import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
 import { ParseMode, Parser } from './Parser';
 import { walk, WalkVisitor, WalkOptions } from '../astUtils/visitors';
-import { isCallExpression, isDottedGetExpression, isExpressionStatement, isVariableExpression } from '../astUtils/reflection';
+import { isCallExpression, isDottedGetExpression, isExpression, isExpressionStatement, isVariableExpression } from '../astUtils/reflection';
 import { BrsInvalid } from '../brsTypes/BrsType';
 
 /**
@@ -81,8 +81,10 @@ export class Body extends Statement {
     }
 
     walk(visitor: WalkVisitor, options?: WalkOptions) {
-        for (let i = 0; i < this.statements.length; i++) {
-            walk(this.statements, i, visitor, options, this);
+        if (options?.walkStatements) {
+            for (let i = 0; i < this.statements.length; i++) {
+                walk(this.statements, i, visitor, options, this);
+            }
         }
     }
 }
@@ -172,8 +174,10 @@ export class Block extends Statement {
     }
 
     walk(visitor: WalkVisitor, options?: WalkOptions) {
-        for (let i = 0; i < this.statements.length; i++) {
-            walk(this.statements, i, visitor, options, this);
+        if (options?.walkStatements) {
+            for (let i = 0; i < this.statements.length; i++) {
+                walk(this.statements, i, visitor, options, this);
+            }
         }
     }
 }
@@ -451,16 +455,20 @@ export class IfStatement extends Statement {
         if (options?.walkExpressions) {
             walk(this, 'condition', visitor, options);
         }
-        walk(this, 'thenBranch', visitor, options);
+        if (options?.walkStatements) {
+            walk(this, 'thenBranch', visitor, options);
+        }
 
         for (let i = 0; i < this.elseIfs.length; i++) {
             if (options?.walkExpressions) {
                 walk(this.elseIfs[i], 'condition', visitor, options, this);
             }
-            walk(this.elseIfs[i], 'thenBranch', visitor, options, this);
+            if (options?.walkStatements) {
+                walk(this.elseIfs[i], 'thenBranch', visitor, options, this);
+            }
         }
 
-        if (this.elseBranch) {
+        if (this.elseBranch && options?.walkStatements) {
             walk(this, 'elseBranch', visitor, options);
         }
     }
@@ -550,8 +558,10 @@ export class PrintStatement extends Statement {
     walk(visitor: WalkVisitor, options?: WalkOptions) {
         if (options?.walkExpressions) {
             for (let i = 0; i < this.expressions.length; i++) {
-                //TODO the original walk code did an `isExpression()` check before walking. Do we need that?
-                walk(this.expressions, i, visitor, options, this);
+                //sometimes we have semicolon `Token`s in the expressions list (should probably fix that...), so only emit the actual expressions
+                if (isExpression(this.expressions[i])) {
+                    walk(this.expressions, i, visitor, options, this);
+                }
             }
         }
     }
@@ -754,12 +764,16 @@ export class ForStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options?: WalkOptions) {
-        walk(this, 'counterDeclaration', visitor, options);
+        if (options?.walkStatements) {
+            walk(this, 'counterDeclaration', visitor, options);
+        }
         if (options?.walkExpressions) {
             walk(this, 'finalValue', visitor, options);
             walk(this, 'increment', visitor, options);
         }
-        walk(this, 'body', visitor, options);
+        if (options?.walkStatements) {
+            walk(this, 'body', visitor, options);
+        }
     }
 }
 
@@ -818,7 +832,9 @@ export class ForEachStatement extends Statement {
         if (options?.walkExpressions) {
             walk(this, 'target', visitor, options);
         }
-        walk(this, 'body', visitor, options);
+        if (options?.walkStatements) {
+            walk(this, 'body', visitor, options);
+        }
     }
 }
 
@@ -869,7 +885,9 @@ export class WhileStatement extends Statement {
         if (options.walkExpressions) {
             walk(this, 'condition', visitor, options);
         }
-        walk(this, 'body', visitor, options);
+        if (options?.walkStatements) {
+            walk(this, 'body', visitor, options);
+        }
     }
 }
 
@@ -1029,7 +1047,7 @@ export class NamespaceStatement extends Statement {
         if (options?.walkExpressions) {
             walk(this, 'nameExpression', visitor, options);
         }
-        if (this.body.statements.length > 0) {
+        if (this.body.statements.length > 0 && options?.walkStatements) {
             walk(this, 'body', visitor, options);
         }
     }
@@ -1401,8 +1419,10 @@ export class ClassStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options?: WalkOptions) {
-        for (let i = 0; i < this.body.length; i++) {
-            walk(this.body, i, visitor, options, this);
+        if (options?.walkStatements) {
+            for (let i = 0; i < this.body.length; i++) {
+                walk(this.body, i, visitor, options, this);
+            }
         }
     }
 }
@@ -1575,7 +1595,7 @@ export class ClassFieldStatement implements Statement {
     }
 
     walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions && this.initialValue) {
+        if (this.initialValue && options?.walkExpressions) {
             walk(this, 'initialValue', visitor, options);
         }
     }
