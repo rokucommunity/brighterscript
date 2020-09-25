@@ -30,7 +30,7 @@ describe('parser', () => {
             //simulate a tree-shaking plugin by removing the `UnusedFunction`
             parser.ast.statements.splice(1);
             //tell the parser we modified the AST and need to regenerate references
-            parser.clearReferences();
+            parser.invalidateReferences();
             expect(parser['_references']).not.to.exist;
             //calling `references` automatically regenerates the references
             expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
