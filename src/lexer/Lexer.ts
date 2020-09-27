@@ -5,6 +5,7 @@ import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Character
 import { BrsType, BrsString, Int32, Int64, Float, Double } from '../brsTypes/index';
 import { Range, Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
+import util from '../util';
 
 export class Lexer {
     /**
@@ -98,16 +99,7 @@ export class Lexer {
             kind: TokenKind.Eof,
             isReserved: false,
             text: '',
-            range: {
-                start: {
-                    line: this.lineBegin,
-                    character: this.columnBegin
-                },
-                end: {
-                    line: this.lineEnd,
-                    character: this.columnEnd + 1
-                }
-            } as Range
+            range: util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
         });
         return this;
     }
@@ -969,16 +961,7 @@ export class Lexer {
      * @returns the range of `text` as a `TokenLocation`
      */
     private rangeOf(text: string): Range {
-        return {
-            start: {
-                line: this.lineBegin,
-                character: this.columnBegin
-            },
-            end: {
-                line: this.lineEnd,
-                character: this.columnEnd
-            }
-        };
+        return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
     }
 }
 

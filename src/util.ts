@@ -950,6 +950,22 @@ export class Util {
             return className;
         }
     }
+
+    /**
+     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower
+     */
+    public createRange(startLine, startCharacter, endLine, endCharacter): Range {
+        return {
+            start: {
+                line: startLine,
+                character: startCharacter
+            },
+            end: {
+                line: endLine,
+                character: endCharacter
+            }
+        };
+    }
 }
 
 /**
