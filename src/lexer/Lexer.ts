@@ -98,9 +98,17 @@ export class Lexer {
             kind: TokenKind.Eof,
             isReserved: false,
             text: '',
-            range: Range.create(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
+            range: {
+                start: {
+                    line: this.lineBegin,
+                    character: this.columnBegin
+                },
+                end: {
+                    line: this.lineEnd,
+                    character: this.columnEnd + 1
+                }
+            } as Range
         });
-
         return this;
     }
 
@@ -961,12 +969,16 @@ export class Lexer {
      * @returns the range of `text` as a `TokenLocation`
      */
     private rangeOf(text: string): Range {
-        return Range.create(
-            this.lineBegin,
-            this.columnBegin,
-            this.lineEnd,
-            this.columnEnd
-        );
+        return {
+            start: {
+                line: this.lineBegin,
+                character: this.columnBegin
+            },
+            end: {
+                line: this.lineEnd,
+                character: this.columnEnd
+            }
+        };
     }
 }
 
