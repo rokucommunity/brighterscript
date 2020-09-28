@@ -44,7 +44,7 @@ export function walk<T>(keyParent: T, key: keyof T, visitor: WalkVisitor, option
     //replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
     if (result && (isExpression(result) || isStatement(result))) {
         (keyParent as any)[key] = result;
-        element = result;
+        return;
     }
 
     //stop processing if canceled
