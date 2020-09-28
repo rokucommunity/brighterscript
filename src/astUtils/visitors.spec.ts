@@ -725,6 +725,42 @@ describe('astUtils visitors', () => {
             ]);
         });
 
+        it.only('walks ReturnStatement with or without value', async () => {
+            await testWalk(`
+                sub main()
+                    a = 0
+                    if a = 0 then
+                        return
+                    else if a > 0 then
+                        return 1
+                    else
+                        return 'nothing
+                    end if
+                end sub
+            `, [
+                'FunctionStatement',
+                'FunctionExpression',
+                'Block',
+                'AssignmentStatement',
+                'LiteralExpression',
+                'IfStatement',
+                'BinaryExpression',
+                'VariableExpression',
+                'LiteralExpression',
+                'Block',
+                'ReturnStatement',
+                'BinaryExpression',
+                'VariableExpression',
+                'LiteralExpression',
+                'Block',
+                'ReturnStatement',
+                'LiteralExpression',
+                'Block',
+                'ReturnStatement',
+                'CommentStatement'
+            ]);
+        });
+
         it('walks TaggedTemplateStringExpression', async () => {
             await testWalk(`
                 sub main()

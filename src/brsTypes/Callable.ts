@@ -102,8 +102,8 @@ export class FunctionParameter extends Expression {
         return result;
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions && this.defaultValue) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkExpressions && this.defaultValue) {
             walk(this, 'defaultValue', visitor, options);
         }
     }

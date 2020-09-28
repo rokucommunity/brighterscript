@@ -19,13 +19,13 @@ export function isXmlFile(file: (BrsFile | XmlFile)): file is XmlFile {
 
 /**
  * Determine if the variable is a descendent of the Statement base class.
- * Due to performance restrictions, this expects all statements to directly extend Statement,
- * so it only checks the immediate parent's class name. For example:
- * this will work for FunctionStatement -> Statement,
- * but will not work CustomFunctionStatement -> FunctionStatement -> Statement
+ * Due to performance restrictions, this expects all statements to
+ * directly extend Statement or FunctionStatement,
+ * so it only checks the immediate parent's class name.
  */
 export function isStatement(statement: any): statement is Statement {
-    return Object.getPrototypeOf(statement?.constructor || 0).name === 'Statement';
+    const ctor = Object.getPrototypeOf(statement?.constructor || 0).name;
+    return ctor === 'Statement' || ctor === 'FunctionStatement';
 }
 
 export function isBody(statement: any): statement is Body {

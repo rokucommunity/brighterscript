@@ -26,34 +26,37 @@ export type WalkVisitor = <T = Statement | Expression>(stmtExpr: Statement | Exp
 /**
  * A helper function for Statement and Expression `walkAll` calls.
  */
-export function walk<T>(keyParent: T, key: keyof T, visitor: WalkVisitor, options?: WalkOptions, parent?: Expression | Statement) {
+export function walk<T>(keyParent: T, key: keyof T, visitor: WalkVisitor, options: WalkOptions, parent?: Expression | Statement) {
     //stop processing if canceled
-    if (options?.cancel?.isCancellationRequested) {
+    if (options.cancel?.isCancellationRequested) {
+        return;
+    }
+
+    //the object we're visiting
+    let element: any = keyParent[key];
+    if (!element) {
         return;
     }
 
     //notify the visitor of this expression
-    const result = visitor(keyParent[key] as any, parent ?? keyParent as any);
+    const result = visitor(element, parent ?? keyParent as any);
 
-    //Replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
-    if (isExpression(result) || isStatement(result)) {
+    //replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
+    if (result && (isExpression(result) || isStatement(result))) {
         (keyParent as any)[key] = result;
+        element = result;
     }
 
     //stop processing if canceled
-    if (options?.cancel?.isCancellationRequested) {
+    if (options.cancel?.isCancellationRequested) {
         return;
     }
 
-    const stmtExpr = keyParent[key] as any as Expression | Statement;
-    if (!stmtExpr) {
-        throw new Error(`Index "${key}" for ${keyParent.constructor.name} is undefined`);
-    }
-    if (!stmtExpr.walk) {
+    if (!element.walk) {
         throw new Error(`${keyParent.constructor.name}["${key}"]${parent ? ` for ${parent.constructor.name}` : ''} does not contain a "walk" method`);
     }
     //walk the child expressions
-    stmtExpr.walk(visitor, options);
+    element.walk(visitor, options);
 }
 
 /**
