@@ -331,7 +331,7 @@ export class Lexer {
                 } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unexpectedCharacter(c),
-                        range: this.rangeOf(c)
+                        range: this.rangeOf()
                     });
                 }
                 break;
@@ -442,7 +442,7 @@ export class Lexer {
                 // BrightScript doesn't support multi-line strings
                 this.diagnostics.push({
                     ...DiagnosticMessages.unterminatedStringAtEndOfLine(),
-                    range: this.rangeOf(this.source.slice(this.start, this.current))
+                    range: this.rangeOf()
                 });
                 isUnterminated = true;
                 break;
@@ -455,7 +455,7 @@ export class Lexer {
             // terminating a string with EOF is also not allowed
             this.diagnostics.push({
                 ...DiagnosticMessages.unterminatedStringAtEndOfFile(),
-                range: this.rangeOf(this.source.slice(this.start, this.current))
+                range: this.rangeOf()
             });
             isUnterminated = true;
         }
@@ -582,7 +582,7 @@ export class Lexer {
 
                     this.diagnostics.push({
                         ...DiagnosticMessages.unexpectedConditionalCompilationString(),
-                        range: this.rangeOf(this.source.slice(this.start, this.current))
+                        range: this.rangeOf()
                     });
                 }
 
@@ -734,7 +734,7 @@ export class Lexer {
             this.advance(); // consume the "."
             this.diagnostics.push({
                 ...DiagnosticMessages.fractionalHexLiteralsAreNotSupported(),
-                range: this.rangeOf(this.source.slice(this.start, this.current))
+                range: this.rangeOf()
             });
             return;
         }
@@ -929,7 +929,7 @@ export class Lexer {
             default:
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedConditionalCompilationString(),
-                    range: this.rangeOf(this.source.slice(this.start, this.current))
+                    range: this.rangeOf()
                 });
         }
     }
@@ -946,7 +946,7 @@ export class Lexer {
             text: text,
             isReserved: ReservedWords.has(text.toLowerCase()),
             literal: literal,
-            range: this.rangeOf(text)
+            range: this.rangeOf()
         };
         this.tokens.push(token);
         this.sync();
@@ -967,7 +967,7 @@ export class Lexer {
      * @param text the text to create a range for
      * @returns the range of `text` as a `TokenLocation`
      */
-    private rangeOf(text: string): Range {
+    private rangeOf(): Range {
         return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
     }
 }
