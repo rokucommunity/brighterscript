@@ -19,7 +19,7 @@ export abstract class Statement {
     public abstract range: Range;
 
     public abstract transpile(state: TranspileState): Array<SourceNode | string>;
-    public abstract walk(visitor: WalkVisitor, options?: WalkOptions);
+    public abstract walk(visitor: WalkVisitor, options: WalkOptions);
 }
 
 export class EmptyStatement extends Statement {
@@ -28,7 +28,7 @@ export class EmptyStatement extends Statement {
     transpile(state: TranspileState) {
         return [];
     }
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
 }
@@ -80,8 +80,8 @@ export class Body extends Statement {
         return result;
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkStatements) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkStatements) {
             for (let i = 0; i < this.statements.length; i++) {
                 walk(this.statements, i, visitor, options, this);
             }
@@ -117,8 +117,8 @@ export class AssignmentStatement extends Statement {
         }
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkExpressions) {
             walk(this, 'value', visitor, options);
         }
     }
@@ -173,8 +173,8 @@ export class Block extends Statement {
         return results;
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkStatements) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkStatements) {
             for (let i = 0; i < this.statements.length; i++) {
                 walk(this.statements, i, visitor, options, this);
             }
@@ -196,8 +196,8 @@ export class ExpressionStatement extends Statement {
         return this.expression.transpile(state);
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkExpressions) {
             walk(this, 'expression', visitor, options);
         }
     }
@@ -240,7 +240,7 @@ export class CommentStatement extends Statement implements Expression {
         return result;
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
 }
@@ -263,7 +263,7 @@ export class ExitForStatement extends Statement {
         ];
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
 
@@ -287,7 +287,7 @@ export class ExitWhileStatement extends Statement {
         ];
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
 }
@@ -328,8 +328,8 @@ export class FunctionStatement extends Statement {
         return this.func.transpile(state, nameToken);
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkExpressions) {
             walk(this, 'func', visitor, options);
         }
     }
@@ -451,24 +451,24 @@ export class IfStatement extends Statement {
         return results;
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkExpressions) {
             walk(this, 'condition', visitor, options);
         }
-        if (options?.walkStatements) {
+        if (options.walkStatements) {
             walk(this, 'thenBranch', visitor, options);
         }
 
         for (let i = 0; i < this.elseIfs.length; i++) {
-            if (options?.walkExpressions) {
+            if (options.walkExpressions) {
                 walk(this.elseIfs[i], 'condition', visitor, options, this);
             }
-            if (options?.walkStatements) {
+            if (options.walkStatements) {
                 walk(this.elseIfs[i], 'thenBranch', visitor, options, this);
             }
         }
 
-        if (this.elseBranch && options?.walkStatements) {
+        if (this.elseBranch && options.walkStatements) {
             walk(this, 'elseBranch', visitor, options);
         }
     }
@@ -493,8 +493,8 @@ export class IncrementStatement extends Statement {
         ];
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkExpressions) {
             walk(this, 'value', visitor, options);
         }
     }
@@ -555,8 +555,8 @@ export class PrintStatement extends Statement {
         }
         return result;
     }
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkExpressions) {
             for (let i = 0; i < this.expressions.length; i++) {
                 //sometimes we have semicolon `Token`s in the expressions list (should probably fix that...), so only emit the actual expressions
                 if (isExpression(this.expressions[i])) {
@@ -588,7 +588,7 @@ export class GotoStatement extends Statement {
         ];
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
 }
@@ -614,7 +614,7 @@ export class LabelStatement extends Statement {
         ];
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
 }
@@ -647,8 +647,8 @@ export class ReturnStatement extends Statement {
         return result;
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkExpressions) {
             walk(this, 'value', visitor, options);
         }
     }
@@ -672,7 +672,7 @@ export class EndStatement extends Statement {
         ];
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
 }
@@ -695,7 +695,7 @@ export class StopStatement extends Statement {
         ];
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
 }
@@ -763,15 +763,15 @@ export class ForStatement extends Statement {
         return result;
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkStatements) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkStatements) {
             walk(this, 'counterDeclaration', visitor, options);
         }
-        if (options?.walkExpressions) {
+        if (options.walkExpressions) {
             walk(this, 'finalValue', visitor, options);
             walk(this, 'increment', visitor, options);
         }
-        if (options?.walkStatements) {
+        if (options.walkStatements) {
             walk(this, 'body', visitor, options);
         }
     }
@@ -828,11 +828,11 @@ export class ForEachStatement extends Statement {
         return result;
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkExpressions) {
             walk(this, 'target', visitor, options);
         }
-        if (options?.walkStatements) {
+        if (options.walkStatements) {
             walk(this, 'body', visitor, options);
         }
     }
@@ -881,11 +881,11 @@ export class WhileStatement extends Statement {
         return result;
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkExpressions) {
             walk(this, 'condition', visitor, options);
         }
-        if (options?.walkStatements) {
+        if (options.walkStatements) {
             walk(this, 'body', visitor, options);
         }
     }
@@ -921,8 +921,8 @@ export class DottedSetStatement extends Statement {
         }
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkExpressions) {
             walk(this, 'obj', visitor, options);
             walk(this, 'value', visitor, options);
         }
@@ -965,8 +965,8 @@ export class IndexedSetStatement extends Statement {
         }
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkExpressions) {
             walk(this, 'obj', visitor, options);
             walk(this, 'index', visitor, options);
             walk(this, 'value', visitor, options);
@@ -1005,7 +1005,7 @@ export class LibraryStatement extends Statement {
         return result;
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
 }
@@ -1043,11 +1043,11 @@ export class NamespaceStatement extends Statement {
         return this.body.transpile(state);
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkExpressions) {
             walk(this, 'nameExpression', visitor, options);
         }
-        if (this.body.statements.length > 0 && options?.walkStatements) {
+        if (this.body.statements.length > 0 && options.walkStatements) {
             walk(this, 'body', visitor, options);
         }
     }
@@ -1091,7 +1091,7 @@ export class ImportStatement extends Statement {
         ];
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
 }
@@ -1418,8 +1418,8 @@ export class ClassStatement extends Statement {
         return result;
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkStatements) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkStatements) {
             for (let i = 0; i < this.body.length; i++) {
                 walk(this.body, i, visitor, options, this);
             }
@@ -1427,13 +1427,14 @@ export class ClassStatement extends Statement {
     }
 }
 
-export class ClassMethodStatement implements Statement {
+export class ClassMethodStatement extends FunctionStatement {
     constructor(
         readonly accessModifier: Token,
-        readonly name: Identifier,
-        readonly func: FunctionExpression,
+        name: Identifier,
+        func: FunctionExpression,
         readonly overrides: Token
     ) {
+        super(name, func, undefined);
         this.range = Range.create(
             (this.accessModifier ?? this.func).range.start,
             this.func.range.end
@@ -1565,8 +1566,8 @@ export class ClassMethodStatement implements Statement {
         this.func.body.statements.splice(startingIndex, 0, ...newStatements);
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (options?.walkExpressions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkExpressions) {
             walk(this, 'func', visitor, options);
         }
     }
@@ -1594,8 +1595,8 @@ export class ClassFieldStatement implements Statement {
         throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
     }
 
-    walk(visitor: WalkVisitor, options?: WalkOptions) {
-        if (this.initialValue && options?.walkExpressions) {
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.initialValue && options.walkExpressions) {
             walk(this, 'initialValue', visitor, options);
         }
     }

@@ -15,7 +15,7 @@ describe('Statement', () => {
             const statement = new EmptyStatement();
             statement.walk(() => {
                 expect(true).to.be.false;
-            });
+            }, {});
         });
     });
 

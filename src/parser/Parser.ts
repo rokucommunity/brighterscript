@@ -384,9 +384,8 @@ export class Parser {
                 if (this.check(TokenKind.Function, TokenKind.Sub) || (this.check(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
                     let funcDeclaration = this.functionDeclaration(false);
 
-                    //remove this function from the lists because it's a class method
-                    this._references.functionExpressions.pop();
-                    this._references.functionStatements.pop();
+                    //remove this function from the lists because it's not a callable
+                    const functionStatement = this._references.functionStatements.pop();
 
                     //if we have an overrides keyword AND this method is called 'new', that's not allowed
                     if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
@@ -395,14 +394,17 @@ export class Parser {
                             range: overrideKeyword.range
                         });
                     }
-                    body.push(
-                        new ClassMethodStatement(
-                            accessModifier,
-                            funcDeclaration.name,
-                            funcDeclaration.func,
-                            overrideKeyword
-                        )
+                    const methodStatement = new ClassMethodStatement(
+                        accessModifier,
+                        funcDeclaration.name,
+                        funcDeclaration.func,
+                        overrideKeyword
                     );
+
+                    //refer to this statement as parent of the expression
+                    functionStatement.func.functionStatement = methodStatement;
+
+                    body.push(methodStatement);
 
                     //fields
                 } else if (this.check(TokenKind.Identifier, ...AllowedProperties)) {
