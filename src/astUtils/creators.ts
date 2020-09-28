@@ -1,11 +1,12 @@
-import { Range, Position } from 'vscode-languageserver';
+import { Position } from 'vscode-languageserver';
 import { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import { LiteralExpression, Expression, CallExpression, NamespacedVariableNameExpression, DottedGetExpression, VariableExpression } from '../parser/Expression';
 import { BrsType, BrsString, BrsInvalid, Int32, Float } from '../brsTypes';
+import util from '../util';
 
 export function createRange(pos: Position) {
-    return Range.create(pos.line, pos.character, pos.line, pos.character);
+    return util.createRange(pos.line, pos.character, pos.line, pos.character);
 }
 
 export function createToken<T extends TokenKind>(kind: T, pos: Position, text?: string, literal?: BrsType): Token & { kind: T } {

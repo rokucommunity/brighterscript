@@ -26,7 +26,7 @@ export class BinaryExpression implements Expression {
         readonly operator: Token,
         readonly right: Expression
     ) {
-        this.range = Range.create(this.left.range.start, this.right.range.end);
+        this.range = util.createRangeFromPositions(this.left.range.start, this.right.range.end);
     }
 
     public readonly range: Range;
@@ -60,7 +60,7 @@ export class CallExpression implements Expression {
         readonly args: Expression[],
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
-        this.range = Range.create(this.callee.range.start, this.closingParen.range.end);
+        this.range = util.createRangeFromPositions(this.callee.range.start, this.closingParen.range.end);
     }
 
     public readonly range: Range;
@@ -136,7 +136,7 @@ export class FunctionExpression implements Expression {
      * and ending with the last n' in 'end function' or 'b' in 'end sub'
      */
     public get range() {
-        return Range.create(
+        return util.createRangeFromPositions(
             (this.functionType ?? this.leftParen).range.start,
             (this.end ?? this.body ?? this.returnTypeToken ?? this.asToken ?? this.rightParen).range.end
         );
@@ -264,7 +264,7 @@ export class DottedGetExpression implements Expression {
         readonly name: Identifier,
         readonly dot: Token
     ) {
-        this.range = Range.create(this.obj.range.start, this.name.range.end);
+        this.range = util.createRangeFromPositions(this.obj.range.start, this.name.range.end);
     }
 
     public readonly range: Range;
@@ -296,7 +296,7 @@ export class XmlAttributeGetExpression implements Expression {
         readonly name: Identifier,
         readonly at: Token
     ) {
-        this.range = Range.create(this.obj.range.start, this.name.range.end);
+        this.range = util.createRangeFromPositions(this.obj.range.start, this.name.range.end);
     }
 
     public readonly range: Range;
@@ -324,7 +324,7 @@ export class IndexedGetExpression implements Expression {
         readonly openingSquare: Token,
         readonly closingSquare: Token
     ) {
-        this.range = Range.create(this.obj.range.start, this.closingSquare.range.end);
+        this.range = util.createRangeFromPositions(this.obj.range.start, this.closingSquare.range.end);
     }
 
     public readonly range: Range;
@@ -355,7 +355,7 @@ export class GroupingExpression implements Expression {
         },
         readonly expression: Expression
     ) {
-        this.range = Range.create(this.tokens.left.range.start, this.tokens.right.range.end);
+        this.range = util.createRangeFromPositions(this.tokens.left.range.start, this.tokens.right.range.end);
     }
 
     public readonly range: Range;
@@ -381,7 +381,7 @@ export class LiteralExpression implements Expression {
         readonly value: BrsType,
         range: Range
     ) {
-        this.range = range ?? Range.create(-1, -1, -1, -1);
+        this.range = range ?? util.createRange(-1, -1, -1, -1);
     }
 
     public readonly range: Range;
@@ -448,7 +448,7 @@ export class ArrayLiteralExpression implements Expression {
         readonly open: Token,
         readonly close: Token
     ) {
-        this.range = Range.create(this.open.range.start, this.close.range.end);
+        this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
     }
 
     public readonly range: Range;
@@ -534,7 +534,7 @@ export class AALiteralExpression implements Expression {
         readonly open: Token,
         readonly close: Token
     ) {
-        this.range = Range.create(this.open.range.start, this.close.range.end);
+        this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
     }
 
     public readonly range: Range;
@@ -639,7 +639,7 @@ export class UnaryExpression implements Expression {
         readonly operator: Token,
         readonly right: Expression
     ) {
-        this.range = Range.create(this.operator.range.start, this.right.range.end);
+        this.range = util.createRangeFromPositions(this.operator.range.start, this.right.range.end);
     }
 
     public readonly range: Range;
@@ -795,7 +795,7 @@ export class NewExpression implements Expression {
         readonly newKeyword: Token,
         readonly call: CallExpression
     ) {
-        this.range = Range.create(this.newKeyword.range.start, this.call.range.end);
+        this.range = util.createRangeFromPositions(this.newKeyword.range.start, this.call.range.end);
     }
 
     /**
@@ -834,7 +834,7 @@ export class CallfuncExpression implements Expression {
         readonly args: Expression[],
         readonly closingParen: Token
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             callee.range.start,
             (closingParen ?? args[args.length - 1] ?? openingParen ?? methodName ?? operator).range.end
         );
@@ -894,7 +894,7 @@ export class TemplateStringQuasiExpression implements Expression {
     constructor(
         readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteral>
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             this.expressions[0].range.start,
             this.expressions[this.expressions.length - 1].range.end
         );
@@ -937,7 +937,7 @@ export class TemplateStringExpression implements Expression {
         readonly expressions: Expression[],
         readonly closingBacktick: Token
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end
         );
@@ -1028,7 +1028,7 @@ export class TaggedTemplateStringExpression implements Expression {
         readonly expressions: Expression[],
         readonly closingBacktick: Token
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end
         );
