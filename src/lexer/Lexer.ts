@@ -129,7 +129,8 @@ export class Lexer {
      * Accepts and returns nothing, because it's side-effect driven.
      */
     private scanToken(): void {
-        let c = this.advance();
+        this.advance();
+        let c = this.previous();
         if (isAlpha(c)) {
             this.identifier();
             return;
@@ -379,9 +380,15 @@ export class Lexer {
      * Reads and returns the next character from `string` while **moving the current position forward**.
      * @returns the new "current" character.
      */
-    private advance(): string {
+    private advance(): void {
         this.current++;
         this.columnEnd++;
+    }
+
+    /**
+     * Get the token at the previous position
+     */
+    private previous() {
         return this.source.charAt(this.current - 1);
     }
 
