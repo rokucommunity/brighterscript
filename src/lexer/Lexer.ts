@@ -1,3 +1,4 @@
+/* eslint-disable func-names */
 import { TokenKind, ReservedWords, Keywords } from './TokenKind';
 import { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
@@ -90,7 +91,6 @@ export class Lexer {
         this.columnEnd = 0;
         this.tokens = [];
         this.diagnostics = [];
-
         while (!this.isAtEnd()) {
             this.scanToken();
         }
@@ -123,218 +123,205 @@ export class Lexer {
     }
 
     /**
+     * Map for looking up token functions based solely upon a single character
+     * Should be used in conjunction with `tokenKindMap`
+     */
+    private static tokenFunctionMap = {
+        '\r': Lexer.prototype.newline,
+        '\n': Lexer.prototype.newline,
+        ' ': Lexer.prototype.whitespace,
+        '\t': Lexer.prototype.whitespace,
+        '#': Lexer.prototype.preProcessedConditional,
+        '"': Lexer.prototype.string,
+        '\'': Lexer.prototype.comment,
+        '`': Lexer.prototype.templateString,
+        '.': function (this: Lexer) {
+            // this might be a float/double literal, because decimals without a leading 0
+            // are allowed
+            if (isDecimalDigit(this.peek())) {
+                this.decimalNumber(true);
+            } else {
+                this.addToken(TokenKind.Dot);
+            }
+        },
+        '@': function (this: Lexer) {
+            if (this.peek() === '.') {
+                this.advance();
+                this.addToken(TokenKind.Callfunc);
+            } else {
+                this.addToken(TokenKind.At);
+            }
+        },
+        '+': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.PlusEqual);
+                    break;
+                case '+':
+                    this.advance();
+                    this.addToken(TokenKind.PlusPlus);
+                    break;
+                default:
+                    this.addToken(TokenKind.Plus);
+                    break;
+            }
+        },
+        '-': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.MinusEqual);
+                    break;
+                case '-':
+                    this.advance();
+                    this.addToken(TokenKind.MinusMinus);
+                    break;
+                default:
+                    this.addToken(TokenKind.Minus);
+                    break;
+            }
+        },
+        '*': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.StarEqual);
+                    break;
+                default:
+                    this.addToken(TokenKind.Star);
+                    break;
+            }
+        },
+        '/': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.ForwardslashEqual);
+                    break;
+                default:
+                    this.addToken(TokenKind.Forwardslash);
+                    break;
+            }
+        },
+        '\\': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.BackslashEqual);
+                    break;
+                default:
+                    this.addToken(TokenKind.Backslash);
+                    break;
+            }
+        },
+        '<': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.LessEqual);
+                    break;
+                case '<':
+                    this.advance();
+                    switch (this.peek()) {
+                        case '=':
+                            this.advance();
+                            this.addToken(TokenKind.LeftShiftEqual);
+                            break;
+                        default:
+                            this.addToken(TokenKind.LeftShift);
+                            break;
+                    }
+                    break;
+                case '>':
+                    this.advance();
+                    this.addToken(TokenKind.LessGreater);
+                    break;
+                default:
+                    this.addToken(TokenKind.Less);
+                    break;
+            }
+        },
+        '>': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.GreaterEqual);
+                    break;
+                case '>':
+                    this.advance();
+                    switch (this.peek()) {
+                        case '=':
+                            this.advance();
+                            this.addToken(TokenKind.RightShiftEqual);
+                            break;
+                        default:
+                            this.addToken(TokenKind.RightShift);
+                            break;
+                    }
+                    break;
+                default:
+                    this.addToken(TokenKind.Greater);
+                    break;
+            }
+        }
+    };
+
+    /**
+     * Map for looking up token kinds based solely on a single character.
+     * Should be used in conjunction with `tokenFunctionMap`
+     */
+    private static tokenKindMap = {
+        '(': TokenKind.LeftParen,
+        ')': TokenKind.RightParen,
+        '=': TokenKind.Equal,
+        ',': TokenKind.Comma,
+        '{': TokenKind.LeftCurlyBrace,
+        '}': TokenKind.RightCurlyBrace,
+        '[': TokenKind.LeftSquareBracket,
+        ']': TokenKind.RightSquareBracket,
+        '^': TokenKind.Caret,
+        ':': TokenKind.Colon,
+        ';': TokenKind.Semicolon,
+        '?': TokenKind.Print
+    };
+
+    /**
      * Reads a non-deterministic number of characters from `source`, produces a `Token`, and adds it to
      * the `tokens` array.
      *
      * Accepts and returns nothing, because it's side-effect driven.
      */
-    private scanToken(): void {
+    public scanToken(): void {
         this.advance();
-        let c = this.previous();
+        let c = this.source.charAt(this.current - 1);
+
+        let tokenKind: TokenKind | undefined;
+        let tokenFunction: Function | undefined;
+
         if (isAlpha(c)) {
             this.identifier();
-            return;
-        }
-        switch (c.toLowerCase()) {
-            case '\r':
-            case '\n':
-                this.newline();
-                break;
-            case '.':
-                // this might be a float/double literal, because decimals without a leading 0
-                // are allowed
-                if (isDecimalDigit(this.peek())) {
-                    this.decimalNumber(true);
-                } else {
-                    this.addToken(TokenKind.Dot);
-                }
-                break;
-            case '(':
-                this.addToken(TokenKind.LeftParen);
-                break;
-            case ')':
-                this.addToken(TokenKind.RightParen);
-                break;
-            case '=':
-                this.addToken(TokenKind.Equal);
-                break;
-            case '"':
-                this.string();
-                break;
-            case `'`:
-                this.comment();
-                break;
-            case ',':
-                this.addToken(TokenKind.Comma);
-                break;
-            case '{':
-                this.addToken(TokenKind.LeftCurlyBrace);
-                break;
-            case '}':
-                this.addToken(TokenKind.RightCurlyBrace);
-                break;
-            case '[':
-                this.addToken(TokenKind.LeftSquareBracket);
-                break;
-            case ']':
-                this.addToken(TokenKind.RightSquareBracket);
-                break;
-            case '@':
-                if (this.peek() === '.') {
-                    this.advance();
-                    this.addToken(TokenKind.Callfunc);
-                } else {
-                    this.addToken(TokenKind.At);
-                }
-                break;
-            case '+':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.PlusEqual);
-                        break;
-                    case '+':
-                        this.advance();
-                        this.addToken(TokenKind.PlusPlus);
-                        break;
-                    default:
-                        this.addToken(TokenKind.Plus);
-                        break;
-                }
-                break;
-            case '-':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.MinusEqual);
-                        break;
-                    case '-':
-                        this.advance();
-                        this.addToken(TokenKind.MinusMinus);
-                        break;
-                    default:
-                        this.addToken(TokenKind.Minus);
-                        break;
-                }
-                break;
-            case '*':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.StarEqual);
-                        break;
-                    default:
-                        this.addToken(TokenKind.Star);
-                        break;
-                }
-                break;
-            case '/':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.ForwardslashEqual);
-                        break;
-                    default:
-                        this.addToken(TokenKind.Forwardslash);
-                        break;
-                }
-                break;
-            case '^':
-                this.addToken(TokenKind.Caret);
-                break;
-            case '\\':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.BackslashEqual);
-                        break;
-                    default:
-                        this.addToken(TokenKind.Backslash);
-                        break;
-                }
-                break;
-            case ':':
-                this.addToken(TokenKind.Colon);
-                break;
-            case ';':
-                this.addToken(TokenKind.Semicolon);
-                break;
-            case '?':
-                this.addToken(TokenKind.Print);
-                break;
-            case '`':
-                this.templateString();
-                break;
-            case '<':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.LessEqual);
-                        break;
-                    case '<':
-                        this.advance();
-                        switch (this.peek()) {
-                            case '=':
-                                this.advance();
-                                this.addToken(TokenKind.LeftShiftEqual);
-                                break;
-                            default:
-                                this.addToken(TokenKind.LeftShift);
-                                break;
-                        }
-                        break;
-                    case '>':
-                        this.advance();
-                        this.addToken(TokenKind.LessGreater);
-                        break;
-                    default:
-                        this.addToken(TokenKind.Less);
-                        break;
-                }
-                break;
-            case '>':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.GreaterEqual);
-                        break;
-                    case '>':
-                        this.advance();
-                        switch (this.peek()) {
-                            case '=':
-                                this.advance();
-                                this.addToken(TokenKind.RightShiftEqual);
-                                break;
-                            default:
-                                this.addToken(TokenKind.RightShift);
-                                break;
-                        }
-                        break;
-                    default:
-                        this.addToken(TokenKind.Greater);
-                        break;
-                }
-                break;
-            case ' ':
-            case '\t':
-                this.whitespace();
-                break;
-            case '#':
-                this.preProcessedConditional();
-                break;
-            default:
-                if (isDecimalDigit(c)) {
-                    this.decimalNumber(false);
-                } else if (c === '&' && this.peek().toLowerCase() === 'h') {
-                    this.advance(); // move past 'h'
-                    this.hexadecimalNumber();
-                } else {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.unexpectedCharacter(c),
-                        range: this.rangeOf()
-                    });
-                }
-                break;
+
+            // eslint-disable-next-line no-cond-assign
+        } else if (tokenFunction = Lexer.tokenFunctionMap[c]) {
+            tokenFunction.call(this);
+
+            // eslint-disable-next-line no-cond-assign
+        } else if (tokenKind = Lexer.tokenKindMap[c]) {
+            this.addToken(tokenKind);
+
+        } else if (isDecimalDigit(c)) {
+            this.decimalNumber(false);
+
+        } else if (c === '&' && this.peek().toLowerCase() === 'h') {
+            this.advance(); // move past 'h'
+            this.hexadecimalNumber();
+
+        } else {
+            this.diagnostics.push({
+                ...DiagnosticMessages.unexpectedCharacter(c),
+                range: this.rangeOf()
+            });
         }
     }
 
@@ -383,13 +370,6 @@ export class Lexer {
     private advance(): void {
         this.current++;
         this.columnEnd++;
-    }
-
-    /**
-     * Get the token at the previous position
-     */
-    private previous() {
-        return this.source.charAt(this.current - 1);
     }
 
     /**
