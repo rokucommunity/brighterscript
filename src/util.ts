@@ -972,8 +972,14 @@ export class Util {
      */
     public createRangeFromPositions(startPosition: Position, endPosition: Position): Range {
         return {
-            start: startPosition,
-            end: endPosition
+            start: {
+                line: startPosition.line,
+                character: startPosition.character
+            },
+            end: {
+                line: endPosition.line,
+                character: endPosition.character
+            }
         };
     }
 
