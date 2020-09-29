@@ -14,7 +14,6 @@ import {
     InitializeParams,
     Location,
     ProposedFeatures,
-    Range,
     ServerCapabilities,
     TextDocumentPositionParams,
     TextDocuments,
@@ -403,7 +402,7 @@ export class LanguageServer {
             if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
                 builder.addDiagnostic(configFilePath, {
                     ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
-                    range: Range.create(0, 0, 0, 0)
+                    range: util.createRange(0, 0, 0, 0)
                 });
                 return this.sendDiagnostics();
             }
@@ -527,7 +526,7 @@ export class LanguageServer {
         //     label: 'bronley',
         //     textEdit: {
         //         newText: 'bronley2',
-        //         range: Range.create(position, position)
+        //         range: util.createRange(position, position)
         //     }
         // }] as CompletionItem[];
 

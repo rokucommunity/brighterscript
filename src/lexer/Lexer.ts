@@ -1,3 +1,4 @@
+/* eslint-disable func-names */
 import { TokenKind, ReservedWords, Keywords } from './TokenKind';
 import { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
@@ -5,6 +6,7 @@ import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Character
 import { BrsType, BrsString, Int32, Int64, Float, Double } from '../brsTypes/index';
 import { Range, Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
+import util from '../util';
 
 export class Lexer {
     /**
@@ -89,7 +91,6 @@ export class Lexer {
         this.columnEnd = 0;
         this.tokens = [];
         this.diagnostics = [];
-
         while (!this.isAtEnd()) {
             this.scanToken();
         }
@@ -98,9 +99,8 @@ export class Lexer {
             kind: TokenKind.Eof,
             isReserved: false,
             text: '',
-            range: Range.create(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
+            range: util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
         });
-
         return this;
     }
 
@@ -123,217 +123,205 @@ export class Lexer {
     }
 
     /**
+     * Map for looking up token functions based solely upon a single character
+     * Should be used in conjunction with `tokenKindMap`
+     */
+    private static tokenFunctionMap = {
+        '\r': Lexer.prototype.newline,
+        '\n': Lexer.prototype.newline,
+        ' ': Lexer.prototype.whitespace,
+        '\t': Lexer.prototype.whitespace,
+        '#': Lexer.prototype.preProcessedConditional,
+        '"': Lexer.prototype.string,
+        '\'': Lexer.prototype.comment,
+        '`': Lexer.prototype.templateString,
+        '.': function (this: Lexer) {
+            // this might be a float/double literal, because decimals without a leading 0
+            // are allowed
+            if (isDecimalDigit(this.peek())) {
+                this.decimalNumber(true);
+            } else {
+                this.addToken(TokenKind.Dot);
+            }
+        },
+        '@': function (this: Lexer) {
+            if (this.peek() === '.') {
+                this.advance();
+                this.addToken(TokenKind.Callfunc);
+            } else {
+                this.addToken(TokenKind.At);
+            }
+        },
+        '+': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.PlusEqual);
+                    break;
+                case '+':
+                    this.advance();
+                    this.addToken(TokenKind.PlusPlus);
+                    break;
+                default:
+                    this.addToken(TokenKind.Plus);
+                    break;
+            }
+        },
+        '-': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.MinusEqual);
+                    break;
+                case '-':
+                    this.advance();
+                    this.addToken(TokenKind.MinusMinus);
+                    break;
+                default:
+                    this.addToken(TokenKind.Minus);
+                    break;
+            }
+        },
+        '*': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.StarEqual);
+                    break;
+                default:
+                    this.addToken(TokenKind.Star);
+                    break;
+            }
+        },
+        '/': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.ForwardslashEqual);
+                    break;
+                default:
+                    this.addToken(TokenKind.Forwardslash);
+                    break;
+            }
+        },
+        '\\': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.BackslashEqual);
+                    break;
+                default:
+                    this.addToken(TokenKind.Backslash);
+                    break;
+            }
+        },
+        '<': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.LessEqual);
+                    break;
+                case '<':
+                    this.advance();
+                    switch (this.peek()) {
+                        case '=':
+                            this.advance();
+                            this.addToken(TokenKind.LeftShiftEqual);
+                            break;
+                        default:
+                            this.addToken(TokenKind.LeftShift);
+                            break;
+                    }
+                    break;
+                case '>':
+                    this.advance();
+                    this.addToken(TokenKind.LessGreater);
+                    break;
+                default:
+                    this.addToken(TokenKind.Less);
+                    break;
+            }
+        },
+        '>': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.GreaterEqual);
+                    break;
+                case '>':
+                    this.advance();
+                    switch (this.peek()) {
+                        case '=':
+                            this.advance();
+                            this.addToken(TokenKind.RightShiftEqual);
+                            break;
+                        default:
+                            this.addToken(TokenKind.RightShift);
+                            break;
+                    }
+                    break;
+                default:
+                    this.addToken(TokenKind.Greater);
+                    break;
+            }
+        }
+    };
+
+    /**
+     * Map for looking up token kinds based solely on a single character.
+     * Should be used in conjunction with `tokenFunctionMap`
+     */
+    private static tokenKindMap = {
+        '(': TokenKind.LeftParen,
+        ')': TokenKind.RightParen,
+        '=': TokenKind.Equal,
+        ',': TokenKind.Comma,
+        '{': TokenKind.LeftCurlyBrace,
+        '}': TokenKind.RightCurlyBrace,
+        '[': TokenKind.LeftSquareBracket,
+        ']': TokenKind.RightSquareBracket,
+        '^': TokenKind.Caret,
+        ':': TokenKind.Colon,
+        ';': TokenKind.Semicolon,
+        '?': TokenKind.Print
+    };
+
+    /**
      * Reads a non-deterministic number of characters from `source`, produces a `Token`, and adds it to
      * the `tokens` array.
      *
      * Accepts and returns nothing, because it's side-effect driven.
      */
-    private scanToken(): void {
-        let c = this.advance();
+    public scanToken(): void {
+        this.advance();
+        let c = this.source.charAt(this.current - 1);
+
+        let tokenKind: TokenKind | undefined;
+        let tokenFunction: Function | undefined;
+
         if (isAlpha(c)) {
             this.identifier();
-            return;
-        }
-        switch (c.toLowerCase()) {
-            case '\r':
-            case '\n':
-                this.newline();
-                break;
-            case '.':
-                // this might be a float/double literal, because decimals without a leading 0
-                // are allowed
-                if (isDecimalDigit(this.peek())) {
-                    this.decimalNumber(true);
-                } else {
-                    this.addToken(TokenKind.Dot);
-                }
-                break;
-            case '(':
-                this.addToken(TokenKind.LeftParen);
-                break;
-            case ')':
-                this.addToken(TokenKind.RightParen);
-                break;
-            case '=':
-                this.addToken(TokenKind.Equal);
-                break;
-            case '"':
-                this.string();
-                break;
-            case `'`:
-                this.comment();
-                break;
-            case ',':
-                this.addToken(TokenKind.Comma);
-                break;
-            case '{':
-                this.addToken(TokenKind.LeftCurlyBrace);
-                break;
-            case '}':
-                this.addToken(TokenKind.RightCurlyBrace);
-                break;
-            case '[':
-                this.addToken(TokenKind.LeftSquareBracket);
-                break;
-            case ']':
-                this.addToken(TokenKind.RightSquareBracket);
-                break;
-            case '@':
-                if (this.peek() === '.') {
-                    this.advance();
-                    this.addToken(TokenKind.Callfunc);
-                } else {
-                    this.addToken(TokenKind.At);
-                }
-                break;
-            case '+':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.PlusEqual);
-                        break;
-                    case '+':
-                        this.advance();
-                        this.addToken(TokenKind.PlusPlus);
-                        break;
-                    default:
-                        this.addToken(TokenKind.Plus);
-                        break;
-                }
-                break;
-            case '-':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.MinusEqual);
-                        break;
-                    case '-':
-                        this.advance();
-                        this.addToken(TokenKind.MinusMinus);
-                        break;
-                    default:
-                        this.addToken(TokenKind.Minus);
-                        break;
-                }
-                break;
-            case '*':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.StarEqual);
-                        break;
-                    default:
-                        this.addToken(TokenKind.Star);
-                        break;
-                }
-                break;
-            case '/':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.ForwardslashEqual);
-                        break;
-                    default:
-                        this.addToken(TokenKind.Forwardslash);
-                        break;
-                }
-                break;
-            case '^':
-                this.addToken(TokenKind.Caret);
-                break;
-            case '\\':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.BackslashEqual);
-                        break;
-                    default:
-                        this.addToken(TokenKind.Backslash);
-                        break;
-                }
-                break;
-            case ':':
-                this.addToken(TokenKind.Colon);
-                break;
-            case ';':
-                this.addToken(TokenKind.Semicolon);
-                break;
-            case '?':
-                this.addToken(TokenKind.Print);
-                break;
-            case '`':
-                this.templateString();
-                break;
-            case '<':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.LessEqual);
-                        break;
-                    case '<':
-                        this.advance();
-                        switch (this.peek()) {
-                            case '=':
-                                this.advance();
-                                this.addToken(TokenKind.LeftShiftEqual);
-                                break;
-                            default:
-                                this.addToken(TokenKind.LeftShift);
-                                break;
-                        }
-                        break;
-                    case '>':
-                        this.advance();
-                        this.addToken(TokenKind.LessGreater);
-                        break;
-                    default:
-                        this.addToken(TokenKind.Less);
-                        break;
-                }
-                break;
-            case '>':
-                switch (this.peek()) {
-                    case '=':
-                        this.advance();
-                        this.addToken(TokenKind.GreaterEqual);
-                        break;
-                    case '>':
-                        this.advance();
-                        switch (this.peek()) {
-                            case '=':
-                                this.advance();
-                                this.addToken(TokenKind.RightShiftEqual);
-                                break;
-                            default:
-                                this.addToken(TokenKind.RightShift);
-                                break;
-                        }
-                        break;
-                    default:
-                        this.addToken(TokenKind.Greater);
-                        break;
-                }
-                break;
-            case ' ':
-            case '\t':
-                this.whitespace();
-                break;
-            case '#':
-                this.preProcessedConditional();
-                break;
-            default:
-                if (isDecimalDigit(c)) {
-                    this.decimalNumber(false);
-                } else if (c === '&' && this.peek().toLowerCase() === 'h') {
-                    this.advance(); // move past 'h'
-                    this.hexadecimalNumber();
-                } else {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.unexpectedCharacter(c),
-                        range: this.rangeOf(c)
-                    });
-                }
-                break;
+
+            // eslint-disable-next-line no-cond-assign
+        } else if (tokenFunction = Lexer.tokenFunctionMap[c]) {
+            tokenFunction.call(this);
+
+            // eslint-disable-next-line no-cond-assign
+        } else if (tokenKind = Lexer.tokenKindMap[c]) {
+            this.addToken(tokenKind);
+
+        } else if (isDecimalDigit(c)) {
+            this.decimalNumber(false);
+
+        } else if (c === '&' && this.peek().toLowerCase() === 'h') {
+            this.advance(); // move past 'h'
+            this.hexadecimalNumber();
+
+        } else {
+            this.diagnostics.push({
+                ...DiagnosticMessages.unexpectedCharacter(c),
+                range: this.rangeOf()
+            });
         }
     }
 
@@ -379,10 +367,9 @@ export class Lexer {
      * Reads and returns the next character from `string` while **moving the current position forward**.
      * @returns the new "current" character.
      */
-    private advance(): string {
+    private advance(): void {
         this.current++;
         this.columnEnd++;
-        return this.source.charAt(this.current - 1);
     }
 
     /**
@@ -435,7 +422,7 @@ export class Lexer {
                 // BrightScript doesn't support multi-line strings
                 this.diagnostics.push({
                     ...DiagnosticMessages.unterminatedStringAtEndOfLine(),
-                    range: this.rangeOf(this.source.slice(this.start, this.current))
+                    range: this.rangeOf()
                 });
                 isUnterminated = true;
                 break;
@@ -448,7 +435,7 @@ export class Lexer {
             // terminating a string with EOF is also not allowed
             this.diagnostics.push({
                 ...DiagnosticMessages.unterminatedStringAtEndOfFile(),
-                range: this.rangeOf(this.source.slice(this.start, this.current))
+                range: this.rangeOf()
             });
             isUnterminated = true;
         }
@@ -575,7 +562,7 @@ export class Lexer {
 
                     this.diagnostics.push({
                         ...DiagnosticMessages.unexpectedConditionalCompilationString(),
-                        range: this.rangeOf(this.source.slice(this.start, this.current))
+                        range: this.rangeOf()
                     });
                 }
 
@@ -727,7 +714,7 @@ export class Lexer {
             this.advance(); // consume the "."
             this.diagnostics.push({
                 ...DiagnosticMessages.fractionalHexLiteralsAreNotSupported(),
-                range: this.rangeOf(this.source.slice(this.start, this.current))
+                range: this.rangeOf()
             });
             return;
         }
@@ -922,7 +909,7 @@ export class Lexer {
             default:
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedConditionalCompilationString(),
-                    range: this.rangeOf(this.source.slice(this.start, this.current))
+                    range: this.rangeOf()
                 });
         }
     }
@@ -939,7 +926,7 @@ export class Lexer {
             text: text,
             isReserved: ReservedWords.has(text.toLowerCase()),
             literal: literal,
-            range: this.rangeOf(text)
+            range: this.rangeOf()
         };
         this.tokens.push(token);
         this.sync();
@@ -960,13 +947,8 @@ export class Lexer {
      * @param text the text to create a range for
      * @returns the range of `text` as a `TokenLocation`
      */
-    private rangeOf(text: string): Range {
-        return Range.create(
-            this.lineBegin,
-            this.columnBegin,
-            this.lineEnd,
-            this.columnEnd
-        );
+    private rangeOf(): Range {
+        return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
     }
 }
 

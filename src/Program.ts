@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import { CompletionItem, Location, Position, Range, CompletionItemKind } from 'vscode-languageserver';
+import { CompletionItem, Location, Position, CompletionItemKind } from 'vscode-languageserver';
 import { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -516,7 +516,7 @@ export class Program {
                     this.diagnostics.push({
                         ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
                         file: file,
-                        range: Range.create(0, 0, 0, Number.MAX_VALUE)
+                        range: util.createRange(0, 0, 0, Number.MAX_VALUE)
                     });
                 }
             }

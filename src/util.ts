@@ -121,7 +121,7 @@ export class Util {
                 colIndex++;
             }
         }
-        return Range.create(lineIndex, colIndex, lineIndex, colIndex + length);
+        return util.createRange(lineIndex, colIndex, lineIndex, colIndex + length);
     }
 
     /**
@@ -747,7 +747,7 @@ export class Util {
         for (let item of items) {
             codes.push({
                 code: item.text,
-                range: Range.create(
+                range: util.createRange(
                     token.range.start.line,
                     token.range.start.character + offset + item.startIndex,
                     token.range.start.line,
@@ -879,7 +879,7 @@ export class Util {
      * Get a location object back by extracting location information from other objects that contain location
      */
     public getRange(startObj: { range: Range }, endObj: { range: Range }): Range {
-        return Range.create(startObj.range.start, endObj.range.end);
+        return util.createRangeFromPositions(startObj.range.start, endObj.range.end);
     }
 
     /**
@@ -949,6 +949,42 @@ export class Util {
         } else {
             return className;
         }
+    }
+
+    /**
+     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `util.createRange()` is significantly slower
+     */
+    public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
+        return {
+            start: {
+                line: startLine,
+                character: startCharacter
+            },
+            end: {
+                line: endLine,
+                character: endCharacter
+            }
+        };
+    }
+
+    /**
+     * Create a `Range` from two `Position`s
+     */
+    public createRangeFromPositions(startPosition: Position, endPosition: Position): Range {
+        return {
+            start: startPosition,
+            end: endPosition
+        };
+    }
+
+    /**
+     * Create a `Position` object. Prefer this over `Position.create` for performance reasons
+     */
+    public createPosition(line: number, character: number) {
+        return {
+            line: line,
+            character: character
+        };
     }
 }
 

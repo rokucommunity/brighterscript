@@ -197,7 +197,7 @@ export class BrsFile {
             this.parser = new Parser();
             this.diagnostics.push({
                 file: this,
-                range: Range.create(0, 0, 0, Number.MAX_VALUE),
+                range: util.createRange(0, 0, 0, Number.MAX_VALUE),
                 ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(serializeError(e)))
             });
         }
@@ -366,9 +366,9 @@ export class BrsFile {
 
             let affectedRange: Range;
             if (tokenized.disableType === 'line') {
-                affectedRange = Range.create(token.range.start.line, 0, token.range.start.line, token.range.start.character);
+                affectedRange = util.createRange(token.range.start.line, 0, token.range.start.line, token.range.start.character);
             } else if (tokenized.disableType === 'next-line') {
-                affectedRange = Range.create(token.range.start.line + 1, 0, token.range.start.line + 1, Number.MAX_SAFE_INTEGER);
+                affectedRange = util.createRange(token.range.start.line + 1, 0, token.range.start.line + 1, Number.MAX_SAFE_INTEGER);
             }
 
             let commentFlag: CommentFlag;
@@ -656,11 +656,11 @@ export class BrsFile {
                     }
                 }
                 let functionCall: FunctionCall = {
-                    range: Range.create(expression.range.start, expression.closingParen.range.end),
+                    range: util.createRangeFromPositions(expression.range.start, expression.closingParen.range.end),
                     functionScope: this.getFunctionScopeAtPosition(Position.create(callee.range.start.line, callee.range.start.character)),
                     file: this,
                     name: functionName,
-                    nameRange: Range.create(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
+                    nameRange: util.createRange(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
                     //TODO keep track of parameters
                     args: args
                 };

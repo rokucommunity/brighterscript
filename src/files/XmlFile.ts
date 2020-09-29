@@ -210,7 +210,7 @@ export class XmlFile {
         this.parentNameRange = this.findExtendsPosition(fileContents);
 
         //create a range of the entire file
-        this.fileRange = Range.create(0, 0, this.lines.length, this.lines[this.lines.length - 1].length - 1);
+        this.fileRange = util.createRange(0, 0, this.lines.length, this.lines[this.lines.length - 1].length - 1);
 
         this.parsedXml = {};
         try {
@@ -230,14 +230,16 @@ export class XmlFile {
                 for (let lineIndex = 0; lineIndex < this.lines.length; lineIndex++) {
                     let idx = this.lines[lineIndex].indexOf('<component');
                     if (idx > -1) {
-                        componentRange = Range.create(
-                            Position.create(lineIndex, idx),
-                            Position.create(lineIndex, idx + 10)
+                        componentRange = util.createRange(
+                            lineIndex,
+                            idx,
+                            lineIndex,
+                            idx + 10
                         );
                         //calculate the range of the component's name (if it exists)
                         const match = /(.*?name\s*=\s*(?:'|"))(.*?)('|")/.exec(this.lines[lineIndex]);
                         if (match) {
-                            this.componentNameRange = Range.create(
+                            this.componentNameRange = util.createRange(
                                 lineIndex,
                                 match[1].length,
                                 lineIndex,
@@ -251,7 +253,7 @@ export class XmlFile {
                 if (!this.componentName) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
-                        range: Range.create(
+                        range: util.createRange(
                             componentRange.start.line,
                             componentRange.start.character,
                             componentRange.start.line,
@@ -265,7 +267,7 @@ export class XmlFile {
                 if (!this.parentComponentName) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
-                        range: Range.create(
+                        range: util.createRange(
                             componentRange.start.line,
                             componentRange.start.character,
                             componentRange.start.line,
@@ -278,7 +280,7 @@ export class XmlFile {
                 //the component xml element was not found in the file
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
-                    range: Range.create(
+                    range: util.createRange(
                         0,
                         0,
                         0,
@@ -295,7 +297,7 @@ export class XmlFile {
                 //add basic xml parse diagnostic errors
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlGenericParseError(match[1]),
-                    range: Range.create(
+                    range: util.createRange(
                         lineIndex,
                         columnIndex,
                         lineIndex,
@@ -343,7 +345,7 @@ export class XmlFile {
                     let endColumnIndex = startColumnIndex + uri.length;
 
                     uriRanges[uri].push(
-                        Range.create(
+                        util.createRange(
                             lineIndex,
                             startColumnIndex,
                             lineIndex,
@@ -361,7 +363,7 @@ export class XmlFile {
                             ...DiagnosticMessages.brighterscriptScriptTagMissingTypeAttribute(),
                             file: this,
                             //just flag the whole line; we'll get better location tracking when we have a formal xml parser
-                            range: Range.create(lineIndex, 0, lineIndex, line.length - 1)
+                            range: util.createRange(lineIndex, 0, lineIndex, line.length - 1)
                         });
                     }
                     lineIndexOffset += match[0].length;
@@ -520,7 +522,7 @@ export class XmlFile {
                 if (extendsIdx > -1) {
                     let colStartIndex = extendsIdx + extendsToFirstQuote.length;
                     let colEndIndex = colStartIndex + componentName.length;
-                    return Range.create(lineIndex, colStartIndex, lineIndex, colEndIndex);
+                    return util.createRange(lineIndex, colStartIndex, lineIndex, colEndIndex);
                 }
             }
         }

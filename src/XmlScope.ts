@@ -1,5 +1,4 @@
-import { Location, Position, Range } from 'vscode-languageserver';
-
+import { Location, Position } from 'vscode-languageserver';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
@@ -110,7 +109,7 @@ export class XmlScope extends Scope {
             util.rangeContains(file.parentNameRange, position)
         ) {
             results.push({
-                range: Range.create(0, 0, 0, 0),
+                range: util.createRange(0, 0, 0, 0),
                 uri: util.pathToUri(file.parentComponent.pathAbsolute)
             });
         }
