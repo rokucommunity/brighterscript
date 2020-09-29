@@ -7,6 +7,7 @@ import { FunctionScope } from './FunctionScope';
 import { BrsType } from './types/BrsType';
 import { FunctionType } from './types/FunctionType';
 import { ParseMode } from './parser/Parser';
+import { FunctionStatement } from './parser';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
@@ -43,6 +44,10 @@ export interface Callable {
      * Indicates whether or not this callable has an associated namespace
      */
     hasNamespace: boolean;
+    /**
+     * Gives access to the whole statement if you need more data than provided by the interface
+     */
+    functionStatement: FunctionStatement;
 }
 
 export interface FunctionCall {

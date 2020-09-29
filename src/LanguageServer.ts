@@ -23,7 +23,10 @@ import {
     ExecuteCommandParams,
     DocumentSymbolParams,
     WorkspaceSymbolParams,
-    SymbolInformation
+    SymbolInformation,
+    SignatureHelpParams,
+    SignatureHelp,
+    SignatureInformation
 } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -133,6 +136,8 @@ export class LanguageServer {
 
         this.connection.onDefinition(this.onDefinition.bind(this));
 
+        this.connection.onSignatureHelp(this.onSignatureHelp.bind(this));
+
         this.connection.onHover(this.onHover.bind(this));
 
         this.connection.onExecuteCommand(this.onExecuteCommand.bind(this));
@@ -191,6 +196,9 @@ export class LanguageServer {
                 documentSymbolProvider: true,
                 workspaceSymbolProvider: true,
                 hoverProvider: true,
+                signatureHelpProvider: {
+                    triggerCharacters: ['(', ',']
+                },
                 executeCommandProvider: {
                     commands: [
                         CustomCommands.TranspileFile
@@ -865,7 +873,6 @@ export class LanguageServer {
     }
 
     private async validateTextDocument(textDocument: TextDocument): Promise<void> {
-
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
 
@@ -966,13 +973,94 @@ export class LanguageServer {
         }
         // TODO I think this could be optimized better but it does the trick for now
         const deduplicatedDefinitions = Object.values(results.reduce((map, location) => {
-            const start = location.range.start;
-            const end = location.range.end;
+            const range = location.range ?? Range.create(0, 0, 0, 0);
+            const start = range.start;
+            const end = range.end;
             const key = `${location.uri}:${start.line}_${start.character}-${end.line}_${end.character}`;
             map[key] = location;
             return map;
         }, {}));
         return deduplicatedDefinitions as Location[];
+    }
+
+    private async onSignatureHelp(params: SignatureHelpParams) {
+        console.log('onSignatureHelp', 'params', params);
+
+        // Courtesy of George Cook :) He might call it whack but it works ¯\_(ツ)_/¯
+        //get the position of a symbol to our left
+        //1. get first bracket to our left, - then get the symbol before that..
+        //really crude crappy parser..
+        //TODO this is whack - it's not even LTR ugh..
+        const position = params.position;
+        const line = this.documents.get(params.textDocument.uri).getText(Range.create(position.line, 0, position.line, position.character));
+
+        const bracketCounts = { normal: 0, square: 0, curly: 0 };
+        let commaCount = 0;
+        let index = position.character;
+        let isArgStartFound = false;
+        while (index >= 0) {
+            if (isArgStartFound) {
+                if (line.charAt(index) !== ' ') {
+                    break;
+                }
+            } else {
+                if (line.charAt(index) === ')') {
+                    bracketCounts.normal++;
+                }
+
+                if (line.charAt(index) === ']') {
+                    bracketCounts.square++;
+                }
+
+                if (line.charAt(index) === '}') {
+                    bracketCounts.curly++;
+                }
+
+                if (line.charAt(index) === ',' && bracketCounts.normal <= 0 && bracketCounts.curly <= 0 && bracketCounts.square <= 0) {
+                    commaCount++;
+                }
+
+                if (line.charAt(index) === '(') {
+                    if (bracketCounts.normal === 0) {
+                        isArgStartFound = true;
+                    } else {
+                        bracketCounts.normal--;
+                    }
+                }
+
+                if (line.charAt(index) === '[') {
+                    bracketCounts.square--;
+                }
+
+                if (line.charAt(index) === '{') {
+                    bracketCounts.curly--;
+                }
+            }
+            index--;
+        }
+        if (index === 0) {
+            // Couldn't find the start so go ahead and exit out
+            return undefined;
+        }
+        await this.waitAllProgramFirstRuns();
+
+        let promises = [] as Promise<SignatureInformation>[];
+        for (const workspace of this.getWorkspaces()) {
+            const pathAbsolute = util.uriToPath(params.textDocument.uri);
+            const promise = workspace.builder.program.getSignatureHelp(pathAbsolute, Position.create(position.line, index));
+            promises.push(promise);
+        }
+        const signatures = await Promise.all(promises);
+
+        const activeSignature = signatures.length > 0 ? 0 : null;
+        const activeParameter = activeSignature >= 0 ? commaCount : null;
+        let results: SignatureHelp = {
+            signatures: signatures,
+            activeSignature: 0,
+            activeParameter: activeParameter
+        };
+
+        return results;
     }
 
     /**

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { SourceNode } from 'source-map';
-import { CompletionItem, CompletionItemKind, Location, Hover, Position, Range, DocumentSymbol, SymbolKind, SymbolInformation } from 'vscode-languageserver';
+import { CompletionItem, CompletionItemKind, Location, Hover, Position, Range, DocumentSymbol, SymbolKind, SymbolInformation, SignatureInformation, ParameterInformation } from 'vscode-languageserver';
 import chalk from 'chalk';
 import { Scope } from '../Scope';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
@@ -24,6 +24,7 @@ import { ClassStatement } from '../parser/ClassStatement';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
+import { XmlFile } from './XmlFile';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -588,7 +589,8 @@ export class BrsFile {
                 range: statement.func.range,
                 type: functionType,
                 getName: statement.getName.bind(statement),
-                hasNamespace: !!statement.namespaceName
+                hasNamespace: !!statement.namespaceName,
+                functionStatement: statement
             });
         }
     }
@@ -833,7 +835,7 @@ export class BrsFile {
     private getPartialVariableName(currentToken: Token) {
         let identifierAndDotKinds = [TokenKind.Identifier, ...AllowedLocalIdentifiers, TokenKind.Dot];
 
-        //consume tokens backwards until we find someting other than a dot or an identifier
+        //consume tokens backwards until we find something other than a dot or an identifier
         let tokens = [];
         for (let i = this.parser.tokens.indexOf(currentToken); i >= 0; i--) {
             currentToken = this.parser.tokens[i];
@@ -1050,7 +1052,7 @@ export class BrsFile {
 
         //throw out invalid tokens and the wrong kind of tokens
         if (!token || !definitionTokenTypes.includes(token.kind)) {
-            return null;
+            return results;
         }
 
         const lowerTokenText = token.text.toLowerCase();
@@ -1140,6 +1142,69 @@ export class BrsFile {
         }
     }
 
+    public async getSignatureHelp(position: Position) {
+        await this.isReady();
+
+        const callSiteToken = this.getTokenAt(Position.create(position.line, position.character));
+        const scopes = this.program.getScopesForFile(this);
+        for (const scope of scopes) {
+            const callable = scope.getCallableByName(callSiteToken.text);
+            if (!callable) {
+                continue;
+            }
+
+            const funcFile = callable.file;
+            if (funcFile instanceof XmlFile) {
+                continue;
+            }
+            const statement = callable.functionStatement;
+            const func = statement.func;
+            const funcStartPosition = func.range.start;
+
+            // Get function comments in reverse order
+            let currentToken = funcFile.getTokenAt(funcStartPosition);
+            let functionComments = [] as string[];
+            while (true) {
+                currentToken = funcFile.getPreviousToken(currentToken);
+                if (currentToken.range.start.line + 1 < funcStartPosition.line) {
+                    if (functionComments.length === 0) {
+                        break;
+                    }
+                }
+
+                const kind = currentToken.kind;
+                if (kind === TokenKind.Comment) {
+                    // Strip off common leading characters to make it easier to read
+                    const commentText = currentToken.text.replace(/^[' *\/]+/, '');
+                    functionComments.unshift(commentText);
+                } else if (kind === TokenKind.Newline) {
+                    if (functionComments.length === 0) {
+                        continue;
+                    }
+                    // if we already had a new line as the last token then exit out
+                    if (functionComments[0] === currentToken.text) {
+                        break;
+                    }
+                    functionComments.unshift(currentToken.text);
+                } else {
+                    break;
+                }
+            }
+            const documentation = functionComments.join('').trim();
+
+            const lines = util.splitStringIntoLines(funcFile.fileContents);
+
+            const params = [] as ParameterInformation[];
+            for (const param of func.parameters) {
+                params.push(ParameterInformation.create(param.name.text));
+            }
+
+            const label = util.getTextForRange(lines, Range.create(func.functionType.range.start, func.body.range.start)).trim();
+            const signature = SignatureInformation.create(label, documentation, ...params);
+            return signature;
+        }
+    }
+
     /**
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
@@ -1154,7 +1219,7 @@ export class BrsFile {
         } else {
             //create a source map from the original source code
             let chunks = [] as (SourceNode | string)[];
-            let lines = this.fileContents.split(/\r?\n/g);
+            let lines = util.splitStringIntoLines(this.fileContents);
             for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
                 let line = lines[lineIndex];
                 chunks.push(

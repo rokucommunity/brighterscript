@@ -591,7 +591,7 @@ export class Program {
         return results;
     }
 
-    public async getHover(pathAbsolute: string, position: Position) {
+    public getHover(pathAbsolute: string, position: Position) {
         //find the file
         let file = this.getFile(pathAbsolute);
         if (!file) {
@@ -599,6 +599,16 @@ export class Program {
         }
 
         return file.getHover(position);
+    }
+
+    public getSignatureHelp(pathAbsolute: string, position: Position) {
+        //find the file
+        let file = this.getFile(pathAbsolute);
+        if (!file) {
+            return null;
+        }
+
+        return file.getSignatureHelp(position);
     }
 
 

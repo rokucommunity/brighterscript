@@ -487,6 +487,25 @@ describe('util', () => {
             });
         });
     });
+
+    describe('getTextForRange', () => {
+        const testArray = ['The quick', 'brown fox', 'jumps over', 'the lazy dog'];
+        const testString = testArray.join('\n');
+        it('should work if string is passed in', () => {
+            const result = util.getTextForRange(testString, Range.create(0, 0, 1, 5));
+            expect(result).to.equal('The quick\nbrown');
+        });
+
+        it('should work if array is passed in', () => {
+            const result = util.getTextForRange(testArray, Range.create(0, 0, 1, 5));
+            expect(result).to.equal('The quick\nbrown');
+        });
+
+        it('should work if start and end are on the same line', () => {
+            const result = util.getTextForRange(testArray, Range.create(0, 4, 0, 7));
+            expect(result).to.equal('qui');
+        });
+    });
 });
 
 async function expectThrowAsync(callback) {

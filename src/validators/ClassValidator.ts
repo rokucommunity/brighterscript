@@ -33,7 +33,7 @@ export class BsClassValidator {
      * Given a class name optionally prefixed with a namespace name, find the class that matches
      */
     private getClassByName(className: string, namespaceName?: string) {
-        let fullName = util.getFulllyQualifiedClassName(className, namespaceName);
+        let fullName = util.getFullyQualifiedClassName(className, namespaceName);
         return this.classes[fullName.toLowerCase()];
     }
 
@@ -54,7 +54,7 @@ export class BsClassValidator {
 
                 if (!newableClass) {
                     //try and find functions with this name.
-                    let fullName = util.getFulllyQualifiedClassName(className, newExpression.namespaceName?.getName(ParseMode.BrighterScript));
+                    let fullName = util.getFullyQualifiedClassName(className, newExpression.namespaceName?.getName(ParseMode.BrighterScript));
                     let callable = this.scope.getCallableByName(fullName);
                     //if we found a callable with this name, the user used a "new" keyword in front of a function. add error
                     if (callable) {

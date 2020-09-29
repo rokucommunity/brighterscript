@@ -918,12 +918,42 @@ export class Util {
      * If the name does not have a period, and a namespaceName was provided, return the class name prepended
      * by the namespace name
      */
-    public getFulllyQualifiedClassName(className: string, namespaceName?: string) {
+    public getFullyQualifiedClassName(className: string, namespaceName?: string) {
         if (className.includes('.') === false && namespaceName) {
             return `${namespaceName}.${className}`;
         } else {
             return className;
         }
+    }
+
+    public splitStringIntoLines(string: string) {
+        return string.split(/\r?\n/g);
+    }
+
+    public getTextForRange(string: string|string[], range: Range) {
+        let lines: string[];
+        if (Array.isArray(string)) {
+            lines = string;
+        } else {
+            lines = this.splitStringIntoLines(string);
+        }
+
+        const start = range.start;
+        const end = range.end;
+
+        let endCharacter = end.character;
+        // If lines are the same we need to subtract out our new starting position to make it work correctly
+        if (start.line === end.line) {
+            endCharacter -= start.character;
+        }
+
+        let rangeLines = [lines[start.line].substring(start.character)];
+        for (let i = start.line + 1; i <= end.line; i++) {
+            rangeLines.push(lines[i]);
+        }
+        const lastLine = rangeLines.pop();
+        rangeLines.push(lastLine.substring(0, endCharacter));
+        return rangeLines.join('\n');
     }
 }
 
