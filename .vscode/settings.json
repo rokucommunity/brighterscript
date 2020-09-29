@@ -22,5 +22,6 @@
     ],
     "mocha.env": {
         "TS_NODE_TYPE_CHECK": false
-    }
+    },
+    "files.trimTrailingWhitespace": true
 }

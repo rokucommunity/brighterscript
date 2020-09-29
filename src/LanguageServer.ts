@@ -14,7 +14,6 @@ import {
     InitializeParams,
     Location,
     ProposedFeatures,
-    Range,
     ServerCapabilities,
     TextDocumentPositionParams,
     TextDocuments,
@@ -346,7 +345,7 @@ export class LanguageServer {
             return configFilePath;
         }
 
-        //look for the depricated `brsconfig.json` file
+        //look for the deprecated `brsconfig.json` file
         configFilePath = path.resolve(workspacePath, 'brsconfig.json');
         if (await util.fileExists(configFilePath)) {
             return configFilePath;
@@ -417,11 +416,11 @@ export class LanguageServer {
             newWorkspace.isFirstRunComplete = true;
             newWorkspace.isFirstRunSuccessful = false;
         }).then(() => {
-            //if we found a depricated brsconfig.json, add a diagnostic warning the user
+            //if we found a deprecated brsconfig.json, add a diagnostic warning the user
             if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
                 builder.addDiagnostic(configFilePath, {
-                    ...DiagnosticMessages.brsConfigJsonIsDepricated(),
-                    range: Range.create(0, 0, 0, 0)
+                    ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
+                    range: util.createRange(0, 0, 0, 0)
                 });
                 return this.sendDiagnostics();
             }
@@ -545,7 +544,7 @@ export class LanguageServer {
         //     label: 'bronley',
         //     textEdit: {
         //         newText: 'bronley2',
-        //         range: Range.create(position, position)
+        //         range: util.createRange(position, position)
         //     }
         // }] as CompletionItem[];
 

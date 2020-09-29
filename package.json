@@ -1,10 +1,11 @@
 {
     "name": "brighterscript",
-    "version": "0.13.1",
+    "version": "0.15.0",
     "description": "A superset of Roku's BrightScript language.",
     "scripts": {
         "preversion": "npm run build && npm run lint && npm run test",
-        "build": "rimraf out && tsc",
+        "build": "rimraf out && tsc && npm run build:plugins",
+        "build:plugins": "cd testProjects/plugins && rimraf *.js && tsc",
         "watch": "rimraf out && tsc --watch",
         "prepublishOnly": "npm run build",
         "lint": "eslint \"src/**\"",

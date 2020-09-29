@@ -1,8 +1,8 @@
 import { Token, Identifier, TokenKind, CompoundAssignmentOperators } from '../lexer';
 import { SourceNode } from 'source-map';
-import { Expression, FunctionExpression, NamespacedVariableNameExpression, BinaryExpression } from './Expression';
+import { Expression, FunctionExpression, NamespacedVariableNameExpression, BinaryExpression, ExpressionVisitor } from './Expression';
 import { util } from '../util';
-import { Range, Position } from 'vscode-languageserver';
+import { Range, Position, CancellationToken } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 
@@ -18,6 +18,14 @@ export interface Statement {
     transpile(state: TranspileState): Array<SourceNode | string>;
 }
 
+export class EmptyStatement {
+    range: Range;
+
+    transpile(state: TranspileState) {
+        return [];
+    }
+}
+
 export class Body implements Statement {
     constructor(
         public statements: Statement[] = []
@@ -25,7 +33,7 @@ export class Body implements Statement {
     }
 
     public get range() {
-        return Range.create(
+        return util.createRangeFromPositions(
             this.statements[0]?.range.start ?? Position.create(0, 0),
             this.statements[this.statements.length - 1]?.range.end ?? Position.create(0, 0)
         );
@@ -72,7 +80,7 @@ export class AssignmentStatement implements Statement {
         readonly value: Expression,
         readonly containingFunction: FunctionExpression
     ) {
-        this.range = Range.create(this.name.range.start, this.value.range.end);
+        this.range = util.createRangeFromPositions(this.name.range.start, this.value.range.end);
     }
 
     public readonly range: Range;
@@ -98,7 +106,7 @@ export class Block implements Statement {
         readonly statements: Statement[],
         readonly startingRange: Range
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             this.startingRange.start,
             this.statements.length
                 ? this.statements[this.statements.length - 1].range.end
@@ -160,7 +168,7 @@ export class CommentStatement implements Statement, Expression {
     constructor(
         public comments: Token[]
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             this.comments[0].range.start,
             this.comments[this.comments.length - 1].range.end
         );
@@ -188,6 +196,12 @@ export class CommentStatement implements Statement, Expression {
             }
         }
         return result;
+    }
+
+    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken) {
+        if (!cancel?.isCancellationRequested) {
+            visitor(this, parent);
+        }
     }
 }
 
@@ -283,7 +297,7 @@ export class IfStatement implements Statement {
         readonly elseIfs: ElseIf[],
         readonly elseBranch?: Block
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             this.tokens.if.range.start,
             (this.tokens.endIf ?? this.elseBranch ?? this.elseIfs?.[this.elseIfs?.length - 1]?.thenBranch ?? this.thenBranch).range.end
         );
@@ -384,7 +398,7 @@ export class IncrementStatement implements Statement {
         readonly value: Expression,
         readonly operator: Token
     ) {
-        this.range = Range.create(this.value.range.start, this.operator.range.end);
+        this.range = util.createRangeFromPositions(this.value.range.start, this.operator.range.end);
     }
 
     public readonly range: Range;
@@ -423,7 +437,7 @@ export class PrintStatement implements Statement {
         },
         readonly expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             this.tokens.print.range.start,
             this.expressions.length
                 ? this.expressions[this.expressions.length - 1].range.end
@@ -461,7 +475,7 @@ export class GotoStatement implements Statement {
             label: Token;
         }
     ) {
-        this.range = Range.create(this.tokens.goto.range.start, this.tokens.label.range.end);
+        this.range = util.createRangeFromPositions(this.tokens.goto.range.start, this.tokens.label.range.end);
     }
 
     public readonly range: Range;
@@ -482,7 +496,7 @@ export class LabelStatement implements Statement {
             colon: Token;
         }
     ) {
-        this.range = Range.create(this.tokens.identifier.range.start, this.tokens.colon.range.end);
+        this.range = util.createRangeFromPositions(this.tokens.identifier.range.start, this.tokens.colon.range.end);
     }
 
     public readonly range: Range;
@@ -503,7 +517,7 @@ export class ReturnStatement implements Statement {
         },
         readonly value?: Expression
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             this.tokens.return.range.start,
             (this.value && this.value.range.end) || this.tokens.return.range.end
         );
@@ -530,7 +544,7 @@ export class EndStatement implements Statement {
             end: Token;
         }
     ) {
-        this.range = Range.create(this.tokens.end.range.start, this.tokens.end.range.end);
+        this.range = util.createRangeFromPositions(this.tokens.end.range.start, this.tokens.end.range.end);
     }
 
     public readonly range: Range;
@@ -548,7 +562,7 @@ export class StopStatement implements Statement {
             stop: Token;
         }
     ) {
-        this.range = Range.create(this.tokens.stop.range.start, this.tokens.stop.range.end);
+        this.range = util.createRangeFromPositions(this.tokens.stop.range.start, this.tokens.stop.range.end);
     }
 
     public readonly range: Range;
@@ -573,7 +587,7 @@ export class ForStatement implements Statement {
         readonly increment: Expression,
         readonly body: Block
     ) {
-        this.range = Range.create(this.tokens.for.range.start, this.tokens.endFor.range.end);
+        this.range = util.createRangeFromPositions(this.tokens.for.range.start, this.tokens.endFor.range.end);
     }
 
     public readonly range: Range;
@@ -634,7 +648,7 @@ export class ForEachStatement implements Statement {
         readonly target: Expression,
         readonly body: Block
     ) {
-        this.range = Range.create(this.tokens.forEach.range.start, this.tokens.endFor.range.end);
+        this.range = util.createRangeFromPositions(this.tokens.forEach.range.start, this.tokens.endFor.range.end);
     }
 
     public readonly range: Range;
@@ -683,7 +697,7 @@ export class WhileStatement implements Statement {
         readonly condition: Expression,
         readonly body: Block
     ) {
-        this.range = Range.create(this.tokens.while.range.start, this.tokens.endWhile.range.end);
+        this.range = util.createRangeFromPositions(this.tokens.while.range.start, this.tokens.endWhile.range.end);
     }
 
     public readonly range: Range;
@@ -723,7 +737,7 @@ export class DottedSetStatement implements Statement {
         readonly name: Identifier,
         readonly value: Expression
     ) {
-        this.range = Range.create(this.obj.range.start, this.value.range.end);
+        this.range = util.createRangeFromPositions(this.obj.range.start, this.value.range.end);
     }
 
     public readonly range: Range;
@@ -755,7 +769,7 @@ export class IndexedSetStatement implements Statement {
         readonly openingSquare: Token,
         readonly closingSquare: Token
     ) {
-        this.range = Range.create(this.obj.range.start, this.value.range.end);
+        this.range = util.createRangeFromPositions(this.obj.range.start, this.value.range.end);
     }
 
     public readonly range: Range;
@@ -790,7 +804,7 @@ export class LibraryStatement implements Statement {
             filePath: Token | undefined;
         }
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             this.tokens.library.range.start,
             this.tokens.filePath ? this.tokens.filePath.range.end : this.tokens.library.range.end
         );
@@ -831,7 +845,7 @@ export class NamespaceStatement implements Statement {
     public name: string;
 
     public get range() {
-        return Range.create(
+        return util.createRangeFromPositions(
             this.keyword.range.start,
             (this.endKeyword ?? this.body ?? this.nameExpression ?? this.keyword).range.end
         );
@@ -852,7 +866,7 @@ export class ImportStatement implements Statement {
         readonly importToken: Token,
         readonly filePathToken: Token
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             importToken.range.start,
             (filePathToken ?? importToken).range.end
         );
@@ -860,7 +874,7 @@ export class ImportStatement implements Statement {
             //remove quotes
             this.filePath = this.filePathToken.text.replace(/"/g, '');
             //adjust the range to exclude the quotes
-            this.filePathToken.range = Range.create(
+            this.filePathToken.range = util.createRange(
                 this.filePathToken.range.start.line,
                 this.filePathToken.range.start.character + 1,
                 this.filePathToken.range.end.line,
@@ -879,7 +893,7 @@ export class ImportStatement implements Statement {
                 this.range.start.line + 1,
                 this.range.start.character,
                 state.file.pathAbsolute,
-                `'${this.importToken.text} "${this.filePathToken.text}"`
+                `'${this.importToken.text} ${this.filePathToken.text}`
             )
         ];
     }

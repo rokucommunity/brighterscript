@@ -5,6 +5,7 @@ import * as sinonImport from 'sinon';
 import util from './util';
 import { Range } from 'vscode-languageserver';
 import { Lexer } from './lexer';
+import { BsConfig } from './BsConfig';
 
 //shorthand for normalizing a path
 let n = path.normalize;
@@ -37,6 +38,12 @@ describe('util', () => {
         process.chdir(cwd);
     });
 
+    describe('fileExists', () => {
+        it('returns false when no value is passed', async () => {
+            expect(await util.fileExists(undefined)).to.be.false;
+        });
+    });
+
     describe('uriToPath', () => {
         it('retains original drive casing for windows', () => {
             expect(util.uriToPath(`file:///C:${path.sep}something`)).to.equal(`C:${path.sep}something`);
@@ -51,6 +58,14 @@ describe('util', () => {
     });
 
     describe('loadConfigFile', () => {
+        it('returns undefined when no path is provided', async () => {
+            expect(await util.loadConfigFile(undefined)).to.be.undefined;
+        });
+
+        it('returns undefined when the path does not exist', async () => {
+            expect(await util.loadConfigFile(`?${cwd}/donotexist.json`)).to.be.undefined;
+        });
+
         it('returns proper list of ancestor project paths', async () => {
             vfs[n(`${cwd}/child.json`)] = `{"extends": "parent.json"}`;
             vfs[n(`${cwd}/parent.json`)] = `{"extends": "grandparent.json"}`;
@@ -64,6 +79,41 @@ describe('util', () => {
             vfs[n(`${cwd}/child.json`)] = `{}`;
             let config = await util.loadConfigFile('child.json');
             expect(config._ancestors).to.eql([n(`${cwd}/child.json`)]);
+        });
+
+        it('resolves plugins path relatively to config file', () => {
+            const config: BsConfig = {
+                plugins: [
+                    './plugins.js',
+                    './scripts/plugins.js',
+                    '../scripts/plugins.js',
+                    'bsplugin'
+                ]
+            };
+            util.resolvePluginPaths(config, `${cwd}/config/child.json`);
+            expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+                `${cwd}/config/plugins.js`,
+                `${cwd}/config/scripts/plugins.js`,
+                `${cwd}/scripts/plugins.js`,
+                'bsplugin'
+            ].map(p => util.pathSepNormalize(p, '/')));
+        });
+
+        it('removes duplicate plugins and undefined values', () => {
+            const config: BsConfig = {
+                plugins: [
+                    './plugins.js',
+                    'bsplugin',
+                    '../config/plugins.js',
+                    'bsplugin',
+                    undefined
+                ]
+            };
+            util.resolvePluginPaths(config, `${cwd}/config/child.json`);
+            expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+                `${cwd}/config/plugins.js`,
+                'bsplugin'
+            ].map(p => util.pathSepNormalize(p, '/')));
         });
     });
 

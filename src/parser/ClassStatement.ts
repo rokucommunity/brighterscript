@@ -33,7 +33,7 @@ export class ClassStatement implements Statement {
             }
         }
 
-        this.range = Range.create(this.classKeyword.range.start, this.end.range.end);
+        this.range = util.createRangeFromPositions(this.classKeyword.range.start, this.end.range.end);
     }
 
     public getName(parseMode: ParseMode) {
@@ -336,7 +336,7 @@ export class ClassMethodStatement implements Statement {
         readonly func: FunctionExpression,
         readonly overrides: Token
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             (this.accessModifier ?? this.func).range.start,
             this.func.range.end
         );
@@ -457,7 +457,7 @@ export class ClassMethodStatement implements Statement {
                         new LiteralExpression(
                             BrsInvalid.Instance,
                             //set the range to the end of the name so locations don't get broken
-                            Range.create(field.name.range.end, field.name.range.end)
+                            util.createRangeFromPositions(field.name.range.end, field.name.range.end)
                         ),
                         this.func
                     )
@@ -478,7 +478,7 @@ export class ClassFieldStatement implements Statement {
         readonly equal?: Token,
         readonly initialValue?: Expression
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             (this.accessModifier ?? this.name).range.start,
             (this.initialValue ?? this.type ?? this.as ?? this.name).range.end
         );

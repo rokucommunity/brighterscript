@@ -1,7 +1,7 @@
 import { assert, expect } from 'chai';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
-import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range, DiagnosticSeverity, Location } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
@@ -9,6 +9,8 @@ import { XmlFile } from './files/XmlFile';
 import { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
+import { URI } from 'vscode-uri';
+import PluginInterface from './PluginInterface';
 
 let testProjectsPath = s`${__dirname}/../testProjects`;
 
@@ -26,6 +28,7 @@ describe('Program', () => {
             rootDir: rootDir,
             stagingFolderPath: stagingFolderPath
         });
+        program.createSourceScope(); //ensure source scope is created
     });
     afterEach(() => {
         sinon.restore();
@@ -182,9 +185,106 @@ describe('Program', () => {
             // let componentPath = path.resolve(`${rootDir}/components/component1.xml`);
             // await program.loadOrReloadFile('components', '')
         });
+
+        it(`emits events for scope and file creation`, async () => {
+            const beforeProgramValidate = sinon.spy();
+            const afterProgramValidate = sinon.spy();
+            const afterScopeCreate = sinon.spy();
+            const beforeScopeValidate = sinon.spy();
+            const afterScopeValidate = sinon.spy();
+            const beforeFileParse = sinon.spy();
+            const afterFileParse = sinon.spy();
+            const afterFileValidate = sinon.spy();
+            program.plugins = new PluginInterface([{
+                name: 'emits events for scope and file creation',
+                beforeProgramValidate: beforeProgramValidate,
+                afterProgramValidate: afterProgramValidate,
+                afterScopeCreate: afterScopeCreate,
+                beforeScopeValidate: beforeScopeValidate,
+                afterScopeValidate: afterScopeValidate,
+                beforeFileParse: beforeFileParse,
+                afterFileParse: afterFileParse,
+                afterFileValidate: afterFileValidate
+            }], undefined);
+
+            let mainPath = s`${rootDir}/source/main.brs`;
+            //add a new source file
+            await program.addOrReplaceFile({ src: mainPath, dest: 'source/main.brs' }, '');
+            //add a component file
+            await program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/components/lib.brs" />
+                </component>`);
+            await program.validate();
+
+            //program events
+            expect(beforeProgramValidate.callCount).to.equal(1);
+            expect(afterProgramValidate.callCount).to.equal(1);
+            //scope events
+            //(we get component scope event only because source is created in beforeEach)
+            expect(afterScopeCreate.callCount).to.equal(1);
+            expect(beforeScopeValidate.callCount).to.equal(2);
+            expect(afterScopeValidate.callCount).to.equal(2);
+            //file events
+            expect(beforeFileParse.callCount).to.equal(2);
+            expect(afterFileParse.callCount).to.equal(2);
+            expect(afterFileValidate.callCount).to.equal(2);
+        });
     });
 
     describe('validate', () => {
+        it('catches duplicate XML component names', async () => {
+            //add 2 components which both reference the same errored file
+            await program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                </component>
+            `);
+            await program.addOrReplaceFile({ src: `${rootDir}/components/component2.xml`, dest: 'components/component2.xml' }, `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                </component>
+            `);
+            await program.validate();
+            expect(program.getDiagnostics()).to.be.lengthOf(2);
+            expect(program.getDiagnostics().map(x => {
+                delete x.file;
+                return x;
+            })).to.eql([{
+                ...DiagnosticMessages.duplicateComponentName('Component1'),
+                range: Range.create(2, 33, 2, 43),
+                relatedInformation: [{
+                    location: Location.create(
+                        URI.file(s`${rootDir}/components/component1.xml`).toString(),
+                        Range.create(2, 33, 2, 43)
+                    ),
+                    message: 'Also defined here'
+                }]
+            }, {
+                ...DiagnosticMessages.duplicateComponentName('Component1'),
+                range: Range.create(2, 33, 2, 43),
+                relatedInformation: [{
+                    location: Location.create(
+                        URI.file(s`${rootDir}/components/component2.xml`).toString(),
+                        Range.create(2, 33, 2, 43)
+                    ),
+                    message: 'Also defined here'
+                }]
+            }]);
+        });
+
+        it('allows adding diagnostics', () => {
+            const expected = [{
+                message: 'message',
+                file: undefined,
+                range: undefined
+            }];
+            program.addDiagnostics(expected);
+            const actual = (program as any).diagnostics;
+            expect(actual).to.deep.equal(expected);
+        });
+
         it('does not produce duplicate parse errors for different component scopes', async () => {
             //add a file with a parse error
             await program.addOrReplaceFile({ src: `${rootDir}/components/lib.brs`, dest: 'components/lib.brs' }, `
@@ -630,7 +730,7 @@ describe('Program', () => {
                     end sub
                 end namespace
                 sub main()
-                    
+
                 end sub
             `);
             let completions = (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 23))).map(x => x.label);
