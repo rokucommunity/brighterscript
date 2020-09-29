@@ -648,7 +648,7 @@ export class Scope {
 
                     this.diagnostics.push({
                         ...DiagnosticMessages.duplicateFunctionImplementation(callable.name, callableContainer.scope.name),
-                        range: Range.create(
+                        range: util.createRange(
                             callable.nameRange.start.line,
                             callable.nameRange.start.character,
                             callable.nameRange.start.line,

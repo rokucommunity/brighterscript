@@ -725,7 +725,7 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it.only('walks ReturnStatement with or without value', async () => {
+        it('walks ReturnStatement with or without value', async () => {
             await testWalk(`
                 sub main()
                     a = 0

@@ -30,7 +30,7 @@ export class BinaryExpression extends Expression {
         public right: Expression
     ) {
         super();
-        this.range = Range.create(this.left.range.start, this.right.range.end);
+        this.range = util.createRangeFromPositions(this.left.range.start, this.right.range.end);
     }
 
     public readonly range: Range;
@@ -64,7 +64,7 @@ export class CallExpression extends Expression {
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
         super();
-        this.range = Range.create(this.callee.range.start, this.closingParen.range.end);
+        this.range = util.createRangeFromPositions(this.callee.range.start, this.closingParen.range.end);
     }
 
     public readonly range: Range;
@@ -142,7 +142,7 @@ export class FunctionExpression extends Expression {
      * and ending with the last n' in 'end function' or 'b' in 'end sub'
      */
     public get range() {
-        return Range.create(
+        return util.createRangeFromPositions(
             (this.functionType ?? this.leftParen).range.start,
             (this.end ?? this.body ?? this.returnTypeToken ?? this.asToken ?? this.rightParen).range.end
         );
@@ -277,7 +277,7 @@ export class DottedGetExpression extends Expression {
         readonly dot: Token
     ) {
         super();
-        this.range = Range.create(this.obj.range.start, this.name.range.end);
+        this.range = util.createRangeFromPositions(this.obj.range.start, this.name.range.end);
     }
 
     public readonly range: Range;
@@ -309,7 +309,7 @@ export class XmlAttributeGetExpression extends Expression {
         readonly at: Token
     ) {
         super();
-        this.range = Range.create(this.obj.range.start, this.name.range.end);
+        this.range = util.createRangeFromPositions(this.obj.range.start, this.name.range.end);
     }
 
     public readonly range: Range;
@@ -337,7 +337,7 @@ export class IndexedGetExpression extends Expression {
         readonly closingSquare: Token
     ) {
         super();
-        this.range = Range.create(this.obj.range.start, this.closingSquare.range.end);
+        this.range = util.createRangeFromPositions(this.obj.range.start, this.closingSquare.range.end);
     }
 
     public readonly range: Range;
@@ -368,7 +368,7 @@ export class GroupingExpression extends Expression {
         public expression: Expression
     ) {
         super();
-        this.range = Range.create(this.tokens.left.range.start, this.tokens.right.range.end);
+        this.range = util.createRangeFromPositions(this.tokens.left.range.start, this.tokens.right.range.end);
     }
 
     public readonly range: Range;
@@ -394,7 +394,7 @@ export class LiteralExpression extends Expression {
         range: Range
     ) {
         super();
-        this.range = range ?? Range.create(-1, -1, -1, -1);
+        this.range = range ?? util.createRange(-1, -1, -1, -1);
     }
 
     public readonly range: Range;
@@ -459,7 +459,7 @@ export class ArrayLiteralExpression extends Expression {
         readonly close: Token
     ) {
         super();
-        this.range = Range.create(this.open.range.start, this.close.range.end);
+        this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
     }
 
     public readonly range: Range;
@@ -547,7 +547,7 @@ export class AALiteralExpression extends Expression {
         readonly close: Token
     ) {
         super();
-        this.range = Range.create(this.open.range.start, this.close.range.end);
+        this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
     }
 
     public readonly range: Range;
@@ -652,7 +652,7 @@ export class UnaryExpression extends Expression {
         public right: Expression
     ) {
         super();
-        this.range = Range.create(this.operator.range.start, this.right.range.end);
+        this.range = util.createRangeFromPositions(this.operator.range.start, this.right.range.end);
     }
 
     public readonly range: Range;
@@ -805,7 +805,7 @@ export class NewExpression extends Expression {
         readonly call: CallExpression
     ) {
         super();
-        this.range = Range.create(this.newKeyword.range.start, this.call.range.end);
+        this.range = util.createRangeFromPositions(this.newKeyword.range.start, this.call.range.end);
     }
 
     /**
@@ -844,7 +844,7 @@ export class CallfuncExpression extends Expression {
         readonly closingParen: Token
     ) {
         super();
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             callee.range.start,
             (closingParen ?? args[args.length - 1] ?? openingParen ?? methodName ?? operator).range.end
         );
@@ -906,7 +906,7 @@ export class TemplateStringQuasiExpression extends Expression {
         readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>
     ) {
         super();
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             this.expressions[0].range.start,
             this.expressions[this.expressions.length - 1].range.end
         );
@@ -947,7 +947,7 @@ export class TemplateStringExpression extends Expression {
         readonly closingBacktick: Token
     ) {
         super();
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end
         );
@@ -1045,7 +1045,7 @@ export class TaggedTemplateStringExpression extends Expression {
         readonly closingBacktick: Token
     ) {
         super();
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end
         );

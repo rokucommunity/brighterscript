@@ -7,6 +7,7 @@ import { Range } from 'vscode-languageserver';
 import { TranspileState } from '../parser/TranspileState';
 import { walk, WalkOptions, WalkVisitor } from '../astUtils';
 import { Expression, LiteralExpression } from '../parser/Expression';
+import util from '../util';
 
 /** An argument to a BrightScript `function` or `sub`. */
 export interface Argument {
@@ -56,7 +57,7 @@ export class StdlibArgument implements Argument {
     }
 
     /** A fake location exists only within the BRS runtime. */
-    static InternalRange = Range.create(-1, -1, -1, -1);
+    static InternalRange = util.createRange(-1, -1, -1, -1);
 }
 
 export class FunctionParameter extends Expression {

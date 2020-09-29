@@ -1,5 +1,3 @@
-import { Range } from 'vscode-languageserver';
-
 import { BrsFile } from './files/BrsFile';
 import { Callable } from './interfaces';
 import { ArrayType } from './types/ArrayType';
@@ -13,6 +11,7 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { Parser } from './parser';
+import util from './util';
 
 export let globalFile = new BrsFile('global', 'global', null);
 globalFile.parser = new Parser();
@@ -728,7 +727,7 @@ let programStatementFunctions = [
 export let globalCallables = [...mathFunctions, ...runtimeFunctions, ...globalUtilityFunctions, ...globalStringFunctions, ...programStatementFunctions];
 for (let callable of globalCallables) {
     //give each callable a dummy location
-    callable.nameRange = Range.create(0, 0, 0, callable.name.length);
+    callable.nameRange = util.createRange(0, 0, 0, callable.name.length);
 
     //add each parameter to the type
     for (let param of callable.params) {
