@@ -560,7 +560,7 @@ export class PrintStatement extends Statement {
         if (options.walkExpressions) {
             for (let i = 0; i < this.expressions.length; i++) {
                 //sometimes we have semicolon `Token`s in the expressions list (should probably fix that...), so only emit the actual expressions
-                if (isExpression(this.expressions[i])) {
+                if (isExpression(this.expressions[i] as any)) {
                     walk(this.expressions, i, visitor, options, this);
                 }
             }

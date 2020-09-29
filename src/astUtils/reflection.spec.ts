@@ -207,7 +207,7 @@ describe('reflection', () => {
 
         it('isExpression', () => {
             expect(isExpression(binary)).to.be.true;
-            expect(isExpression(binary.operator)).to.be.false;
+            expect(isExpression(binary.operator as any)).to.be.false;
         });
         it('isBinaryExpression', () => {
             expect(isBinaryExpression(binary)).to.be.true;
@@ -295,7 +295,7 @@ describe('reflection', () => {
             expect(isExpression(new EmptyStatement())).to.be.false;
             //doesn't fail for invalid param types
             expect(isExpression(undefined)).to.be.false;
-            expect(isExpression(1)).to.be.false;
+            expect(isExpression(1 as any)).to.be.false;
         });
     });
 });
