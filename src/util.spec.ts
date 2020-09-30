@@ -1,46 +1,24 @@
 import { expect } from 'chai';
 import * as path from 'path';
-import { createSandbox } from 'sinon';
-let sinon = createSandbox();
 import util, { standardizePath as s } from './util';
 import { Range } from 'vscode-languageserver';
 import { Lexer } from './lexer';
 import { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 
-let cwd = process.cwd();
-let rootConfigPath = s`${process.cwd()}/bsconfig.json`;
-let rootConfigDir = path.dirname(rootConfigPath);
 let tempDir = s`${process.cwd()}/.tmp`;
-let vfs = {};
+let rootDir = s`${tempDir}/rootDir`;
+let cwd = process.cwd();
 
-function addFile(filePath: string, fileContents?: string) {
-    let absFilePath = s`${path.resolve(tempDir, filePath)}`;
-    vfs[absFilePath] = fileContents || '';
-    return absFilePath;
-}
-
-describe.only('util', () => {
+describe('util', () => {
     beforeEach(() => {
-        vfs = {};
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
-        sinon.stub(util, 'getFileContents').callsFake((filePath) => {
-            filePath = s(filePath);
-            if (vfs[filePath]) {
-                return vfs[filePath];
-            } else {
-                throw new Error('Cannot find file ' + filePath);
-            }
-        });
     });
 
     afterEach(() => {
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
-        sinon.restore();
-        //restore current working directory
-        process.chdir(cwd);
     });
 
     describe('fileExists', () => {
@@ -68,32 +46,31 @@ describe.only('util', () => {
         });
 
         it('returns undefined when the path does not exist', async () => {
-            expect(await util.loadConfigFile(`?${cwd}/donotexist.json`)).to.be.undefined;
+            expect(await util.loadConfigFile(`?${rootDir}/donotexist.json`)).to.be.undefined;
         });
 
         it('returns proper list of ancestor project paths', async () => {
-            vfs[s`${cwd}/child.json`] = `{"extends": "parent.json"}`;
-            vfs[s`${cwd}/parent.json`] = `{"extends": "grandparent.json"}`;
-            vfs[s`${cwd}/grandparent.json`] = `{"extends": "greatgrandparent.json"}`;
-            vfs[s`${cwd}/greatgrandparent.json`] = `{}`;
-            let config = await util.loadConfigFile('child.json');
+            fsExtra.outputFileSync(s`${rootDir}/child.json`, `{"extends": "parent.json"}`);
+            fsExtra.outputFileSync(s`${rootDir}/parent.json`, `{"extends": "grandparent.json"}`);
+            fsExtra.outputFileSync(s`${rootDir}/grandparent.json`, `{"extends": "greatgrandparent.json"}`);
+            fsExtra.outputFileSync(s`${rootDir}/greatgrandparent.json`, `{}`);
             expect(
-                config._ancestors.map(x => s(x))
+                (await util.loadConfigFile(s`${rootDir}/child.json`))._ancestors.map(x => s(x))
             ).to.eql([
-                s`${cwd}/child.json`,
-                s`${cwd}/parent.json`,
-                s`${cwd}/grandparent.json`,
-                s`${cwd}/greatgrandparent.json`
+                s`${rootDir}/child.json`,
+                s`${rootDir}/parent.json`,
+                s`${rootDir}/grandparent.json`,
+                s`${rootDir}/greatgrandparent.json`
             ]);
         });
 
         it('returns empty ancestors list for non-extends files', async () => {
-            vfs[s`${cwd}/child.json`] = `{}`;
-            let config = await util.loadConfigFile('child.json');
+            fsExtra.outputFileSync(s`${rootDir}/child.json`, `{}`);
+            let config = await util.loadConfigFile(s`${rootDir}/child.json`);
             expect(
                 config._ancestors.map(x => s(x))
             ).to.eql([
-                s`${cwd}/child.json`
+                s`${rootDir}/child.json`
             ]);
         });
 
@@ -106,11 +83,11 @@ describe.only('util', () => {
                     'bsplugin'
                 ]
             };
-            util.resolvePluginPaths(config, `${cwd}/config/child.json`);
+            util.resolvePluginPaths(config, `${rootDir}/config/child.json`);
             expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
-                `${cwd}/config/plugins.js`,
-                `${cwd}/config/scripts/plugins.js`,
-                `${cwd}/scripts/plugins.js`,
+                `${rootDir}/config/plugins.js`,
+                `${rootDir}/config/scripts/plugins.js`,
+                `${rootDir}/scripts/plugins.js`,
                 'bsplugin'
             ].map(p => util.pathSepNormalize(p, '/')));
         });
@@ -125,9 +102,9 @@ describe.only('util', () => {
                     undefined
                 ]
             };
-            util.resolvePluginPaths(config, `${cwd}/config/child.json`);
+            util.resolvePluginPaths(config, `${process.cwd()}/config/child.json`);
             expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
-                `${cwd}/config/plugins.js`,
+                `${process.cwd()}/config/plugins.js`,
                 'bsplugin'
             ].map(p => util.pathSepNormalize(p, '/')));
         });
@@ -201,27 +178,24 @@ describe.only('util', () => {
     });
 
     describe('findClosestConfigFile', () => {
-        beforeEach(() => {
-            sinon.stub(util, 'fileExists').callsFake(async (filePath) => {
-                return Promise.resolve(
-                    Object.keys(vfs).includes(filePath)
-                );
-            });
-        });
-
         it('finds config up the chain', async () => {
-            let brsFilePath = addFile('src/app.brs');
-            let currentDirBsConfigPath = addFile('src/bsconfig.json');
-            let currentDirBrsConfigPath = addFile('src/brsconfig.json');
-            let parentDirBsConfigPath = addFile('bsconfig.json');
-            let parentDirBrsConfigPath = addFile('brsconfig.json');
+            const brsFilePath = s`${rootDir}/src/app.brs`;
+            const currentDirBsConfigPath = s`${rootDir}/src/bsconfig.json`;
+            const currentDirBrsConfigPath = s`${rootDir}/src/brsconfig.json`;
+            const parentDirBsConfigPath = s`${rootDir}/bsconfig.json`;
+            const parentDirBrsConfigPath = s`${rootDir}/brsconfig.json`;
+            fsExtra.outputFileSync(brsFilePath, '');
+            fsExtra.outputFileSync(currentDirBsConfigPath, '');
+            fsExtra.outputFileSync(currentDirBrsConfigPath, '');
+            fsExtra.outputFileSync(parentDirBsConfigPath, '');
+            fsExtra.outputFileSync(parentDirBrsConfigPath, '');
 
             expect(await util.findClosestConfigFile(brsFilePath)).to.equal(currentDirBsConfigPath);
-            delete vfs[currentDirBsConfigPath];
+            fsExtra.removeSync(currentDirBsConfigPath);
             expect(await util.findClosestConfigFile(brsFilePath)).to.equal(currentDirBrsConfigPath);
-            delete vfs[currentDirBrsConfigPath];
+            fsExtra.removeSync(currentDirBrsConfigPath);
             expect(await util.findClosestConfigFile(brsFilePath)).to.equal(parentDirBsConfigPath);
-            delete vfs[parentDirBsConfigPath];
+            fsExtra.removeSync(parentDirBsConfigPath);
             expect(await util.findClosestConfigFile(brsFilePath)).to.equal(parentDirBrsConfigPath);
         });
 
@@ -242,19 +216,23 @@ describe.only('util', () => {
         });
 
         it('throws for missing extends file', async () => {
-            vfs[rootConfigPath] = `{ "extends": "path/does/not/exist/bsconfig.json" }`;
-            await expectThrowAsync(async () => {
-                await util.normalizeAndResolveConfig({
-                    project: rootConfigPath
+            try {
+                fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, `{ "extends": "path/does/not/exist/bsconfig.json" }`);
+                await expectThrowAsync(async () => {
+                    await util.normalizeAndResolveConfig({
+                        project: s`${rootDir}/bsconfig.json`
+                    });
                 });
-            });
+            } finally {
+                process.chdir(cwd);
+            }
         });
 
         it('throws for missing extends file', async () => {
-            vfs[rootConfigPath] = `{ "extends": "?path/does/not/exist/bsconfig.json" }`;
+            fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, `{ "extends": "?path/does/not/exist/bsconfig.json" }`);
             await expectNotThrowAsync(async () => {
                 await util.normalizeAndResolveConfig({
-                    project: rootConfigPath
+                    project: s`${rootDir}/bsconfig.json`
                 });
             });
         });
@@ -262,7 +240,6 @@ describe.only('util', () => {
 
     describe('normalizeConfig', () => {
         it('loads project from disc', async () => {
-            sinon.restore();
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
             let config = await util.normalizeAndResolveConfig({
                 project: s`${tempDir}/rootDir/bsconfig.json`
@@ -275,7 +252,6 @@ describe.only('util', () => {
         });
 
         it('loads project from disc and extends it', async () => {
-            sinon.restore();
             //the extends file
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.base.json`, `{
                 "outFile": "customOutDir/pkg1.zip",
@@ -296,7 +272,6 @@ describe.only('util', () => {
         });
 
         it('overrides parent files array with child files array', async () => {
-            sinon.restore();
             //the parent file
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.parent.json`, `{
                 "files": ["base.brs"]
@@ -314,19 +289,20 @@ describe.only('util', () => {
         });
 
         it('catches circular dependencies', async () => {
-            vfs[rootConfigPath] = `{
+            fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, `{
                 "extends": "bsconfig2.json"
-            }`;
-            vfs[path.join(rootConfigDir, 'bsconfig2.json')] = `{
+            }`);
+            fsExtra.outputFileSync(s`${rootDir}/bsconfig2.json`, `{
                 "extends": "bsconfig.json"
-            }`;
+            }`);
 
             let threw = false;
             try {
-                await util.normalizeAndResolveConfig({ project: rootConfigPath });
+                await util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
             } catch (e) {
                 threw = true;
             }
+            process.chdir(cwd);
             expect(threw).to.equal(true, 'Should have thrown an error');
             //the test passed
         });
