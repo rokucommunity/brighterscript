@@ -22,13 +22,7 @@ function addFile(filePath: string, fileContents?: string) {
     return absFilePath;
 }
 
-function writeFileSync(filePath: string, fileContents?: string) {
-    const absFilePath = s`${path.resolve(tempDir, filePath)}`;
-    fsExtra.ensureDirSync(path.dirname(absFilePath));
-    fsExtra.writeFileSync(absFilePath, fileContents || '');
-}
-
-describe('util', () => {
+describe.only('util', () => {
     beforeEach(() => {
         vfs = {};
         fsExtra.ensureDirSync(tempDir);
@@ -136,7 +130,7 @@ describe('util', () => {
         });
 
         it('returns path to file when found', async () => {
-            writeFileSync('rootDir/bsconfig.json');
+            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, '');
             expect(
                 await util.getConfigFilePath(s`${tempDir}/rootDir`)
             ).to.equal(
@@ -146,7 +140,7 @@ describe('util', () => {
 
         it('finds config file in parent directory', async () => {
             const bsconfigPath = s`${tempDir}/rootDir/bsconfig.json`;
-            writeFileSync(bsconfigPath);
+            fsExtra.outputFileSync(bsconfigPath, '');
             fsExtra.ensureDirSync(`${tempDir}/rootDir/source`);
             expect(
                 await util.getConfigFilePath(s`${tempDir}/rootDir/source`)
@@ -161,7 +155,7 @@ describe('util', () => {
 
             const rootDir = s`${tempDir}/rootDir`;
 
-            writeFileSync(`${rootDir}/bsconfig.json`);
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, '');
 
             fsExtra.ensureDirSync(rootDir);
             process.chdir(rootDir);
@@ -259,7 +253,7 @@ describe('util', () => {
     describe('normalizeConfig', () => {
         it('loads project from disc', async () => {
             sinon.restore();
-            writeFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
+            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
             let config = await util.normalizeAndResolveConfig({
                 project: s`${tempDir}/rootDir/bsconfig.json`
             });
@@ -273,13 +267,13 @@ describe('util', () => {
         it('loads project from disc and extends it', async () => {
             sinon.restore();
             //the extends file
-            writeFileSync(s`${tempDir}/rootDir/bsconfig.base.json`, `{
+            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.base.json`, `{
                 "outFile": "customOutDir/pkg1.zip",
                 "rootDir": "core"
             }`);
 
             //the project file
-            writeFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{
+            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{
                 "extends": "bsconfig.base.json",
                 "watch": true
             }`);
@@ -294,12 +288,12 @@ describe('util', () => {
         it('overrides parent files array with child files array', async () => {
             sinon.restore();
             //the parent file
-            writeFileSync(s`${tempDir}/rootDir/bsconfig.parent.json`, `{
+            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.parent.json`, `{
                 "files": ["base.brs"]
             }`);
 
             //the project file
-            writeFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{
+            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{
                 "extends": "bsconfig.parent.json",
                 "files": ["child.brs"]
             }`);
