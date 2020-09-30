@@ -1,7 +1,6 @@
 node_modules*
 dist
 out
-testProjects/plugins/*.js
 .tmp
 .history
 .DS_Store
