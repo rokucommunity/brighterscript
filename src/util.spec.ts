@@ -8,8 +8,6 @@ import { Lexer } from './lexer';
 import { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 
-//shorthand for normalizing a path
-let n = path.normalize;
 let cwd = process.cwd();
 let rootConfigPath = s`${process.cwd()}/bsconfig.json`;
 let rootConfigDir = path.dirname(rootConfigPath);
@@ -28,6 +26,7 @@ describe.only('util', () => {
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
         sinon.stub(util, 'getFileContents').callsFake((filePath) => {
+            filePath = s(filePath);
             if (vfs[filePath]) {
                 return vfs[filePath];
             } else {
@@ -73,18 +72,29 @@ describe.only('util', () => {
         });
 
         it('returns proper list of ancestor project paths', async () => {
-            vfs[n(`${cwd}/child.json`)] = `{"extends": "parent.json"}`;
-            vfs[n(`${cwd}/parent.json`)] = `{"extends": "grandparent.json"}`;
-            vfs[n(`${cwd}/grandparent.json`)] = `{"extends": "greatgrandparent.json"}`;
-            vfs[n(`${cwd}/greatgrandparent.json`)] = `{}`;
+            vfs[s`${cwd}/child.json`] = `{"extends": "parent.json"}`;
+            vfs[s`${cwd}/parent.json`] = `{"extends": "grandparent.json"}`;
+            vfs[s`${cwd}/grandparent.json`] = `{"extends": "greatgrandparent.json"}`;
+            vfs[s`${cwd}/greatgrandparent.json`] = `{}`;
             let config = await util.loadConfigFile('child.json');
-            expect(config._ancestors).to.eql([n(`${cwd}/child.json`), n(`${cwd}/parent.json`), n(`${cwd}/grandparent.json`), n(`${cwd}/greatgrandparent.json`)]);
+            expect(
+                config._ancestors.map(x => s(x))
+            ).to.eql([
+                s`${cwd}/child.json`,
+                s`${cwd}/parent.json`,
+                s`${cwd}/grandparent.json`,
+                s`${cwd}/greatgrandparent.json`
+            ]);
         });
 
         it('returns empty ancestors list for non-extends files', async () => {
-            vfs[n(`${cwd}/child.json`)] = `{}`;
+            vfs[s`${cwd}/child.json`] = `{}`;
             let config = await util.loadConfigFile('child.json');
-            expect(config._ancestors).to.eql([n(`${cwd}/child.json`)]);
+            expect(
+                config._ancestors.map(x => s(x))
+            ).to.eql([
+                s`${cwd}/child.json`
+            ]);
         });
 
         it('resolves plugins path relatively to config file', () => {
@@ -360,18 +370,18 @@ describe.only('util', () => {
         });
 
         it('resolves single dot directory', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', './lib.brs')).to.equal(n(`components/lib.brs`));
+            expect(util.getPkgPathFromTarget('components/component1.xml', './lib.brs')).to.equal(s`components/lib.brs`);
         });
 
         it('resolves absolute pkg paths as relative paths', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/source/lib.brs')).to.equal(n(`source/lib.brs`));
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/source/lib.brs')).to.equal(s`source/lib.brs`);
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/lib.brs')).to.equal(`lib.brs`);
         });
 
         it('resolves gracefully for invalid values', () => {
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/')).to.equal(null);
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:')).to.equal(null);
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg')).to.equal(n(`components/pkg`));
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg')).to.equal(s`components/pkg`);
         });
     });
 
@@ -383,13 +393,13 @@ describe.only('util', () => {
             expect(util.getRelativePath('sub/file.xml', 'sub/file.brs')).to.equal('file.brs');
         });
         it('works when source in root, target in subdir', () => {
-            expect(util.getRelativePath('file.xml', 'sub/file.brs')).to.equal(n(`sub/file.brs`));
+            expect(util.getRelativePath('file.xml', 'sub/file.brs')).to.equal(s`sub/file.brs`);
         });
         it('works when source in sub, target in root', () => {
-            expect(util.getRelativePath('sub/file.xml', 'file.brs')).to.equal(n(`../file.brs`));
+            expect(util.getRelativePath('sub/file.xml', 'file.brs')).to.equal(s`../file.brs`);
         });
         it('works when source and target are in different subs', () => {
-            expect(util.getRelativePath('sub1/file.xml', 'sub2/file.brs')).to.equal(n(`../sub2/file.brs`));
+            expect(util.getRelativePath('sub1/file.xml', 'sub2/file.brs')).to.equal(s`../sub2/file.brs`);
         });
     });
 
