@@ -1,28 +1,38 @@
 import { expect } from 'chai';
 import * as path from 'path';
-import * as sinonImport from 'sinon';
-
-import util from './util';
+import { createSandbox } from 'sinon';
+let sinon = createSandbox();
+import util, { standardizePath as s } from './util';
 import { Range } from 'vscode-languageserver';
 import { Lexer } from './lexer';
 import { BsConfig } from './BsConfig';
+import * as fsExtra from 'fs-extra';
 
 //shorthand for normalizing a path
 let n = path.normalize;
-let sinon = sinonImport.createSandbox();
 let cwd = process.cwd();
-let rootConfigPath = path.join(process.cwd(), 'bsconfig.json');
+let rootConfigPath = s`${process.cwd()}/bsconfig.json`;
 let rootConfigDir = path.dirname(rootConfigPath);
+let tempDir = s`${process.cwd()}/.tmp`;
 let vfs = {};
-function addFile(relativeFilePath: string, fileContents?: string) {
-    let absFilePath = n(`${cwd}/${relativeFilePath}`);
+
+function addFile(filePath: string, fileContents?: string) {
+    let absFilePath = s`${path.resolve(tempDir, filePath)}`;
     vfs[absFilePath] = fileContents || '';
     return absFilePath;
+}
+
+function writeFileSync(filePath: string, fileContents?: string) {
+    const absFilePath = s`${path.resolve(tempDir, filePath)}`;
+    fsExtra.ensureDirSync(path.dirname(absFilePath));
+    fsExtra.writeFileSync(absFilePath, fileContents || '');
 }
 
 describe('util', () => {
     beforeEach(() => {
         vfs = {};
+        fsExtra.ensureDirSync(tempDir);
+        fsExtra.emptyDirSync(tempDir);
         sinon.stub(util, 'getFileContents').callsFake((filePath) => {
             if (vfs[filePath]) {
                 return vfs[filePath];
@@ -33,6 +43,8 @@ describe('util', () => {
     });
 
     afterEach(() => {
+        fsExtra.ensureDirSync(tempDir);
+        fsExtra.emptyDirSync(tempDir);
         sinon.restore();
         //restore current working directory
         process.chdir(cwd);
@@ -119,30 +131,49 @@ describe('util', () => {
 
     describe('getConfigFilePath', () => {
         it('returns undefined when it does not find the file', async () => {
-            let configFilePath = await util.getConfigFilePath(path.join(process.cwd(), 'testProjects', 'project1'));
+            let configFilePath = await util.getConfigFilePath(s`${process.cwd()}/testProject/project1`);
             expect(configFilePath).not.to.exist;
         });
 
         it('returns path to file when found', async () => {
-            let rootDir = path.join(cwd, 'testProjects', 'project2');
-            let configFilePath = await util.getConfigFilePath(rootDir);
-            expect(configFilePath).to.equal(path.join(rootDir, 'bsconfig.json'));
+            writeFileSync('rootDir/bsconfig.json');
+            expect(
+                await util.getConfigFilePath(s`${tempDir}/rootDir`)
+            ).to.equal(
+                s`${tempDir}/rootDir/bsconfig.json`
+            );
         });
 
         it('finds config file in parent directory', async () => {
-            let configFilePath = await util.getConfigFilePath(path.join(cwd, 'testProjects', 'project2', 'source'));
-            expect(configFilePath).to.equal(path.join(cwd, 'testProjects', 'project2', 'bsconfig.json'));
+            const bsconfigPath = s`${tempDir}/rootDir/bsconfig.json`;
+            writeFileSync(bsconfigPath);
+            fsExtra.ensureDirSync(`${tempDir}/rootDir/source`);
+            expect(
+                await util.getConfigFilePath(s`${tempDir}/rootDir/source`)
+            ).to.equal(
+                s`${tempDir}/rootDir/bsconfig.json`
+            );
         });
 
         it('uses cwd when not provided', async () => {
             //sanity check
             expect(await util.getConfigFilePath()).not.to.exist;
 
-            addFile('testProjects/project2/bsconfig.json');
+            const rootDir = s`${tempDir}/rootDir`;
 
-            let rootDir = path.join(cwd, 'testProjects', 'project2');
+            writeFileSync(`${rootDir}/bsconfig.json`);
+
+            fsExtra.ensureDirSync(rootDir);
             process.chdir(rootDir);
-            expect(await util.getConfigFilePath()).to.equal(path.join(rootDir, 'bsconfig.json'));
+            try {
+                expect(
+                    await util.getConfigFilePath()
+                ).to.equal(
+                    s`${rootDir}/bsconfig.json`
+                );
+            } finally {
+                process.chdir(cwd);
+            }
         });
     });
 
@@ -207,7 +238,7 @@ describe('util', () => {
         });
 
         it('throws for missing extends file', async () => {
-            vfs[rootConfigPath] = `{"extends": "path/does/not/exist/bsconfig.json"}`;
+            vfs[rootConfigPath] = `{ "extends": "path/does/not/exist/bsconfig.json" }`;
             await expectThrowAsync(async () => {
                 await util.normalizeAndResolveConfig({
                     project: rootConfigPath
@@ -216,7 +247,7 @@ describe('util', () => {
         });
 
         it('throws for missing extends file', async () => {
-            vfs[rootConfigPath] = `{"extends": "?path/does/not/exist/bsconfig.json"}`;
+            vfs[rootConfigPath] = `{ "extends": "?path/does/not/exist/bsconfig.json" }`;
             await expectNotThrowAsync(async () => {
                 await util.normalizeAndResolveConfig({
                     project: rootConfigPath
@@ -227,46 +258,53 @@ describe('util', () => {
 
     describe('normalizeConfig', () => {
         it('loads project from disc', async () => {
-            vfs[rootConfigPath] = `{"outFile": "customOutDir/pkg.zip"}`;
-            let config = await util.normalizeAndResolveConfig({ project: rootConfigPath });
-            expect(config.outFile).to.equal(path.join(path.dirname(rootConfigPath), 'customOutDir', 'pkg.zip'));
+            sinon.restore();
+            writeFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
+            let config = await util.normalizeAndResolveConfig({
+                project: s`${tempDir}/rootDir/bsconfig.json`
+            });
+            expect(
+                config.outFile
+            ).to.equal(
+                s`${tempDir}/rootDir/customOutDir/pkg.zip`
+            );
         });
 
         it('loads project from disc and extends it', async () => {
+            sinon.restore();
             //the extends file
-            let extendsConfigPath = path.join(rootConfigDir, 'testProjects', 'base_bsconfig.json');
-            vfs[extendsConfigPath] = `{
+            writeFileSync(s`${tempDir}/rootDir/bsconfig.base.json`, `{
                 "outFile": "customOutDir/pkg1.zip",
                 "rootDir": "core"
-            }`;
+            }`);
 
             //the project file
-            vfs[rootConfigPath] = `{
-                "extends": "testProjects/base_bsconfig.json",
+            writeFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{
+                "extends": "bsconfig.base.json",
                 "watch": true
-            }`;
+            }`);
 
-            let config = await util.normalizeAndResolveConfig({ project: rootConfigPath });
+            let config = await util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
 
-            expect(config.outFile).to.equal(path.join(rootConfigDir, 'testProjects', 'customOutDir', 'pkg1.zip'));
-            expect(config.rootDir).to.equal(path.join(rootConfigDir, 'testProjects', 'core'));
+            expect(config.outFile).to.equal(s`${tempDir}/rootDir/customOutDir/pkg1.zip`);
+            expect(config.rootDir).to.equal(s`${tempDir}/rootDir/core`);
             expect(config.watch).to.equal(true);
         });
 
         it('overrides parent files array with child files array', async () => {
+            sinon.restore();
             //the parent file
-            let extendsConfigPath = path.join(rootConfigDir, 'testProjects', 'parent.bsconfig.json');
-            vfs[extendsConfigPath] = `{
+            writeFileSync(s`${tempDir}/rootDir/bsconfig.parent.json`, `{
                 "files": ["base.brs"]
-            }`;
+            }`);
 
             //the project file
-            vfs[rootConfigPath] = `{
-                "extends": "testProjects/parent.bsconfig.json",
+            writeFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{
+                "extends": "bsconfig.parent.json",
                 "files": ["child.brs"]
-            }`;
+            }`);
 
-            let config = await util.normalizeAndResolveConfig({ project: rootConfigPath });
+            let config = await util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
 
             expect(config.files).to.eql(['child.brs']);
         });
