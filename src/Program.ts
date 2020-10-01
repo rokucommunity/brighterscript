@@ -534,7 +534,8 @@ export class Program {
     private detectDuplicateComponentNames() {
         const componentsByName = Object.keys(this.files).reduce((map, filePath) => {
             const file = this.files[filePath];
-            if (file instanceof XmlFile) {
+            //if this is an XmlFile, and it has a valid `componentName` property
+            if (file instanceof XmlFile && file.componentName) {
                 let lowerName = file.componentName.toLowerCase();
                 if (!map[lowerName]) {
                     map[lowerName] = [];
