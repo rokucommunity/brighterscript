@@ -2087,10 +2087,11 @@ describe('BrsFile', () => {
     });
 
     describe('Plugins', () => {
-        it('can loads a plugin which transforms the AST', async () => {
-            const rootDir = process.cwd();
+        it('can load a plugin which transforms the AST', async () => {
             program.plugins = new PluginInterface(
-                loadPlugins([`${rootDir}/testProjects/plugins/removePrint.js`]),
+                loadPlugins([
+                    require.resolve('../examples/plugins/removePrint')
+                ]),
                 undefined
             );
             await testTranspile(`

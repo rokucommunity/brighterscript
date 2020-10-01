@@ -1,11 +1,14 @@
-import { CompilerPlugin, BrsFile, XmlFile } from '../../dist';
-import { EmptyStatement } from '../../dist/parser';
-import { createVisitor, walkStatements, isBrsFile } from '../../dist/astUtils';
+import { isBrsFile } from '../../astUtils/reflection';
+import { createVisitor } from '../../astUtils/visitors';
+import { BrsFile } from '../../files/BrsFile';
+import { XmlFile } from '../../files/XmlFile';
+import { CompilerPlugin } from '../../interfaces';
+import { EmptyStatement } from '../../parser/Statement';
 
 // entry point
 const pluginInterface: CompilerPlugin = {
     name: 'removePrint',
-    afterFileParse
+    afterFileParse: afterFileParse
 };
 export default pluginInterface;
 

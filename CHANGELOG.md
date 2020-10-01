@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.15.2] - 2020-10-01
+### Fixed
+ - Bug in component validation that would throw errors if component name was undefined (generally due to an XML parse error). ([#194](https://github.com/rokucommunity/brighterscript/pull/194))
+
+
+
+## [0.15.1] - 2020-09-30
+### Fixed
+ - improved performance in the lexer and parser
+ - potential for accidentally changing `cwd` during bsconfig resolving
+
+
+
 ## [0.15.0] - 2020-09-18
 ### Added
  - plugin API to allow visibility into the various compiler phases. This is currently in alpha. ([#170](https://github.com/rokucommunity/brighterscript/pull/170))
@@ -530,3 +543,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.13.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.13.1...v0.13.2
 [0.14.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.13.2...v0.14.0
 [0.15.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.14.0...v0.15.0
+[0.15.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.15.0...v0.15.1
+[0.15.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.15.1...v0.15.2
