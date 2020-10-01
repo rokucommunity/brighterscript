@@ -7,7 +7,7 @@ import { BrsFile } from '../files/BrsFile';
 import { Statement, PrintStatement, Block, ReturnStatement } from '../parser/Statement';
 import { Expression } from '../parser/Expression';
 import { TokenKind } from '../lexer';
-import { createVisitor, walkStatements } from './visitors';
+import { createVisitor, WalkMode, walkStatements } from './visitors';
 import { isPrintStatement } from './reflection';
 import { createToken } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
@@ -254,8 +254,7 @@ describe('astUtils visitors', () => {
             const walker = functionsWalker((statement, parentStatement) => {
                 statementVisitor(statement, parentStatement);
                 statement.walk(expressionVisitor, {
-                    walkStatements: false,
-                    walkExpressions: true
+                    walkMode: WalkMode.visitExpressions
                 });
             });
             program.plugins.add({
@@ -311,17 +310,15 @@ describe('astUtils visitors', () => {
     });
 
     describe('walk', () => {
-        async function testWalk(text: string, expectedConstructors: string[]) {
+        async function testWalk(text: string, expectedConstructors: string[], walkMode = WalkMode.visitAll) {
             const file = await program.addOrReplaceFile('source/main.bs', text) as BrsFile;
             const items = [];
             let index = 1;
-            file.ast.walk((stmtExpr: any) => {
-                stmtExpr._testId = index++;
-                items.push(stmtExpr);
+            file.ast.walk((element: any) => {
+                element._testId = index++;
+                items.push(element);
             }, {
-                walkExpressions: true,
-                walkChildFunctions: true,
-                walkStatements: true
+                walkMode: walkMode
             });
             index = 1;
             expect(items.map(x => `${x.constructor.name}:${x._testId}`)).to.eql(expectedConstructors.map(x => `${x}:${index++}`));
@@ -347,9 +344,7 @@ describe('astUtils visitors', () => {
                     cancel.cancel();
                 }
             }, {
-                walkExpressions: true,
-                walkChildFunctions: true,
-                walkStatements: true,
+                walkMode: WalkMode.visitAll,
                 cancel: cancel.token
             });
 
@@ -852,6 +847,47 @@ describe('astUtils visitors', () => {
                 'DottedGetExpression',
                 'VariableExpression'
             ]);
+        });
+
+        it('visits all statements and no expressions', async () => {
+            await testWalk(`
+                sub main()
+                    log = sub(message)
+                        print "hello " + message
+                    end sub
+                    log("hello" + " world")
+                end sub
+            `, [
+                'FunctionStatement',
+                'Block',
+                'AssignmentStatement',
+                'Block',
+                'PrintStatement',
+                'ExpressionStatement'
+            ], WalkMode.visitAllStatements);
+        });
+
+        it('visits all expressions and no statement', async () => {
+            await testWalk(`
+                sub main()
+                    log = sub(message)
+                        print "hello " + message
+                    end sub
+                    log("hello" + " world")
+                end sub
+            `, [
+                'FunctionExpression',
+                'FunctionExpression',
+                'FunctionParameter',
+                'BinaryExpression',
+                'LiteralExpression',
+                'VariableExpression',
+                'CallExpression',
+                'VariableExpression',
+                'BinaryExpression',
+                'LiteralExpression',
+                'LiteralExpression'
+            ], WalkMode.visitAllExpressions);
         });
     });
 });

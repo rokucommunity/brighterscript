@@ -1,3 +1,4 @@
+/* eslint-disable no-bitwise */
 import { CancellationToken } from 'vscode-languageserver';
 import { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement } from '../parser/Statement';
 import { AALiteralExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, Expression, FunctionExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
@@ -13,9 +14,7 @@ export function walkStatements(
     cancel?: CancellationToken
 ): void {
     statement.walk(visitor as any, {
-        walkChildFunctions: false,
-        walkExpressions: false,
-        walkStatements: true,
+        walkMode: WalkMode.visitStatements,
         cancel: cancel
     });
 }
@@ -38,13 +37,18 @@ export function walk<T>(keyParent: T, key: keyof T, visitor: WalkVisitor, option
         return;
     }
 
-    //notify the visitor of this expression
-    const result = visitor(element, parent ?? keyParent as any);
+    //notify the visitor of this element
+    if (
+        (isExpression(element) && options.walkMode & WalkModeInternal.visitExpressions) ||
+        (isStatement(element) && options.walkMode & WalkModeInternal.visitStatements)
+    ) {
+        const result = visitor(element, parent ?? keyParent as any);
 
-    //replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
-    if (result && (isExpression(result) || isStatement(result))) {
-        (keyParent as any)[key] = result;
-        return;
+        //replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
+        if (result && (isExpression(result) || isStatement(result))) {
+            (keyParent as any)[key] = result;
+            return;
+        }
     }
 
     //stop processing if canceled
@@ -125,21 +129,74 @@ export function createVisitor(
 
 export interface WalkOptions {
     /**
-     * If true AND walkExpressions is enabled, then child FunctionExpressions will be walked
-     * @default false
+     * What mode should the walker walk?
+     * You can use the unique enums, or apply bitwise and to combine the various modes you're interested in
      */
-    walkChildFunctions?: boolean;
-    /**
-     * If enabled, expressions will be walked. Otherwise expressoins will be skipped.
-     * @default false
-     */
-    walkExpressions?: boolean;
-    /**
-     * If enabled statements will be walked. Otherwise statements will be skipped
-     */
-    walkStatements?: boolean;
+    walkMode: WalkMode;
     /**
      * A token that can be used to cancel the walk operation
      */
     cancel?: CancellationToken;
+}
+
+/**
+ * An enum used to denote the specific WalkMode options (without
+ */
+export enum WalkModeInternal {
+    /**
+     * Walk statements
+     */
+    walkStatements = 1,
+    /**
+     * Call the visitor for every statement encountered by a walker
+     */
+    visitStatements = 2,
+    /**
+     * Walk expressions.
+     */
+    walkExpressions = 4,
+    /**
+     * Call the visitor for every expression encountered by a walker
+     */
+    visitExpressions = 8,
+    /**
+     * If child function expressions are encountered, this will allow the walker to step into them.
+     */
+    enterChildFunctions = 16,
+}
+
+/* eslint-disable no-bitwise */
+export enum WalkMode {
+    /**
+     * Walk statements
+     */
+    walkStatements = WalkModeInternal.walkStatements,
+    /**
+     * Walk and visit statements
+     */
+    visitStatements = WalkModeInternal.walkStatements | WalkModeInternal.visitStatements,
+    /**
+     * Walk expressions.
+     */
+    walkExpressions = WalkModeInternal.walkExpressions,
+    /**
+     * Visit statements. This is useless without `walkExpressions`
+     */
+    visitExpressions = WalkModeInternal.walkExpressions | WalkModeInternal.visitExpressions,
+    /**
+     * If child function expressions are encountered, this will allow the walker to step into them.
+     */
+    enterChildFunctions = WalkModeInternal.enterChildFunctions | WalkModeInternal.walkExpressions,
+    /**
+     * Visit every statement. This will walk all expressions and statements, also stepping into child functions
+     */
+    visitAllStatements = WalkModeInternal.walkStatements | WalkModeInternal.visitStatements | WalkModeInternal.walkExpressions | WalkModeInternal.enterChildFunctions,
+    /**
+     * Visit every statement. This will walk all expressions and statements, also stepping into child functions.
+     */
+    visitAllExpressions = WalkModeInternal.walkStatements | WalkModeInternal.walkExpressions | WalkModeInternal.visitExpressions | WalkModeInternal.enterChildFunctions,
+    /**
+     * Visit every statement and expression. This will walk all expressions and statements, also stepping into child functions
+     */
+    visitAll = WalkModeInternal.walkStatements | WalkModeInternal.visitStatements | WalkModeInternal.walkExpressions | WalkModeInternal.visitExpressions | WalkModeInternal.enterChildFunctions
 }

@@ -1,5 +1,5 @@
 import { isBrsFile } from '../../astUtils/reflection';
-import { createVisitor } from '../../astUtils/visitors';
+import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { BrsFile } from '../../files/BrsFile';
 import { XmlFile } from '../../files/XmlFile';
 import { CompilerPlugin } from '../../interfaces';
@@ -23,7 +23,7 @@ function afterFileParse(file: (BrsFile | XmlFile)) {
         fun.body.walk(createVisitor({
             PrintStatement: (statement) => new EmptyStatement()
         }), {
-            walkStatements: true
+            walkMode: WalkMode.visitStatements
         });
     });
 }

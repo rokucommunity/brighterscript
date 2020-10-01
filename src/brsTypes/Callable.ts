@@ -5,7 +5,7 @@ import { Identifier, Token } from '../lexer';
 import { SourceNode } from 'source-map';
 import { Range } from 'vscode-languageserver';
 import { TranspileState } from '../parser/TranspileState';
-import { walk, WalkOptions, WalkVisitor } from '../astUtils';
+import { walk, WalkModeInternal, WalkOptions, WalkVisitor } from '../astUtils';
 import { Expression, LiteralExpression } from '../parser/Expression';
 import util from '../util';
 
@@ -104,7 +104,8 @@ export class FunctionParameter extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions && this.defaultValue) {
+        // eslint-disable-next-line no-bitwise
+        if (this.defaultValue && options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'defaultValue', visitor, options);
         }
     }

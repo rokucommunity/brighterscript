@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { Body, ClassStatement, CommentStatement, EmptyStatement, NamespaceStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
-import { CancellationTokenSource } from '../astUtils';
+import { CancellationTokenSource, WalkMode } from '../astUtils';
 import { Range } from 'vscode-languageserver';
 import { NamespacedVariableNameExpression, VariableExpression } from './Expression';
 
@@ -15,7 +15,7 @@ describe('Statement', () => {
             const statement = new EmptyStatement();
             statement.walk(() => {
                 expect(true).to.be.false;
-            }, {});
+            }, { walkMode: WalkMode.visitAll });
         });
     });
 
@@ -46,7 +46,7 @@ describe('Statement', () => {
                 cancel.cancel();
                 comment.walk(() => {
                     throw new Error('Should not have been called');
-                }, { cancel: cancel.token });
+                }, { walkMode: WalkMode.visitAll, cancel: cancel.token });
             });
         });
     });

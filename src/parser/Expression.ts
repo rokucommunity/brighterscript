@@ -1,3 +1,4 @@
+/* eslint-disable no-bitwise */
 import { Token, Identifier, TokenKind } from '../lexer';
 import { BrsType, ValueKind, BrsString, FunctionParameter } from '../brsTypes';
 import { Block, CommentStatement, FunctionStatement } from './Statement';
@@ -7,7 +8,7 @@ import util from '../util';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
-import { walk, WalkOptions, WalkVisitor } from '../astUtils/visitors';
+import { walk, WalkModeInternal, WalkOptions, WalkVisitor } from '../astUtils/visitors';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -46,7 +47,7 @@ export class BinaryExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'left', visitor, options);
             walk(this, 'right', visitor, options);
         }
@@ -93,7 +94,7 @@ export class CallExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'callee', visitor, options);
             for (let i = 0; i < this.args.length; i++) {
                 walk(this.args, i, visitor, options, this);
@@ -204,13 +205,13 @@ export class FunctionExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             for (let i = 0; i < this.parameters.length; i++) {
                 walk(this.parameters, i, visitor, options, this);
             }
 
             //This is the core of full-program walking...it allows us to step into sub functions
-            if (options.walkChildFunctions) {
+            if (options.walkMode & WalkModeInternal.enterChildFunctions) {
                 walk(this, 'body', visitor, options);
             }
         }
@@ -264,7 +265,7 @@ export class NamespacedVariableNameExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'expression', visitor, options);
         }
     }
@@ -296,7 +297,7 @@ export class DottedGetExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'obj', visitor, options);
         }
     }
@@ -323,7 +324,7 @@ export class XmlAttributeGetExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'obj', visitor, options);
         }
     }
@@ -352,7 +353,7 @@ export class IndexedGetExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'obj', visitor, options);
             walk(this, 'index', visitor, options);
         }
@@ -382,7 +383,7 @@ export class GroupingExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'expression', visitor, options);
         }
     }
@@ -521,7 +522,7 @@ export class ArrayLiteralExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             for (let i = 0; i < this.elements.length; i++) {
                 walk(this.elements, i, visitor, options, this);
             }
@@ -634,7 +635,7 @@ export class AALiteralExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             for (let i = 0; i < this.elements.length; i++) {
                 if (this.elements[i] instanceof CommentStatement) {
                     walk(this.elements, i, visitor, options, this);
@@ -666,7 +667,7 @@ export class UnaryExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'right', visitor, options);
         }
     }
@@ -828,7 +829,7 @@ export class NewExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'call', visitor, options);
         }
     }
@@ -888,7 +889,7 @@ export class CallfuncExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'callee', visitor, options);
             for (let i = 0; i < this.args.length; i++) {
                 walk(this.args, i, visitor, options, this);
@@ -931,7 +932,7 @@ export class TemplateStringQuasiExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             for (let i = 0; i < this.expressions.length; i++) {
                 walk(this.expressions, i, visitor, options, this);
             }
@@ -1022,7 +1023,7 @@ export class TemplateStringExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             //walk the quasis and expressions in left-to-right order
             for (let i = 0; i < this.quasis.length; i++) {
                 walk(this.quasis, i, visitor, options, this);
@@ -1106,7 +1107,7 @@ export class TaggedTemplateStringExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             //walk the quasis and expressions in left-to-right order
             for (let i = 0; i < this.quasis.length; i++) {
                 walk(this.quasis, i, visitor, options, this);

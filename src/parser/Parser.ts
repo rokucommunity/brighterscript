@@ -81,7 +81,7 @@ import {
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
 import { isClassMethod } from '../astUtils/reflection';
-import { createVisitor } from '../astUtils/visitors';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
 
 export class Parser {
     /**
@@ -2415,9 +2415,7 @@ export class Parser {
                 references.newExpressions.push(e);
             }
         }), {
-            walkChildFunctions: true,
-            walkExpressions: true,
-            walkStatements: true
+            walkMode: WalkMode.visitAll
         });
         return references;
     }

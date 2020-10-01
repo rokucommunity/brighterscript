@@ -1,3 +1,4 @@
+/* eslint-disable no-bitwise */
 import { Token, Identifier, TokenKind, CompoundAssignmentOperators } from '../lexer';
 import { SourceNode } from 'source-map';
 import { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, CallExpression, VariableExpression, LiteralExpression } from './Expression';
@@ -5,7 +6,7 @@ import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
 import { ParseMode, Parser } from './Parser';
-import { walk, WalkVisitor, WalkOptions } from '../astUtils/visitors';
+import { walk, WalkVisitor, WalkOptions, WalkModeInternal } from '../astUtils/visitors';
 import { isCallExpression, isDottedGetExpression, isExpression, isExpressionStatement, isVariableExpression } from '../astUtils/reflection';
 import { BrsInvalid } from '../brsTypes/BrsType';
 
@@ -81,7 +82,7 @@ export class Body extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkStatements) {
+        if (options.walkMode & WalkModeInternal.walkStatements) {
             for (let i = 0; i < this.statements.length; i++) {
                 walk(this.statements, i, visitor, options, this);
             }
@@ -118,7 +119,7 @@ export class AssignmentStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'value', visitor, options);
         }
     }
@@ -174,7 +175,7 @@ export class Block extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkStatements) {
+        if (options.walkMode & WalkModeInternal.walkStatements) {
             for (let i = 0; i < this.statements.length; i++) {
                 walk(this.statements, i, visitor, options, this);
             }
@@ -197,7 +198,7 @@ export class ExpressionStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'expression', visitor, options);
         }
     }
@@ -330,7 +331,7 @@ export class FunctionStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'func', visitor, options);
         }
     }
@@ -453,23 +454,23 @@ export class IfStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'condition', visitor, options);
         }
-        if (options.walkStatements) {
+        if (options.walkMode & WalkModeInternal.walkStatements) {
             walk(this, 'thenBranch', visitor, options);
         }
 
         for (let i = 0; i < this.elseIfs.length; i++) {
-            if (options.walkExpressions) {
+            if (options.walkMode & WalkModeInternal.walkExpressions) {
                 walk(this.elseIfs[i], 'condition', visitor, options, this);
             }
-            if (options.walkStatements) {
+            if (options.walkMode & WalkModeInternal.walkStatements) {
                 walk(this.elseIfs[i], 'thenBranch', visitor, options, this);
             }
         }
 
-        if (this.elseBranch && options.walkStatements) {
+        if (this.elseBranch && options.walkMode & WalkModeInternal.walkStatements) {
             walk(this, 'elseBranch', visitor, options);
         }
     }
@@ -495,7 +496,7 @@ export class IncrementStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'value', visitor, options);
         }
     }
@@ -557,7 +558,7 @@ export class PrintStatement extends Statement {
         return result;
     }
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             for (let i = 0; i < this.expressions.length; i++) {
                 //sometimes we have semicolon `Token`s in the expressions list (should probably fix that...), so only emit the actual expressions
                 if (isExpression(this.expressions[i] as any)) {
@@ -649,7 +650,7 @@ export class ReturnStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'value', visitor, options);
         }
     }
@@ -765,14 +766,14 @@ export class ForStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkStatements) {
+        if (options.walkMode & WalkModeInternal.walkStatements) {
             walk(this, 'counterDeclaration', visitor, options);
         }
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'finalValue', visitor, options);
             walk(this, 'increment', visitor, options);
         }
-        if (options.walkStatements) {
+        if (options.walkMode & WalkModeInternal.walkStatements) {
             walk(this, 'body', visitor, options);
         }
     }
@@ -830,10 +831,10 @@ export class ForEachStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'target', visitor, options);
         }
-        if (options.walkStatements) {
+        if (options.walkMode & WalkModeInternal.walkStatements) {
             walk(this, 'body', visitor, options);
         }
     }
@@ -883,10 +884,10 @@ export class WhileStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'condition', visitor, options);
         }
-        if (options.walkStatements) {
+        if (options.walkMode & WalkModeInternal.walkStatements) {
             walk(this, 'body', visitor, options);
         }
     }
@@ -923,7 +924,7 @@ export class DottedSetStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'obj', visitor, options);
             walk(this, 'value', visitor, options);
         }
@@ -967,7 +968,7 @@ export class IndexedSetStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'obj', visitor, options);
             walk(this, 'index', visitor, options);
             walk(this, 'value', visitor, options);
@@ -1045,10 +1046,10 @@ export class NamespaceStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'nameExpression', visitor, options);
         }
-        if (this.body.statements.length > 0 && options.walkStatements) {
+        if (this.body.statements.length > 0 && options.walkMode & WalkModeInternal.walkStatements) {
             walk(this, 'body', visitor, options);
         }
     }
@@ -1420,7 +1421,7 @@ export class ClassStatement extends Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkStatements) {
+        if (options.walkMode & WalkModeInternal.walkStatements) {
             for (let i = 0; i < this.body.length; i++) {
                 walk(this.body, i, visitor, options, this);
             }
@@ -1568,13 +1569,13 @@ export class ClassMethodStatement extends FunctionStatement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkExpressions) {
+        if (options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'func', visitor, options);
         }
     }
 }
 
-export class ClassFieldStatement implements Statement {
+export class ClassFieldStatement extends Statement {
 
     constructor(
         readonly accessModifier?: Token,
@@ -1584,6 +1585,7 @@ export class ClassFieldStatement implements Statement {
         readonly equal?: Token,
         readonly initialValue?: Expression
     ) {
+        super();
         this.range = util.createRangeFromPositions(
             (this.accessModifier ?? this.name).range.start,
             (this.initialValue ?? this.type ?? this.as ?? this.name).range.end
@@ -1597,7 +1599,7 @@ export class ClassFieldStatement implements Statement {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (this.initialValue && options.walkExpressions) {
+        if (this.initialValue && options.walkMode & WalkModeInternal.walkExpressions) {
             walk(this, 'initialValue', visitor, options);
         }
     }
