@@ -980,6 +980,19 @@ export class Util {
             character: character
         };
     }
+
+    /**
+     * Convert a list of tokens into a string, including their leading whitespace
+     */
+    public tokensToString(tokens: Token[]) {
+        let result = '';
+        //skip iterating the final token
+        for (let i = 0; i < tokens.length; i++) {
+            let token = tokens[i];
+            result += token.leadingWhitespace + token.text;
+        }
+        return result;
+    }
 }
 
 /**

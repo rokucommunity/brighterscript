@@ -7,6 +7,7 @@ import { Lexer } from './Lexer';
 import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
+import util from '../util';
 
 describe('lexer', () => {
     it('recognizes namespace keywords', () => {
@@ -1171,5 +1172,17 @@ describe('lexer', () => {
             TokenKind.PkgLocationLiteral,
             TokenKind.Eof
         ]);
+    });
+
+    it('properly tracks leadingWhitespace', () => {
+        const text = `
+            sub main()
+
+                print "main"\r\n\n
+
+            end sub
+        `;
+        const { tokens } = Lexer.scan(text, { includeWhitespace: false });
+        expect(util.tokensToString(tokens)).to.equal(text);
     });
 });
