@@ -24,7 +24,14 @@ export abstract class Statement {
 }
 
 export class EmptyStatement extends Statement {
-    range: Range;
+    constructor(
+        /**
+         * Create a negative range to indicate this is an interpolated location
+         */
+        public range: Range = util.createRange(-1, -1, -1, -1)
+    ) {
+        super();
+    }
 
     transpile(state: TranspileState) {
         return [];
