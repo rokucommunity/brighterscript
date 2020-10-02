@@ -60,6 +60,11 @@ export class Lexer {
     public options: ScanOptions;
 
     /**
+     * Contains all of the leading whitespace that has not yet been consumed by a token
+     */
+    private leadingWhitespace = '';
+
+    /**
      * A convenience function, equivalent to `new Lexer().scan(toScan)`, that converts a string
      * containing BrightScript code to an array of `Token` objects that will later be used to build
      * an abstract syntax tree.
@@ -99,8 +104,10 @@ export class Lexer {
             kind: TokenKind.Eof,
             isReserved: false,
             text: '',
-            range: util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
+            range: util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1),
+            leadingWhitespace: this.leadingWhitespace
         });
+        this.leadingWhitespace = '';
         return this;
     }
 
@@ -337,11 +344,11 @@ export class Lexer {
         while (this.peek() === ' ' || this.peek() === '\t') {
             this.advance();
         }
-        if (this.options.includeWhitespace) {
-            this.addToken(TokenKind.Whitespace);
-        } else {
-            //toss out the whitespace
-            this.sync();
+        const whitespaceToken = this.addToken(TokenKind.Whitespace);
+        this.leadingWhitespace = whitespaceToken.text;
+        //if we aren't keeping the whitespace tokens, then remove this one
+        if (this.options.includeWhitespace === false) {
+            this.tokens.pop();
         }
         this.start = this.current;
     }
@@ -926,8 +933,10 @@ export class Lexer {
             text: text,
             isReserved: ReservedWords.has(text.toLowerCase()),
             literal: literal,
-            range: this.rangeOf()
+            range: this.rangeOf(),
+            leadingWhitespace: this.leadingWhitespace
         };
+        this.leadingWhitespace = '';
         this.tokens.push(token);
         this.sync();
         return token;

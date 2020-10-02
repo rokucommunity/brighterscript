@@ -544,7 +544,8 @@ export class Parser {
                     range: {
                         start: this.peek().range.start,
                         end: this.peek().range.start
-                    }
+                    },
+                    leadingWhitespace: ''
                 };
             }
             let isSub = functionType && functionType.kind === TokenKind.Sub;

@@ -15,7 +15,8 @@ export function createToken<T extends TokenKind>(kind: T, pos: Position, text?: 
         text: text || kind.toString(),
         isReserved: !text || text === kind.toString(),
         range: createRange(pos),
-        literal: literal
+        literal: literal,
+        leadingWhitespace: ''
     };
 }
 

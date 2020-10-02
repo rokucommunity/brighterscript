@@ -182,7 +182,8 @@ describe('reflection', () => {
             text: '0',
             range: range,
             isReserved: false,
-            charCode: 0
+            charCode: 0,
+            leadingWhitespace: ''
         };
         const nsVar = new NamespacedVariableNameExpression(createIdentifier('a', pos));
         const binary = new BinaryExpression(expr, token, expr);
