@@ -405,7 +405,8 @@ export class ClassMethodStatement implements Statement {
                             kind: TokenKind.Identifier,
                             text: 'super',
                             isReserved: false,
-                            range: state.classStatement.name.range
+                            range: state.classStatement.name.range,
+                            leadingWhitespace: ''
                         },
                         null
                     ),
@@ -413,13 +414,15 @@ export class ClassMethodStatement implements Statement {
                         kind: TokenKind.LeftParen,
                         text: '(',
                         isReserved: false,
-                        range: state.classStatement.name.range
+                        range: state.classStatement.name.range,
+                        leadingWhitespace: ''
                     },
                     {
                         kind: TokenKind.RightParen,
                         text: ')',
                         isReserved: false,
-                        range: state.classStatement.name.range
+                        range: state.classStatement.name.range,
+                        leadingWhitespace: ''
                     },
                     [],
                     null
@@ -451,7 +454,8 @@ export class ClassMethodStatement implements Statement {
                             kind: TokenKind.Equal,
                             isReserved: false,
                             range: field.name.range,
-                            text: '='
+                            text: '=',
+                            leadingWhitespace: ''
                         },
                         thisQualifiedName,
                         new LiteralExpression(

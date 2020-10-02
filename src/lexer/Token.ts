@@ -16,6 +16,10 @@ export interface Token {
     literal?: BrsType;
     /** Where the token was found. */
     range: Range;
+    /**
+     * Any leading whitespace found prior to this token. Excludes newline characters.
+     */
+    leadingWhitespace: string;
 }
 
 /**
