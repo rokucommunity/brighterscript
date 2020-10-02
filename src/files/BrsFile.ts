@@ -11,7 +11,7 @@ import { FunctionParameter } from '../brsTypes';
 import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
 import { AALiteralExpression, DottedGetExpression, FunctionExpression, LiteralExpression, CallExpression, VariableExpression, Expression } from '../parser/Expression';
-import { AssignmentStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, Body, ImportStatement } from '../parser/Statement';
+import { AssignmentStatement, ClassStatement, CommentStatement, FunctionStatement, IfStatement, LibraryStatement, ImportStatement } from '../parser/Statement';
 import { Program } from '../Program';
 import { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -20,7 +20,6 @@ import { StringType } from '../types/StringType';
 import { VoidType } from '../types/VoidType';
 import { standardizePath as s, util } from '../util';
 import { TranspileState } from '../parser/TranspileState';
-import { ClassStatement } from '../parser/ClassStatement';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
@@ -98,7 +97,9 @@ export class BrsFile {
     /**
      * The AST for this file
      */
-    private ast: Body;
+    public get ast() {
+        return this.parser.ast;
+    }
 
     /**
      * Get the token at the specified position
@@ -111,6 +112,7 @@ export class BrsFile {
             }
         }
     }
+
 
     public parser: Parser;
 
@@ -170,8 +172,6 @@ export class BrsFile {
                 ...this.parser.diagnostics as BsDiagnostic[]
             );
 
-            this.ast = this.parser.ast;
-
             //notify AST ready
             this.program.plugins.emit('afterFileParse', this);
 
@@ -222,8 +222,8 @@ export class BrsFile {
         }
 
         let statements = [
-            ...this.parser.libraryStatements,
-            ...this.parser.importStatements
+            ...this.parser.references.libraryStatements,
+            ...this.parser.references.importStatements
         ];
         for (let result of statements) {
             //register import statements
@@ -430,7 +430,7 @@ export class BrsFile {
      */
     private createFunctionScopes() {
         //find every function
-        let functions = this.parser.functionExpressions;
+        let functions = this.parser.references.functionExpressions;
 
         //create a functionScope for every function
         for (let func of functions) {
@@ -465,7 +465,7 @@ export class BrsFile {
         }
 
         //find every variable assignment in the whole file
-        let assignmentStatements = this.parser.assignmentStatements;
+        let assignmentStatements = this.parser.references.assignmentStatements;
 
         for (let statement of assignmentStatements) {
 
@@ -559,7 +559,7 @@ export class BrsFile {
     }
 
     private findCallables() {
-        for (let statement of this.parser.functionStatements) {
+        for (let statement of this.parser.references.functionStatements ?? []) {
 
             let functionType = new FunctionType(util.valueKindToBrsType(statement.func.returns));
             functionType.setName(statement.name.text);
@@ -599,7 +599,7 @@ export class BrsFile {
     private findFunctionCalls() {
         this.functionCalls = [];
         //for every function in the file
-        for (let func of this.parser.functionExpressions) {
+        for (let func of this.parser.references.functionExpressions) {
             //for all function calls in this function
             for (let expression of func.callExpressions) {
 

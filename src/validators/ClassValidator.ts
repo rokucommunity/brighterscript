@@ -1,10 +1,11 @@
 import { Scope } from '../Scope';
-import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from '../parser/ClassStatement';
 import { XmlFile } from '../files/XmlFile';
 import { BrsFile } from '../files/BrsFile';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { BsDiagnostic } from '..';
-import { CallExpression, VariableExpression, ParseMode, ExpressionStatement } from '../parser';
+import { CallExpression, VariableExpression } from '../parser/Expression';
+import { ParseMode } from '../parser/Parser';
+import { ExpressionStatement, ClassMethodStatement, ClassFieldStatement, ClassStatement } from '../parser/Statement';
 import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
@@ -44,7 +45,7 @@ export class BsClassValidator {
     private verifyNewExpressions() {
         let files = this.scope.getFiles();
         for (let file of files) {
-            let newExpressions = file.parser.newExpressions;
+            let newExpressions = file.parser.references.newExpressions;
             for (let newExpression of newExpressions) {
                 let className = newExpression.className.getName(ParseMode.BrighterScript);
                 let newableClass = this.getClassByName(
@@ -259,7 +260,7 @@ export class BsClassValidator {
         let files = this.scope.getFiles();
 
         for (let file of files) {
-            for (let x of file.parser.classStatements) {
+            for (let x of file.parser.references.classStatements ?? []) {
                 let classStatement = x as AugmentedClassStatement;
                 let name = classStatement.getName(ParseMode.BrighterScript);
                 //skip this class if it doesn't have a name

@@ -1,5 +1,5 @@
 import { isBrsFile } from '../../astUtils/reflection';
-import { createStatementVisitor, walkStatements } from '../../astUtils/visitors';
+import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { BrsFile } from '../../files/BrsFile';
 import { XmlFile } from '../../files/XmlFile';
 import { CompilerPlugin } from '../../interfaces';
@@ -19,10 +19,11 @@ function afterFileParse(file: (BrsFile | XmlFile)) {
         return;
     }
     // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-    file.parser.functionExpressions.forEach((fun) => {
-        const visitor = createStatementVisitor({
+    file.parser.references.functionExpressions.forEach((fun) => {
+        fun.body.walk(createVisitor({
             PrintStatement: (statement) => new EmptyStatement()
+        }), {
+            walkMode: WalkMode.visitStatements
         });
-        walkStatements(fun.body, visitor);
     });
 }

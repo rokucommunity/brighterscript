@@ -1,11 +1,10 @@
-import { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement } from '../parser/Statement';
-import { ClassStatement } from '../parser/ClassStatement';
-import { Token } from '../lexer/Token';
-import { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteral, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
-import { BrsType, BrsString, ValueKind, BrsInvalid, BrsBoolean } from '../brsTypes';
+import { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement } from '../parser/Statement';
+import { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
+import { BrsString, ValueKind, BrsInvalid, BrsBoolean } from '../brsTypes';
 import { BrsNumber } from '../brsTypes/BrsNumber';
 import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
+import { InternalWalkMode } from './visitors';
 
 // File reflection
 
@@ -19,160 +18,185 @@ export function isXmlFile(file: (BrsFile | XmlFile)): file is XmlFile {
 
 // Statements reflection
 
-export function isBody(statement: Statement): statement is Body {
-    return statement?.constructor?.name === 'Body';
+/**
+ * Determine if the variable is a descendent of the Statement base class.
+ * Due to performance restrictions, this expects all statements to
+ * directly extend Statement or FunctionStatement,
+ * so it only checks the immediate parent's class name.
+ */
+export function isStatement(element: Statement | Expression): element is Statement {
+    // eslint-disable-next-line no-bitwise
+    return !!(element && element.visitMode & InternalWalkMode.visitStatements);
 }
-export function isAssignmentStatement(statement: Statement): statement is AssignmentStatement {
-    return statement?.constructor?.name === 'AssignmentStatement';
+
+export function isBody(element: Statement | Expression): element is Body {
+    return element?.constructor?.name === 'Body';
 }
-export function isBlock(statement: Statement): statement is Block {
-    return statement?.constructor?.name === 'Block';
+export function isAssignmentStatement(element: Statement | Expression): element is AssignmentStatement {
+    return element?.constructor?.name === 'AssignmentStatement';
 }
-export function isExpressionStatement(statement: Statement): statement is ExpressionStatement {
-    return statement?.constructor?.name === 'ExpressionStatement';
+export function isBlock(element: Statement | Expression): element is Block {
+    return element?.constructor?.name === 'Block';
 }
-export function isCommentStatement(statement: Statement): statement is CommentStatement {
-    return statement?.constructor?.name === 'CommentStatement';
+export function isExpressionStatement(element: Statement | Expression): element is ExpressionStatement {
+    return element?.constructor?.name === 'ExpressionStatement';
 }
-export function isExitForStatement(statement: Statement): statement is ExitForStatement {
-    return statement?.constructor?.name === 'ExitForStatement';
+export function isCommentStatement(element: Statement | Expression): element is CommentStatement {
+    return element?.constructor?.name === 'CommentStatement';
 }
-export function isExitWhileStatement(statement: Statement): statement is ExitWhileStatement {
-    return statement?.constructor?.name === 'ExitWhileStatement';
+export function isExitForStatement(element: Statement | Expression): element is ExitForStatement {
+    return element?.constructor?.name === 'ExitForStatement';
 }
-export function isFunctionStatement(statement: Statement): statement is FunctionStatement {
-    return statement?.constructor?.name === 'FunctionStatement';
+export function isExitWhileStatement(element: Statement | Expression): element is ExitWhileStatement {
+    return element?.constructor?.name === 'ExitWhileStatement';
 }
-export function isIfStatement(statement: Statement): statement is IfStatement {
-    return statement?.constructor?.name === 'IfStatement';
+export function isFunctionStatement(element: Statement | Expression): element is FunctionStatement {
+    return element?.constructor?.name === 'FunctionStatement';
 }
-export function isIncrementStatement(statement: Statement): statement is IncrementStatement {
-    return statement?.constructor?.name === 'IncrementStatement';
+export function isIfStatement(element: Statement | Expression): element is IfStatement {
+    return element?.constructor?.name === 'IfStatement';
 }
-export function isPrintStatement(statement: Statement): statement is PrintStatement {
-    return statement?.constructor?.name === 'PrintStatement';
+export function isIncrementStatement(element: Statement | Expression): element is IncrementStatement {
+    return element?.constructor?.name === 'IncrementStatement';
 }
-export function isGotoStatement(statement: Statement): statement is GotoStatement {
-    return statement?.constructor?.name === 'GotoStatement';
+export function isPrintStatement(element: Statement | Expression): element is PrintStatement {
+    return element?.constructor?.name === 'PrintStatement';
 }
-export function isLabelStatement(statement: Statement): statement is LabelStatement {
-    return statement?.constructor?.name === 'LabelStatement';
+export function isGotoStatement(element: Statement | Expression): element is GotoStatement {
+    return element?.constructor?.name === 'GotoStatement';
 }
-export function isReturnStatement(statement: Statement): statement is ReturnStatement {
-    return statement?.constructor?.name === 'ReturnStatement';
+export function isLabelStatement(element: Statement | Expression): element is LabelStatement {
+    return element?.constructor?.name === 'LabelStatement';
 }
-export function isEndStatement(statement: Statement): statement is EndStatement {
-    return statement?.constructor?.name === 'EndStatement';
+export function isReturnStatement(element: Statement | Expression): element is ReturnStatement {
+    return element?.constructor?.name === 'ReturnStatement';
 }
-export function isStopStatement(statement: Statement): statement is StopStatement {
-    return statement?.constructor?.name === 'StopStatement';
+export function isEndStatement(element: Statement | Expression): element is EndStatement {
+    return element?.constructor?.name === 'EndStatement';
 }
-export function isForStatement(statement: Statement): statement is ForStatement {
-    return statement?.constructor?.name === 'ForStatement';
+export function isStopStatement(element: Statement | Expression): element is StopStatement {
+    return element?.constructor?.name === 'StopStatement';
 }
-export function isForEachStatement(statement: Statement): statement is ForEachStatement {
-    return statement?.constructor?.name === 'ForEachStatement';
+export function isForStatement(element: Statement | Expression): element is ForStatement {
+    return element?.constructor?.name === 'ForStatement';
 }
-export function isWhileStatement(statement: Statement): statement is WhileStatement {
-    return statement?.constructor?.name === 'WhileStatement';
+export function isForEachStatement(element: Statement | Expression): element is ForEachStatement {
+    return element?.constructor?.name === 'ForEachStatement';
 }
-export function isDottedSetStatement(statement: Statement): statement is DottedSetStatement {
-    return statement?.constructor?.name === 'DottedSetStatement';
+export function isWhileStatement(element: Statement | Expression): element is WhileStatement {
+    return element?.constructor?.name === 'WhileStatement';
 }
-export function isIndexedSetStatement(statement: Statement): statement is IndexedSetStatement {
-    return statement?.constructor?.name === 'IndexedSetStatement';
+export function isDottedSetStatement(element: Statement | Expression): element is DottedSetStatement {
+    return element?.constructor?.name === 'DottedSetStatement';
 }
-export function isLibraryStatement(statement: Statement): statement is LibraryStatement {
-    return statement?.constructor?.name === 'LibraryStatement';
+export function isIndexedSetStatement(element: Statement | Expression): element is IndexedSetStatement {
+    return element?.constructor?.name === 'IndexedSetStatement';
 }
-export function isNamespaceStatement(statement: Statement): statement is NamespaceStatement {
-    return statement?.constructor?.name === 'NamespaceStatement';
+export function isLibraryStatement(element: Statement | Expression): element is LibraryStatement {
+    return element?.constructor?.name === 'LibraryStatement';
 }
-export function isClassStatement(statement: Statement): statement is ClassStatement {
-    return statement?.constructor?.name === 'ClassStatement';
+export function isNamespaceStatement(element: Statement | Expression): element is NamespaceStatement {
+    return element?.constructor?.name === 'NamespaceStatement';
 }
-export function isImportStatement(statement: Statement): statement is ImportStatement {
-    return statement?.constructor?.name === 'ImportStatement';
+export function isClassStatement(element: Statement | Expression): element is ClassStatement {
+    return element?.constructor?.name === 'ClassStatement';
+}
+export function isImportStatement(element: Statement | Expression): element is ImportStatement {
+    return element?.constructor?.name === 'ImportStatement';
+}
+export function isClassMethod(element: Statement | Expression): element is ClassMethodStatement {
+    return element?.constructor.name === 'ClassMethodStatement';
+}
+export function isClassField(element: Statement | Expression): element is ClassFieldStatement {
+    return element?.constructor.name === 'ClassFieldStatement';
 }
 
 // Expressions reflection
+/**
+ * Determine if the variable is a descendent of the Expression base class.
+ * Due to performance restrictions, this expects all statements to directly extend Expression,
+ * so it only checks the immediate parent's class name. For example:
+ * this will work for StringLiteralExpression -> Expression,
+ * but will not work CustomStringLiteralExpression -> StringLiteralExpression -> Expression
+ */
+export function isExpression(element: Expression | Statement): element is Expression {
+    // eslint-disable-next-line no-bitwise
+    return !!(element && element.visitMode & InternalWalkMode.visitExpressions);
+}
 
-export function isExpression(expression: Expression | Token): expression is Expression {
-    return !!(expression && (expression as any).walk);
+export function isBinaryExpression(element: Expression | Statement): element is BinaryExpression {
+    return element?.constructor.name === 'BinaryExpression';
 }
-export function isBinaryExpression(expression: Expression | Token): expression is BinaryExpression {
-    return expression?.constructor.name === 'BinaryExpression';
+export function isCallExpression(element: Expression | Statement): element is CallExpression {
+    return element?.constructor.name === 'CallExpression';
 }
-export function isCallExpression(expression: Expression | Token): expression is CallExpression {
-    return expression?.constructor.name === 'CallExpression';
+export function isFunctionExpression(element: Expression | Statement): element is FunctionExpression {
+    return element?.constructor.name === 'FunctionExpression';
 }
-export function isFunctionExpression(expression: Expression | Token): expression is FunctionExpression {
-    return expression?.constructor.name === 'FunctionExpression';
+export function isNamespacedVariableNameExpression(element: Expression | Statement): element is NamespacedVariableNameExpression {
+    return element?.constructor.name === 'NamespacedVariableNameExpression';
 }
-export function isNamespacedVariableNameExpression(expression: Expression | Token): expression is NamespacedVariableNameExpression {
-    return expression?.constructor.name === 'NamespacedVariableNameExpression';
+export function isDottedGetExpression(element: Expression | Statement): element is DottedGetExpression {
+    return element?.constructor.name === 'DottedGetExpression';
 }
-export function isDottedGetExpression(expression: Expression | Token): expression is DottedGetExpression {
-    return expression?.constructor.name === 'DottedGetExpression';
+export function isXmlAttributeGetExpression(element: Expression | Statement): element is XmlAttributeGetExpression {
+    return element?.constructor.name === 'XmlAttributeGetExpression';
 }
-export function isXmlAttributeGetExpression(expression: Expression | Token): expression is XmlAttributeGetExpression {
-    return expression?.constructor.name === 'XmlAttributeGetExpression';
+export function isIndexedGetExpression(element: Expression | Statement): element is IndexedGetExpression {
+    return element?.constructor.name === 'IndexedGetExpression';
 }
-export function isIndexedGetExpression(expression: Expression | Token): expression is IndexedGetExpression {
-    return expression?.constructor.name === 'IndexedGetExpression';
+export function isGroupingExpression(element: Expression | Statement): element is GroupingExpression {
+    return element?.constructor.name === 'GroupingExpression';
 }
-export function isGroupingExpression(expression: Expression | Token): expression is GroupingExpression {
-    return expression?.constructor.name === 'GroupingExpression';
+export function isLiteralExpression(element: Expression | Statement): element is LiteralExpression {
+    return element?.constructor.name === 'LiteralExpression';
 }
-export function isLiteralExpression(expression: Expression | Token): expression is LiteralExpression {
-    return expression?.constructor.name === 'LiteralExpression';
+export function isEscapedCharCodeLiteral(element: Expression | Statement): element is EscapedCharCodeLiteralExpression {
+    return element?.constructor.name === 'EscapedCharCodeLiteralExpression';
 }
-export function isEscapedCharCodeLiteral(expression: Expression | Token): expression is EscapedCharCodeLiteral {
-    return expression?.constructor.name === 'EscapedCharCodeLiteral';
+export function isArrayLiteralExpression(element: Expression | Statement): element is ArrayLiteralExpression {
+    return element?.constructor.name === 'ArrayLiteralExpression';
 }
-export function isArrayLiteralExpression(expression: Expression | Token): expression is ArrayLiteralExpression {
-    return expression?.constructor.name === 'ArrayLiteralExpression';
+export function isAALiteralExpression(element: Expression | Statement): element is AALiteralExpression {
+    return element?.constructor.name === 'AALiteralExpression';
 }
-export function isAALiteralExpression(expression: Expression | Token): expression is AALiteralExpression {
-    return expression?.constructor.name === 'AALiteralExpression';
+export function isUnaryExpression(element: Expression | Statement): element is UnaryExpression {
+    return element?.constructor.name === 'UnaryExpression';
 }
-export function isUnaryExpression(expression: Expression | Token): expression is UnaryExpression {
-    return expression?.constructor.name === 'UnaryExpression';
+export function isVariableExpression(element: Expression | Statement): element is VariableExpression {
+    return element?.constructor.name === 'VariableExpression';
 }
-export function isVariableExpression(expression: Expression | Token): expression is VariableExpression {
-    return expression?.constructor.name === 'VariableExpression';
+export function isSourceLiteralExpression(element: Expression | Statement): element is SourceLiteralExpression {
+    return element?.constructor.name === 'SourceLiteralExpression';
 }
-export function isSourceLiteralExpression(expression: Expression | Token): expression is SourceLiteralExpression {
-    return expression?.constructor.name === 'SourceLiteralExpression';
+export function isNewExpression(element: Expression | Statement): element is NewExpression {
+    return element?.constructor.name === 'NewExpression';
 }
-export function isNewExpression(expression: Expression | Token): expression is NewExpression {
-    return expression?.constructor.name === 'NewExpression';
+export function isCallfuncExpression(element: Expression | Statement): element is CallfuncExpression {
+    return element?.constructor.name === 'CallfuncExpression';
 }
-export function isCallfuncExpression(expression: Expression | Token): expression is CallfuncExpression {
-    return expression?.constructor.name === 'CallfuncExpression';
+export function isTemplateStringQuasiExpression(element: Expression | Statement): element is TemplateStringQuasiExpression {
+    return element?.constructor.name === 'TemplateStringQuasiExpression';
 }
-export function isTemplateStringQuasiExpression(expression: Expression | Token): expression is TemplateStringQuasiExpression {
-    return expression?.constructor.name === 'TemplateStringQuasiExpression';
+export function isTemplateStringExpression(element: Expression | Statement): element is TemplateStringExpression {
+    return element?.constructor.name === 'TemplateStringExpression';
 }
-export function isTemplateStringExpression(expression: Expression | Token): expression is TemplateStringExpression {
-    return expression?.constructor.name === 'TemplateStringExpression';
-}
-export function isTaggedTemplateStringExpression(expression: Expression | Token): expression is TaggedTemplateStringExpression {
-    return expression?.constructor.name === 'TaggedTemplateStringExpression';
+export function isTaggedTemplateStringExpression(element: Expression | Statement): element is TaggedTemplateStringExpression {
+    return element?.constructor.name === 'TaggedTemplateStringExpression';
 }
 
 // Values reflection
 
-export function isInvalid(value: BrsType): value is BrsInvalid {
+export function isInvalid(value: any): value is BrsInvalid {
     return value?.kind === ValueKind.Invalid;
 }
-export function isBoolean(value: BrsType): value is BrsBoolean {
+export function isBoolean(value: any): value is BrsBoolean {
     return value?.kind === ValueKind.Boolean;
 }
-export function isString(value: BrsType): value is BrsString {
+export function isString(value: any): value is BrsString {
     return value?.kind === ValueKind.String;
 }
-export function isNumber(value: BrsType): value is BrsNumber {
+export function isNumber(value: any): value is BrsNumber {
     return value && (
         value.kind === ValueKind.Int32 ||
         value.kind === ValueKind.Int64 ||
@@ -183,15 +207,15 @@ export function isNumber(value: BrsType): value is BrsNumber {
 
 // Literal reflection
 
-export function isLiteralInvalid(e: Expression | Token): e is LiteralExpression & { value: BrsInvalid } {
+export function isLiteralInvalid(e: any): e is LiteralExpression & { value: BrsInvalid } {
     return isLiteralExpression(e) && isInvalid(e.value);
 }
-export function isLiteralBoolean(e: Expression | Token): e is LiteralExpression & { value: BrsBoolean } {
+export function isLiteralBoolean(e: any): e is LiteralExpression & { value: BrsBoolean } {
     return isLiteralExpression(e) && isBoolean(e.value);
 }
-export function isLiteralString(e: Expression | Token): e is LiteralExpression & { value: BrsString } {
+export function isLiteralString(e: any): e is LiteralExpression & { value: BrsString } {
     return isLiteralExpression(e) && isString(e.value);
 }
-export function isLiteralNumber(e: Expression | Token): e is LiteralExpression & { value: BrsNumber } {
+export function isLiteralNumber(e: any): e is LiteralExpression & { value: BrsNumber } {
     return isLiteralExpression(e) && isNumber(e.value);
 }
