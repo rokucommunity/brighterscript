@@ -4,6 +4,7 @@ import { BrsString, ValueKind, BrsInvalid, BrsBoolean } from '../brsTypes';
 import { BrsNumber } from '../brsTypes/BrsNumber';
 import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
+import { WalkModeInternal } from './visitors';
 
 // File reflection
 
@@ -24,8 +25,8 @@ export function isXmlFile(file: (BrsFile | XmlFile)): file is XmlFile {
  * so it only checks the immediate parent's class name.
  */
 export function isStatement(element: Statement | Expression): element is Statement {
-    const ctor = Object.getPrototypeOf(element?.constructor || 0).name;
-    return ctor === 'Statement' || ctor === 'FunctionStatement';
+    // eslint-disable-next-line no-bitwise
+    return !!(element && element.visitMode & WalkModeInternal.visitStatements);
 }
 
 export function isBody(element: Statement | Expression): element is Body {
@@ -119,7 +120,8 @@ export function isClassField(element: Statement | Expression): element is ClassF
  * but will not work CustomStringLiteralExpression -> StringLiteralExpression -> Expression
  */
 export function isExpression(element: Expression | Statement): element is Expression {
-    return Object.getPrototypeOf(element?.constructor || 0)?.name === 'Expression';
+    // eslint-disable-next-line no-bitwise
+    return !!(element && element.visitMode & WalkModeInternal.visitExpressions);
 }
 
 export function isBinaryExpression(element: Expression | Statement): element is BinaryExpression {

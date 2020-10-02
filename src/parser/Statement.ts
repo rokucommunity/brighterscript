@@ -14,12 +14,19 @@ import { BrsInvalid } from '../brsTypes/BrsType';
  * A BrightScript statement
  */
 export abstract class Statement {
+
     /**
      *  The starting and ending location of the statement.
      **/
     public abstract range: Range;
 
     public abstract transpile(state: TranspileState): Array<SourceNode | string>;
+
+    /**
+     * When being considered by the walk visitor, this describes what type of element the current class is.
+     */
+    public visitMode = WalkModeInternal.visitStatements;
+
     public abstract walk(visitor: WalkVisitor, options: WalkOptions);
 }
 
@@ -216,6 +223,7 @@ export class CommentStatement extends Statement implements Expression {
         public comments: Token[]
     ) {
         super();
+        this.visitMode = WalkModeInternal.visitStatements | WalkModeInternal.visitExpressions;
         if (this.comments?.length > 0) {
 
             this.range = util.createRangeFromPositions(

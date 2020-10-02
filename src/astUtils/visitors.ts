@@ -32,21 +32,19 @@ export function walk<T>(keyParent: T, key: keyof T, visitor: WalkVisitor, option
     }
 
     //the object we're visiting
-    let element: any = keyParent[key];
+    let element = keyParent[key] as any as Statement | Expression;
     if (!element) {
         return;
     }
 
     //notify the visitor of this element
-    if (
-        (isExpression(element) && options.walkMode & WalkModeInternal.visitExpressions) ||
-        (isStatement(element) && options.walkMode & WalkModeInternal.visitStatements)
-    ) {
+    if (element.visitMode & options.walkMode) {
         const result = visitor(element, parent ?? keyParent as any);
 
         //replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
         if (result && (isExpression(result) || isStatement(result))) {
             (keyParent as any)[key] = result;
+            //don't walk the new element
             return;
         }
     }

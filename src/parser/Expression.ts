@@ -20,6 +20,10 @@ export abstract class Expression {
     public abstract range: Range;
 
     public abstract transpile(state: TranspileState): Array<SourceNode | string>;
+    /**
+     * When being considered by the walk visitor, this describes what type of element the current class is.
+     */
+    public visitMode = WalkModeInternal.visitExpressions;
 
     public abstract walk(visitor: WalkVisitor, options: WalkOptions);
 }
