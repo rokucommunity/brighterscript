@@ -140,7 +140,7 @@ export interface WalkOptions {
 /**
  * An enum used to denote the specific WalkMode options (without
  */
-export enum WalkModeInternal {
+export enum InternalWalkMode {
     /**
      * Walk statements
      */
@@ -168,33 +168,33 @@ export enum WalkMode {
     /**
      * Walk statements
      */
-    walkStatements = WalkModeInternal.walkStatements,
+    walkStatements = InternalWalkMode.walkStatements,
     /**
      * Walk and visit statements
      */
-    visitStatements = WalkModeInternal.walkStatements | WalkModeInternal.visitStatements,
+    visitStatements = InternalWalkMode.walkStatements | InternalWalkMode.visitStatements,
     /**
      * Walk expressions.
      */
-    walkExpressions = WalkModeInternal.walkExpressions,
+    walkExpressions = InternalWalkMode.walkExpressions,
     /**
      * Visit statements. This is useless without `walkExpressions`
      */
-    visitExpressions = WalkModeInternal.walkExpressions | WalkModeInternal.visitExpressions,
+    visitExpressions = InternalWalkMode.walkExpressions | InternalWalkMode.visitExpressions,
     /**
      * If child function expressions are encountered, this will allow the walker to step into them.
      */
-    enterChildFunctions = WalkModeInternal.enterChildFunctions | WalkModeInternal.walkExpressions,
+    enterChildFunctions = InternalWalkMode.enterChildFunctions | InternalWalkMode.walkExpressions,
     /**
      * Visit every statement. This will walk all expressions and statements, also stepping into child functions
      */
-    visitAllStatements = WalkModeInternal.walkStatements | WalkModeInternal.visitStatements | WalkModeInternal.walkExpressions | WalkModeInternal.enterChildFunctions,
+    visitAllStatements = InternalWalkMode.walkStatements | InternalWalkMode.visitStatements | InternalWalkMode.walkExpressions | InternalWalkMode.enterChildFunctions,
     /**
      * Visit every statement. This will walk all expressions and statements, also stepping into child functions.
      */
-    visitAllExpressions = WalkModeInternal.walkStatements | WalkModeInternal.walkExpressions | WalkModeInternal.visitExpressions | WalkModeInternal.enterChildFunctions,
+    visitAllExpressions = InternalWalkMode.walkStatements | InternalWalkMode.walkExpressions | InternalWalkMode.visitExpressions | InternalWalkMode.enterChildFunctions,
     /**
      * Visit every statement and expression. This will walk all expressions and statements, also stepping into child functions
      */
-    visitAll = WalkModeInternal.walkStatements | WalkModeInternal.visitStatements | WalkModeInternal.walkExpressions | WalkModeInternal.visitExpressions | WalkModeInternal.enterChildFunctions
+    visitAll = InternalWalkMode.walkStatements | InternalWalkMode.visitStatements | InternalWalkMode.walkExpressions | InternalWalkMode.visitExpressions | InternalWalkMode.enterChildFunctions
 }

@@ -4,7 +4,7 @@ import { BrsString, ValueKind, BrsInvalid, BrsBoolean } from '../brsTypes';
 import { BrsNumber } from '../brsTypes/BrsNumber';
 import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
-import { WalkModeInternal } from './visitors';
+import { InternalWalkMode } from './visitors';
 
 // File reflection
 
@@ -26,7 +26,7 @@ export function isXmlFile(file: (BrsFile | XmlFile)): file is XmlFile {
  */
 export function isStatement(element: Statement | Expression): element is Statement {
     // eslint-disable-next-line no-bitwise
-    return !!(element && element.visitMode & WalkModeInternal.visitStatements);
+    return !!(element && element.visitMode & InternalWalkMode.visitStatements);
 }
 
 export function isBody(element: Statement | Expression): element is Body {
@@ -121,7 +121,7 @@ export function isClassField(element: Statement | Expression): element is ClassF
  */
 export function isExpression(element: Expression | Statement): element is Expression {
     // eslint-disable-next-line no-bitwise
-    return !!(element && element.visitMode & WalkModeInternal.visitExpressions);
+    return !!(element && element.visitMode & InternalWalkMode.visitExpressions);
 }
 
 export function isBinaryExpression(element: Expression | Statement): element is BinaryExpression {
