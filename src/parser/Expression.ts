@@ -215,7 +215,7 @@ export class FunctionExpression extends Expression {
             }
 
             //This is the core of full-program walking...it allows us to step into sub functions
-            if (options.walkMode & InternalWalkMode.enterChildFunctions) {
+            if (options.walkMode & InternalWalkMode.recurseChildFunctions) {
                 walk(this, 'body', visitor, options);
             }
         }

@@ -310,7 +310,7 @@ describe('astUtils visitors', () => {
     });
 
     describe('walk', () => {
-        async function testWalk(text: string, expectedConstructors: string[], walkMode = WalkMode.visitAll) {
+        async function testWalk(text: string, expectedConstructors: string[], walkMode = WalkMode.visitAllRecursive) {
             const file = await program.addOrReplaceFile('source/main.bs', text) as BrsFile;
             const items = [];
             let index = 1;
@@ -344,7 +344,7 @@ describe('astUtils visitors', () => {
                     cancel.cancel();
                 }
             }, {
-                walkMode: WalkMode.visitAll,
+                walkMode: WalkMode.visitAllRecursive,
                 cancel: cancel.token
             });
 
@@ -864,7 +864,7 @@ describe('astUtils visitors', () => {
                 'Block',
                 'PrintStatement',
                 'ExpressionStatement'
-            ], WalkMode.visitAllStatements);
+            ], WalkMode.visitStatementsRecursive);
         });
 
         it('visits all expressions and no statement', async () => {
@@ -887,7 +887,7 @@ describe('astUtils visitors', () => {
                 'BinaryExpression',
                 'LiteralExpression',
                 'LiteralExpression'
-            ], WalkMode.visitAllExpressions);
+            ], WalkMode.visitExpressionsRecursive);
         });
     });
 });

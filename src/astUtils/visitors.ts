@@ -160,41 +160,46 @@ export enum InternalWalkMode {
     /**
      * If child function expressions are encountered, this will allow the walker to step into them.
      */
-    enterChildFunctions = 16,
+    recurseChildFunctions = 16,
 }
 
 /* eslint-disable no-bitwise */
 export enum WalkMode {
     /**
-     * Walk statements
+     * Walk statements, but does NOT step into child functions
      */
     walkStatements = InternalWalkMode.walkStatements,
     /**
-     * Walk and visit statements
+     * Walk and visit statements, but does NOT step into child functions
      */
     visitStatements = InternalWalkMode.walkStatements | InternalWalkMode.visitStatements,
     /**
-     * Walk expressions.
+     * Walk expressions, but does NOT step into child functions
      */
     walkExpressions = InternalWalkMode.walkExpressions,
     /**
-     * Visit statements. This is useless without `walkExpressions`
+     * Walk and visit statements, but does NOT step into child functions
      */
     visitExpressions = InternalWalkMode.walkExpressions | InternalWalkMode.visitExpressions,
     /**
+     * Visit all descendent statements and expressions, but does NOT step into child functions
+     */
+    visitAll = InternalWalkMode.walkStatements | InternalWalkMode.visitStatements | InternalWalkMode.walkExpressions | InternalWalkMode.visitExpressions,
+    /**
      * If child function expressions are encountered, this will allow the walker to step into them.
+     * This includes `WalkMode.walkExpressions`
      */
-    enterChildFunctions = InternalWalkMode.enterChildFunctions | InternalWalkMode.walkExpressions,
+    recurseChildFunctions = InternalWalkMode.recurseChildFunctions | InternalWalkMode.walkExpressions,
     /**
-     * Visit every statement. This will walk all expressions and statements, also stepping into child functions
+     * Visit all descendent statements, and DOES step into child functions
      */
-    visitAllStatements = InternalWalkMode.walkStatements | InternalWalkMode.visitStatements | InternalWalkMode.walkExpressions | InternalWalkMode.enterChildFunctions,
+    visitStatementsRecursive = InternalWalkMode.walkStatements | InternalWalkMode.visitStatements | InternalWalkMode.walkExpressions | InternalWalkMode.recurseChildFunctions,
     /**
-     * Visit every statement. This will walk all expressions and statements, also stepping into child functions.
+     * Visit all descendent expressions, and DOES step into child functions
      */
-    visitAllExpressions = InternalWalkMode.walkStatements | InternalWalkMode.walkExpressions | InternalWalkMode.visitExpressions | InternalWalkMode.enterChildFunctions,
+    visitExpressionsRecursive = InternalWalkMode.walkStatements | InternalWalkMode.walkExpressions | InternalWalkMode.visitExpressions | InternalWalkMode.recurseChildFunctions,
     /**
-     * Visit every statement and expression. This will walk all expressions and statements, also stepping into child functions
+     * Visit all descendent statements and expressions, and DOES step into child functions
      */
-    visitAll = InternalWalkMode.walkStatements | InternalWalkMode.visitStatements | InternalWalkMode.walkExpressions | InternalWalkMode.visitExpressions | InternalWalkMode.enterChildFunctions
+    visitAllRecursive = InternalWalkMode.walkStatements | InternalWalkMode.visitStatements | InternalWalkMode.walkExpressions | InternalWalkMode.visitExpressions | InternalWalkMode.recurseChildFunctions
 }

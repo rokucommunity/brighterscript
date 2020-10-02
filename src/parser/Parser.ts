@@ -2415,7 +2415,7 @@ export class Parser {
                 references.newExpressions.push(e);
             }
         }), {
-            walkMode: WalkMode.visitAll
+            walkMode: WalkMode.visitAllRecursive
         });
         return references;
     }

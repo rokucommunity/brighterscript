@@ -15,7 +15,7 @@ describe('Statement', () => {
             const statement = new EmptyStatement();
             statement.walk(() => {
                 expect(true).to.be.false;
-            }, { walkMode: WalkMode.visitAll });
+            }, { walkMode: WalkMode.visitAllRecursive });
         });
     });
 
@@ -46,7 +46,7 @@ describe('Statement', () => {
                 cancel.cancel();
                 comment.walk(() => {
                     throw new Error('Should not have been called');
-                }, { walkMode: WalkMode.visitAll, cancel: cancel.token });
+                }, { walkMode: WalkMode.visitAllRecursive, cancel: cancel.token });
             });
         });
     });
