@@ -556,6 +556,7 @@ export class AAMemberExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
+        walk(this, 'value', visitor, options);
     }
 
 }
@@ -659,7 +660,7 @@ export class AALiteralExpression extends Expression {
                 if (isCommentStatement(this.elements[i])) {
                     walk(this.elements, i, visitor, options, this);
                 } else {
-                    walk((this.elements[i] as AAMemberExpression), 'value', visitor, options, this);
+                    walk(this.elements, i, visitor, options, this);
                 }
             }
         }
