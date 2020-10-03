@@ -6,13 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.16.0] - 2020-10-02
+## [0.16.0] - 2020-10-2
 ### Added
- -
+ - `Expression.walk` and `Statement.walk` functions which provide shallow or deep walking of the AST
+ - Many `ast` reflection methods to be used instead of `instanceof`.
+ - plugin system (still in alpha) support for re-scanning the AST after modifing the AST by calling `invalidateReferences()`
+ - every token has a `leadingWhitespace` property now that contains leading whitespace. Retrieving whitespace tokens from the `Lexer` will be removed in a future update in favor of this appraoch
 ### Changed
- -
+ - all AST nodes now extend either `Statement` or `Expression` instead of simply implementing their interfaces.
 ### Removed
- -
+ - several AST walking functions from `astUtils/` in favor of direct node walking
 
 
 
