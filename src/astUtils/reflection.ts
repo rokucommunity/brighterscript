@@ -1,19 +1,22 @@
 import { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement } from '../parser/Statement';
 import { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
-import { BrsString, ValueKind, BrsInvalid, BrsBoolean } from '../brsTypes';
+import { BrsString, ValueKind, BrsInvalid, BrsBoolean, RoString, RoArray, RoAssociativeArray, RoSGNode, FunctionParameterExpression } from '../brsTypes';
 import { BrsNumber } from '../brsTypes/BrsNumber';
 import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
 import { InternalWalkMode } from './visitors';
+import { FunctionType } from '../types/FunctionType';
+import { File } from '../interfaces';
+import { StringType } from '../types/StringType';
 
 // File reflection
 
-export function isBrsFile(file: (BrsFile | XmlFile)): file is BrsFile {
-    return file.extension === '.brs' || file.extension === '.bs';
+export function isBrsFile(file: (BrsFile | XmlFile | File)): file is BrsFile {
+    return file?.constructor.name === 'BrsFile';
 }
 
 export function isXmlFile(file: (BrsFile | XmlFile)): file is XmlFile {
-    return file.extension === '.xml';
+    return file?.constructor.name === 'XmlFile';
 }
 
 // Statements reflection
@@ -104,10 +107,10 @@ export function isClassStatement(element: Statement | Expression): element is Cl
 export function isImportStatement(element: Statement | Expression): element is ImportStatement {
     return element?.constructor?.name === 'ImportStatement';
 }
-export function isClassMethod(element: Statement | Expression): element is ClassMethodStatement {
+export function isClassMethodStatement(element: Statement | Expression): element is ClassMethodStatement {
     return element?.constructor.name === 'ClassMethodStatement';
 }
-export function isClassField(element: Statement | Expression): element is ClassFieldStatement {
+export function isClassFieldStatement(element: Statement | Expression): element is ClassFieldStatement {
     return element?.constructor.name === 'ClassFieldStatement';
 }
 
@@ -151,7 +154,7 @@ export function isGroupingExpression(element: Expression | Statement): element i
 export function isLiteralExpression(element: Expression | Statement): element is LiteralExpression {
     return element?.constructor.name === 'LiteralExpression';
 }
-export function isEscapedCharCodeLiteral(element: Expression | Statement): element is EscapedCharCodeLiteralExpression {
+export function isEscapedCharCodeLiteralExpression(element: Expression | Statement): element is EscapedCharCodeLiteralExpression {
     return element?.constructor.name === 'EscapedCharCodeLiteralExpression';
 }
 export function isArrayLiteralExpression(element: Expression | Statement): element is ArrayLiteralExpression {
@@ -184,8 +187,11 @@ export function isTemplateStringExpression(element: Expression | Statement): ele
 export function isTaggedTemplateStringExpression(element: Expression | Statement): element is TaggedTemplateStringExpression {
     return element?.constructor.name === 'TaggedTemplateStringExpression';
 }
+export function isFunctionParameterExpression(element: Expression | Statement): element is FunctionParameterExpression {
+    return element?.constructor.name === 'FunctionParameterExpression';
+}
 
-// Values reflection
+// Value/Type reflection
 
 export function isInvalid(value: any): value is BrsInvalid {
     return value?.kind === ValueKind.Invalid;
@@ -204,6 +210,22 @@ export function isNumber(value: any): value is BrsNumber {
         value.kind === ValueKind.Double
     );
 }
+export function isStringType(value: any): value is StringType {
+    return value?.constructor.name === 'StringType';
+}
+
+export function isFunctionType(e: any): e is FunctionType {
+    return e?.constructor.name === 'FunctionType';
+}
+export function isRoArray(e: any): e is RoArray {
+    return e?.constructor.name === 'RoArray';
+}
+export function isRoAssociativeArray(e: any): e is RoAssociativeArray {
+    return e?.constructor.name === 'RoAssociativeArray';
+}
+export function isRoSGNode(e: any): e is RoSGNode {
+    return e?.constructor.name === 'RoSGNode';
+}
 
 // Literal reflection
 
@@ -218,4 +240,7 @@ export function isLiteralString(e: any): e is LiteralExpression & { value: BrsSt
 }
 export function isLiteralNumber(e: any): e is LiteralExpression & { value: BrsNumber } {
     return isLiteralExpression(e) && isNumber(e.value);
+}
+export function isRoString(s: any): s is RoString {
+    return s.constructor.name === 'RoString';
 }

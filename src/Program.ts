@@ -18,6 +18,7 @@ import { globalFile } from './globalCallables';
 import { parseManifest, ManifestValue } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
+import { isXmlFile } from './astUtils/reflection';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {
@@ -485,7 +486,7 @@ export class Program {
             }
 
             //if this is a component, remove it from our components map
-            if (file instanceof XmlFile) {
+            if (isXmlFile(file)) {
                 this.unregisterComponent(file);
             }
             this.plugins.emit('afterFileDispose', file);
@@ -535,7 +536,7 @@ export class Program {
         const componentsByName = Object.keys(this.files).reduce((map, filePath) => {
             const file = this.files[filePath];
             //if this is an XmlFile, and it has a valid `componentName` property
-            if (file instanceof XmlFile && file.componentName) {
+            if (isXmlFile(file) && file.componentName) {
                 let lowerName = file.componentName.toLowerCase();
                 if (!map[lowerName]) {
                     map[lowerName] = [];

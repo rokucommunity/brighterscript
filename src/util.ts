@@ -9,7 +9,6 @@ import * as xml2js from 'xml2js';
 
 import { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { BrsFile } from './files/BrsFile';
 import { CallableContainer, ValueKind, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { BrsType } from './types/BrsType';
@@ -29,6 +28,7 @@ import { DottedGetExpression, VariableExpression } from './parser/Expression';
 import { LogLevel } from './Logger';
 import { TokenKind, Token } from './lexer';
 import { CompilerPlugin } from '.';
+import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
 
 export class Util {
 
@@ -482,9 +482,9 @@ export class Util {
     public findBeginningVariableExpression(dottedGet: DottedGetExpression): VariableExpression | undefined {
         let left: any = dottedGet;
         while (left) {
-            if (left instanceof VariableExpression) {
+            if (isVariableExpression(left)) {
                 return left;
-            } else if (left instanceof DottedGetExpression) {
+            } else if (isDottedGetExpression(left)) {
                 left = left.obj;
             } else {
                 break;
@@ -680,7 +680,7 @@ export class Util {
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
         //for now, we only support suppressing brs file diagnostics
-        if (diagnostic.file instanceof BrsFile) {
+        if (isBrsFile(diagnostic.file)) {
             for (let flag of diagnostic.file.commentFlags) {
                 //this diagnostic is affected by this flag
                 if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {

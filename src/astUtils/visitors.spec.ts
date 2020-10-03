@@ -592,12 +592,12 @@ describe('astUtils visitors', () => {
             `, [
                 'FunctionStatement',
                 'FunctionExpression',
-                'FunctionParameter',
+                'FunctionParameterExpression',
                 'Block',
                 'AssignmentStatement',
                 'FunctionExpression',
-                'FunctionParameter',
-                'FunctionParameter',
+                'FunctionParameterExpression',
+                'FunctionParameterExpression',
                 'Block'
             ]);
         });
@@ -682,6 +682,7 @@ describe('astUtils visitors', () => {
                 'AssignmentStatement',
                 'AALiteralExpression',
                 'CommentStatement',
+                'AAMemberExpression',
                 'LiteralExpression'
             ]);
         });
@@ -878,7 +879,7 @@ describe('astUtils visitors', () => {
             `, [
                 'FunctionExpression',
                 'FunctionExpression',
-                'FunctionParameter',
+                'FunctionParameterExpression',
                 'BinaryExpression',
                 'LiteralExpression',
                 'VariableExpression',

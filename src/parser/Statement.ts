@@ -7,7 +7,7 @@ import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
 import { ParseMode, Parser } from './Parser';
 import { walk, WalkVisitor, WalkOptions, InternalWalkMode } from '../astUtils/visitors';
-import { isCallExpression, isDottedGetExpression, isExpression, isExpressionStatement, isVariableExpression } from '../astUtils/reflection';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isVariableExpression } from '../astUtils/reflection';
 import { BrsInvalid } from '../brsTypes/BrsType';
 
 /**
@@ -73,17 +73,17 @@ export class Body extends Statement {
                 //this is the first statement. do nothing related to spacing and newlines
 
                 //if comment is on same line as prior sibling
-            } else if (statement instanceof CommentStatement && previousStatement && statement.range.start.line === previousStatement.range.end.line) {
+            } else if (isCommentStatement(statement) && previousStatement && statement.range.start.line === previousStatement.range.end.line) {
                 result.push(
                     ' '
                 );
 
                 //add double newline if this is a comment, and next is a function
-            } else if (statement instanceof CommentStatement && nextStatement && nextStatement instanceof FunctionStatement) {
+            } else if (isCommentStatement(statement) && nextStatement && isFunctionStatement(nextStatement)) {
                 result.push('\n\n');
 
                 //add double newline if is function not preceeded by a comment
-            } else if (statement instanceof FunctionStatement && previousStatement && !(previousStatement instanceof CommentStatement)) {
+            } else if (isFunctionStatement(statement) && previousStatement && !(isCommentStatement(previousStatement))) {
                 result.push('\n\n');
             } else {
                 //separate statements by a single newline
@@ -163,7 +163,7 @@ export class Block extends Statement {
             let statement = this.statements[i];
 
             //if comment is on same line as parent
-            if (statement instanceof CommentStatement &&
+            if (isCommentStatement(statement) &&
                 (util.linesTouch(state.lineage[0], statement) || util.linesTouch(previousStatement, statement))
             ) {
                 results.push(' ');
@@ -1131,10 +1131,10 @@ export class ClassStatement extends Statement {
         super();
         this.body = this.body ?? [];
         for (let statement of this.body) {
-            if (statement instanceof ClassMethodStatement) {
+            if (isClassMethodStatement(statement)) {
                 this.methods.push(statement);
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
-            } else if (statement instanceof ClassFieldStatement) {
+            } else if (isClassFieldStatement(statement)) {
                 this.fields.push(statement);
                 this.memberMap[statement?.name?.text.toLowerCase()] = statement;
             }
@@ -1309,12 +1309,12 @@ export class ClassStatement extends Statement {
 
         for (let statement of this.body) {
             //is field statement
-            if (statement instanceof ClassFieldStatement) {
+            if (isClassFieldStatement(statement)) {
                 //do nothing with class fields in this situation, they are handled elsewhere
                 continue;
 
                 //methods
-            } else if (statement instanceof ClassMethodStatement) {
+            } else if (isClassMethodStatement(statement)) {
 
                 //store overridden parent methods as super{parentIndex}_{methodName}
                 if (

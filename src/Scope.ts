@@ -9,10 +9,10 @@ import { BsClassValidator } from './validators/ClassValidator';
 import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
-import { FunctionType } from './types/FunctionType';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -261,9 +261,9 @@ export class Scope {
                 let ns = namespaceLookup[name.toLowerCase()];
                 ns.statements.push(...namespace.body.statements);
                 for (let statement of namespace.body.statements) {
-                    if (statement instanceof ClassStatement) {
+                    if (isClassStatement(statement)) {
                         ns.classStatements[statement.name.text.toLowerCase()] = statement;
-                    } else if (statement instanceof FunctionStatement) {
+                    } else if (isFunctionStatement(statement)) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     }
                 }
@@ -511,7 +511,7 @@ export class Scope {
                 let lowerVarName = varDeclaration.name.toLowerCase();
 
                 //if the var is a function
-                if (varDeclaration.type instanceof FunctionType) {
+                if (isFunctionType(varDeclaration.type)) {
                     //local var function with same name as stdlib function
                     if (
                         //has same name as stdlib
@@ -668,9 +668,9 @@ export class Scope {
         let result = [] as FileReference[];
         let files = this.getFiles();
         for (let file of files) {
-            if (file instanceof BrsFile) {
+            if (isBrsFile(file)) {
                 result.push(...file.ownScriptImports);
-            } else if (file instanceof XmlFile) {
+            } else if (isXmlFile(file)) {
                 result.push(...file.scriptTagImports);
             }
         }
