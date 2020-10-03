@@ -1,6 +1,6 @@
 /* eslint-disable no-bitwise */
 import { Token, Identifier, TokenKind } from '../lexer';
-import { BrsType, ValueKind, BrsString, FunctionParameter } from '../brsTypes';
+import { BrsType, ValueKind, BrsString, FunctionParameterExpression } from '../brsTypes';
 import { Block, CommentStatement, FunctionStatement } from './Statement';
 import { SourceNode } from 'source-map';
 import { Range } from 'vscode-languageserver';
@@ -9,6 +9,7 @@ import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import { walk, InternalWalkMode, WalkOptions, WalkVisitor } from '../astUtils/visitors';
+import { isCommentStatement, isEscapedCharCodeLiteralExpression, isLiteralExpression, isVariableExpression } from '../astUtils/reflection';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -109,7 +110,7 @@ export class CallExpression extends Expression {
 
 export class FunctionExpression extends Expression {
     constructor(
-        readonly parameters: FunctionParameter[],
+        readonly parameters: FunctionParameterExpression[],
         readonly returns: ValueKind,
         public body: Block,
         readonly functionType: Token | null,
@@ -245,14 +246,14 @@ export class NamespacedVariableNameExpression extends Expression {
 
     public getNameParts() {
         let parts = [] as string[];
-        if (this.expression instanceof VariableExpression) {
+        if (isVariableExpression(this.expression)) {
             parts.push(this.expression.name.text);
         } else {
             let expr = this.expression;
 
             parts.push(expr.name.text);
 
-            while (expr instanceof VariableExpression === false) {
+            while (isVariableExpression(expr) === false) {
                 expr = expr.obj as DottedGetExpression;
                 parts.unshift(expr.name.text);
             }
@@ -481,7 +482,7 @@ export class ArrayLiteralExpression extends Expression {
             let previousElement = this.elements[i - 1];
             let element = this.elements[i];
 
-            if (element instanceof CommentStatement) {
+            if (isCommentStatement(element)) {
                 //if the comment is on the same line as opening square or previous statement, don't add newline
                 if (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element)) {
                     result.push(' ');
@@ -505,7 +506,7 @@ export class ArrayLiteralExpression extends Expression {
                 for (let j = i + 1; j < this.elements.length; j++) {
                     let el = this.elements[j];
                     //add a comma if there will be another element after this
-                    if (el instanceof CommentStatement === false) {
+                    if (isCommentStatement(el) === false) {
                         result.push(',');
                         break;
                     }
@@ -534,15 +535,29 @@ export class ArrayLiteralExpression extends Expression {
     }
 }
 
-/** A member of an associative array literal. */
-export interface AAMemberExpression {
-    /** The name of the member. */
-    key: BrsString;
-    keyToken: Token;
-    colonToken: Token;
-    /** The expression evaluated to determine the member's initial value. */
-    value: Expression;
-    range: Range;
+export class AAMemberExpression extends Expression {
+    constructor(
+        /** The name of the member. */
+        public key: BrsString,
+        public keyToken: Token,
+        public colonToken: Token,
+        /** The expression evaluated to determine the member's initial value. */
+        public value: Expression
+    ) {
+        super();
+        this.range = util.createRangeFromPositions(keyToken.range.start, this.value.range.end);
+    }
+
+    public range: Range;
+
+    transpile(state: TranspileState): Array<SourceNode | string> {
+        //TODO move the logic from AALiteralExpression loop into this function
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+    }
+
 }
 
 export class AALiteralExpression extends Expression {
@@ -565,7 +580,7 @@ export class AALiteralExpression extends Expression {
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
-        if (hasChildren && ((this.elements[0] instanceof CommentStatement) === false || !util.linesTouch(this.elements[0], this.open))) {
+        if (hasChildren && (isCommentStatement(this.elements[0]) === false || !util.linesTouch(this.elements[0], this.open))) {
             result.push('\n');
         }
         state.blockDepth++;
@@ -575,7 +590,7 @@ export class AALiteralExpression extends Expression {
             let nextElement = this.elements[i + 1];
 
             //don't indent if comment is same-line
-            if (element instanceof CommentStatement &&
+            if (isCommentStatement(element as any) &&
                 (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element))
             ) {
                 result.push(' ');
@@ -586,7 +601,7 @@ export class AALiteralExpression extends Expression {
             }
 
             //render comments
-            if (element instanceof CommentStatement) {
+            if (isCommentStatement(element)) {
                 result.push(...element.transpile(state));
             } else {
                 //key
@@ -602,7 +617,7 @@ export class AALiteralExpression extends Expression {
                 //determine if comments are the only members left in the array
                 let onlyCommentsRemaining = true;
                 for (let j = i + 1; j < this.elements.length; j++) {
-                    if ((this.elements[j] instanceof CommentStatement) === false) {
+                    if (isCommentStatement(this.elements[j]) === false) {
                         onlyCommentsRemaining = false;
                         break;
                     }
@@ -618,7 +633,7 @@ export class AALiteralExpression extends Expression {
 
 
             //if next element is a same-line comment, skip the newline
-            if (nextElement && nextElement instanceof CommentStatement && nextElement.range.start.line === element.range.start.line) {
+            if (nextElement && isCommentStatement(nextElement) && nextElement.range.start.line === element.range.start.line) {
 
                 //add a newline between statements
             } else {
@@ -641,7 +656,7 @@ export class AALiteralExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             for (let i = 0; i < this.elements.length; i++) {
-                if (this.elements[i] instanceof CommentStatement) {
+                if (isCommentStatement(this.elements[i])) {
                     walk(this.elements, i, visitor, options, this);
                 } else {
                     walk((this.elements[i] as AAMemberExpression), 'value', visitor, options, this);
@@ -996,8 +1011,8 @@ export class TemplateStringExpression extends Expression {
             if (expression) {
                 //skip the toString wrapper around certain expressions
                 if (
-                    expression instanceof EscapedCharCodeLiteralExpression ||
-                    (expression instanceof LiteralExpression && expression.value.kind === ValueKind.String)
+                    isEscapedCharCodeLiteralExpression(expression) ||
+                    (isLiteralExpression(expression) && expression.value.kind === ValueKind.String)
                 ) {
                     add(
                         ...expression.transpile(state)

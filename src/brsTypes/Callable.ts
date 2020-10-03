@@ -60,7 +60,7 @@ export class StdlibArgument implements Argument {
     static InternalRange = util.createRange(-1, -1, -1, -1);
 }
 
-export class FunctionParameter extends Expression {
+export class FunctionParameterExpression extends Expression {
     constructor(
         public name: Identifier,
         public type: {
