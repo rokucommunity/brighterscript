@@ -682,6 +682,7 @@ describe('astUtils visitors', () => {
                 'AssignmentStatement',
                 'AALiteralExpression',
                 'CommentStatement',
+                'AAMemberExpression',
                 'LiteralExpression'
             ]);
         });
