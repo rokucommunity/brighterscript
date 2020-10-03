@@ -19,7 +19,7 @@ import {
     ValueKind,
     Argument,
     StdlibArgument,
-    FunctionParameter,
+    FunctionParameterExpression,
     valueKindFromString
 } from '../brsTypes';
 import {
@@ -80,7 +80,7 @@ import {
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isClassMethod } from '../astUtils/reflection';
+import { isCallExpression, isCallfuncExpression, isClassMethodStatement, isDottedGetExpression, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 
 export class Parser {
@@ -587,7 +587,7 @@ export class Parser {
                 }
             }
 
-            let params: FunctionParameter[] = [];
+            let params: FunctionParameterExpression[] = [];
             let asToken: Token;
             let typeToken: Token;
             if (!this.check(TokenKind.RightParen)) {
@@ -717,7 +717,7 @@ export class Parser {
         }
     }
 
-    private functionParameter(): FunctionParameter {
+    private functionParameter(): FunctionParameterExpression {
         if (!this.check(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedParameterNameButFound(this.peek().text),
@@ -758,7 +758,7 @@ export class Parser {
             type = typeValueKind;
         }
 
-        return new FunctionParameter(
+        return new FunctionParameterExpression(
             name,
             {
                 kind: type,
@@ -1547,7 +1547,7 @@ export class Parser {
                     range: this.peek().range
                 });
                 throw this.lastDiagnosticAsError();
-            } else if (expr instanceof CallExpression) {
+            } else if (isCallExpression(expr)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.incrementDecrementOperatorsAreNotAllowedAsResultOfFunctionCall(),
                     range: expressionStart.range
@@ -1570,7 +1570,7 @@ export class Parser {
             );
         }
 
-        if (expr instanceof CallExpression || expr instanceof CallfuncExpression) {
+        if (isCallExpression(expr) || isCallfuncExpression(expr)) {
             return new ExpressionStatement(expr);
         }
 
@@ -1593,13 +1593,13 @@ export class Parser {
 
 
         let expr = this.call();
-        if (this.check(...AssignmentOperators) && !(expr instanceof CallExpression)) {
+        if (this.check(...AssignmentOperators) && !(isCallExpression(expr))) {
             let left = expr;
             let operator = this.advance();
             let right = this.expression();
 
             // Create a dotted or indexed "set" based on the left-hand side's type
-            if (left instanceof IndexedGetExpression) {
+            if (isIndexedGetExpression(left)) {
                 this.consume(
                     DiagnosticMessages.expectedNewlineOrColonAfterIndexedSetStatement(),
                     TokenKind.Newline,
@@ -1623,7 +1623,7 @@ export class Parser {
                     left.openingSquare,
                     left.closingSquare
                 );
-            } else if (left instanceof DottedGetExpression) {
+            } else if (isDottedGetExpression(left)) {
                 this.consume(
                     DiagnosticMessages.expectedNewlineOrColonAfterDottedSetStatement(),
                     TokenKind.Newline,
@@ -2052,7 +2052,7 @@ export class Parser {
             TokenKind.RightParen
         );
 
-        if (callee instanceof VariableExpression) {
+        if (isVariableExpression(callee)) {
             callee.isCalled = true;
         }
 
@@ -2173,13 +2173,12 @@ export class Parser {
                     } else {
                         let k = key();
                         let expr = this.expression();
-                        members.push({
-                            key: k.key,
-                            keyToken: k.keyToken,
-                            colonToken: k.colonToken,
-                            value: expr,
-                            range: util.getRange(k, expr)
-                        });
+                        members.push(new AAMemberExpression(
+                            k.key,
+                            k.keyToken,
+                            k.colonToken,
+                            expr
+                        ));
                     }
 
                     while (this.match(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
@@ -2203,13 +2202,12 @@ export class Parser {
                             }
                             let k = key();
                             let expr = this.expression();
-                            members.push({
-                                key: k.key,
-                                keyToken: k.keyToken,
-                                colonToken: k.colonToken,
-                                value: expr,
-                                range: util.getRange(k, expr)
-                            });
+                            members.push(new AAMemberExpression(
+                                k.key,
+                                k.keyToken,
+                                k.colonToken,
+                                expr
+                            ));
                         }
                     }
 
@@ -2408,7 +2406,7 @@ export class Parser {
                 references.libraryStatements.push(s);
             },
             FunctionExpression: (expression, parent) => {
-                if (!isClassMethod(parent)) {
+                if (!isClassMethodStatement(parent)) {
                     references.functionExpressions.push(expression);
                 }
             },

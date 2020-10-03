@@ -5,10 +5,11 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { BsDiagnostic } from '..';
 import { CallExpression, VariableExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import { ExpressionStatement, ClassMethodStatement, ClassFieldStatement, ClassStatement } from '../parser/Statement';
+import { ExpressionStatement, ClassMethodStatement, ClassStatement } from '../parser/Statement';
 import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isVariableExpression } from '../astUtils/reflection';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -120,7 +121,7 @@ export class BsClassValidator {
                 let firstStatement = ((newMethod as ClassMethodStatement).func?.body?.statements[0] as ExpressionStatement)?.expression as CallExpression;
 
                 //if the first statement isn't a call
-                if (firstStatement instanceof CallExpression === false) {
+                if (isCallExpression(firstStatement) === false) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.classConstructorMissingSuperCall(),
                         file: classStatement.file,
@@ -128,7 +129,7 @@ export class BsClassValidator {
                     });
 
                     //if the first statement's left-hand-side callee isn't a variable
-                } else if (firstStatement.callee instanceof VariableExpression === false) {
+                } else if (isVariableExpression(firstStatement.callee) === false) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.classConstructorSuperMustBeFirstStatement(),
                         file: classStatement.file,
@@ -154,7 +155,7 @@ export class BsClassValidator {
             let fields = {};
 
             for (let statement of classStatement.body) {
-                if (statement instanceof ClassMethodStatement || statement instanceof ClassFieldStatement) {
+                if (isClassMethodStatement(statement) || isClassFieldStatement(statement)) {
                     let member = statement;
                     let lowerMemberName = member.name.text.toLowerCase();
 
@@ -167,10 +168,10 @@ export class BsClassValidator {
                         });
                     }
 
-                    let memberType = member instanceof ClassFieldStatement ? 'field' : 'method';
+                    let memberType = isClassFieldStatement(member) ? 'field' : 'method';
                     let ancestorAndMember = this.getAncestorMember(classStatement, lowerMemberName);
                     if (ancestorAndMember) {
-                        let ancestorMemberType = ancestorAndMember.member instanceof ClassFieldStatement ? 'field' : 'method';
+                        let ancestorMemberType = isClassFieldStatement(ancestorAndMember.member) ? 'field' : 'method';
 
                         //mismatched member type (field/method in child, opposite in parent)
                         if (memberType !== ancestorMemberType) {
@@ -186,7 +187,7 @@ export class BsClassValidator {
                         }
 
                         //child field has same name as parent
-                        if (member instanceof ClassFieldStatement) {
+                        if (isClassFieldStatement(member)) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.memberAlreadyExistsInParentClass(
                                     memberType,
@@ -200,7 +201,7 @@ export class BsClassValidator {
                         //child method missing the override keyword
                         if (
                             //is a method
-                            member instanceof ClassMethodStatement &&
+                            isClassMethodStatement(member) &&
                             //does not have an override keyword
                             !member.overrides &&
                             //is not the constructur function
@@ -216,10 +217,10 @@ export class BsClassValidator {
                         }
                     }
 
-                    if (member instanceof ClassMethodStatement) {
+                    if (isClassMethodStatement(member)) {
                         methods[lowerMemberName] = member;
 
-                    } else if (member instanceof ClassFieldStatement) {
+                    } else if (isClassFieldStatement(member)) {
                         fields[lowerMemberName] = member;
                     }
                 }
