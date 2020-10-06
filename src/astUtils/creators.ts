@@ -33,8 +33,8 @@ export function createIntegerLiteral(value: string, range?: Range) {
 export function createFloatLiteral(value: string, range?: Range) {
     return new LiteralExpression(createToken(TokenKind.FloatLiteral, value, range));
 }
-export function createInvalidLiteral(range?: Range) {
-    return new LiteralExpression(createToken(TokenKind.Invalid, null, range));
+export function createInvalidLiteral(value?: string, range?: Range) {
+    return new LiteralExpression(createToken(TokenKind.Invalid, value, range));
 }
 export function createBooleanLiteral(value: 'true' | 'false', range?: Range) {
     return new LiteralExpression(createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, range));

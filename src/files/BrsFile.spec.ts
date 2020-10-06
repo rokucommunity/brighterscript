@@ -1,8 +1,7 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
-
-import { Callable, CallableArg, CommentFlag, BsDiagnostic, VariableDeclaration } from '../interfaces';
+import { Callable, CommentFlag, BsDiagnostic, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
@@ -14,7 +13,7 @@ import { SourceMapConsumer } from 'source-map';
 import { TokenKind, Lexer, Keywords } from '../lexer';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { StandardizedFileEntry } from 'roku-deploy';
-import { standardizePath as s } from '../util';
+import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
 import { loadPlugins } from '..';
 
@@ -1154,20 +1153,20 @@ describe('BrsFile', () => {
                 end function
             `);
             expect(file.functionCalls.length).to.equal(1);
-            let args = file.functionCalls[0].args;
-            expect(args.length).to.equal(3);
-            expect(args[0]).deep.include(<CallableArg>{
+
+            expect(file.functionCalls[0].args).to.eql([{
                 type: new StringType(),
+                range: util.createRange(2, 32, 2, 38),
                 text: '"name"'
-            });
-            expect(args[1]).deep.include(<CallableArg>{
+            }, {
                 type: new IntegerType(),
+                range: util.createRange(2, 40, 2, 42),
                 text: '12'
-            });
-            expect(args[2]).deep.include(<CallableArg>{
+            }, {
                 type: new BooleanType(),
+                range: util.createRange(2, 44, 2, 48),
                 text: 'true'
-            });
+            }]);
         });
 
         it('finds function calls nested inside statements', async () => {

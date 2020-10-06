@@ -914,19 +914,18 @@ export class Parser {
     }
 
     private forStatement(): ForStatement {
-        const forKeyword = this.advance();
+        const forToken = this.advance();
         const initializer = this.assignment(TokenKind.To);
-        const to = this.advance();
+        const toToken = this.advance();
         const finalValue = this.expression();
-        let increment: Expression | undefined;
-        let step: Token | undefined;
+        let incrementExpression: Expression | undefined;
+        let stepToken: Token | undefined;
 
         if (this.check(TokenKind.Step)) {
-            step = this.advance();
-            increment = this.expression();
+            stepToken = this.advance();
+            incrementExpression = this.expression();
         } else {
             // BrightScript for/to/step loops default to a step of 1 if no `step` is provided
-            increment = new LiteralExpression(this.peek());
         }
         while (this.match(TokenKind.Newline)) {
 
@@ -940,22 +939,20 @@ export class Parser {
             });
             throw this.lastDiagnosticAsError();
         }
-        let endFor = this.advance();
+        let endForToken = this.advance();
         while (this.match(TokenKind.Newline)) { }
 
         // WARNING: BrightScript doesn't delete the loop initial value after a for/to loop! It just
         // stays around in scope with whatever value it was when the loop exited.
         return new ForStatement(
-            {
-                for: forKeyword,
-                to: to,
-                step: step,
-                endFor: endFor
-            },
+            forToken,
             initializer,
+            toToken,
             finalValue,
-            increment,
-            body
+            body,
+            endForToken,
+            stepToken,
+            incrementExpression
         );
     }
 

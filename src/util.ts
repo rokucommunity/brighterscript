@@ -973,6 +973,8 @@ export class Util {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
+            case TokenKind.True:
+            case TokenKind.False:
                 return new BooleanType();
             case TokenKind.Double:
             case TokenKind.DoubleLiteral:
@@ -1003,6 +1005,29 @@ export class Util {
                 return new StringType();
             case TokenKind.Void:
                 return new VoidType();
+            case TokenKind.Identifier:
+                switch (token.text.toLowerCase()) {
+                    case 'boolean':
+                        return new BooleanType();
+                    case 'double':
+                        return new DoubleType();
+                    case 'float':
+                        return new FloatType();
+                    case 'function':
+                        return new FunctionType(new DynamicType());
+                    case 'integer':
+                        return new IntegerType();
+                    case 'invalid':
+                        return new InvalidType();
+                    case 'longinteger':
+                        return new LongIntegerType();
+                    case 'object':
+                        return new ObjectType();
+                    case 'string':
+                        return new StringType();
+                    case 'void':
+                        return new VoidType();
+                }
         }
 
     }

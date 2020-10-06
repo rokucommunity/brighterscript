@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import { Parser } from '../../Parser';
 import { Lexer, DisallowedLocalIdentifiersText, TokenKind } from '../../../lexer';
 import { Range } from 'vscode-languageserver';
+import { AAMemberExpression } from '../../Expression';
 
 describe('parser', () => {
     describe('`end` keyword', () => {
@@ -274,8 +275,8 @@ describe('parser', () => {
             end function
         `);
         let { statements, diagnostics } = Parser.parse(tokens);
+        let element = ((statements as any)[0].func.body.statements[0].value.elements[0] as AAMemberExpression);
         expect(diagnostics[0]?.message).not.to.exist;
-        expect((statements[0] as any).func.body.statements[0].value.elements[0].keyToken.text).to.equal('"has-second-layer"');
-        expect((statements[0] as any).func.body.statements[0].value.elements[0].key.value).to.equal('has-second-layer');
+        expect(element.keyToken.text).to.equal('"has-second-layer"');
     });
 });

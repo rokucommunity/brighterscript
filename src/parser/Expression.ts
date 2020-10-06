@@ -11,6 +11,7 @@ import { walk, InternalWalkMode, WalkOptions, WalkVisitor } from '../astUtils/vi
 import { isCommentStatement, isEscapedCharCodeLiteralExpression, isLiteralExpression, isLiteralString, isStringType, isTemplateStringQuasiExpression, isVariableExpression } from '../astUtils/reflection';
 import { BscType } from '../types/BscType';
 import { DynamicType } from '../types/DynamicType';
+import { VoidType } from '../types/VoidType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -127,6 +128,10 @@ export class FunctionExpression extends Expression {
         super();
         if (this.returnTypeToken) {
             this.returnType = util.tokenToBscType(this.returnTypeToken);
+        } else if (this.functionType.text.toLowerCase() === 'sub') {
+            this.returnType = new VoidType();
+        } else {
+            this.returnType = new DynamicType();
         }
     }
 
@@ -479,10 +484,11 @@ export class LiteralExpression extends Expression {
             text = `"${this.token.text.replace(/"/g, '""')}"`;
 
         } else if (isStringType(this.type)) {
-            //escape quote marks with another quote mark
-            //TODO do we need to do this anymore? If not, remove the above and below comments
-            //`"${this.value.value.replace(/"/g, '""')}"`;
             text = this.token.text;
+            //add trailing quotemark if it's missing. We will have already generated a diagnostic for this.
+            if (text.endsWith('"') === false) {
+                text += '"';
+            }
         } else {
             text = this.token.text;
         }
@@ -1009,13 +1015,8 @@ export class TemplateStringQuasiExpression extends Expression {
         let result = [];
         let plus = '';
         for (let expression of this.expressions) {
-            //skip empty quasi strings
-            if (expression.token.kind === TokenKind.TemplateStringQuasi && expression.token.text === '') {
-                continue;
-            }
             //skip empty strings
             //TODO what does an empty string literal expression look like?
-            debugger;
             if (expression.token.text === '' && skipEmptyStrings === true) {
                 continue;
             }

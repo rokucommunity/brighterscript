@@ -719,19 +719,17 @@ export class StopStatement extends Statement {
 
 export class ForStatement extends Statement {
     constructor(
-        readonly tokens: {
-            for: Token;
-            to: Token;
-            step?: Token;
-            endFor: Token;
-        },
-        readonly counterDeclaration: AssignmentStatement,
-        readonly finalValue: Expression,
-        readonly increment: Expression,
-        readonly body: Block
+        public forToken: Token,
+        public counterDeclaration: AssignmentStatement,
+        public toToken: Token,
+        public finalValue: Expression,
+        public body: Block,
+        public endForToken: Token,
+        public stepToken?: Token,
+        public increment?: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.for.range.start, this.tokens.endFor.range.end);
+        this.range = util.createRangeFromPositions(this.forToken.range.start, this.endForToken.range.end);
     }
 
     public readonly range: Range;
@@ -740,7 +738,7 @@ export class ForStatement extends Statement {
         let result = [];
         //for
         result.push(
-            new SourceNode(this.tokens.for.range.start.line + 1, this.tokens.for.range.start.character, state.pathAbsolute, 'for'),
+            new SourceNode(this.forToken.range.start.line + 1, this.forToken.range.start.character, state.pathAbsolute, 'for'),
             ' '
         );
         //i=1
@@ -750,16 +748,16 @@ export class ForStatement extends Statement {
         );
         //to
         result.push(
-            new SourceNode(this.tokens.to.range.start.line + 1, this.tokens.to.range.start.character, state.pathAbsolute, 'to'),
+            new SourceNode(this.toToken.range.start.line + 1, this.toToken.range.start.character, state.pathAbsolute, 'to'),
             ' '
         );
         //final value
         result.push(this.finalValue.transpile(state));
         //step
-        if (this.tokens.step) {
+        if (this.stepToken) {
             result.push(
                 ' ',
-                new SourceNode(this.tokens.step.range.start.line + 1, this.tokens.step.range.start.character, state.pathAbsolute, 'step'),
+                new SourceNode(this.stepToken.range.start.line + 1, this.stepToken.range.start.character, state.pathAbsolute, 'step'),
                 ' ',
                 this.increment.transpile(state)
             );
@@ -774,7 +772,7 @@ export class ForStatement extends Statement {
         //end for
         result.push(
             state.indent(),
-            new SourceNode(this.tokens.endFor.range.start.line + 1, this.tokens.endFor.range.start.character, state.pathAbsolute, 'end for')
+            new SourceNode(this.endForToken.range.start.line + 1, this.endForToken.range.start.character, state.pathAbsolute, 'end for')
         );
 
         return result;
@@ -1566,9 +1564,9 @@ export class ClassMethodStatement extends FunctionStatement {
                 //if there is no initial value, set the initial value to `invalid`
                 newStatements.push(
                     new AssignmentStatement(
-                        createToken(TokenKind.Equal, '='),
+                        createToken(TokenKind.Equal, '=', field.name.range),
                         thisQualifiedName,
-                        createInvalidLiteral(),
+                        createInvalidLiteral('invalid', field.name.range),
                         this.func
                     )
                 );

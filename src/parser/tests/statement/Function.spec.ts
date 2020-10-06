@@ -298,7 +298,7 @@ describe('parser', () => {
                 EOF
             ]);
 
-            expect(diagnostics).to.be.lengthOf(0);
+            expect(diagnostics[0]?.message).not.to.exist;
             expect(statements).to.length.greaterThan(0);
 
         });

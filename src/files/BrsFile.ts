@@ -621,14 +621,24 @@ export class BrsFile {
                 let args = [] as CallableArg[];
                 //TODO convert if stmts to use instanceof instead
                 for (let arg of expression.args as any) {
-                    //is variable being passed into argument
-                    if (arg.name) {
+
+                    //is a literal parameter value
+                    if (isLiteralExpression(arg)) {
+                        args.push({
+                            range: arg.range,
+                            type: arg.type,
+                            text: arg.token.text
+                        });
+
+                        //is variable being passed into argument
+                    } else if (arg.name) {
                         args.push({
                             range: arg.range,
                             //TODO - look up the data type of the actual variable
                             type: new DynamicType(),
                             text: arg.name.text
                         });
+
                     } else if (arg.value) {
                         let text = '';
                         /* istanbul ignore next: TODO figure out why value is undefined sometimes */
@@ -646,6 +656,7 @@ export class BrsFile {
                             callableArg.text = '"' + callableArg.text + '"';
                         }
                         args.push(callableArg);
+
                     } else {
                         args.push({
                             range: arg.range,

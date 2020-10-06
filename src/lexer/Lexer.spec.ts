@@ -461,11 +461,16 @@ describe('lexer', () => {
                 TokenKind.BackTick,
                 TokenKind.Eof
             ]);
-            expect(tokens[1].text).to.eql('"the cat says "');
-            expect(tokens[2].text).to.eql('\\`');
-            expect(tokens[3].text).to.eql('"meow"');
-            expect(tokens[4].text).to.eql('\\`');
-            expect(tokens[5].text).to.eql('" a lot"');
+            expect(tokens.map(x => x.text)).to.eql([
+                '`',
+                'the cat says ',
+                '\\`',
+                'meow',
+                '\\`',
+                ' a lot',
+                '`',
+                '' //EOF
+            ]);
         });
 
         it('produces template string literal tokens', () => {
@@ -476,7 +481,7 @@ describe('lexer', () => {
                 TokenKind.BackTick,
                 TokenKind.Eof
             ]);
-            expect(tokens[1].text).to.deep.equal('"hello world"');
+            expect(tokens[1].text).to.deep.equal('hello world');
         });
 
         it('collects quasis outside and expressions inside of template strings', () => {
@@ -641,9 +646,16 @@ describe('lexer', () => {
                 TokenKind.BackTick,
                 TokenKind.Eof
             ]);
-            expect(tokens[1].text).to.eql(`"multi-line"`);
-            expect(tokens[2].text).to.equal('\n');
-            expect(tokens[2].text).to.equal('\n');
+            expect(tokens.map(x => x.text)).to.eql([
+                '`',
+                'multi-line',
+                '\n',
+                '',
+                '\n',
+                '',
+                '`',
+                '' //EOF
+            ]);
         });
 
         it('maintains proper line/column locations for multiline strings', () => {
@@ -717,31 +729,31 @@ describe('lexer', () => {
         it('respects \'#\' suffix', () => {
             let d = Lexer.scan('123#').tokens[0];
             expect(d.kind).to.equal(TokenKind.DoubleLiteral);
-            expect(d.text).to.eql(123);
+            expect(d.text).to.eql('123#');
         });
 
         it('forces literals >= 10 digits into doubles', () => {
             let d = Lexer.scan('0000000005').tokens[0];
             expect(d.kind).to.equal(TokenKind.DoubleLiteral);
-            expect(d.text).to.eql(5);
+            expect(d.text).to.eql('0000000005');
         });
 
         it('forces literals with \'D\' in exponent into doubles', () => {
             let d = Lexer.scan('2.5d3').tokens[0];
             expect(d.kind).to.equal(TokenKind.DoubleLiteral);
-            expect(d.text).to.eql(2500);
+            expect(d.text).to.eql('2.5d3');
         });
 
         it('allows digits before `.` to be elided', () => {
             let f = Lexer.scan('.123#').tokens[0];
             expect(f.kind).to.equal(TokenKind.DoubleLiteral);
-            expect(f.text).to.eql(0.123);
+            expect(f.text).to.eql('.123#');
         });
 
         it('allows digits after `.` to be elided', () => {
             let f = Lexer.scan('12.#').tokens[0];
             expect(f.kind).to.equal(TokenKind.DoubleLiteral);
-            expect(f.text).to.eql('12');
+            expect(f.text).to.eql('12.#');
         });
     });
 
@@ -795,7 +807,7 @@ describe('lexer', () => {
         it('forces literals with \'&\' suffix into Int64s', () => {
             let li = Lexer.scan('123&').tokens[0];
             expect(li.kind).to.equal(TokenKind.LongIntegerLiteral);
-            expect(li.text).to.deep.equal('123');
+            expect(li.text).to.deep.equal('123&');
         });
     });
 
@@ -803,7 +815,7 @@ describe('lexer', () => {
         it('supports hexadecimal literals', () => {
             let i = Lexer.scan('&hFf').tokens[0];
             expect(i.kind).to.equal(TokenKind.IntegerLiteral);
-            expect(i.text).to.deep.equal('255');
+            expect(i.text).to.deep.equal('&hFf');
         });
 
         it('falls back to a regular integer', () => {

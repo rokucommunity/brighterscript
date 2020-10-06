@@ -5,6 +5,7 @@ import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { createToken } from '../../../astUtils/creators';
+import { ForStatement, LiteralExpression } from '../..';
 
 describe('parser for loops', () => {
     it('accepts a \'step\' clause', () => {
@@ -24,14 +25,13 @@ describe('parser for loops', () => {
             EOF
         ]) as any;
 
-        expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
-        expect(statements[0]).to.exist;
-        expect(statements[0].increment).to.exist;
-        expect(statements[0].increment.value).to.include(new Int32(2));
+        const statement = statements[0] as ForStatement;
+        expect(diagnostics[0]?.message).not.to.exist;
+        expect(statement.increment).to.be.instanceof(LiteralExpression);
+        expect((statement.increment as LiteralExpression).token.text).to.equal('2');
     });
 
-    it('defaults a missing \'step\' clause to \'1\'', () => {
+    it('supports omitted \'step\' clause', () => {
         let { statements, diagnostics } = Parser.parse([
             token(TokenKind.For, 'for'),
             identifier('i'),
@@ -46,11 +46,8 @@ describe('parser for loops', () => {
             EOF
         ]) as any;
 
-        expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
-        expect(statements[0]).to.exist;
-        expect(statements[0].increment).to.exist;
-        expect(statements[0].increment.value).to.include(new Int32(1));
+        expect(diagnostics[0]?.message).not.to.exist;
+        expect((statements[0] as ForStatement).increment).not.to.exist;
     });
 
     it('allows \'next\' to terminate loop', () => {
