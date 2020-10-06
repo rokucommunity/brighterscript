@@ -239,7 +239,11 @@ export class FunctionParameterExpression extends Expression {
         public asToken?: Token
     ) {
         super();
-        this.type = util.tokenToBscType(typeToken) ?? new DynamicType();
+        if (typeToken) {
+            this.type = util.tokenToBscType(typeToken);
+        } else {
+            this.type = new DynamicType();
+        }
     }
 
     public type: BscType;
