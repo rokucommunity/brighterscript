@@ -8,7 +8,7 @@ import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import { walk, InternalWalkMode, WalkOptions, WalkVisitor } from '../astUtils/visitors';
-import { isCommentStatement, isEscapedCharCodeLiteralExpression, isLiteralExpression, isLiteralString, isStringType, isTemplateStringQuasiExpression, isVariableExpression } from '../astUtils/reflection';
+import { isCommentStatement, isEscapedCharCodeLiteralExpression, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
 import { BscType } from '../types/BscType';
 import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
