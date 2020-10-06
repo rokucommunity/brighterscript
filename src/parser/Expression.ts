@@ -8,7 +8,7 @@ import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import { walk, InternalWalkMode, WalkOptions, WalkVisitor } from '../astUtils/visitors';
-import { isCommentStatement, isEscapedCharCodeLiteralExpression, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
+import { isCommentStatement, isEscapedCharCodeLiteralExpression, isLiteralExpression, isLiteralString, isStringType, isTemplateStringQuasiExpression, isVariableExpression } from '../astUtils/reflection';
 import { BscType } from '../types/BscType';
 import { DynamicType } from '../types/DynamicType';
 
@@ -474,7 +474,11 @@ export class LiteralExpression extends Expression {
 
     transpile(state: TranspileState) {
         let text: string;
-        if (isStringType(this.type)) {
+        if (this.token.kind === TokenKind.TemplateStringQuasi) {
+            //wrap quasis with quotes (and escape inner quotemarks)
+            text = `"${this.token.text.replace(/"/g, '""')}"`;
+
+        } else if (isStringType(this.type)) {
             //escape quote marks with another quote mark
             //TODO do we need to do this anymore? If not, remove the above and below comments
             //`"${this.value.value.replace(/"/g, '""')}"`;
@@ -1005,9 +1009,14 @@ export class TemplateStringQuasiExpression extends Expression {
         let result = [];
         let plus = '';
         for (let expression of this.expressions) {
+            //skip empty quasi strings
+            if (expression.token.kind === TokenKind.TemplateStringQuasi && expression.token.text === '') {
+                continue;
+            }
             //skip empty strings
             //TODO what does an empty string literal expression look like?
-            if ((expression as LiteralExpression).token.text === '""' && skipEmptyStrings === true) {
+            debugger;
+            if (expression.token.text === '' && skipEmptyStrings === true) {
                 continue;
             }
             result.push(
