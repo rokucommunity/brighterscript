@@ -1,10 +1,10 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind, Lexer } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import { createToken } from '../../../astUtils/creators';
 
 describe('parser call expressions', () => {
     it('parses named function calls', () => {
@@ -73,9 +73,9 @@ describe('parser call expressions', () => {
         const { statements, diagnostics } = Parser.parse([
             identifier('add'),
             { kind: TokenKind.LeftParen, text: '(', line: 1 },
-            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+            createToken(TokenKind.IntegerLiteral, '1'),
             { kind: TokenKind.Comma, text: ',', line: 1 },
-            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+            createToken(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.RightParen, ')'),
             EOF
         ]) as any;
@@ -108,7 +108,6 @@ describe('parser call expressions', () => {
             {
                 kind: TokenKind.StringLiteral,
                 text: `"bar"`,
-                literal: new BrsString('bar'),
                 isReserved: false,
                 range: Range.create(0, 4, 0, 9)
             },
@@ -121,7 +120,6 @@ describe('parser call expressions', () => {
             {
                 kind: TokenKind.StringLiteral,
                 text: `"baz"`,
-                literal: new BrsString('baz'),
                 isReserved: false,
                 range: Range.create(0, 11, 0, 16)
             },

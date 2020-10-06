@@ -1,9 +1,9 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
+import { createToken } from '../../../astUtils/creators';
 
 describe('parser', () => {
     describe('exponential expressions', () => {
@@ -11,9 +11,9 @@ describe('parser', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                createToken(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Caret, '^'),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                createToken(TokenKind.IntegerLiteral, '3'),
                 EOF
             ]);
 
@@ -25,11 +25,11 @@ describe('parser', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                createToken(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Caret, '^'),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                createToken(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Caret, '^'),
-                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
+                createToken(TokenKind.IntegerLiteral, '4'),
                 EOF
             ]);
 

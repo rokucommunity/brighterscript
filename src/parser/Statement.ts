@@ -1,14 +1,14 @@
 /* eslint-disable no-bitwise */
 import { Token, Identifier, TokenKind, CompoundAssignmentOperators } from '../lexer';
 import { SourceNode } from 'source-map';
-import { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, CallExpression, VariableExpression, LiteralExpression } from './Expression';
+import { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
 import { ParseMode, Parser } from './Parser';
 import { walk, WalkVisitor, WalkOptions, InternalWalkMode } from '../astUtils/visitors';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isVariableExpression } from '../astUtils/reflection';
-import { BrsInvalid } from '../brsTypes/BrsType';
+import { createInvalidLiteral, createToken } from '../astUtils';
 
 /**
  * A BrightScript statement
@@ -1566,19 +1566,9 @@ export class ClassMethodStatement extends FunctionStatement {
                 //if there is no initial value, set the initial value to `invalid`
                 newStatements.push(
                     new AssignmentStatement(
-                        {
-                            kind: TokenKind.Equal,
-                            isReserved: false,
-                            range: field.name.range,
-                            text: '=',
-                            leadingWhitespace: ''
-                        },
+                        createToken(TokenKind.Equal, '='),
                         thisQualifiedName,
-                        new LiteralExpression(
-                            BrsInvalid.Instance,
-                            //set the range to the end of the name so locations don't get broken
-                            Range.create(field.name.range.end, field.name.range.end)
-                        ),
+                        createInvalidLiteral(),
                         this.func
                     )
                 );

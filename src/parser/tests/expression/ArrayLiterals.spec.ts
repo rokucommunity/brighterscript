@@ -1,10 +1,10 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsBoolean, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import { createToken } from '../../../astUtils/creators';
 
 describe('parser array literals', () => {
     describe('empty arrays', () => {
@@ -47,11 +47,11 @@ describe('parser array literals', () => {
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                createToken(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                createToken(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                createToken(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
@@ -66,13 +66,13 @@ describe('parser array literals', () => {
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                createToken(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Comma, ','),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                createToken(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Comma, ','),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                createToken(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.RightSquareBracket, ']'),
                 EOF
@@ -88,11 +88,11 @@ describe('parser array literals', () => {
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                createToken(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                createToken(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Newline, '\n'),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                createToken(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.RightSquareBracket, ']'),
                 EOF
@@ -109,11 +109,11 @@ describe('parser array literals', () => {
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                createToken(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                createToken(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                createToken(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
@@ -128,19 +128,19 @@ describe('parser array literals', () => {
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
                 token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                createToken(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                createToken(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                createToken(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.Comma, ','),
                 token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
+                createToken(TokenKind.IntegerLiteral, '4'),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                createToken(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.Comma, ','),
-                token(TokenKind.IntegerLiteral, '6', new Int32(6)),
+                createToken(TokenKind.IntegerLiteral, '6'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.RightSquareBracket, ']'),
                 EOF
@@ -155,12 +155,12 @@ describe('parser array literals', () => {
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                createToken(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                createToken(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Comma, ','),
                 token(TokenKind.Not, 'not'),
-                token(TokenKind.False, 'false', BrsBoolean.False),
+                createToken(TokenKind.False, 'false'),
                 token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);

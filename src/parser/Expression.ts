@@ -1,6 +1,5 @@
 /* eslint-disable no-bitwise */
 import { Token, Identifier, TokenKind } from '../lexer';
-import { BrsType, ValueKind, BrsString, FunctionParameterExpression } from '../brsTypes';
 import { Block, CommentStatement, FunctionStatement } from './Statement';
 import { SourceNode } from 'source-map';
 import { Range } from 'vscode-languageserver';
@@ -9,7 +8,9 @@ import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import { walk, InternalWalkMode, WalkOptions, WalkVisitor } from '../astUtils/visitors';
-import { isCommentStatement, isEscapedCharCodeLiteralExpression, isLiteralExpression, isVariableExpression } from '../astUtils/reflection';
+import { isCommentStatement, isEscapedCharCodeLiteralExpression, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
+import { BscType } from '../types/BscType';
+import { DynamicType } from '../types/DynamicType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -111,7 +112,6 @@ export class CallExpression extends Expression {
 export class FunctionExpression extends Expression {
     constructor(
         readonly parameters: FunctionParameterExpression[],
-        readonly returns: ValueKind,
         public body: Block,
         readonly functionType: Token | null,
         public end: Token,
@@ -125,7 +125,15 @@ export class FunctionExpression extends Expression {
         readonly parentFunction?: FunctionExpression
     ) {
         super();
+        if (this.returnTypeToken) {
+            this.returnType = util.tokenToBscType(this.returnTypeToken);
+        }
     }
+
+    /**
+     * The type this function returns
+     */
+    public returnType: BscType;
 
     /**
      * The list of function calls that are declared within this function scope. This excludes CallExpressions
@@ -219,6 +227,55 @@ export class FunctionExpression extends Expression {
             if (options.walkMode & InternalWalkMode.recurseChildFunctions) {
                 walk(this, 'body', visitor, options);
             }
+        }
+    }
+}
+
+export class FunctionParameterExpression extends Expression {
+    constructor(
+        public name: Identifier,
+        public typeToken?: Token,
+        public defaultValue?: Expression,
+        public asToken?: Token
+    ) {
+        super();
+        this.type = util.tokenToBscType(typeToken) ?? new DynamicType();
+    }
+
+    public type: BscType;
+
+    public get range(): Range {
+        return {
+            start: this.name.range.start,
+            end: this.typeToken ? this.typeToken.range.end : this.name.range.end
+        };
+    }
+
+    public transpile(state: TranspileState) {
+        let result = [
+            //name
+            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
+        ] as any[];
+        //default value
+        if (this.defaultValue) {
+            result.push(' = ');
+            result.push(this.defaultValue.transpile(state));
+        }
+        //type declaration
+        if (this.asToken) {
+            result.push(' ');
+            result.push(new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pathAbsolute, 'as'));
+            result.push(' ');
+            result.push(new SourceNode(this.typeToken.range.start.line + 1, this.typeToken.range.start.character, state.pathAbsolute, this.typeToken.text));
+        }
+
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        // eslint-disable-next-line no-bitwise
+        if (this.defaultValue && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'defaultValue', visitor, options);
         }
     }
 }
@@ -396,22 +453,30 @@ export class GroupingExpression extends Expression {
 
 export class LiteralExpression extends Expression {
     constructor(
-        readonly value: BrsType,
-        range: Range
+        public token: Token
     ) {
         super();
-        this.range = range ?? util.createRange(-1, -1, -1, -1);
+        this.type = util.tokenToBscType(token);
     }
 
-    public readonly range: Range;
+    public get range() {
+        return this.token.range;
+    }
+
+    /**
+     * The (data) type of this expression
+     */
+    public type: BscType;
 
     transpile(state: TranspileState) {
         let text: string;
-        if (this.value.kind === ValueKind.String) {
+        if (isStringType(this.type)) {
             //escape quote marks with another quote mark
-            text = `"${this.value.value.replace(/"/g, '""')}"`;
+            //TODO do we need to do this anymore? If not, remove the above and below comments
+            //`"${this.value.value.replace(/"/g, '""')}"`;
+            text = this.token.text;
         } else {
-            text = this.value.toString();
+            text = this.token.text;
         }
 
         return [
@@ -537,8 +602,6 @@ export class ArrayLiteralExpression extends Expression {
 
 export class AAMemberExpression extends Expression {
     constructor(
-        /** The name of the member. */
-        public key: BrsString,
         public keyToken: Token,
         public colonToken: Token,
         /** The expression evaluated to determine the member's initial value. */
@@ -939,7 +1002,8 @@ export class TemplateStringQuasiExpression extends Expression {
         let plus = '';
         for (let expression of this.expressions) {
             //skip empty strings
-            if (((expression as LiteralExpression)?.value as BrsString)?.value === '' && skipEmptyStrings === true) {
+            //TODO what does an empty string literal expression look like?
+            if ((expression as LiteralExpression).token.text === '""' && skipEmptyStrings === true) {
                 continue;
             }
             result.push(
@@ -1013,7 +1077,7 @@ export class TemplateStringExpression extends Expression {
                 //skip the toString wrapper around certain expressions
                 if (
                     isEscapedCharCodeLiteralExpression(expression) ||
-                    (isLiteralExpression(expression) && expression.value.kind === ValueKind.String)
+                    (isLiteralExpression(expression) && isStringType(expression.type))
                 ) {
                     add(
                         ...expression.transpile(state)

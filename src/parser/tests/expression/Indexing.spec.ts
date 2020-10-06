@@ -1,12 +1,12 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { AssignmentStatement } from '../../Statement';
+import { createToken } from '../../../astUtils/creators';
 
 describe('parser indexing', () => {
     describe('one level', () => {
@@ -31,7 +31,7 @@ describe('parser indexing', () => {
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
                 token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                createToken(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
@@ -49,7 +49,7 @@ describe('parser indexing', () => {
                     identifier('foo'),
                     token(TokenKind.Dot, '.'),
                     token(TokenKind.LeftSquareBracket, '['),
-                    token(TokenKind.Integer, '2', new Int32(2)),
+                    createToken(TokenKind.Integer, '2'),
                     token(TokenKind.RightSquareBracket, ']'),
                     EOF
                 ]);
@@ -67,7 +67,7 @@ describe('parser indexing', () => {
                     token(TokenKind.Dot, '.'),
                     token(TokenKind.Dot, '.'),
                     token(TokenKind.LeftSquareBracket, '['),
-                    token(TokenKind.Integer, '2', new Int32(2)),
+                    createToken(TokenKind.Integer, '2'),
                     token(TokenKind.RightSquareBracket, ']'),
                     EOF
                 ]);
@@ -153,7 +153,6 @@ describe('parser indexing', () => {
                 {
                     kind: TokenKind.IntegerLiteral,
                     text: '2',
-                    literal: new Int32(2),
                     isReserved: false,
                     range: Range.create(1, 8, 1, 9)
                 },
@@ -201,13 +200,13 @@ describe('parser indexing', () => {
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
                 token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                createToken(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+                createToken(TokenKind.IntegerLiteral, '0'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '6', new Int32(6)),
+                createToken(TokenKind.IntegerLiteral, '6'),
                 token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
@@ -224,7 +223,7 @@ describe('parser indexing', () => {
                 token(TokenKind.Dot, '.'),
                 identifier('bar'),
                 token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+                createToken(TokenKind.IntegerLiteral, '0'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.Dot, '.'),
                 identifier('baz'),

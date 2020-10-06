@@ -2,8 +2,8 @@ import { PreprocessorParser } from './PreprocessorParser';
 import { identifier, token } from '../parser/tests/Parser.spec';
 import { TokenKind } from '../lexer/TokenKind';
 import { expect } from 'chai';
-import { BrsBoolean } from '../brsTypes';
 import { BrightScriptChunk } from './Chunk';
+import { createToken } from '../astUtils/creators';
 
 describe('preprocessor parser', () => {
     let parser: PreprocessorParser;
@@ -35,7 +35,7 @@ describe('preprocessor parser', () => {
             token(TokenKind.HashConst, '#const'),
             identifier('foo'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.True, 'true', BrsBoolean.True),
+            createToken(TokenKind.True, 'true'),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.Eof, '\0')
         ]);

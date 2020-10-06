@@ -1,5 +1,5 @@
 /* eslint-disable no-multi-spaces */
-import { CancellationToken, CancellationTokenSource, Position, Range } from 'vscode-languageserver';
+import { CancellationToken, CancellationTokenSource, Range } from 'vscode-languageserver';
 import { expect } from 'chai';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
@@ -207,7 +207,7 @@ describe('astUtils visitors', () => {
                 Block: blockHandler
             });
             const printStatement = new PrintStatement({
-                print: createToken(TokenKind.Print, Position.create(0, 0))
+                print: createToken(TokenKind.Print)
             }, []);
             const blockStatement = new Block([], Range.create(0, 0, 0, 0));
             visitor(printStatement, undefined);
@@ -221,16 +221,15 @@ describe('astUtils visitors', () => {
 
     describe('Statement editor', () => {
         it('allows replacing statements', () => {
-            const pos = Position.create(0, 0);
             const printStatement1 = new PrintStatement({
-                print: createToken(TokenKind.Print, pos)
+                print: createToken(TokenKind.Print)
             }, []);
             const printStatement2 = new PrintStatement({
-                print: createToken(TokenKind.Print, pos)
+                print: createToken(TokenKind.Print)
             }, []);
             const block = new Block([
                 printStatement1,
-                new ReturnStatement({ return: createToken(TokenKind.Return, pos) })
+                new ReturnStatement({ return: createToken(TokenKind.Return) })
             ], Range.create(0, 0, 0, 0));
             const visitor = createVisitor({
                 PrintStatement: () => printStatement2

@@ -1,10 +1,10 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import { createToken } from '../../../astUtils/creators';
 
 describe('parser for loops', () => {
     it('accepts a \'step\' clause', () => {
@@ -12,11 +12,11 @@ describe('parser for loops', () => {
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+            createToken(TokenKind.IntegerLiteral, '0'),
             token(TokenKind.To, 'to'),
-            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+            createToken(TokenKind.IntegerLiteral, '5'),
             token(TokenKind.Step, 'step'),
-            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+            createToken(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.Newline, '\n'),
             // body would go here, but it's not necessary for this test
             token(TokenKind.EndFor, 'end for'),
@@ -36,9 +36,9 @@ describe('parser for loops', () => {
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+            createToken(TokenKind.IntegerLiteral, '0'),
             token(TokenKind.To, 'to'),
-            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+            createToken(TokenKind.IntegerLiteral, '5'),
             token(TokenKind.Newline, '\n'),
             // body would go here, but it's not necessary for this test
             token(TokenKind.EndFor, 'end for'),
@@ -58,9 +58,9 @@ describe('parser for loops', () => {
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+            createToken(TokenKind.IntegerLiteral, '0'),
             token(TokenKind.To, 'to'),
-            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+            createToken(TokenKind.IntegerLiteral, '5'),
             token(TokenKind.Newline, '\n'),
             // body would go here, but it's not necessary for this test
             token(TokenKind.Next, 'next'),
@@ -103,7 +103,6 @@ describe('parser for loops', () => {
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
-                literal: new Int32(0),
                 isReserved: false,
                 range: Range.create(0, 8, 0, 9)
             },
@@ -119,7 +118,6 @@ describe('parser for loops', () => {
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '10',
-                literal: new Int32(10),
                 isReserved: false,
                 range: Range.create(0, 13, 0, 15)
             },

@@ -1,21 +1,21 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import { createToken } from '../../../astUtils/creators';
 
 describe('parser additive expressions', () => {
     it('parses left-associative addition chains', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+            createToken(TokenKind.IntegerLiteral, '1'),
             token(TokenKind.Plus, '+'),
-            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+            createToken(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.Plus, '+'),
-            token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+            createToken(TokenKind.IntegerLiteral, '3'),
             EOF
         ]);
 
@@ -27,11 +27,11 @@ describe('parser additive expressions', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+            createToken(TokenKind.IntegerLiteral, '1'),
             token(TokenKind.Minus, '-'),
-            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+            createToken(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.Minus, '-'),
-            token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+            createToken(TokenKind.IntegerLiteral, '3'),
             EOF
         ]);
 
@@ -62,7 +62,6 @@ describe('parser additive expressions', () => {
                 kind: TokenKind.IntegerLiteral,
                 text: '1',
                 isReserved: false,
-                literal: new Int32(1),
                 range: Range.create(0, 4, 0, 5)
             },
             {
@@ -75,7 +74,6 @@ describe('parser additive expressions', () => {
                 kind: TokenKind.IntegerLiteral,
                 text: '2',
                 isReserved: false,
-                literal: new Int32(2),
                 range: Range.create(0, 8, 0, 9)
             },
             {
@@ -88,7 +86,6 @@ describe('parser additive expressions', () => {
                 kind: TokenKind.IntegerLiteral,
                 text: '3',
                 isReserved: false,
-                literal: new Int32(3),
                 range: Range.create(0, 12, 0, 13)
             },
             {

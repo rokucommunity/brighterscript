@@ -2,8 +2,6 @@
 import { TokenKind, ReservedWords, Keywords } from './TokenKind';
 import { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
-
-import { BrsType, BrsString, Int32, Int64, Float, Double } from '../brsTypes/index';
 import { Range, Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
@@ -457,7 +455,7 @@ export class Lexer {
 
         //replace escaped quotemarks "" with a single quote
         value = value.replace(/""/g, '"');
-        this.addToken(TokenKind.StringLiteral, new BrsString(value));
+        this.addToken(TokenKind.StringLiteral);
     }
     /**
      * Reads characters within a string literal, advancing through escaped characters to the
@@ -592,7 +590,7 @@ export class Lexer {
     private templateQuasiString() {
         let value = this.source.slice(this.start, this.current);
         if (value !== '`') { // if this is an empty string straight after an expression, then we'll accidentally consume the backtick
-            this.addToken(TokenKind.TemplateStringQuasi, new BrsString(value));
+            this.addToken(TokenKind.TemplateStringQuasi);
         }
     }
 
@@ -630,13 +628,13 @@ export class Lexer {
 
         if (numberOfDigits >= 10 && designator !== '&') {
             // numeric literals over 10 digits with no type designator are implicitly Doubles
-            this.addToken(TokenKind.DoubleLiteral, Double.fromString(asString));
+            this.addToken(TokenKind.DoubleLiteral);
             return;
         } else if (designator === '#') {
             // numeric literals ending with "#" are forced to Doubles
             this.advance();
             asString = this.source.slice(this.start, this.current);
-            this.addToken(TokenKind.DoubleLiteral, Double.fromString(asString));
+            this.addToken(TokenKind.DoubleLiteral);
             return;
         } else if (designator === 'd') {
             // literals that use "D" as the exponent are also automatic Doubles
@@ -656,7 +654,7 @@ export class Lexer {
 
             // replace the exponential marker with a JavaScript-friendly "e"
             asString = this.source.slice(this.start, this.current).replace(/[dD]/, 'e');
-            this.addToken(TokenKind.DoubleLiteral, Double.fromString(asString));
+            this.addToken(TokenKind.DoubleLiteral);
             return;
         }
 
@@ -664,7 +662,7 @@ export class Lexer {
             // numeric literals ending with "!" are forced to Floats
             this.advance();
             asString = this.source.slice(this.start, this.current);
-            this.addToken(TokenKind.FloatLiteral, Float.fromString(asString));
+            this.addToken(TokenKind.FloatLiteral);
             return;
         } else if (designator === 'e') {
             // literals that use "E" as the exponent are also automatic Floats
@@ -683,11 +681,11 @@ export class Lexer {
             }
 
             asString = this.source.slice(this.start, this.current);
-            this.addToken(TokenKind.FloatLiteral, Float.fromString(asString));
+            this.addToken(TokenKind.FloatLiteral);
             return;
         } else if (containsDecimal) {
             // anything with a decimal but without matching Double rules is a Float
-            this.addToken(TokenKind.FloatLiteral, Float.fromString(asString));
+            this.addToken(TokenKind.FloatLiteral);
             return;
         }
 
@@ -695,11 +693,11 @@ export class Lexer {
             // numeric literals ending with "&" are forced to LongIntegers
             asString = this.source.slice(this.start, this.current);
             this.advance();
-            this.addToken(TokenKind.LongIntegerLiteral, Int64.fromString(asString));
+            this.addToken(TokenKind.LongIntegerLiteral);
 
         } else {
             // otherwise, it's a regular integer
-            this.addToken(TokenKind.IntegerLiteral, Int32.fromString(asString));
+            this.addToken(TokenKind.IntegerLiteral);
 
         }
     }
@@ -729,11 +727,9 @@ export class Lexer {
         if (this.peek() === '&') {
             // literals ending with "&" are forced to LongIntegers
             this.advance();
-            let asString = this.source.slice(this.start, this.current);
-            this.addToken(TokenKind.LongIntegerLiteral, Int64.fromString(asString));
+            this.addToken(TokenKind.LongIntegerLiteral);
         } else {
-            let asString = this.source.slice(this.start, this.current);
-            this.addToken(TokenKind.IntegerLiteral, Int32.fromString(asString));
+            this.addToken(TokenKind.IntegerLiteral);
         }
     }
 
@@ -926,13 +922,12 @@ export class Lexer {
      * @param kind the type of token to produce.
      * @param literal an optional literal value to include in the token.
      */
-    private addToken(kind: TokenKind, literal?: BrsType) {
+    private addToken(kind: TokenKind) {
         let text = this.source.slice(this.start, this.current);
         let token: Token = {
             kind: kind,
             text: text,
             isReserved: ReservedWords.has(text.toLowerCase()),
-            literal: literal,
             range: this.rangeOf(),
             leadingWhitespace: this.leadingWhitespace
         };

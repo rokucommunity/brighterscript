@@ -9,9 +9,8 @@ import * as xml2js from 'xml2js';
 
 import { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { CallableContainer, ValueKind, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
+import { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
 import { BooleanType } from './types/BooleanType';
-import { BrsType } from './types/BrsType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
@@ -21,7 +20,6 @@ import { InvalidType } from './types/InvalidType';
 import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
-import { UninitializedType } from './types/UninitializedType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import { DottedGetExpression, VariableExpression } from './parser/Expression';
@@ -333,38 +331,6 @@ export class Util {
         return subject.replace(/{(\d+)}/g, (match, num) => {
             return typeof args[num] !== 'undefined' ? args[num] : match;
         });
-    }
-
-    public valueKindToBrsType(kind: ValueKind): BrsType {
-        switch (kind) {
-            case ValueKind.Boolean:
-                return new BooleanType();
-            //TODO refine the function type on the outside (I don't think this ValueKind is actually returned)
-            case ValueKind.Callable:
-                return new FunctionType(new VoidType());
-            case ValueKind.Double:
-                return new DoubleType();
-            case ValueKind.Dynamic:
-                return new DynamicType();
-            case ValueKind.Float:
-                return new FloatType();
-            case ValueKind.Int32:
-                return new IntegerType();
-            case ValueKind.Int64:
-                return new LongIntegerType();
-            case ValueKind.Invalid:
-                return new InvalidType();
-            case ValueKind.Object:
-                return new ObjectType();
-            case ValueKind.String:
-                return new StringType();
-            case ValueKind.Uninitialized:
-                return new UninitializedType();
-            case ValueKind.Void:
-                return new VoidType();
-            default:
-                return undefined;
-        }
     }
 
     /**
@@ -998,6 +964,47 @@ export class Util {
             result += token.leadingWhitespace + token.text;
         }
         return result;
+    }
+
+    /**
+     * Convert a token into a BscType
+     */
+    public tokenToBscType(token: Token) {
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        switch (token.kind) {
+            case TokenKind.Boolean:
+                return new BooleanType();
+            case TokenKind.Double:
+            case TokenKind.DoubleLiteral:
+                return new DoubleType();
+            case TokenKind.Dynamic:
+                return new DynamicType();
+            case TokenKind.Float:
+            case TokenKind.FloatLiteral:
+                return new FloatType();
+            case TokenKind.Function:
+                //TODO should there be a more generic function type without a signature that's assignable to all other function types?
+                return new FunctionType(new DynamicType());
+            case TokenKind.Integer:
+            case TokenKind.IntegerLiteral:
+                return new IntegerType();
+            case TokenKind.Invalid:
+                return new InvalidType();
+            case TokenKind.LongInteger:
+            case TokenKind.LongIntegerLiteral:
+                return new LongIntegerType();
+            case TokenKind.Object:
+                return new ObjectType();
+            case TokenKind.String:
+            case TokenKind.StringLiteral:
+            case TokenKind.TemplateStringExpressionBegin:
+            case TokenKind.TemplateStringExpressionEnd:
+            case TokenKind.TemplateStringQuasi:
+                return new StringType();
+            case TokenKind.Void:
+                return new VoidType();
+        }
+
     }
 }
 

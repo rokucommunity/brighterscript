@@ -1,20 +1,20 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsBoolean, BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import { createToken } from '../../../astUtils/creators';
 
 describe('parser while statements', () => {
 
     it('while without exit', () => {
         const { statements, diagnostics } = Parser.parse([
             token(TokenKind.While, 'while'),
-            token(TokenKind.True, 'true', BrsBoolean.True),
+            createToken(TokenKind.True, 'true'),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.Print, 'print'),
-            token(TokenKind.StringLiteral, 'looping', new BrsString('looping')),
+            createToken(TokenKind.StringLiteral, 'looping'),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.EndWhile, 'end while'),
             EOF
@@ -27,10 +27,10 @@ describe('parser while statements', () => {
     it('while with exit', () => {
         const { statements, diagnostics } = Parser.parse([
             token(TokenKind.While, 'while'),
-            token(TokenKind.True, 'true', BrsBoolean.True),
+            createToken(TokenKind.True, 'true'),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.Print, 'print'),
-            token(TokenKind.StringLiteral, 'looping', new BrsString('looping')),
+            createToken(TokenKind.StringLiteral, 'looping'),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.ExitWhile, 'exit while'),
             token(TokenKind.Newline, '\n'),
@@ -61,7 +61,6 @@ describe('parser while statements', () => {
             {
                 kind: TokenKind.True,
                 text: 'true',
-                literal: BrsBoolean.True,
                 isReserved: true,
                 range: Range.create(0, 6, 0, 10)
             },
@@ -74,7 +73,7 @@ describe('parser while statements', () => {
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
             token(TokenKind.LeftParen, '('),
-            token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+            createToken(TokenKind.IntegerLiteral),
             token(TokenKind.RightParen, ')'),
             token(TokenKind.Newline, '\n'),
             {

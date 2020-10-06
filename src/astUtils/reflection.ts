@@ -1,13 +1,17 @@
 import { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement } from '../parser/Statement';
-import { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
-import { BrsString, ValueKind, BrsInvalid, BrsBoolean, RoString, RoArray, RoAssociativeArray, RoSGNode, FunctionParameterExpression } from '../brsTypes';
-import { BrsNumber } from '../brsTypes/BrsNumber';
+import { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, FunctionParameterExpression } from '../parser/Expression';
 import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
 import { InternalWalkMode } from './visitors';
 import { FunctionType } from '../types/FunctionType';
 import { File } from '../interfaces';
 import { StringType } from '../types/StringType';
+import { BooleanType } from '../types/BooleanType';
+import { InvalidType } from '../types/InvalidType';
+import { LongIntegerType } from '../types/LongIntegerType';
+import { DoubleType } from '../types/DoubleType';
+import { FloatType } from '../types/FloatType';
+import { IntegerType } from '../types/IntegerType';
 
 // File reflection
 
@@ -191,56 +195,48 @@ export function isFunctionParameterExpression(element: Expression | Statement): 
     return element?.constructor.name === 'FunctionParameterExpression';
 }
 
-// Value/Type reflection
-
-export function isInvalid(value: any): value is BrsInvalid {
-    return value?.kind === ValueKind.Invalid;
-}
-export function isBoolean(value: any): value is BrsBoolean {
-    return value?.kind === ValueKind.Boolean;
-}
-export function isString(value: any): value is BrsString {
-    return value?.kind === ValueKind.String;
-}
-export function isNumber(value: any): value is BrsNumber {
-    return value && (
-        value.kind === ValueKind.Int32 ||
-        value.kind === ValueKind.Int64 ||
-        value.kind === ValueKind.Float ||
-        value.kind === ValueKind.Double
-    );
-}
+// BscType reflection
 export function isStringType(value: any): value is StringType {
-    return value?.constructor.name === 'StringType';
+    return value?.constructor.name === StringType.name;
 }
-
 export function isFunctionType(e: any): e is FunctionType {
-    return e?.constructor.name === 'FunctionType';
+    return e?.constructor.name === FunctionType.name;
 }
-export function isRoArray(e: any): e is RoArray {
-    return e?.constructor.name === 'RoArray';
+export function isBooleanType(e: any): e is BooleanType {
+    return e?.constructor.name === BooleanType.name;
 }
-export function isRoAssociativeArray(e: any): e is RoAssociativeArray {
-    return e?.constructor.name === 'RoAssociativeArray';
+export function isIntegerType(e: any): e is IntegerType {
+    return e?.constructor.name === IntegerType.name;
 }
-export function isRoSGNode(e: any): e is RoSGNode {
-    return e?.constructor.name === 'RoSGNode';
+export function isLongIntegerType(e: any): e is LongIntegerType {
+    return e?.constructor.name === LongIntegerType.name;
+}
+export function isFloatType(e: any): e is FloatType {
+    return e?.constructor.name === FloatType.name;
+}
+export function isDoubleType(e: any): e is DoubleType {
+    return e?.constructor.name === DoubleType.name;
+}
+export function isNumberType(e: any): e is IntegerType | LongIntegerType | FloatType | DoubleType {
+    return [
+        IntegerType.name,
+        LongIntegerType.name,
+        FloatType.name,
+        DoubleType.name
+    ].includes(e?.constructor.name);
 }
 
 // Literal reflection
 
-export function isLiteralInvalid(e: any): e is LiteralExpression & { value: BrsInvalid } {
-    return isLiteralExpression(e) && isInvalid(e.value);
+export function isLiteralInvalid(e: any): e is LiteralExpression & { type: InvalidType } {
+    return isLiteralExpression(e) && isLiteralInvalid(e.type);
 }
-export function isLiteralBoolean(e: any): e is LiteralExpression & { value: BrsBoolean } {
-    return isLiteralExpression(e) && isBoolean(e.value);
+export function isLiteralBoolean(e: any): e is LiteralExpression & { type: BooleanType } {
+    return isLiteralExpression(e) && isBooleanType(e.type);
 }
-export function isLiteralString(e: any): e is LiteralExpression & { value: BrsString } {
-    return isLiteralExpression(e) && isString(e.value);
+export function isLiteralString(e: any): e is LiteralExpression & { type: StringType } {
+    return isLiteralExpression(e) && isStringType(e.type);
 }
-export function isLiteralNumber(e: any): e is LiteralExpression & { value: BrsNumber } {
-    return isLiteralExpression(e) && isNumber(e.value);
-}
-export function isRoString(s: any): s is RoString {
-    return s.constructor.name === 'RoString';
+export function isLiteralNumber(e: any): e is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
+    return isLiteralExpression(e) && isNumberType(e.type);
 }
