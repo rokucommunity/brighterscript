@@ -6,7 +6,6 @@ import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
 import { FunctionType } from './types/FunctionType';
 import { IntegerType } from './types/IntegerType';
-import { InterfaceType } from './types/InterfaceType';
 import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
@@ -293,7 +292,7 @@ let globalUtilityFunctions = [
     }, {
         name: 'GetInterface',
         shortDescription: 'Each BrightScript Component has one or more interfaces. This function returns a value of type "Interface". \nNote that generally BrightScript Components allow you to skip the interface specification. In which case, the appropriate interface within the object is used. This works as long as the function names within the interfaces are unique.',
-        type: new FunctionType(new InterfaceType()),
+        type: new FunctionType(new ObjectType()),
         file: globalFile,
         params: [{
             name: 'object',
@@ -305,7 +304,7 @@ let globalUtilityFunctions = [
     }, {
         name: 'FindMemberFunction',
         shortDescription: 'Returns the interface from the object that provides the specified function, or invalid if not found.',
-        type: new FunctionType(new InterfaceType()),
+        type: new FunctionType(new ObjectType()),
         file: globalFile,
         params: [{
             name: 'object',
