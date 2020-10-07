@@ -13,7 +13,7 @@ describe('parser prefix unary expressions', () => {
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Not, 'not'),
-            createToken(TokenKind.True, 'true'),
+            token(TokenKind.True, 'true'),
             EOF
         ]);
 
@@ -30,7 +30,7 @@ describe('parser prefix unary expressions', () => {
             token(TokenKind.Not, 'not'),
             token(TokenKind.Not, 'not'),
             token(TokenKind.Not, 'not'),
-            createToken(TokenKind.True, 'true'),
+            token(TokenKind.True, 'true'),
             EOF
         ]);
 
@@ -43,7 +43,7 @@ describe('parser prefix unary expressions', () => {
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Minus, '-'),
-            createToken(TokenKind.IntegerLiteral, '5'),
+            token(TokenKind.IntegerLiteral, '5'),
             EOF
         ]);
 
@@ -60,7 +60,7 @@ describe('parser prefix unary expressions', () => {
             token(TokenKind.Minus, '-'),
             token(TokenKind.Minus, '-'),
             token(TokenKind.Minus, '-'),
-            createToken(TokenKind.IntegerLiteral, '5'),
+            token(TokenKind.IntegerLiteral, '5'),
             EOF
         ]);
 

@@ -31,7 +31,7 @@ describe('parser indexing', () => {
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
                 token(TokenKind.LeftSquareBracket, '['),
-                createToken(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
@@ -49,7 +49,7 @@ describe('parser indexing', () => {
                     identifier('foo'),
                     token(TokenKind.Dot, '.'),
                     token(TokenKind.LeftSquareBracket, '['),
-                    createToken(TokenKind.Integer, '2'),
+                    token(TokenKind.Integer, '2'),
                     token(TokenKind.RightSquareBracket, ']'),
                     EOF
                 ]);
@@ -67,7 +67,7 @@ describe('parser indexing', () => {
                     token(TokenKind.Dot, '.'),
                     token(TokenKind.Dot, '.'),
                     token(TokenKind.LeftSquareBracket, '['),
-                    createToken(TokenKind.Integer, '2'),
+                    token(TokenKind.Integer, '2'),
                     token(TokenKind.RightSquareBracket, ']'),
                     EOF
                 ]);
@@ -200,13 +200,13 @@ describe('parser indexing', () => {
                 token(TokenKind.Equal, '='),
                 identifier('foo'),
                 token(TokenKind.LeftSquareBracket, '['),
-                createToken(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.LeftSquareBracket, '['),
-                createToken(TokenKind.IntegerLiteral, '0'),
+                token(TokenKind.IntegerLiteral, '0'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.LeftSquareBracket, '['),
-                createToken(TokenKind.IntegerLiteral, '6'),
+                token(TokenKind.IntegerLiteral, '6'),
                 token(TokenKind.RightSquareBracket, ']'),
                 EOF
             ]);
@@ -223,7 +223,7 @@ describe('parser indexing', () => {
                 token(TokenKind.Dot, '.'),
                 identifier('bar'),
                 token(TokenKind.LeftSquareBracket, '['),
-                createToken(TokenKind.IntegerLiteral, '0'),
+                token(TokenKind.IntegerLiteral, '0'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.Dot, '.'),
                 identifier('baz'),

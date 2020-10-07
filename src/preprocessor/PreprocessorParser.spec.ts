@@ -35,7 +35,7 @@ describe('preprocessor parser', () => {
             token(TokenKind.HashConst, '#const'),
             identifier('foo'),
             token(TokenKind.Equal, '='),
-            createToken(TokenKind.True, 'true'),
+            token(TokenKind.True, 'true'),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.Eof, '\0')
         ]);

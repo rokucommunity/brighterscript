@@ -13,7 +13,7 @@ describe('parser primary expressions', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             equals,
-            createToken(TokenKind.IntegerLiteral, '5'),
+            token(TokenKind.IntegerLiteral, '5'),
             EOF
         ]);
         expect(diagnostics).to.be.lengthOf(0);
@@ -25,7 +25,7 @@ describe('parser primary expressions', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             equals,
-            createToken(TokenKind.StringLiteral, 'hello'),
+            token(TokenKind.StringLiteral, 'hello'),
             EOF
         ]);
 
@@ -37,12 +37,12 @@ describe('parser primary expressions', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
-            createToken(TokenKind.IntegerLiteral, '1'),
+            token(TokenKind.IntegerLiteral, '1'),
             token(TokenKind.Plus, '+'),
             token(TokenKind.LeftParen, '('),
-            createToken(TokenKind.IntegerLiteral, '2'),
+            token(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.Star, '*'),
-            createToken(TokenKind.IntegerLiteral, '3'),
+            token(TokenKind.IntegerLiteral, '3'),
             token(TokenKind.RightParen, ')'),
             EOF
         ]);

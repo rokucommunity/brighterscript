@@ -12,11 +12,11 @@ describe('parser', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.FloatLiteral, '3.0'),
+                token(TokenKind.FloatLiteral, '3.0'),
                 token(TokenKind.Star, '*'),
-                createToken(TokenKind.FloatLiteral, '5.0'),
+                token(TokenKind.FloatLiteral, '5.0'),
                 token(TokenKind.Star, '*'),
-                createToken(TokenKind.FloatLiteral, '7.0'),
+                token(TokenKind.FloatLiteral, '7.0'),
                 EOF
             ]);
 
@@ -28,11 +28,11 @@ describe('parser', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.FloatLiteral, '7.0'),
+                token(TokenKind.FloatLiteral, '7.0'),
                 token(TokenKind.Forwardslash, '/'),
-                createToken(TokenKind.FloatLiteral, '5.0'),
+                token(TokenKind.FloatLiteral, '5.0'),
                 token(TokenKind.Forwardslash, '/'),
-                createToken(TokenKind.FloatLiteral, '3.0'),
+                token(TokenKind.FloatLiteral, '3.0'),
                 EOF
             ]);
 
@@ -44,11 +44,11 @@ describe('parser', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.FloatLiteral, '7.0'),
+                token(TokenKind.FloatLiteral, '7.0'),
                 token(TokenKind.Mod, 'MOD'),
-                createToken(TokenKind.FloatLiteral, '5.0'),
+                token(TokenKind.FloatLiteral, '5.0'),
                 token(TokenKind.Mod, 'MOD'),
-                createToken(TokenKind.FloatLiteral, '3.0'),
+                token(TokenKind.FloatLiteral, '3.0'),
                 EOF
             ]);
 
@@ -60,11 +60,11 @@ describe('parser', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.FloatLiteral, '32.5'),
+                token(TokenKind.FloatLiteral, '32.5'),
                 token(TokenKind.Backslash, '\\'),
-                createToken(TokenKind.FloatLiteral, '5.0'),
+                token(TokenKind.FloatLiteral, '5.0'),
                 token(TokenKind.Backslash, '\\'),
-                createToken(TokenKind.FloatLiteral, '3.0'),
+                token(TokenKind.FloatLiteral, '3.0'),
                 EOF
             ]);
 

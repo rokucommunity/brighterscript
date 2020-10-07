@@ -11,11 +11,11 @@ describe('parser additive expressions', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
-            createToken(TokenKind.IntegerLiteral, '1'),
+            token(TokenKind.IntegerLiteral, '1'),
             token(TokenKind.Plus, '+'),
-            createToken(TokenKind.IntegerLiteral, '2'),
+            token(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.Plus, '+'),
-            createToken(TokenKind.IntegerLiteral, '3'),
+            token(TokenKind.IntegerLiteral, '3'),
             EOF
         ]);
 
@@ -27,11 +27,11 @@ describe('parser additive expressions', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
-            createToken(TokenKind.IntegerLiteral, '1'),
+            token(TokenKind.IntegerLiteral, '1'),
             token(TokenKind.Minus, '-'),
-            createToken(TokenKind.IntegerLiteral, '2'),
+            token(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.Minus, '-'),
-            createToken(TokenKind.IntegerLiteral, '3'),
+            token(TokenKind.IntegerLiteral, '3'),
             EOF
         ]);
 

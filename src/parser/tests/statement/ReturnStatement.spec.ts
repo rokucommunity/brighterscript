@@ -33,7 +33,7 @@ describe('parser return statements', () => {
             token(TokenKind.RightParen, ')'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.Return, 'return'),
-            createToken(TokenKind.StringLiteral, '"test"'),
+            token(TokenKind.StringLiteral, '"test"'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.EndFunction, 'end function'),
             EOF

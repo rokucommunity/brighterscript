@@ -11,10 +11,10 @@ describe('parser while statements', () => {
     it('while without exit', () => {
         const { statements, diagnostics } = Parser.parse([
             token(TokenKind.While, 'while'),
-            createToken(TokenKind.True, 'true'),
+            token(TokenKind.True, 'true'),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.Print, 'print'),
-            createToken(TokenKind.StringLiteral, 'looping'),
+            token(TokenKind.StringLiteral, 'looping'),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.EndWhile, 'end while'),
             EOF
@@ -27,10 +27,10 @@ describe('parser while statements', () => {
     it('while with exit', () => {
         const { statements, diagnostics } = Parser.parse([
             token(TokenKind.While, 'while'),
-            createToken(TokenKind.True, 'true'),
+            token(TokenKind.True, 'true'),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.Print, 'print'),
-            createToken(TokenKind.StringLiteral, 'looping'),
+            token(TokenKind.StringLiteral, 'looping'),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.ExitWhile, 'exit while'),
             token(TokenKind.Newline, '\n'),
@@ -73,7 +73,7 @@ describe('parser while statements', () => {
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
             token(TokenKind.LeftParen, '('),
-            createToken(TokenKind.IntegerLiteral),
+            token(TokenKind.IntegerLiteral),
             token(TokenKind.RightParen, ')'),
             token(TokenKind.Newline, '\n'),
             {

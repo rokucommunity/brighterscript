@@ -29,7 +29,7 @@ describe('preprocessor', () => {
             let { processedTokens } = new Preprocessor().filter([
                 new DeclarationChunk(
                     identifier('lorem'),
-                    createToken(TokenKind.False, 'false')
+                    token(TokenKind.False, 'false')
                 )
             ]);
             expect(processedTokens).to.eql([]);
@@ -41,7 +41,7 @@ describe('preprocessor', () => {
                     () => new Preprocessor().filter([
                         new DeclarationChunk(
                             identifier('lorem'),
-                            createToken(TokenKind.True, 'true')
+                            token(TokenKind.True, 'true')
                         )
                     ])
                 ).not.to.throw;
@@ -51,7 +51,7 @@ describe('preprocessor', () => {
                 expect(() => new Preprocessor().filter([
                     new DeclarationChunk(
                         identifier('ipsum'),
-                        createToken(TokenKind.False, 'false')
+                        token(TokenKind.False, 'false')
                     )
                 ])
                 ).not.to.throw;
@@ -62,11 +62,11 @@ describe('preprocessor', () => {
                     // 'ipsum' must be defined before it's referenced
                     new DeclarationChunk(
                         identifier('ipsum'),
-                        createToken(TokenKind.False, 'false')
+                        token(TokenKind.False, 'false')
                     ),
                     new DeclarationChunk(
                         identifier('dolor'),
-                        createToken(TokenKind.True, 'true')
+                        token(TokenKind.True, 'true')
                     )
                 ])
                 ).not.to.throw;
@@ -76,7 +76,7 @@ describe('preprocessor', () => {
                 expect(() => new Preprocessor().filter([
                     new DeclarationChunk(
                         identifier('sit'),
-                        createToken(TokenKind.String, 'good boy!')
+                        token(TokenKind.String, 'good boy!')
                     )
                 ])
                 ).to.throw;//('#const declarations can only have');
@@ -86,11 +86,11 @@ describe('preprocessor', () => {
                 expect(() => new Preprocessor().filter([
                     new DeclarationChunk(
                         identifier('lorem'),
-                        createToken(TokenKind.False, 'false')
+                        token(TokenKind.False, 'false')
                     ),
                     new DeclarationChunk(
                         identifier('lorem'),
-                        createToken(TokenKind.True, 'true')
+                        token(TokenKind.True, 'true')
                     )
                 ])
                 ).to.throw;
@@ -109,7 +109,7 @@ describe('preprocessor', () => {
         it('doesn\'t throw when branched around', () => {
             expect(() => new Preprocessor().filter([
                 new HashIfStatement(
-                    createToken(TokenKind.False, 'false'),
+                    token(TokenKind.False, 'false'),
                     [
                         new ErrorChunk(
                             token(TokenKind.HashError, '#error'),
@@ -141,11 +141,11 @@ describe('preprocessor', () => {
         it('enters #if branch', () => {
             new Preprocessor().filter([
                 new HashIfStatement(
-                    createToken(TokenKind.True, 'true'),
+                    token(TokenKind.True, 'true'),
                     [ifChunk],
                     [
                         {
-                            condition: createToken(TokenKind.True, 'true'),
+                            condition: token(TokenKind.True, 'true'),
                             thenChunks: [elseIfChunk]
                         }
                     ],
@@ -161,11 +161,11 @@ describe('preprocessor', () => {
         it('enters #else if branch', () => {
             new Preprocessor().filter([
                 new HashIfStatement(
-                    createToken(TokenKind.False, 'false'),
+                    token(TokenKind.False, 'false'),
                     [ifChunk],
                     [
                         {
-                            condition: createToken(TokenKind.True, 'true'),
+                            condition: token(TokenKind.True, 'true'),
                             thenChunks: [elseIfChunk]
                         }
                     ],
@@ -181,11 +181,11 @@ describe('preprocessor', () => {
         it('enters #else branch', () => {
             new Preprocessor().filter([
                 new HashIfStatement(
-                    createToken(TokenKind.False, 'false'),
+                    token(TokenKind.False, 'false'),
                     [ifChunk],
                     [
                         {
-                            condition: createToken(TokenKind.False, 'false'),
+                            condition: token(TokenKind.False, 'false'),
                             thenChunks: [elseIfChunk]
                         }
                     ],
@@ -201,7 +201,7 @@ describe('preprocessor', () => {
         it('enters no branches if none pass', () => {
             new Preprocessor().filter([
                 new HashIfStatement(
-                    createToken(TokenKind.False, 'false'),
+                    token(TokenKind.False, 'false'),
                     [ifChunk],
                     [] // no else-if chunks
                     // NOTE: no 'else" chunk!
@@ -217,7 +217,7 @@ describe('preprocessor', () => {
             new Preprocessor().filter([
                 new DeclarationChunk(
                     identifier('lorem'),
-                    createToken(TokenKind.True, 'true')
+                    token(TokenKind.True, 'true')
                 ),
                 new HashIfStatement(
                     identifier('lorem'),

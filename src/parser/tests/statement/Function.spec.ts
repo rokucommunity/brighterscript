@@ -48,7 +48,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                createToken(TokenKind.StringLiteral, 'Lorem ipsum'),
+                token(TokenKind.StringLiteral, 'Lorem ipsum'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndFunction, 'end function'),
                 EOF
@@ -109,19 +109,19 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.IntegerLiteral, '3'),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Comma, ','),
 
                 identifier('b'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.IntegerLiteral, '4'),
+                token(TokenKind.IntegerLiteral, '4'),
                 token(TokenKind.Comma, ','),
 
                 identifier('c'),
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                createToken(TokenKind.IntegerLiteral, '5'),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.RightParen, ')'),
 
                 token(TokenKind.Newline, '\\n'),
@@ -142,7 +142,7 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.IntegerLiteral, '3'),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
@@ -151,7 +151,7 @@ describe('parser', () => {
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                createToken(TokenKind.IntegerLiteral, '5'),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
@@ -250,7 +250,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                createToken(TokenKind.StringLiteral, 'Lorem ipsum'),
+                token(TokenKind.StringLiteral, 'Lorem ipsum'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndSub, 'end sub'),
                 EOF
@@ -311,19 +311,19 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.IntegerLiteral, '3'),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Comma, ','),
 
                 identifier('b'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.IntegerLiteral, '4'),
+                token(TokenKind.IntegerLiteral, '4'),
                 token(TokenKind.Comma, ','),
 
                 identifier('c'),
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                createToken(TokenKind.IntegerLiteral, '5'),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.RightParen, ')'),
 
                 token(TokenKind.Newline, '\\n'),
@@ -343,7 +343,7 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.IntegerLiteral, '3'),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
@@ -352,7 +352,7 @@ describe('parser', () => {
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                createToken(TokenKind.IntegerLiteral, '5'),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),

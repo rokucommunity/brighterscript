@@ -51,7 +51,7 @@ describe('parser indexed assignment', () => {
                 token(TokenKind.Dot, '.'),
                 identifier('bar'),
                 token(TokenKind.StarEqual, '*='),
-                createToken(TokenKind.IntegerLiteral, '5'),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.Newline, '\\n'),
                 EOF
             ]);
@@ -67,7 +67,7 @@ describe('parser indexed assignment', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('someArray'),
                 token(TokenKind.LeftSquareBracket, '['),
-                createToken(TokenKind.IntegerLiteral, '0'),
+                token(TokenKind.IntegerLiteral, '0'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -87,7 +87,7 @@ describe('parser indexed assignment', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('someArray'),
                 token(TokenKind.LeftSquareBracket, '['),
-                createToken(TokenKind.IntegerLiteral, '0'),
+                token(TokenKind.IntegerLiteral, '0'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.True, 'true'),
@@ -106,10 +106,10 @@ describe('parser indexed assignment', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('someArray'),
                 token(TokenKind.LeftSquareBracket, '['),
-                createToken(TokenKind.IntegerLiteral, '0'),
+                token(TokenKind.IntegerLiteral, '0'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.StarEqual, '*='),
-                createToken(TokenKind.IntegerLiteral, '3'),
+                token(TokenKind.IntegerLiteral, '3'),
                 EOF
             ]);
 

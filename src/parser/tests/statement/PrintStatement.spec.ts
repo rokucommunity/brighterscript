@@ -29,9 +29,9 @@ describe('parser print statements', () => {
     it('parses print lists with no separator', () => {
         let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Print),
-            createToken(TokenKind.StringLiteral, 'Foo'),
-            createToken(TokenKind.StringLiteral, 'bar'),
-            createToken(TokenKind.StringLiteral, 'baz'),
+            token(TokenKind.StringLiteral, 'Foo'),
+            token(TokenKind.StringLiteral, 'bar'),
+            token(TokenKind.StringLiteral, 'baz'),
             EOF
         ]);
 
@@ -43,11 +43,11 @@ describe('parser print statements', () => {
     it('parses print lists with separators', () => {
         let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Print),
-            createToken(TokenKind.StringLiteral, 'Foo'),
+            token(TokenKind.StringLiteral, 'Foo'),
             token(TokenKind.Semicolon),
-            createToken(TokenKind.StringLiteral, 'bar'),
+            token(TokenKind.StringLiteral, 'bar'),
             token(TokenKind.Semicolon),
-            createToken(TokenKind.StringLiteral, 'baz'),
+            token(TokenKind.StringLiteral, 'baz'),
             EOF
         ]);
 

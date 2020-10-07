@@ -104,13 +104,13 @@ describe('parser if statements', () => {
         it('parses if only', () => {
             let { statements, diagnostics } = Parser.parse([
                 token(TokenKind.If, 'if'),
-                createToken(TokenKind.IntegerLiteral, '1'),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Less, '<'),
-                createToken(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Then, 'then'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.True, 'true'),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.Newline, '\n'),
                 EOF
             ]);
@@ -122,17 +122,17 @@ describe('parser if statements', () => {
         it('parses if-else', () => {
             let { statements, diagnostics } = Parser.parse([
                 token(TokenKind.If, 'if'),
-                createToken(TokenKind.IntegerLiteral, '1'),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Less, '<'),
-                createToken(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Then, 'then'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.True, 'true'),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.Else, 'else'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.False, 'true'),
+                token(TokenKind.False, 'true'),
                 token(TokenKind.Newline, '\n'),
                 EOF
             ]);
@@ -144,25 +144,25 @@ describe('parser if statements', () => {
         it('parses if-elseif-else', () => {
             let { statements, diagnostics } = Parser.parse([
                 token(TokenKind.If, 'if'),
-                createToken(TokenKind.IntegerLiteral, '1'),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Less, '<'),
-                createToken(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Then, 'then'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.True, 'true'),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.ElseIf, 'else if'),
-                createToken(TokenKind.IntegerLiteral, '1'),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Then, 'then'),
                 identifier('same'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.True, 'true'),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.Else, 'else'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.True, 'true'),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.Newline, '\n'),
                 EOF
             ]);
@@ -174,23 +174,23 @@ describe('parser if statements', () => {
         it('allows \'then\' to be skipped', () => {
             let { statements, diagnostics } = Parser.parse([
                 token(TokenKind.If, 'if'),
-                createToken(TokenKind.IntegerLiteral, '1'),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Less, '<'),
-                createToken(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.IntegerLiteral, '2'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.True, 'true'),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.ElseIf, 'else if'),
-                createToken(TokenKind.IntegerLiteral, '1'),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.IntegerLiteral, '2'),
                 identifier('same'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.True, 'true'),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.Else, 'else'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.False, 'false'),
+                token(TokenKind.False, 'false'),
                 token(TokenKind.Newline, '\n'),
                 EOF
             ]);

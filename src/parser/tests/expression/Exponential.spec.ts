@@ -11,9 +11,9 @@ describe('parser', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Caret, '^'),
-                createToken(TokenKind.IntegerLiteral, '3'),
+                token(TokenKind.IntegerLiteral, '3'),
                 EOF
             ]);
 
@@ -25,11 +25,11 @@ describe('parser', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                createToken(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Caret, '^'),
-                createToken(TokenKind.IntegerLiteral, '3'),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Caret, '^'),
-                createToken(TokenKind.IntegerLiteral, '4'),
+                token(TokenKind.IntegerLiteral, '4'),
                 EOF
             ]);
 

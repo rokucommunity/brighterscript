@@ -41,7 +41,7 @@ describe('parser variable declarations', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('foo'),
             token(TokenKind.Equal),
-            createToken(TokenKind.IntegerLiteral, '5'),
+            token(TokenKind.IntegerLiteral, '5'),
             EOF
         ]);
 
@@ -54,9 +54,9 @@ describe('parser variable declarations', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('bar'),
             token(TokenKind.Equal),
-            createToken(TokenKind.IntegerLiteral, '5'),
+            token(TokenKind.IntegerLiteral, '5'),
             token(TokenKind.Caret),
-            createToken(TokenKind.IntegerLiteral, '3'),
+            token(TokenKind.IntegerLiteral, '3'),
             EOF
         ]);
 

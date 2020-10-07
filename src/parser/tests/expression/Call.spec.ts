@@ -73,9 +73,9 @@ describe('parser call expressions', () => {
         const { statements, diagnostics } = Parser.parse([
             identifier('add'),
             { kind: TokenKind.LeftParen, text: '(', line: 1 },
-            createToken(TokenKind.IntegerLiteral, '1'),
+            token(TokenKind.IntegerLiteral, '1'),
             { kind: TokenKind.Comma, text: ',', line: 1 },
-            createToken(TokenKind.IntegerLiteral, '2'),
+            token(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.RightParen, ')'),
             EOF
         ]) as any;

@@ -12,9 +12,9 @@ describe('parser boolean expressions', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
-            createToken(TokenKind.True, 'true'),
+            token(TokenKind.True, 'true'),
             token(TokenKind.And, 'and'),
-            createToken(TokenKind.False, 'false'),
+            token(TokenKind.False, 'false'),
             EOF
         ]);
 
@@ -26,9 +26,9 @@ describe('parser boolean expressions', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
-            createToken(TokenKind.True, 'true'),
+            token(TokenKind.True, 'true'),
             token(TokenKind.Or, 'or'),
-            createToken(TokenKind.False, 'false'),
+            token(TokenKind.False, 'false'),
             EOF
         ]);
 
