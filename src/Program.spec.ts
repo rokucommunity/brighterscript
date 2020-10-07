@@ -61,7 +61,10 @@ describe('Program', () => {
 
                 //resolve lib.brs from memory instead of going to disk
                 program.fileResolvers.push((pathAbsolute) => {
-                    if (pathAbsolute === s`${rootDir}/source/lib.brs`) {
+                    if (
+                        pathAbsolute === s`${rootDir}/source/lib.brs` ||
+                        pathAbsolute === s`${rootDir}/source/lib.d.bs`
+                    ) {
                         return `'comment`;
                     }
                 });

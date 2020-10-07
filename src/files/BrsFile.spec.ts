@@ -21,14 +21,16 @@ import { loadPlugins } from '..';
 let sinon = sinonImport.createSandbox();
 
 describe('BrsFile', () => {
-    let rootDir = process.cwd();
+    let rootDir = s`${process.cwd()}/.tmp/rootDir}`;
     let program: Program;
+    let srcPath = s`${rootDir}/source/main.brs`;
+    let destPath = 'source/main.brs';
     let file: BrsFile;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
         program = new Program({ rootDir: rootDir });
-        file = new BrsFile('abs', 'rel', program);
+        file = new BrsFile(srcPath, destPath, program);
     });
     afterEach(() => {
         sinon.restore();
@@ -861,6 +863,7 @@ describe('BrsFile', () => {
         });
 
         it('adds error for library statements NOT at top of file', () => {
+            file = new BrsFile(srcPath.replace(/\.brs$/, '.bs'), destPath.replace(/\.brs$/, '.bs'), program);
             file.parse(`
                 sub main()
                 end sub

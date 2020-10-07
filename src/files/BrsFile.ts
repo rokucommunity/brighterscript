@@ -124,7 +124,7 @@ export class BrsFile {
     /**
      * If the file was given type definitions during parse
      */
-    public hasTypeDefinitions() {
+    public get hasTypeDefinitions() {
         return !!this.typeDefinitionContents;
     }
 

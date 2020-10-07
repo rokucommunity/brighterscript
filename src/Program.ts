@@ -157,7 +157,7 @@ export class Program {
      * This walks backwards through the file resolvers until we get a value.
      * This allow the language server to provide file contents directly from memory.
      */
-    public async getFileContents(pathAbsolute: string, throwIfMissing = true) {
+    public async getFileContents(pathAbsolute: string) {
         pathAbsolute = s`${pathAbsolute}`;
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
@@ -166,9 +166,7 @@ export class Program {
                 return result;
             }
         }
-        if (throwIfMissing) {
-            throw new Error(`Could not load file "${pathAbsolute}"`);
-        }
+        throw new Error(`Could not load file "${pathAbsolute}"`);
     }
 
     /**
@@ -292,12 +290,26 @@ export class Program {
 
         let typeDefinitionPath = pathAbsolute.replace(/.brs$/, '.d.bs');
 
+        //specifically check for `undefined`, because `null` means "does not exist"
         if (this.typeDefinitionCache[typeDefinitionPath] === undefined) {
-            const contents = await this.getFileContents(typeDefinitionPath, false);
+            let contents: string | null;
+            try {
+                contents = await this.getFileContents(typeDefinitionPath);
+            } catch (e) {
+                //something went wrong trying to load the d file...just ignore the error
+                this.logger.info(`Exception throw trying to load '${typeDefinitionPath}'`, e);
+                contents = null;
+            }
             this.typeDefinitionCache[typeDefinitionPath] = contents ?? null;
         }
         return this.typeDefinitionCache[typeDefinitionPath];
     }
+    /**
+     * A cache for type defintions.
+     * `undefined` means never checked, so we should check the FS.
+     * `null` means file does not exist on FS (so don't check the FS again).
+     * `string` contains the cached type definition file
+     */
     private typeDefinitionCache = {} as { [typeDefinitionPath: string]: string };
 
 
