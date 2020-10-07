@@ -9,7 +9,6 @@ import * as xml2js from 'xml2js';
 
 import { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { BrsFile } from './files/BrsFile';
 import { CallableContainer, ValueKind, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { BrsType } from './types/BrsType';
@@ -29,6 +28,7 @@ import { DottedGetExpression, VariableExpression } from './parser/Expression';
 import { LogLevel } from './Logger';
 import { TokenKind, Token } from './lexer';
 import { CompilerPlugin } from '.';
+import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
 
 export class Util {
 
@@ -121,7 +121,7 @@ export class Util {
                 colIndex++;
             }
         }
-        return Range.create(lineIndex, colIndex, lineIndex, colIndex + length);
+        return util.createRange(lineIndex, colIndex, lineIndex, colIndex + length);
     }
 
     /**
@@ -130,22 +130,19 @@ export class Util {
      * @param configFilePath
      * @param parentProjectPaths
      */
-    public async loadConfigFile(configFilePath: string, parentProjectPaths?: string[]) {
-        let cwd = process.cwd();
-
+    public async loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
         if (configFilePath) {
-
             //if the config file path starts with question mark, then it's optional. return undefined if it doesn't exist
             if (configFilePath.startsWith('?')) {
                 //remove leading question mark
                 configFilePath = configFilePath.substring(1);
-                if (await fsExtra.pathExists(configFilePath) === false) {
+                if (await fsExtra.pathExists(path.resolve(cwd, configFilePath)) === false) {
                     return undefined;
                 }
             }
             //keep track of the inheritance chain
             parentProjectPaths = parentProjectPaths ? parentProjectPaths : [];
-            configFilePath = path.resolve(configFilePath);
+            configFilePath = path.resolve(cwd, configFilePath);
             if (parentProjectPaths?.includes(configFilePath)) {
                 parentProjectPaths.push(configFilePath);
                 parentProjectPaths.reverse();
@@ -168,13 +165,12 @@ export class Util {
             }
             this.resolvePluginPaths(projectConfig, configFilePath);
 
-            //set working directory to the location of the project file
-            process.chdir(path.dirname(configFilePath));
+            let projectFileCwd = path.dirname(configFilePath);
 
             let result: BsConfig;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
-                let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath]);
+                let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
                 //extend the base config with the current project settings
                 result = { ...baseProjectConfig, ...projectConfig };
             } else {
@@ -186,17 +182,15 @@ export class Util {
 
             //make any paths in the config absolute (relative to the CURRENT config file)
             if (result.outFile) {
-                result.outFile = path.resolve(result.outFile);
+                result.outFile = path.resolve(projectFileCwd, result.outFile);
             }
             if (result.rootDir) {
-                result.rootDir = path.resolve(result.rootDir);
+                result.rootDir = path.resolve(projectFileCwd, result.rootDir);
             }
             if (result.cwd) {
-                result.cwd = path.resolve(result.cwd);
+                result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
 
-            //restore working directory
-            process.chdir(cwd);
             return result;
         }
     }
@@ -270,7 +264,7 @@ export class Util {
             result.project = config.project;
         }
         if (result.project) {
-            let configFile = await this.loadConfigFile(result.project);
+            let configFile = await this.loadConfigFile(result.project, null, config?.cwd);
             result = Object.assign(result, configFile);
         }
 
@@ -488,9 +482,9 @@ export class Util {
     public findBeginningVariableExpression(dottedGet: DottedGetExpression): VariableExpression | undefined {
         let left: any = dottedGet;
         while (left) {
-            if (left instanceof VariableExpression) {
+            if (isVariableExpression(left)) {
                 return left;
-            } else if (left instanceof DottedGetExpression) {
+            } else if (isDottedGetExpression(left)) {
                 left = left.obj;
             } else {
                 break;
@@ -686,7 +680,7 @@ export class Util {
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
         //for now, we only support suppressing brs file diagnostics
-        if (diagnostic.file instanceof BrsFile) {
+        if (isBrsFile(diagnostic.file)) {
             for (let flag of diagnostic.file.commentFlags) {
                 //this diagnostic is affected by this flag
                 if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
@@ -747,7 +741,7 @@ export class Util {
         for (let item of items) {
             codes.push({
                 code: item.text,
-                range: Range.create(
+                range: util.createRange(
                     token.range.start.line,
                     token.range.start.character + offset + item.startIndex,
                     token.range.start.line,
@@ -879,7 +873,7 @@ export class Util {
      * Get a location object back by extracting location information from other objects that contain location
      */
     public getRange(startObj: { range: Range }, endObj: { range: Range }): Range {
-        return Range.create(startObj.range.start, endObj.range.end);
+        return util.createRangeFromPositions(startObj.range.start, endObj.range.end);
     }
 
     /**
@@ -949,6 +943,61 @@ export class Util {
         } else {
             return className;
         }
+    }
+
+    /**
+     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `util.createRange()` is significantly slower
+     */
+    public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
+        return {
+            start: {
+                line: startLine,
+                character: startCharacter
+            },
+            end: {
+                line: endLine,
+                character: endCharacter
+            }
+        };
+    }
+
+    /**
+     * Create a `Range` from two `Position`s
+     */
+    public createRangeFromPositions(startPosition: Position, endPosition: Position): Range {
+        return {
+            start: {
+                line: startPosition.line,
+                character: startPosition.character
+            },
+            end: {
+                line: endPosition.line,
+                character: endPosition.character
+            }
+        };
+    }
+
+    /**
+     * Create a `Position` object. Prefer this over `Position.create` for performance reasons
+     */
+    public createPosition(line: number, character: number) {
+        return {
+            line: line,
+            character: character
+        };
+    }
+
+    /**
+     * Convert a list of tokens into a string, including their leading whitespace
+     */
+    public tokensToString(tokens: Token[]) {
+        let result = '';
+        //skip iterating the final token
+        for (let i = 0; i < tokens.length; i++) {
+            let token = tokens[i];
+            result += token.leadingWhitespace + token.text;
+        }
+        return result;
     }
 }
 

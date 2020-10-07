@@ -14,6 +14,31 @@ describe('parser', () => {
         });
     });
 
+    describe('findReferences', () => {
+        it('gets called if references are missing', () => {
+            const parser = Parser.parse(`
+                sub main()
+                end sub
+
+                sub UnusedFunction()
+                end sub
+            `);
+            expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
+                'main',
+                'UnusedFunction'
+            ]);
+            //simulate a tree-shaking plugin by removing the `UnusedFunction`
+            parser.ast.statements.splice(1);
+            //tell the parser we modified the AST and need to regenerate references
+            parser.invalidateReferences();
+            expect(parser['_references']).not.to.exist;
+            //calling `references` automatically regenerates the references
+            expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
+                'main'
+            ]);
+        });
+    });
+
     describe('callfunc operator', () => {
         it('is not allowed in brightscript mode', () => {
             let parser = parse(`
@@ -543,7 +568,7 @@ describe('parser', () => {
 
         it('catchs missing file path', () => {
             let { statements, diagnostics } = parse(`
-                import 
+                import
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).to.equal(
                 DiagnosticMessages.expectedStringLiteralAfterKeyword('import').message

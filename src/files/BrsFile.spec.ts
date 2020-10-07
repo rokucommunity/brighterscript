@@ -862,9 +862,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('adds error for library statements NOT at top of file', () => {
-            file = new BrsFile(srcPath.replace(/\.brs$/, '.bs'), destPath.replace(/\.brs$/, '.bs'), program);
-            file.parse(`
+        it('adds error for library statements NOT at top of file', async () => {
+            let file = await program.addOrReplaceFile('source/main.bs', `
                 sub main()
                 end sub
                 import "file.brs"
@@ -883,8 +882,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('adds error for library statements NOT at top of file', () => {
-            file.parse(`
+        it('adds error for library statements NOT at top of file', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 sub main()
                 end sub
                 Library "v30/bslCore.brs"
@@ -896,8 +895,8 @@ describe('BrsFile', () => {
             ]);
         });
 
-        it('adds error for library statements inside of function body', () => {
-            file.parse(`
+        it('adds error for library statements inside of function body', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     Library "v30/bslCore.brs"
                 end sub
@@ -918,8 +917,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('succeeds when finding variables with "sub" in them', () => {
-            file.parse(`
+        it('succeeds when finding variables with "sub" in them', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 function DoSomething()
                     return value.subType()
                 end function
@@ -1223,9 +1222,8 @@ describe('BrsFile', () => {
             expect(file.callables.length).to.equal(0);
         });
 
-        it('finds return type', () => {
-            let file = new BrsFile('absolute', 'relative', program);
-            file.parse(`
+        it('finds return type', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 function DoSomething() as string
                 end function
             `);
@@ -1327,8 +1325,8 @@ describe('BrsFile', () => {
             expect(scope.variableDeclarations[0].name).to.equal('theLength');
         });
 
-        it('finds value from global return', () => {
-            file.parse(`
+        it('finds value from global return', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 sub Main()
                    myName = GetName()
                 end sub
@@ -2115,7 +2113,7 @@ describe('BrsFile', () => {
                 sub speak()
                 end sub
             `);
-            expect(file.parser.functionStatements.map(x => x.name.text)).to.eql(['main']);
+            expect(file.parser.references.functionStatements.map(x => x.name.text)).to.eql(['main']);
         });
 
         it('reads from the cache after first load', async () => {
@@ -2142,15 +2140,16 @@ describe('BrsFile', () => {
                 sub speak()
                 end sub
             `);
-            expect(file.parser.functionStatements.map(x => x.name.text)).to.eql(['main', 'speak']);
+            expect(file.parser.references.functionStatements.map(x => x.name.text)).to.eql(['main', 'speak']);
         });
     });
 
     describe('Plugins', () => {
-        it('can loads a plugin which transforms the AST', async () => {
-            const rootDir = process.cwd();
+        it('can load a plugin which transforms the AST', async () => {
             program.plugins = new PluginInterface(
-                loadPlugins([`${rootDir}/testProjects/plugins/removePrint.js`]),
+                loadPlugins([
+                    require.resolve('../examples/plugins/removePrint')
+                ]),
                 undefined
             );
             await testTranspile(`

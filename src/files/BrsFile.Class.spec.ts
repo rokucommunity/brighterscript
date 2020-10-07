@@ -34,12 +34,12 @@ describe('BrsFile BrighterScript classes', () => {
             class Duck
             end class
         `) as BrsFile);
-        expect(file.parser.classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
+        expect(file.parser.references.classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
     });
 
     it('does not cause errors with incomplete class statement', async () => {
         (await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
-            class 
+            class
         `) as BrsFile);
         await program.validate();
         //if no exception was thrown, this test passes
@@ -78,7 +78,7 @@ describe('BrsFile BrighterScript classes', () => {
         `) as BrsFile);
         await program.validate();
         expect(program.getDiagnostics()[0]?.message).not.to.exist;
-        let duckClass = file.parser.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
+        let duckClass = file.parser.references.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
         expect(duckClass).to.exist;
         expect(duckClass.memberMap['move']).to.exist;
     });
@@ -271,7 +271,7 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
 
                 class Duck extends Animal
-                    sub new(name as string, age as integer) 
+                    sub new(name as string, age as integer)
                         super(name)
                         super.DoSomething()
                     end sub
@@ -306,7 +306,7 @@ describe('BrsFile BrighterScript classes', () => {
         });
 
         it('new keyword transpiles correctly', async () => {
-            await addFile('source/Animal.bs', ` 
+            await addFile('source/Animal.bs', `
                 class Animal
                     sub new(name as string)
                     end sub
@@ -329,39 +329,39 @@ describe('BrsFile BrighterScript classes', () => {
                     sub new(name as string)
                         m.name = name
                     end sub
-                
+
                     name as string
-                
+
                     sub move(distanceInMeters as integer)
                         print m.name + " moved " + distanceInMeters.ToStr() + " meters"
                     end sub
                 end class
-                
+
                 class Duck extends Animal
                     override sub move(distanceInMeters as integer)
                         print "Waddling..."
                         super.move(distanceInMeters)
                     end sub
                 end class
-                
+
                 class BabyDuck extends Duck
                     override sub move(distanceInMeters as integer)
                         super.move(distanceInMeters)
                         print "Fell over...I'm new at this"
                     end sub
                 end class
-                
+
                 sub Main()
                     smokey = new Animal("Smokey")
-                    smokey.move(1) 
+                    smokey.move(1)
                     '> Bear moved 1 meters
-                
+
                     donald = new Duck("Donald")
-                    donald.move(2) 
+                    donald.move(2)
                     '> Waddling...\\nDonald moved 2 meters
-                
+
                     dewey = new BabyDuck("Dewey")
-                    dewey.move(3) 
+                    dewey.move(3)
                     '> Waddling...\\nDewey moved 2 meters\\nFell over...I'm new at this
                 end sub
             `, `
@@ -417,7 +417,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-                
+
                 sub Main()
                     smokey = Animal("Smokey")
                     smokey.move(1)
@@ -439,7 +439,7 @@ describe('BrsFile BrighterScript classes', () => {
                         print "Walked " + meters.ToStr() + " meters"
                     end sub
                 end class
-                
+
                 class BabyDuck extends Duck
                     public override sub walk(meters as integer)
                         print "Tripped"

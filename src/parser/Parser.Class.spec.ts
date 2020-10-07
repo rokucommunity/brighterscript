@@ -2,8 +2,7 @@ import { expect } from 'chai';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { TokenKind, Lexer, AllowedLocalIdentifiers, AllowedProperties } from '../lexer';
 import { Parser, ParseMode } from './Parser';
-import { ClassFieldStatement, ClassStatement } from './ClassStatement';
-import { FunctionStatement, AssignmentStatement } from './Statement';
+import { FunctionStatement, AssignmentStatement, ClassStatement, ClassFieldStatement } from './Statement';
 import { NewExpression } from './Expression';
 
 describe('parser class', () => {

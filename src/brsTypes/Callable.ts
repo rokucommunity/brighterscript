@@ -1,11 +1,13 @@
 declare type Interpreter = any;
 import * as Brs from '.';
-import * as Expr from '../parser/Expression';
 declare let Scope: any;
 import { Identifier, Token } from '../lexer';
 import { SourceNode } from 'source-map';
 import { Range } from 'vscode-languageserver';
 import { TranspileState } from '../parser/TranspileState';
+import { walk, InternalWalkMode, WalkOptions, WalkVisitor } from '../astUtils';
+import { Expression, LiteralExpression } from '../parser/Expression';
+import util from '../util';
 
 /** An argument to a BrightScript `function` or `sub`. */
 export interface Argument {
@@ -25,7 +27,7 @@ export interface Argument {
     };
 
     /** The default value to use for the argument if none is provided. */
-    readonly defaultValue?: Expr.Expression;
+    readonly defaultValue?: Expression;
 }
 
 /**
@@ -50,15 +52,15 @@ export class StdlibArgument implements Argument {
         this.name = { text: name, range: StdlibArgument.InternalRange };
         this.type = { kind: type, range: StdlibArgument.InternalRange };
         if (defaultValue) {
-            this.defaultValue = new Expr.LiteralExpression(defaultValue, StdlibArgument.InternalRange);
+            this.defaultValue = new LiteralExpression(defaultValue, StdlibArgument.InternalRange);
         }
     }
 
     /** A fake location exists only within the BRS runtime. */
-    static InternalRange = Range.create(-1, -1, -1, -1);
+    static InternalRange = util.createRange(-1, -1, -1, -1);
 }
 
-export class FunctionParameter {
+export class FunctionParameterExpression extends Expression {
     constructor(
         public name: Identifier,
         public type: {
@@ -66,10 +68,13 @@ export class FunctionParameter {
             range: Range;
         },
         public typeToken?: Token,
-        public defaultValue?: Expr.Expression,
+        public defaultValue?: Expression,
         public asToken?: Token
+    ) {
+        super();
 
-    ) { }
+    }
+
     public get range(): Range {
         return {
             start: this.name.range.start,
@@ -96,6 +101,13 @@ export class FunctionParameter {
         }
 
         return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        // eslint-disable-next-line no-bitwise
+        if (this.defaultValue && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'defaultValue', visitor, options);
+        }
     }
 }
 

@@ -16,7 +16,8 @@ export function token(kind, text?, literal?): Token {
         text: text,
         isReserved: ReservedWords.has((text || '').toLowerCase()),
         literal: literal,
-        range: Range.create(-9, -9, -9, -9)
+        range: Range.create(-9, -9, -9, -9),
+        leadingWhitespace: ''
     };
 }
 

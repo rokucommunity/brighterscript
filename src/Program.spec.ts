@@ -11,8 +11,7 @@ import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-
-let testProjectsPath = s`${__dirname}/../testProjects`;
+import { EmptyStatement, FunctionStatement } from './parser/Statement';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -142,8 +141,20 @@ describe('Program', () => {
             expect(Object.keys(program.files).length).to.equal(1);
         });
 
+        it('supports empty statements for transpile', async () => {
+            const file = await program.addOrReplaceFile('source/main.bs', `
+                sub main()
+                    m.logError()
+                    'some comment
+                end sub
+            `);
+            (file.parser.ast.statements[0] as FunctionStatement).func.body.statements[0] = new EmptyStatement();
+            await program.transpile([{ src: file.pathAbsolute, dest: file.pkgPath }], tmpPath);
+        });
+
         it('works with different cwd', async () => {
-            let projectDir = s`${testProjectsPath}/project2`;
+            let projectDir = s`${tmpPath}/project2`;
+            fsExtra.ensureDirSync(projectDir);
             program = new Program({ cwd: projectDir });
             await program.addOrReplaceFile({ src: 'source/lib.brs', dest: 'source/lib.brs' }, 'function main()\n    print "hello world"\nend function');
             // await program.reloadFile('source/lib.brs', `'this is a comment`);

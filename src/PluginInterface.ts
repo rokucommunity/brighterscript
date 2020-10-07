@@ -9,21 +9,21 @@ export type Arguments<T> = [T] extends [(...args: infer U) => any]
 
 export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> {
 
-    constructor(private plugins: CompilerPlugin[], private logger: Logger) {}
+    constructor(private plugins: CompilerPlugin[], private logger: Logger) { }
 
     /**
      * Call `event` on plugins
      */
     public emit<K extends keyof T & string>(event: K, ...args: Arguments<T[K]>) {
-        this.plugins.forEach((plugin) => {
-            if (plugin.hasOwnProperty(event)) {
+        for (let plugin of this.plugins) {
+            if ((plugin as any)[event]) {
                 try {
                     (plugin as any)[event](...args);
                 } catch (err) {
                     this.logger.error(`Error when calling plugin ${plugin.name}.${event}:`, err);
                 }
             }
-        });
+        }
     }
 
     public add(plugin: CompilerPlugin) {
