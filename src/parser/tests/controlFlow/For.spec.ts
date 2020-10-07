@@ -4,7 +4,6 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
-import { createToken } from '../../../astUtils/creators';
 import { ForStatement, LiteralExpression } from '../..';
 
 describe('parser for loops', () => {

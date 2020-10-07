@@ -6,7 +6,6 @@ import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { AssignmentStatement } from '../../Statement';
-import { createToken } from '../../../astUtils/creators';
 
 describe('parser indexing', () => {
     describe('one level', () => {

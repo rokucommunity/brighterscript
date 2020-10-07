@@ -3,7 +3,6 @@ import { expect } from 'chai';
 import { Parser } from '../../Parser';
 import { TokenKind, Lexer } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
-import { createToken } from '../../../astUtils/creators';
 
 describe('parser', () => {
 

@@ -3,7 +3,6 @@ import { identifier, token } from '../parser/tests/Parser.spec';
 import { TokenKind } from '../lexer/TokenKind';
 import { expect } from 'chai';
 import { BrightScriptChunk } from './Chunk';
-import { createToken } from '../astUtils/creators';
 
 describe('preprocessor parser', () => {
     let parser: PreprocessorParser;

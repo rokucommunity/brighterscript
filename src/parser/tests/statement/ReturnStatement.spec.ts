@@ -5,7 +5,6 @@ import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { FunctionStatement } from '../../Statement';
 import { Range } from 'vscode-languageserver';
-import { createToken } from '../../../astUtils/creators';
 
 describe('parser return statements', () => {
     it('parses void returns', () => {
