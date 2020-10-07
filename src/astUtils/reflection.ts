@@ -217,13 +217,14 @@ export function isFloatType(e: any): e is FloatType {
 export function isDoubleType(e: any): e is DoubleType {
     return e?.constructor.name === DoubleType.name;
 }
+const numberConstructorNames = [
+    IntegerType.name,
+    LongIntegerType.name,
+    FloatType.name,
+    DoubleType.name
+];
 export function isNumberType(e: any): e is IntegerType | LongIntegerType | FloatType | DoubleType {
-    return [
-        IntegerType.name,
-        LongIntegerType.name,
-        FloatType.name,
-        DoubleType.name
-    ].includes(e?.constructor.name);
+    return numberConstructorNames.includes(e?.constructor.name);
 }
 
 // Literal reflection
