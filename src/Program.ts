@@ -285,34 +285,36 @@ export class Program {
      */
     private async getTypeDefinitionsForFile(pathAbsolute: string) {
         //you can only get type definitions for .brs files
-        if (!pathAbsolute.endsWith('.brs')) {
+        if (!pathAbsolute.toLowerCase().endsWith('.brs')) {
             return;
         }
 
-        let typeDefinitionPath = pathAbsolute.replace(/.brs$/, '.d.bs');
-
+        let typedefPath = pathAbsolute.replace(/.brs$/i, '.d.bs');
+        let lowerTypedefPath = typedefPath.toLowerCase();
         //specifically check for `undefined`, because `null` means "does not exist"
-        if (this.typeDefinitionCache[typeDefinitionPath] === undefined) {
+        if (this.typedefCache[lowerTypedefPath] === undefined) {
             let contents: string | null;
             try {
-                contents = await this.getFileContents(typeDefinitionPath);
+                contents = await this.getFileContents(typedefPath);
             } catch (e) {
                 //something went wrong trying to load the d file...just ignore the error
-                this.logger.info(`Exception throw trying to load '${typeDefinitionPath}'`, e);
+                this.logger.info(`Exception throw trying to load '${typedefPath}'`, e);
                 contents = null;
             }
-            this.typeDefinitionCache[typeDefinitionPath] = contents ?? null;
+            this.typedefCache[lowerTypedefPath] = contents ?? null;
         }
-        return this.typeDefinitionCache[typeDefinitionPath];
+        return this.typedefCache[lowerTypedefPath];
     }
+
     /**
      * A cache for type defintions.
      * `undefined` means never checked, so we should check the FS.
      * `null` means file does not exist on FS (so don't check the FS again).
-     * `string` contains the cached type definition file
+     * `string` contains the cached type definition file.
+     *
+     * The key is the all-lowercase src path of the typedef file
      */
-    private typeDefinitionCache = {} as { [typeDefinitionPath: string]: string };
-
+    public typedefCache = {} as { [lowerTypedefSrcPath: string]: string };
 
     /**
      * Load a file into the program. If that file already exists, it is replaced.
@@ -330,42 +332,42 @@ export class Program {
     public async addOrReplaceFile(fileEntry: FileObj, fileContents?: string): Promise<XmlFile | BrsFile>;
     public async addOrReplaceFile(fileParam: FileObj | string, fileContents?: string): Promise<XmlFile | BrsFile> {
         assert.ok(fileParam, 'fileEntry is required');
-        let pathAbsolute: string;
+        let srcPath: string;
         let pkgPath: string;
         if (typeof fileParam === 'string') {
-            pathAbsolute = s`${this.options.rootDir}/${fileParam}`;
+            srcPath = s`${this.options.rootDir}/${fileParam}`;
             pkgPath = s`${fileParam}`;
         } else {
-            pathAbsolute = s`${fileParam.src}`;
+            srcPath = s`${fileParam.src}`;
             pkgPath = s`${fileParam.dest}`;
         }
-        let file = await this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(pathAbsolute)], async () => {
+        let file = await this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], async () => {
 
-            assert.ok(pathAbsolute, 'fileEntry.src is required');
+            assert.ok(srcPath, 'fileEntry.src is required');
             assert.ok(pkgPath, 'fileEntry.dest is required');
 
             //if the file is already loaded, remove it
-            if (this.hasFile(pathAbsolute)) {
-                this.removeFile(pathAbsolute);
+            if (this.hasFile(srcPath)) {
+                this.removeFile(srcPath);
             }
-            let fileExtension = path.extname(pathAbsolute).toLowerCase();
+            let fileExtension = path.extname(srcPath).toLowerCase();
             let file: BrsFile | XmlFile | undefined;
 
             //load the file contents by file path if not provided
             let getFileContents = async () => {
                 if (fileContents === undefined) {
-                    return this.getFileContents(pathAbsolute);
+                    return this.getFileContents(srcPath);
                 } else {
                     return fileContents;
                 }
             };
 
             //if this is a type definition file, store its contents in the cache
-            if (pathAbsolute.endsWith('.d.bs')) {
-                this.typeDefinitionCache[pathAbsolute] = await getFileContents();
+            if (srcPath.toLowerCase().endsWith('.d.bs')) {
+                this.typedefCache[srcPath.toLowerCase()] = await getFileContents();
 
             } else if (fileExtension === '.brs' || fileExtension === '.bs') {
-                let brsFile = new BrsFile(pathAbsolute, pkgPath, this);
+                let brsFile = new BrsFile(srcPath, pkgPath, this);
 
                 //add file to the `source` dependency list
                 if (brsFile.pkgPath.startsWith(startOfSourcePkgPath)) {
@@ -375,15 +377,15 @@ export class Program {
 
 
                 //add the file to the program
-                this.files[pathAbsolute] = brsFile;
+                this.files[srcPath] = brsFile;
                 let fileContents: SourceObj = {
-                    pathAbsolute: pathAbsolute,
+                    pathAbsolute: srcPath,
                     source: await getFileContents(),
-                    definitions: await this.getTypeDefinitionsForFile(pathAbsolute)
+                    definitions: await this.getTypeDefinitionsForFile(srcPath)
                 };
                 this.plugins.emit('beforeFileParse', fileContents);
 
-                this.logger.time(LogLevel.info, ['parse', chalk.green(pathAbsolute)], () => {
+                this.logger.time(LogLevel.info, ['parse', chalk.green(srcPath)], () => {
                     brsFile.parse(fileContents.source, fileContents.definitions);
                 });
                 file = brsFile;
@@ -397,11 +399,11 @@ export class Program {
                 //resides in the components folder (Roku will only parse xml files in the components folder)
                 pkgPath.toLowerCase().startsWith(util.pathSepNormalize(`components/`))
             ) {
-                let xmlFile = new XmlFile(pathAbsolute, pkgPath, this);
+                let xmlFile = new XmlFile(srcPath, pkgPath, this);
                 //add the file to the program
-                this.files[pathAbsolute] = xmlFile;
+                this.files[srcPath] = xmlFile;
                 let fileContents: SourceObj = {
-                    pathAbsolute: pathAbsolute,
+                    pathAbsolute: srcPath,
                     source: await getFileContents()
                 };
                 this.plugins.emit('beforeFileParse', fileContents);
@@ -505,7 +507,7 @@ export class Program {
         pathAbsolute = s`${pathAbsolute}`;
 
         if (pathAbsolute.endsWith('.d.bs')) {
-            delete this.typeDefinitionCache[pathAbsolute];
+            delete this.typedefCache[pathAbsolute.toLowerCase()];
             return;
         }
 
@@ -885,4 +887,4 @@ export class Program {
     }
 }
 
-export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined>;
+export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined> | void;

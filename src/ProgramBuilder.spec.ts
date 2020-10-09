@@ -1,19 +1,20 @@
 import { expect } from 'chai';
 import * as fsExtra from 'fs-extra';
-import * as sinonImport from 'sinon';
+import { createSandbox } from 'sinon';
+const sinon = createSandbox();
 import { Program } from './Program';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { Logger, LogLevel } from './Logger';
 
-let sinon = sinonImport.createSandbox();
-let tmpPath = s`${process.cwd()}/.tmp`;
-let rootDir = s`${tmpPath}/rootDir`;
-let stagingFolderPath = s`${tmpPath}/staging`;
-
 describe('ProgramBuilder', () => {
+
+    let tmpPath = s`${process.cwd()}/.tmp`;
+    let rootDir = s`${tmpPath}/rootDir`;
+    let stagingFolderPath = s`${tmpPath}/staging`;
+
     beforeEach(() => {
-        fsExtra.ensureDirSync(tmpPath);
+        fsExtra.ensureDirSync(rootDir);
         fsExtra.emptyDirSync(tmpPath);
     });
     afterEach(() => {
@@ -23,25 +24,13 @@ describe('ProgramBuilder', () => {
     });
 
     let builder: ProgramBuilder;
-    let b: any;
-    let setVfsFile: (filePath: string, contents: string) => void;
     beforeEach(async () => {
         builder = new ProgramBuilder();
-        b = builder;
-        b.options = await util.normalizeAndResolveConfig(undefined);
-        b.program = new Program(b.options);
-        b.logger = new Logger();
-        let vfs = {};
-        setVfsFile = (filePath, contents) => {
-            vfs[filePath] = contents;
-        };
-        sinon.stub(b.program.util, 'getFileContents').callsFake((filePath) => {
-            if (vfs[filePath]) {
-                return vfs[filePath];
-            } else {
-                throw new Error(`Cannot find file "${filePath}"`);
-            }
+        builder.options = await util.normalizeAndResolveConfig({
+            rootDir: rootDir
         });
+        builder.program = new Program(builder.options);
+        builder.logger = new Logger();
     });
 
 
@@ -62,12 +51,44 @@ describe('ProgramBuilder', () => {
                 dest: 'file.xml'
             }]));
 
-            b.program = {
-                addOrReplaceFile: () => { }
-            };
-            let stub = sinon.stub(b.program, 'addOrReplaceFile');
-            await b.loadAllFilesAST();
+            let stub = sinon.stub(builder.program, 'addOrReplaceFile');
+            await builder['loadAllFilesAST']();
             expect(stub.getCalls()).to.be.lengthOf(3);
+        });
+
+        it('loads all type definitions first', async () => {
+            const requestedFiles = [] as string[];
+            builder.program.fileResolvers.push((filePath) => {
+                requestedFiles.push(s(filePath));
+            });
+            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/main.d.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.d.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
+            const stub = sinon.stub(builder.program, 'addOrReplaceFile');
+            await builder['loadAllFilesAST']();
+            const srcPaths = stub.getCalls().map(x => x.args[0].src);
+            //the d files should be first
+            expect(srcPaths.indexOf(s`${rootDir}/source/main.d.bs`)).within(0, 1);
+            expect(srcPaths.indexOf(s`${rootDir}/source/lib.d.bs`)).within(0, 1);
+            //the non-d files should be last
+            expect(srcPaths.indexOf(s`${rootDir}/source/main.brs`)).within(2, 3);
+            expect(srcPaths.indexOf(s`${rootDir}/source/lib.brs`)).within(2, 3);
+
+            //the d files should NOT be requested from the FS
+            expect(requestedFiles).not.to.include(s`${rootDir}/source/lib.d.bs`);
+            expect(requestedFiles).not.to.include(s`${rootDir}/source/main.d.bs`);
+        });
+
+        it('does not load non-existent type definition file', async () => {
+            const requestedFiles = [] as string[];
+            builder.program.fileResolvers.push((filePath) => {
+                requestedFiles.push(s(filePath));
+            });
+            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
+            await builder['loadAllFilesAST']();
+            //the d file should not be requested because `loadAllFilesAST` knows it doesn't exist
+            expect(requestedFiles).not.to.include(s`${rootDir}/source/main.d.bs`);
         });
     });
 
@@ -76,7 +97,7 @@ describe('ProgramBuilder', () => {
             //supress the console log statements for the bsconfig parse errors
             sinon.stub(console, 'log').returns(undefined);
             //totally bogus config file
-            setVfsFile(s`${rootDir}/bsconfig.json`, '{');
+            fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '{');
             await builder.run({
                 project: s`${rootDir}/bsconfig.json`,
                 username: 'john'
