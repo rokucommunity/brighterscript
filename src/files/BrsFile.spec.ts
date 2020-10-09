@@ -17,6 +17,7 @@ import { StandardizedFileEntry } from 'roku-deploy';
 import { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
 import { loadPlugins } from '..';
+import { trim } from '../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 
@@ -36,6 +37,13 @@ describe('BrsFile', () => {
         sinon.restore();
         program.dispose();
     });
+
+    /**
+     * Generics wrapper around addOrReplaceFile
+     */
+    async function addOrReplaceFile<T>(relativePath: string, contents?: string): Promise<T> {
+        return await program.addOrReplaceFile(relativePath, contents) as any as T;
+    }
 
     it('supports the third parameter in CreateObject', async () => {
         await program.addOrReplaceFile('source/main.brs', `
@@ -2141,6 +2149,54 @@ describe('BrsFile', () => {
                 end sub
             `);
             expect(file.parser.references.functionStatements.map(x => x.name.text)).to.eql(['main', 'speak']);
+        });
+    });
+
+    describe('getTypedef', () => {
+        async function testTypedef(original: string, expected: string) {
+            let file = await addOrReplaceFile<BrsFile>('source/main.brs', original);
+            expect(file.getTypedef()).to.eql(expected);
+        }
+
+        it('strips function body', async () => {
+            await testTypedef(`
+                sub main(param1 as string)
+                    print "main"
+                end sub
+            `, trim`
+                sub main(param1 as string)
+                end sub
+            `);
+        });
+
+        it('includes import statements', async () => {
+            await testTypedef(`
+               import "pkg:/source/lib.brs"
+            `, trim`
+                import "pkg:/source/lib.brs"
+            `);
+        });
+
+        it('includes namespace statements', async () => {
+            await testTypedef(`
+                namespace Name
+                    sub logInfo()
+                    end sub
+                end namespace
+                namespace NameA.NameB
+                    sub logInfo()
+                    end sub
+                end namespace
+            `, trim`
+                namespace Name
+                    sub logInfo()
+                    end sub
+                end namespace
+                namespace NameA.NameB
+                    sub logInfo()
+                    end sub
+                end namespace
+            `);
         });
     });
 

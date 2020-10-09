@@ -6,9 +6,10 @@ import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
 import { ParseMode, Parser } from './Parser';
-import { walk, WalkVisitor, WalkOptions, InternalWalkMode } from '../astUtils/visitors';
+import { walk, WalkVisitor, WalkOptions, InternalWalkMode, WalkMode } from '../astUtils/visitors';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isVariableExpression } from '../astUtils/reflection';
 import { BrsInvalid } from '../brsTypes/BrsType';
+import { TypedefProvider } from '../interfaces';
 
 /**
  * A BrightScript statement
@@ -51,7 +52,7 @@ export class EmptyStatement extends Statement {
 /**
  * This is a top-level statement. Consider this the root of the AST
  */
-export class Body extends Statement {
+export class Body extends Statement implements TypedefProvider {
     constructor(
         public statements: Statement[] = []
     ) {
@@ -94,6 +95,20 @@ export class Body extends Statement {
             }
 
             result.push(...statement.transpile(state));
+        }
+        return result;
+    }
+
+    getTypedef(state: TranspileState) {
+        let result = [];
+        for (const statement of this.statements) {
+            //if the current statement supports generating typedef, call it
+            if ('getTypedef' in statement) {
+                result.push(
+                    ...(statement as TypedefProvider).getTypedef(state),
+                    state.newline()
+                );
+            }
         }
         return result;
     }
@@ -221,7 +236,7 @@ export class ExpressionStatement extends Statement {
     }
 }
 
-export class CommentStatement extends Statement implements Expression {
+export class CommentStatement extends Statement implements Expression, TypedefProvider {
     constructor(
         public comments: Token[]
     ) {
@@ -258,6 +273,10 @@ export class CommentStatement extends Statement implements Expression {
             }
         }
         return result;
+    }
+
+    public getTypedef(state: TranspileState) {
+        return this.transpile(state);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -312,7 +331,7 @@ export class ExitWhileStatement extends Statement {
     }
 }
 
-export class FunctionStatement extends Statement {
+export class FunctionStatement extends Statement implements TypedefProvider {
     constructor(
         public name: Identifier,
         public func: FunctionExpression,
@@ -346,6 +365,10 @@ export class FunctionStatement extends Statement {
         };
 
         return this.func.transpile(state, nameToken);
+    }
+
+    getTypedef(state: TranspileState) {
+        return this.func.getTypedef(state, this.name);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -994,7 +1017,7 @@ export class IndexedSetStatement extends Statement {
     }
 }
 
-export class LibraryStatement extends Statement {
+export class LibraryStatement extends Statement implements TypedefProvider {
     constructor(
         readonly tokens: {
             library: Token;
@@ -1025,12 +1048,16 @@ export class LibraryStatement extends Statement {
         return result;
     }
 
+    getTypedef(state: TranspileState) {
+        return this.transpile(state);
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
 }
 
-export class NamespaceStatement extends Statement {
+export class NamespaceStatement extends Statement implements TypedefProvider {
     constructor(
         public keyword: Token,
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
@@ -1063,6 +1090,25 @@ export class NamespaceStatement extends Statement {
         return this.body.transpile(state);
     }
 
+    getTypedef(state: TranspileState) {
+        let result = [
+            'namespace ',
+            ...this.nameExpression.getName(ParseMode.BrighterScript),
+            state.newline()
+        ];
+        state.blockDepth++;
+        result.push(
+            state.indent(),
+            ...this.body.getTypedef(state)
+        );
+        state.blockDepth--;
+
+        result.push(
+            'end namespace'
+        );
+        return result;
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'nameExpression', visitor, options);
@@ -1073,7 +1119,7 @@ export class NamespaceStatement extends Statement {
     }
 }
 
-export class ImportStatement extends Statement {
+export class ImportStatement extends Statement implements TypedefProvider {
     constructor(
         readonly importToken: Token,
         readonly filePathToken: Token
@@ -1108,6 +1154,17 @@ export class ImportStatement extends Statement {
                 state.file.pathAbsolute,
                 `'${this.importToken.text} ${this.filePathToken.text}`
             )
+        ];
+    }
+
+    /**
+     * Get the typedef for this statement
+     */
+    public getTypedef(state: TranspileState) {
+        return [
+            this.importToken.text,
+            ' ',
+            this.filePathToken.text
         ];
     }
 

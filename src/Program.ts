@@ -18,7 +18,7 @@ import { globalFile } from './globalCallables';
 import { parseManifest, ManifestValue } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isXmlFile } from './astUtils/reflection';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {
@@ -836,6 +836,13 @@ export class Program {
                 fsExtra.writeFile(outputPath, result.code),
                 writeMapPromise
             ]);
+
+            if (isBrsFile(file) && this.options.emitDefinitions !== false) {
+                const typedef = file.getTypedef();
+                const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
+                await fsExtra.writeFile(typedefPath, typedef);
+            }
+
             this.plugins.emit('afterFileTranspile', entry);
         });
 

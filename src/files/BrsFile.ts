@@ -1048,6 +1048,12 @@ export class BrsFile {
         }
     }
 
+    public getTypedef() {
+        const state = new TranspileState(this);
+        const programNode = new SourceNode(null, null, this.pathAbsolute, this.ast.getTypedef(state));
+        return programNode.toString();
+    }
+
     public dispose() {
         this.parser?.dispose();
     }

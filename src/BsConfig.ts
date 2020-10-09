@@ -99,6 +99,12 @@ export interface BsConfig {
     emitFullPaths?: boolean;
 
     /**
+     * Emit type definition files (`d.bs`)
+     * @default true
+     */
+    emitDefinitions?: boolean;
+
+    /**
      * A list of filters used to exclude diagnostics from the output
      */
     diagnosticFilters?: Array<number | string | { src: string; codes: number[] } | { src: string } | { codes: number[] }>;

@@ -9,6 +9,8 @@ import { FunctionType } from './types/FunctionType';
 import { ParseMode } from './parser/Parser';
 import { Program, SourceObj, TranspileObj } from './Program';
 import { ProgramBuilder } from './ProgramBuilder';
+import { SourceNode } from 'source-map';
+import { TranspileState } from './parser/TranspileState';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
@@ -195,4 +197,8 @@ export interface CompilerPlugin {
     afterFileTranspile?: (entry: TranspileObj) => void;
     beforeFileDispose?: (file: (BrsFile | XmlFile)) => void;
     afterFileDispose?: (file: (BrsFile | XmlFile)) => void;
+}
+
+export interface TypedefProvider {
+    getTypedef(state: TranspileState): Array<SourceNode | string>;
 }

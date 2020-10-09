@@ -10,6 +10,7 @@ import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import { walk, InternalWalkMode, WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { isCommentStatement, isEscapedCharCodeLiteralExpression, isLiteralExpression, isVariableExpression } from '../astUtils/reflection';
+import { TypedefProvider } from '../interfaces';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -108,7 +109,7 @@ export class CallExpression extends Expression {
     }
 }
 
-export class FunctionExpression extends Expression {
+export class FunctionExpression extends Expression implements TypedefProvider {
     constructor(
         readonly parameters: FunctionParameterExpression[],
         readonly returns: ValueKind,
@@ -154,7 +155,7 @@ export class FunctionExpression extends Expression {
         );
     }
 
-    transpile(state: TranspileState, name?: Identifier) {
+    transpile(state: TranspileState, name?: Identifier, includeBody = true) {
         let results = [];
         //'function'|'sub'
         results.push(
@@ -196,10 +197,12 @@ export class FunctionExpression extends Expression {
                 new SourceNode(this.returnTypeToken.range.start.line + 1, this.returnTypeToken.range.start.character, state.pathAbsolute, this.returnTypeToken.text.toLowerCase())
             );
         }
-        state.lineage.unshift(this);
-        let body = this.body.transpile(state);
-        state.lineage.shift();
-        results.push(...body);
+        if (includeBody) {
+            state.lineage.unshift(this);
+            let body = this.body.transpile(state);
+            state.lineage.shift();
+            results.push(...body);
+        }
         results.push('\n');
         //'end sub'|'end function'
         results.push(
@@ -207,6 +210,10 @@ export class FunctionExpression extends Expression {
             new SourceNode(this.end.range.start.line + 1, this.end.range.start.character, state.pathAbsolute, this.end.text)
         );
         return results;
+    }
+
+    getTypedef(state: TranspileState, name?: Identifier) {
+        return this.transpile(state, name, false);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
