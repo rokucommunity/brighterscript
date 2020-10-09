@@ -22,7 +22,7 @@ import { trim } from '../testHelpers.spec';
 let sinon = sinonImport.createSandbox();
 
 describe('BrsFile', () => {
-    let rootDir = s`${process.cwd()}/.tmp/rootDir}`;
+    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     let srcPath = s`${rootDir}/source/main.brs`;
     let destPath = 'source/main.brs';
@@ -248,12 +248,12 @@ describe('BrsFile', () => {
             });
 
             it('works for all', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line
                         name = "bob
                     end sub
-                `) as BrsFile;
+                `);
                 expect(file.commentFlags[0]).to.exist;
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: null,
@@ -266,12 +266,12 @@ describe('BrsFile', () => {
             });
 
             it('works for specific codes', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line: 1083, 1001
                         name = "bob
                     end sub
-                `) as BrsFile;
+                `);
                 expect(file.commentFlags[0]).to.exist;
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: [1083, 1001],
@@ -307,11 +307,11 @@ describe('BrsFile', () => {
 
         describe('bs:disable-line', () => {
             it('works for all', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         z::;;%%%%%% 'bs:disable-line
                     end sub
-                `) as BrsFile;
+                `);
                 expect(file.commentFlags[0]).to.exist;
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: null,
@@ -2097,23 +2097,11 @@ describe('BrsFile', () => {
     });
 
     describe('type definitions', () => {
-        let files: {};
-        beforeEach(() => {
-            files = {};
-            program.fileResolvers.push((filePath: string) => {
-                if (files[filePath]) {
-                    return files[filePath];
-                } else {
-                    throw new Error(`Could not find in-memory file for ${filePath}`);
-                }
-            });
-        });
-
         it('only exposes defined functions even if source has more', async () => {
-            files[s`${rootDir}/source/main.d.bs`] = `
+            await program.addOrReplaceFile('source/main.d.bs', `
                 sub main()
                 end sub
-            `;
+            `);
 
             const file = await program.addOrReplaceFile('source/main.brs', `
                 sub main()
@@ -2123,32 +2111,37 @@ describe('BrsFile', () => {
             `);
             expect(file.parser.references.functionStatements.map(x => x.name.text)).to.eql(['main']);
         });
+    });
 
-        it('reads from the cache after first load', async () => {
-            files[s`${rootDir}/source/main.d.bs`] = `
-                sub main()
-                end sub
-            `;
-
-            const spy = sinon.spy(program, 'getFileContents');
-
-            await program.addOrReplaceFile('source/main.brs', ``);
-            expect(spy.callCount).to.equal(1);
-
-            await program.addOrReplaceFile('source/main.brs', ``);
-            //the definition file should be in the cache already so no new calls
-            expect(spy.callCount).to.equal(1);
+    describe('typedef', () => {
+        it('sets typedef path properly', async () => {
+            expect((await addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefPath).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
+            expect((await addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefPath).to.equal(undefined);
+            expect((await addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefPath).to.equal(undefined);
         });
 
-        it('does not fail when type defs are missing', async () => {
-            program.fileResolvers = [];
-            let file = await program.addOrReplaceFile('source/main.brs', `
-                sub main()
-                end sub
-                sub speak()
-                end sub
-            `);
-            expect(file.parser.references.functionStatements.map(x => x.name.text)).to.eql(['main', 'speak']);
+        it('does not link when missing from program', async () => {
+            const file = await addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            expect(file.typedefFile).not.to.exist;
+        });
+
+        it('links typedef when added BEFORE .brs file', async () => {
+            const typedef = await addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+            const file = await addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            expect(file.typedefFile).to.equal(typedef);
+        });
+
+        it('links typedef when added AFTER .brs file', async () => {
+            const file = await addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            const typedef = await addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+            expect(file.typedefFile).to.eql(typedef);
+        });
+
+        it('removes typedef link when typedef is removed', async () => {
+            const typedef = await addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+            const file = await addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            program.removeFile(typedef.pathAbsolute);
+            expect(file.typedefFile).to.be.undefined;
         });
     });
 
@@ -2274,7 +2267,7 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
     return async (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) => {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
-        let file = await program.addOrReplaceFile({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source) as BrsFile;
+        let file = await program.addOrReplaceFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
         await program.validate();
         let diagnostics = file.getDiagnostics();
         if (diagnostics.length > 0 && failOnDiagnostic !== false) {

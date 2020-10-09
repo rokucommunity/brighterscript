@@ -389,33 +389,20 @@ export class ProgramBuilder {
         });
         this.logger.debug('ProgramBuilder.loadAllFilesAST() files:', files);
 
-        const allTypedefFiles = [] as string[];
-        const actualTypedefMap = {};
-        const actualTypedefFiles = [] as FileObj[];
-        const nonTypeFiles = [] as FileObj[];
+        const typedefFiles = [] as FileObj[];
+        const nonTypedefFiles = [] as FileObj[];
         for (const file of files) {
             const srcLower = file.src.toLowerCase();
             if (srcLower.endsWith('.d.bs')) {
-                actualTypedefMap[srcLower] = true;
-                actualTypedefFiles.push(file);
+                typedefFiles.push(file);
             } else {
-                nonTypeFiles.push(file);
-            }
-            if (srcLower.endsWith('.brs')) {
-                allTypedefFiles.push(srcLower.slice(0, -4) + '.d.bs');
-            }
-        }
-
-        //mark the missing type files as `null` so Program doesn't ask the FS for them
-        for (const filePath of allTypedefFiles) {
-            if (!actualTypedefMap[filePath]) {
-                this.program.setTypedef(filePath, null);
+                nonTypedefFiles.push(file);
             }
         }
 
         //preload every type definition file first, which eliminates duplicate file loading
         await Promise.all(
-            actualTypedefFiles.map(async (file) => {
+            typedefFiles.map(async (file) => {
                 try {
                     await this.program.addOrReplaceFile(file);
                 } catch (e) {
@@ -427,7 +414,7 @@ export class ProgramBuilder {
 
         //parse every file other than the type definitions
         await Promise.all(
-            nonTypeFiles.map(async (file) => {
+            nonTypedefFiles.map(async (file) => {
                 try {
                     let fileExtension = path.extname(file.src).toLowerCase();
 

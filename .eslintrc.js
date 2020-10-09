@@ -80,6 +80,7 @@ module.exports = {
         'func-style': 'off',
         'function-call-argument-newline': 'off',
         'function-paren-newline': 'off',
+        'getter-return': 'off',
         'guard-for-in': 'off',
         'id-length': 'off',
         'indent': 'off',

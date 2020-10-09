@@ -110,9 +110,9 @@ export class Program {
     private diagnostics = [] as BsDiagnostic[];
 
     /**
-     * A map of every file loaded into this program
+     * A map of every file loaded into this program, indexed by its original file location
      */
-    public files = {} as { [pathAbsolute: string]: BrsFile | XmlFile };
+    public files = {} as { [srcPath: string]: BrsFile | XmlFile };
 
     private scopes = {} as { [name: string]: Scope };
 
@@ -236,14 +236,14 @@ export class Program {
      * contents from the file system.
      * @param filePaths
      */
-    public async addOrReplaceFiles(fileObjects: Array<FileObj>) {
+    public async addOrReplaceFiles<T extends BrsFile | XmlFile>(fileObjects: Array<FileObj>) {
         let promises = [];
         for (let fileObject of fileObjects) {
             promises.push(
                 this.addOrReplaceFile(fileObject)
             );
         }
-        return Promise.all(promises);
+        return Promise.all(promises) as Promise<T[]>;
     }
 
     public getPkgPath(...args: any[]): any { //eslint-disable-line
@@ -280,62 +280,20 @@ export class Program {
     }
 
     /**
-     * Get the type definitions for the specified file.
-     * The results are cached for future performance boosts.
-     */
-    public async getTypedef(pathAbsolute: string) {
-        //you can only get type definitions for .brs files
-        if (!pathAbsolute.toLowerCase().endsWith('.brs')) {
-            return;
-        }
-
-        let typedefPath = pathAbsolute.replace(/.brs$/i, '.d.bs');
-        let typedefKey = util.getTypedefKey(typedefPath);
-        //specifically check for `undefined`, because `null` means "does not exist"
-        if (this.typedefCache[typedefKey] === undefined) {
-            let contents: string | null;
-            try {
-                contents = await this.getFileContents(typedefPath);
-            } catch (e) {
-                //something went wrong trying to load the d file...just ignore the error
-                this.logger.info(`Exception throw trying to load '${typedefPath}'`, e);
-                contents = null;
-            }
-            this.typedefCache[typedefKey] = contents ?? null;
-        }
-        return this.typedefCache[typedefKey];
-    }
-
-    /**
-     * A cache for type defintions.
-     * `undefined` means never checked, so we should check the FS.
-     * `null` means file does not exist on FS (so don't check the FS again).
-     * `string` contains the cached type definition file.
-     *
-     * The key is the all-lowercase src path of the typedef file
-     */
-    private typedefCache = {} as { [lowerTypedefSrcPath: string]: string };
-
-    public setTypedef(typedefSrcPath: string, contents: string | null | undefined) {
-        const typedefKey = util.getTypedefKey(typedefSrcPath);
-        this.typedefCache[typedefKey] = contents;
-    }
-
-    /**
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
      * @param relativePath the file path relative to the root dir
      * @param fileContents the file contents. If not provided, the file will be loaded from disk
      */
-    public async addOrReplaceFile(relativePath: string, fileContents?: string): Promise<XmlFile | BrsFile>;
+    public async addOrReplaceFile<T extends BrsFile | XmlFile>(relativePath: string, fileContents?: string): Promise<T>;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
      * @param fileEntry an object that specifies src and dest for the file.
      * @param fileContents the file contents. If not provided, the file will be loaded from disk
      */
-    public async addOrReplaceFile(fileEntry: FileObj, fileContents?: string): Promise<XmlFile | BrsFile>;
-    public async addOrReplaceFile(fileParam: FileObj | string, fileContents?: string): Promise<XmlFile | BrsFile> {
+    public async addOrReplaceFile<T extends BrsFile | XmlFile>(fileEntry: FileObj, fileContents?: string): Promise<T>;
+    public async addOrReplaceFile<T extends BrsFile | XmlFile>(fileParam: FileObj | string, fileContents?: string): Promise<T> {
         assert.ok(fileParam, 'fileEntry is required');
         let srcPath: string;
         let pkgPath: string;
@@ -367,11 +325,7 @@ export class Program {
                 }
             };
 
-            //if this is a type definition file, store its contents in the cache
-            if (srcPath.toLowerCase().endsWith('.d.bs')) {
-                this.setTypedef(srcPath, await getFileContents());
-
-            } else if (fileExtension === '.brs' || fileExtension === '.bs') {
+            if (fileExtension === '.brs' || fileExtension === '.bs') {
                 let brsFile = new BrsFile(srcPath, pkgPath, this);
 
                 //add file to the `source` dependency list
@@ -385,17 +339,16 @@ export class Program {
                 this.files[srcPath] = brsFile;
                 let fileContents: SourceObj = {
                     pathAbsolute: srcPath,
-                    source: await getFileContents(),
-                    definitions: await this.getTypedef(srcPath)
+                    source: await getFileContents()
                 };
                 this.plugins.emit('beforeFileParse', fileContents);
 
                 this.logger.time(LogLevel.info, ['parse', chalk.green(srcPath)], () => {
-                    brsFile.parse(fileContents.source, fileContents.definitions);
+                    brsFile.parse(fileContents.source);
                 });
                 file = brsFile;
 
-                this.dependencyGraph.addOrReplace(brsFile.dependencyGraphKey, brsFile.ownScriptImports.map(x => x.pkgPath.toLowerCase()));
+                brsFile.attachDependencyGraph(this.dependencyGraph);
 
                 this.plugins.emit('afterFileValidate', brsFile);
             } else if (
@@ -440,7 +393,7 @@ export class Program {
             }
             return file;
         });
-        return file;
+        return file as T;
     }
 
     /**
@@ -460,11 +413,11 @@ export class Program {
      * with the same path with only case being different.
      * @param pathAbsolute
      */
-    public getFileByPathAbsolute(pathAbsolute: string) {
+    public getFileByPathAbsolute<T extends BrsFile | XmlFile>(pathAbsolute: string) {
         pathAbsolute = s`${pathAbsolute}`;
         for (let filePath in this.files) {
             if (filePath.toLowerCase() === pathAbsolute.toLowerCase()) {
-                return this.files[filePath];
+                return this.files[filePath] as T;
             }
         }
     }
@@ -473,7 +426,7 @@ export class Program {
      * Get a list of files for the given pkgPath array.
      * Missing files are just ignored.
      */
-    public getFilesByPkgPaths(pkgPaths: string[]) {
+    public getFilesByPkgPaths<T extends BrsFile | XmlFile>(pkgPaths: string[]) {
         pkgPaths = pkgPaths.map(x => s`${x}`.toLowerCase());
 
         let result = [] as Array<XmlFile | BrsFile>;
@@ -483,7 +436,7 @@ export class Program {
                 result.push(file);
             }
         }
-        return result;
+        return result as T[];
     }
 
     /**
@@ -510,11 +463,6 @@ export class Program {
      */
     public removeFile(pathAbsolute: string) {
         pathAbsolute = s`${pathAbsolute}`;
-
-        if (pathAbsolute.endsWith('.d.bs')) {
-            delete this.typedefCache[util.getTypedefKey(pathAbsolute)];
-            return;
-        }
 
         let file = this.getFile(pathAbsolute);
         if (file) {

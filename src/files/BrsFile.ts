@@ -1,4 +1,3 @@
-import * as path from 'path';
 import { SourceNode } from 'source-map';
 import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
 import chalk from 'chalk';
@@ -22,6 +21,9 @@ import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
 import { isAALiteralExpression, isAssignmentStatement, isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isFunctionType, isIfStatement, isImportStatement, isLibraryStatement, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
+import { DependencyGraph } from '../DependencyGraph';
+import * as extname from 'path-complete-extname';
+import { Cache } from '../Cache';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -39,11 +41,15 @@ export class BrsFile {
         this.pkgPath = s`${this.pkgPath}`;
         this.dependencyGraphKey = this.pkgPath.toLowerCase();
 
-        this.extension = path.extname(pathAbsolute).toLowerCase();
+        this.extension = extname(this.pkgPath).toLowerCase();
 
         //all BrighterScript files need to be transpiled
-        if (this.extension === '.bs') {
+        if (this.extension.endsWith('.bs')) {
             this.needsTranspiled = true;
+        }
+        this.isTypedefFile = this.extension === '.d.bs';
+        if (this.extension === '.brs') {
+            this.typedefPath = util.getTypedefPath(this.pathAbsolute);
         }
     }
 
@@ -52,7 +58,7 @@ export class BrsFile {
      */
     public dependencyGraphKey: string;
     /**
-     * The extension for this file
+     * The all-lowercase extension for this file (including the leading dot)
      */
     public extension: string;
 
@@ -112,21 +118,72 @@ export class BrsFile {
         }
     }
 
-
-    public parser: Parser;
+    public parser = new Parser();
 
     public fileContents: string;
 
+    private logDebug(...args) {
+        this.program.logger.debug('BrsFile', chalk.green(this.pkgPath), ...args);
+    }
+
     /**
-     * Contains the full text for the type definitions file (if one was provided)
+     * If this is a typedef file
      */
-    public typedefContents?: string;
+    public isTypedefFile: boolean;
+
+    /**
+     * Path to the corresponding typedef file for this file (if applicable)
+     */
+    public typedefPath?: string;
 
     /**
      * If the file was given type definitions during parse
      */
-    public get hasTypedefs() {
-        return !!this.typedefContents;
+    public get hasTypedef() {
+        return !!this.typedefFile;
+    }
+
+    /**
+     * A reference to the typedef file (if one exists)
+     */
+    public get typedefFile() {
+        if (this.typedefPath) {
+            return this.cache.getOrAdd('typedefFile', () => {
+                return this.program.getFileByPathAbsolute<BrsFile>(this.typedefPath);
+            });
+        }
+    }
+
+    private cache = new Cache();
+
+    /**
+     * An unsubscribe function for the dependencyGraph subscription
+     */
+    private unsubscribeFromDependencyGraph: () => void;
+
+    /**
+     * Attach the file to the dependency graph so it can monitor changes.
+     * Also notify the dependency graph of our current dependencies so other dependents can be notified.
+     */
+    public attachDependencyGraph(dependencyGraph: DependencyGraph) {
+        if (this.unsubscribeFromDependencyGraph) {
+            this.unsubscribeFromDependencyGraph();
+        }
+
+        //anytime a dependency changes, clean up some cached values
+        this.unsubscribeFromDependencyGraph = this.program.dependencyGraph.onchange(this.dependencyGraphKey, () => {
+            this.logDebug('clear cache because dependency graph changed');
+            this.cache.clear();
+        });
+
+        const dependencies = this.ownScriptImports.map(x => x.pkgPath.toLowerCase());
+        //if this is a .brs file, watch for typedef changes
+        if (this.extension === '.brs') {
+            dependencies.push(
+                util.getTypedefPath(this.pathAbsolute)
+            );
+        }
+        dependencyGraph.addOrReplace(this.dependencyGraphKey, dependencies);
     }
 
     /**
@@ -134,18 +191,22 @@ export class BrsFile {
      * @param fileContents
      * @param typedefContents - a string containing the d.bs file contents (type definitions)
      */
-    public parse(fileContents: string, typedefContents?: string) {
+    public parse(fileContents: string) {
         try {
             this.fileContents = fileContents;
-            this.typedefContents = typedefContents;
             if (this.parseDeferred.isCompleted) {
                 throw new Error(`File was already processed. Create a new instance of BrsFile instead. ${this.pathAbsolute}`);
+            }
+
+            //if we have a typedef file, skip parsing this file
+            if (this.hasTypedef) {
+                return;
             }
 
             //tokenize the input file
             let lexer = this.program.logger.time(LogLevel.debug, ['lexer.lex', chalk.green(this.pathAbsolute)], () => {
                 //scan the d.bs file if present, otherwise the fileContents
-                return Lexer.scan(typedefContents ?? fileContents, {
+                return Lexer.scan(fileContents, {
                     includeWhitespace: false
                 });
             });
@@ -171,9 +232,8 @@ export class BrsFile {
             //if the preprocessor generated tokens, use them.
             let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
 
-            this.parser = new Parser();
             this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.pathAbsolute)], () => {
-                const parseMode = this.extension === '.bs' || this.hasTypedefs ? ParseMode.BrighterScript : ParseMode.BrightScript;
+                const parseMode = this.extension === '.bs' ? ParseMode.BrighterScript : ParseMode.BrightScript;
                 this.parser.parse(tokens, {
                     mode: parseMode,
                     logger: this.program.logger

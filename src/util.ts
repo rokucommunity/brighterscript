@@ -674,9 +674,14 @@ export class Util {
         return files;
     }
 
-    public getTypedefKey(brsSrcPath: string) {
+    /**
+     * Given a path to a brs file, compute the path to a theoretical d.bs file
+     */
+    public getTypedefPath(brsSrcPath: string) {
         return standardizePath(
-            brsSrcPath.toLowerCase()
+            brsSrcPath
+                .replace(/\.brs$/i, '.d.bs')
+                .toLowerCase()
         );
     }
 
