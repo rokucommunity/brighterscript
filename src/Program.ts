@@ -283,7 +283,7 @@ export class Program {
      * Get the type definitions for the specified file.
      * The results are cached for future performance boosts.
      */
-    private async getTypeDefinitionsForFile(pathAbsolute: string) {
+    private async getTypedefsForFile(pathAbsolute: string) {
         //you can only get type definitions for .brs files
         if (!pathAbsolute.toLowerCase().endsWith('.brs')) {
             return;
@@ -381,7 +381,7 @@ export class Program {
                 let fileContents: SourceObj = {
                     pathAbsolute: srcPath,
                     source: await getFileContents(),
-                    definitions: await this.getTypeDefinitionsForFile(srcPath)
+                    definitions: await this.getTypedefsForFile(srcPath)
                 };
                 this.plugins.emit('beforeFileParse', fileContents);
 

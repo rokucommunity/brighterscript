@@ -120,24 +120,24 @@ export class BrsFile {
     /**
      * Contains the full text for the type definitions file (if one was provided)
      */
-    public typeDefinitionContents?: string;
+    public typedefContents?: string;
 
     /**
      * If the file was given type definitions during parse
      */
-    public get hasTypeDefinitions() {
-        return !!this.typeDefinitionContents;
+    public get hasTypedefs() {
+        return !!this.typedefContents;
     }
 
     /**
      * Calculate the AST for this file
      * @param fileContents
-     * @param typeDefinitionContents - a string containing the d.bs file contents (type definitions)
+     * @param typedefContents - a string containing the d.bs file contents (type definitions)
      */
-    public parse(fileContents: string, typeDefinitionContents?: string) {
+    public parse(fileContents: string, typedefContents?: string) {
         try {
             this.fileContents = fileContents;
-            this.typeDefinitionContents = typeDefinitionContents;
+            this.typedefContents = typedefContents;
             if (this.parseDeferred.isCompleted) {
                 throw new Error(`File was already processed. Create a new instance of BrsFile instead. ${this.pathAbsolute}`);
             }
@@ -145,7 +145,7 @@ export class BrsFile {
             //tokenize the input file
             let lexer = this.program.logger.time(LogLevel.debug, ['lexer.lex', chalk.green(this.pathAbsolute)], () => {
                 //scan the d.bs file if present, otherwise the fileContents
-                return Lexer.scan(typeDefinitionContents ?? fileContents, {
+                return Lexer.scan(typedefContents ?? fileContents, {
                     includeWhitespace: false
                 });
             });
@@ -173,7 +173,7 @@ export class BrsFile {
 
             this.parser = new Parser();
             this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.pathAbsolute)], () => {
-                const parseMode = this.extension === '.bs' || this.hasTypeDefinitions ? ParseMode.BrighterScript : ParseMode.BrightScript;
+                const parseMode = this.extension === '.bs' || this.hasTypedefs ? ParseMode.BrighterScript : ParseMode.BrightScript;
                 this.parser.parse(tokens, {
                     mode: parseMode,
                     logger: this.program.logger

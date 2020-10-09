@@ -2425,8 +2425,7 @@ export class Parser {
 
 export enum ParseMode {
     BrightScript = 'BrightScript',
-    BrighterScript = 'BrighterScript',
-    TypeDefinition = 'TypeDefinition'
+    BrighterScript = 'BrighterScript'
 }
 
 export interface ParseOptions {

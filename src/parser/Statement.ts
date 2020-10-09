@@ -48,6 +48,9 @@ export class EmptyStatement extends Statement {
     }
 }
 
+/**
+ * This is a top-level statement. Consider this the root of the AST
+ */
 export class Body extends Statement {
     constructor(
         public statements: Statement[] = []
