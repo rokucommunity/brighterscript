@@ -2198,6 +2198,42 @@ describe('BrsFile', () => {
                 end namespace
             `);
         });
+
+        it('includes classes', async () => {
+            await testTypedef(`
+                class Person
+                    public name as string
+                    public age = 12
+                    public sub getAge() as integer
+                        return m.age
+                    end sub
+                end class
+                namespace NameA.NameB
+                    class Person
+                        public name as string
+                        public age = 12
+                        public sub getAge() as integer
+                            return m.age
+                        end sub
+                    end class
+                end namespace
+            `, trim`
+                class Person
+                    public name as string
+                    public age as integer
+                    public sub getAge() as integer
+                    end sub
+                end class
+                namespace NameA.NameB
+                    class Person
+                        public name as string
+                        public age as integer
+                        public sub getAge() as integer
+                        end sub
+                    end class
+                end namespace
+            `);
+        });
     });
 
     describe('Plugins', () => {

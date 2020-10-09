@@ -7,8 +7,8 @@ import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
 import { ParseMode, Parser } from './Parser';
 import { walk, WalkVisitor, WalkOptions, InternalWalkMode } from '../astUtils/visitors';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isVariableExpression } from '../astUtils/reflection';
-import { BrsInvalid } from '../brsTypes/BrsType';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isLiteralExpression, isVariableExpression } from '../astUtils/reflection';
+import { BrsInvalid, ValueKind, valueKindFromString, valueKindToString } from '../brsTypes/BrsType';
 import { TypedefProvider } from '../interfaces';
 
 /**
@@ -1174,7 +1174,7 @@ export class ImportStatement extends Statement implements TypedefProvider {
 }
 
 
-export class ClassStatement extends Statement {
+export class ClassStatement extends Statement implements TypedefProvider {
 
     constructor(
         readonly classKeyword: Token,
@@ -1235,6 +1235,31 @@ export class ClassStatement extends Statement {
         );
         //make the class assembler (i.e. the public-facing class creator method)
         result.push(...this.getTranspiledClassFunction(state));
+        return result;
+    }
+
+    getTypedef(state: TranspileState) {
+        const result = [] as Array<string | SourceNode>;
+        result.push(
+            'class ',
+            this.name.text,
+            state.newline()
+        );
+        state.blockDepth++;
+        for (const member of this.body) {
+            if ('getTypedef' in member) {
+                result.push(
+                    state.indent(),
+                    ...(member as TypedefProvider).getTypedef(state),
+                    state.newline()
+                );
+            }
+        }
+        state.blockDepth--;
+        result.push(
+            state.indent(),
+            'end class'
+        );
         return result;
     }
 
@@ -1551,6 +1576,14 @@ export class ClassMethodStatement extends FunctionStatement {
         return this.func.transpile(state);
     }
 
+    getTypedef(state: TranspileState) {
+        return [
+            this.accessModifier.text,
+            ' ',
+            ...super.getTypedef(state)
+        ];
+    }
+
     /**
      * All child classes must call the parent constructor. The type checker will warn users when they don't call it in their own class,
      * but we still need to call it even if they have omitted it. This injects the super call if it's missing
@@ -1654,7 +1687,7 @@ export class ClassMethodStatement extends FunctionStatement {
     }
 }
 
-export class ClassFieldStatement extends Statement {
+export class ClassFieldStatement extends Statement implements TypedefProvider {
 
     constructor(
         readonly accessModifier?: Token,
@@ -1671,10 +1704,38 @@ export class ClassFieldStatement extends Statement {
         );
     }
 
+    /**
+     * Derive a ValueKind from the type token, or the intial value.
+     * Defaults to `ValueKind.Dynamic`
+     */
+    private getType() {
+        if (this.type) {
+            return valueKindFromString(this.type.text);
+        } else if (isLiteralExpression(this.initialValue)) {
+            return this.initialValue.value.kind;
+        } else {
+            return ValueKind.Dynamic;
+        }
+    }
+
     public readonly range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
+    }
+
+    getTypedef(state: TranspileState) {
+        const result = [];
+        if (this.name) {
+            result.push(
+                this.accessModifier?.text ?? 'public',
+                ' ',
+                this.name?.text,
+                ' as ',
+                valueKindToString(this.getType()).toLowerCase()
+            );
+        }
+        return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
