@@ -674,6 +674,12 @@ export class Util {
         return files;
     }
 
+    public getTypedefKey(brsSrcPath: string) {
+        return standardizePath(
+            brsSrcPath.toLowerCase()
+        );
+    }
+
     /**
      * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
      * @param diagnostic

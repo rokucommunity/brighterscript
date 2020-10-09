@@ -283,16 +283,16 @@ export class Program {
      * Get the type definitions for the specified file.
      * The results are cached for future performance boosts.
      */
-    private async getTypedefsForFile(pathAbsolute: string) {
+    public async getTypedef(pathAbsolute: string) {
         //you can only get type definitions for .brs files
         if (!pathAbsolute.toLowerCase().endsWith('.brs')) {
             return;
         }
 
         let typedefPath = pathAbsolute.replace(/.brs$/i, '.d.bs');
-        let lowerTypedefPath = typedefPath.toLowerCase();
+        let typedefKey = util.getTypedefKey(typedefPath);
         //specifically check for `undefined`, because `null` means "does not exist"
-        if (this.typedefCache[lowerTypedefPath] === undefined) {
+        if (this.typedefCache[typedefKey] === undefined) {
             let contents: string | null;
             try {
                 contents = await this.getFileContents(typedefPath);
@@ -301,9 +301,9 @@ export class Program {
                 this.logger.info(`Exception throw trying to load '${typedefPath}'`, e);
                 contents = null;
             }
-            this.typedefCache[lowerTypedefPath] = contents ?? null;
+            this.typedefCache[typedefKey] = contents ?? null;
         }
-        return this.typedefCache[lowerTypedefPath];
+        return this.typedefCache[typedefKey];
     }
 
     /**
@@ -314,7 +314,12 @@ export class Program {
      *
      * The key is the all-lowercase src path of the typedef file
      */
-    public typedefCache = {} as { [lowerTypedefSrcPath: string]: string };
+    private typedefCache = {} as { [lowerTypedefSrcPath: string]: string };
+
+    public setTypedef(typedefSrcPath: string, contents: string | null | undefined) {
+        const typedefKey = util.getTypedefKey(typedefSrcPath);
+        this.typedefCache[typedefKey] = contents;
+    }
 
     /**
      * Load a file into the program. If that file already exists, it is replaced.
@@ -364,7 +369,7 @@ export class Program {
 
             //if this is a type definition file, store its contents in the cache
             if (srcPath.toLowerCase().endsWith('.d.bs')) {
-                this.typedefCache[srcPath.toLowerCase()] = await getFileContents();
+                this.setTypedef(srcPath, await getFileContents());
 
             } else if (fileExtension === '.brs' || fileExtension === '.bs') {
                 let brsFile = new BrsFile(srcPath, pkgPath, this);
@@ -381,7 +386,7 @@ export class Program {
                 let fileContents: SourceObj = {
                     pathAbsolute: srcPath,
                     source: await getFileContents(),
-                    definitions: await this.getTypedefsForFile(srcPath)
+                    definitions: await this.getTypedef(srcPath)
                 };
                 this.plugins.emit('beforeFileParse', fileContents);
 
@@ -507,7 +512,7 @@ export class Program {
         pathAbsolute = s`${pathAbsolute}`;
 
         if (pathAbsolute.endsWith('.d.bs')) {
-            delete this.typedefCache[pathAbsolute.toLowerCase()];
+            delete this.typedefCache[util.getTypedefKey(pathAbsolute)];
             return;
         }
 

@@ -409,7 +409,7 @@ export class ProgramBuilder {
         //mark the missing type files as `null` so Program doesn't ask the FS for them
         for (const filePath of allTypedefFiles) {
             if (!actualTypedefMap[filePath]) {
-                this.program.typedefCache[s(filePath)] = null;
+                this.program.setTypedef(filePath, null);
             }
         }
 
