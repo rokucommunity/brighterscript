@@ -8,7 +8,7 @@ import { FunctionScope } from '../FunctionScope';
 import { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import { Deferred } from '../deferred';
 import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers, Keywords } from '../lexer';
-import { Parser, ParseMode } from '../parser';
+import { Parser, ParseMode, Statement, FunctionStatement, NamespaceStatement } from '../parser';
 import { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import { AssignmentStatement, ClassStatement, LibraryStatement, ImportStatement } from '../parser/Statement';
 import { Program } from '../Program';

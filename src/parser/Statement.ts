@@ -1210,7 +1210,7 @@ export class ClassStatement extends Statement {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                let fullyQualifiedClassName = util.getFulllyQualifiedClassName(
+                let fullyQualifiedClassName = util.getFullyQualifiedClassName(
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
                     this.namespaceName?.getName(ParseMode.BrighterScript)
                 );
@@ -1284,7 +1284,7 @@ export class ClassStatement extends Statement {
 
         //construct parent class or empty object
         if (ancestors[0]) {
-            let fullyQualifiedClassName = util.getFulllyQualifiedClassName(
+            let fullyQualifiedClassName = util.getFullyQualifiedClassName(
                 this.parentClassName.getName(ParseMode.BrighterScript),
                 this.namespaceName?.getName(ParseMode.BrighterScript)
             );
