@@ -6,7 +6,7 @@ import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
 import { TranspileState } from './TranspileState';
 import { ParseMode, Parser } from './Parser';
-import { walk, WalkVisitor, WalkOptions, InternalWalkMode, WalkMode } from '../astUtils/visitors';
+import { walk, WalkVisitor, WalkOptions, InternalWalkMode } from '../astUtils/visitors';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isExpression, isExpressionStatement, isFunctionStatement, isVariableExpression } from '../astUtils/reflection';
 import { BrsInvalid } from '../brsTypes/BrsType';
 import { TypedefProvider } from '../interfaces';
