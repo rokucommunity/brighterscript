@@ -6,14 +6,13 @@ import { XmlFile } from './files/XmlFile';
 import { CallableContainer, BsDiagnostic, FileReference } from './interfaces';
 import { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement } from './parser';
-import { ClassStatement } from './parser/ClassStatement';
+import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
-import { FunctionType } from './types/FunctionType';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -88,7 +87,7 @@ export class Scope {
         let namespaceNameLower = namespaceName.toLowerCase();
         let files = this.getFiles();
         for (let file of files) {
-            for (let namespace of file.parser.namespaceStatements) {
+            for (let namespace of file.parser.references.namespaceStatements) {
                 let loopNamespaceNameLower = namespace.name.toLowerCase();
                 if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
                     return true;
@@ -237,7 +236,7 @@ export class Scope {
         let namespaceLookup = {} as { [namespaceName: string]: NamespaceContainer };
         let files = this.getFiles();
         for (let file of files) {
-            for (let namespace of file.parser.namespaceStatements) {
+            for (let namespace of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
                 let name = namespace.nameExpression.getName(ParseMode.BrighterScript);
                 let nameParts = name.split('.');
@@ -262,9 +261,9 @@ export class Scope {
                 let ns = namespaceLookup[name.toLowerCase()];
                 ns.statements.push(...namespace.body.statements);
                 for (let statement of namespace.body.statements) {
-                    if (statement instanceof ClassStatement) {
+                    if (isClassStatement(statement)) {
                         ns.classStatements[statement.name.text.toLowerCase()] = statement;
-                    } else if (statement instanceof FunctionStatement) {
+                    } else if (isFunctionStatement(statement)) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     }
                 }
@@ -290,7 +289,7 @@ export class Scope {
         let lookup = {} as { [lowerName: string]: ClassStatement };
         let files = this.getFiles();
         for (let file of files) {
-            for (let cls of file.parser.classStatements) {
+            for (let cls of file.parser.references.classStatements) {
                 lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
             }
         }
@@ -301,7 +300,7 @@ export class Scope {
         let result = [] as NamespaceStatement[];
         let files = this.getFiles();
         for (let file of files) {
-            result.push(...file.parser.namespaceStatements);
+            result.push(...file.parser.references.namespaceStatements);
         }
         return result;
     }
@@ -383,7 +382,7 @@ export class Scope {
 
     private detectVariableNamespaceCollisions(file: BrsFile | XmlFile) {
         //find all function parameters
-        for (let func of file.parser.functionExpressions) {
+        for (let func of file.parser.references.functionExpressions) {
             for (let param of func.parameters) {
                 let lowerParamName = param.name.text.toLowerCase();
                 let namespace = this.namespaceLookup[lowerParamName];
@@ -405,7 +404,7 @@ export class Scope {
             }
         }
 
-        for (let assignment of file.parser.assignmentStatements) {
+        for (let assignment of file.parser.references.assignmentStatements) {
             let lowerAssignmentName = assignment.name.text.toLowerCase();
             let namespace = this.namespaceLookup[lowerAssignmentName];
             //see if the param matches any starting namespace part
@@ -445,7 +444,7 @@ export class Scope {
         let result = [] as AugmentedNewExpression[];
         let files = this.getFiles();
         for (let file of files) {
-            let expressions = file.parser.newExpressions as AugmentedNewExpression[];
+            let expressions = file.parser.references.newExpressions as AugmentedNewExpression[];
             for (let expression of expressions) {
                 expression.file = file;
                 result.push(expression);
@@ -512,7 +511,7 @@ export class Scope {
                 let lowerVarName = varDeclaration.name.toLowerCase();
 
                 //if the var is a function
-                if (varDeclaration.type instanceof FunctionType) {
+                if (isFunctionType(varDeclaration.type)) {
                     //local var function with same name as stdlib function
                     if (
                         //has same name as stdlib
@@ -669,9 +668,9 @@ export class Scope {
         let result = [] as FileReference[];
         let files = this.getFiles();
         for (let file of files) {
-            if (file instanceof BrsFile) {
+            if (isBrsFile(file)) {
                 result.push(...file.ownScriptImports);
-            } else if (file instanceof XmlFile) {
+            } else if (isXmlFile(file)) {
                 result.push(...file.scriptTagImports);
             }
         }

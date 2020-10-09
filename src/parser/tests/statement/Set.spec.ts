@@ -132,82 +132,95 @@ describe('parser indexed assignment', () => {
                 kind: TokenKind.Identifier,
                 text: 'arr',
                 isReserved: false,
-                range: Range.create(0, 0, 0, 3)
+                range: Range.create(0, 0, 0, 3),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.LeftSquareBracket,
                 text: '[',
                 isReserved: false,
-                range: Range.create(0, 3, 0, 4)
+                range: Range.create(0, 3, 0, 4),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
                 literal: new Int32(0),
                 isReserved: false,
-                range: Range.create(0, 4, 0, 5)
+                range: Range.create(0, 4, 0, 5),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.RightSquareBracket,
                 text: ']',
                 isReserved: false,
-                range: Range.create(0, 5, 0, 6)
+                range: Range.create(0, 5, 0, 6),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                range: Range.create(0, 7, 0, 8)
+                range: Range.create(0, 7, 0, 8),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '1',
                 literal: new Int32(1),
                 isReserved: false,
-                range: Range.create(0, 9, 0, 10)
+                range: Range.create(0, 9, 0, 10),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                range: Range.create(0, 10, 0, 11)
+                range: Range.create(0, 10, 0, 11),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'obj',
                 isReserved: false,
-                range: Range.create(1, 0, 1, 3)
+                range: Range.create(1, 0, 1, 3),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Dot,
                 text: '.',
                 isReserved: false,
-                range: Range.create(1, 3, 1, 4)
+                range: Range.create(1, 3, 1, 4),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
-                range: Range.create(1, 4, 1, 5)
+                range: Range.create(1, 4, 1, 5),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                range: Range.create(1, 6, 1, 7)
+                range: Range.create(1, 6, 1, 7),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
                 literal: new Int32(5),
                 isReserved: false,
-                range: Range.create(1, 8, 1, 9)
+                range: Range.create(1, 8, 1, 9),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                range: Range.create(1, 10, 1, 11)
+                range: Range.create(1, 10, 1, 11),
+                leadingWhitespace: ''
             }
         ]);
 

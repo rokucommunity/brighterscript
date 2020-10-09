@@ -1,11 +1,14 @@
-import { CompilerPlugin, BrsFile, XmlFile } from '../../dist';
-import { EmptyStatement } from '../../dist/parser';
-import { createStatementVisitor, walkStatements, isBrsFile } from '../../dist/astUtils';
+import { isBrsFile } from '../../astUtils/reflection';
+import { createVisitor, WalkMode } from '../../astUtils/visitors';
+import { BrsFile } from '../../files/BrsFile';
+import { XmlFile } from '../../files/XmlFile';
+import { CompilerPlugin } from '../../interfaces';
+import { EmptyStatement } from '../../parser/Statement';
 
 // entry point
 const pluginInterface: CompilerPlugin = {
     name: 'removePrint',
-    afterFileParse
+    afterFileParse: afterFileParse
 };
 export default pluginInterface;
 
@@ -16,10 +19,11 @@ function afterFileParse(file: (BrsFile | XmlFile)) {
         return;
     }
     // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-    file.parser.functionExpressions.forEach((fun) => {
-        const visitor = createStatementVisitor({
+    file.parser.references.functionExpressions.forEach((fun) => {
+        fun.body.walk(createVisitor({
             PrintStatement: (statement) => new EmptyStatement()
+        }), {
+            walkMode: WalkMode.visitStatements
         });
-        walkStatements(fun.body, visitor);
     });
 }

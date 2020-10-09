@@ -68,20 +68,23 @@ describe('parser print statements', () => {
                 kind: TokenKind.Print,
                 text: 'print',
                 isReserved: true,
-                range: Range.create(0, 0, 1, 5)
+                range: Range.create(0, 0, 1, 5),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
                 literal: new BrsString('foo'),
                 isReserved: false,
-                range: Range.create(0, 6, 0, 11)
+                range: Range.create(0, 6, 0, 11),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                range: Range.create(0, 11, 0, 12)
+                range: Range.create(0, 11, 0, 12),
+                leadingWhitespace: ''
             }
         ]);
 

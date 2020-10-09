@@ -6,6 +6,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.16.1] - 2020-10-03
+### Changed
+ - rename isEscapedCharCodeLiteral to isEscapedCharCodeLiteralExpression to match other expression class names
+ - rename FunctionParameter to FunctionParameterExpression to match other expression class names
+ - convert AAMemberExpression interface into an expression class.
+ - convert isBrsFile and isXmlFile to check for constructor file name rather than file extension.
+### Fixed
+ - bugs with plugin interoperability with BrighterScript when using `instanceof`. All internal BrighterScript logic now uses the `is` functions from `astutils/reflection`, and plugin authors should do the same.
+
+
+
+## [0.16.0] - 2020-10-02
+### Added
+ - `Expression.walk` and `Statement.walk` functions which provide shallow or deep walking of the AST
+ - Many `ast` reflection methods to be used instead of `instanceof`.
+ - plugin system (still in alpha) support for re-scanning the AST after modifing the AST by calling `invalidateReferences()`
+ - every token has a `leadingWhitespace` property now that contains leading whitespace. Retrieving whitespace tokens from the `Lexer` will be removed in a future update in favor of this appraoch
+### Changed
+ - all AST nodes now extend either `Statement` or `Expression` instead of simply implementing their interfaces.
+### Removed
+ - several AST walking functions from `astUtils/` in favor of direct node walking
+
+
+
+## [0.15.2] - 2020-10-01
+### Fixed
+ - Bug in component validation that would throw errors if component name was undefined (generally due to an XML parse error). ([#194](https://github.com/rokucommunity/brighterscript/pull/194))
+
+
+
+## [0.15.1] - 2020-09-30
+### Fixed
+ - improved performance in the lexer and parser
+ - potential for accidentally changing `cwd` during bsconfig resolving
+
+
+
 ## [0.15.0] - 2020-09-18
 ### Added
  - plugin API to allow visibility into the various compiler phases. This is currently in alpha. ([#170](https://github.com/rokucommunity/brighterscript/pull/170))
@@ -530,3 +567,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.13.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.13.1...v0.13.2
 [0.14.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.13.2...v0.14.0
 [0.15.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.14.0...v0.15.0
+[0.15.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.15.0...v0.15.1
+[0.15.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.15.1...v0.15.2
+[0.16.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.15.2...v0.16.0
+[0.16.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.0...v0.16.1

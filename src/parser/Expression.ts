@@ -1,31 +1,41 @@
+/* eslint-disable no-bitwise */
 import { Token, Identifier, TokenKind } from '../lexer';
-import { BrsType, ValueKind, BrsString, FunctionParameter } from '../brsTypes';
+import { BrsType, ValueKind, BrsString, FunctionParameterExpression } from '../brsTypes';
 import { Block, CommentStatement, FunctionStatement } from './Statement';
 import { SourceNode } from 'source-map';
-import { Range, CancellationToken } from 'vscode-languageserver';
+import { Range } from 'vscode-languageserver';
 import util from '../util';
 import { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
+import { walk, InternalWalkMode, WalkOptions, WalkVisitor } from '../astUtils/visitors';
+import { isCommentStatement, isEscapedCharCodeLiteralExpression, isLiteralExpression, isVariableExpression } from '../astUtils/reflection';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
 /** A BrightScript expression */
-export interface Expression {
-    /** The starting and ending location of the expression. */
-    range: Range;
+export abstract class Expression {
+    /**
+     * The starting and ending location of the expression.
+     */
+    public abstract range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string>;
+    public abstract transpile(state: TranspileState): Array<SourceNode | string>;
+    /**
+     * When being considered by the walk visitor, this describes what type of element the current class is.
+     */
+    public visitMode = InternalWalkMode.visitExpressions;
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void;
+    public abstract walk(visitor: WalkVisitor, options: WalkOptions);
 }
 
-export class BinaryExpression implements Expression {
+export class BinaryExpression extends Expression {
     constructor(
-        readonly left: Expression,
-        readonly operator: Token,
-        readonly right: Expression
+        public left: Expression,
+        public operator: Token,
+        public right: Expression
     ) {
+        super();
         this.range = util.createRangeFromPositions(this.left.range.start, this.right.range.end);
     }
 
@@ -41,16 +51,15 @@ export class BinaryExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.left.walk(visitor, this, cancel);
-            this.right.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'left', visitor, options);
+            walk(this, 'right', visitor, options);
         }
     }
 }
 
-export class CallExpression implements Expression {
+export class CallExpression extends Expression {
     static MaximumArguments = 32;
 
     constructor(
@@ -60,6 +69,7 @@ export class CallExpression implements Expression {
         readonly args: Expression[],
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
+        super();
         this.range = util.createRangeFromPositions(this.callee.range.start, this.closingParen.range.end);
     }
 
@@ -88,18 +98,19 @@ export class CallExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            visitor(this.callee, this);
-            this.args.forEach(e => e.walk(visitor, this, cancel));
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'callee', visitor, options);
+            for (let i = 0; i < this.args.length; i++) {
+                walk(this.args, i, visitor, options, this);
+            }
         }
     }
 }
 
-export class FunctionExpression implements Expression {
+export class FunctionExpression extends Expression {
     constructor(
-        readonly parameters: FunctionParameter[],
+        readonly parameters: FunctionParameterExpression[],
         readonly returns: ValueKind,
         public body: Block,
         readonly functionType: Token | null,
@@ -113,6 +124,7 @@ export class FunctionExpression implements Expression {
          */
         readonly parentFunction?: FunctionExpression
     ) {
+        super();
     }
 
     /**
@@ -197,19 +209,26 @@ export class FunctionExpression implements Expression {
         return results;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.parameters.forEach(p => p.defaultValue?.walk(visitor, this, cancel));
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            for (let i = 0; i < this.parameters.length; i++) {
+                walk(this.parameters, i, visitor, options, this);
+            }
+
+            //This is the core of full-program walking...it allows us to step into sub functions
+            if (options.walkMode & InternalWalkMode.recurseChildFunctions) {
+                walk(this, 'body', visitor, options);
+            }
         }
     }
 }
 
-export class NamespacedVariableNameExpression implements Expression {
+export class NamespacedVariableNameExpression extends Expression {
     constructor(
         //if this is a `DottedGetExpression`, it must be comprised only of `VariableExpression`s
         readonly expression: DottedGetExpression | VariableExpression
     ) {
+        super();
         this.range = expression.range;
     }
     range: Range;
@@ -227,14 +246,14 @@ export class NamespacedVariableNameExpression implements Expression {
 
     public getNameParts() {
         let parts = [] as string[];
-        if (this.expression instanceof VariableExpression) {
+        if (isVariableExpression(this.expression)) {
             parts.push(this.expression.name.text);
         } else {
             let expr = this.expression;
 
             parts.push(expr.name.text);
 
-            while (expr instanceof VariableExpression === false) {
+            while (isVariableExpression(expr) === false) {
                 expr = expr.obj as DottedGetExpression;
                 parts.unshift(expr.name.text);
             }
@@ -250,20 +269,20 @@ export class NamespacedVariableNameExpression implements Expression {
         }
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.expression.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
         }
     }
 }
 
-export class DottedGetExpression implements Expression {
+export class DottedGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
         readonly dot: Token
     ) {
+        super();
         this.range = util.createRangeFromPositions(this.obj.range.start, this.name.range.end);
     }
 
@@ -282,20 +301,20 @@ export class DottedGetExpression implements Expression {
         }
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.obj.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'obj', visitor, options);
         }
     }
 }
 
-export class XmlAttributeGetExpression implements Expression {
+export class XmlAttributeGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
         readonly name: Identifier,
         readonly at: Token
     ) {
+        super();
         this.range = util.createRangeFromPositions(this.obj.range.start, this.name.range.end);
     }
 
@@ -309,21 +328,21 @@ export class XmlAttributeGetExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.obj.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'obj', visitor, options);
         }
     }
 }
 
-export class IndexedGetExpression implements Expression {
+export class IndexedGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
         readonly index: Expression,
         readonly openingSquare: Token,
         readonly closingSquare: Token
     ) {
+        super();
         this.range = util.createRangeFromPositions(this.obj.range.start, this.closingSquare.range.end);
     }
 
@@ -338,23 +357,23 @@ export class IndexedGetExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.obj.walk(visitor, this, cancel);
-            this.index.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'obj', visitor, options);
+            walk(this, 'index', visitor, options);
         }
     }
 }
 
-export class GroupingExpression implements Expression {
+export class GroupingExpression extends Expression {
     constructor(
         readonly tokens: {
             left: Token;
             right: Token;
         },
-        readonly expression: Expression
+        public expression: Expression
     ) {
+        super();
         this.range = util.createRangeFromPositions(this.tokens.left.range.start, this.tokens.right.range.end);
     }
 
@@ -368,19 +387,19 @@ export class GroupingExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.expression.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
         }
     }
 }
 
-export class LiteralExpression implements Expression {
+export class LiteralExpression extends Expression {
     constructor(
         readonly value: BrsType,
         range: Range
     ) {
+        super();
         this.range = range ?? util.createRange(-1, -1, -1, -1);
     }
 
@@ -405,10 +424,8 @@ export class LiteralExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-        }
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
     }
 }
 
@@ -416,10 +433,11 @@ export class LiteralExpression implements Expression {
  * This is a special expression only used within template strings. It exists so we can prevent producing lots of empty strings
  * during template string transpile by identifying these expressions explicitly and skipping the bslib_toString around them
  */
-export class EscapedCharCodeLiteral implements Expression {
+export class EscapedCharCodeLiteralExpression extends Expression {
     constructor(
         readonly token: Token & { charCode: number }
     ) {
+        super();
         this.range = token.range;
     }
     readonly range: Range;
@@ -435,19 +453,18 @@ export class EscapedCharCodeLiteral implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-        }
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
     }
 }
 
-export class ArrayLiteralExpression implements Expression {
+export class ArrayLiteralExpression extends Expression {
     constructor(
         readonly elements: Array<Expression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) {
+        super();
         this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
     }
 
@@ -465,7 +482,7 @@ export class ArrayLiteralExpression implements Expression {
             let previousElement = this.elements[i - 1];
             let element = this.elements[i];
 
-            if (element instanceof CommentStatement) {
+            if (isCommentStatement(element)) {
                 //if the comment is on the same line as opening square or previous statement, don't add newline
                 if (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element)) {
                     result.push(' ');
@@ -489,7 +506,7 @@ export class ArrayLiteralExpression implements Expression {
                 for (let j = i + 1; j < this.elements.length; j++) {
                     let el = this.elements[j];
                     //add a comma if there will be another element after this
-                    if (el instanceof CommentStatement === false) {
+                    if (isCommentStatement(el) === false) {
                         result.push(',');
                         break;
                     }
@@ -509,31 +526,48 @@ export class ArrayLiteralExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.elements.forEach(element => element.walk(visitor, this, cancel));
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            for (let i = 0; i < this.elements.length; i++) {
+                walk(this.elements, i, visitor, options, this);
+            }
         }
     }
 }
 
-/** A member of an associative array literal. */
-export interface AAMemberExpression {
-    /** The name of the member. */
-    key: BrsString;
-    keyToken: Token;
-    colonToken: Token;
-    /** The expression evaluated to determine the member's initial value. */
-    value: Expression;
-    range: Range;
+export class AAMemberExpression extends Expression {
+    constructor(
+        /** The name of the member. */
+        public key: BrsString,
+        public keyToken: Token,
+        public colonToken: Token,
+        /** The expression evaluated to determine the member's initial value. */
+        public value: Expression
+    ) {
+        super();
+        this.range = util.createRangeFromPositions(keyToken.range.start, this.value.range.end);
+    }
+
+    public range: Range;
+
+    transpile(state: TranspileState): Array<SourceNode | string> {
+        //TODO move the logic from AALiteralExpression loop into this function
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        walk(this, 'value', visitor, options);
+    }
+
 }
 
-export class AALiteralExpression implements Expression {
+export class AALiteralExpression extends Expression {
     constructor(
         readonly elements: Array<AAMemberExpression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) {
+        super();
         this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
     }
 
@@ -547,7 +581,7 @@ export class AALiteralExpression implements Expression {
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
-        if (hasChildren && ((this.elements[0] instanceof CommentStatement) === false || !util.linesTouch(this.elements[0], this.open))) {
+        if (hasChildren && (isCommentStatement(this.elements[0]) === false || !util.linesTouch(this.elements[0], this.open))) {
             result.push('\n');
         }
         state.blockDepth++;
@@ -557,7 +591,7 @@ export class AALiteralExpression implements Expression {
             let nextElement = this.elements[i + 1];
 
             //don't indent if comment is same-line
-            if (element instanceof CommentStatement &&
+            if (isCommentStatement(element as any) &&
                 (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element))
             ) {
                 result.push(' ');
@@ -568,7 +602,7 @@ export class AALiteralExpression implements Expression {
             }
 
             //render comments
-            if (element instanceof CommentStatement) {
+            if (isCommentStatement(element)) {
                 result.push(...element.transpile(state));
             } else {
                 //key
@@ -584,7 +618,7 @@ export class AALiteralExpression implements Expression {
                 //determine if comments are the only members left in the array
                 let onlyCommentsRemaining = true;
                 for (let j = i + 1; j < this.elements.length; j++) {
-                    if ((this.elements[j] instanceof CommentStatement) === false) {
+                    if (isCommentStatement(this.elements[j]) === false) {
                         onlyCommentsRemaining = false;
                         break;
                     }
@@ -600,7 +634,7 @@ export class AALiteralExpression implements Expression {
 
 
             //if next element is a same-line comment, skip the newline
-            if (nextElement && nextElement instanceof CommentStatement && nextElement.range.start.line === element.range.start.line) {
+            if (nextElement && isCommentStatement(nextElement) && nextElement.range.start.line === element.range.start.line) {
 
                 //add a newline between statements
             } else {
@@ -620,25 +654,25 @@ export class AALiteralExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.elements.forEach(element => {
-                if (element instanceof CommentStatement) {
-                    element.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            for (let i = 0; i < this.elements.length; i++) {
+                if (isCommentStatement(this.elements[i])) {
+                    walk(this.elements, i, visitor, options, this);
                 } else {
-                    element.value.walk(visitor, this, cancel);
+                    walk(this.elements, i, visitor, options, this);
                 }
-            });
+            }
         }
     }
 }
 
-export class UnaryExpression implements Expression {
+export class UnaryExpression extends Expression {
     constructor(
-        readonly operator: Token,
-        readonly right: Expression
+        public operator: Token,
+        public right: Expression
     ) {
+        super();
         this.range = util.createRangeFromPositions(this.operator.range.start, this.right.range.end);
     }
 
@@ -652,19 +686,19 @@ export class UnaryExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.right.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'right', visitor, options);
         }
     }
 }
 
-export class VariableExpression implements Expression {
+export class VariableExpression extends Expression {
     constructor(
         readonly name: Identifier,
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
+        super();
         this.range = this.name.range;
     }
 
@@ -697,18 +731,16 @@ export class VariableExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.namespaceName?.walk(visitor, this, cancel);
-        }
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
     }
 }
 
-export class SourceLiteralExpression implements Expression {
+export class SourceLiteralExpression extends Expression {
     constructor(
         readonly token: Token
     ) {
+        super();
         this.range = token.range;
     }
 
@@ -778,10 +810,8 @@ export class SourceLiteralExpression implements Expression {
         ];
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-        }
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
     }
 }
 
@@ -790,11 +820,12 @@ export class SourceLiteralExpression implements Expression {
  * except we need to uniquely identify these statements so we can
  * do more type checking.
  */
-export class NewExpression implements Expression {
+export class NewExpression extends Expression {
     constructor(
         readonly newKeyword: Token,
         readonly call: CallExpression
     ) {
+        super();
         this.range = util.createRangeFromPositions(this.newKeyword.range.start, this.call.range.end);
     }
 
@@ -817,15 +848,14 @@ export class NewExpression implements Expression {
         return this.call.transpile(state);
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.call.walk(visitor, this, cancel);
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'call', visitor, options);
         }
     }
 }
 
-export class CallfuncExpression implements Expression {
+export class CallfuncExpression extends Expression {
     constructor(
         readonly callee: Expression,
         readonly operator: Token,
@@ -834,6 +864,7 @@ export class CallfuncExpression implements Expression {
         readonly args: Expression[],
         readonly closingParen: Token
     ) {
+        super();
         this.range = util.createRangeFromPositions(
             callee.range.start,
             (closingParen ?? args[args.length - 1] ?? openingParen ?? methodName ?? operator).range.end
@@ -877,11 +908,12 @@ export class CallfuncExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.callee.walk(visitor, this, cancel);
-            this.args.forEach(arg => arg.walk(visitor, this, cancel));
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'callee', visitor, options);
+            for (let i = 0; i < this.args.length; i++) {
+                walk(this.args, i, visitor, options, this);
+            }
         }
     }
 }
@@ -890,10 +922,11 @@ export class CallfuncExpression implements Expression {
  * Since template strings can contain newlines, we need to concatenate multiple strings together with chr() calls.
  * This is a single expression that represents the string contatenation of all parts of a single quasi.
  */
-export class TemplateStringQuasiExpression implements Expression {
+export class TemplateStringQuasiExpression extends Expression {
     constructor(
-        readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteral>
+        readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>
     ) {
+        super();
         this.range = util.createRangeFromPositions(
             this.expressions[0].range.start,
             this.expressions[this.expressions.length - 1].range.end
@@ -918,25 +951,23 @@ export class TemplateStringQuasiExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.expressions.forEach(element => {
-                if (element instanceof LiteralExpression) {
-                    element.walk(visitor, this, cancel);
-                }
-            });
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            for (let i = 0; i < this.expressions.length; i++) {
+                walk(this.expressions, i, visitor, options, this);
+            }
         }
     }
 }
 
-export class TemplateStringExpression implements Expression {
+export class TemplateStringExpression extends Expression {
     constructor(
         readonly openingBacktick: Token,
         readonly quasis: TemplateStringQuasiExpression[],
         readonly expressions: Expression[],
         readonly closingBacktick: Token
     ) {
+        super();
         this.range = util.createRangeFromPositions(
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end
@@ -981,8 +1012,8 @@ export class TemplateStringExpression implements Expression {
             if (expression) {
                 //skip the toString wrapper around certain expressions
                 if (
-                    expression instanceof EscapedCharCodeLiteral ||
-                    (expression instanceof LiteralExpression && expression.value.kind === ValueKind.String)
+                    isEscapedCharCodeLiteralExpression(expression) ||
+                    (isLiteralExpression(expression) && expression.value.kind === ValueKind.String)
                 ) {
                     add(
                         ...expression.transpile(state)
@@ -1011,16 +1042,22 @@ export class TemplateStringExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.quasis.forEach(e => e.walk(visitor, this, cancel));
-            this.expressions.forEach(e => e.walk(visitor, this, cancel));
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            //walk the quasis and expressions in left-to-right order
+            for (let i = 0; i < this.quasis.length; i++) {
+                walk(this.quasis, i, visitor, options, this);
+
+                //this skips the final loop iteration since we'll always have one more quasi than expression
+                if (this.expressions[i]) {
+                    walk(this.expressions, i, visitor, options, this);
+                }
+            }
         }
     }
 }
 
-export class TaggedTemplateStringExpression implements Expression {
+export class TaggedTemplateStringExpression extends Expression {
     constructor(
         readonly tagName: Identifier,
         readonly openingBacktick: Token,
@@ -1028,6 +1065,7 @@ export class TaggedTemplateStringExpression implements Expression {
         readonly expressions: Expression[],
         readonly closingBacktick: Token
     ) {
+        super();
         this.range = util.createRangeFromPositions(
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end
@@ -1088,11 +1126,17 @@ export class TaggedTemplateStringExpression implements Expression {
         return result;
     }
 
-    walk(visitor: ExpressionVisitor, parent?: Expression, cancel?: CancellationToken): void {
-        if (!cancel?.isCancellationRequested) {
-            visitor(this, parent);
-            this.quasis.forEach(e => e.walk(visitor, this, cancel));
-            this.expressions.forEach(e => e.walk(visitor, this, cancel));
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            //walk the quasis and expressions in left-to-right order
+            for (let i = 0; i < this.quasis.length; i++) {
+                walk(this.quasis, i, visitor, options, this);
+
+                //this skips the final loop iteration since we'll always have one more quasi than expression
+                if (this.expressions[i]) {
+                    walk(this.expressions, i, visitor, options, this);
+                }
+            }
         }
     }
 }
