@@ -424,6 +424,16 @@ export class XmlFile {
                 this.pkgPath.replace(/\.xml$/i, '.brs').toLowerCase()
             );
         }
+        const len = dependencies.length;
+        for (let i = 0; i < len; i++) {
+            const dep = dependencies[i];
+
+            //add a dependency on `d.bs` file for every `.brs` file
+            if (dep.slice(-4).toLowerCase() === '.brs') {
+                dependencies.push(util.getTypedefPath(dep));
+            }
+        }
+
         if (this.parentComponentName) {
             dependencies.push(this.parentComponentDependencyGraphKey);
         }

@@ -634,4 +634,53 @@ describe('XmlFile', () => {
             code: 9999
         }]);
     });
+    describe('typedef', () => {
+        it('loads `d.bs` files into scope', async () => {
+            const xmlFile = await program.addOrReplaceFile<XmlFile>('components/Component1.xml', `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script uri="Component1.brs" />
+                </component>
+            `);
+            await program.addOrReplaceFile('components/Component1.d.bs', `
+                sub logInfo()
+                end sub
+            `);
+
+            expect(program.getScopesForFile(xmlFile)[0].getAllCallables().map(x => x.callable.name)).to.include('logInfo');
+        });
+
+        it.only('does not load .brs information into scope if related d.bs is in scope', async () => {
+            const xmlFile = await program.addOrReplaceFile<XmlFile>('components/Component1.xml', `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script uri="Component1.brs" />
+                </component>
+            `);
+            const scope = program.getScopesForFile(xmlFile)[0];
+
+            //load brs file
+            await program.addOrReplaceFile('components/Component1.brs', `
+                sub logInfo()
+                end sub
+                sub logWarning()
+                end sub
+            `);
+
+            let functionNames = scope.getAllCallables().map(x => x.callable.name);
+            expect(functionNames).to.include('logInfo');
+            expect(functionNames).to.include('logWarning');
+
+            //load d.bs file, which should shadow out the .brs file
+            await program.addOrReplaceFile('components/Component1.d.bs', `
+                sub logError()
+                end sub
+            `);
+
+            functionNames = scope.getAllCallables().map(x => x.callable.name);
+            expect(functionNames).to.include('logError');
+            expect(functionNames).not.to.include('logInfo');
+            expect(functionNames).not.to.include('logWarning');
+        });
+    });
 });

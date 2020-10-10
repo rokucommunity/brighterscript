@@ -2109,7 +2109,10 @@ describe('BrsFile', () => {
                 sub speak()
                 end sub
             `);
-            expect(file.parser.references.functionStatements.map(x => x.name.text)).to.eql(['main']);
+            expect(file.parser.references.functionStatements).to.be.empty;
+            const functionNames = program.getScopeByName('source').getAllCallables().map(x => x.callable.name);
+            expect(functionNames).to.include('main');
+            expect(functionNames).not.to.include('speak');
         });
     });
 
