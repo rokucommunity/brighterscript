@@ -1,6 +1,4 @@
 import { Scope } from '../Scope';
-import { XmlFile } from '../files/XmlFile';
-import { BrsFile } from '../files/BrsFile';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { BsDiagnostic } from '..';
 import { CallExpression, VariableExpression } from '../parser/Expression';
@@ -10,6 +8,7 @@ import { Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isVariableExpression } from '../astUtils/reflection';
+import { BscFile } from '../interfaces';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -351,6 +350,6 @@ export class BsClassValidator {
 
 }
 type AugmentedClassStatement = ClassStatement & {
-    file: BrsFile | XmlFile;
+    file: BscFile;
     parentClass: AugmentedClassStatement;
 };
