@@ -16,8 +16,10 @@ export interface BsDiagnostic extends Diagnostic {
     file: File;
 }
 
+export type BscFile = BrsFile | XmlFile;
+
 export interface Callable {
-    file: BrsFile | XmlFile;
+    file: BscFile;
     name: string;
     /**
      * Is the callable declared as "sub". If falsey, assumed declared as "function"
@@ -171,7 +173,7 @@ export interface CommentFlag {
     codes: number[] | null;
 }
 
-type ValidateHandler = (scope: Scope, files: (BrsFile | XmlFile)[], callables: CallableContainerMap) => void;
+type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
 
 export interface CompilerPlugin {
     name: string;
@@ -191,12 +193,12 @@ export interface CompilerPlugin {
     beforeScopeValidate?: ValidateHandler;
     afterScopeValidate?: ValidateHandler;
     beforeFileParse?: (source: SourceObj) => void;
-    afterFileParse?: (file: (BrsFile | XmlFile)) => void;
-    afterFileValidate?: (file: (BrsFile | XmlFile)) => void;
+    afterFileParse?: (file: BscFile) => void;
+    afterFileValidate?: (file: BscFile) => void;
     beforeFileTranspile?: (entry: TranspileObj) => void;
     afterFileTranspile?: (entry: TranspileObj) => void;
-    beforeFileDispose?: (file: (BrsFile | XmlFile)) => void;
-    afterFileDispose?: (file: (BrsFile | XmlFile)) => void;
+    beforeFileDispose?: (file: BscFile) => void;
+    afterFileDispose?: (file: BscFile) => void;
 }
 
 export interface TypedefProvider {
