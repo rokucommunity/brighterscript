@@ -1,9 +1,8 @@
 import { Location, Position } from 'vscode-languageserver';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import { FileReference } from './interfaces';
+import { BscFile, FileReference } from './interfaces';
 import { Program } from './Program';
 import util from './util';
 import { isXmlFile } from './astUtils/reflection';
@@ -85,7 +84,7 @@ export class XmlScope extends Scope {
         return this.cache.getOrAdd('files', () => {
             let result = [
                 this.xmlFile
-            ] as Array<BrsFile | XmlFile>;
+            ] as BscFile[];
             let scriptPkgPaths = this.xmlFile.getAllScriptImports();
             for (let scriptPkgPath of scriptPkgPaths) {
                 let file = this.program.getFileByPkgPath(scriptPkgPath);
@@ -100,7 +99,7 @@ export class XmlScope extends Scope {
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
-    public getDefinition(file: BrsFile | XmlFile, position: Position): Location[] {
+    public getDefinition(file: BscFile, position: Position): Location[] {
         let results = [] as Location[];
         //if the position is within the file's parent component name
         if (

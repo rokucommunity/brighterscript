@@ -311,7 +311,7 @@ describe('astUtils visitors', () => {
 
     describe('walk', () => {
         async function testWalk(text: string, expectedConstructors: string[], walkMode = WalkMode.visitAllRecursive) {
-            const file = await program.addOrReplaceFile('source/main.bs', text) as BrsFile;
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.bs', text);
             const items = [];
             let index = 1;
             file.ast.walk((element: any) => {
@@ -325,14 +325,14 @@ describe('astUtils visitors', () => {
         }
 
         it('Walks through all expressions until cancelled', async () => {
-            const file = await program.addOrReplaceFile('source/main.bs', `
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.bs', `
                 sub logger(message = "nil" as string)
                     innerLog = sub(message = "nil" as string)
                         print message
                     end sub
                     innerLog(message)
                 end sub
-            `) as BrsFile;
+            `);
 
             const cancel = new CancellationTokenSource();
             let count = 0;

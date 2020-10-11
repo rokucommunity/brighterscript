@@ -19,21 +19,21 @@ describe('XmlScope', () => {
 
     describe('constructor', () => {
         it('listens for attach/detach parent events', async () => {
-            let parentXmlFile = await program.addOrReplaceFile('components/parent.xml', `
+            let parentXmlFile = await program.addOrReplaceFile<XmlFile>('components/parent.xml', `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Parent" extends="Scene">
                 </component>
-            `) as XmlFile;
+            `);
             let scope = program.getScopeByName(parentXmlFile.pkgPath);
 
             //should default to global scope
             expect(scope.getParentScope()).to.equal(program.globalScope);
 
-            let childXmlFile = await program.addOrReplaceFile('components/child.xml', `
+            let childXmlFile = await program.addOrReplaceFile<XmlFile>('components/child.xml', `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Child" extends="Parent">
                 </component>
-            `) as XmlFile;
+            `);
             let childScope = program.getComponentScope('Child');
 
             await program.validate();
