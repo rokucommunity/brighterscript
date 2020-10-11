@@ -6,7 +6,7 @@ import { File } from './interfaces';
 import util from './util';
 import { expect } from 'chai';
 
-describe.only('DiagnosticCollection', () => {
+describe('DiagnosticCollection', () => {
     let collection: DiagnosticCollection;
     let diagnostics: BsDiagnostic[];
     let workspaces: Workspace[];
