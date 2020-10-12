@@ -83,6 +83,30 @@ describe('BrsFile BrighterScript classes', () => {
         expect(duckClass.memberMap['move']).to.exist;
     });
 
+    it('supports various namespace configurations', async () => {
+        await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            class Animal
+                sub new()
+                    bigBird = new Birds.Bird()
+                    donald = new Birds.Duck()
+                end sub
+            end class
+
+            namespace Birds
+                class Bird
+                    sub new()
+                        dog = new Animal()
+                        donald = new Duck()
+                    end sub
+                end class
+                class Duck
+                end class
+            end namespace
+        `);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).not.to.exist;
+    });
+
     describe('transpile', () => {
         it('follows correct sequence for property initializers', async () => {
             await testTranspile(`
@@ -303,6 +327,44 @@ describe('BrsFile BrighterScript classes', () => {
                     return instance
                 end function
             `, undefined, 'source/main.bs');
+        });
+
+        it('properly transpiles classes from outside current namespace', async () => {
+            await addFile('source/Animals.bs', `
+                namespace Animals
+                    class Duck
+                    end class
+                end namespace
+                class Bird
+                end class
+            `);
+            await testTranspile(`
+                namespace Animals
+                    sub init()
+                        donaldDuck = new Duck()
+                        daffyDuck = new Animals.Duck()
+                        bigBird = new Bird()
+                    end sub
+                end namespace
+            `, `
+                sub Animals_init()
+                    donaldDuck = Animals_Duck()
+                    daffyDuck = Animals_Duck()
+                    bigBird = Bird()
+                end sub
+            `, undefined, 'source/main.bs');
+        });
+
+        it('properly transpiles new statement for missing class ', async () => {
+            await testTranspile(`
+            sub main()
+                bob = new Human()
+            end sub
+        `, `
+            sub main()
+                bob = Human()
+            end sub
+        `, undefined, 'source/main.bs');
         });
 
         it('new keyword transpiles correctly', async () => {

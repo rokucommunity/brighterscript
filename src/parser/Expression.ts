@@ -67,6 +67,9 @@ export class CallExpression extends Expression {
         readonly openingParen: Token,
         readonly closingParen: Token,
         readonly args: Expression[],
+        /**
+         * The namespace that currently wraps this call expression. This is NOT the namespace of the callee...that will be represented in the callee expression itself.
+         */
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
         super();
@@ -75,11 +78,15 @@ export class CallExpression extends Expression {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState) {
+    transpile(state: TranspileState, nameOverride?: string) {
         let result = [];
 
         //transpile the name
-        result.push(...this.callee.transpile(state));
+        if (nameOverride) {
+            result.push(state.sourceNode(this.callee, nameOverride));
+        } else {
+            result.push(...this.callee.transpile(state));
+        }
 
         result.push(
             new SourceNode(this.openingParen.range.start.line + 1, this.openingParen.range.start.character, state.pathAbsolute, '(')
@@ -845,7 +852,13 @@ export class NewExpression extends Expression {
     public readonly range: Range;
 
     public transpile(state: TranspileState) {
-        return this.call.transpile(state);
+        const cls = state.file.getClassByName(
+            this.className.getName(ParseMode.BrighterScript),
+            this.namespaceName?.getName(ParseMode.BrighterScript)
+        );
+        //new statements within a namespace block can omit the leading namespace if the class resides in that same namespace.
+        //So we need to figure out if this is a namespace-omitted class, or if this class exists without a namespace.
+        return this.call.transpile(state, cls?.getName(ParseMode.BrightScript));
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

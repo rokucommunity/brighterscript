@@ -35,7 +35,12 @@ export class BsClassValidator {
      */
     private getClassByName(className: string, namespaceName?: string) {
         let fullName = util.getFulllyQualifiedClassName(className, namespaceName);
-        return this.classes[fullName.toLowerCase()];
+        let cls = this.classes[fullName.toLowerCase()];
+        //if we couldn't find the class by its full namespaced name, look for a global class with that name
+        if (!cls) {
+            cls = this.classes[className.toLowerCase()];
+        }
+        return cls;
     }
 
     /**
