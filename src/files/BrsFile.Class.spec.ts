@@ -83,6 +83,30 @@ describe('BrsFile BrighterScript classes', () => {
         expect(duckClass.memberMap['move']).to.exist;
     });
 
+    it('supports various namespace configurations', async () => {
+        await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            class Animal
+                sub new()
+                    bigBird = new Birds.Bird()
+                    donald = new Birds.Duck()
+                end sub
+            end class
+
+            namespace Birds
+                class Bird
+                    sub new()
+                        dog = new Animal()
+                        donald = new Duck()
+                    end sub
+                end class
+                class Duck
+                end class
+            end namespace
+        `);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).not.to.exist;
+    });
+
     describe('transpile', () => {
         it('follows correct sequence for property initializers', async () => {
             await testTranspile(`
