@@ -934,8 +934,8 @@ export class Util {
     /**
      * Given the class name text, return a namespace-prefixed name.
      * If the name already has a period in it, or the namespaceName was not provided, return the class name as is.
-     * If the name does not have a period, and a namespaceName was provided, return the class name prepended
-     * by the namespace name
+     * If the name does not have a period, and a namespaceName was provided, return the class name prepended by the namespace name.
+     * If no namespace is provided, return the `className` unchanged.
      */
     public getFulllyQualifiedClassName(className: string, namespaceName?: string) {
         if (className.includes('.') === false && namespaceName) {

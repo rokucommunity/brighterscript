@@ -305,6 +305,44 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
+        it('properly transpiles classes from outside current namespace', async () => {
+            await addFile('source/Animals.bs', `
+                namespace Animals
+                    class Duck
+                    end class
+                end namespace
+                class Bird
+                end class
+            `);
+            await testTranspile(`
+                namespace Animals
+                    sub init()
+                        donaldDuck = new Duck()
+                        daffyDuck = new Animals.Duck()
+                        bigBird = new Bird()
+                    end sub
+                end namespace
+            `, `
+                sub Animals_init()
+                    donaldDuck = Animals_Duck()
+                    daffyDuck = Animals_Duck()
+                    bigBird = Bird()
+                end sub
+            `, undefined, 'source/main.bs');
+        });
+
+        it('properly transpiles new statement for missing class ', async () => {
+            await testTranspile(`
+            sub main()
+                bob = new Human()
+            end sub
+        `, `
+            sub main()
+                bob = Human()
+            end sub
+        `, undefined, 'source/main.bs');
+        });
+
         it('new keyword transpiles correctly', async () => {
             await addFile('source/Animal.bs', `
                 class Animal
