@@ -6,7 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.16.3]
+## [0.16.4] - 2020-10-12
+### Changed
+ - LanguageServer now sends a _diff_ of diagnostics for files, instead of the entire project's diagnostics every time. ([#204](https://github.com/rokucommunity/brighterscript/pull/204))
+### Fixed
+ - transpile bug for namespaced class constructors that wouldn't properly prepend the namespace in some situations. ([#208](https://github.com/rokucommunity/brighterscript/pull/208))
+ - bug in class validation that was causing bogus diagnostics during class construction in namespaces.([#203](https://github.com/rokucommunity/brighterscript/issues/203))
+
+
+
+## [0.16.3] - 2020-10-11
 ### Changed
  - Add generic type parameter for `Program` add functions.
  - Export `BscType` type to simplify `BrsFile | XmlFile` usage everywhere.
@@ -23,10 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.16.1] - 2020-10-03
 ### Changed
- - rename isEscapedCharCodeLiteral to isEscapedCharCodeLiteralExpression to match other expression class names
- - rename FunctionParameter to FunctionParameterExpression to match other expression class names
- - convert AAMemberExpression interface into an expression class.
- - convert isBrsFile and isXmlFile to check for constructor file name rather than file extension.
+ - rename `isEscapedCharCodeLiteral` to `isEscapedCharCodeLiteralExpression` to match other expression class names
+ - rename `FunctionParameter` to `FunctionParameterExpression` to match other expression class names
+ - convert `AAMemberExpression` interface into an expression class.
+ - convert `isBrsFile` and `isXmlFile` to check for constructor file name rather than file extension.
 ### Fixed
  - bugs with plugin interoperability with BrighterScript when using `instanceof`. All internal BrighterScript logic now uses the `is` functions from `astutils/reflection`, and plugin authors should do the same.
 
@@ -588,3 +597,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.16.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.0...v0.16.1
 [0.16.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.1...v0.16.2
 [0.16.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.2...v0.16.3
+[0.16.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.3...v0.16.4
