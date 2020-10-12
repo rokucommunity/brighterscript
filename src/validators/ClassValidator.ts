@@ -1,13 +1,13 @@
 import { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { BsDiagnostic } from '..';
-import { CallExpression, VariableExpression } from '../parser/Expression';
+import { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import { ExpressionStatement, ClassMethodStatement, ClassStatement } from '../parser/Statement';
-import { CancellationToken, CancellationTokenSource, Location } from 'vscode-languageserver';
+import { ClassMethodStatement, ClassStatement } from '../parser/Statement';
+import { CancellationTokenSource, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isVariableExpression } from '../astUtils/reflection';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement } from '../astUtils/reflection';
 import { BscFile } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils';
 
@@ -122,21 +122,23 @@ export class BsClassValidator {
                 //prevent use of `m.` anywhere before the `super()` call
                 const cancellationToken = new CancellationTokenSource();
                 let superCall: CallExpression;
-                newMethod.func.body.walk((expression, parent) => {
-                    const expressionNameLower = expression?.name?.text.toLowerCase();
-                    if (expressionNameLower === 'm') {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                            file: classStatement.file,
-                            range: expression.range
-                        });
+                newMethod.func.body.walk(createVisitor({
+                    VariableExpression: (expression, parent) => {
+                        const expressionNameLower = expression?.name?.text.toLowerCase();
+                        if (expressionNameLower === 'm') {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
+                                file: classStatement.file,
+                                range: expression.range
+                            });
+                        }
+                        if (isCallExpression(parent) && expressionNameLower === 'super') {
+                            superCall = parent;
+                            //stop walking
+                            cancellationToken.cancel();
+                        }
                     }
-                    if (isCallExpression(parent) && expressionNameLower === 'super') {
-                        superCall = parent;
-                        //stop walking
-                        cancellationToken.cancel();
-                    }
-                }, {
+                }), {
                     walkMode: WalkMode.visitAll,
                     cancel: cancellationToken.token
                 });
