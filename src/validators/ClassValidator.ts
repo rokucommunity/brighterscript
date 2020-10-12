@@ -4,11 +4,12 @@ import { BsDiagnostic } from '..';
 import { CallExpression, VariableExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
 import { ExpressionStatement, ClassMethodStatement, ClassStatement } from '../parser/Statement';
-import { Location } from 'vscode-languageserver';
+import { CancellationToken, CancellationTokenSource, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isVariableExpression } from '../astUtils/reflection';
 import { BscFile } from '../interfaces';
+import { createVisitor, WalkMode } from '../astUtils';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -110,42 +111,42 @@ export class BsClassValidator {
     private verifyChildConstructor() {
         for (let key in this.classes) {
             let classStatement = this.classes[key];
-            let newMethod = classStatement.memberMap.new;
-            let ancestorNewMethod = this.getAncestorMember(classStatement, 'new');
+            const newMethod = classStatement.memberMap.new as ClassMethodStatement;
 
             if (
                 //this class has a "new method"
                 newMethod &&
                 //this class has a parent class
-                classStatement.parentClass &&
-                //this class's ancestors have a "new" method
-                ancestorNewMethod
+                classStatement.parentClass
             ) {
-                //verify there's a `super()` as the first statement in this member's "new" method
-                let firstStatement = ((newMethod as ClassMethodStatement).func?.body?.statements[0] as ExpressionStatement)?.expression as CallExpression;
+                //prevent use of `m.` anywhere before the `super()` call
+                const cancellationToken = new CancellationTokenSource();
+                let superCall: CallExpression;
+                newMethod.func.body.walk((expression, parent) => {
+                    const expressionNameLower = expression?.name?.text.toLowerCase();
+                    if (expressionNameLower === 'm') {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
+                            file: classStatement.file,
+                            range: expression.range
+                        });
+                    }
+                    if (isCallExpression(parent) && expressionNameLower === 'super') {
+                        superCall = parent;
+                        //stop walking
+                        cancellationToken.cancel();
+                    }
+                }, {
+                    walkMode: WalkMode.visitAll,
+                    cancel: cancellationToken.token
+                });
 
-                //if the first statement isn't a call
-                if (isCallExpression(firstStatement) === false) {
+                //every child class constructor must include a call to `super()`
+                if (!superCall) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.classConstructorMissingSuperCall(),
                         file: classStatement.file,
                         range: newMethod.range
-                    });
-
-                    //if the first statement's left-hand-side callee isn't a variable
-                } else if (isVariableExpression(firstStatement.callee) === false) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.classConstructorSuperMustBeFirstStatement(),
-                        file: classStatement.file,
-                        range: firstStatement.range
-                    });
-
-                    //if the method is not called "super"
-                } else if ((firstStatement.callee as VariableExpression).name.text.toLowerCase() !== 'super') {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.classConstructorSuperMustBeFirstStatement(),
-                        file: classStatement.file,
-                        range: firstStatement.range
                     });
                 }
             }

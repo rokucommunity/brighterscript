@@ -106,6 +106,78 @@ describe('BrsFile BrighterScript classes', () => {
         await program.validate();
         expect(program.getDiagnostics()[0]?.message).not.to.exist;
     });
+    describe('super', () => {
+        it('always requires super call in child constructor', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+                class Bird
+                end class
+                class Duck extends Bird
+                    sub new()
+                    end sub
+                end class
+            `);
+            await program.validate();
+            expect(program.getDiagnostics()[0]?.message).to.eql(DiagnosticMessages.classConstructorMissingSuperCall().message);
+        });
+
+        it('requires super call in child when parent has own `new` method', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+                class Bird
+                    sub new()
+                    end sub
+                end class
+                class Duck extends Bird
+                    sub new()
+                    end sub
+                end class
+            `);
+            await program.validate();
+            expect(program.getDiagnostics()[0]?.message).to.eql(DiagnosticMessages.classConstructorMissingSuperCall().message);
+        });
+
+        it('allows non-`m` expressions and statements before the super call', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+                class Bird
+                    sub new(name)
+                    end sub
+                end class
+                class Duck extends Bird
+                    sub new()
+                        name = "Donald" + "Duck"
+                        super(name)
+                    end sub
+                end class
+            `);
+            await program.validate();
+            expect(program.getDiagnostics()[0]?.message).to.be.undefined;
+        });
+
+        it('allows non-`m` expressions and statements before the super call', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+                class Bird
+                    sub new(name)
+                    end sub
+                end class
+                class Duck extends Bird
+                    sub new()
+                        m.name = m.name + "Duck"
+                        super()
+                    end sub
+                end class
+            `);
+            await program.validate();
+            expect(
+                program.getDiagnostics().map(x => ({ message: x.message, range: x.range }))
+            ).to.eql([{
+                message: DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall().message,
+                range: Range.create(7, 24, 7, 25)
+            }, {
+                message: DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall().message,
+                range: Range.create(7, 33, 7, 34)
+            }]);
+        });
+
+    });
 
     describe('transpile', () => {
         it('follows correct sequence for property initializers', async () => {

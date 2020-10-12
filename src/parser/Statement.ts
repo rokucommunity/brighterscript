@@ -1113,7 +1113,6 @@ export class ImportStatement extends Statement {
     }
 }
 
-
 export class ClassStatement extends Statement {
 
     constructor(
