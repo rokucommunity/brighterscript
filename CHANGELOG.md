@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [Unreleased]
+### Changed
+ - Add generic type parameter for `Program` add functions.
+ - Export `BscType` type to simplify `BrsFile | XmlFile` usage everywhere.
+
+
 ## [0.16.2] - 2020-10-09
 ### Fixed
  - critical bug in diagnostic printing that would crash the program if a diagnostic was missing a valid range.
