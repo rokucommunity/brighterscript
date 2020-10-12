@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
  - Add generic type parameter for `Program` add functions.
  - Export `BscType` type to simplify `BrsFile | XmlFile` usage everywhere.
+### Fixed
+ - Prevent bogus diagnostic on all callfunc operations ([#205](https://github.com/rokucommunity/brighterscript/issues/205))
+
 
 
 ## [0.16.2] - 2020-10-09
