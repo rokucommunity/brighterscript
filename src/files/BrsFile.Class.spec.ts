@@ -143,6 +143,8 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
                 class Duck extends Bird
                     sub new()
+                        thing = { m: "m"}
+                        print thing.m
                         name = "Donald" + "Duck"
                         super(name)
                     end sub
