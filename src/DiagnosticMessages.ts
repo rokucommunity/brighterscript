@@ -520,8 +520,8 @@ export let DiagnosticMessages = {
         code: 1100,
         severity: DiagnosticSeverity.Error
     }),
-    classConstructorSuperMustBeFirstStatement: () => ({
-        message: `A call to 'super()' must be the first statement in this constructor method.`,
+    classConstructorIllegalUseOfMBeforeSuperCall: () => ({
+        message: `Illegal use of "m" before calling "super()"`,
         code: 1101,
         severity: DiagnosticSeverity.Error
     }),
@@ -590,7 +590,6 @@ export let DiagnosticMessages = {
         code: 1115,
         severity: DiagnosticSeverity.Error
     })
-
 };
 
 let allCodes = [] as number[];
