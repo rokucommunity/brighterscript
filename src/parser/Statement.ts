@@ -1173,7 +1173,6 @@ export class ImportStatement extends Statement implements TypedefProvider {
     }
 }
 
-
 export class ClassStatement extends Statement implements TypedefProvider {
 
     constructor(
