@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.16.5] - 2020-10-13
+### Fixed
+ - performance issue during the parse phase. We now defer certain collections until needed. ([#210](https://github.com/rokucommunity/brighterscript/pull/210))
+
+
+
 ## [0.16.4] - 2020-10-12
 ### Changed
  - LanguageServer now sends a _diff_ of diagnostics for files, instead of the entire project's diagnostics every time. ([#204](https://github.com/rokucommunity/brighterscript/pull/204))
@@ -598,3 +604,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.16.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.1...v0.16.2
 [0.16.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.2...v0.16.3
 [0.16.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.3...v0.16.4
+[0.16.5]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.4...v0.16.5
