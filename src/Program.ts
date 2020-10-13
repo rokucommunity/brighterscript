@@ -756,11 +756,12 @@ export class Program {
         const entries = Object.values(this.files).map(file => {
             let filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
             if (!filePathObj) {
-              //this file has been added in-memory, from a plugin, for example
-              filePathObj =  {
-                src: file.pkgPath,
-                dest: file.pkgPath
-              };
+                //this file has been added in-memory, from a plugin, for example
+                filePathObj = {
+                    //add an interpolated src path (since it doesn't actually exist in memory)
+                    src: `bsc:/${file.pkgPath}`,
+                    dest: file.pkgPath
+                };
             }
             //replace the file extension
             let outputPath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
