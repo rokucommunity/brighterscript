@@ -559,7 +559,12 @@ export class Scope {
     private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: { [lowerName: string]: CallableContainer[] }) {
         //validate all expression calls
         for (let expCall of file.functionCalls) {
-            let lowerName = expCall.name.toLowerCase();
+            const lowerName = expCall.name.toLowerCase();
+            //for now, skip validation on any method named "super" within `.bs` contexts.
+            //TODO revise this logic so we know if this function call resides within a class constructor function
+            if (file.extension === '.bs' && lowerName === 'super') {
+                continue;
+            }
 
             //get the local scope for this expression
             let scope = file.getFunctionScopeAtPosition(expCall.nameRange.start);
