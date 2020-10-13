@@ -2033,6 +2033,16 @@ describe('BrsFile', () => {
 
     describe('callfunc operator', () => {
         describe('transpile', () => {
+            it('does not produce diagnostics', async () => {
+                await program.addOrReplaceFile('source/main.bs', `
+                    sub main()
+                        someObject@.someFunction(paramObject.value)
+                    end sub
+                `);
+                await program.validate();
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            });
+
             it('sets invalid on empty callfunc', async () => {
                 await testTranspile(`
                     sub main()

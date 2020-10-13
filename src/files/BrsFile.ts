@@ -87,7 +87,14 @@ export class BrsFile {
 
     public functionCalls = [] as FunctionCall[];
 
-    public functionScopes = [] as FunctionScope[];
+    private _functionScopes: FunctionScope[];
+
+    public get functionScopes(): FunctionScope[] {
+        if (!this._functionScopes) {
+            this.createFunctionScopes();
+        }
+        return this._functionScopes;
+    }
 
     /**
      * files referenced by import statements
@@ -253,14 +260,8 @@ export class BrsFile {
             //extract all callables from this file
             this.findCallables();
 
-            //traverse the ast and find all functions and create a scope object
-            this.createFunctionScopes();
-
             //find all places where a sub/function is being called
             this.findFunctionCalls();
-
-            //scan the full text for any word that looks like a variable
-            this.findPropertyNameCompletions();
 
             this.findAndValidateImportAndImportStatements();
 
@@ -383,7 +384,7 @@ export class BrsFile {
             return x && x.kind === TokenKind.Identifier;
         });
 
-        this.propertyNameCompletions = [];
+        this._propertyNameCompletions = [];
         let names = {};
         for (let identifier of identifiers) {
             let ancestors = this.getAncestors(identifier.key);
@@ -416,14 +417,21 @@ export class BrsFile {
             }
 
             names[name] = true;
-            this.propertyNameCompletions.push({
+            this._propertyNameCompletions.push({
                 label: name,
                 kind: CompletionItemKind.Text
             });
         }
     }
 
-    public propertyNameCompletions = [] as CompletionItem[];
+    private _propertyNameCompletions: CompletionItem[];
+
+    public get propertyNameCompletions(): CompletionItem[] {
+        if (!this._propertyNameCompletions) {
+            this.findPropertyNameCompletions();
+        }
+        return this._propertyNameCompletions;
+    }
 
     /**
      * Find all comment flags in the source code. These enable or disable diagnostic messages.
@@ -508,6 +516,8 @@ export class BrsFile {
         let functions = this.parser.references.functionExpressions;
 
         //create a functionScope for every function
+        this._functionScopes = [];
+
         for (let func of functions) {
             let scope = new FunctionScope(func);
 
@@ -536,7 +546,7 @@ export class BrsFile {
             this.scopesByFunc.set(func, scope);
 
             //find every statement in the scope
-            this.functionScopes.push(scope);
+            this._functionScopes.push(scope);
         }
 
         //find every variable assignment in the whole file
