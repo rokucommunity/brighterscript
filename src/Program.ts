@@ -754,9 +754,14 @@ export class Program {
 
     public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
         const entries = Object.values(this.files).map(file => {
-            const filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
+            let filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
             if (!filePathObj) {
-                throw new Error(`Cannot find fileMap record in fileMaps for '${file.pathAbsolute}'`);
+                //this file has been added in-memory, from a plugin, for example
+                filePathObj = {
+                    //add an interpolated src path (since it doesn't actually exist in memory)
+                    src: `bsc:/${file.pkgPath}`,
+                    dest: file.pkgPath
+                };
             }
             //replace the file extension
             let outputPath = filePathObj.dest.replace(/\.bs$/gi, '.brs');
