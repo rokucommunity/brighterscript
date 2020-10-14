@@ -6,9 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## Unreleased
+## [0.16.7] - 2020-10-13
 ### Fixed
  - bug when finding `bsconfig.json` that would use the wrong cwd in multi-workspace language server situations.
+ - bug when transpiling in-memory-only files. ([#212](https://github.com/rokucommunity/brighterscript/pull/212))
 
 
 
@@ -618,3 +619,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.16.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.3...v0.16.4
 [0.16.5]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.4...v0.16.5
 [0.16.6]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.5...v0.16.6
+[0.16.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.6...v0.16.7
