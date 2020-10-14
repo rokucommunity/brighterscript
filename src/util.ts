@@ -258,7 +258,7 @@ export class Util {
 
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = await this.getConfigFilePath();
+            result.project = await this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
             result.project = config.project;

@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## Unreleased
+### Fixed
+ - bug when finding `bsconfig.json` that would use the wrong cwd in multi-workspace language server situations.
+
+
+
 ## [0.16.6] - 2020-10-13
 ### Fixed
  - quirk in the GitHub actions workflow that didn't publish the correct code.
