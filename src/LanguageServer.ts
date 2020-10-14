@@ -6,7 +6,6 @@ import {
     CompletionItem,
     Connection,
     createConnection,
-    Diagnostic,
     DidChangeConfigurationNotification,
     DidChangeWatchedFilesParams,
     FileChangeType,
@@ -37,11 +36,11 @@ import { Deferred } from './deferred';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
-import { BsDiagnostic } from './interfaces';
 import { Logger } from './Logger';
 import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
 import { BrsFile } from './files/BrsFile';
+import { DiagnosticCollection } from './DiagnosticCollection';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
@@ -1079,89 +1078,29 @@ export class LanguageServer {
         return results;
     }
 
-    /**
-     * The list of all issues, indexed by file. This allows us to keep track of which buckets of
-     * diagnostics to send and which to skip because nothing has changed
-     */
-    private latestDiagnosticsByFile = {} as { [key: string]: Diagnostic[] };
+    private diagnosticCollection = new DiagnosticCollection();
+
     private async sendDiagnostics() {
-        //compute the new list of diagnostics for whole project
-        let diagnosticsByFile = {} as { [key: string]: Diagnostic[] };
-        let workspaces = this.getWorkspaces();
+        //Get only the changes to diagnostics since the last time we sent them to the client
+        const patch = await this.diagnosticCollection.getPatch(this.workspaces);
 
-        //make a bucket for every file in every project
-        for (let workspace of workspaces) {
-            //Ensure the program was constructed. This prevents race conditions where certain diagnostics are being sent before the program was created.
-            await workspace.firstRunPromise;
-            //if there is no program, skip this workspace (hopefully diagnostics were added to the builder itself
-            if (workspace.builder && workspace.builder.program) {
-                for (let filePath in workspace.builder.program.files) {
-                    diagnosticsByFile[filePath] = [];
-                }
-            }
-        }
-
-        let diagnostics = Array.prototype.concat.apply([] as BsDiagnostic[],
-            workspaces.map((x) => x.builder.getDiagnostics())
-        ) as BsDiagnostic[];
-
-        /**
-         * A map that tracks which diagnostics have been added for each file.
-         * This allows us to remove duplicate diagnostics
-         */
-        let uniqueMap = {} as { [diagnosticKey: string]: boolean };
-
-        for (let diagnostic of diagnostics) {
-            //certain diagnostics are attached to non-tracked files, so create those buckets dynamically
-            if (!diagnosticsByFile[diagnostic.file.pathAbsolute]) {
-                diagnosticsByFile[diagnostic.file.pathAbsolute] = [];
-            }
-            let key =
-                diagnostic.file.pathAbsolute + '-' +
-                diagnostic.code + '-' +
-                diagnostic.range.start.line + '-' +
-                diagnostic.range.start.character + '-' +
-                diagnostic.range.end.line + '-' +
-                diagnostic.range.end.character;
-
-            //filter exact duplicate diagnostics from multiple projects for same file and location
-            if (!uniqueMap[key]) {
-                uniqueMap[key] = true;
-                let d = {
-                    severity: diagnostic.severity,
-                    range: diagnostic.range,
-                    message: diagnostic.message,
-                    relatedInformation: diagnostic.relatedInformation,
-                    code: diagnostic.code,
+        for (let filePath in patch) {
+            const diagnostics = patch[filePath].map(d => {
+                return {
+                    severity: d.severity,
+                    range: d.range,
+                    message: d.message,
+                    relatedInformation: d.relatedInformation,
+                    code: d.code,
                     source: 'brs'
                 };
+            });
 
-                diagnosticsByFile[diagnostic.file.pathAbsolute].push(d);
-            }
-        }
-
-        //send all diagnostics
-        for (let filePath in diagnosticsByFile) {
-            //TODO filter by only the files that have changed
             this.connection.sendDiagnostics({
                 uri: URI.file(filePath).toString(),
-                diagnostics: diagnosticsByFile[filePath]
+                diagnostics: diagnostics
             });
         }
-
-        //clear any diagnostics for files that are no longer present
-        let currentFilePaths = Object.keys(diagnosticsByFile);
-        for (let filePath in this.latestDiagnosticsByFile) {
-            if (!currentFilePaths.includes(filePath)) {
-                this.connection.sendDiagnostics({
-                    uri: URI.file(filePath).toString(),
-                    diagnostics: []
-                });
-            }
-        }
-
-        //save the new list of diagnostics
-        this.latestDiagnosticsByFile = diagnosticsByFile;
     }
 
     public async onExecuteCommand(params: ExecuteCommandParams) {

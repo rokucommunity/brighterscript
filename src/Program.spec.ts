@@ -1319,6 +1319,55 @@ describe('Program', () => {
     });
 
     describe('transpile', () => {
+        it('transpiles in-memory-only files', async () => {
+            await program.addOrReplaceFile('source/logger.bs', `
+                sub logInfo()
+                    print SOURCE_LINE_NUM
+                end sub
+            `);
+            await program.transpile([], program.options.stagingFolderPath);
+            expect(
+                fsExtra.readFileSync(s`${stagingFolderPath}/source/logger.brs`).toString().split(/\r?\n/).map(x => x.trim())
+            ).to.eql([
+                'sub logInfo()',
+                'print 3',
+                'end sub'
+            ]);
+        });
+
+        it('copies in-memory-only .brs files to stagingDir', async () => {
+            await program.addOrReplaceFile('source/logger.brs', `
+                sub logInfo()
+                    print "logInfo"
+                end sub
+            `);
+            await program.transpile([], program.options.stagingFolderPath);
+            expect(
+                fsExtra.readFileSync(s`${stagingFolderPath}/source/logger.brs`).toString()
+            ).to.eql(`
+                sub logInfo()
+                    print "logInfo"
+                end sub
+            `);
+        });
+
+        it('copies in-memory .xml file', async () => {
+            await program.addOrReplaceFile('components/Component1.xml', `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                </component>
+            `);
+            await program.transpile([], program.options.stagingFolderPath);
+            expect(
+                fsExtra.readFileSync(s`${stagingFolderPath}/components/Component1.xml`).toString()
+            ).to.eql(`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `);
+        });
+
         it('uses sourceRoot when provided for brs files', async () => {
             let sourceRoot = s`${tmpPath}/sourceRootFolder`;
             program = new Program({
