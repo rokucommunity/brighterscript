@@ -1938,7 +1938,7 @@ export class Parser {
         // force it into an identifier so the AST makes some sense
         methodName.kind = TokenKind.Identifier;
         let openParen = this.consume(DiagnosticMessages.expectedOpenParenToFollowCallfuncIdentifier(), TokenKind.LeftParen);
-        let call = this.finishCall(openParen, callee);
+        let call = this.finishCall(openParen, callee, false);
 
         return new CallfuncExpression(callee, operator, methodName as Identifier, openParen, call.args, call.closingParen);
     }
@@ -1993,7 +1993,7 @@ export class Parser {
         return expr;
     }
 
-    private finishCall(openingParen: Token, callee: Expression) {
+    private finishCall(openingParen: Token, callee: Expression, addToCallExpressionList = true) {
         let args = [] as Expression[];
         while (this.match(TokenKind.Newline)) {
         }
@@ -2025,7 +2025,9 @@ export class Parser {
         }
 
         let expression = new CallExpression(callee, openingParen, closingParen, args, this.currentNamespaceName);
-        this.callExpressions.push(expression);
+        if (addToCallExpressionList) {
+            this.callExpressions.push(expression);
+        }
         return expression;
     }
 

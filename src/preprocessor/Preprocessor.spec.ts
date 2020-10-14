@@ -4,7 +4,6 @@ import { Preprocessor } from './Preprocessor';
 import { BrightScriptChunk, DeclarationChunk, ErrorChunk, HashIfStatement } from './Chunk';
 import { expect } from 'chai';
 import { createSandbox } from 'sinon';
-import { createToken } from '../astUtils/creators';
 let sinon = createSandbox();
 
 describe('preprocessor', () => {

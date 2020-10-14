@@ -1,9 +1,7 @@
 import { CompletionItem, CompletionItemKind, Location, Position, Range } from 'vscode-languageserver';
 import chalk from 'chalk';
 import { DiagnosticMessages, DiagnosticInfo } from './DiagnosticMessages';
-import { BrsFile } from './files/BrsFile';
-import { XmlFile } from './files/XmlFile';
-import { CallableContainer, BsDiagnostic, FileReference } from './interfaces';
+import { CallableContainer, BsDiagnostic, FileReference, BscFile } from './interfaces';
 import { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
@@ -131,7 +129,7 @@ export class Scope {
 
     public getFiles() {
         return this.cache.getOrAdd('files', () => {
-            let result = [] as Array<BrsFile | XmlFile>;
+            let result = [] as BscFile[];
             let dependencies = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
             for (let dependency of dependencies) {
                 //skip scopes and components
@@ -380,7 +378,7 @@ export class Scope {
         this.cache.clear();
     }
 
-    private detectVariableNamespaceCollisions(file: BrsFile | XmlFile) {
+    private detectVariableNamespaceCollisions(file: BscFile) {
         //find all function parameters
         for (let func of file.parser.references.functionExpressions) {
             for (let param of func.parameters) {
@@ -428,7 +426,7 @@ export class Scope {
     /**
      * Find function declarations with the same name as a stdlib function
      */
-    private diagnosticDetectFunctionCollisions(file: BrsFile | XmlFile) {
+    private diagnosticDetectFunctionCollisions(file: BscFile) {
         for (let func of file.callables) {
             if (globalCallableMap[func.getName(ParseMode.BrighterScript).toLowerCase()]) {
                 this.diagnostics.push({
@@ -464,7 +462,7 @@ export class Scope {
      * @param file
      * @param callableContainersByLowerName
      */
-    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BrsFile | XmlFile, callableContainersByLowerName: { [lowerName: string]: CallableContainer[] }) {
+    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: { [lowerName: string]: CallableContainer[] }) {
         //validate all function calls
         for (let expCall of file.functionCalls) {
             let callableContainersWithThisName = callableContainersByLowerName[expCall.name.toLowerCase()];
@@ -503,7 +501,7 @@ export class Scope {
      * @param file
      * @param callableContainerMap
      */
-    private diagnosticDetectShadowedLocalVars(file: BrsFile | XmlFile, callableContainerMap: { [lowerName: string]: CallableContainer[] }) {
+    private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: { [lowerName: string]: CallableContainer[] }) {
         //loop through every function scope
         for (let scope of file.functionScopes) {
             //every var declaration in this scope
@@ -558,10 +556,15 @@ export class Scope {
      * @param file
      * @param callablesByLowerName
      */
-    private diagnosticDetectCallsToUnknownFunctions(file: BrsFile | XmlFile, callablesByLowerName: { [lowerName: string]: CallableContainer[] }) {
+    private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: { [lowerName: string]: CallableContainer[] }) {
         //validate all expression calls
         for (let expCall of file.functionCalls) {
-            let lowerName = expCall.name.toLowerCase();
+            const lowerName = expCall.name.toLowerCase();
+            //for now, skip validation on any method named "super" within `.bs` contexts.
+            //TODO revise this logic so we know if this function call resides within a class constructor function
+            if (file.extension === '.bs' && lowerName === 'super') {
+                continue;
+            }
 
             //get the local scope for this expression
             let scope = file.getFunctionScopeAtPosition(expCall.nameRange.start);
@@ -727,7 +730,7 @@ export class Scope {
      * Determine if this scope is referenced and known by the file.
      * @param file
      */
-    public hasFile(file: BrsFile | XmlFile) {
+    public hasFile(file: BscFile) {
         let files = this.getFiles();
         let hasFile = files.includes(file);
         return hasFile;
@@ -759,7 +762,7 @@ export class Scope {
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
-    public getDefinition(file: BrsFile | XmlFile, position: Position): Location[] { //eslint-disable-line
+    public getDefinition(file: BscFile, position: Position): Location[] { //eslint-disable-line
         //TODO implement for brs files
         return [];
     }
@@ -778,7 +781,7 @@ export class Scope {
 }
 
 interface NamespaceContainer {
-    file: BrsFile | XmlFile;
+    file: BscFile;
     fullName: string;
     nameRange: Range;
     lastPartName: string;
@@ -789,5 +792,5 @@ interface NamespaceContainer {
 }
 
 interface AugmentedNewExpression extends NewExpression {
-    file: BrsFile | XmlFile;
+    file: BscFile;
 }

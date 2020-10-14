@@ -129,12 +129,12 @@ export interface CompilerPlugin {
     beforeScopeValidate?: ValidateHandler;
     afterScopeValidate?: ValidateHandler;
     beforeFileParse?: (source: SourceObj) => void;
-    afterFileParse?: (file: (BrsFile | XmlFile)) => void;
-    afterFileValidate?: (file: (BrsFile | XmlFile)) => void;
+    afterFileParse?: (file: BscFile) => void;
+    afterFileValidate?: (file: BscFile) => void;
     beforeFileTranspile?: (entry: TranspileObj) => void;
     afterFileTranspile?: (entry: TranspileObj) => void;
-    beforeFileDispose?: (file: (BrsFile | XmlFile)) => void;
-    afterFileDispose?: (file: (BrsFile | XmlFile)) => void;
+    beforeFileDispose?: (file: BscFile) => void;
+    afterFileDispose?: (file: BscFile) => void;
 }
 
 // related types:
@@ -149,11 +149,11 @@ interface SourceObj {
 }
 
 interface TranspileObj {
-    file: (BrsFile | XmlFile);
+    file: (BscFile);
     outputPath: string;
 }
 
-type ValidateHandler = (scope: Scope, files: (BrsFile | XmlFile)[], callables: CallableContainerMap) => void;
+type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
 interface CallableContainerMap {
     [name: string]: CallableContainer[];
 }
@@ -206,7 +206,7 @@ const pluginInterface: CompilerPlugin = {
 export default pluginInterface;
 
 // post-parsing validation
-function afterFileValidate(file: BrsFile | XmlFile) {
+function afterFileValidate(file: BscFile) {
     if (!isBrsFile(file)) {
         return;
     }

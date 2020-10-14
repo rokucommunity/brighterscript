@@ -7,7 +7,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import { BsDiagnostic, File, FileReference, FileObj } from './interfaces';
+import { BsDiagnostic, File, FileReference, FileObj, BscFile } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -27,7 +27,7 @@ export interface SourceObj {
 }
 
 export interface TranspileObj {
-    file: (BrsFile | XmlFile);
+    file: BscFile;
     outputPath: string;
 }
 
@@ -111,7 +111,7 @@ export class Program {
     /**
      * A map of every file loaded into this program
      */
-    public files = {} as { [pathAbsolute: string]: BrsFile | XmlFile };
+    public files = {} as { [pathAbsolute: string]: BscFile };
 
     private scopes = {} as { [name: string]: Scope };
 
@@ -235,14 +235,14 @@ export class Program {
      * contents from the file system.
      * @param filePaths
      */
-    public async addOrReplaceFiles(fileObjects: Array<FileObj>) {
+    public async addOrReplaceFiles<T extends BscFile[]>(fileObjects: Array<FileObj>) {
         let promises = [];
         for (let fileObject of fileObjects) {
             promises.push(
                 this.addOrReplaceFile(fileObject)
             );
         }
-        return Promise.all(promises);
+        return Promise.all(promises) as Promise<T>;
     }
 
     public getPkgPath(...args: any[]): any { //eslint-disable-line
@@ -284,15 +284,15 @@ export class Program {
      * @param relativePath the file path relative to the root dir
      * @param fileContents the file contents. If not provided, the file will be loaded from disk
      */
-    public async addOrReplaceFile(relativePath: string, fileContents?: string): Promise<XmlFile | BrsFile>;
+    public async addOrReplaceFile<T extends BscFile>(relativePath: string, fileContents?: string): Promise<T>;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
      * @param fileEntry an object that specifies src and dest for the file.
      * @param fileContents the file contents. If not provided, the file will be loaded from disk
      */
-    public async addOrReplaceFile(fileEntry: FileObj, fileContents?: string): Promise<XmlFile | BrsFile>;
-    public async addOrReplaceFile(fileParam: FileObj | string, fileContents?: string): Promise<XmlFile | BrsFile> {
+    public async addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents?: string): Promise<T>;
+    public async addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents?: string): Promise<T> {
         assert.ok(fileParam, 'fileEntry is required');
         let pathAbsolute: string;
         let pkgPath: string;
@@ -313,7 +313,7 @@ export class Program {
                 this.removeFile(pathAbsolute);
             }
             let fileExtension = path.extname(pathAbsolute).toLowerCase();
-            let file: BrsFile | XmlFile | undefined;
+            let file: BscFile | undefined;
 
             //load the file contents by file path if not provided
             let getFileContents = async () => {
@@ -391,7 +391,7 @@ export class Program {
             }
             return file;
         });
-        return file;
+        return file as T;
     }
 
     /**
@@ -424,7 +424,7 @@ export class Program {
      * Get a list of files for the given pkgPath array.
      * Missing files are just ignored.
      */
-    public getFilesByPkgPaths(pkgPaths: string[]) {
+    public getFilesByPkgPaths<T extends BscFile[]>(pkgPaths: string[]) {
         pkgPaths = pkgPaths.map(x => s`${x}`.toLowerCase());
 
         let result = [] as Array<XmlFile | BrsFile>;
@@ -434,15 +434,15 @@ export class Program {
                 result.push(file);
             }
         }
-        return result;
+        return result as T;
     }
 
     /**
      * Get a file with the specified pkg path.
      * If not found, return undefined
      */
-    public getFileByPkgPath(pkgPath: string) {
-        return this.getFilesByPkgPaths([pkgPath])[0];
+    public getFileByPkgPath<T extends BscFile>(pkgPath: string) {
+        return this.getFilesByPkgPaths([pkgPath])[0] as T;
     }
 
     /**
@@ -573,7 +573,7 @@ export class Program {
     /**
      * Determine if the given file is included in at least one scope in this program
      */
-    private fileIsIncludedInAnyScope(file: BrsFile | XmlFile) {
+    private fileIsIncludedInAnyScope(file: BscFile) {
         for (let scopeName in this.scopes) {
             if (this.scopes[scopeName].hasFile(file)) {
                 return true;
@@ -586,9 +586,9 @@ export class Program {
      * Get the file at the given path
      * @param pathAbsolute
      */
-    private getFile(pathAbsolute: string) {
+    private getFile<T extends BscFile>(pathAbsolute: string) {
         pathAbsolute = s`${pathAbsolute}`;
-        return this.files[pathAbsolute];
+        return this.files[pathAbsolute] as T;
     }
 
     /**
@@ -754,9 +754,14 @@ export class Program {
 
     public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
         const entries = Object.values(this.files).map(file => {
-            const filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
+            let filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
             if (!filePathObj) {
-                throw new Error(`Cannot find fileMap record in fileMaps for '${file.pathAbsolute}'`);
+                //this file has been added in-memory, from a plugin, for example
+                filePathObj = {
+                    //add an interpolated src path (since it doesn't actually exist in memory)
+                    src: `bsc:/${file.pkgPath}`,
+                    dest: file.pkgPath
+                };
             }
             //replace the file extension
             let outputPath = filePathObj.dest.replace(/\.bs$/gi, '.brs');

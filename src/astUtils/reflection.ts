@@ -4,7 +4,7 @@ import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
 import { InternalWalkMode } from './visitors';
 import { FunctionType } from '../types/FunctionType';
-import { File } from '../interfaces';
+import { BscFile, File } from '../interfaces';
 import { StringType } from '../types/StringType';
 import { BooleanType } from '../types/BooleanType';
 import { InvalidType } from '../types/InvalidType';
@@ -15,11 +15,11 @@ import { IntegerType } from '../types/IntegerType';
 
 // File reflection
 
-export function isBrsFile(file: (BrsFile | XmlFile | File)): file is BrsFile {
+export function isBrsFile(file: (BscFile | File)): file is BrsFile {
     return file?.constructor.name === 'BrsFile';
 }
 
-export function isXmlFile(file: (BrsFile | XmlFile)): file is XmlFile {
+export function isXmlFile(file: (BscFile)): file is XmlFile {
     return file?.constructor.name === 'XmlFile';
 }
 

@@ -89,7 +89,7 @@ export class Util {
      * @param configFilePath
      */
     public async getConfigFilePath(cwd?: string) {
-        cwd = cwd ? cwd : process.cwd();
+        cwd = cwd ?? process.cwd();
         let configPath = path.join(cwd, 'bsconfig.json');
         //find the nearest config file path
         for (let i = 0; i < 100; i++) {
@@ -256,7 +256,7 @@ export class Util {
 
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = await this.getConfigFilePath();
+            result.project = await this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
             result.project = config.project;
@@ -900,8 +900,8 @@ export class Util {
     /**
      * Given the class name text, return a namespace-prefixed name.
      * If the name already has a period in it, or the namespaceName was not provided, return the class name as is.
-     * If the name does not have a period, and a namespaceName was provided, return the class name prepended
-     * by the namespace name
+     * If the name does not have a period, and a namespaceName was provided, return the class name prepended by the namespace name.
+     * If no namespace is provided, return the `className` unchanged.
      */
     public getFulllyQualifiedClassName(className: string, namespaceName?: string) {
         if (className.includes('.') === false && namespaceName) {
