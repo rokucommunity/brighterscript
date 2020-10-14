@@ -91,7 +91,7 @@ export class Util {
      * @param configFilePath
      */
     public async getConfigFilePath(cwd?: string) {
-        cwd = cwd ? cwd : process.cwd();
+        cwd = cwd ?? process.cwd();
         let configPath = path.join(cwd, 'bsconfig.json');
         //find the nearest config file path
         for (let i = 0; i < 100; i++) {

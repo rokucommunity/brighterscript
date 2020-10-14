@@ -1,12 +1,12 @@
 import { expect } from 'chai';
 import * as fsExtra from 'fs-extra';
-import * as sinonImport from 'sinon';
+import { createSandbox } from 'sinon';
+const sinon = createSandbox();
 import { Program } from './Program';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { Logger, LogLevel } from './Logger';
 
-let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tmpPath}/rootDir`;
 let stagingFolderPath = s`${tmpPath}/staging`;
@@ -24,26 +24,13 @@ describe('ProgramBuilder', () => {
 
     let builder: ProgramBuilder;
     let b: any;
-    let setVfsFile: (filePath: string, contents: string) => void;
     beforeEach(async () => {
         builder = new ProgramBuilder();
         b = builder;
         b.options = await util.normalizeAndResolveConfig(undefined);
         b.program = new Program(b.options);
         b.logger = new Logger();
-        let vfs = {};
-        setVfsFile = (filePath, contents) => {
-            vfs[filePath] = contents;
-        };
-        sinon.stub(b.program.util, 'getFileContents').callsFake((filePath) => {
-            if (vfs[filePath]) {
-                return vfs[filePath];
-            } else {
-                throw new Error(`Cannot find file "${filePath}"`);
-            }
-        });
     });
-
 
     afterEach(() => {
         builder.dispose();
@@ -76,7 +63,7 @@ describe('ProgramBuilder', () => {
             //supress the console log statements for the bsconfig parse errors
             sinon.stub(console, 'log').returns(undefined);
             //totally bogus config file
-            setVfsFile(s`${rootDir}/bsconfig.json`, '{');
+            fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '{');
             await builder.run({
                 project: s`${rootDir}/bsconfig.json`,
                 username: 'john'
