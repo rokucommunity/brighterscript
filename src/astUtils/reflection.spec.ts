@@ -13,13 +13,15 @@ import { XmlFile } from '../files/XmlFile';
 
 describe('reflection', () => {
     describe('Files', () => {
-        const program = new Program({});
-        const file = new BrsFile('path/to/source/file.brs', 'pkg:/source/file.brs', program);
-        const comp = new XmlFile('path/to/components/file.xml', 'pkg:/components/file.brs', program);
-        expect(isBrsFile(file)).to.be.true;
-        expect(isXmlFile(file)).to.be.false;
-        expect(isBrsFile(comp)).to.be.false;
-        expect(isXmlFile(comp)).to.be.true;
+        it('recognizes files', () => {
+            const program = new Program({});
+            const file = new BrsFile('path/to/source/file.brs', 'pkg:/source/file.brs', program);
+            const comp = new XmlFile('path/to/components/file.xml', 'pkg:/components/file.brs', program);
+            expect(isBrsFile(file)).to.be.true;
+            expect(isXmlFile(file)).to.be.false;
+            expect(isBrsFile(comp)).to.be.false;
+            expect(isXmlFile(comp)).to.be.true;
+        });
     });
 
     describe('Statements', () => {

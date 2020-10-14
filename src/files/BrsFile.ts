@@ -48,9 +48,7 @@ export class BrsFile {
             this.needsTranspiled = true;
         }
         this.isTypedefFile = this.extension === '.d.bs';
-        if (this.extension === '.brs') {
-            this.typedefPath = util.getTypedefPath(this.pathAbsolute);
-        }
+        this.typedefPath = util.getTypedefPath(this.pathAbsolute);
     }
 
     /**
@@ -156,7 +154,8 @@ export class BrsFile {
     public get typedefFile() {
         if (this.typedefPath) {
             return this.cache.getOrAdd('typedefFile', () => {
-                return this.program.getFileByPathAbsolute<BrsFile>(this.typedefPath);
+                const file = this.program.getFileByPathAbsolute<BrsFile>(this.typedefPath);
+                return file;
             });
         }
     }
@@ -207,6 +206,7 @@ export class BrsFile {
 
             //if we have a typedef file, skip parsing this file
             if (this.hasTypedef) {
+                this.parseDeferred.resolve();
                 return;
             }
 

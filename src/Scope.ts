@@ -11,6 +11,7 @@ import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
+import { BrsFile } from './files/BrsFile';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -83,15 +84,14 @@ export class Scope {
      */
     public isKnownNamespace(namespaceName: string) {
         let namespaceNameLower = namespaceName.toLowerCase();
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             for (let namespace of file.parser.references.namespaceStatements) {
                 let loopNamespaceNameLower = namespace.name.toLowerCase();
                 if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
                     return true;
                 }
             }
-        }
+        });
         return false;
     }
 
@@ -157,11 +157,10 @@ export class Scope {
     public getDiagnostics() {
         let diagnosticLists = [this.diagnostics] as BsDiagnostic[][];
 
-        let files = this.getFiles();
         //add diagnostics from every referenced file
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             diagnosticLists.push(file.getDiagnostics());
-        }
+        });
         let allDiagnostics = Array.prototype.concat.apply([], diagnosticLists) as BsDiagnostic[];
 
         let filteredDiagnostics = allDiagnostics.filter((x) => {
@@ -205,25 +204,34 @@ export class Scope {
         }
     }
 
+    public enumerateFiles(callback: (file: BscFile) => void) {
+        const files = this.getFiles();
+        for (const file of files) {
+            //skip files that have a typedef
+            if (file.extension === '.brs' && (file as BrsFile).hasTypedef) {
+                continue;
+            }
+            callback(file);
+        }
+    }
+
     /**
      * Get the list of callables explicitly defined in files in this scope.
      * This excludes ancestor callables
      */
     public getOwnCallables(): CallableContainer[] {
         let result = [] as CallableContainer[];
-        let files = this.getFiles();
-
         this.logDebug('getOwnCallables() files: ', () => this.getFiles().map(x => x.pkgPath));
 
         //get callables from own files
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             for (let callable of file.callables) {
                 result.push({
                     callable: callable,
                     scope: this
                 });
             }
-        }
+        });
         return result;
     }
 
@@ -232,8 +240,7 @@ export class Scope {
      */
     public buildNamespaceLookup() {
         let namespaceLookup = {} as { [namespaceName: string]: NamespaceContainer };
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             for (let namespace of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
                 let name = namespace.nameExpression.getName(ParseMode.BrighterScript);
@@ -279,27 +286,25 @@ export class Scope {
                     namespaceLookup[parentName.toLowerCase()].namespaces[ns.lastPartName.toLowerCase()] = ns;
                 }
             }
-        }
+        });
         return namespaceLookup;
     }
 
     private buildClassLookup() {
         let lookup = {} as { [lowerName: string]: ClassStatement };
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             for (let cls of file.parser.references.classStatements) {
                 lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
             }
-        }
+        });
         return lookup;
     }
 
     public getNamespaceStatements() {
         let result = [] as NamespaceStatement[];
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             result.push(...file.parser.references.namespaceStatements);
-        }
+        });
         return result;
     }
 
@@ -355,13 +360,13 @@ export class Scope {
             this.validateClasses();
 
             //do many per-file checks
-            for (let file of files) {
+            this.enumerateFiles((file) => {
                 this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
                 this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
                 this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
                 this.diagnosticDetectFunctionCollisions(file);
                 this.detectVariableNamespaceCollisions(file);
-            }
+            });
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
 
@@ -440,14 +445,13 @@ export class Scope {
 
     public getNewExpressions() {
         let result = [] as AugmentedNewExpression[];
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             let expressions = file.parser.references.newExpressions as AugmentedNewExpression[];
             for (let expression of expressions) {
                 expression.file = file;
                 result.push(expression);
             }
-        }
+        });
         return result;
     }
 
@@ -669,14 +673,13 @@ export class Scope {
      */
     private getScriptImports() {
         let result = [] as FileReference[];
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             if (isBrsFile(file)) {
                 result.push(...file.ownScriptImports);
             } else if (isXmlFile(file)) {
                 result.push(...file.scriptTagImports);
             }
-        }
+        });
         return result;
     }
 
@@ -772,10 +775,9 @@ export class Scope {
      */
     public getPropertyNameCompletions() {
         let results = [] as CompletionItem[];
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             results.push(...file.propertyNameCompletions);
-        }
+        });
         return results;
     }
 }

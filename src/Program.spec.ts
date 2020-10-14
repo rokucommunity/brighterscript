@@ -738,7 +738,7 @@ describe('Program', () => {
 
     describe('getCompletions', () => {
         it('should include first-level namespace names for brighterscript files', async () => {
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+            await program.addOrReplaceFile('source/main.bs', `
                 namespace NameA.NameB.NameC
                     sub DoSomething()
                     end sub
@@ -756,7 +756,7 @@ describe('Program', () => {
         });
 
         it('resolves completions for namespaces with next namespace part for brighterscript file', async () => {
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+            const file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
                 namespace NameA.NameB.NameC
                     sub DoSomething()
                     end sub
@@ -765,6 +765,7 @@ describe('Program', () => {
                     NameA.
                 end sub
             `);
+            await file.isReady();
             let completions = (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 26))).map(x => x.label);
             expect(completions).to.include('NameB');
             expect(completions).not.to.include('NameA');

@@ -331,19 +331,17 @@ describe('XmlFile', () => {
         });
     });
 
-    describe('getAllScriptImports', () => {
+    describe('getAllDependencies', () => {
         it('returns own imports', async () => {
-            file = await program.addOrReplaceFile({
-                src: `${rootDir}/components/comp1.xml`,
-                dest: `components/comp1.xml`
-            }, `
+            file = await program.addOrReplaceFile('components/comp1.xml', `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="BaseScene">
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                 </component>
             `) as any;
-            expect(file.getAllScriptImports()).to.eql([
-                s`source/lib.brs`
+            expect(file.getAllDependencies().sort()).to.eql([
+                s`source/lib.brs`,
+                s`source/lib.d.bs`
             ]);
         });
     });
@@ -650,7 +648,7 @@ describe('XmlFile', () => {
             expect(program.getScopesForFile(xmlFile)[0].getAllCallables().map(x => x.callable.name)).to.include('logInfo');
         });
 
-        it.only('does not load .brs information into scope if related d.bs is in scope', async () => {
+        it('does not load .brs information into scope if related d.bs is in scope', async () => {
             const xmlFile = await program.addOrReplaceFile<XmlFile>('components/Component1.xml', `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">

@@ -87,7 +87,7 @@ export class Parser {
     /**
      * The array of tokens passed to `parse()`
      */
-    public tokens: Token[];
+    public tokens = [] as Token[];
 
     /**
      * The current token index
@@ -97,7 +97,7 @@ export class Parser {
     /**
      * The list of statements for the parsed file
      */
-    public ast: Body;
+    public ast = new Body([]);
 
     public get statements() {
         return this.ast.statements;

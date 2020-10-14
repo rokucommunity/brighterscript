@@ -11,6 +11,7 @@ import { Parser } from '../parser/Parser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import { DependencyGraph } from '../DependencyGraph';
+import * as extname from 'path-complete-extname';
 
 export interface SGAstScript {
     $?: {
@@ -111,9 +112,10 @@ export class XmlFile {
      *  - implied codebehind file
      *  - import statements from imported scripts or their descendents
      */
-    public getAllScriptImports() {
-        return this.cache.getOrAdd('allScriptImports', () => {
-            let value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
+    public getAllDependencies() {
+        return this.cache.getOrAdd(`allScriptImports`, () => {
+            let value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey])
+
             return value;
         });
     }
@@ -128,7 +130,11 @@ export class XmlFile {
      */
     public getAvailableScriptImports() {
         return this.cache.getOrAdd('allAvailableScriptImports', () => {
-            let allDependencies = this.getAllScriptImports();
+
+            let allDependencies = this.getAllDependencies()
+                //skip typedef files
+                .filter(x => extname(x) !== '.d.bs');
+
             let result = [] as string[];
             let filesInProgram = this.program.getFilesByPkgPaths(allDependencies);
             for (let file of filesInProgram) {
@@ -483,8 +489,8 @@ export class XmlFile {
             if (file === this) {
                 return true;
             }
-            let allScriptImports = this.getAllScriptImports();
-            for (let importPkgPath of allScriptImports) {
+            let allDependencies = this.getAllDependencies();
+            for (let importPkgPath of allDependencies) {
                 if (importPkgPath.toLowerCase() === file.pkgPath.toLowerCase()) {
                     return true;
                 }

@@ -38,13 +38,6 @@ describe('BrsFile', () => {
         program.dispose();
     });
 
-    /**
-     * Generics wrapper around addOrReplaceFile
-     */
-    async function addOrReplaceFile<T>(relativePath: string, contents?: string): Promise<T> {
-        return await program.addOrReplaceFile(relativePath, contents) as any as T;
-    }
-
     it('supports the third parameter in CreateObject', async () => {
         await program.addOrReplaceFile('source/main.brs', `
             sub main()
@@ -2107,7 +2100,7 @@ describe('BrsFile', () => {
     });
 
     describe('type definitions', () => {
-        it('only exposes defined functions even if source has more', async () => {
+        it.only('only exposes defined functions even if source has more', async () => {
             await program.addOrReplaceFile('source/main.d.bs', `
                 sub main()
                 end sub
@@ -2128,31 +2121,33 @@ describe('BrsFile', () => {
 
     describe('typedef', () => {
         it('sets typedef path properly', async () => {
-            expect((await addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefPath).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
-            expect((await addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefPath).to.equal(undefined);
-            expect((await addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefPath).to.equal(undefined);
+            expect((await program.addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefPath).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
+            expect((await program.addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefPath).to.equal(undefined);
+            expect((await program.addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefPath).to.equal(undefined);
+            //works for dest with `.brs` extension
+            expect((await program.addOrReplaceFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefPath).to.equal(undefined);
         });
 
         it('does not link when missing from program', async () => {
-            const file = await addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
             expect(file.typedefFile).not.to.exist;
         });
 
         it('links typedef when added BEFORE .brs file', async () => {
-            const typedef = await addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
-            const file = await addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            const typedef = await program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
             expect(file.typedefFile).to.equal(typedef);
         });
 
         it('links typedef when added AFTER .brs file', async () => {
-            const file = await addOrReplaceFile<BrsFile>('source/main.brs', ``);
-            const typedef = await addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            const typedef = await program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
             expect(file.typedefFile).to.eql(typedef);
         });
 
         it('removes typedef link when typedef is removed', async () => {
-            const typedef = await addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
-            const file = await addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            const typedef = await program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
             program.removeFile(typedef.pathAbsolute);
             expect(file.typedefFile).to.be.undefined;
         });
@@ -2160,7 +2155,7 @@ describe('BrsFile', () => {
 
     describe('getTypedef', () => {
         async function testTypedef(original: string, expected: string) {
-            let file = await addOrReplaceFile<BrsFile>('source/main.brs', original);
+            let file = await program.addOrReplaceFile<BrsFile>('source/main.brs', original);
             expect(file.getTypedef()).to.eql(expected);
         }
 
