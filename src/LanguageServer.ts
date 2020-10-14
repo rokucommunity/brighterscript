@@ -6,7 +6,6 @@ import {
     CompletionItem,
     Connection,
     createConnection,
-    Diagnostic,
     DidChangeConfigurationNotification,
     DidChangeWatchedFilesParams,
     FileChangeType,
@@ -14,7 +13,6 @@ import {
     InitializeParams,
     Location,
     ProposedFeatures,
-    Range,
     ServerCapabilities,
     TextDocumentPositionParams,
     TextDocuments,
@@ -30,10 +28,10 @@ import { Deferred } from './deferred';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
-import { BsDiagnostic } from './interfaces';
 import { Logger } from './Logger';
-import { KeyedDebouncer } from './KeyedDebouncer';
-import { TaskThrottler } from './TaskThrottler';
+import { Throttler } from './Throttler';
+import { KeyedThrottler } from './KeyedThrottler';
+import { DiagnosticCollection } from './DiagnosticCollection';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
@@ -73,9 +71,14 @@ export class LanguageServer {
 
     private loggerSubscription;
 
-    private debouncer = new KeyedDebouncer<string>();
+    private keyedThrottler = new KeyedThrottler(this.debounceTimeout);
 
-    private throttledValidation = new TaskThrottler(this.validateAll.bind(this));
+    public validateThrottler = new Throttler(0);
+    private boundValidateAll = this.validateAll.bind(this);
+
+    private validateAllThrottled() {
+        return this.validateThrottler.run(this.boundValidateAll);
+    }
 
     //run the server
     public run() {
@@ -323,7 +326,7 @@ export class LanguageServer {
             return configFilePath;
         }
 
-        //look for the depricated `brsconfig.json` file
+        //look for the deprecated `brsconfig.json` file
         configFilePath = path.resolve(workspacePath, 'brsconfig.json');
         if (await util.fileExists(configFilePath)) {
             return configFilePath;
@@ -394,11 +397,11 @@ export class LanguageServer {
             newWorkspace.isFirstRunComplete = true;
             newWorkspace.isFirstRunSuccessful = false;
         }).then(() => {
-            //if we found a depricated brsconfig.json, add a diagnostic warning the user
+            //if we found a deprecated brsconfig.json, add a diagnostic warning the user
             if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
                 builder.addDiagnostic(configFilePath, {
-                    ...DiagnosticMessages.brsConfigJsonIsDepricated(),
-                    range: Range.create(0, 0, 0, 0)
+                    ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
+                    range: util.createRange(0, 0, 0, 0)
                 });
                 return this.sendDiagnostics();
             }
@@ -493,6 +496,9 @@ export class LanguageServer {
 
         let filePath = util.uriToPath(uri);
 
+        //wait until the fle has settled
+        await this.keyedThrottler.onIdleOnce(filePath, true);
+
         let workspaceCompletionPromises = [] as Array<Promise<CompletionItem[]>>;
         let workspaces = this.getWorkspaces();
         //get completions from every workspace
@@ -519,7 +525,7 @@ export class LanguageServer {
         //     label: 'bronley',
         //     textEdit: {
         //         newText: 'bronley2',
-        //         range: Range.create(position, position)
+        //         range: util.createRange(position, position)
         //     }
         // }] as CompletionItem[];
 
@@ -578,7 +584,7 @@ export class LanguageServer {
         await this.waitAllProgramFirstRuns();
 
         // valdiate all workspaces
-        this.throttledValidation.run();
+        this.validateAllThrottled(); //eslint-disable-line
     }
 
     private getRootDir(workspace: Workspace) {
@@ -672,11 +678,6 @@ export class LanguageServer {
 
         let keys = changes.map(x => x.pathAbsolute);
 
-        //Debounce the list of keys so we avoid duplicate parsing. This will return only the keys
-        //that made it through the debounce (i.e. no other method debounced those keys again).
-        //Any that are not present will be handled by the later listener that debouced it.
-        keys = await this.debouncer.debounce(keys, this.debounceTimeout);
-
         //filter the list of changes to only the ones that made it through the debounce unscathed
         changes = changes.filter(x => keys.includes(x.pathAbsolute));
 
@@ -741,7 +742,7 @@ export class LanguageServer {
             );
 
             //valdiate all workspaces
-            this.throttledValidation.run();
+            await this.validateAllThrottled();
         }
         this.connection.sendNotification('build-status', 'success');
     }
@@ -752,53 +753,62 @@ export class LanguageServer {
      * @param changes
      */
     public async handleFileChanges(workspace: Workspace, changes: { type: FileChangeType; pathAbsolute: string }[]) {
+        //this loop assumes paths are both file paths and folder paths, which eliminates the need to detect.
+        //All functions below can handle being given a file path AND a folder path, and will only operate on the one they are looking for
+        await Promise.all(changes.map(async (change) => {
+            await this.keyedThrottler.run(change.pathAbsolute, async () => {
+                await this.handleFileChange(workspace, change);
+            });
+        }));
+    }
+
+    /**
+     * This only operates on files that match the specified files globs, so it is safe to throw
+     * any file changes you receive with no unexpected side-effects
+     * @param changes
+     */
+    private async handleFileChange(workspace: Workspace, change: { type: FileChangeType; pathAbsolute: string }) {
         const program = workspace.builder.program;
         const options = workspace.builder.options;
         const rootDir = workspace.builder.rootDir;
+        //deleted
+        if (change.type === FileChangeType.Deleted) {
+            //try to act on this path as a directory
+            workspace.builder.removeFilesInFolder(change.pathAbsolute);
 
-        //this loop assumes paths are both file paths and folder paths,
-        //Which eliminates the need to detect. All functions below can handle being given
-        //a file path AND a folder path, and will only operate on the one they are looking for
-        for (let change of changes) {
-            //deleted
-            if (change.type === FileChangeType.Deleted) {
-                //try to act on this path as a directory
-                workspace.builder.removeFilesInFolder(change.pathAbsolute);
+            //if this is a file loaded in the program, remove it
+            if (program.hasFile(change.pathAbsolute)) {
+                program.removeFile(change.pathAbsolute);
+            }
 
-                //if this is a file loaded in the program, remove it
-                if (program.hasFile(change.pathAbsolute)) {
-                    program.removeFile(change.pathAbsolute);
-                }
+            //created
+        } else if (change.type === FileChangeType.Created) {
+            // thanks to `onDidChangeWatchedFiles`, we can safely assume that all "Created" changes are file paths, (not directories)
 
-                //created
-            } else if (change.type === FileChangeType.Created) {
-                // thanks to `onDidChangeWatchedFiles`, we can safely assume that all "Created" changes are file paths, (not directories)
+            //get the dest path for this file.
+            let destPath = rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir);
 
-                //get the dest path for this file.
-                let destPath = rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir);
+            //if we got a dest path, then the program wants this file
+            if (destPath) {
+                await program.addOrReplaceFile({
+                    src: change.pathAbsolute,
+                    dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
+                });
+            } else {
+                //no dest path means the program doesn't want this file
+            }
 
-                //if we got a dest path, then the program wants this file
-                if (destPath) {
-                    await program.addOrReplaceFile({
-                        src: change.pathAbsolute,
-                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
-                    });
-                } else {
-                    //no dest path means the program doesn't want this file
-                }
-
-                //changed
-            } else if (program.hasFile(change.pathAbsolute)) {
-                //sometimes "changed" events are emitted on files that were actually deleted,
-                //so determine file existance and act accordingly
-                if (await util.fileExists(change.pathAbsolute)) {
-                    await program.addOrReplaceFile({
-                        src: change.pathAbsolute,
-                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
-                    });
-                } else {
-                    program.removeFile(change.pathAbsolute);
-                }
+            //changed
+        } else if (program.hasFile(change.pathAbsolute)) {
+            //sometimes "changed" events are emitted on files that were actually deleted,
+            //so determine file existance and act accordingly
+            if (await util.fileExists(change.pathAbsolute)) {
+                await program.addOrReplaceFile({
+                    src: change.pathAbsolute,
+                    dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
+                });
+            } else {
+                program.removeFile(change.pathAbsolute);
             }
         }
     }
@@ -848,38 +858,38 @@ export class LanguageServer {
         await this.waitAllProgramFirstRuns();
 
         let filePath = URI.parse(textDocument.uri).fsPath;
-        let keys = await this.debouncer.debounce([textDocument.uri], this.debounceTimeout);
-        //skip parsing the file because some other iteration debounced the file after us so they will handle it
-        if (keys.length === 0) {
-            return;
-        }
 
-        this.connection.sendNotification('build-status', 'building');
-
-        let documentText = textDocument.getText();
-        let workspaces = this.getWorkspaces();
         try {
-            await Promise.all(
-                workspaces.map(async (x) => {
-                    //only add or replace existing files. All of the files in the project should
-                    //have already been loaded by other means
-                    if (x.builder.program.hasFile(filePath)) {
-                        let rootDir = x.builder.program.options.rootDir ?? x.builder.program.options.cwd;
-                        let dest = rokuDeploy.getDestPath(filePath, x.builder.program.options.files, rootDir);
-                        await x.builder.program.addOrReplaceFile({
-                            src: filePath,
-                            dest: dest
-                        }, documentText);
-                    }
-                })
-            );
 
+            //throttle file processing. first call is run immediately, and then the last call is processed.
+            await this.keyedThrottler.run(filePath, async () => {
+
+                this.connection.sendNotification('build-status', 'building');
+
+                let documentText = textDocument.getText();
+                let workspaces = this.getWorkspaces();
+                await Promise.all(
+                    workspaces.map(async (x) => {
+                        //only add or replace existing files. All of the files in the project should
+                        //have already been loaded by other means
+                        if (x.builder.program.hasFile(filePath)) {
+                            let rootDir = x.builder.program.options.rootDir ?? x.builder.program.options.cwd;
+                            let dest = rokuDeploy.getDestPath(filePath, x.builder.program.options.files, rootDir);
+                            await x.builder.program.addOrReplaceFile({
+                                src: filePath,
+                                dest: dest
+                            }, documentText);
+                        }
+                    })
+                );
+            });
             // valdiate all workspaces
-            this.throttledValidation.run();
+            await this.validateAllThrottled();
         } catch (e) {
             this.connection.tracer.log(e);
             this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
         }
+        console.log('Validate done');
     }
 
     private async validateAll() {
@@ -922,89 +932,29 @@ export class LanguageServer {
         return results;
     }
 
-    /**
-     * The list of all issues, indexed by file. This allows us to keep track of which buckets of
-     * diagnostics to send and which to skip because nothing has changed
-     */
-    private latestDiagnosticsByFile = {} as { [key: string]: Diagnostic[] };
+    private diagnosticCollection = new DiagnosticCollection();
+
     private async sendDiagnostics() {
-        //compute the new list of diagnostics for whole project
-        let diagnosticsByFile = {} as { [key: string]: Diagnostic[] };
-        let workspaces = this.getWorkspaces();
+        //Get only the changes to diagnostics since the last time we sent them to the client
+        const patch = await this.diagnosticCollection.getPatch(this.workspaces);
 
-        //make a bucket for every file in every project
-        for (let workspace of workspaces) {
-            //Ensure the program was constructued. This prevents race conditions where certain diagnostics are being sent before the program was created.
-            await workspace.firstRunPromise;
-            //if there is no program, skip this workspace (hopefully diagnostics were added to the builder itself
-            if (workspace.builder && workspace.builder.program) {
-                for (let filePath in workspace.builder.program.files) {
-                    diagnosticsByFile[filePath] = [];
-                }
-            }
-        }
-
-        let diagnostics = Array.prototype.concat.apply([] as BsDiagnostic[],
-            workspaces.map((x) => x.builder.getDiagnostics())
-        ) as BsDiagnostic[];
-
-        /**
-         * A map that tracks which diagnostics have been added for each file.
-         * This allows us to remove duplicate diagnostics
-         */
-        let uniqueMap = {} as { [diagnosticKey: string]: boolean };
-
-        for (let diagnostic of diagnostics) {
-            //certain diagnostics are attached to non-tracked files, so create those buckets dynamically
-            if (!diagnosticsByFile[diagnostic.file.pathAbsolute]) {
-                diagnosticsByFile[diagnostic.file.pathAbsolute] = [];
-            }
-            let key =
-                diagnostic.file.pathAbsolute + '-' +
-                diagnostic.code + '-' +
-                diagnostic.range.start.line + '-' +
-                diagnostic.range.start.character + '-' +
-                diagnostic.range.end.line + '-' +
-                diagnostic.range.end.character;
-
-            //filter exact duplicate diagnostics from multiple projects for same file and location
-            if (!uniqueMap[key]) {
-                uniqueMap[key] = true;
-                let d = {
-                    severity: diagnostic.severity,
-                    range: diagnostic.range,
-                    message: diagnostic.message,
-                    relatedInformation: diagnostic.relatedInformation,
-                    code: diagnostic.code,
+        for (let filePath in patch) {
+            const diagnostics = patch[filePath].map(d => {
+                return {
+                    severity: d.severity,
+                    range: d.range,
+                    message: d.message,
+                    relatedInformation: d.relatedInformation,
+                    code: d.code,
                     source: 'brs'
                 };
+            });
 
-                diagnosticsByFile[diagnostic.file.pathAbsolute].push(d);
-            }
-        }
-
-        //send all diagnostics
-        for (let filePath in diagnosticsByFile) {
-            //TODO filter by only the files that have changed
             this.connection.sendDiagnostics({
                 uri: URI.file(filePath).toString(),
-                diagnostics: diagnosticsByFile[filePath]
+                diagnostics: diagnostics
             });
         }
-
-        //clear any diagnostics for files that are no longer present
-        let currentFilePaths = Object.keys(diagnosticsByFile);
-        for (let filePath in this.latestDiagnosticsByFile) {
-            if (!currentFilePaths.includes(filePath)) {
-                this.connection.sendDiagnostics({
-                    uri: URI.file(filePath).toString(),
-                    diagnostics: []
-                });
-            }
-        }
-
-        //save the new list of diagnostics
-        this.latestDiagnosticsByFile = diagnosticsByFile;
     }
 
     public async onExecuteCommand(params: ExecuteCommandParams) {
@@ -1028,6 +978,7 @@ export class LanguageServer {
 
     public dispose() {
         this.loggerSubscription?.();
+        this.validateThrottler.dispose();
     }
 }
 

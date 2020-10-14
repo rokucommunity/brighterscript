@@ -9,8 +9,7 @@ import * as xml2js from 'xml2js';
 
 import { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { BrsFile } from './files/BrsFile';
-import { CallableContainer, ValueKind, BsDiagnostic, FileReference } from './interfaces';
+import { CallableContainer, ValueKind, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { BrsType } from './types/BrsType';
 import { DoubleType } from './types/DoubleType';
@@ -28,6 +27,8 @@ import { ParseMode } from './parser/Parser';
 import { DottedGetExpression, VariableExpression } from './parser/Expression';
 import { LogLevel } from './Logger';
 import { TokenKind, Token } from './lexer';
+import { CompilerPlugin } from '.';
+import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
 
 export class Util {
 
@@ -90,7 +91,7 @@ export class Util {
      * @param configFilePath
      */
     public async getConfigFilePath(cwd?: string) {
-        cwd = cwd ? cwd : process.cwd();
+        cwd = cwd ?? process.cwd();
         let configPath = path.join(cwd, 'bsconfig.json');
         //find the nearest config file path
         for (let i = 0; i < 100; i++) {
@@ -120,7 +121,7 @@ export class Util {
                 colIndex++;
             }
         }
-        return Range.create(lineIndex, colIndex, lineIndex, colIndex + length);
+        return util.createRange(lineIndex, colIndex, lineIndex, colIndex + length);
     }
 
     /**
@@ -129,13 +130,19 @@ export class Util {
      * @param configFilePath
      * @param parentProjectPaths
      */
-    public async loadConfigFile(configFilePath: string, parentProjectPaths?: string[]) {
-        let cwd = process.cwd();
-
+    public async loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
         if (configFilePath) {
+            //if the config file path starts with question mark, then it's optional. return undefined if it doesn't exist
+            if (configFilePath.startsWith('?')) {
+                //remove leading question mark
+                configFilePath = configFilePath.substring(1);
+                if (await fsExtra.pathExists(path.resolve(cwd, configFilePath)) === false) {
+                    return undefined;
+                }
+            }
             //keep track of the inheritance chain
             parentProjectPaths = parentProjectPaths ? parentProjectPaths : [];
-            configFilePath = path.resolve(configFilePath);
+            configFilePath = path.resolve(cwd, configFilePath);
             if (parentProjectPaths?.includes(configFilePath)) {
                 parentProjectPaths.push(configFilePath);
                 parentProjectPaths.reverse();
@@ -156,14 +163,14 @@ export class Util {
                 } as BsDiagnostic;
                 throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
+            this.resolvePluginPaths(projectConfig, configFilePath);
 
-            //set working directory to the location of the project file
-            process.chdir(path.dirname(configFilePath));
+            let projectFileCwd = path.dirname(configFilePath);
 
             let result: BsConfig;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
-                let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath]);
+                let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
                 //extend the base config with the current project settings
                 result = { ...baseProjectConfig, ...projectConfig };
             } else {
@@ -175,18 +182,38 @@ export class Util {
 
             //make any paths in the config absolute (relative to the CURRENT config file)
             if (result.outFile) {
-                result.outFile = path.resolve(result.outFile);
+                result.outFile = path.resolve(projectFileCwd, result.outFile);
             }
             if (result.rootDir) {
-                result.rootDir = path.resolve(result.rootDir);
+                result.rootDir = path.resolve(projectFileCwd, result.rootDir);
             }
             if (result.cwd) {
-                result.cwd = path.resolve(result.cwd);
+                result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
 
-            //restore working directory
-            process.chdir(cwd);
             return result;
+        }
+    }
+
+    /**
+     * Relative paths to scripts in plugins should be resolved relatively to the bsconfig file
+     * and de-duplicated
+     * @param config Parsed configuration
+     * @param configFilePath Path of the configuration file
+     */
+    public resolvePluginPaths(config: BsConfig, configFilePath: string) {
+        if (config.plugins?.length > 0) {
+            const relPath = path.dirname(configFilePath);
+            const exists: { [key: string]: boolean } = {};
+            config.plugins = config.plugins.map(p => {
+                return p?.startsWith('.') ? path.resolve(relPath, p) : p;
+            }).filter(p => {
+                if (!p || exists[p]) {
+                    return false;
+                }
+                exists[p] = true;
+                return true;
+            });
         }
     }
 
@@ -231,13 +258,13 @@ export class Util {
 
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = await this.getConfigFilePath();
+            result.project = await this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
             result.project = config.project;
         }
         if (result.project) {
-            let configFile = await this.loadConfigFile(result.project);
+            let configFile = await this.loadConfigFile(result.project, null, config?.cwd);
             result = Object.assign(result, configFile);
         }
 
@@ -266,6 +293,7 @@ export class Util {
         config.copyToStaging = config.copyToStaging === false ? false : true;
         config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
         config.diagnosticFilters = config.diagnosticFilters ?? [];
+        config.plugins = config.plugins ?? [];
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
@@ -345,7 +373,7 @@ export class Util {
      */
     public getCallableContainersByLowerName(callables: CallableContainer[]) {
         //find duplicate functions
-        let result = {} as { [name: string]: CallableContainer[] };
+        let result = {} as CallableContainerMap;
 
         for (let callableContainer of callables) {
             let lowerName = callableContainer.callable.getName(ParseMode.BrightScript).toLowerCase();
@@ -454,9 +482,9 @@ export class Util {
     public findBeginningVariableExpression(dottedGet: DottedGetExpression): VariableExpression | undefined {
         let left: any = dottedGet;
         while (left) {
-            if (left instanceof VariableExpression) {
+            if (isVariableExpression(left)) {
                 return left;
-            } else if (left instanceof DottedGetExpression) {
+            } else if (isDottedGetExpression(left)) {
                 left = left.obj;
             } else {
                 break;
@@ -652,7 +680,7 @@ export class Util {
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
         //for now, we only support suppressing brs file diagnostics
-        if (diagnostic.file instanceof BrsFile) {
+        if (isBrsFile(diagnostic.file)) {
             for (let flag of diagnostic.file.commentFlags) {
                 //this diagnostic is affected by this flag
                 if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
@@ -713,7 +741,7 @@ export class Util {
         for (let item of items) {
             codes.push({
                 code: item.text,
-                range: Range.create(
+                range: util.createRange(
                     token.range.start.line,
                     token.range.start.character + offset + item.startIndex,
                     token.range.start.line,
@@ -799,7 +827,12 @@ export class Util {
      */
     public sleep(milliseconds: number) {
         return new Promise((resolve) => {
-            setTimeout(resolve, milliseconds);
+            //if milliseconds is 0, don't actually timeout (improves unit test throughput)
+            if (milliseconds === 0) {
+                process.nextTick(resolve);
+            } else {
+                setTimeout(resolve, milliseconds);
+            }
         });
     }
 
@@ -840,7 +873,7 @@ export class Util {
      * Get a location object back by extracting location information from other objects that contain location
      */
     public getRange(startObj: { range: Range }, endObj: { range: Range }): Range {
-        return Range.create(startObj.range.start, endObj.range.end);
+        return util.createRangeFromPositions(startObj.range.start, endObj.range.end);
     }
 
     /**
@@ -901,8 +934,8 @@ export class Util {
     /**
      * Given the class name text, return a namespace-prefixed name.
      * If the name already has a period in it, or the namespaceName was not provided, return the class name as is.
-     * If the name does not have a period, and a namespaceName was provided, return the class name prepended
-     * by the namespace name
+     * If the name does not have a period, and a namespaceName was provided, return the class name prepended by the namespace name.
+     * If no namespace is provided, return the `className` unchanged.
      */
     public getFulllyQualifiedClassName(className: string, namespaceName?: string) {
         if (className.includes('.') === false && namespaceName) {
@@ -910,6 +943,61 @@ export class Util {
         } else {
             return className;
         }
+    }
+
+    /**
+     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `util.createRange()` is significantly slower
+     */
+    public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
+        return {
+            start: {
+                line: startLine,
+                character: startCharacter
+            },
+            end: {
+                line: endLine,
+                character: endCharacter
+            }
+        };
+    }
+
+    /**
+     * Create a `Range` from two `Position`s
+     */
+    public createRangeFromPositions(startPosition: Position, endPosition: Position): Range {
+        return {
+            start: {
+                line: startPosition.line,
+                character: startPosition.character
+            },
+            end: {
+                line: endPosition.line,
+                character: endPosition.character
+            }
+        };
+    }
+
+    /**
+     * Create a `Position` object. Prefer this over `Position.create` for performance reasons
+     */
+    public createPosition(line: number, character: number) {
+        return {
+            line: line,
+            character: character
+        };
+    }
+
+    /**
+     * Convert a list of tokens into a string, including their leading whitespace
+     */
+    public tokensToString(tokens: Token[]) {
+        let result = '';
+        //skip iterating the final token
+        for (let i = 0; i < tokens.length; i++) {
+            let token = tokens[i];
+            result += token.leadingWhitespace + token.text;
+        }
+        return result;
     }
 }
 
@@ -926,6 +1014,29 @@ export function standardizePath(stringParts, ...expressions: any[]) {
             result.join('')
         )
     );
+}
+
+export function loadPlugins(pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
+    return pathOrModules.reduce((acc, pathOrModule) => {
+        if (typeof pathOrModule === 'string') {
+            try {
+                // eslint-disable-next-line
+                let loaded = require(pathOrModule);
+                let plugin: CompilerPlugin = loaded.default ? loaded.default : loaded;
+                if (!plugin.name) {
+                    plugin.name = pathOrModule;
+                }
+                acc.push(plugin);
+            } catch (err) {
+                if (onError) {
+                    onError(pathOrModule, err);
+                } else {
+                    throw err;
+                }
+            }
+        }
+        return acc;
+    }, [] as CompilerPlugin[]);
 }
 
 export let util = new Util();

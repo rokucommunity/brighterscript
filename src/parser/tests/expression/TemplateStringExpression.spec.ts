@@ -34,9 +34,9 @@ describe('TemplateStringExpression', () => {
 
             it(`complex case`, () => {
                 let { tokens } = Lexer.scan(`a = \`hello \${"world"}!
-                    I am a \${"template" + "\`string\`"} 
+                    I am a \${"template" + "\`string\`"}
                     and I am very \${["pleased"][0]} to meet you \${m.top.getChildCount()}
-                    the end. 
+                    the end.
                     goodnight\`
                 `);
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
@@ -133,8 +133,8 @@ describe('TemplateStringExpression', () => {
         it('properly transpiles complex multiline template string in array def', async () => {
             await testTranspile(
                 `a = [
-                    "one", 
-                    "two", 
+                    "one",
+                    "two",
                     \`I am a complex example\${a.isRunning(["a", "b", "c"])}\`
                 ]
             `, `
@@ -158,7 +158,7 @@ describe('TemplateStringExpression', () => {
                     \`I am a complex example \${a.isRunning([
                         "a",
                         "b",
-                        "c", 
+                        "c",
                         \`d_open \${"inside" + m.items[i]} d_close\`
                     ])}\`
                 ]

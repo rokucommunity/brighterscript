@@ -109,8 +109,8 @@ export let DiagnosticMessages = {
         code: 1019,
         severity: DiagnosticSeverity.Error
     }),
-    brsConfigJsonIsDepricated: () => ({
-        message: `'brsconfig.json' is depricated. Please rename to 'bsconfig.json'`,
+    brsConfigJsonIsDeprecated: () => ({
+        message: `'brsconfig.json' is deprecated. Please rename to 'bsconfig.json'`,
         code: 1020,
         severity: DiagnosticSeverity.Warning
     }),
@@ -520,8 +520,8 @@ export let DiagnosticMessages = {
         code: 1100,
         severity: DiagnosticSeverity.Error
     }),
-    classConstructorSuperMustBeFirstStatement: () => ({
-        message: `A call to 'super()' must be the first statement in this constructor method.`,
+    classConstructorIllegalUseOfMBeforeSuperCall: () => ({
+        message: `Illegal use of "m" before calling "super()"`,
         code: 1101,
         severity: DiagnosticSeverity.Error
     }),
@@ -536,14 +536,14 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Warning
     }),
     localVarShadowedByScopedFunction: () => ({
-        message: `Local var has same name as scoped function and will not be accessible`,
+        message: `Declaring a local variable with same name as scoped function can result in unexpected behavior`,
         code: 1104,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Error
     }),
     scopeFunctionShadowedByBuiltInFunction: () => ({
-        message: `Scope function has same name as built-in function and will not be accessible`,
+        message: `Scope function will not be accessible because it has the same name as a built-in function`,
         code: 1105,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Error
     }),
     brighterscriptScriptTagMissingTypeAttribute: () => ({
         message: `All BrighterScript script tags must include the type="text/brighterscript" attribute`,
@@ -584,8 +584,12 @@ export let DiagnosticMessages = {
         message: `Unterminated template string expression. '\${' must be followed by expression, then '}'`,
         code: 1114,
         severity: DiagnosticSeverity.Error
+    }),
+    duplicateComponentName: (componentName: string) => ({
+        message: `There are multiple components with the name '${componentName}'`,
+        code: 1115,
+        severity: DiagnosticSeverity.Error
     })
-
 };
 
 let allCodes = [] as number[];

@@ -1,20 +1,16 @@
-import { EventEmitter } from 'eventemitter3';
 import { CompletionItem, CompletionItemKind, Location, Position, Range } from 'vscode-languageserver';
 import chalk from 'chalk';
 import { DiagnosticMessages, DiagnosticInfo } from './DiagnosticMessages';
-import { BrsFile } from './files/BrsFile';
-import { XmlFile } from './files/XmlFile';
-import { CallableContainer, BsDiagnostic, FileReference } from './interfaces';
+import { CallableContainer, BsDiagnostic, FileReference, BscFile } from './interfaces';
 import { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement } from './parser';
-import { ClassStatement } from './parser/ClassStatement';
+import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
-import { FunctionType } from './types/FunctionType';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -89,7 +85,7 @@ export class Scope {
         let namespaceNameLower = namespaceName.toLowerCase();
         let files = this.getFiles();
         for (let file of files) {
-            for (let namespace of file.parser.namespaceStatements) {
+            for (let namespace of file.parser.references.namespaceStatements) {
                 let loopNamespaceNameLower = namespace.name.toLowerCase();
                 if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
                     return true;
@@ -133,7 +129,7 @@ export class Scope {
 
     public getFiles() {
         return this.cache.getOrAdd('files', () => {
-            let result = [] as Array<BrsFile | XmlFile>;
+            let result = [] as BscFile[];
             let dependencies = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
             for (let dependency of dependencies) {
                 //skip scopes and components
@@ -175,6 +171,10 @@ export class Scope {
         //filter out diangostics that match any of the comment flags
 
         return filteredDiagnostics;
+    }
+
+    public addDiagnostics(diagnostics: BsDiagnostic[]) {
+        this.diagnostics.push(...diagnostics);
     }
 
     /**
@@ -234,7 +234,7 @@ export class Scope {
         let namespaceLookup = {} as { [namespaceName: string]: NamespaceContainer };
         let files = this.getFiles();
         for (let file of files) {
-            for (let namespace of file.parser.namespaceStatements) {
+            for (let namespace of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
                 let name = namespace.nameExpression.getName(ParseMode.BrighterScript);
                 let nameParts = name.split('.');
@@ -259,9 +259,9 @@ export class Scope {
                 let ns = namespaceLookup[name.toLowerCase()];
                 ns.statements.push(...namespace.body.statements);
                 for (let statement of namespace.body.statements) {
-                    if (statement instanceof ClassStatement) {
+                    if (isClassStatement(statement)) {
                         ns.classStatements[statement.name.text.toLowerCase()] = statement;
-                    } else if (statement instanceof FunctionStatement) {
+                    } else if (isFunctionStatement(statement)) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     }
                 }
@@ -287,7 +287,7 @@ export class Scope {
         let lookup = {} as { [lowerName: string]: ClassStatement };
         let files = this.getFiles();
         for (let file of files) {
-            for (let cls of file.parser.classStatements) {
+            for (let cls of file.parser.references.classStatements) {
                 lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
             }
         }
@@ -298,27 +298,12 @@ export class Scope {
         let result = [] as NamespaceStatement[];
         let files = this.getFiles();
         for (let file of files) {
-            result.push(...file.parser.namespaceStatements);
+            result.push(...file.parser.references.namespaceStatements);
         }
         return result;
     }
 
-    public emitter = new EventEmitter();
-
-    public on(eventName: 'invalidated', callback: () => void);
-    public on(eventName: string, callback: (data: any) => void) {
-        this.emitter.on(eventName, callback);
-        return () => {
-            this.emitter.removeListener(eventName, callback);
-        };
-    }
-
-    protected emit(name: 'invalidated');
-    protected emit(name: string, data?: any) {
-        this.emitter.emit(name, data);
-    }
-
-    protected logDebug(...args) {
+    protected logDebug(...args: any[]) {
         this.program.logger.debug(this._debugLogComponentName, ...args);
     }
     private _debugLogComponentName: string;
@@ -356,6 +341,9 @@ export class Scope {
 
             //get a list of all callables, indexed by their lower case names
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
+            let files = this.getFiles();
+
+            this.program.plugins.emit('beforeScopeValidate', this, files, callableContainerMap);
 
             //find all duplicate function declarations
             this.diagnosticFindDuplicateFunctionDeclarations(callableContainerMap);
@@ -366,7 +354,6 @@ export class Scope {
             //enforce a series of checks on the bodies of class methods
             this.validateClasses();
 
-            let files = this.getFiles();
             //do many per-file checks
             for (let file of files) {
                 this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
@@ -375,6 +362,8 @@ export class Scope {
                 this.diagnosticDetectFunctionCollisions(file);
                 this.detectVariableNamespaceCollisions(file);
             }
+
+            this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
 
             (this as any).isValidated = true;
         });
@@ -389,9 +378,9 @@ export class Scope {
         this.cache.clear();
     }
 
-    private detectVariableNamespaceCollisions(file: BrsFile | XmlFile) {
+    private detectVariableNamespaceCollisions(file: BscFile) {
         //find all function parameters
-        for (let func of file.parser.functionExpressions) {
+        for (let func of file.parser.references.functionExpressions) {
             for (let param of func.parameters) {
                 let lowerParamName = param.name.text.toLowerCase();
                 let namespace = this.namespaceLookup[lowerParamName];
@@ -413,7 +402,7 @@ export class Scope {
             }
         }
 
-        for (let assignment of file.parser.assignmentStatements) {
+        for (let assignment of file.parser.references.assignmentStatements) {
             let lowerAssignmentName = assignment.name.text.toLowerCase();
             let namespace = this.namespaceLookup[lowerAssignmentName];
             //see if the param matches any starting namespace part
@@ -437,7 +426,7 @@ export class Scope {
     /**
      * Find function declarations with the same name as a stdlib function
      */
-    private diagnosticDetectFunctionCollisions(file: BrsFile | XmlFile) {
+    private diagnosticDetectFunctionCollisions(file: BscFile) {
         for (let func of file.callables) {
             if (globalCallableMap[func.getName(ParseMode.BrighterScript).toLowerCase()]) {
                 this.diagnostics.push({
@@ -453,7 +442,7 @@ export class Scope {
         let result = [] as AugmentedNewExpression[];
         let files = this.getFiles();
         for (let file of files) {
-            let expressions = file.parser.newExpressions as AugmentedNewExpression[];
+            let expressions = file.parser.references.newExpressions as AugmentedNewExpression[];
             for (let expression of expressions) {
                 expression.file = file;
                 result.push(expression);
@@ -473,7 +462,7 @@ export class Scope {
      * @param file
      * @param callableContainersByLowerName
      */
-    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BrsFile | XmlFile, callableContainersByLowerName: { [lowerName: string]: CallableContainer[] }) {
+    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: { [lowerName: string]: CallableContainer[] }) {
         //validate all function calls
         for (let expCall of file.functionCalls) {
             let callableContainersWithThisName = callableContainersByLowerName[expCall.name.toLowerCase()];
@@ -512,7 +501,7 @@ export class Scope {
      * @param file
      * @param callableContainerMap
      */
-    private diagnosticDetectShadowedLocalVars(file: BrsFile | XmlFile, callableContainerMap: { [lowerName: string]: CallableContainer[] }) {
+    private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: { [lowerName: string]: CallableContainer[] }) {
         //loop through every function scope
         for (let scope of file.functionScopes) {
             //every var declaration in this scope
@@ -520,7 +509,7 @@ export class Scope {
                 let lowerVarName = varDeclaration.name.toLowerCase();
 
                 //if the var is a function
-                if (varDeclaration.type instanceof FunctionType) {
+                if (isFunctionType(varDeclaration.type)) {
                     //local var function with same name as stdlib function
                     if (
                         //has same name as stdlib
@@ -567,10 +556,15 @@ export class Scope {
      * @param file
      * @param callablesByLowerName
      */
-    private diagnosticDetectCallsToUnknownFunctions(file: BrsFile | XmlFile, callablesByLowerName: { [lowerName: string]: CallableContainer[] }) {
+    private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: { [lowerName: string]: CallableContainer[] }) {
         //validate all expression calls
         for (let expCall of file.functionCalls) {
-            let lowerName = expCall.name.toLowerCase();
+            const lowerName = expCall.name.toLowerCase();
+            //for now, skip validation on any method named "super" within `.bs` contexts.
+            //TODO revise this logic so we know if this function call resides within a class constructor function
+            if (file.extension === '.bs' && lowerName === 'super') {
+                continue;
+            }
 
             //get the local scope for this expression
             let scope = file.getFunctionScopeAtPosition(expCall.nameRange.start);
@@ -657,7 +651,7 @@ export class Scope {
 
                     this.diagnostics.push({
                         ...DiagnosticMessages.duplicateFunctionImplementation(callable.name, callableContainer.scope.name),
-                        range: Range.create(
+                        range: util.createRange(
                             callable.nameRange.start.line,
                             callable.nameRange.start.character,
                             callable.nameRange.start.line,
@@ -677,9 +671,9 @@ export class Scope {
         let result = [] as FileReference[];
         let files = this.getFiles();
         for (let file of files) {
-            if (file instanceof BrsFile) {
+            if (isBrsFile(file)) {
                 result.push(...file.ownScriptImports);
-            } else if (file instanceof XmlFile) {
+            } else if (isXmlFile(file)) {
                 result.push(...file.scriptTagImports);
             }
         }
@@ -736,7 +730,7 @@ export class Scope {
      * Determine if this scope is referenced and known by the file.
      * @param file
      */
-    public hasFile(file: BrsFile | XmlFile) {
+    public hasFile(file: BscFile) {
         let files = this.getFiles();
         let hasFile = files.includes(file);
         return hasFile;
@@ -768,7 +762,7 @@ export class Scope {
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
-    public getDefinition(file: BrsFile | XmlFile, position: Position): Location[] { //eslint-disable-line
+    public getDefinition(file: BscFile, position: Position): Location[] { //eslint-disable-line
         //TODO implement for brs files
         return [];
     }
@@ -787,7 +781,7 @@ export class Scope {
 }
 
 interface NamespaceContainer {
-    file: BrsFile | XmlFile;
+    file: BscFile;
     fullName: string;
     nameRange: Range;
     lastPartName: string;
@@ -798,5 +792,5 @@ interface NamespaceContainer {
 }
 
 interface AugmentedNewExpression extends NewExpression {
-    file: BrsFile | XmlFile;
+    file: BscFile;
 }

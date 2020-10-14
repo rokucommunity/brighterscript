@@ -1,13 +1,15 @@
 import { Scope } from '../Scope';
-import { ClassStatement, ClassMethodStatement, ClassFieldStatement } from '../parser/ClassStatement';
-import { XmlFile } from '../files/XmlFile';
-import { BrsFile } from '../files/BrsFile';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { BsDiagnostic } from '..';
-import { CallExpression, VariableExpression, ParseMode, ExpressionStatement } from '../parser';
-import { Location } from 'vscode-languageserver';
+import { CallExpression } from '../parser/Expression';
+import { ParseMode } from '../parser/Parser';
+import { ClassMethodStatement, ClassStatement } from '../parser/Statement';
+import { CancellationTokenSource, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement } from '../astUtils/reflection';
+import { BscFile } from '../interfaces';
+import { createVisitor, WalkMode } from '../astUtils';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -34,7 +36,12 @@ export class BsClassValidator {
      */
     private getClassByName(className: string, namespaceName?: string) {
         let fullName = util.getFulllyQualifiedClassName(className, namespaceName);
-        return this.classes[fullName.toLowerCase()];
+        let cls = this.classes[fullName.toLowerCase()];
+        //if we couldn't find the class by its full namespaced name, look for a global class with that name
+        if (!cls) {
+            cls = this.classes[className.toLowerCase()];
+        }
+        return cls;
     }
 
     /**
@@ -44,7 +51,7 @@ export class BsClassValidator {
     private verifyNewExpressions() {
         let files = this.scope.getFiles();
         for (let file of files) {
-            let newExpressions = file.parser.newExpressions;
+            let newExpressions = file.parser.references.newExpressions;
             for (let newExpression of newExpressions) {
                 let className = newExpression.className.getName(ParseMode.BrighterScript);
                 let newableClass = this.getClassByName(
@@ -104,42 +111,44 @@ export class BsClassValidator {
     private verifyChildConstructor() {
         for (let key in this.classes) {
             let classStatement = this.classes[key];
-            let newMethod = classStatement.memberMap.new;
-            let ancestorNewMethod = this.getAncestorMember(classStatement, 'new');
+            const newMethod = classStatement.memberMap.new as ClassMethodStatement;
 
             if (
                 //this class has a "new method"
                 newMethod &&
                 //this class has a parent class
-                classStatement.parentClass &&
-                //this class's ancestors have a "new" method
-                ancestorNewMethod
+                classStatement.parentClass
             ) {
-                //verify there's a `super()` as the first statement in this member's "new" method
-                let firstStatement = ((newMethod as ClassMethodStatement).func?.body?.statements[0] as ExpressionStatement)?.expression as CallExpression;
+                //prevent use of `m.` anywhere before the `super()` call
+                const cancellationToken = new CancellationTokenSource();
+                let superCall: CallExpression;
+                newMethod.func.body.walk(createVisitor({
+                    VariableExpression: (expression, parent) => {
+                        const expressionNameLower = expression?.name?.text.toLowerCase();
+                        if (expressionNameLower === 'm') {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
+                                file: classStatement.file,
+                                range: expression.range
+                            });
+                        }
+                        if (isCallExpression(parent) && expressionNameLower === 'super') {
+                            superCall = parent;
+                            //stop walking
+                            cancellationToken.cancel();
+                        }
+                    }
+                }), {
+                    walkMode: WalkMode.visitAll,
+                    cancel: cancellationToken.token
+                });
 
-                //if the first statement isn't a call
-                if (firstStatement instanceof CallExpression === false) {
+                //every child class constructor must include a call to `super()`
+                if (!superCall) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.classConstructorMissingSuperCall(),
                         file: classStatement.file,
                         range: newMethod.range
-                    });
-
-                    //if the first statement's left-hand-side callee isn't a variable
-                } else if (firstStatement.callee instanceof VariableExpression === false) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.classConstructorSuperMustBeFirstStatement(),
-                        file: classStatement.file,
-                        range: firstStatement.range
-                    });
-
-                    //if the method is not called "super"
-                } else if ((firstStatement.callee as VariableExpression).name.text.toLowerCase() !== 'super') {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.classConstructorSuperMustBeFirstStatement(),
-                        file: classStatement.file,
-                        range: firstStatement.range
                     });
                 }
             }
@@ -153,7 +162,7 @@ export class BsClassValidator {
             let fields = {};
 
             for (let statement of classStatement.body) {
-                if (statement instanceof ClassMethodStatement || statement instanceof ClassFieldStatement) {
+                if (isClassMethodStatement(statement) || isClassFieldStatement(statement)) {
                     let member = statement;
                     let lowerMemberName = member.name.text.toLowerCase();
 
@@ -166,10 +175,10 @@ export class BsClassValidator {
                         });
                     }
 
-                    let memberType = member instanceof ClassFieldStatement ? 'field' : 'method';
+                    let memberType = isClassFieldStatement(member) ? 'field' : 'method';
                     let ancestorAndMember = this.getAncestorMember(classStatement, lowerMemberName);
                     if (ancestorAndMember) {
-                        let ancestorMemberType = ancestorAndMember.member instanceof ClassFieldStatement ? 'field' : 'method';
+                        let ancestorMemberType = isClassFieldStatement(ancestorAndMember.member) ? 'field' : 'method';
 
                         //mismatched member type (field/method in child, opposite in parent)
                         if (memberType !== ancestorMemberType) {
@@ -185,7 +194,7 @@ export class BsClassValidator {
                         }
 
                         //child field has same name as parent
-                        if (member instanceof ClassFieldStatement) {
+                        if (isClassFieldStatement(member)) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.memberAlreadyExistsInParentClass(
                                     memberType,
@@ -199,7 +208,7 @@ export class BsClassValidator {
                         //child method missing the override keyword
                         if (
                             //is a method
-                            member instanceof ClassMethodStatement &&
+                            isClassMethodStatement(member) &&
                             //does not have an override keyword
                             !member.overrides &&
                             //is not the constructur function
@@ -215,10 +224,10 @@ export class BsClassValidator {
                         }
                     }
 
-                    if (member instanceof ClassMethodStatement) {
+                    if (isClassMethodStatement(member)) {
                         methods[lowerMemberName] = member;
 
-                    } else if (member instanceof ClassFieldStatement) {
+                    } else if (isClassFieldStatement(member)) {
                         fields[lowerMemberName] = member;
                     }
                 }
@@ -259,7 +268,7 @@ export class BsClassValidator {
         let files = this.scope.getFiles();
 
         for (let file of files) {
-            for (let x of file.parser.classStatements) {
+            for (let x of file.parser.references.classStatements ?? []) {
                 let classStatement = x as AugmentedClassStatement;
                 let name = classStatement.getName(ParseMode.BrighterScript);
                 //skip this class if it doesn't have a name
@@ -349,6 +358,6 @@ export class BsClassValidator {
 
 }
 type AugmentedClassStatement = ClassStatement & {
-    file: BrsFile | XmlFile;
+    file: BscFile;
     parentClass: AugmentedClassStatement;
 };

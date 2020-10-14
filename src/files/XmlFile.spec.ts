@@ -28,6 +28,24 @@ describe('XmlFile', () => {
     });
 
     describe('parse', () => {
+        it('allows modifying the parsed XML model', async () => {
+            const expected = 'OtherName';
+            file = new XmlFile('abs', 'rel', program);
+            program.plugins.add({
+                name: 'allows modifying the parsed XML model',
+                afterFileParse: () => {
+                    file.parsedXml.component.$.name = expected;
+                }
+            });
+            await file.parse(`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="Scene">
+                    <script type="text/brightscript" uri="ChildScene1.brs" /> <script type="text/brightscript" uri="ChildScene2.brs" /> <script type="text/brightscript" uri="ChildScene3.brs" />
+                </component>
+            `);
+            expect(file.componentName).to.equal(expected);
+        });
+
         it('supports importing BrighterScript files', async () => {
             file = await program.addOrReplaceFile({ src: `${rootDir}/components/custom.xml`, dest: 'components/custom.xml' }, `
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -276,7 +294,7 @@ describe('XmlFile', () => {
 
             let xmlFile = new XmlFile(s`${rootDir}/components/component1/component1.xml`, s`components/component1/component1.xml`, <any>program);
             xmlFile.scriptTagImports.push({
-                pkgPath: s`components/component1/component1..brs`,
+                pkgPath: s`components/component1/component1.brs`,
                 text: 'component1.brs',
                 filePathRange: Range.create(1, 1, 1, 1),
                 sourceFile: xmlFile
@@ -318,7 +336,7 @@ describe('XmlFile', () => {
             file = await program.addOrReplaceFile({
                 src: `${rootDir}/components/comp1.xml`,
                 dest: `components/comp1.xml`
-            }, `  
+            }, `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="BaseScene">
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
@@ -334,7 +352,7 @@ describe('XmlFile', () => {
         let xmlFile = await program.addOrReplaceFile({
             src: `${rootDir}/components/comp1.xml`,
             dest: `components/comp1.xml`
-        }, `  
+        }, `
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="BaseScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.bs" />
@@ -387,7 +405,7 @@ describe('XmlFile', () => {
         let xmlFile1 = await program.addOrReplaceFile({
             src: `${rootDir}/components/comp1.xml`,
             dest: `components/comp1.xml`
-        }, `  
+        }, `
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene1" extends="BaseScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.brs" />
@@ -397,7 +415,7 @@ describe('XmlFile', () => {
         let xmlFile2 = await program.addOrReplaceFile({
             src: `${rootDir}/components/comp2.xml`,
             dest: `components/comp2.xml`
-        }, `  
+        }, `
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene2" extends="BaseScene">
             </component>
@@ -415,6 +433,17 @@ describe('XmlFile', () => {
         }, ``);
         expect(program.getScopesForFile(xmlFile1)[0].isValidated).to.be.false;
         expect(program.getScopesForFile(xmlFile2)[0].isValidated).to.be.true;
+    });
+
+    it('allows adding diagnostics', () => {
+        const expected = [{
+            message: 'message',
+            file: undefined,
+            range: undefined
+        }];
+        file.addDiagnostics(expected);
+        const actual = file.getDiagnostics();
+        expect(actual).deep.equal(expected);
     });
 
     describe('findExtendsPosition', () => {
@@ -550,5 +579,59 @@ describe('XmlFile', () => {
         expect(program.getDiagnostics()[0]?.message).to.exist.and.to.equal(
             DiagnosticMessages.brighterscriptScriptTagMissingTypeAttribute().message
         );
+    });
+
+    describe('Transform plugins', () => {
+        async function parseFileWithPlugins(validateXml: (file: XmlFile) => void) {
+            const rootDir = process.cwd();
+            const program = new Program({
+                rootDir: rootDir
+            });
+            file = new XmlFile('abs', 'rel', program);
+            program.plugins.add({
+                name: 'Transform plugins',
+                afterFileParse: () => validateXml(file)
+            });
+            await file.parse(`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Cmp1" extends="Scene">
+                </component>
+            `);
+            return file;
+        }
+
+        it('Calls XML file validation plugins', async () => {
+            const validateXml = sinon.spy();
+            const file = await parseFileWithPlugins(validateXml);
+            expect(validateXml.callCount).to.equal(1);
+            expect(validateXml.calledWith(file)).to.be.true;
+        });
+    });
+
+    it('plugin diagnostics work for xml files', async () => {
+        program.plugins.add({
+            name: 'Xml diagnostic test',
+            afterFileParse: (file) => {
+                if (file.pathAbsolute.endsWith('.xml')) {
+                    file.addDiagnostics([{
+                        file: file,
+                        message: 'Test diagnostic',
+                        range: Range.create(0, 0, 0, 0),
+                        code: 9999
+                    }]);
+                }
+            }
+        });
+
+        await program.addOrReplaceFile('components/comp.xml', `
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Cmp1" extends="Scene">
+            </component>
+        `);
+        await program.validate();
+        expect(program.getDiagnostics().map(x => ({ message: x.message, code: x.code }))).to.eql([{
+            message: 'Test diagnostic',
+            code: 9999
+        }]);
     });
 });

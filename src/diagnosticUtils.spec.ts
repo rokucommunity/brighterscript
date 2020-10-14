@@ -4,13 +4,38 @@ import * as util from './diagnosticUtils';
 import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 
 describe('diagnosticUtils', () => {
+    let options: ReturnType<typeof util.getPrintDiagnosticOptions>;
+    beforeEach(() => {
+        options = util.getPrintDiagnosticOptions({});
+    });
+
+    describe('printDiagnostic', () => {
+        it('does not crash when range is undefined', () => {
+            //print a diagnostic that doesn't have a range...it should not explode
+            util.printDiagnostic(options, DiagnosticSeverity.Error, './temp/file.brs', [], {
+                message: 'Bad thing happened',
+                range: null, //important...this needs to be null for the test to pass,
+                code: 1234
+            } as any);
+        });
+
+        it('does not crash when filie path is missing', () => {
+            //print a diagnostic that doesn't have a range...it should not explode
+            util.printDiagnostic(options, DiagnosticSeverity.Error, undefined, [], {
+                message: 'Bad thing happened',
+                range: Range.create(0, 0, 2, 2), //important...this needs to be null for the test to pass,
+                code: 1234
+            } as any);
+        });
+    });
+
     describe('getPrintDiagnosticOptions', () => {
         let options: ReturnType<typeof util.getPrintDiagnosticOptions>;
         it('prepares cwd value', () => {
             options = util.getPrintDiagnosticOptions({ cwd: 'cwd' });
             expect(options.cwd).to.equal('cwd');
             // default value
-            options = util.getPrintDiagnosticOptions({ });
+            options = util.getPrintDiagnosticOptions({});
             expect(options.cwd).to.equal(process.cwd());
         });
         it('prepares emitFullPaths value', () => {
@@ -19,7 +44,7 @@ describe('diagnosticUtils', () => {
             options = util.getPrintDiagnosticOptions({ emitFullPaths: false });
             expect(options.emitFullPaths).to.equal(false);
             // default value
-            options = util.getPrintDiagnosticOptions({ });
+            options = util.getPrintDiagnosticOptions({});
             expect(options.emitFullPaths).to.equal(false);
         });
         it('maps diagnosticLevel to severityLevel', () => {
@@ -32,7 +57,7 @@ describe('diagnosticUtils', () => {
             options = util.getPrintDiagnosticOptions({ diagnosticLevel: 'error' });
             expect(options.severityLevel).to.equal(DiagnosticSeverity.Error);
             // default value
-            options = util.getPrintDiagnosticOptions({ });
+            options = util.getPrintDiagnosticOptions({});
             expect(options.severityLevel).to.equal(DiagnosticSeverity.Warning);
             options = util.getPrintDiagnosticOptions({ diagnosticLevel: 'x' } as any);
             expect(options.severityLevel).to.equal(DiagnosticSeverity.Warning);

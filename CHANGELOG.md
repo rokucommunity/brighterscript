@@ -6,7 +6,131 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.12.2]
+## Unreleased
+### Fixed
+ - bug when finding `bsconfig.json` that would use the wrong cwd in multi-workspace language server situations.
+
+
+
+## [0.16.6] - 2020-10-13
+### Fixed
+ - quirk in the GitHub actions workflow that didn't publish the correct code.
+
+
+
+## [0.16.5] - 2020-10-13
+### Fixed
+ - performance issue during the parse phase. We now defer certain collections until needed. ([#210](https://github.com/rokucommunity/brighterscript/pull/210))
+
+
+
+## [0.16.4] - 2020-10-12
+### Changed
+ - LanguageServer now sends a _diff_ of diagnostics for files, instead of the entire project's diagnostics every time. ([#204](https://github.com/rokucommunity/brighterscript/pull/204))
+### Fixed
+ - transpile bug for namespaced class constructors that wouldn't properly prepend the namespace in some situations. ([#208](https://github.com/rokucommunity/brighterscript/pull/208))
+ - bug in class validation that was causing bogus diagnostics during class construction in namespaces.([#203](https://github.com/rokucommunity/brighterscript/issues/203))
+
+
+
+## [0.16.3] - 2020-10-11
+### Changed
+ - Add generic type parameter for `Program` add functions.
+ - Export `BscType` type to simplify `BrsFile | XmlFile` usage everywhere.
+### Fixed
+ - Prevent bogus diagnostic on all callfunc operations ([#205](https://github.com/rokucommunity/brighterscript/issues/205))
+
+
+
+## [0.16.2] - 2020-10-09
+### Fixed
+ - critical bug in diagnostic printing that would crash the program if a diagnostic was missing a valid range.
+
+
+
+## [0.16.1] - 2020-10-03
+### Changed
+ - rename `isEscapedCharCodeLiteral` to `isEscapedCharCodeLiteralExpression` to match other expression class names
+ - rename `FunctionParameter` to `FunctionParameterExpression` to match other expression class names
+ - convert `AAMemberExpression` interface into an expression class.
+ - convert `isBrsFile` and `isXmlFile` to check for constructor file name rather than file extension.
+### Fixed
+ - bugs with plugin interoperability with BrighterScript when using `instanceof`. All internal BrighterScript logic now uses the `is` functions from `astutils/reflection`, and plugin authors should do the same.
+
+
+
+## [0.16.0] - 2020-10-02
+### Added
+ - `Expression.walk` and `Statement.walk` functions which provide shallow or deep walking of the AST
+ - Many `ast` reflection methods to be used instead of `instanceof`.
+ - plugin system (still in alpha) support for re-scanning the AST after modifing the AST by calling `invalidateReferences()`
+ - every token has a `leadingWhitespace` property now that contains leading whitespace. Retrieving whitespace tokens from the `Lexer` will be removed in a future update in favor of this appraoch
+### Changed
+ - all AST nodes now extend either `Statement` or `Expression` instead of simply implementing their interfaces.
+### Removed
+ - several AST walking functions from `astUtils/` in favor of direct node walking
+
+
+
+## [0.15.2] - 2020-10-01
+### Fixed
+ - Bug in component validation that would throw errors if component name was undefined (generally due to an XML parse error). ([#194](https://github.com/rokucommunity/brighterscript/pull/194))
+
+
+
+## [0.15.1] - 2020-09-30
+### Fixed
+ - improved performance in the lexer and parser
+ - potential for accidentally changing `cwd` during bsconfig resolving
+
+
+
+## [0.15.0] - 2020-09-18
+### Added
+ - plugin API to allow visibility into the various compiler phases. This is currently in alpha. ([#170](https://github.com/rokucommunity/brighterscript/pull/170))
+
+
+
+## [0.14.0] - 2020-09-04
+### Changed
+ - Add error diagnostic BS1115 which flags duplicate component names [#186](https://github.com/rokucommunity/brighterscript/pull/186)
+
+
+
+## [0.13.2] - 2020-08-31
+### Changed
+ - Upgraded BS1104 to error (previously a warning) and refined the messaging.
+
+
+
+## [0.13.1] - 2020-08-14
+### Changed
+ - upgraded to [roku-deploy@3.2.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#323---2020-08-14)
+ - throw exception when copying to staging folder and `rootDir` does not exist in the file system
+ - throw exception when zipping package and `${stagingFolder}/manifest` does not exist in the file system
+
+
+
+## [0.13.0] - 2020-08-10
+### Added
+ - ability to mark the `extends` and `project` options in `bsconfig.json`, API and CLI as optional.
+
+
+
+## [0.12.4] - 2020-08-06
+### Fixed
+ - bug in cli that wouldn't properly read bsconfig values. [#167](https://github.com/rokucommunity/brighterscript/issues/167)
+ - bug in cli that doesn't use `retain-staging-folder` argument properly. [#168](https://github.com/rokucommunity/brighterscript/issues/168)
+
+
+
+## [0.12.3] - 2020-08-03
+### Fixed
+ - bug in the language server that would provide stale completions due to the file throttling introduced in v0.11.2. Now the language server will wait for the throttled parsing to complete before serving completion results.
+
+
+
+## [0.12.2] - 2020-07-16
 ### Added
  - Expose `ProgramBuilder.transpile()` method to make it easier for tools to transpile programmatically. [#154](https://github.com/rokucommunity/brighterscript/issues/154)
 ### Fixed
@@ -26,9 +150,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
  - `diagnosticLevel` option to limit/control the noise in the console diagnostics
 ### Changed
- - Move away from `command-line-args` in favor of `yargs` for CLI support 
+ - Move away from `command-line-args` in favor of `yargs` for CLI support
 ### Fixed
- - Throttle LanguageServer validation to prevent running too many validations in a row. 
+ - Throttle LanguageServer validation to prevent running too many validations in a row.
  - Bug in CLI preventing ability to provide false values to certain flags
  - Do not print `info` and `hint` diagnostics from the CLI by default.
 
@@ -74,7 +198,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.10.10] - 2020-06-12
 ### Fixed
- - include the missing `bslib.brs` file in the npm package which was causing errors during transpile. 
+ - include the missing `bslib.brs` file in the npm package which was causing errors during transpile.
 
 
 
@@ -132,8 +256,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.10.2] - 2020-05-23
-### Added 
- - language server command `TranspileFile` which will return the transpiled contents of the requested file. 
+### Added
+ - language server command `TranspileFile` which will return the transpiled contents of the requested file.
 ### Fixed
  - quotemarks in string literals were not being properly escaped during transpile ([#89](https://github.com/rokucommunity/brighterscript/issues/89))
  - Bug that was only validating calls at top level. Now calls found anywhere in a function are validated
@@ -149,8 +273,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.10.0] - 2020-05-19
-### Added 
- - new callfunc operator. 
+### Added
+ - new callfunc operator.
 
 
 
@@ -178,7 +302,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - additional messages during cli run
 ### Changed
  - don't terminate bsc on warning diagnostics
- - removed extraneous log statements from the util module 
+ - removed extraneous log statements from the util module
 ### Fixed
  - fixed bugs when printing diagnostics to the console that wouldn't show the proper squiggly line location.
 
@@ -186,7 +310,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.5] - 2020-05-06
 ### Added
- - new config option called `showDiagnosticsInConsole` which disables printing diagnostics to the console 
+ - new config option called `showDiagnosticsInConsole` which disables printing diagnostics to the console
 ### Fixed
  - bug in lexer that was capturing the carriage return character (`\n`) at the end of comment statements
  - bug in transpiler that wouldn't include a newline after the final comment statement
@@ -202,7 +326,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
  - bug that was flagging namespaced functions with the same name as a stdlib function.
  - bug that was not properly transpiling brighterscript script tags in xml components.
- - several performance issues introduced in v0.8.2. 
+ - several performance issues introduced in v0.8.2.
  - Replace `type="text/brighterscript"` with `type="text/brightscript"` in xml script imports during transpile. ([#73](https://github.com/rokucommunity/brighterscript/issues/73))
 
 
@@ -288,7 +412,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
  - ability to filter out diagnostics by using the `diagnosticFilters` option in bsconfig
 ### Changed
- - depricated the `ignoreErrorCodes` in favor of `diagnosticFilters`
+ - deprecated the `ignoreErrorCodes` in favor of `diagnosticFilters`
 ### Fixed
  - Bug in the language server that wasn't reloading the project when changing the `bsconfig.json`
 
@@ -328,11 +452,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0] - 2020-04-10
 ### Added
- - several new diagnostics for conditional compiles. Some of them allow the parser to recover and continue. 
+ - several new diagnostics for conditional compiles. Some of them allow the parser to recover and continue.
  - experimental class transpile support. There is still no intellisense for classes yet though.
 ### Changed
    - All errors are now stored as vscode-languageserver `Diagnostic` objects instead of a custom error structure.
-   - Token, AST node, and diagnostic locations are now stored as `Range` objects, which use zero-based lines instead of the previous one-based line numbers. 
+   - Token, AST node, and diagnostic locations are now stored as `Range` objects, which use zero-based lines instead of the previous one-based line numbers.
    - All parser diagnostics have been broken out into their own error codes, removing the use of error code 1000 for a generic catch-all. That code still exists and will hold runtime errors from the parser.
 ### Fixed
  - bug in parser that was flagging the new class keywords (`new`, `class`, `public`, `protected`, `private`, `override`) as parse errors. These are now allowed as both local variables and property names.
@@ -364,15 +488,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.4.0] - 2020-01-07
-### Added 
- - ability to specify the pkgPath of a file when adding to the project. 
+### Added
+ - ability to specify the pkgPath of a file when adding to the project.
 ### Changed
  - upgraded to [roku-deploy@3.0.0-beta.6](https://www.npmjs.com/package/roku-deploy/v/3.0.0-beta.6)
 ### Fixed
  - bug that was showing duplicate function warnings when multiple files target the same `pkgPath`. Now roku-deploy will only keep the last referenced file for each `pkgPath`
  - reduced memory consumtion and FS calls during file watcher events
  - issue in getFileByPkgPath related to path separator mismatches
- - bugs related to standalone workspaces causing issues for other workspaces. 
+ - bugs related to standalone workspaces causing issues for other workspaces.
 
 
 
@@ -385,7 +509,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.0] - 2019-10-03
 ### Added
- - support for parsing opened files not included in any project. 
+ - support for parsing opened files not included in any project.
 ### Fixed
  - parser bug that was preventing comments as their own lines inside associative array literals. ([#29](https://github.com/rokucommunity/brighterscript/issues/28))
 
@@ -403,7 +527,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
  - crash when parsing the workspace path to read the config on startup.
  - auto complete options not always returning results when it should.
- - windows bug relating to the drive letter being different, and so then not matching the file list. 
+ - windows bug relating to the drive letter being different, and so then not matching the file list.
  - many bugs related to mismatched file path comparisons.
 
 
@@ -412,7 +536,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
  - bsconfig.json validation
  - slightly smarter intellisense that knows when you're trying to complete an object property.
- - diagnostic for depricated brsconfig.json
+ - diagnostic for deprecated brsconfig.json
  - basic transpile support including sourcemaps. Most lines also support transpiling including comments, but there may still be bugs
  - parser now includes all comments as tokens in the AST.
 
@@ -428,54 +552,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Cloned from [brightscript-language](https://github.com/rokucommunity/brightscript-language)
 
 
-
-[0.12.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.12.1...v0.12.2
-[0.12.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.12.0...v0.12.1
-[0.12.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.3...v0.12.0
-[0.11.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.2...v0.11.3
-[0.11.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.1...v0.11.2
-[0.11.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.11.0...v0.11.1
-[0.11.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.10...v0.11.0
+[0.1.0]:    https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.1.0
+[0.2.0]:    https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.2.0
+[0.2.1]:    https://github.com/rokucommunity/brighterscript/compare/v0.2.0...v0.2.1
+[0.2.2]:    https://github.com/rokucommunity/brighterscript/compare/v0.2.1...v0.2.2
+[0.3.0]:    https://github.com/rokucommunity/brighterscript/compare/v0.2.2...v0.3.0
+[0.3.1]:    https://github.com/rokucommunity/brighterscript/compare/v0.3.0...v0.3.1
+[0.4.0]:    https://github.com/rokucommunity/brighterscript/compare/v0.3.1...v0.4.0
+[0.4.1]:    https://github.com/rokucommunity/brighterscript/compare/v0.4.0...v0.4.1
+[0.4.2]:    https://github.com/rokucommunity/brighterscript/compare/v0.4.1...v0.4.2
+[0.4.3]:    https://github.com/rokucommunity/brighterscript/compare/v0.4.2...v0.4.3
+[0.4.4]:    https://github.com/rokucommunity/brighterscript/compare/v0.4.3...v0.4.4
+[0.5.0]:    https://github.com/rokucommunity/brighterscript/compare/v0.4.4...v0.5.0
+[0.5.1]:    https://github.com/rokucommunity/brighterscript/compare/v0.5.0...v0.5.1
+[0.5.2]:    https://github.com/rokucommunity/brighterscript/compare/v0.5.1...v0.5.2
+[0.5.3]:    https://github.com/rokucommunity/brighterscript/compare/v0.5.2...v0.5.3
+[0.5.4]:    https://github.com/rokucommunity/brighterscript/compare/v0.5.3...v0.5.4
+[0.6.0]:    https://github.com/rokucommunity/brighterscript/compare/v0.5.4...v0.6.0
+[0.7.0]:    https://github.com/rokucommunity/brighterscript/compare/v0.6.0...v0.7.0
+[0.7.1]:    https://github.com/rokucommunity/brighterscript/compare/v0.7.0...v0.7.1
+[0.7.2]:    https://github.com/rokucommunity/brighterscript/compare/v0.7.1...v0.7.2
+[0.8.0]:    https://github.com/rokucommunity/brighterscript/compare/v0.7.2...v0.8.0
+[0.8.1]:    https://github.com/rokucommunity/brighterscript/compare/v0.8.0...v0.8.1
+[0.8.2]:    https://github.com/rokucommunity/brighterscript/compare/v0.8.1...v0.8.2
+[0.9.0]:    https://github.com/rokucommunity/brighterscript/compare/v0.8.2...v0.9.0
+[0.9.1]:    https://github.com/rokucommunity/brighterscript/compare/v0.9.0...v0.9.1
+[0.9.2]:    https://github.com/rokucommunity/brighterscript/compare/v0.9.1...v0.9.2
+[0.9.3]:    https://github.com/rokucommunity/brighterscript/compare/v0.9.2...v0.9.3
+[0.9.4]:    https://github.com/rokucommunity/brighterscript/compare/v0.9.3...v0.9.4
+[0.9.5]:    https://github.com/rokucommunity/brighterscript/compare/v0.9.4...v0.9.5
+[0.9.6]:    https://github.com/rokucommunity/brighterscript/compare/v0.9.5...v0.9.6
+[0.9.7]:    https://github.com/rokucommunity/brighterscript/compare/v0.9.6...v0.9.7
+[0.9.8]:    https://github.com/rokucommunity/brighterscript/compare/v0.9.7...v0.9.8
+[0.10.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.8...v0.10.0
+[0.10.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.10.0...v0.10.1
+[0.10.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.10.1...v0.10.2
+[0.10.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.10.2...v0.10.3
+[0.10.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.10.3...v0.10.4
+[0.10.5]:   https://github.com/rokucommunity/brighterscript/compare/v0.10.4...v0.10.5
+[0.10.6]:   https://github.com/rokucommunity/brighterscript/compare/v0.10.5...v0.10.6
+[0.10.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.10.6...v0.10.7
+[0.10.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.10.7...v0.10.8
+[0.10.9]:   https://github.com/rokucommunity/brighterscript/compare/v0.10.8...v0.10.9
 [0.10.10]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.9...v0.10.10
-[0.10.9]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.8...v0.10.9
-[0.10.8]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.7...v0.10.8
-[0.10.7]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.6...v0.10.7
-[0.10.6]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.5...v0.10.6
-[0.10.5]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.4...v0.10.5
-[0.10.4]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.3...v0.10.4
-[0.10.3]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.2...v0.10.3
-[0.10.2]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.1...v0.10.2
-[0.10.1]:  https://github.com/rokucommunity/brighterscript/compare/v0.10.0...v0.10.1
-[0.10.0]:  https://github.com/rokucommunity/brighterscript/compare/v0.9.8...v0.10.0
-[0.9.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.7...v0.9.8
-[0.9.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.6...v0.9.7
-[0.9.6]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.5...v0.9.6
-[0.9.5]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.4...v0.9.5
-[0.9.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.3...v0.9.4
-[0.9.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.2...v0.9.3
-[0.9.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.1...v0.9.2
-[0.9.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.9.0...v0.9.1
-[0.9.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.8.2...v0.9.0
-[0.8.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.8.1...v0.8.2
-[0.8.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.8.0...v0.8.1
-[0.8.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.7.2...v0.8.0
-[0.7.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.7.1...v0.7.2
-[0.7.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.7.0...v0.7.1
-[0.7.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.6.0...v0.7.0
-[0.6.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.5.4...v0.6.0
-[0.5.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.5.3...v0.5.4
-[0.5.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.5.2...v0.5.3
-[0.5.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.5.1...v0.5.2
-[0.5.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.5.0...v0.5.1
-[0.5.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.4.4...v0.5.0
-[0.4.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.4.3...v0.4.4
-[0.4.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.4.2...v0.4.3
-[0.4.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.4.1...v0.4.2
-[0.4.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.4.0...v0.4.1
-[0.4.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.3.1...v0.4.0
-[0.3.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.3.0...v0.3.1
-[0.3.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.2.2...v0.3.0
-[0.2.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.2.1...v0.2.2
-[0.2.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.2.0...v0.2.1
-[0.2.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.2.0
-[0.1.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.1.0
+[0.11.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.10.10...v0.11.0
+[0.11.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.11.0...v0.11.1
+[0.11.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.11.1...v0.11.2
+[0.11.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.11.2...v0.11.3
+[0.12.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.11.3...v0.12.0
+[0.12.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.12.0...v0.12.1
+[0.12.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.12.1...v0.12.2
+[0.12.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.12.2...v0.12.3
+[0.12.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.12.3...v0.12.4
+[0.13.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.12.4...v0.13.0
+[0.13.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.13.0...v0.13.1
+[0.13.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.13.1...v0.13.2
+[0.14.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.13.2...v0.14.0
+[0.15.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.14.0...v0.15.0
+[0.15.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.15.0...v0.15.1
+[0.15.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.15.1...v0.15.2
+[0.16.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.15.2...v0.16.0
+[0.16.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.0...v0.16.1
+[0.16.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.1...v0.16.2
+[0.16.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.2...v0.16.3
+[0.16.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.3...v0.16.4
+[0.16.5]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.4...v0.16.5
+[0.16.6]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.5...v0.16.6

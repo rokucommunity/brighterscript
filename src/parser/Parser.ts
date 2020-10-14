@@ -19,7 +19,7 @@ import {
     ValueKind,
     Argument,
     StdlibArgument,
-    FunctionParameter,
+    FunctionParameterExpression,
     valueKindFromString
 } from '../brsTypes';
 import {
@@ -50,7 +50,7 @@ import {
     StopStatement,
     NamespaceStatement,
     Body,
-    ImportStatement
+    ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement
 } from './Statement';
 import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
@@ -73,14 +73,15 @@ import {
     VariableExpression,
     XmlAttributeGetExpression,
     TemplateStringExpression,
-    EscapedCharCodeLiteral,
+    EscapedCharCodeLiteralExpression,
     TemplateStringQuasiExpression,
     TaggedTemplateStringExpression,
     SourceLiteralExpression
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
-import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
 import { Logger } from '../Logger';
+import { isCallExpression, isCallfuncExpression, isClassMethodStatement, isDottedGetExpression, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
 
 export class Parser {
     /**
@@ -98,8 +99,41 @@ export class Parser {
      */
     public ast: Body;
 
-    //TODO remove this once we have verified all of the tests.
-    public statements: Statement[];
+    public get statements() {
+        return this.ast.statements;
+    }
+
+    /**
+     * References for significant statements/expressions in the parser.
+     * These are initially extracted during parse-time to improve performance, but will also be dynamically regenerated if need be.
+     *
+     * If a plugin modifies the AST, then the plugin should call Parser#invalidateReferences() to force this list to refresh
+     */
+    public get references() {
+        //build the references object if it's missing.
+        if (!this._references) {
+            this._references = this.findReferences();
+        }
+        return this._references;
+    }
+
+    private _references: References = {
+        assignmentStatements: [],
+        classStatements: [],
+        functionStatements: [],
+        functionExpressions: [],
+        importStatements: [],
+        libraryStatements: [],
+        namespaceStatements: [],
+        newExpressions: []
+    };
+
+    /**
+     * Invalidates (clears) the references collection. This should be called anytime the AST has been manipulated.
+     */
+    invalidateReferences() {
+        this._references = undefined;
+    }
 
     /**
      * The list of diagnostics found during the parse process
@@ -119,46 +153,6 @@ export class Parser {
     private globalTerminators = [] as TokenKind[][];
 
     /**
-     * All class statements defined in this file
-     */
-    public classStatements = [] as ClassStatement[];
-
-    /**
-     * All namespace statements defined in this file
-     */
-    public namespaceStatements = [] as NamespaceStatement[];
-
-    /**
-     * All function statements defined in this file
-     */
-    public functionStatements = [] as FunctionStatement[];
-
-    /**
-     * All function expressions defined in this file
-     */
-    public functionExpressions = [] as FunctionExpression[];
-
-    /**
-     * All `new <ClassName>` expressions defined in this file
-     */
-    public newExpressions = [] as NewExpression[];
-
-    /**
-     * All assignment statements in this file
-     */
-    public assignmentStatements = [] as AssignmentStatement[];
-
-    /**
-     * All import statements in this file
-     */
-    public importStatements = [] as ImportStatement[];
-
-    /**
-     * All library statements in this file
-     */
-    public libraryStatements = [] as LibraryStatement[];
-
-    /**
      * When a namespace has been started, this gets set. When it's done, this gets unset.
      * It is useful for passing the namespace into certain statements that need it
      */
@@ -172,7 +166,7 @@ export class Parser {
     private currentFunctionExpression: FunctionExpression;
 
     /**
-     * A list of allowed local identifiers. We store this in a property because we augment the list in the constructor
+     * A list of identifiers that are permitted to be used as local variables. We store this in a property because we augment the list in the constructor
      * based on the parse mode
      */
     private allowedLocalIdentifiers: TokenKind[];
@@ -218,7 +212,6 @@ export class Parser {
         this.namespaceAndFunctionDepth = 0;
 
         this.ast = this.body();
-        this.statements = this.ast.statements;
 
         return this;
     }
@@ -391,9 +384,8 @@ export class Parser {
                 if (this.check(TokenKind.Function, TokenKind.Sub) || (this.check(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
                     let funcDeclaration = this.functionDeclaration(false);
 
-                    //remove this function from the lists because it's a class method
-                    this.functionExpressions.pop();
-                    this.functionStatements.pop();
+                    //remove this function from the lists because it's not a callable
+                    const functionStatement = this._references.functionStatements.pop();
 
                     //if we have an overrides keyword AND this method is called 'new', that's not allowed
                     if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
@@ -402,14 +394,17 @@ export class Parser {
                             range: overrideKeyword.range
                         });
                     }
-                    body.push(
-                        new ClassMethodStatement(
-                            accessModifier,
-                            funcDeclaration.name,
-                            funcDeclaration.func,
-                            overrideKeyword
-                        )
+                    const methodStatement = new ClassMethodStatement(
+                        accessModifier,
+                        funcDeclaration.name,
+                        funcDeclaration.func,
+                        overrideKeyword
                     );
+
+                    //refer to this statement as parent of the expression
+                    functionStatement.func.functionStatement = methodStatement;
+
+                    body.push(methodStatement);
 
                     //fields
                 } else if (this.check(TokenKind.Identifier, ...AllowedProperties)) {
@@ -476,7 +471,7 @@ export class Parser {
             parentClassName,
             this.currentNamespaceName
         );
-        this.classStatements.push(result);
+        this._references.classStatements.push(result);
         return result;
     }
 
@@ -549,7 +544,8 @@ export class Parser {
                     range: {
                         start: this.peek().range.start,
                         end: this.peek().range.start
-                    }
+                    },
+                    leadingWhitespace: ''
                 };
             }
             let isSub = functionType && functionType.kind === TokenKind.Sub;
@@ -591,7 +587,7 @@ export class Parser {
                 }
             }
 
-            let params: FunctionParameter[] = [];
+            let params: FunctionParameterExpression[] = [];
             let asToken: Token;
             let typeToken: Token;
             if (!this.check(TokenKind.RightParen)) {
@@ -664,7 +660,7 @@ export class Parser {
                 this.currentFunctionExpression.childFunctionExpressions.push(func);
             }
 
-            this.functionExpressions.push(func);
+            this._references.functionExpressions.push(func);
 
             let previousFunctionExpression = this.currentFunctionExpression;
             this.currentFunctionExpression = func;
@@ -711,7 +707,7 @@ export class Parser {
                 }
                 let result = new FunctionStatement(name, func, this.currentNamespaceName);
                 func.functionStatement = result;
-                this.functionStatements.push(result);
+                this._references.functionStatements.push(result);
                 return result;
             }
         } finally {
@@ -721,7 +717,7 @@ export class Parser {
         }
     }
 
-    private functionParameter(): FunctionParameter {
+    private functionParameter(): FunctionParameterExpression {
         if (!this.check(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedParameterNameButFound(this.peek().text),
@@ -762,7 +758,7 @@ export class Parser {
             type = typeValueKind;
         }
 
-        return new FunctionParameter(
+        return new FunctionParameterExpression(
             name,
             {
                 kind: type,
@@ -811,7 +807,7 @@ export class Parser {
                 this.currentFunctionExpression
             );
         }
-        this.assignmentStatements.push(result);
+        this._references.assignmentStatements.push(result);
         return result;
     }
 
@@ -1130,7 +1126,7 @@ export class Parser {
 
         this.namespaceAndFunctionDepth--;
         let result = new NamespaceStatement(keyword, name, body, endKeyword);
-        this.namespaceStatements.push(result);
+        this._references.namespaceStatements.push(result);
 
         return result;
     }
@@ -1221,7 +1217,7 @@ export class Parser {
 
         //consume to the next newline, eof, or colon
         while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
-        this.libraryStatements.push(libStatement);
+        this._references.libraryStatements.push(libStatement);
         return libStatement;
     }
 
@@ -1241,7 +1237,7 @@ export class Parser {
 
         //consume to the next newline, eof, or colon
         while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
-        this.importStatements.push(importStatement);
+        this._references.importStatements.push(importStatement);
         return importStatement;
     }
 
@@ -1271,7 +1267,7 @@ export class Parser {
                 this.advance();
             } else if (next.kind === TokenKind.EscapedCharCodeLiteral) {
                 currentQuasiExpressionParts.push(
-                    new EscapedCharCodeLiteral(<any>next)
+                    new EscapedCharCodeLiteralExpression(<any>next)
                 );
                 this.advance();
             } else {
@@ -1551,7 +1547,7 @@ export class Parser {
                     range: this.peek().range
                 });
                 throw this.lastDiagnosticAsError();
-            } else if (expr instanceof CallExpression) {
+            } else if (isCallExpression(expr)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.incrementDecrementOperatorsAreNotAllowedAsResultOfFunctionCall(),
                     range: expressionStart.range
@@ -1574,7 +1570,7 @@ export class Parser {
             );
         }
 
-        if (expr instanceof CallExpression || expr instanceof CallfuncExpression) {
+        if (isCallExpression(expr) || isCallfuncExpression(expr)) {
             return new ExpressionStatement(expr);
         }
 
@@ -1597,13 +1593,13 @@ export class Parser {
 
 
         let expr = this.call();
-        if (this.check(...AssignmentOperators) && !(expr instanceof CallExpression)) {
+        if (this.check(...AssignmentOperators) && !(isCallExpression(expr))) {
             let left = expr;
             let operator = this.advance();
             let right = this.expression();
 
             // Create a dotted or indexed "set" based on the left-hand side's type
-            if (left instanceof IndexedGetExpression) {
+            if (isIndexedGetExpression(left)) {
                 this.consume(
                     DiagnosticMessages.expectedNewlineOrColonAfterIndexedSetStatement(),
                     TokenKind.Newline,
@@ -1627,7 +1623,7 @@ export class Parser {
                     left.openingSquare,
                     left.closingSquare
                 );
-            } else if (left instanceof DottedGetExpression) {
+            } else if (isDottedGetExpression(left)) {
                 this.consume(
                     DiagnosticMessages.expectedNewlineOrColonAfterDottedSetStatement(),
                     TokenKind.Newline,
@@ -1960,7 +1956,7 @@ export class Parser {
         //pop the call from the  callExpressions list because this is technically something else
         this.callExpressions.pop();
         let result = new NewExpression(newToken, call);
-        this.newExpressions.push(result);
+        this._references.newExpressions.push(result);
         return result;
     }
 
@@ -1974,7 +1970,7 @@ export class Parser {
         // force it into an identifier so the AST makes some sense
         methodName.kind = TokenKind.Identifier;
         let openParen = this.consume(DiagnosticMessages.expectedOpenParenToFollowCallfuncIdentifier(), TokenKind.LeftParen);
-        let call = this.finishCall(openParen, callee);
+        let call = this.finishCall(openParen, callee, false);
 
         return new CallfuncExpression(callee, operator, methodName as Identifier, openParen, call.args, call.closingParen);
     }
@@ -2029,7 +2025,7 @@ export class Parser {
         return expr;
     }
 
-    private finishCall(openingParen: Token, callee: Expression) {
+    private finishCall(openingParen: Token, callee: Expression, addToCallExpressionList = true) {
         let args = [] as Expression[];
         while (this.match(TokenKind.Newline)) {
         }
@@ -2056,8 +2052,14 @@ export class Parser {
             TokenKind.RightParen
         );
 
+        if (isVariableExpression(callee)) {
+            callee.isCalled = true;
+        }
+
         let expression = new CallExpression(callee, openingParen, closingParen, args, this.currentNamespaceName);
-        this.callExpressions.push(expression);
+        if (addToCallExpressionList) {
+            this.callExpressions.push(expression);
+        }
         return expression;
     }
 
@@ -2173,13 +2175,12 @@ export class Parser {
                     } else {
                         let k = key();
                         let expr = this.expression();
-                        members.push({
-                            key: k.key,
-                            keyToken: k.keyToken,
-                            colonToken: k.colonToken,
-                            value: expr,
-                            range: util.getRange(k, expr)
-                        });
+                        members.push(new AAMemberExpression(
+                            k.key,
+                            k.keyToken,
+                            k.colonToken,
+                            expr
+                        ));
                     }
 
                     while (this.match(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
@@ -2203,13 +2204,12 @@ export class Parser {
                             }
                             let k = key();
                             let expr = this.expression();
-                            members.push({
-                                key: k.key,
-                                keyToken: k.keyToken,
-                                colonToken: k.colonToken,
-                                value: expr,
-                                range: util.getRange(k, expr)
-                            });
+                            members.push(new AAMemberExpression(
+                                k.key,
+                                k.keyToken,
+                                k.colonToken,
+                                expr
+                            ));
                         }
                     }
 
@@ -2371,6 +2371,56 @@ export class Parser {
         }
     }
 
+    /**
+     * References are found during the initial parse.
+     * However, sometimes plugins can modify the AST, requiring a full walk to re-compute all references.
+     * This does that walk.
+     */
+    private findReferences() {
+        const references: References = {
+            assignmentStatements: [],
+            classStatements: [],
+            namespaceStatements: [],
+            functionStatements: [],
+            functionExpressions: [],
+            importStatements: [],
+            libraryStatements: [],
+            newExpressions: []
+        };
+
+        this.ast.walk(createVisitor({
+            AssignmentStatement: s => {
+                references.assignmentStatements.push(s);
+            },
+            ClassStatement: s => {
+                references.classStatements.push(s);
+            },
+            NamespaceStatement: s => {
+                references.namespaceStatements.push(s);
+            },
+            FunctionStatement: s => {
+                references.functionStatements.push(s);
+            },
+            ImportStatement: s => {
+                references.importStatements.push(s);
+            },
+            LibraryStatement: s => {
+                references.libraryStatements.push(s);
+            },
+            FunctionExpression: (expression, parent) => {
+                if (!isClassMethodStatement(parent)) {
+                    references.functionExpressions.push(expression);
+                }
+            },
+            NewExpression: e => {
+                references.newExpressions.push(e);
+            }
+        }), {
+            walkMode: WalkMode.visitAllRecursive
+        });
+        return references;
+    }
+
     public dispose() {
     }
 }
@@ -2389,4 +2439,16 @@ export interface ParseOptions {
      * A logger that should be used for logging. If omitted, a default logger is used
      */
     logger?: Logger;
+}
+
+
+export interface References {
+    assignmentStatements: AssignmentStatement[];
+    classStatements: ClassStatement[];
+    namespaceStatements: NamespaceStatement[];
+    functionStatements: FunctionStatement[];
+    functionExpressions: FunctionExpression[];
+    importStatements: ImportStatement[];
+    libraryStatements: LibraryStatement[];
+    newExpressions: NewExpression[];
 }

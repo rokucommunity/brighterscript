@@ -15,6 +15,8 @@ import { TokenKind, Lexer, Keywords } from '../lexer';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { StandardizedFileEntry } from 'roku-deploy';
 import { standardizePath as s } from '../util';
+import PluginInterface from '../PluginInterface';
+import { loadPlugins } from '..';
 
 let sinon = sinonImport.createSandbox();
 
@@ -48,6 +50,17 @@ describe('BrsFile', () => {
         expect(new BrsFile(`${rootDir}/source/main.brs`, 'source/main.brs', program).needsTranspiled).to.be.false;
         //BrighterScript
         expect(new BrsFile(`${rootDir}/source/main.bs`, 'source/main.bs', program).needsTranspiled).to.be.true;
+    });
+
+    it('allows adding diagnostics', () => {
+        const expected = [{
+            message: 'message',
+            file: undefined,
+            range: undefined
+        }];
+        file.addDiagnostics(expected);
+        const actual = file.getDiagnostics();
+        expect(actual).deep.equal(expected);
     });
 
     describe('getPartialVariableName', () => {
@@ -110,7 +123,7 @@ describe('BrsFile', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
-                    
+
                 end sub
             `);
 
@@ -225,12 +238,12 @@ describe('BrsFile', () => {
             });
 
             it('works for all', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line
                         name = "bob
                     end sub
-                `) as BrsFile;
+                `);
                 expect(file.commentFlags[0]).to.exist;
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: null,
@@ -243,12 +256,12 @@ describe('BrsFile', () => {
             });
 
             it('works for specific codes', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line: 1083, 1001
                         name = "bob
                     end sub
-                `) as BrsFile;
+                `);
                 expect(file.commentFlags[0]).to.exist;
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: [1083, 1001],
@@ -284,11 +297,11 @@ describe('BrsFile', () => {
 
         describe('bs:disable-line', () => {
             it('works for all', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                let file = await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         z::;;%%%%%% 'bs:disable-line
                     end sub
-                `) as BrsFile;
+                `);
                 expect(file.commentFlags[0]).to.exist;
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: null,
@@ -847,8 +860,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('adds error for library statements NOT at top of file', () => {
-            file.parse(`
+        it('adds error for library statements NOT at top of file', async () => {
+            let file = await program.addOrReplaceFile('source/main.bs', `
                 sub main()
                 end sub
                 import "file.brs"
@@ -867,8 +880,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('adds error for library statements NOT at top of file', () => {
-            file.parse(`
+        it('adds error for library statements NOT at top of file', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 sub main()
                 end sub
                 Library "v30/bslCore.brs"
@@ -880,8 +893,8 @@ describe('BrsFile', () => {
             ]);
         });
 
-        it('adds error for library statements inside of function body', () => {
-            file.parse(`
+        it('adds error for library statements inside of function body', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     Library "v30/bslCore.brs"
                 end sub
@@ -902,8 +915,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('succeeds when finding variables with "sub" in them', () => {
-            file.parse(`
+        it('succeeds when finding variables with "sub" in them', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 function DoSomething()
                     return value.subType()
                 end function
@@ -1207,9 +1220,8 @@ describe('BrsFile', () => {
             expect(file.callables.length).to.equal(0);
         });
 
-        it('finds return type', () => {
-            let file = new BrsFile('absolute', 'relative', program);
-            file.parse(`
+        it('finds return type', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 function DoSomething() as string
                 end function
             `);
@@ -1311,8 +1323,8 @@ describe('BrsFile', () => {
             expect(scope.variableDeclarations[0].name).to.equal('theLength');
         });
 
-        it('finds value from global return', () => {
-            file.parse(`
+        it('finds value from global return', async () => {
+            let file = await program.addOrReplaceFile('source/main.brs', `
                 sub Main()
                    myName = GetName()
                 end sub
@@ -1557,15 +1569,13 @@ describe('BrsFile', () => {
             });
         });
         it('includes all text to end of line for a non-terminated string', async () => {
-            await testTranspile(`
-                sub main()
-                    name = "john 
-                end sub
-            `, `
-                sub main()
-                    name = "john "
-                end sub
-            `, 'trim', 'source/main.bs', false);
+            await testTranspile(
+                'sub main()\n    name = "john \nend sub',
+                'sub main()\n    name = "john "\nend sub',
+                null,
+                'source/main.bs',
+                false
+            );
         });
         it('escapes quotes in string literals', async () => {
             await testTranspile(`
@@ -1623,14 +1633,14 @@ describe('BrsFile', () => {
                 namespace Vertibrates.Birds
                     function GetAllBirds()
                         return [
-                            GetDuck(), 
+                            GetDuck(),
                             GetGoose()
                         ]
                     end function
-                
+
                     function GetDuck()
                     end function
-                    
+
                     function GetGoose()
                     end function
                 end namespace
@@ -2013,6 +2023,16 @@ describe('BrsFile', () => {
 
     describe('callfunc operator', () => {
         describe('transpile', () => {
+            it('does not produce diagnostics', async () => {
+                await program.addOrReplaceFile('source/main.bs', `
+                    sub main()
+                        someObject@.someFunction(paramObject.value)
+                    end sub
+                `);
+                await program.validate();
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            });
+
             it('sets invalid on empty callfunc', async () => {
                 await testTranspile(`
                     sub main()
@@ -2042,13 +2062,79 @@ describe('BrsFile', () => {
             });
         });
     });
+
+    describe('transform callback', () => {
+        function parseFileWithCallback(ext: string, onParsed: () => void) {
+            const rootDir = process.cwd();
+            const program = new Program({
+                rootDir: rootDir
+            });
+            program.plugins.add({
+                name: 'transform callback',
+                afterFileParse: onParsed
+            });
+            const file = new BrsFile(`absolute_path/file${ext}`, `relative_path/file${ext}`, program);
+            expect(file.extension).to.equal(ext);
+            file.parse(`
+                sub Sum()
+                    print "hello world"
+                end sub
+            `);
+            return file;
+        }
+
+        it('called for BRS file', () => {
+            const onParsed = sinon.spy();
+            parseFileWithCallback('.brs', onParsed);
+            expect(onParsed.callCount).to.equal(1);
+        });
+
+        it('called for BR file', () => {
+            const onParsed = sinon.spy();
+            parseFileWithCallback('.bs', onParsed);
+            expect(onParsed.callCount).to.equal(1);
+        });
+    });
+
+    describe('Plugins', () => {
+        it('can load a plugin which transforms the AST', async () => {
+            program.plugins = new PluginInterface(
+                loadPlugins([
+                    require.resolve('../examples/plugins/removePrint')
+                ]),
+                undefined
+            );
+            await testTranspile(`
+                sub main()
+                    sayHello(sub()
+                        print "sub hello"
+                    end sub)
+                    print "something"
+                end sub
+
+                sub sayHello(fn)
+                    fn()
+                    print "hello"
+                end sub
+            `, `
+                sub main()
+                    sayHello(sub()
+                        \n                    end sub)
+                    \n                end sub
+
+                sub sayHello(fn)
+                    fn()
+                    \n                end sub
+            `);
+        });
+    });
 });
 
 export function getTestTranspile(scopeGetter: () => [Program, string]) {
     return async (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) => {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
-        let file = await program.addOrReplaceFile({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source) as BrsFile;
+        let file = await program.addOrReplaceFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
         await program.validate();
         let diagnostics = file.getDiagnostics();
         if (diagnostics.length > 0 && failOnDiagnostic !== false) {

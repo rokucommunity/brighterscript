@@ -7,12 +7,14 @@ export interface BsConfig {
     _ancestors?: string[];
 
     /**
-     * A path to a project file. This is really only passed in from the command line, and should not be present in bsconfig.json files
+     * A path to a project file. This is really only passed in from the command line, and should not be present in bsconfig.json files.
+     * Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.
      */
     project?: string;
 
     /**
-     * Relative or absolute path to another bsconfig.json file that this file should import and then override
+     * Relative or absolute path to another bsconfig.json file that this file should import and then override.
+     * Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.
      */
     extends?: string;
 
@@ -105,6 +107,11 @@ export interface BsConfig {
      * Specify what diagnostic types should be printed to the console. Defaults to 'warn'
      */
     diagnosticLevel?: 'info' | 'hint' | 'warn' | 'error';
+
+    /**
+     * A list of scripts or modules to add extra diagnostics or transform the AST
+     */
+    plugins?: Array<string>;
 
     /**
      * When enabled, every xml component will search for a .bs or .brs file with the same name

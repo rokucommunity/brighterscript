@@ -7,13 +7,17 @@ import { FunctionScope } from './FunctionScope';
 import { BrsType } from './types/BrsType';
 import { FunctionType } from './types/FunctionType';
 import { ParseMode } from './parser/Parser';
+import { Program, SourceObj, TranspileObj } from './Program';
+import { ProgramBuilder } from './ProgramBuilder';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
 }
 
+export type BscFile = BrsFile | XmlFile;
+
 export interface Callable {
-    file: BrsFile | XmlFile;
+    file: BscFile;
     name: string;
     /**
      * Is the callable declared as "sub". If falsey, assumed declared as "function"
@@ -37,7 +41,7 @@ export interface Callable {
      * The range of the name of this callable
      */
     nameRange?: Range;
-    isDepricated?: boolean;
+    isDeprecated?: boolean;
     getName: (parseMode: ParseMode) => string;
     /**
      * Indicates whether or not this callable has an associated namespace
@@ -150,6 +154,10 @@ export interface CallableContainer {
     scope: Scope;
 }
 
+export interface CallableContainerMap {
+    [name: string]: CallableContainer[];
+}
+
 export interface CommentFlag {
     file: BrsFile;
     /**
@@ -161,4 +169,32 @@ export interface CommentFlag {
      */
     affectedRange: Range;
     codes: number[] | null;
+}
+
+type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
+
+export interface CompilerPlugin {
+    name: string;
+    beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterProgramCreate?: (program: Program) => void;
+    beforeProgramValidate?: (program: Program) => void;
+    afterProgramValidate?: (program: Program) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    afterScopeCreate?: (scope: Scope) => void;
+    beforeScopeDispose?: (scope: Scope) => void;
+    afterScopeDispose?: (scope: Scope) => void;
+    beforeScopeValidate?: ValidateHandler;
+    afterScopeValidate?: ValidateHandler;
+    beforeFileParse?: (source: SourceObj) => void;
+    afterFileParse?: (file: BscFile) => void;
+    afterFileValidate?: (file: BscFile) => void;
+    beforeFileTranspile?: (entry: TranspileObj) => void;
+    afterFileTranspile?: (entry: TranspileObj) => void;
+    beforeFileDispose?: (file: BscFile) => void;
+    afterFileDispose?: (file: BscFile) => void;
 }

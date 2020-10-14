@@ -1,5 +1,3 @@
-import { Range } from 'vscode-languageserver';
-
 import { BrsFile } from './files/BrsFile';
 import { Callable } from './interfaces';
 import { ArrayType } from './types/ArrayType';
@@ -13,6 +11,7 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { Parser } from './parser';
+import util from './util';
 
 export let globalFile = new BrsFile('global', 'global', null);
 globalFile.parser = new Parser();
@@ -250,7 +249,7 @@ let runtimeFunctions = [{
     shortDescription: `Eval can be used to run a code snippet in the context of the current function. It performs a compile, and then the bytecode execution.\nIf a compilation error occurs, no bytecode execution is performed, and Eval returns an roList with one or more compile errors. Each list entry is an roAssociativeArray with ERRNO and ERRSTR keys describing the error.\nIf compilation succeeds, bytecode execution is performed and the integer runtime error code is returned. These are the same error codes as returned by GetLastRunRuntimeError().\nEval() can be usefully in two cases. The first is when you need to dynamically generate code at runtime.\nThe other is if you need to execute a statement that could result in a runtime error, but you don't want code execution to stop. '`,
     type: new FunctionType(new DynamicType()),
     file: globalFile,
-    isDepricated: true,
+    isDeprecated: true,
     params: [{
         name: 'code',
         type: new StringType()
@@ -728,7 +727,7 @@ let programStatementFunctions = [
 export let globalCallables = [...mathFunctions, ...runtimeFunctions, ...globalUtilityFunctions, ...globalStringFunctions, ...programStatementFunctions];
 for (let callable of globalCallables) {
     //give each callable a dummy location
-    callable.nameRange = Range.create(0, 0, 0, callable.name.length);
+    callable.nameRange = util.createRange(0, 0, 0, callable.name.length);
 
     //add each parameter to the type
     for (let param of callable.params) {
