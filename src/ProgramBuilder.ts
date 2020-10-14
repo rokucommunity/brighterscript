@@ -8,9 +8,8 @@ import { standardizePath as s, util, loadPlugins } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { Logger, LogLevel } from './Logger';
-import { getPrintDiagnosticOptions, printDiagnostic } from './diagnosticUtils';
 import PluginInterface from './PluginInterface';
-
+import * as diagnosticUtils from './diagnosticUtils';
 /**
  * A runner class that handles
  */
@@ -221,7 +220,7 @@ export class ProgramBuilder {
         }
 
         //get printing options
-        const options = getPrintDiagnosticOptions(this.options);
+        const options = diagnosticUtils.getPrintDiagnosticOptions(this.options);
         const { cwd, emitFullPaths } = options;
 
         let pathsAbsolute = Object.keys(diagnosticsByFile).sort();
@@ -239,16 +238,23 @@ export class ProgramBuilder {
             if (!emitFullPaths) {
                 filePath = path.relative(cwd, filePath);
             }
-
+            let linesByFile = {};
             //load the file text
-            let fileText = await util.getFileContents(pathAbsolute);
-            let lines = util.getLines(fileText);
+            try {
+                let file = this.program.getFileByPathAbsolute(pathAbsolute);
+                let lines = linesByFile[pathAbsolute];
+                if (!lines) {
+                  lines = file && file.fileContents ? file.fileContents.split(/\r?\n/g) : [];
+                  linesByFile[pathAbsolute] = lines
+                }
 
-            for (let diagnostic of sortedDiagnostics) {
-                //default the severity to error if undefined
-                let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
-                //format output
-                printDiagnostic(options, severity, filePath, lines, diagnostic);
+                for (let diagnostic of sortedDiagnostics) {
+                    //default the severity to error if undefined
+                    let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
+                    //format output
+                    diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic);
+                }
+            } catch (e) {
             }
         }
     }
