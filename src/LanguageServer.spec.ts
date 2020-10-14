@@ -2,12 +2,14 @@ import { expect } from 'chai';
 import * as fsExtra from 'fs-extra';
 import * as glob from 'glob';
 import * as path from 'path';
-import { DidChangeWatchedFilesParams, FileChangeType, TextDocumentSyncKind, Range } from 'vscode-languageserver';
+import { DidChangeWatchedFilesParams, FileChangeType, Range } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import { LanguageServer, Workspace } from './LanguageServer';
 import { ProgramBuilder } from './ProgramBuilder';
+import { Program } from './Program';
 import * as sinonImport from 'sinon';
 import { standardizePath as s, util } from './util';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 
 let sinon: sinonImport.SinonSandbox;
 beforeEach(() => {
@@ -40,11 +42,19 @@ describe('LanguageServer', () => {
         onDocumentSymbol: () => null,
         onWorkspaceSymbol: () => null,
         onDefinition: () => null,
+        onSignatureHelp: () => null,
+        onReferences: () => null,
         onHover: () => null,
         listen: () => null,
         sendNotification: () => null,
         sendDiagnostics: () => null,
         onExecuteCommand: () => null,
+        onDidOpenTextDocument: () => null,
+        onDidChangeTextDocument: () => null,
+        onDidCloseTextDocument: () => null,
+        onWillSaveTextDocument: () => null,
+        onWillSaveTextDocumentWaitUntil: () => null,
+        onDidSaveTextDocument: () => null,
         workspace: {
             getWorkspaceFolders: () => workspaceFolders,
             getConfiguration: () => {
@@ -76,15 +86,6 @@ describe('LanguageServer', () => {
         //mock the connection stuff
         svr.createConnection = () => {
             return connection;
-        };
-
-        svr.documents = {
-            onDidChangeContent: () => null,
-            onDidClose: () => null,
-            listen: () => null,
-            get: () => { },
-            all: () => [],
-            syncKind: TextDocumentSyncKind.Full
         };
     });
     afterEach(async () => {
@@ -321,6 +322,95 @@ describe('LanguageServer', () => {
                 type: FileChangeType.Created,
                 pathAbsolute: s`${rootDir}/source/lib.brs`
             }]);
+        });
+    });
+
+    describe('onReferences', () => {
+        let program: Program;
+        let functionDocument: TextDocument;
+        let referenceFileUris = [];
+
+        beforeEach(async () => {
+            svr.connection = svr.createConnection();
+            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
+            program = svr.workspaces[0].builder.program;
+
+            let functionFileBaseName = 'buildAwesome';
+            functionDocument = await addBrsFile(functionFileBaseName, `function buildAwesome()
+                return 42
+            end function`);
+
+            for (let i = 0; i < 5; i++) {
+                let name = `CallComponent${i}`;
+                const document = await addBrsFile(name, `sub init()
+                    shouldBuildAwesome = true
+                    if shouldBuildAwesome then
+                        buildAwesome()
+                    end if
+                end sub`);
+
+                await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
+                referenceFileUris.push(document.uri);
+            }
+        });
+
+        async function addXmlFile(name: string, additionalXmlContents = '') {
+            const filePath = `components/${name}.xml`;
+
+            const contents = `<?xml version="1.0" encoding="utf-8"?>
+            <component name="${name}" extends="Group">
+                ${additionalXmlContents}
+                <script type="text/brightscript" uri="${name}.brs" />
+            </component>`;
+            await program.addOrReplaceFile(filePath, contents);
+        }
+
+        async function addBrsFile(name: string, contents: string) {
+            const filePath = `components/${name}.brs`;
+
+            await program.addOrReplaceFile(filePath, contents);
+            for (const key in program.files) {
+                if (key.includes(filePath)) {
+                    const document = TextDocument.create(util.pathToUri(key), 'brightscript', 1, contents);
+                    svr.documents._documents[document.uri] = document;
+                    return document;
+                }
+            }
+        }
+
+        it('should return the expected results if we entered on an identifier token', async () => {
+            const references = await svr.onReferences({
+                textDocument: {
+                    uri: functionDocument.uri
+                },
+                position: util.createPosition(0, 13)
+            });
+
+            expect(references.length).to.equal(referenceFileUris.length);
+
+            for (const reference of references) {
+                expect(referenceFileUris).to.contain(reference.uri);
+            }
+        });
+
+        it('should return an empty response if we entered on anything other than an identifier token', async () => {
+            let references = await svr.onReferences({
+                textDocument: {
+                    uri: functionDocument.uri
+                },
+                position: util.createPosition(0, 0) // function token
+            });
+
+            expect(references).to.be.empty;
+
+            references = await svr.onReferences({
+                textDocument: {
+                    uri: functionDocument.uri
+                },
+                position: util.createPosition(1, 20) // return token
+            });
+
+            expect(references).to.be.empty;
         });
     });
 });

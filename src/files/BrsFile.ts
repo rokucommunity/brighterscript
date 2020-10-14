@@ -23,6 +23,8 @@ import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
 import { XmlFile } from './XmlFile';
 import { isAALiteralExpression, isAssignmentStatement, isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isFunctionType, isIfStatement, isImportStatement, isLibraryStatement, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
+import { WalkMode } from '../astUtils';
+import { createVisitor } from '../astUtils/visitors';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -662,7 +664,7 @@ export class BrsFile {
                 }
                 let functionCall: FunctionCall = {
                     range: util.createRangeFromPositions(expression.range.start, expression.closingParen.range.end),
-                    functionScope: this.getFunctionScopeAtPosition(Position.create(callee.range.start.line, callee.range.start.character)),
+                    functionScope: this.getFunctionScopeAtPosition(callee.range.start),
                     file: this,
                     name: functionName,
                     nameRange: util.createRange(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
@@ -1151,7 +1153,7 @@ export class BrsFile {
     public async getSignatureHelp(position: Position) {
         await this.isReady();
 
-        const callSiteToken = this.getTokenAt(Position.create(position.line, position.character));
+        const callSiteToken = this.getTokenAt(position);
         const scopes = this.program.getScopesForFile(this);
         for (const scope of scopes) {
             const callable = scope.getCallableByName(callSiteToken.text);
@@ -1205,10 +1207,45 @@ export class BrsFile {
                 params.push(ParameterInformation.create(param.name.text));
             }
 
-            const label = util.getTextForRange(lines, Range.create(func.functionType.range.start, func.body.range.start)).trim();
+            const label = util.getTextForRange(lines, util.createRangeFromPositions(func.functionType.range.start, func.body.range.start)).trim();
             const signature = SignatureInformation.create(label, documentation, ...params);
             return signature;
         }
+    }
+
+    public async getReferences(position: Position) {
+        await this.isReady();
+
+        const callSiteToken = this.getTokenAt(position);
+
+        let locations = [] as Location[];
+
+        // No need to actually look if they didn't select a token we can search against
+        if (callSiteToken.kind !== TokenKind.Identifier) {
+            return locations;
+        }
+        console.log('callSiteToken.kind', callSiteToken.kind);
+        const searchFor = callSiteToken.text.toLowerCase();
+
+        const scopes = this.program.getScopesForFile(this);
+
+        for (const scope of scopes) {
+            for (const file of scope.getFiles()) {
+                if (file instanceof BrsFile) {
+                    file.ast.walk(createVisitor({
+                        VariableExpression: (e) => {
+                            if (e.name.text.toLowerCase() === searchFor) {
+                                locations.push(Location.create(util.pathToUri(file.pathAbsolute), e.range));
+                            }
+                        }
+                    }),
+                    {
+                        walkMode: WalkMode.visitExpressionsRecursive
+                    });
+                }
+            }
+        }
+        return locations;
     }
 
     /**

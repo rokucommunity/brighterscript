@@ -672,23 +672,22 @@ export class Program {
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
      */
-    public async getDefinition(pathAbsolute: string, position: Position) {
+    public getDefinition(pathAbsolute: string, position: Position) {
         let file = this.getFile(pathAbsolute);
         if (!file) {
             return [];
         }
-        let results = [] as Location[];
-        let scopes = this.getScopesForFile(file);
 
-        for (let scope of scopes) {
-            if (file instanceof BrsFile) {
-                const locations = await file.getDefinition(position);
-                results = [...results, ...locations];
-            } else {
+        if (file instanceof BrsFile) {
+            return file.getDefinition(position);
+        } else {
+            let results = [] as Location[];
+            const scopes = this.getScopesForFile(file);
+            for (const scope of scopes) {
                 results = results.concat(...scope.getDefinition(file, position));
             }
+            return results;
         }
-        return results;
     }
 
     public getHover(pathAbsolute: string, position: Position) {
@@ -711,6 +710,15 @@ export class Program {
         return file.getSignatureHelp(position);
     }
 
+    public getReferences(pathAbsolute: string, position: Position) {
+        //find the file
+        let file = this.getFile(pathAbsolute);
+        if (!file) {
+            return null;
+        }
+
+        return file.getReferences(position);
+    }
 
     /**
      * Get a list of all script imports, relative to the specified pkgPath

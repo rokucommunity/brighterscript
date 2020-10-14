@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { CodeWithSourceMap, SourceNode } from 'source-map';
-import { CompletionItem, Hover, Position, Range, SignatureInformation } from 'vscode-languageserver';
+import { CompletionItem, Hover, Location, Position, Range, SignatureInformation } from 'vscode-languageserver';
 import { Deferred } from '../deferred';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
@@ -545,6 +545,11 @@ export class XmlFile {
     }
 
     public getSignatureHelp(position: Position): Promise<SignatureInformation> { //eslint-disable-line
+        //TODO implement
+        return null;
+    }
+
+    public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
         //TODO implement
         return null;
     }

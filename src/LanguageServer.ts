@@ -25,7 +25,9 @@ import {
     SymbolInformation,
     SignatureHelpParams,
     SignatureHelp,
-    SignatureInformation
+    SignatureInformation,
+    Range,
+    ReferenceParams
 } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -139,6 +141,8 @@ export class LanguageServer {
 
         this.connection.onHover(this.onHover.bind(this));
 
+        this.connection.onReferences(this.onReferences.bind(this));
+
         this.connection.onExecuteCommand(this.onExecuteCommand.bind(this));
 
         /*
@@ -195,6 +199,7 @@ export class LanguageServer {
                 documentSymbolProvider: true,
                 workspaceSymbolProvider: true,
                 hoverProvider: true,
+                referencesProvider: true,
                 signatureHelpProvider: {
                     triggerCharacters: ['(', ',']
                 },
@@ -962,29 +967,45 @@ export class LanguageServer {
         await this.waitAllProgramFirstRuns();
         let results = [] as Location[];
 
-        let pathAbsolute = util.uriToPath(params.textDocument.uri);
-        let workspaces = this.getWorkspaces();
-        for (let workspace of workspaces) {
+        const pathAbsolute = util.uriToPath(params.textDocument.uri);
+        const workspaces = this.getWorkspaces();
+        for (const workspace of workspaces) {
+            // TODO should probably do promise all instead
             const locations = await workspace.builder.program.getDefinition(pathAbsolute, params.position);
             results = results.concat(
                 ...locations
             );
         }
-        // TODO I think this could be optimized better but it does the trick for now
-        const deduplicatedDefinitions = Object.values(results.reduce((map, location) => {
-            const range = location.range ?? Range.create(0, 0, 0, 0);
-            const start = range.start;
-            const end = range.end;
-            const key = `${location.uri}:${start.line}_${start.character}-${end.line}_${end.character}`;
-            map[key] = location;
-            return map;
-        }, {}));
-        return deduplicatedDefinitions as Location[];
+        return results;
     }
 
     private async onSignatureHelp(params: SignatureHelpParams) {
-        console.log('onSignatureHelp', 'params', params);
+        const info = this.getIdentifierInfo(params);
+        if (!info) {
+            return;
+        }
+        await this.waitAllProgramFirstRuns();
 
+        let promises = [] as Promise<SignatureInformation>[];
+        for (const workspace of this.getWorkspaces()) {
+            const pathAbsolute = util.uriToPath(params.textDocument.uri);
+            const promise = workspace.builder.program.getSignatureHelp(pathAbsolute, info.position);
+            promises.push(promise);
+        }
+        const signatures = await Promise.all(promises);
+
+        const activeSignature = signatures.length > 0 ? 0 : null;
+        const activeParameter = activeSignature >= 0 ? info.commaCount : null;
+        let results: SignatureHelp = {
+            signatures: signatures,
+            activeSignature: activeSignature,
+            activeParameter: activeParameter
+        };
+
+        return results;
+    }
+
+    private getIdentifierInfo(params: SignatureHelpParams|ReferenceParams) {
         // Courtesy of George Cook :) He might call it whack but it works ¯\_(ツ)_/¯
         //get the position of a symbol to our left
         //1. get first bracket to our left, - then get the symbol before that..
@@ -1037,28 +1058,24 @@ export class LanguageServer {
             }
             index--;
         }
-        if (index === 0) {
-            // Couldn't find the start so go ahead and exit out
-            return undefined;
+        if (index > 0) {
+            return {
+                commaCount: commaCount,
+                position: util.createPosition(position.line, index)
+            };
         }
-        await this.waitAllProgramFirstRuns();
+    }
 
-        let promises = [] as Promise<SignatureInformation>[];
-        for (const workspace of this.getWorkspaces()) {
-            const pathAbsolute = util.uriToPath(params.textDocument.uri);
-            const promise = workspace.builder.program.getSignatureHelp(pathAbsolute, Position.create(position.line, index));
-            promises.push(promise);
-        }
-        const signatures = await Promise.all(promises);
+    private async onReferences(params: ReferenceParams) {
+        const position = params.position;
+        const pathAbsolute = util.uriToPath(params.textDocument.uri);
 
-        const activeSignature = signatures.length > 0 ? 0 : null;
-        const activeParameter = activeSignature >= 0 ? commaCount : null;
-        let results: SignatureHelp = {
-            signatures: signatures,
-            activeSignature: 0,
-            activeParameter: activeParameter
-        };
-
+        const results = util.flatMap(
+            await Promise.all(this.getWorkspaces().map(workspace => {
+                return workspace.builder.program.getReferences(pathAbsolute, position);
+            })),
+            c => c
+        );
         return results;
     }
 
@@ -1074,7 +1091,7 @@ export class LanguageServer {
 
         //make a bucket for every file in every project
         for (let workspace of workspaces) {
-            //Ensure the program was constructued. This prevents race conditions where certain diagnostics are being sent before the program was created.
+            //Ensure the program was constructed. This prevents race conditions where certain diagnostics are being sent before the program was created.
             await workspace.firstRunPromise;
             //if there is no program, skip this workspace (hopefully diagnostics were added to the builder itself
             if (workspace.builder && workspace.builder.program) {
