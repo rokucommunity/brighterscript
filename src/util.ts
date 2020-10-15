@@ -493,52 +493,6 @@ export class Util {
     }
 
     /**
-     * Find all properties in an object that match the predicate.
-     * @param seenMap - used to prevent circular dependency infinite loops
-     */
-    public findAllDeep<T>(obj: any, predicate: (value: any) => boolean | undefined, parentKey?: string, ancestors?: any[], seenMap?: Map<any, boolean>) {
-        seenMap = seenMap ?? new Map<any, boolean>();
-        let result = [] as Array<{ key: string; value: T; ancestors: any[] }>;
-
-        //skip this object if we've already seen it
-        if (seenMap.has(obj)) {
-            return result;
-        }
-
-        //base case. If this object maches, keep it as a result
-        if (predicate(obj) === true) {
-            result.push({
-                key: parentKey,
-                ancestors: ancestors,
-                value: obj
-            });
-        }
-
-        seenMap.set(obj, true);
-
-        //look through all children
-        if (obj instanceof Object) {
-            for (let key in obj) {
-                let value = obj[key];
-                let fullKey = parentKey ? parentKey + '.' + key : key;
-                if (typeof value === 'object') {
-                    result = [...result, ...this.findAllDeep<T>(
-                        value,
-                        predicate,
-                        fullKey,
-                        [
-                            ...(ancestors ?? []),
-                            obj
-                        ],
-                        seenMap
-                    )];
-                }
-            }
-        }
-        return result;
-    }
-
-    /**
      * Test if `position` is in `range`. If the position is at the edges, will return true.
      * Adapted from core vscode
      * @param range
