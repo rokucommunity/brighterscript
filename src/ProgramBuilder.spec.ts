@@ -190,10 +190,7 @@ describe('ProgramBuilder', () => {
         });
 
         it('prints no diagnostics when showDiagnosticsInConsole is false', () => {
-            builder = new ProgramBuilder();
-            builder.options = {
-                showDiagnosticsInConsole: false
-            };
+            builder.options.showDiagnosticsInConsole = false;
 
             let stub = sinon.stub(builder, 'getDiagnostics').returns([]);
             expect(stub.called).to.be.false;
@@ -202,11 +199,8 @@ describe('ProgramBuilder', () => {
 
 
         it('prints nothing when there are no diagnostics', () => {
+            builder.options.showDiagnosticsInConsole = true;
 
-            builder = new ProgramBuilder();
-            builder.options = {
-                showDiagnosticsInConsole: true
-            };
             sinon.stub(builder, 'getDiagnostics').returns([]);
             let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
@@ -216,18 +210,11 @@ describe('ProgramBuilder', () => {
         });
 
         it('prints diagnostic, when file is present in project', () => {
-
-            builder = new ProgramBuilder();
-            builder.options = {
-                showDiagnosticsInConsole: true
-            };
-            builder.program = new Program({});
+            builder.options.showDiagnosticsInConsole = true;
 
             let diagnostics = createBsDiagnostic('p1', ['m1']);
             let f1 = diagnostics[0].file as BrsFile;
-            f1.fileContents = `l1
-l2
-l3`;
+            f1.fileContents = `l1\nl2\nl3`;
             sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
             sinon.stub(builder.program, 'getFileByPathAbsolute').returns(f1);
@@ -241,12 +228,7 @@ l3`;
     });
 
     it('prints diagnostic, when file has no lines', () => {
-
-        builder = new ProgramBuilder();
-        builder.options = {
-            showDiagnosticsInConsole: true
-        };
-        builder.program = new Program({});
+        builder.options.showDiagnosticsInConsole = true;
 
         let diagnostics = createBsDiagnostic('p1', ['m1']);
         let f1 = diagnostics[0].file as BrsFile;
@@ -263,12 +245,7 @@ l3`;
     });
 
     it('prints diagnostic, when no file present', () => {
-
-        builder = new ProgramBuilder();
-        builder.options = {
-            showDiagnosticsInConsole: true
-        };
-        builder.program = new Program({});
+        builder.options.showDiagnosticsInConsole = true;
 
         let diagnostics = createBsDiagnostic('p1', ['m1']);
         sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
@@ -286,7 +263,7 @@ l3`;
 function createBsDiagnostic(filePath: string, messages: string[]): BsDiagnostic[] {
     let file = new BrsFile(filePath, filePath, null);
     let diagnostics = [];
-    for (let message in messages) {
+    for (let message of messages) {
         let d = createDiagnostic(file, 1, message);
         d.file = file;
         diagnostics.push(d);
