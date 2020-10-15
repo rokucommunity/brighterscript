@@ -180,15 +180,6 @@ describe('ProgramBuilder', () => {
 
     describe('printDiagnostics', () => {
 
-        beforeEach(() => {
-            fsExtra.ensureDirSync(tmpPath);
-            fsExtra.emptyDirSync(tmpPath);
-        });
-
-        afterEach(() => {
-            sinon.restore();
-        });
-
         it('prints no diagnostics when showDiagnosticsInConsole is false', () => {
             builder.options.showDiagnosticsInConsole = false;
 
@@ -196,7 +187,6 @@ describe('ProgramBuilder', () => {
             expect(stub.called).to.be.false;
             builder['printDiagnostics']();
         });
-
 
         it('prints nothing when there are no diagnostics', () => {
             builder.options.showDiagnosticsInConsole = true;
