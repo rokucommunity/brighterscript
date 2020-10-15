@@ -1011,7 +1011,7 @@ export class LanguageServer {
         //really crude crappy parser..
         //TODO this is whack - it's not even LTR ugh..
         const position = params.position;
-        const line = this.documents.get(params.textDocument.uri).getText(Range.create(position.line, 0, position.line, position.character));
+        const line = this.documents.get(params.textDocument.uri).getText(util.createRange(position.line, 0, position.line, position.character));
 
         const bracketCounts = { normal: 0, square: 0, curly: 0 };
         let commaCount = 0;
