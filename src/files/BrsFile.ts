@@ -1184,6 +1184,9 @@ export class BrsFile {
             let functionComments = [] as string[];
             while (true) {
                 currentToken = funcFile.getPreviousToken(currentToken);
+                if (!currentToken) {
+                    break;
+                }
                 if (currentToken.range.start.line + 1 < funcStartPosition.line) {
                     if (functionComments.length === 0) {
                         break;

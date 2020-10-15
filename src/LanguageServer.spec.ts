@@ -325,6 +325,94 @@ describe('LanguageServer', () => {
         });
     });
 
+    describe('onSignatureHelp', () => {
+        let program: Program;
+        let callDocument: TextDocument;
+        const functionFileBaseName = 'buildAwesome';
+        const funcDefinitionLine = 'function buildAwesome()';
+        beforeEach(async () => {
+            svr.connection = svr.createConnection();
+            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
+            program = svr.workspaces[0].builder.program;
+
+            let name = `CallComponent`;
+            callDocument = await addBrsFile(name, `sub init()
+                shouldBuildAwesome = true
+                if shouldBuildAwesome then
+                    buildAwesome()
+                else
+                    m.buildAwesome()
+                end if
+            end sub`);
+            await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
+        });
+
+        async function addXmlFile(name: string, additionalXmlContents = '') {
+            const filePath = `components/${name}.xml`;
+
+            const contents = `<?xml version="1.0" encoding="utf-8"?>
+            <component name="${name}" extends="Group">
+                ${additionalXmlContents}
+                <script type="text/brightscript" uri="${name}.brs" />
+            </component>`;
+            await program.addOrReplaceFile(filePath, contents);
+        }
+
+        async function addBrsFile(name: string, contents: string) {
+            const filePath = `components/${name}.brs`;
+
+            await program.addOrReplaceFile(filePath, contents);
+            for (const key in program.files) {
+                if (key.includes(filePath)) {
+                    const document = TextDocument.create(util.pathToUri(key), 'brightscript', 1, contents);
+                    svr.documents._documents[document.uri] = document;
+                    return document;
+                }
+            }
+        }
+
+        it('should return the expected signature info when a documentation is included', async () => {
+            const funcDescriptionComment = '@description Builds awesome for you';
+            const funcReturnComment = '@return {Integer} The key to everything';
+
+            await addBrsFile(functionFileBaseName, `' /**
+            ' * ${funcDescriptionComment}
+            ' * ${funcReturnComment}
+            ' */
+            ${funcDefinitionLine}
+                return 42
+            end function`);
+
+            const result = await svr.onSignatureHelp({
+                textDocument: {
+                    uri: callDocument.uri
+                },
+                position: util.createPosition(3, 33)
+            });
+            expect(result.signatures).to.not.be.empty;
+            const signature = result.signatures[0];
+            expect(signature.label).to.equal(funcDefinitionLine);
+            expect(signature.documentation).to.include(funcDescriptionComment);
+            expect(signature.documentation).to.include(funcReturnComment);
+        });
+
+        it('should work if used on a property value', async () => {
+            await addBrsFile(functionFileBaseName, `${funcDefinitionLine}
+                return 42
+            end function`);
+
+            const result = await svr.onSignatureHelp({
+                textDocument: {
+                    uri: callDocument.uri
+                },
+                position: util.createPosition(5, 35)
+            });
+            expect(result.signatures).to.not.be.empty;
+            const signature = result.signatures[0];
+            expect(signature.label).to.equal(funcDefinitionLine);
+        });
+    });
+
     describe('onReferences', () => {
         let program: Program;
         let functionDocument: TextDocument;
