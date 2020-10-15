@@ -8,6 +8,7 @@
         "watch": "rimraf out && tsc --watch",
         "prepublishOnly": "npm run build",
         "lint": "eslint \"src/**\"",
+        "format": "tsfmt -r",
         "test": "nyc mocha",
         "test:nocover": "mocha",
         "test:watch": "mocha --watch",
@@ -100,6 +101,7 @@
         "testdouble": "^3.5.2",
         "ts-node": "8.9.1",
         "typescript": "^3.9.2",
+        "typescript-formatter": "^7.2.2",
         "vscode-jsonrpc": "^5.0.1"
     },
     "dependencies": {
