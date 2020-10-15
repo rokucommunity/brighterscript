@@ -25,7 +25,6 @@ import {
     SignatureHelpParams,
     SignatureHelp,
     SignatureInformation,
-    Range,
     ReferenceParams
 } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
@@ -979,11 +978,12 @@ export class LanguageServer {
     }
 
     private async onSignatureHelp(params: SignatureHelpParams) {
+        await this.waitAllProgramFirstRuns();
+
         const info = this.getIdentifierInfo(params);
         if (!info) {
             return;
         }
-        await this.waitAllProgramFirstRuns();
 
         let promises = [] as Promise<SignatureInformation>[];
         for (const workspace of this.getWorkspaces()) {
