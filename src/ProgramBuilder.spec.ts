@@ -180,64 +180,64 @@ describe('ProgramBuilder', () => {
 
     describe('printDiagnostics', () => {
 
-      beforeEach(() => {
-          fsExtra.ensureDirSync(tmpPath);
-          fsExtra.emptyDirSync(tmpPath);
-      });
+        beforeEach(() => {
+            fsExtra.ensureDirSync(tmpPath);
+            fsExtra.emptyDirSync(tmpPath);
+        });
 
-      afterEach(() => {
-          sinon.restore();
-      });
+        afterEach(() => {
+            sinon.restore();
+        });
 
-      it('prints no diagnostics when showDiagnosticsInConsole is false', () => {
-          builder = new ProgramBuilder();
-          builder.options = {
-              showDiagnosticsInConsole: false
-          };
+        it('prints no diagnostics when showDiagnosticsInConsole is false', () => {
+            builder = new ProgramBuilder();
+            builder.options = {
+                showDiagnosticsInConsole: false
+            };
 
-          let stub = sinon.stub(builder, 'getDiagnostics').returns([]);
-          expect(stub.called).to.be.false;
-          builder['printDiagnostics']();
-      });
+            let stub = sinon.stub(builder, 'getDiagnostics').returns([]);
+            expect(stub.called).to.be.false;
+            builder['printDiagnostics']();
+        });
 
 
-      it('prints nothing when there are no diagnostics', () => {
+        it('prints nothing when there are no diagnostics', () => {
 
-          builder = new ProgramBuilder();
-          builder.options = {
-              showDiagnosticsInConsole: true
-          };
-          sinon.stub(builder, 'getDiagnostics').returns([]);
-          let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
+            builder = new ProgramBuilder();
+            builder.options = {
+                showDiagnosticsInConsole: true
+            };
+            sinon.stub(builder, 'getDiagnostics').returns([]);
+            let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
-          builder['printDiagnostics']();
+            builder['printDiagnostics']();
 
-          expect(printStub.called).to.be.false;
-      });
+            expect(printStub.called).to.be.false;
+        });
 
-      it('prints diagnostic, when file is present in project', () => {
+        it('prints diagnostic, when file is present in project', () => {
 
-          builder = new ProgramBuilder();
-          builder.options = {
-              showDiagnosticsInConsole: true
-          };
-          builder.program = new Program({});
+            builder = new ProgramBuilder();
+            builder.options = {
+                showDiagnosticsInConsole: true
+            };
+            builder.program = new Program({});
 
-          let diagnostics = createBsDiagnostic('p1', ['m1']);
-          let f1 = diagnostics[0].file as BrsFile;
-          f1.fileContents = `l1
+            let diagnostics = createBsDiagnostic('p1', ['m1']);
+            let f1 = diagnostics[0].file as BrsFile;
+            f1.fileContents = `l1
 l2
 l3`;
-          sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
+            sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
-          sinon.stub(builder.program, 'getFileByPathAbsolute').returns(f1);
+            sinon.stub(builder.program, 'getFileByPathAbsolute').returns(f1);
 
-          let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
+            let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
-          builder['printDiagnostics']();
+            builder['printDiagnostics']();
 
-          expect(printStub.called).to.be.true;
-      });
+            expect(printStub.called).to.be.true;
+        });
     });
 
     it('prints diagnostic, when file has no lines', () => {
@@ -284,23 +284,23 @@ l3`;
 });
 
 function createBsDiagnostic(filePath: string, messages: string[]): BsDiagnostic[] {
-  let file = new BrsFile(filePath, filePath, null);
-  let diagnostics = [];
-  for (let message in messages) {
-    let d = createDiagnostic(file, 1, message);
-    d.file = file;
-    diagnostics.push(d);
-  }
-  return diagnostics;
+    let file = new BrsFile(filePath, filePath, null);
+    let diagnostics = [];
+    for (let message in messages) {
+        let d = createDiagnostic(file, 1, message);
+        d.file = file;
+        diagnostics.push(d);
+    }
+    return diagnostics;
 }
 function createDiagnostic(
     bscFile: BscFile,
     code: number,
     message: string,
-    startLine: number = 0,
-    startCol: number = 99999,
-    endLine: number = 0,
-    endCol: number = 99999,
+    startLine = 0,
+    startCol = 99999,
+    endLine = 0,
+    endCol = 99999,
     severity: DiagnosticSeverity = DiagnosticSeverity.Error
 ) {
     const diagnostic = {

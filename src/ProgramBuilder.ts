@@ -79,7 +79,7 @@ export class ProgramBuilder {
                 //if this is not a diagnostic, something else is wrong...
                 throw e;
             }
-            await this.printDiagnostics();
+            this.printDiagnostics();
 
             //we added diagnostics, so hopefully that draws attention to the underlying issues.
             //For now, just use a default options object so we have a functioning program
@@ -204,7 +204,7 @@ export class ProgramBuilder {
         return runPromise;
     }
 
-    private async printDiagnostics() {
+    private printDiagnostics() {
         if (this.options.showDiagnosticsInConsole === false) {
             return;
         }
@@ -238,23 +238,16 @@ export class ProgramBuilder {
             if (!emitFullPaths) {
                 filePath = path.relative(cwd, filePath);
             }
-            let linesByFile = {};
             //load the file text
-            try {
-                let file = this.program.getFileByPathAbsolute(pathAbsolute);
-                let lines = linesByFile[pathAbsolute];
-                if (!lines) {
-                  lines = file && file.fileContents ? file.fileContents.split(/\r?\n/g) : [];
-                  linesByFile[pathAbsolute] = lines
-                }
+            const file = this.program.getFileByPathAbsolute(pathAbsolute);
+            //get the file's in-memory contents if available
+            const lines = file?.fileContents?.split(/\r?\n/g) ?? [];
 
-                for (let diagnostic of sortedDiagnostics) {
-                    //default the severity to error if undefined
-                    let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
-                    //format output
-                    diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic);
-                }
-            } catch (e) {
+            for (let diagnostic of sortedDiagnostics) {
+                //default the severity to error if undefined
+                let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
+                //format output
+                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic);
             }
         }
     }
@@ -280,7 +273,7 @@ export class ProgramBuilder {
                 return -1;
             }
 
-            await this.printDiagnostics();
+            this.printDiagnostics();
             wereDiagnosticsPrinted = true;
             let errorCount = this.getDiagnostics().filter(x => x.severity === DiagnosticSeverity.Error).length;
 
@@ -303,7 +296,7 @@ export class ProgramBuilder {
             return 0;
         } catch (e) {
             if (wereDiagnosticsPrinted === false) {
-                await this.printDiagnostics();
+                this.printDiagnostics();
             }
             throw e;
         }
