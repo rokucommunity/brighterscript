@@ -1,18 +1,20 @@
 import * as path from 'path';
 import { SourceNode } from 'source-map';
-import { CompletionItem, CompletionItemKind, Hover, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Hover, Range } from 'vscode-languageserver';
+import { CompletionItemKind, Position } from 'vscode-languageserver';
 import chalk from 'chalk';
-import { Scope } from '../Scope';
+import type { Scope } from '../Scope';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
+import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import { Deferred } from '../deferred';
-import { Lexer, Token, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
+import type { Token } from '../lexer';
+import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
-import { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
-import { AssignmentStatement, ClassStatement, LibraryStatement, ImportStatement } from '../parser/Statement';
-import { Program } from '../Program';
-import { BrsType } from '../types/BrsType';
+import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
+import type { AssignmentStatement, ClassStatement, LibraryStatement, ImportStatement } from '../parser/Statement';
+import type { Program } from '../Program';
+import type { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
@@ -658,7 +660,7 @@ export class BrsFile {
         //wait for the file to finish processing
         await this.isReady();
         //a map of lower-case names of all added options
-        let names = {};
+        let names = {} as Record<string, boolean>;
 
         //handle script import completions
         let scriptImport = util.getScriptImportAtPosition(this.ownScriptImports, position);
@@ -698,7 +700,7 @@ export class BrsFile {
                 label: 'm',
                 kind: CompletionItemKind.Variable
             });
-            names['m'] = true;
+            names.m = true;
 
             result.push(...KeywordCompletions);
 

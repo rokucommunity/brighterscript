@@ -22,21 +22,31 @@ module.exports = {
         '@typescript-eslint/explicit-function-return-type': 'off',
         '@typescript-eslint/explicit-member-accessibility': 'off',
         '@typescript-eslint/explicit-module-boundary-types': 'off',
+        '@typescript-eslint/init-declarations': 'off',
+        '@typescript-eslint/lines-between-class-members': 'off',
         '@typescript-eslint/member-ordering': 'off',
+        '@typescript-eslint/method-signature-style': 'off',
+        '@typescript-eslint/naming-convention': 'off',
         '@typescript-eslint/no-base-to-string': 'off',
         '@typescript-eslint/no-dynamic-delete': 'off',
         '@typescript-eslint/no-empty-function': 'off',
         '@typescript-eslint/no-explicit-any': 'off',
         '@typescript-eslint/no-extra-parens': 'off',
         '@typescript-eslint/no-floating-promises': 'error',
+        '@typescript-eslint/no-implicit-any-catch': 'off',
+        '@typescript-eslint/no-invalid-this': 'off',
         '@typescript-eslint/no-magic-numbers': 'off',
         '@typescript-eslint/no-parameter-properties': 'off',
+        '@typescript-eslint/no-shadow': 'off',
         '@typescript-eslint/no-this-alias': 'off',
         //possibly disable this once we have converted all throw statements to actual errors
         '@typescript-eslint/no-throw-literal': 'off',
+        '@typescript-eslint/no-invalid-void': 'off',
+        '@typescript-eslint/no-invalid-void-type': 'off',
         '@typescript-eslint/no-type-alias': 'off',
         '@typescript-eslint/no-unnecessary-boolean-literal-compare': 'off',
         '@typescript-eslint/no-unnecessary-condition': 'off',
+        '@typescript-eslint/no-unsafe-assignment': 'off',
         '@typescript-eslint/no-unsafe-call': 'off',
         '@typescript-eslint/no-unsafe-member-access': 'off',
         '@typescript-eslint/no-unsafe-return': 'off',
@@ -151,20 +161,30 @@ module.exports = {
         'vars-on-top': 'off',
         'wrap-regex': 'off'
     },
-    overrides: [
-        //disable certain rules for tests
-        {
-            files: ['*.spec.ts'],
-            rules: {
-                '@typescript-eslint/no-unsafe-call': 'off',
-                '@typescript-eslint/no-unsafe-member-access': 'off',
-                '@typescript-eslint/no-unsafe-return': 'off',
-                '@typescript-eslint/no-unused-expressions': 'off',
-                '@typescript-eslint/no-unused-vars': 'off',
-                '@typescript-eslint/no-unused-vars-experimental': 'off',
-                'new-cap': 'off',
-                'no-shadow': 'off'
-            }
+    //disable some rules for certain files
+    overrides: [{
+        //these files are getting deleted soon, so ingore the eslint warnings for now
+        files: ['src/brsTypes/**/*.ts'],
+        rules: {
+            '@typescript-eslint/no-invalid-this': 'off',
+            '@typescript-eslint/method-signature-style': 'off',
+            '@typescript-eslint/no-unsafe-assignment': 'off',
+            '@typescript-eslint/prefer-enum-initializers': 'off'
         }
-    ]
+    },
+    {
+        files: ['*.spec.ts'],
+        rules: {
+            '@typescript-eslint/no-unsafe-assignment': 'off',
+            '@typescript-eslint/no-unsafe-call': 'off',
+            '@typescript-eslint/no-unsafe-member-access': 'off',
+            '@typescript-eslint/no-unsafe-return': 'off',
+            '@typescript-eslint/no-unused-expressions': 'off',
+            '@typescript-eslint/no-unused-vars': 'off',
+            '@typescript-eslint/no-unused-vars-experimental': 'off',
+            '@typescript-eslint/dot-notation': 'off',
+            'new-cap': 'off',
+            'no-shadow': 'off'
+        }
+    }]
 };

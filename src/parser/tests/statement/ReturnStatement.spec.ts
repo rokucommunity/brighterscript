@@ -4,7 +4,7 @@ import { Parser } from '../../Parser';
 import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
-import { FunctionStatement } from '../../Statement';
+import type { FunctionStatement } from '../../Statement';
 import { Range } from 'vscode-languageserver';
 
 describe('parser return statements', () => {

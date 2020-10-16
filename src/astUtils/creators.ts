@@ -1,8 +1,10 @@
-import { Position } from 'vscode-languageserver';
-import { Token } from '../lexer/Token';
+import type { Position } from 'vscode-languageserver';
+import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import { LiteralExpression, Expression, CallExpression, NamespacedVariableNameExpression, DottedGetExpression, VariableExpression } from '../parser/Expression';
-import { BrsType, BrsString, BrsInvalid, Int32, Float } from '../brsTypes';
+import type { Expression, NamespacedVariableNameExpression } from '../parser/Expression';
+import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression } from '../parser/Expression';
+import type { BrsType } from '../brsTypes';
+import { BrsString, BrsInvalid, Int32, Float } from '../brsTypes';
 import util from '../util';
 
 export function createRange(pos: Position) {

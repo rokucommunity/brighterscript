@@ -1,4 +1,4 @@
-import { BrsType } from './BrsType';
+import type { BrsType } from './BrsType';
 import { DynamicType } from './DynamicType';
 
 export class InterfaceType implements BrsType {

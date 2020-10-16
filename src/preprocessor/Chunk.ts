@@ -1,5 +1,5 @@
-import { Token } from '../lexer';
-import { Range } from 'vscode-languageserver';
+import type { Token } from '../lexer';
+import type { Range } from 'vscode-languageserver';
 import util from '../util';
 
 /**

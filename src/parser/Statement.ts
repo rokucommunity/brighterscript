@@ -1,12 +1,15 @@
 /* eslint-disable no-bitwise */
-import { Token, Identifier, TokenKind, CompoundAssignmentOperators } from '../lexer';
+import type { Token, Identifier } from '../lexer';
+import { TokenKind, CompoundAssignmentOperators } from '../lexer';
 import { SourceNode } from 'source-map';
-import { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, CallExpression, VariableExpression, LiteralExpression } from './Expression';
+import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression } from './Expression';
+import { CallExpression, VariableExpression, LiteralExpression } from './Expression';
 import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
-import { TranspileState } from './TranspileState';
+import type { TranspileState } from './TranspileState';
 import { ParseMode, Parser } from './Parser';
-import { walk, WalkVisitor, WalkOptions, InternalWalkMode, createVisitor, WalkMode } from '../astUtils/visitors';
+import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
+import { walk, InternalWalkMode, createVisitor, WalkMode } from '../astUtils/visitors';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement } from '../astUtils/reflection';
 import { BrsInvalid } from '../brsTypes/BrsType';
 
@@ -646,7 +649,7 @@ export class ReturnStatement extends Statement {
         super();
         this.range = util.createRangeFromPositions(
             this.tokens.return.range.start,
-            (this.value && this.value.range.end) || this.tokens.return.range.end
+            this.value?.range.end || this.tokens.return.range.end
         );
     }
 
@@ -1143,13 +1146,14 @@ export class ClassStatement extends Statement {
     }
 
     public getName(parseMode: ParseMode) {
-        if (this.name && this.name.text) {
+        const name = this.name?.text;
+        if (name) {
             if (this.namespaceName) {
                 let namespaceName = this.namespaceName.getName(parseMode);
                 let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
-                return namespaceName + separator + this.name.text;
+                return namespaceName + separator + name;
             } else {
-                return this.name.text;
+                return name;
             }
         } else {
             //return undefined which will allow outside callers to know that this class doesn't have a name
@@ -1157,7 +1161,7 @@ export class ClassStatement extends Statement {
         }
     }
 
-    public memberMap = {} as { [lowerMemberName: string]: ClassMemberStatement };
+    public memberMap = {} as Record<string, ClassMemberStatement>;
     public methods = [] as ClassMethodStatement[];
     public fields = [] as ClassFieldStatement[];
 
@@ -1246,7 +1250,7 @@ export class ClassStatement extends Statement {
                 sub new()
                 end sub
             end class
-        `, { mode: ParseMode.BrighterScript }).statements[0] as ClassStatement).memberMap['new'] as ClassMethodStatement;
+        `, { mode: ParseMode.BrighterScript }).statements[0] as ClassStatement).memberMap.new as ClassMethodStatement;
         //TODO make locations point to 0,0 (might not matter?)
         return stmt;
     }
@@ -1302,8 +1306,8 @@ export class ClassStatement extends Statement {
 
         //create empty `new` function if class is missing it (simplifies transpile logic)
         if (!this.getConstructorFunction()) {
-            this.memberMap['new'] = this.getEmptyNewFunction();
-            this.body = [this.memberMap['new'], ...this.body];
+            this.memberMap.new = this.getEmptyNewFunction();
+            this.body = [this.memberMap.new, ...this.body];
         }
 
         for (let statement of this.body) {

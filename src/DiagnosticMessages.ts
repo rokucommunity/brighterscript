@@ -1,7 +1,8 @@
 /* eslint-disable camelcase */
 
-import { DiagnosticSeverity, Position } from 'vscode-languageserver';
-import { TokenKind } from './lexer/TokenKind';
+import type { Position } from 'vscode-languageserver';
+import { DiagnosticSeverity } from 'vscode-languageserver';
+import type { TokenKind } from './lexer/TokenKind';
 
 /**
  * An object that keeps track of all possible error messages.

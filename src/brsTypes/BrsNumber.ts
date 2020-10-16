@@ -1,9 +1,9 @@
-import Long from 'long';
-import { BrsValue } from './BrsType';
-import { Int32 } from './Int32';
-import { Int64 } from './Int64';
-import { Float } from './Float';
-import { Double } from './Double';
+import type Long from 'long';
+import type { BrsValue } from './BrsType';
+import type { Int32 } from './Int32';
+import type { Int64 } from './Int64';
+import type { Float } from './Float';
+import type { Double } from './Double';
 
 /** The set of operations available on a BrightScript numeric variable. */
 export interface Numeric extends BrsValue {

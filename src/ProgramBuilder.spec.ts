@@ -7,7 +7,8 @@ import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { Logger, LogLevel } from './Logger';
 import * as diagnosticUtils from './diagnosticUtils';
-import { Range, BscFile, BsDiagnostic } from '.';
+import type { BscFile, BsDiagnostic } from '.';
+import { Range } from '.';
 import { DiagnosticSeverity } from './astUtils';
 import { BrsFile } from './files/BrsFile';
 
