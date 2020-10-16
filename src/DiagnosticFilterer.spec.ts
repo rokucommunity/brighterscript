@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
-import { BsDiagnostic } from './interfaces';
+import type { BsDiagnostic } from './interfaces';
 import { standardizePath as s } from './util';
 let rootDir = s`${process.cwd()}/rootDir`;
 

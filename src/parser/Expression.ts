@@ -1,17 +1,19 @@
 /* eslint-disable no-bitwise */
-import { Token, Identifier, TokenKind } from '../lexer';
-import { Block, CommentStatement, FunctionStatement } from './Statement';
+import type { Token, Identifier } from '../lexer';
+import { TokenKind } from '../lexer';
+import type { Block, CommentStatement, FunctionStatement } from './Statement';
 import { SourceNode } from 'source-map';
-import { Range } from 'vscode-languageserver';
+import type { Range } from 'vscode-languageserver';
 import util from '../util';
-import { TranspileState } from './TranspileState';
+import type { TranspileState } from './TranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
-import { walk, InternalWalkMode, WalkOptions, WalkVisitor } from '../astUtils/visitors';
+import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
+import { walk, InternalWalkMode } from '../astUtils/visitors';
 import { isCommentStatement, isEscapedCharCodeLiteralExpression, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
-import { BscType } from '../types/BscType';
-import { DynamicType } from '../types/DynamicType';
 import { VoidType } from '../types/VoidType';
+import { DynamicType } from '../types/DynamicType';
+import type { BscType } from '../types/BscType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 

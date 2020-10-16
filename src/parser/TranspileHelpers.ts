@@ -1,4 +1,4 @@
-import { Range } from 'vscode-languageserver';
+import type { Range } from 'vscode-languageserver';
 
 export interface TranspileState {
     //the path for this file relative to the root of the output package

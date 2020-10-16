@@ -1,8 +1,8 @@
 /* eslint-disable func-names */
 import { TokenKind, ReservedWords, Keywords } from './TokenKind';
-import { Token } from './Token';
+import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
-import { Range, Diagnostic } from 'vscode-languageserver';
+import type { Range, Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
 
@@ -302,14 +302,14 @@ export class Lexer {
         let c = this.source.charAt(this.current - 1);
 
         let tokenKind: TokenKind | undefined;
-        let tokenFunction: Function | undefined;
+        let tokenFunction: (lexer: Lexer) => void | undefined;
 
         if (isAlpha(c)) {
             this.identifier();
 
             // eslint-disable-next-line no-cond-assign
         } else if (tokenFunction = Lexer.tokenFunctionMap[c]) {
-            tokenFunction.call(this);
+            tokenFunction.call(this, undefined);
 
             // eslint-disable-next-line no-cond-assign
         } else if (tokenKind = Lexer.tokenKindMap[c]) {

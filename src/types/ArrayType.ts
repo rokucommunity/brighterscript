@@ -1,4 +1,4 @@
-import { BscType } from './BscType';
+import type { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
 export class ArrayType implements BscType {
@@ -17,7 +17,10 @@ export class ArrayType implements BscType {
         //1. all of the types in this array are present in the target
         outer: for (let innerType of this.innerTypes) {
             //find this inner type in the target
+
+            // eslint-disable-next-line no-unreachable-loop
             for (let targetInnerType of targetType.innerTypes) {
+                //TODO is this loop correct? It ends after 1 iteration but we might need to do more iterations
 
                 if (innerType.isAssignableTo(targetInnerType)) {
                     continue outer;

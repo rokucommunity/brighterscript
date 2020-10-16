@@ -1,4 +1,4 @@
-import { BscType } from './BscType';
+import type { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
 export class StringType implements BscType {

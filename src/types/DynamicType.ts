@@ -1,4 +1,4 @@
-import { BscType } from './BscType';
+import type { BscType } from './BscType';
 
 export class DynamicType implements BscType {
     public isAssignableTo(targetType: BscType) {

@@ -7,7 +7,7 @@ export class DependencyGraph {
     /**
      * A dictionary of all unique nodes in the entire graph
      */
-    public nodes = {} as { [key: string]: Node };
+    public nodes = {} as Record<string, Node>;
 
     private onchangeEmitter = new EventEmitter();
 
@@ -113,7 +113,7 @@ export class Node {
             this.subscriptions = [];
         }
         for (let dependency of this.dependencies) {
-            let sub = this.graph.onchange(dependency, (dependency) => {
+            let sub = this.graph.onchange(dependency, () => {
                 //notify the graph that we changed since one of our dependencies changed
                 this.graph.emit(this.key);
             });

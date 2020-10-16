@@ -1,16 +1,16 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import { BsConfig } from './BsConfig';
-import { BsDiagnostic, File, FileObj } from './interfaces';
-import { FileResolver, Program } from './Program';
+import type { BsConfig } from './BsConfig';
+import type { BsDiagnostic, File, FileObj } from './interfaces';
+import type { FileResolver } from './Program';
+import { Program } from './Program';
 import { standardizePath as s, util, loadPlugins } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { Logger, LogLevel } from './Logger';
-import { getPrintDiagnosticOptions, printDiagnostic } from './diagnosticUtils';
 import PluginInterface from './PluginInterface';
-
+import * as diagnosticUtils from './diagnosticUtils';
 /**
  * A runner class that handles
  */
@@ -80,7 +80,7 @@ export class ProgramBuilder {
                 //if this is not a diagnostic, something else is wrong...
                 throw e;
             }
-            await this.printDiagnostics();
+            this.printDiagnostics();
 
             //we added diagnostics, so hopefully that draws attention to the underlying issues.
             //For now, just use a default options object so we have a functioning program
@@ -205,14 +205,14 @@ export class ProgramBuilder {
         return runPromise;
     }
 
-    private async printDiagnostics() {
+    private printDiagnostics() {
         if (this.options.showDiagnosticsInConsole === false) {
             return;
         }
         let diagnostics = this.getDiagnostics();
 
         //group the diagnostics by file
-        let diagnosticsByFile = {} as { [pathAbsolute: string]: BsDiagnostic[] };
+        let diagnosticsByFile = {} as Record<string, BsDiagnostic[]>;
         for (let diagnostic of diagnostics) {
             if (!diagnosticsByFile[diagnostic.file.pathAbsolute]) {
                 diagnosticsByFile[diagnostic.file.pathAbsolute] = [];
@@ -221,7 +221,7 @@ export class ProgramBuilder {
         }
 
         //get printing options
-        const options = getPrintDiagnosticOptions(this.options);
+        const options = diagnosticUtils.getPrintDiagnosticOptions(this.options);
         const { cwd, emitFullPaths } = options;
 
         let pathsAbsolute = Object.keys(diagnosticsByFile).sort();
@@ -239,16 +239,16 @@ export class ProgramBuilder {
             if (!emitFullPaths) {
                 filePath = path.relative(cwd, filePath);
             }
-
             //load the file text
-            let fileText = await util.getFileContents(pathAbsolute);
-            let lines = util.getLines(fileText);
+            const file = this.program.getFileByPathAbsolute(pathAbsolute);
+            //get the file's in-memory contents if available
+            const lines = file?.fileContents?.split(/\r?\n/g) ?? [];
 
             for (let diagnostic of sortedDiagnostics) {
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
                 //format output
-                printDiagnostic(options, severity, filePath, lines, diagnostic);
+                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic);
             }
         }
     }
@@ -274,7 +274,7 @@ export class ProgramBuilder {
                 return -1;
             }
 
-            await this.printDiagnostics();
+            this.printDiagnostics();
             wereDiagnosticsPrinted = true;
             let errorCount = this.getDiagnostics().filter(x => x.severity === DiagnosticSeverity.Error).length;
 
@@ -297,7 +297,7 @@ export class ProgramBuilder {
             return 0;
         } catch (e) {
             if (wereDiagnosticsPrinted === false) {
-                await this.printDiagnostics();
+                this.printDiagnostics();
             }
             throw e;
         }

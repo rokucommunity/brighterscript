@@ -1,7 +1,8 @@
 import { Range } from 'vscode-languageserver';
-import { Token } from '../lexer/Token';
+import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import { LiteralExpression, Expression, CallExpression, NamespacedVariableNameExpression, DottedGetExpression, VariableExpression } from '../parser/Expression';
+import type { Expression, NamespacedVariableNameExpression } from '../parser/Expression';
+import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression } from '../parser/Expression';
 
 export const interpolatedRange = Range.create(-1, -1, -1, -1);
 

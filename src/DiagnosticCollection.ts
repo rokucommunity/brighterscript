@@ -1,10 +1,10 @@
-import { BsDiagnostic } from './interfaces';
-import { Workspace } from './LanguageServer';
+import type { BsDiagnostic } from './interfaces';
+import type { Workspace } from './LanguageServer';
 
 export class DiagnosticCollection {
-    private previousDiagnosticsByFile = {} as { [fileSrcPathLower: string]: KeyedDiagnostic[] };
+    private previousDiagnosticsByFile = {} as Record<string, KeyedDiagnostic[]>;
 
-    public async getPatch(workspaces: Workspace[]): Promise<{ [fileSrcPathLower: string]: KeyedDiagnostic[] }> {
+    public async getPatch(workspaces: Workspace[]): Promise<Record<string, KeyedDiagnostic[]>> {
         const diagnosticsByFile = await this.getDiagnosticsByFileFromWorkspaces(workspaces);
 
         const patch = {
@@ -19,7 +19,7 @@ export class DiagnosticCollection {
     }
 
     private async getDiagnosticsByFileFromWorkspaces(workspaces: Workspace[]) {
-        const result = {} as { [fileSrcPathLower: string]: KeyedDiagnostic[] };
+        const result = {} as Record<string, KeyedDiagnostic[]>;
 
         //wait for all programs to finish running. This ensures the `Program` exists.
         await Promise.all(
@@ -62,8 +62,8 @@ export class DiagnosticCollection {
     /**
      * Get a patch for all the files that have been removed since last time
      */
-    private getRemovedPatch(currentDiagnosticsByFile: { [fileSrcPathLower: string]: KeyedDiagnostic[] }) {
-        const result = {} as { [fileSrcPathLower: string]: KeyedDiagnostic[] };
+    private getRemovedPatch(currentDiagnosticsByFile: Record<string, KeyedDiagnostic[]>) {
+        const result = {} as Record<string, KeyedDiagnostic[]>;
         for (const filePath in this.previousDiagnosticsByFile) {
             if (!currentDiagnosticsByFile[filePath]) {
                 result[filePath] = [];
@@ -75,8 +75,8 @@ export class DiagnosticCollection {
     /**
      * Get all files whose diagnostics have changed since last time
      */
-    private getModifiedPatch(currentDiagnosticsByFile: { [fileSrcPathLower: string]: KeyedDiagnostic[] }) {
-        const result = {} as { [fileSrcPathLower: string]: KeyedDiagnostic[] };
+    private getModifiedPatch(currentDiagnosticsByFile: Record<string, KeyedDiagnostic[]>) {
+        const result = {} as Record<string, KeyedDiagnostic[]>;
         for (const filePath in currentDiagnosticsByFile) {
             //for this file, if there were diagnostics last time AND there are diagnostics this time, and the lists are different
             if (this.previousDiagnosticsByFile[filePath] && !this.diagnosticListsAreIdentical(this.previousDiagnosticsByFile[filePath], currentDiagnosticsByFile[filePath])) {
@@ -107,8 +107,8 @@ export class DiagnosticCollection {
     /**
      * Get diagnostics for all new files not seen since last time
      */
-    private getAddedPatch(currentDiagnosticsByFile: { [fileSrcPathLower: string]: KeyedDiagnostic[] }) {
-        const result = {} as { [fileSrcPathLower: string]: KeyedDiagnostic[] };
+    private getAddedPatch(currentDiagnosticsByFile: Record<string, KeyedDiagnostic[]>) {
+        const result = {} as Record<string, KeyedDiagnostic[]>;
         for (const filePath in currentDiagnosticsByFile) {
             if (!this.previousDiagnosticsByFile[filePath]) {
                 result[filePath] = currentDiagnosticsByFile[filePath];

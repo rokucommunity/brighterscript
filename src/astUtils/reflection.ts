@@ -1,17 +1,17 @@
-import { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement } from '../parser/Statement';
-import { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, FunctionParameterExpression } from '../parser/Expression';
-import { BrsFile } from '../files/BrsFile';
-import { XmlFile } from '../files/XmlFile';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement } from '../parser/Statement';
+import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, FunctionParameterExpression } from '../parser/Expression';
+import type { BrsFile } from '../files/BrsFile';
+import type { XmlFile } from '../files/XmlFile';
+import type { BscFile, File } from '../interfaces';
+import type { InvalidType } from '../types/InvalidType';
 import { InternalWalkMode } from './visitors';
 import { FunctionType } from '../types/FunctionType';
-import { BscFile, File } from '../interfaces';
 import { StringType } from '../types/StringType';
 import { BooleanType } from '../types/BooleanType';
-import { InvalidType } from '../types/InvalidType';
-import { LongIntegerType } from '../types/LongIntegerType';
-import { DoubleType } from '../types/DoubleType';
-import { FloatType } from '../types/FloatType';
 import { IntegerType } from '../types/IntegerType';
+import { LongIntegerType } from '../types/LongIntegerType';
+import { FloatType } from '../types/FloatType';
+import { DoubleType } from '../types/DoubleType';
 
 // File reflection
 

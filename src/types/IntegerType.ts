@@ -1,4 +1,4 @@
-import { BscType } from './BscType';
+import type { BscType } from './BscType';
 import { DoubleType } from './DoubleType';
 import { DynamicType } from './DynamicType';
 import { FloatType } from './FloatType';

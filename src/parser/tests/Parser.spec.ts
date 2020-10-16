@@ -1,4 +1,5 @@
-import { TokenKind, ReservedWords, Token } from '../../lexer';
+import type { Token } from '../../lexer';
+import { TokenKind, ReservedWords } from '../../lexer';
 import { Range } from 'vscode-languageserver';
 
 /* A set of utilities to be used while writing tests for the BRS parser. */

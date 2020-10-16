@@ -2,10 +2,11 @@ import * as sinonImport from 'sinon';
 
 import { Program } from '../Program';
 import { getTestTranspile } from './BrsFile.spec';
-import { BrsFile } from './BrsFile';
+import type { BrsFile } from './BrsFile';
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { Diagnostic, Range, DiagnosticSeverity } from 'vscode-languageserver';
+import type { Diagnostic } from 'vscode-languageserver';
+import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 import { ParseMode } from '../parser/Parser';
 
 let sinon = sinonImport.createSandbox();
