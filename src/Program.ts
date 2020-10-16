@@ -114,6 +114,7 @@ export class Program {
      * A map of every file loaded into this program
      */
     public files = {} as Record<string, BscFile>;
+    private pkgMap = {} as Record<string, BscFile>;
 
     private scopes = {} as Record<string, Scope>;
 
@@ -337,6 +338,7 @@ export class Program {
 
                 //add the file to the program
                 this.files[pathAbsolute] = brsFile;
+                this.pkgMap[brsFile.pkgPath.toLowerCase()] = brsFile;
                 let fileContents: SourceObj = {
                     pathAbsolute: pathAbsolute,
                     source: await getFileContents()
@@ -427,16 +429,9 @@ export class Program {
      * Missing files are just ignored.
      */
     public getFilesByPkgPaths<T extends BscFile[]>(pkgPaths: string[]) {
-        pkgPaths = pkgPaths.map(x => s`${x}`.toLowerCase());
-
-        let result = [] as Array<XmlFile | BrsFile>;
-        for (let filePath in this.files) {
-            let file = this.files[filePath];
-            if (pkgPaths.includes(s`${file.pkgPath}`.toLowerCase())) {
-                result.push(file);
-            }
-        }
-        return result as T;
+        return pkgPaths
+            .map(pkgPath => this.getFileByPkgPath(pkgPath))
+            .filter(file => file !== undefined) as T;
     }
 
     /**
@@ -444,7 +439,7 @@ export class Program {
      * If not found, return undefined
      */
     public getFileByPkgPath<T extends BscFile>(pkgPath: string) {
-        return this.getFilesByPkgPaths([pkgPath])[0] as T;
+        return this.pkgMap[pkgPath.toLowerCase()] as T;
     }
 
     /**
@@ -479,6 +474,7 @@ export class Program {
             }
             //remove the file from the program
             delete this.files[pathAbsolute];
+            delete this.pkgMap[file.pkgPath.toLowerCase()];
 
             this.dependencyGraph.remove(file.dependencyGraphKey);
 
