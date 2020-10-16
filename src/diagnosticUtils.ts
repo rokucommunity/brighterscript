@@ -1,4 +1,5 @@
-import chalk, { Chalk } from 'chalk';
+import type { Chalk } from 'chalk';
+import chalk from 'chalk';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import type { BsDiagnostic } from '.';

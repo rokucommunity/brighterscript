@@ -660,7 +660,7 @@ export class BrsFile {
         //wait for the file to finish processing
         await this.isReady();
         //a map of lower-case names of all added options
-        let names = {};
+        let names = {} as Record<string, boolean>;
 
         //handle script import completions
         let scriptImport = util.getScriptImportAtPosition(this.ownScriptImports, position);

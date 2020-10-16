@@ -70,13 +70,13 @@ describe('BrsFile', () => {
         } as StandardizedFileEntry;
 
         it('creates proper tokens', async () => {
-            let file = (await program.addOrReplaceFile(entry, `call(ModuleA.ModuleB.ModuleC.`) as any);
-            expect(file.getPartialVariableName(file.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
-            expect(file.getPartialVariableName(file.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
-            expect(file.getPartialVariableName(file.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
-            expect(file.getPartialVariableName(file.parser.tokens[4])).to.equal('ModuleA.ModuleB');
-            expect(file.getPartialVariableName(file.parser.tokens[3])).to.equal('ModuleA.');
-            expect(file.getPartialVariableName(file.parser.tokens[2])).to.equal('ModuleA');
+            file = await program.addOrReplaceFile<BrsFile>(entry, `call(ModuleA.ModuleB.ModuleC.`);
+            expect(file['getPartialVariableName'](file.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
+            expect(file['getPartialVariableName'](file.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
+            expect(file['getPartialVariableName'](file.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
+            expect(file['getPartialVariableName'](file.parser.tokens[4])).to.equal('ModuleA.ModuleB');
+            expect(file['getPartialVariableName'](file.parser.tokens[3])).to.equal('ModuleA.');
+            expect(file['getPartialVariableName'](file.parser.tokens[2])).to.equal('ModuleA');
         });
     });
 

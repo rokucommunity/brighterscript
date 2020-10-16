@@ -163,7 +163,7 @@ export enum InternalWalkMode {
     recurseChildFunctions = 16
 }
 
-/* eslint-disable no-bitwise */
+/* eslint-disable @typescript-eslint/prefer-literal-enum-member */
 export enum WalkMode {
     /**
      * Walk statements, but does NOT step into child functions

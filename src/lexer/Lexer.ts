@@ -305,14 +305,14 @@ export class Lexer {
         let c = this.source.charAt(this.current - 1);
 
         let tokenKind: TokenKind | undefined;
-        let tokenFunction: Function | undefined;
+        let tokenFunction: (lexer: Lexer) => void | undefined;
 
         if (isAlpha(c)) {
             this.identifier();
 
             // eslint-disable-next-line no-cond-assign
         } else if (tokenFunction = Lexer.tokenFunctionMap[c]) {
-            tokenFunction.call(this);
+            tokenFunction.call(this, undefined);
 
             // eslint-disable-next-line no-cond-assign
         } else if (tokenKind = Lexer.tokenKindMap[c]) {

@@ -530,7 +530,7 @@ export class Util {
         });
     }
 
-    public propertyCount(object: object) {
+    public propertyCount(object: Record<string, unknown>) {
         let count = 0;
         for (let key in object) {
             if (object.hasOwnProperty(key)) {

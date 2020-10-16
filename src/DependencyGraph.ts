@@ -113,7 +113,7 @@ export class Node {
             this.subscriptions = [];
         }
         for (let dependency of this.dependencies) {
-            let sub = this.graph.onchange(dependency, (dependency) => {
+            let sub = this.graph.onchange(dependency, () => {
                 //notify the graph that we changed since one of our dependencies changed
                 this.graph.emit(this.key);
             });

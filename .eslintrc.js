@@ -26,15 +26,18 @@ module.exports = {
         '@typescript-eslint/lines-between-class-members': 'off',
         '@typescript-eslint/member-ordering': 'off',
         '@typescript-eslint/method-signature-style': 'off',
+        '@typescript-eslint/naming-convention': 'off',
         '@typescript-eslint/no-base-to-string': 'off',
         '@typescript-eslint/no-dynamic-delete': 'off',
         '@typescript-eslint/no-empty-function': 'off',
         '@typescript-eslint/no-explicit-any': 'off',
         '@typescript-eslint/no-extra-parens': 'off',
         '@typescript-eslint/no-floating-promises': 'error',
+        '@typescript-eslint/no-implicit-any-catch': 'off',
         '@typescript-eslint/no-invalid-this': 'off',
         '@typescript-eslint/no-magic-numbers': 'off',
         '@typescript-eslint/no-parameter-properties': 'off',
+        '@typescript-eslint/no-shadow': 'off',
         '@typescript-eslint/no-this-alias': 'off',
         //possibly disable this once we have converted all throw statements to actual errors
         '@typescript-eslint/no-throw-literal': 'off',
@@ -43,6 +46,7 @@ module.exports = {
         '@typescript-eslint/no-type-alias': 'off',
         '@typescript-eslint/no-unnecessary-boolean-literal-compare': 'off',
         '@typescript-eslint/no-unnecessary-condition': 'off',
+        '@typescript-eslint/no-unsafe-assignment': 'off',
         '@typescript-eslint/no-unsafe-call': 'off',
         '@typescript-eslint/no-unsafe-member-access': 'off',
         '@typescript-eslint/no-unsafe-return': 'off',
@@ -164,7 +168,8 @@ module.exports = {
         rules: {
             '@typescript-eslint/no-invalid-this': 'off',
             '@typescript-eslint/method-signature-style': 'off',
-            '@typescript-eslint/no-unsafe-assignment': 'off'
+            '@typescript-eslint/no-unsafe-assignment': 'off',
+            '@typescript-eslint/prefer-enum-initializers': 'off'
         }
     },
     {

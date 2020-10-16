@@ -649,7 +649,7 @@ export class ReturnStatement extends Statement {
         super();
         this.range = util.createRangeFromPositions(
             this.tokens.return.range.start,
-            (this.value && this.value.range.end) || this.tokens.return.range.end
+            this.value?.range.end || this.tokens.return.range.end
         );
     }
 
@@ -1146,13 +1146,14 @@ export class ClassStatement extends Statement {
     }
 
     public getName(parseMode: ParseMode) {
-        if (this.name && this.name.text) {
+        const name = this.name?.text;
+        if (name) {
             if (this.namespaceName) {
                 let namespaceName = this.namespaceName.getName(parseMode);
                 let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
-                return namespaceName + separator + this.name.text;
+                return namespaceName + separator + name;
             } else {
-                return this.name.text;
+                return name;
             }
         } else {
             //return undefined which will allow outside callers to know that this class doesn't have a name
