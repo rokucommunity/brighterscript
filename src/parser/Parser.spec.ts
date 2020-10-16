@@ -2,7 +2,8 @@ import { expect } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
 import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import { PrintStatement, AssignmentStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
+import type { AssignmentStatement } from './Statement';
+import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 

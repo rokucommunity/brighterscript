@@ -1,15 +1,18 @@
 /* eslint-disable no-bitwise */
-import { Token, Identifier, TokenKind, CompoundAssignmentOperators } from '../lexer';
+import type { Token, Identifier } from '../lexer';
+import { CompoundAssignmentOperators, TokenKind } from '../lexer';
 import { SourceNode } from 'source-map';
-import { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, CallExpression, VariableExpression, LiteralExpression } from './Expression';
+import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression } from './Expression';
+import { CallExpression, VariableExpression, LiteralExpression } from './Expression';
 import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
-import { TranspileState } from './TranspileState';
+import type { TranspileState } from './TranspileState';
 import { ParseMode, Parser } from './Parser';
-import { walk, WalkVisitor, WalkOptions, InternalWalkMode, createVisitor, WalkMode } from '../astUtils/visitors';
+import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
+import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement, isLiteralExpression } from '../astUtils/reflection';
 import { BrsInvalid, ValueKind, valueKindFromString, valueKindToString } from '../brsTypes/BrsType';
-import { TypedefProvider } from '../interfaces';
+import type { TypedefProvider } from '../interfaces';
 
 /**
  * A BrightScript statement
@@ -672,7 +675,7 @@ export class ReturnStatement extends Statement {
         super();
         this.range = util.createRangeFromPositions(
             this.tokens.return.range.start,
-            (this.value && this.value.range.end) || this.tokens.return.range.end
+            this.value?.range.end || this.tokens.return.range.end
         );
     }
 
@@ -1203,13 +1206,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     public getName(parseMode: ParseMode) {
-        if (this.name && this.name.text) {
+        const name = this.name?.text;
+        if (name) {
             if (this.namespaceName) {
                 let namespaceName = this.namespaceName.getName(parseMode);
                 let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
-                return namespaceName + separator + this.name.text;
+                return namespaceName + separator + name;
             } else {
-                return this.name.text;
+                return name;
             }
         } else {
             //return undefined which will allow outside callers to know that this class doesn't have a name
@@ -1217,7 +1221,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
     }
 
-    public memberMap = {} as { [lowerMemberName: string]: ClassMemberStatement };
+    public memberMap = {} as Record<string, ClassMemberStatement>;
     public methods = [] as ClassMethodStatement[];
     public fields = [] as ClassFieldStatement[];
 
@@ -1331,7 +1335,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 sub new()
                 end sub
             end class
-        `, { mode: ParseMode.BrighterScript }).statements[0] as ClassStatement).memberMap['new'] as ClassMethodStatement;
+        `, { mode: ParseMode.BrighterScript }).statements[0] as ClassStatement).memberMap.new as ClassMethodStatement;
         //TODO make locations point to 0,0 (might not matter?)
         return stmt;
     }
@@ -1387,8 +1391,8 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         //create empty `new` function if class is missing it (simplifies transpile logic)
         if (!this.getConstructorFunction()) {
-            this.memberMap['new'] = this.getEmptyNewFunction();
-            this.body = [this.memberMap['new'], ...this.body];
+            this.memberMap.new = this.getEmptyNewFunction();
+            this.body = [this.memberMap.new, ...this.body];
         }
 
         for (let statement of this.body) {

@@ -1,17 +1,20 @@
-import { CompletionItem, CompletionItemKind, Location, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Position, Range } from 'vscode-languageserver';
+import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
-import { DiagnosticMessages, DiagnosticInfo } from './DiagnosticMessages';
-import { CallableContainer, BsDiagnostic, FileReference, BscFile } from './interfaces';
-import { Program } from './Program';
+import type { DiagnosticInfo } from './DiagnosticMessages';
+import { DiagnosticMessages } from './DiagnosticMessages';
+import type { CallableContainer, BsDiagnostic, FileReference, BscFile } from './interfaces';
+import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import { NamespaceStatement, ParseMode, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
+import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
+import { ParseMode } from './parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
-import { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/BrsFile';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -239,7 +242,7 @@ export class Scope {
      * Builds a tree of namespace objects
      */
     public buildNamespaceLookup() {
-        let namespaceLookup = {} as { [namespaceName: string]: NamespaceContainer };
+        let namespaceLookup = {} as Record<string, NamespaceContainer>;
         this.enumerateFiles((file) => {
             for (let namespace of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
@@ -291,7 +294,7 @@ export class Scope {
     }
 
     private buildClassLookup() {
-        let lookup = {} as { [lowerName: string]: ClassStatement };
+        let lookup = {} as Record<string, ClassStatement>;
         this.enumerateFiles((file) => {
             for (let cls of file.parser.references.classStatements) {
                 lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
@@ -466,7 +469,7 @@ export class Scope {
      * @param file
      * @param callableContainersByLowerName
      */
-    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: { [lowerName: string]: CallableContainer[] }) {
+    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: Record<string, CallableContainer[]>) {
         //validate all function calls
         for (let expCall of file.functionCalls) {
             let callableContainersWithThisName = callableContainersByLowerName[expCall.name.toLowerCase()];
@@ -505,7 +508,7 @@ export class Scope {
      * @param file
      * @param callableContainerMap
      */
-    private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: { [lowerName: string]: CallableContainer[] }) {
+    private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: Record<string, CallableContainer[]>) {
         //loop through every function scope
         for (let scope of file.functionScopes) {
             //every var declaration in this scope
@@ -560,7 +563,7 @@ export class Scope {
      * @param file
      * @param callablesByLowerName
      */
-    private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: { [lowerName: string]: CallableContainer[] }) {
+    private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: Record<string, CallableContainer[]>) {
         //validate all expression calls
         for (let expCall of file.functionCalls) {
             const lowerName = expCall.name.toLowerCase();
@@ -599,7 +602,7 @@ export class Scope {
      * Create diagnostics for any duplicate function declarations
      * @param callablesByLowerName
      */
-    private diagnosticFindDuplicateFunctionDeclarations(callableContainersByLowerName: { [lowerName: string]: CallableContainer[] }) {
+    private diagnosticFindDuplicateFunctionDeclarations(callableContainersByLowerName: Record<string, CallableContainer[]>) {
         //for each list of callables with the same name
         for (let lowerName in callableContainersByLowerName) {
             let callableContainers = callableContainersByLowerName[lowerName];
@@ -788,9 +791,9 @@ interface NamespaceContainer {
     nameRange: Range;
     lastPartName: string;
     statements: Statement[];
-    classStatements: { [lowerClassName: string]: ClassStatement };
-    functionStatements: { [lowerFunctionName: string]: FunctionStatement };
-    namespaces: { [name: string]: NamespaceContainer };
+    classStatements: Record<string, ClassStatement>;
+    functionStatements: Record<string, FunctionStatement>;
+    namespaces: Record<string, NamespaceContainer>;
 }
 
 interface AugmentedNewExpression extends NewExpression {

@@ -1,13 +1,14 @@
-import { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement } from '../parser/Statement';
-import { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
-import { BrsString, ValueKind, BrsInvalid, BrsBoolean, RoString, RoArray, RoAssociativeArray, RoSGNode, FunctionParameterExpression } from '../brsTypes';
-import { BrsNumber } from '../brsTypes/BrsNumber';
-import { BrsFile } from '../files/BrsFile';
-import { XmlFile } from '../files/XmlFile';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement } from '../parser/Statement';
+import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
+import type { BrsString, BrsInvalid, BrsBoolean, RoString, RoArray, RoAssociativeArray, RoSGNode, FunctionParameterExpression } from '../brsTypes';
+import { ValueKind } from '../brsTypes';
+import type { BrsNumber } from '../brsTypes/BrsNumber';
+import type { BrsFile } from '../files/BrsFile';
+import type { XmlFile } from '../files/XmlFile';
 import { InternalWalkMode } from './visitors';
-import { FunctionType } from '../types/FunctionType';
-import { BscFile, File } from '../interfaces';
-import { StringType } from '../types/StringType';
+import type { FunctionType } from '../types/FunctionType';
+import type { BscFile, File } from '../interfaces';
+import type { StringType } from '../types/StringType';
 
 // File reflection
 

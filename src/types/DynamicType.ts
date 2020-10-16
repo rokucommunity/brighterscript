@@ -1,4 +1,4 @@
-import { BrsType } from './BrsType';
+import type { BrsType } from './BrsType';
 
 export class DynamicType implements BrsType {
     public isAssignableTo(targetType: BrsType) {

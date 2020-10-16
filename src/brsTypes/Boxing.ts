@@ -1,5 +1,5 @@
-import { BrsComponent } from './components/BrsComponent';
-import { BrsValue } from '.';
+import type { BrsComponent } from './components/BrsComponent';
+import type { BrsValue } from '.';
 
 export interface Boxable {
     box(): BrsComponent;

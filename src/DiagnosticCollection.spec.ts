@@ -1,8 +1,8 @@
-import { BsDiagnostic } from '.';
+import type { BsDiagnostic } from '.';
 import { DiagnosticCollection } from './DiagnosticCollection';
-import { Workspace } from './LanguageServer';
-import { ProgramBuilder } from './ProgramBuilder';
-import { File } from './interfaces';
+import type { Workspace } from './LanguageServer';
+import type { ProgramBuilder } from './ProgramBuilder';
+import type { File } from './interfaces';
 import util from './util';
 import { expect } from 'chai';
 
@@ -22,7 +22,7 @@ describe('DiagnosticCollection', () => {
         }] as Workspace[];
     });
 
-    async function testPatch(expected: { [filePath: string]: string[] }) {
+    async function testPatch(expected: Record<string, string[]>) {
         const patch = await collection.getPatch(workspaces);
         //convert the patch into our test structure
         const actual = {};

@@ -15,13 +15,8 @@
         "**/bower_components": true,
         "**/dist": true
     },
-    "mocha.logVerbose": true,
-    "mocha.files.glob": "src/**/*.ts",
-    "mocha.requires": [
-        "ts-node/register"
-    ],
-    "mocha.env": {
-        "TS_NODE_TYPE_CHECK": false
-    },
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "typescript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
     "files.trimTrailingWhitespace": true
 }

@@ -5,13 +5,14 @@ import { CompletionItemKind, Position, Range, DiagnosticSeverity, Location } fro
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
-import { XmlFile } from './files/XmlFile';
-import { BsDiagnostic } from './interfaces';
+import type { XmlFile } from './files/XmlFile';
+import type { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { EmptyStatement, FunctionStatement } from './parser/Statement';
+import type { FunctionStatement } from './parser/Statement';
+import { EmptyStatement } from './parser/Statement';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;

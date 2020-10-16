@@ -2,28 +2,30 @@ import 'array-flat-polyfill';
 import * as glob from 'glob';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import {
+import type {
     CompletionItem,
     Connection,
-    createConnection,
-    DidChangeConfigurationNotification,
     DidChangeWatchedFilesParams,
-    FileChangeType,
     Hover,
     InitializeParams,
     Location,
-    ProposedFeatures,
     ServerCapabilities,
     TextDocumentPositionParams,
-    TextDocuments,
     Position,
-    TextDocumentSyncKind,
     ExecuteCommandParams
+} from 'vscode-languageserver';
+import {
+    createConnection,
+    DidChangeConfigurationNotification,
+    FileChangeType,
+    ProposedFeatures,
+    TextDocuments,
+    TextDocumentSyncKind
 } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 
-import { BsConfig } from './BsConfig';
+import type { BsConfig } from './BsConfig';
 import { Deferred } from './deferred';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
@@ -50,7 +52,7 @@ export class LanguageServer {
      * Basically these are single-file workspaces to at least get parsing for standalone files.
      * Also, they should only be created when the file is opened, and destroyed when the file is closed.
      */
-    public standaloneFileWorkspaces = {} as { [filePathAbsolute: string]: Workspace };
+    public standaloneFileWorkspaces = {} as Record<string, Workspace>;
 
     private hasConfigurationCapability = false;
 

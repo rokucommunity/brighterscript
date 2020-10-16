@@ -1,9 +1,9 @@
-import { Location, Position } from 'vscode-languageserver';
+import type { Location, Position } from 'vscode-languageserver';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { XmlFile } from './files/XmlFile';
-import { BscFile, FileReference } from './interfaces';
-import { Program } from './Program';
+import type { XmlFile } from './files/XmlFile';
+import type { BscFile, FileReference } from './interfaces';
+import type { Program } from './Program';
 import util from './util';
 import { isXmlFile } from './astUtils/reflection';
 
@@ -53,7 +53,7 @@ export class XmlScope extends Scope {
         if (this.xmlFile.parentComponent) {
             //build a lookup of pkg paths -> FileReference so we can more easily look up collisions
             let parentScriptImports = this.xmlFile.getAncestorScriptTagImports();
-            let lookup = {} as { [pkgPath: string]: FileReference };
+            let lookup = {} as Record<string, FileReference>;
             for (let parentScriptImport of parentScriptImports) {
                 //keep the first occurance of a pkgPath. Parent imports are first in the array
                 if (!lookup[parentScriptImport.pkgPath]) {

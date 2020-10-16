@@ -1,6 +1,8 @@
-import { BrsValue, ValueKind, BrsBoolean, BrsInvalid } from '../BrsType';
-import { BrsType } from '..';
-import { BrsComponent, BrsIterable } from './BrsComponent';
+import type { BrsValue } from '../BrsType';
+import { ValueKind, BrsBoolean, BrsInvalid } from '../BrsType';
+import type { BrsType } from '..';
+import type { BrsIterable } from './BrsComponent';
+import { BrsComponent } from './BrsComponent';
 import { Callable, StdlibArgument } from '../Callable';
 declare type Interpreter = any;
 import { Int32 } from '../Int32';

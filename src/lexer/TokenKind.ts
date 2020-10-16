@@ -223,7 +223,7 @@ export const ReservedWords = new Set([
  *
  * Unfortunately there's no canonical source for this!
  */
-export const Keywords: { [key: string]: TokenKind } = {
+export const Keywords: Record<string, TokenKind> = {
     as: TokenKind.As,
     and: TokenKind.And,
     dim: TokenKind.Dim,

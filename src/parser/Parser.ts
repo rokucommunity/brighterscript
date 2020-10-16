@@ -1,8 +1,10 @@
-import {
-    TokenKind,
+import type {
     Token,
     Identifier,
-    BlockTerminator,
+    BlockTerminator
+} from '../lexer';
+import {
+    TokenKind,
     AllowedLocalIdentifiers,
     AssignmentOperators,
     DisallowedLocalIdentifiersText,
@@ -12,23 +14,26 @@ import {
     isToken
 } from '../lexer';
 
+import type { Argument } from '../brsTypes';
 import {
     BrsInvalid,
     BrsBoolean,
     BrsString,
     Int32,
     ValueKind,
-    Argument,
     StdlibArgument,
     FunctionParameterExpression,
     valueKindFromString
 } from '../brsTypes';
-import {
+import type {
     Statement,
-    FunctionStatement,
-    CommentStatement,
     PrintSeparatorTab,
     PrintSeparatorSpace,
+    ElseIf
+} from './Statement';
+import {
+    FunctionStatement,
+    CommentStatement,
     AssignmentStatement,
     WhileStatement,
     ExitWhileStatement,
@@ -38,7 +43,6 @@ import {
     LibraryStatement,
     Block,
     IfStatement,
-    ElseIf,
     DottedSetStatement,
     IndexedSetStatement,
     ExpressionStatement,
@@ -56,8 +60,10 @@ import {
     ClassMethodStatement,
     ClassStatement
 } from './Statement';
-import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
+import type { DiagnosticInfo } from '../DiagnosticMessages';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 import { util } from '../util';
+import type { Expression } from './Expression';
 import {
     AALiteralExpression,
     AAMemberExpression,
@@ -66,7 +72,6 @@ import {
     CallExpression,
     CallfuncExpression,
     DottedGetExpression,
-    Expression,
     FunctionExpression,
     GroupingExpression,
     IndexedGetExpression,
@@ -82,7 +87,7 @@ import {
     TaggedTemplateStringExpression,
     SourceLiteralExpression
 } from './Expression';
-import { Diagnostic, Range } from 'vscode-languageserver';
+import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
 import { isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';

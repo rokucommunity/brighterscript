@@ -1,16 +1,15 @@
-import { Range, Diagnostic } from 'vscode-languageserver';
-
-import { Scope } from './Scope';
-import { BrsFile } from './files/BrsFile';
-import { XmlFile } from './files/XmlFile';
-import { FunctionScope } from './FunctionScope';
-import { BrsType } from './types/BrsType';
-import { FunctionType } from './types/FunctionType';
-import { ParseMode } from './parser/Parser';
-import { Program, SourceObj, TranspileObj } from './Program';
-import { ProgramBuilder } from './ProgramBuilder';
-import { SourceNode } from 'source-map';
-import { TranspileState } from './parser/TranspileState';
+import type { Range, Diagnostic } from 'vscode-languageserver';
+import type { Scope } from './Scope';
+import type { BrsFile } from './files/BrsFile';
+import type { XmlFile } from './files/XmlFile';
+import type { FunctionScope } from './FunctionScope';
+import type { BrsType } from './types/BrsType';
+import type { FunctionType } from './types/FunctionType';
+import type { ParseMode } from './parser/Parser';
+import type { Program, SourceObj, TranspileObj } from './Program';
+import type { ProgramBuilder } from './ProgramBuilder';
+import type { TranspileState } from './parser/TranspileState';
+import type { SourceNode } from 'source-map';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
@@ -156,9 +155,7 @@ export interface CallableContainer {
     scope: Scope;
 }
 
-export interface CallableContainerMap {
-    [name: string]: CallableContainer[];
-}
+export type CallableContainerMap = Record<string, CallableContainer[]>;
 
 export interface CommentFlag {
     file: BrsFile;

@@ -1,5 +1,5 @@
 import { BrsFile } from './files/BrsFile';
-import { Callable } from './interfaces';
+import type { Callable } from './interfaces';
 import { ArrayType } from './types/ArrayType';
 import { BooleanType } from './types/BooleanType';
 import { DynamicType } from './types/DynamicType';
