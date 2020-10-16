@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.16.8] - 2020-10-15
+### Fixed
+ - bug when printing diagnostics that would crash if the contents were missing (like for in-memory-only files injected by plugins) ([#217](https://github.com/rokucommunity/brighterscript/pull/217))
+ - Drop expensive AST walking for collecting property names and instead collect them as part of parsing
+
+
+
 ## [0.16.7] - 2020-10-13
 ### Fixed
  - bug when finding `bsconfig.json` that would use the wrong cwd in multi-workspace language server situations.
@@ -620,3 +627,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.16.5]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.4...v0.16.5
 [0.16.6]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.5...v0.16.6
 [0.16.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.6...v0.16.7
+[0.16.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.7...v0.16.8
