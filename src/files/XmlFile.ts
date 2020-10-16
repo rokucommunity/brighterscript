@@ -114,7 +114,7 @@ export class XmlFile {
      */
     public getAllDependencies() {
         return this.cache.getOrAdd(`allScriptImports`, () => {
-            let value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey])
+            let value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
 
             return value;
         });
