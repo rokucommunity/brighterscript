@@ -49,8 +49,10 @@ export class BrsFile {
         if (this.extension.endsWith('.bs')) {
             this.needsTranspiled = true;
         }
-        this.isTypedefFile = this.extension === '.d.bs';
-        this.typedefPath = util.getTypedefPath(this.pathAbsolute);
+        this.isTypedef = this.extension === '.d.bs';
+        if (!this.isTypedef) {
+            this.typedefKey = util.getTypedefPath(this.pathAbsolute);
+        }
     }
 
     /**
@@ -136,12 +138,13 @@ export class BrsFile {
     /**
      * If this is a typedef file
      */
-    public isTypedefFile: boolean;
+    public isTypedef: boolean;
 
     /**
-     * Path to the corresponding typedef file for this file (if applicable)
+     * The key to find the typedef file in the program's files map.
+     * A falsey value means this file is ineligable for a typedef
      */
-    public typedefPath?: string;
+    public typedefKey?: string;
 
     /**
      * If the file was given type definitions during parse
@@ -154,9 +157,9 @@ export class BrsFile {
      * A reference to the typedef file (if one exists)
      */
     public get typedefFile() {
-        if (this.typedefPath) {
+        if (this.typedefKey) {
             return this.cache.getOrAdd('typedefFile', () => {
-                const file = this.program.getFileByPathAbsolute<BrsFile>(this.typedefPath);
+                const file = this.program.getFileByPathAbsolute<BrsFile>(this.typedefKey);
                 return file;
             });
         }

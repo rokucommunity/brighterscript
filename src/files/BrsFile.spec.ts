@@ -14,10 +14,10 @@ import { SourceMapConsumer } from 'source-map';
 import { TokenKind, Lexer, Keywords } from '../lexer';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
-import { standardizePath as s } from '../util';
+import { loadPlugins, standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { loadPlugins } from '..';
 import { trim } from '../testHelpers.spec';
+import { XmlFile } from './XmlFile';
 
 let sinon = sinonImport.createSandbox();
 
@@ -2099,8 +2099,27 @@ describe('BrsFile', () => {
         });
     });
 
+    describe('typedefKey', () => {
+        it('works for .brs files', async () => {
+            expect(
+                s((await program.addOrReplaceFile<BrsFile>('source/main.brs', '')).typedefKey)
+            ).to.equal(
+                s`${rootDir.toLowerCase()}/source/main.d.bs`
+            );
+        });
+        it('returns undefined for files that should not have a typedef', async () => {
+            expect((await program.addOrReplaceFile<BrsFile>('source/main.bs', '')).typedefKey).to.be.undefined;
+
+            expect((await program.addOrReplaceFile<BrsFile>('source/main.d.bs', '')).typedefKey).to.be.undefined;
+
+            const xmlFile = await program.addOrReplaceFile<BrsFile>('components/comp.xml', '');
+            expect(xmlFile.typedefKey).to.be.undefined;
+        });
+    });
+
+
     describe('type definitions', () => {
-        it.only('only exposes defined functions even if source has more', async () => {
+        it('only exposes defined functions even if source has more', async () => {
             await program.addOrReplaceFile('source/main.d.bs', `
                 sub main()
                 end sub
@@ -2113,7 +2132,8 @@ describe('BrsFile', () => {
                 end sub
             `);
             expect(file.parser.references.functionStatements).to.be.empty;
-            const functionNames = program.getScopeByName('source').getAllCallables().map(x => x.callable.name);
+            const sourceScope = program.getScopeByName('source');
+            const functionNames = sourceScope.getAllCallables().map(x => x.callable.name);
             expect(functionNames).to.include('main');
             expect(functionNames).not.to.include('speak');
         });
@@ -2121,11 +2141,11 @@ describe('BrsFile', () => {
 
     describe('typedef', () => {
         it('sets typedef path properly', async () => {
-            expect((await program.addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefPath).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
-            expect((await program.addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefPath).to.equal(undefined);
-            expect((await program.addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefPath).to.equal(undefined);
+            expect((await program.addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefKey).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
+            expect((await program.addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefKey).to.equal(undefined);
+            expect((await program.addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefKey).to.equal(undefined);
             //works for dest with `.brs` extension
-            expect((await program.addOrReplaceFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefPath).to.equal(undefined);
+            expect((await program.addOrReplaceFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefKey).to.equal(undefined);
         });
 
         it('does not link when missing from program', async () => {
