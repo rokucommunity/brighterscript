@@ -91,7 +91,7 @@ export class Util {
      * @param configFilePath
      */
     public async getConfigFilePath(cwd?: string) {
-        cwd = cwd ? cwd : process.cwd();
+        cwd = cwd ?? process.cwd();
         let configPath = path.join(cwd, 'bsconfig.json');
         //find the nearest config file path
         for (let i = 0; i < 100; i++) {
@@ -258,7 +258,7 @@ export class Util {
 
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = await this.getConfigFilePath();
+            result.project = await this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
             result.project = config.project;
@@ -490,52 +490,6 @@ export class Util {
                 break;
             }
         }
-    }
-
-    /**
-     * Find all properties in an object that match the predicate.
-     * @param seenMap - used to prevent circular dependency infinite loops
-     */
-    public findAllDeep<T>(obj: any, predicate: (value: any) => boolean | undefined, parentKey?: string, ancestors?: any[], seenMap?: Map<any, boolean>) {
-        seenMap = seenMap ?? new Map<any, boolean>();
-        let result = [] as Array<{ key: string; value: T; ancestors: any[] }>;
-
-        //skip this object if we've already seen it
-        if (seenMap.has(obj)) {
-            return result;
-        }
-
-        //base case. If this object maches, keep it as a result
-        if (predicate(obj) === true) {
-            result.push({
-                key: parentKey,
-                ancestors: ancestors,
-                value: obj
-            });
-        }
-
-        seenMap.set(obj, true);
-
-        //look through all children
-        if (obj instanceof Object) {
-            for (let key in obj) {
-                let value = obj[key];
-                let fullKey = parentKey ? parentKey + '.' + key : key;
-                if (typeof value === 'object') {
-                    result = [...result, ...this.findAllDeep<T>(
-                        value,
-                        predicate,
-                        fullKey,
-                        [
-                            ...(ancestors ?? []),
-                            obj
-                        ],
-                        seenMap
-                    )];
-                }
-            }
-        }
-        return result;
     }
 
     /**

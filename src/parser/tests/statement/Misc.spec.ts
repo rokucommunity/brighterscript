@@ -278,4 +278,46 @@ describe('parser', () => {
         expect((statements[0] as any).func.body.statements[0].value.elements[0].keyToken.text).to.equal('"has-second-layer"');
         expect((statements[0] as any).func.body.statements[0].value.elements[0].key.value).to.equal('has-second-layer');
     });
+
+    it('extracts property names for completion', () => {
+        const { tokens } = Lexer.scan(`
+            function main(arg as string)
+                aa1 = {
+                    "sprop1": 0,
+                    prop1: 1
+                    prop2: {
+                        prop3: 2
+                    }
+                }
+                aa2 = {
+                    prop4: {
+                        prop5: 5,
+                        "sprop2": 0,
+                        prop6: 6
+                    },
+                    prop7: 7
+                }
+                calling({
+                    prop8: 8,
+                    prop9: 9
+                })
+                aa1.field1 = 1
+                aa1.field2.field3 = 2
+                calling(aa2.field4, 3 + aa2.field5.field6)
+            end function
+        `);
+
+        const expected = [
+            'field1', 'field2', 'field3', 'field4', 'field5', 'field6',
+            'prop1', 'prop2', 'prop3', 'prop4', 'prop5', 'prop6', 'prop7', 'prop8', 'prop9'
+        ];
+
+        const parser = Parser.parse(tokens);
+        const { propertyHints: initialHints } = parser.references;
+        expect(Object.keys(initialHints).sort()).to.deep.equal(expected, 'Initial hints');
+
+        parser.invalidateReferences();
+        const { propertyHints: refreshedHints } = parser.references;
+        expect(Object.keys(refreshedHints).sort()).to.deep.equal(expected, 'Refreshed hints');
+    });
 });

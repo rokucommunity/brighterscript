@@ -6,7 +6,7 @@ import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import { Deferred } from '../deferred';
-import { Lexer, Token, TokenKind, Identifier, AllowedLocalIdentifiers, Keywords } from '../lexer';
+import { Lexer, Token, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
 import { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import { AssignmentStatement, ClassStatement, LibraryStatement, ImportStatement } from '../parser/Statement';
@@ -20,7 +20,7 @@ import { TranspileState } from '../parser/TranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isAALiteralExpression, isAssignmentStatement, isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isFunctionType, isIfStatement, isImportStatement, isLibraryStatement, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
+import { isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
 import { DependencyGraph } from '../DependencyGraph';
 import * as extname from 'path-complete-extname';
 import { Cache } from '../Cache';
@@ -378,57 +378,24 @@ export class BrsFile {
         }
     }
 
-    public findPropertyNameCompletions() {
-        //Find every identifier in the whole file
-        let identifiers = util.findAllDeep<Identifier>(this.ast.statements, (x) => {
-            return x && x.kind === TokenKind.Identifier;
-        });
-
-        this._propertyNameCompletions = [];
-        let names = {};
-        for (let identifier of identifiers) {
-            let ancestors = this.getAncestors(identifier.key);
-            let parent = ancestors[ancestors.length - 1];
-
-            let isObjectProperty = !!ancestors.find(x => (isDottedGetExpression(x)) || (isAALiteralExpression(x)));
-
-            //filter out certain text items
-            if (
-                //don't filter out any object properties
-                isObjectProperty === false && (
-                    //top-level functions (they are handled elsewhere)
-                    isFunctionStatement(parent) ||
-                    //local variables created or used by assignments
-                    isAssignmentStatement(ancestors.find(x => x)) ||
-                    //local variables used in conditional statements
-                    isIfStatement(ancestors.find(x => x)) ||
-                    //the 'as' keyword (and parameter types) when used in a type statement
-                    ancestors.find(x => isFunctionParameterExpression(x))
-                )
-            ) {
-                continue;
-            }
-
-            let name = identifier.value.text;
-
-            //filter duplicate names
-            if (names[name]) {
-                continue;
-            }
-
-            names[name] = true;
-            this._propertyNameCompletions.push({
-                label: name,
+    public findPropertyNameCompletions(): CompletionItem[] {
+        //Build completion items from all the "properties" found in the file
+        const { propertyHints } = this.parser.references;
+        const results = [] as CompletionItem[];
+        for (const key of Object.keys(propertyHints)) {
+            results.push({
+                label: propertyHints[key],
                 kind: CompletionItemKind.Text
             });
         }
+        return results;
     }
 
     private _propertyNameCompletions: CompletionItem[];
 
     public get propertyNameCompletions(): CompletionItem[] {
         if (!this._propertyNameCompletions) {
-            this.findPropertyNameCompletions();
+            this._propertyNameCompletions = this.findPropertyNameCompletions();
         }
         return this._propertyNameCompletions;
     }
@@ -567,25 +534,6 @@ export class BrsFile {
                 });
             }
         }
-    }
-
-    /**
-     * Get all ancenstors of an object with the given key
-     * @param statements
-     * @param key
-     */
-    private getAncestors(key: string) {
-        let parts = key.split('.');
-        //throw out the last part (because that's the "child")
-        parts.pop();
-
-        let current = this.ast.statements;
-        let ancestors = [];
-        for (let part of parts) {
-            current = current[part];
-            ancestors.push(current);
-        }
-        return ancestors;
     }
 
     private getBRSTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BrsType {

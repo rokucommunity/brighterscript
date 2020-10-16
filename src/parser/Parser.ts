@@ -8,7 +8,8 @@ import {
     DisallowedLocalIdentifiersText,
     AllowedProperties,
     Lexer,
-    BrighterScriptSourceLiterals
+    BrighterScriptSourceLiterals,
+    isToken
 } from '../lexer';
 
 import {
@@ -50,7 +51,10 @@ import {
     StopStatement,
     NamespaceStatement,
     Body,
-    ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement
+    ImportStatement,
+    ClassFieldStatement,
+    ClassMethodStatement,
+    ClassStatement
 } from './Statement';
 import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
 import { util } from '../util';
@@ -80,7 +84,7 @@ import {
 } from './Expression';
 import { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isCallExpression, isCallfuncExpression, isClassMethodStatement, isDottedGetExpression, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 
 export class Parser {
@@ -112,27 +116,34 @@ export class Parser {
     public get references() {
         //build the references object if it's missing.
         if (!this._references) {
-            this._references = this.findReferences();
+            this.findReferences();
         }
         return this._references;
     }
 
-    private _references: References = {
-        assignmentStatements: [],
-        classStatements: [],
-        functionStatements: [],
-        functionExpressions: [],
-        importStatements: [],
-        libraryStatements: [],
-        namespaceStatements: [],
-        newExpressions: []
-    };
+    private _references: References = createReferences();
 
     /**
      * Invalidates (clears) the references collection. This should be called anytime the AST has been manipulated.
      */
     invalidateReferences() {
         this._references = undefined;
+    }
+
+    private addPropertyHints(item: Token | AALiteralExpression) {
+        if (isToken(item)) {
+            const name = item.text;
+            this._references.propertyHints[name.toLowerCase()] = name;
+        } else {
+            for (const member of item.elements) {
+                if (!isCommentStatement(member)) {
+                    const name = member.keyToken.text;
+                    if (!name.startsWith('"')) {
+                        this._references.propertyHints[name.toLowerCase()] = name;
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -2003,6 +2014,7 @@ export class Parser {
                     name.kind = TokenKind.Identifier;
 
                     expr = new DottedGetExpression(expr, name as Identifier, dot);
+                    this.addPropertyHints(name);
                 }
             } else if (this.check(TokenKind.At)) {
                 let dot = this.advance();
@@ -2221,7 +2233,9 @@ export class Parser {
 
                 let closingBrace = this.previous();
 
-                return new AALiteralExpression(members, openingBrace, closingBrace);
+                const aaExpr = new AALiteralExpression(members, openingBrace, closingBrace);
+                this.addPropertyHints(aaExpr);
+                return aaExpr;
             case this.match(TokenKind.Pos, TokenKind.Tab):
                 let token = Object.assign(this.previous(), {
                     kind: TokenKind.Identifier
@@ -2377,48 +2391,47 @@ export class Parser {
      * This does that walk.
      */
     private findReferences() {
-        const references: References = {
-            assignmentStatements: [],
-            classStatements: [],
-            namespaceStatements: [],
-            functionStatements: [],
-            functionExpressions: [],
-            importStatements: [],
-            libraryStatements: [],
-            newExpressions: []
-        };
+        this._references = createReferences();
 
         this.ast.walk(createVisitor({
             AssignmentStatement: s => {
-                references.assignmentStatements.push(s);
+                this._references.assignmentStatements.push(s);
             },
             ClassStatement: s => {
-                references.classStatements.push(s);
+                this._references.classStatements.push(s);
             },
             NamespaceStatement: s => {
-                references.namespaceStatements.push(s);
+                this._references.namespaceStatements.push(s);
             },
             FunctionStatement: s => {
-                references.functionStatements.push(s);
+                this._references.functionStatements.push(s);
             },
             ImportStatement: s => {
-                references.importStatements.push(s);
+                this._references.importStatements.push(s);
             },
             LibraryStatement: s => {
-                references.libraryStatements.push(s);
+                this._references.libraryStatements.push(s);
             },
             FunctionExpression: (expression, parent) => {
                 if (!isClassMethodStatement(parent)) {
-                    references.functionExpressions.push(expression);
+                    this._references.functionExpressions.push(expression);
                 }
             },
             NewExpression: e => {
-                references.newExpressions.push(e);
+                this._references.newExpressions.push(e);
+            },
+            AALiteralExpression: e => {
+                this.addPropertyHints(e);
+            },
+            DottedGetExpression: e => {
+                this.addPropertyHints(e.name);
+            },
+            DottedSetStatement: e => {
+                this.addPropertyHints(e.name);
             }
         }), {
             walkMode: WalkMode.visitAllRecursive
         });
-        return references;
     }
 
     public dispose() {
@@ -2441,6 +2454,19 @@ export interface ParseOptions {
     logger?: Logger;
 }
 
+function createReferences(): References {
+    return {
+        assignmentStatements: [],
+        classStatements: [],
+        functionStatements: [],
+        functionExpressions: [],
+        importStatements: [],
+        libraryStatements: [],
+        namespaceStatements: [],
+        newExpressions: [],
+        propertyHints: {}
+    };
+}
 
 export interface References {
     assignmentStatements: AssignmentStatement[];
@@ -2451,4 +2477,5 @@ export interface References {
     importStatements: ImportStatement[];
     libraryStatements: LibraryStatement[];
     newExpressions: NewExpression[];
+    propertyHints: Record<string, string>;
 }
