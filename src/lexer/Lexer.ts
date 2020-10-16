@@ -1,10 +1,11 @@
 /* eslint-disable func-names */
 import { TokenKind, ReservedWords, Keywords } from './TokenKind';
-import { Token } from './Token';
+import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 
-import { BrsType, BrsString, Int32, Int64, Float, Double } from '../brsTypes/index';
-import { Range, Diagnostic } from 'vscode-languageserver';
+import type { BrsType } from '../brsTypes/index';
+import { BrsString, Int32, Int64, Float, Double } from '../brsTypes/index';
+import type { Range, Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
 

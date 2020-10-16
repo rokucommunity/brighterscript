@@ -7,7 +7,7 @@ export class DependencyGraph {
     /**
      * A dictionary of all unique nodes in the entire graph
      */
-    public nodes = {} as { [key: string]: Node };
+    public nodes = {} as Record<string, Node>;
 
     private onchangeEmitter = new EventEmitter();
 

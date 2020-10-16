@@ -1,11 +1,13 @@
 /* eslint-disable no-multi-spaces */
-import { CancellationToken, CancellationTokenSource, Position, Range } from 'vscode-languageserver';
+import type { CancellationToken } from 'vscode-languageserver';
+import { CancellationTokenSource, Position, Range } from 'vscode-languageserver';
 import { expect } from 'chai';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
 import { BrsFile } from '../files/BrsFile';
-import { Statement, PrintStatement, Block, ReturnStatement } from '../parser/Statement';
-import { Expression } from '../parser/Expression';
+import type { Statement } from '../parser/Statement';
+import { PrintStatement, Block, ReturnStatement } from '../parser/Statement';
+import type { Expression } from '../parser/Expression';
 import { TokenKind } from '../lexer';
 import { createVisitor, WalkMode, walkStatements } from './visitors';
 import { isPrintStatement } from './reflection';

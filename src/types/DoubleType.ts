@@ -1,4 +1,4 @@
-import { BrsType } from './BrsType';
+import type { BrsType } from './BrsType';
 import { DynamicType } from './DynamicType';
 import { FloatType } from './FloatType';
 import { IntegerType } from './IntegerType';

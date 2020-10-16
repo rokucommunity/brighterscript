@@ -1,10 +1,13 @@
-import { BrsValue, ValueKind, BrsString, BrsInvalid, BrsBoolean, Uninitialized, valueKindToString } from '../BrsType';
-import { BrsComponent, BrsIterable } from './BrsComponent';
-import { BrsType } from '..';
+import type { BrsValue } from '../BrsType';
+import { ValueKind, BrsString, BrsInvalid, BrsBoolean, Uninitialized, valueKindToString } from '../BrsType';
+import type { BrsIterable } from './BrsComponent';
+import { BrsComponent } from './BrsComponent';
+import type { BrsType } from '..';
 import { Callable, StdlibArgument } from '../Callable';
 declare type Interpreter = any;
 import { Int32 } from '../Int32';
-import { AAMember, RoAssociativeArray } from './RoAssociativeArray';
+import type { AAMember } from './RoAssociativeArray';
+import { RoAssociativeArray } from './RoAssociativeArray';
 import { RoArray } from './RoArray';
 import { Float } from '../Float';
 

@@ -1,5 +1,5 @@
-import { BrsType } from '.';
-import { Boxable } from './Boxing';
+import type { BrsType } from '.';
+import type { Boxable } from './Boxing';
 import { RoString } from './components/RoString';
 
 /** Set of values supported in BrightScript. */

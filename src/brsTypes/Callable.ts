@@ -1,11 +1,12 @@
 declare type Interpreter = any;
 import * as Brs from '.';
 declare let Scope: any;
-import { Identifier, Token } from '../lexer';
+import type { Identifier, Token } from '../lexer';
 import { SourceNode } from 'source-map';
 import { Range } from 'vscode-languageserver';
-import { TranspileState } from '../parser/TranspileState';
-import { walk, InternalWalkMode, WalkOptions, WalkVisitor } from '../astUtils';
+import type { TranspileState } from '../parser/TranspileState';
+import type { WalkOptions, WalkVisitor } from '../astUtils';
+import { walk, InternalWalkMode } from '../astUtils';
 import { Expression, LiteralExpression } from '../parser/Expression';
 
 /** An argument to a BrightScript `function` or `sub`. */
@@ -157,7 +158,7 @@ export enum MismatchReason {
     /** Too many arguments were provided to satisfy a signature. */
     TooManyArguments,
     /** An argument's type didn't match the signature's type. */
-    ArgumentTypeMismatch,
+    ArgumentTypeMismatch
 }
 
 /** A BrightScript function's signature, paired with a set of detected signature mismatches. */

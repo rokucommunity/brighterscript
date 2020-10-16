@@ -7,7 +7,7 @@ export class KeyedThrottler {
 
     }
 
-    private throttlers = {} as { [key: string]: Throttler };
+    private throttlers = {} as Record<string, Throttler>;
 
     /**
      * Run the job for the specified key

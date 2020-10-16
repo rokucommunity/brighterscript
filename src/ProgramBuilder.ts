@@ -1,9 +1,10 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import { BsConfig } from './BsConfig';
-import { BsDiagnostic, File, FileObj } from './interfaces';
-import { FileResolver, Program } from './Program';
+import type { BsConfig } from './BsConfig';
+import type { BsDiagnostic, File, FileObj } from './interfaces';
+import type { FileResolver } from './Program';
+import { Program } from './Program';
 import { standardizePath as s, util, loadPlugins } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
@@ -212,7 +213,7 @@ export class ProgramBuilder {
         let diagnostics = this.getDiagnostics();
 
         //group the diagnostics by file
-        let diagnosticsByFile = {} as { [pathAbsolute: string]: BsDiagnostic[] };
+        let diagnosticsByFile = {} as Record<string, BsDiagnostic[]>;
         for (let diagnostic of diagnostics) {
             if (!diagnosticsByFile[diagnostic.file.pathAbsolute]) {
                 diagnosticsByFile[diagnostic.file.pathAbsolute] = [];

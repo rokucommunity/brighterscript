@@ -1,11 +1,11 @@
-import { BsDiagnostic } from './interfaces';
+import type { BsDiagnostic } from './interfaces';
 import * as path from 'path';
 import * as minimatch from 'minimatch';
-import { BsConfig } from './BsConfig';
+import type { BsConfig } from './BsConfig';
 import { standardizePath as s } from './util';
 
 export class DiagnosticFilterer {
-    private byFile: { [filePath: string]: BsDiagnostic[] };
+    private byFile: Record<string, BsDiagnostic[]>;
     private filePaths: string[];
     private filters: Array<{ src?: string; codes?: number[] }>;
     private rootDir: string;

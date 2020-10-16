@@ -1,6 +1,6 @@
-import { BrsType } from '..';
-import { BrsInvalid } from '../BrsType';
-import { Callable } from '../Callable';
+import type { BrsType } from '..';
+import type { BrsInvalid } from '../BrsType';
+import type { Callable } from '../Callable';
 
 export class BrsComponent {
     private methods: Map<string, Callable> = new Map();

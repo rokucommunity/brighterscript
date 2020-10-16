@@ -4,7 +4,7 @@ import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
-import { XmlFile } from '../XmlFile';
+import type { XmlFile } from '../XmlFile';
 import { getTestTranspile } from '../BrsFile.spec';
 
 let sinon = sinonImport.createSandbox();

@@ -1,9 +1,10 @@
 import { BrsComponent } from './BrsComponent';
 import { RoArray } from './RoArray';
-import { BrsValue, ValueKind, BrsString, BrsBoolean, BrsInvalid, Comparable } from '../BrsType';
+import type { BrsValue, Comparable } from '../BrsType';
+import { ValueKind, BrsString, BrsBoolean, BrsInvalid } from '../BrsType';
 import { Callable, StdlibArgument } from '../Callable';
-import { BrsType } from '..';
-import { Unboxable } from '../Boxing';
+import type { BrsType } from '..';
+import type { Unboxable } from '../Boxing';
 import { Int32 } from '../Int32';
 import { Float } from '../Float';
 

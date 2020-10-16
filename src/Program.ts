@@ -1,13 +1,14 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import { CompletionItem, Location, Position, CompletionItemKind } from 'vscode-languageserver';
-import { BsConfig } from './BsConfig';
+import type { CompletionItem, Position } from 'vscode-languageserver';
+import { Location, CompletionItemKind } from 'vscode-languageserver';
+import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import { BsDiagnostic, File, FileReference, FileObj, BscFile } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -15,7 +16,8 @@ import { DependencyGraph } from './DependencyGraph';
 import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
 import { globalFile } from './globalCallables';
-import { parseManifest, ManifestValue } from './preprocessor/Manifest';
+import type { ManifestValue } from './preprocessor/Manifest';
+import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isXmlFile } from './astUtils/reflection';
@@ -111,9 +113,9 @@ export class Program {
     /**
      * A map of every file loaded into this program
      */
-    public files = {} as { [pathAbsolute: string]: BscFile };
+    public files = {} as Record<string, BscFile>;
 
-    private scopes = {} as { [name: string]: Scope };
+    private scopes = {} as Record<string, Scope>;
 
     protected addScope(scope: Scope) {
         this.scopes[scope.name] = scope;
@@ -123,7 +125,7 @@ export class Program {
     /**
      * A map of every component currently loaded into the program, indexed by the component name
      */
-    private components = {} as { [lowerComponentName: string]: { file: XmlFile; scope: XmlScope } };
+    private components = {} as Record<string, { file: XmlFile; scope: XmlScope }>;
 
     /**
      * Get the component with the specified name
@@ -533,7 +535,7 @@ export class Program {
      * Flag all duplicate component names
      */
     private detectDuplicateComponentNames() {
-        const componentsByName = Object.keys(this.files).reduce((map, filePath) => {
+        const componentsByName = Object.keys(this.files).reduce<Record<string, XmlFile[]>>((map, filePath) => {
             const file = this.files[filePath];
             //if this is an XmlFile, and it has a valid `componentName` property
             if (isXmlFile(file) && file.componentName) {
@@ -544,7 +546,7 @@ export class Program {
                 map[lowerName].push(file);
             }
             return map;
-        }, {} as { [lowerComponentName: string]: XmlFile[] });
+        }, {});
 
         for (let componentName in componentsByName) {
             const xmlFiles = componentsByName[componentName];
@@ -641,7 +643,7 @@ export class Program {
         let result = [] as CompletionItem[];
 
         //only keep completions common to every scope for this file
-        let keyCounts = {} as { [key: string]: number };
+        let keyCounts = {} as Record<string, number>;
         for (let completion of allCompletions) {
             let key = `${completion.label}-${completion.kind}`;
             keyCounts[key] = keyCounts[key] ? keyCounts[key] + 1 : 1;
@@ -691,7 +693,7 @@ export class Program {
         /**
          * hashtable to prevent duplicate results
          */
-        let resultPkgPaths = {} as { [lowerPkgPath: string]: boolean };
+        let resultPkgPaths = {} as Record<string, boolean>;
 
         //restrict to only .brs files
         for (let key in this.files) {

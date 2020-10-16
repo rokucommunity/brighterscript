@@ -1,5 +1,5 @@
-import { CompilerPlugin } from './interfaces';
-import { Logger } from './Logger';
+import type { CompilerPlugin } from './interfaces';
+import type { Logger } from './Logger';
 
 // inspiration: https://github.com/andywer/typed-emitter/blob/master/index.d.ts
 

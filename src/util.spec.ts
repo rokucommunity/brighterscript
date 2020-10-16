@@ -3,7 +3,7 @@ import * as path from 'path';
 import util, { standardizePath as s } from './util';
 import { Range } from 'vscode-languageserver';
 import { Lexer } from './lexer';
-import { BsConfig } from './BsConfig';
+import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 
 let tempDir = s`${process.cwd()}/.tmp`;

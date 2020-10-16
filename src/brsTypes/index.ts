@@ -1,19 +1,21 @@
-import {
-    ValueKind,
+import type {
     BrsInvalid,
     BrsBoolean,
     BrsString,
     Uninitialized,
     BrsValue
 } from './BrsType';
-import { RoArray } from './components/RoArray';
-import { RoAssociativeArray } from './components/RoAssociativeArray';
-import { Int32 } from './Int32';
-import { Int64 } from './Int64';
-import { Float } from './Float';
-import { Double } from './Double';
-import { Callable } from './Callable';
-import { BrsComponent } from './components/BrsComponent';
+import {
+    ValueKind
+} from './BrsType';
+import type { RoArray } from './components/RoArray';
+import type { RoAssociativeArray } from './components/RoAssociativeArray';
+import type { Int32 } from './Int32';
+import type { Int64 } from './Int64';
+import type { Float } from './Float';
+import type { Double } from './Double';
+import type { Callable } from './Callable';
+import type { BrsComponent } from './components/BrsComponent';
 import { RoString } from './components/RoString';
 
 export * from './BrsType';

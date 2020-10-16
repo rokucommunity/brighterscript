@@ -1,6 +1,6 @@
 import { isBrsFile } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
-import { BscFile, CompilerPlugin } from '../../interfaces';
+import type { BscFile, CompilerPlugin } from '../../interfaces';
 import { EmptyStatement } from '../../parser/Statement';
 
 // entry point

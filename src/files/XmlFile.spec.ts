@@ -1,10 +1,11 @@
 import { assert, expect } from 'chai';
 import * as path from 'path';
 import * as sinonImport from 'sinon';
-import { CompletionItem, CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
+import type { CompletionItem } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
 
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { BsDiagnostic, FileReference } from '../interfaces';
+import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
