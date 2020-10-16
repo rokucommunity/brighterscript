@@ -1123,21 +1123,21 @@ describe('Program', () => {
 
     describe('getFileByPkgPath', () => {
         it('finds file in source folder', async () => {
-            expect(program.getFileByPkgPath('source/main.brs')).not.to.exist;
-            expect(program.getFileByPkgPath('source/main2.brs')).not.to.exist;
+            expect(program.getFileByPkgPath(s`source/main.brs`)).not.to.exist;
+            expect(program.getFileByPkgPath(s`source/main2.brs`)).not.to.exist;
             await program.addOrReplaceFile({ src: `${rootDir}/source/main2.brs`, dest: 'source/main2.brs' }, '');
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
-            expect(program.getFileByPkgPath('source/main.brs')).to.exist;
-            expect(program.getFileByPkgPath('source/main2.brs')).to.exist;
+            expect(program.getFileByPkgPath(s`source/main.brs`)).to.exist;
+            expect(program.getFileByPkgPath(s`source/main2.brs`)).to.exist;
         });
     });
 
     describe('removeFiles', () => {
         it('removes files by absolute paths', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
-            expect(program.getFileByPkgPath('source/main.brs')).to.exist;
+            expect(program.getFileByPkgPath(s`source/main.brs`)).to.exist;
             program.removeFiles([`${rootDir}/source/main.brs`]);
-            expect(program.getFileByPkgPath('source/main.brs')).not.to.exist;
+            expect(program.getFileByPkgPath(s`source/main.brs`)).not.to.exist;
         });
     });
 
