@@ -425,7 +425,7 @@ export class Program {
     }
 
     /**
-     * Get a list of files for the given pkgPath array.
+     * Get a list of files for the given (platform-normalized) pkgPath array.
      * Missing files are just ignored.
      */
     public getFilesByPkgPaths<T extends BscFile[]>(pkgPaths: string[]) {
@@ -435,7 +435,7 @@ export class Program {
     }
 
     /**
-     * Get a file with the specified pkg path.
+     * Get a file with the specified (platform-normalized) pkg path.
      * If not found, return undefined
      */
     public getFileByPkgPath<T extends BscFile>(pkgPath: string) {
