@@ -649,6 +649,35 @@ describe('XmlFile', () => {
             expect(program.getScopesForFile(xmlFile)[0].getAllCallables().map(x => x.callable.name)).to.include('logInfo');
         });
 
+        it('does not include `d.bs` script during transpile', async () => {
+            await program.addOrReplaceFile('source/logger.d.bs', `
+                sub logInfo()
+                end sub
+            `);
+            await program.addOrReplaceFile('source/logger.brs', `
+                sub logInfo()
+                end sub
+            `);
+            await program.addOrReplaceFile('components/Component1.bs', `
+                import "pkg:/source/logger.brs"
+                sub logInfo()
+                end sub
+            `);
+            await testTranspile(`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script type="text/brighterscript" uri="Component1.bs" />
+                </component>
+            `, `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script type="text/brightscript" uri="Component1.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/logger.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/Component1.xml');
+        });
+
         it('does not load .brs information into scope if related d.bs is in scope', async () => {
             const xmlFile = await program.addOrReplaceFile<XmlFile>('components/Component1.xml', `
                 <?xml version="1.0" encoding="utf-8" ?>
