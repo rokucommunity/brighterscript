@@ -243,8 +243,8 @@ describe('import statements', () => {
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brightscript" uri="AuthManager.brs" />
-                <script type="text/brightscript" uri="pkg:/source/maestro/ioc/IOCMixin.brs" />
                 <script type="text/brightscript" uri="pkg:/source/BaseClass.brs" />
+                <script type="text/brightscript" uri="pkg:/source/maestro/ioc/IOCMixin.brs" />
                 <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
             </component>
         `, null, 'components/AuthenticationService.xml');
