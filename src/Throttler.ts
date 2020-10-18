@@ -63,7 +63,7 @@ export class Throttler {
     private async runInternal(job) {
         this.runningJobPromise = util.sleep(this.delay).then(() => {
             //run the job
-            job();
+            return job();
         }).catch((e) => {
             //log the error, but keep moving
             console.error(e);
