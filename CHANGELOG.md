@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.16.9] - 2020-10-18
+### Fixed
+ - reduce language server throttle for validation and parsing now that those have improved performance.
+ - massively improve validation performance by refactoring `getFileByPkgPath`
+ - micro-optimization of hot parser functions
+ - change codebase to use `import type` many places, which reduces the number of files imported at runtime
+
+
+
 ## [0.16.8] - 2020-10-15
 ### Fixed
  - bug when printing diagnostics that would crash if the contents were missing (like for in-memory-only files injected by plugins) ([#217](https://github.com/rokucommunity/brighterscript/pull/217))
@@ -628,3 +637,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.16.6]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.5...v0.16.6
 [0.16.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.6...v0.16.7
 [0.16.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.7...v0.16.8
+[0.16.9]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.8...v0.16.9
