@@ -3,6 +3,7 @@ const fsExtra = require('fs-extra');
 const syncRequest = require('sync-request');
 const path = require('path');
 const { spawnSync, execSync } = require('child_process');
+const yargs = require('yargs');
 
 class Runner {
     constructor(versions, targets, iterations) {
@@ -106,5 +107,36 @@ class Runner {
     }
 }
 
-const runner = new Runner(['0.16.4', '0.16.9'], ['lexer', 'parser', 'lex-parse-validate'], 1);
+
+let options = yargs
+    .usage('$0', 'bsc benchmark tool')
+    .help('help', 'View help information about this tool.')
+    .option('versions', {
+        type: 'array',
+        default: ['current', 'latest'],
+        description: 'The versions to benchmark. should be a semver value, or "local" for the current project.'
+    })
+    .option('targets', {
+        type: 'array',
+        choices: ['lexer', 'parser', 'lex-parse-validate'],
+        default: ['lexer', 'parser', 'lex-parse-validate'],
+        description: 'Which benchmark targets should be run',
+        defaultDescription: '["lexer", "parser", "lex-parse-validate"]'
+    })
+    .option('iterations', {
+        type: 'number',
+        description: 'The number of times the test should be run.',
+        default: 3
+    })
+    .strict()
+    .check(argv => {
+        const idx = argv.versions.indexOf('latest');
+        if (idx > -1) {
+            //look up the latest version of brighterscript
+            argv.versions[idx] = spawnSync(process.platform.startsWith('win') ? 'npm.cmd' : 'npm', ['show', 'brighterscript', 'version']).stdout.toString().trim()
+        }
+        return true;
+    })
+    .argv;
+const runner = new Runner(options.versions, options.targets, options.iterations);
 runner.run();
