@@ -15,8 +15,7 @@
         "publish-coverage": "nyc report --reporter=text-lcov | coveralls",
         "dep-graph": "madge --image graph.svg --extensions ts ./src/parser",
         "docs": "ts-node scripts/compile-doc-examples.ts",
-        "benchmark": "ts-node --transpile-only benchmarks/index.ts",
-        "benchmark:ci": "npm run benchmark --  --iteration-count=1 --max-percent-change=10"
+        "benchmark": "node ./benchmarks/index.js"
     },
     "mocha": {
         "spec": "src/**/*.spec.ts",
@@ -98,6 +97,7 @@
         "semver-extra": "^3.0.0",
         "sinon": "^9.0.2",
         "source-map-support": "^0.5.13",
+        "sync-request": "^6.1.0",
         "testdouble": "^3.5.2",
         "ts-node": "8.9.1",
         "typescript": "^3.9.2",
