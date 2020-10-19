@@ -12,7 +12,14 @@ import type {
     ServerCapabilities,
     TextDocumentPositionParams,
     Position,
-    ExecuteCommandParams
+    ExecuteCommandParams,
+    WorkspaceSymbolParams,
+    SymbolInformation,
+    DocumentSymbolParams,
+    ReferenceParams,
+    SignatureHelp,
+    SignatureHelpParams,
+    SignatureInformation
 } from 'vscode-languageserver';
 import {
     createConnection,
@@ -34,7 +41,8 @@ import { Logger } from './Logger';
 import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
 import { BrsFile } from './files/BrsFile';
-import { Lexer, Token } from './lexer';
+import type { Token } from './lexer';
+import { Lexer } from './lexer';
 import { DiagnosticCollection } from './DiagnosticCollection';
 
 export class LanguageServer {

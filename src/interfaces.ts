@@ -9,6 +9,7 @@ import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program, SourceObj, TranspileObj } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
+import type { FunctionStatement } from './parser';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;

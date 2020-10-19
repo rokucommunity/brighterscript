@@ -3,7 +3,7 @@ import * as fsExtra from 'fs-extra';
 import * as glob from 'glob';
 import * as path from 'path';
 import type { DidChangeWatchedFilesParams } from 'vscode-languageserver';
-import { FileChangeType, TextDocumentSyncKind, Range } from 'vscode-languageserver';
+import { FileChangeType, Range } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import type { Workspace } from './LanguageServer';
 import { LanguageServer } from './LanguageServer';
@@ -11,6 +11,7 @@ import type { ProgramBuilder } from './ProgramBuilder';
 import * as sinonImport from 'sinon';
 import { standardizePath as s, util } from './util';
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import type { Program } from '.';
 
 let sinon: sinonImport.SinonSandbox;
 beforeEach(() => {

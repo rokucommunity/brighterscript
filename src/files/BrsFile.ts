@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Range } from 'vscode-languageserver';
-import { CompletionItemKind, Position } from 'vscode-languageserver';
+import type { CompletionItem, Hover, Range, Position } from 'vscode-languageserver';
+import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { Scope } from '../Scope';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
@@ -12,7 +12,8 @@ import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
-import type { AssignmentStatement, ClassStatement, LibraryStatement, ImportStatement } from '../parser/Statement';
+import type { AssignmentStatement, LibraryStatement, ImportStatement, Statement } from '../parser/Statement';
+import { ClassStatement, FunctionStatement, NamespaceStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import type { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -24,6 +25,7 @@ import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
 import { isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
+import { createVisitor, WalkMode } from '..';
 
 /**
  * Holds all details about this file within the scope of the whole program
