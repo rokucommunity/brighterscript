@@ -1,8 +1,10 @@
 import * as Long from 'long';
 
-import { BrsType, BrsBoolean } from '.';
-import { BrsNumber, Numeric } from './BrsNumber';
-import { ValueKind, Comparable } from './BrsType';
+import type { BrsType } from '.';
+import { BrsBoolean } from '.';
+import type { BrsNumber, Numeric } from './BrsNumber';
+import type { Comparable } from './BrsType';
+import { ValueKind } from './BrsType';
 import { Float } from './Float';
 import { Double } from './Double';
 

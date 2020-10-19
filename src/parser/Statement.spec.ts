@@ -1,5 +1,6 @@
 import { expect } from 'chai';
-import { Body, ClassStatement, CommentStatement, EmptyStatement, NamespaceStatement } from './Statement';
+import type { NamespaceStatement } from './Statement';
+import { Body, ClassStatement, CommentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import { CancellationTokenSource, WalkMode } from '../astUtils';
 import { Range } from 'vscode-languageserver';

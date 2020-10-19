@@ -2,11 +2,12 @@ import { expect } from 'chai';
 import * as fsExtra from 'fs-extra';
 import * as glob from 'glob';
 import * as path from 'path';
-import { DidChangeWatchedFilesParams, FileChangeType, Range } from 'vscode-languageserver';
+import type { DidChangeWatchedFilesParams } from 'vscode-languageserver';
+import { FileChangeType, TextDocumentSyncKind, Range } from 'vscode-languageserver';
 import { Deferred } from './deferred';
-import { LanguageServer, Workspace } from './LanguageServer';
-import { ProgramBuilder } from './ProgramBuilder';
-import { Program } from './Program';
+import type { Workspace } from './LanguageServer';
+import { LanguageServer } from './LanguageServer';
+import type { ProgramBuilder } from './ProgramBuilder';
 import * as sinonImport from 'sinon';
 import { standardizePath as s, util } from './util';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -30,7 +31,7 @@ describe('LanguageServer', () => {
         name: string;
     }>;
 
-    let vfs = {} as { [filePath: string]: string };
+    let vfs = {} as Record<string, string>;
     let physicalFilePaths = [] as string[];
     let connection = {
         onInitialize: () => null,

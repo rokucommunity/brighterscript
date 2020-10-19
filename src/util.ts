@@ -1,17 +1,19 @@
 import * as fs from 'fs';
 import * as fsExtra from 'fs-extra';
-import { parse as parseJsonc, ParseError, printParseErrorCode } from 'jsonc-parser';
+import type { ParseError } from 'jsonc-parser';
+import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import { Position, Range } from 'vscode-languageserver';
+import type { Position, Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 
-import { BsConfig } from './BsConfig';
+import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { CallableContainer, ValueKind, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
+import { ValueKind } from './interfaces';
 import { BooleanType } from './types/BooleanType';
-import { BrsType } from './types/BrsType';
+import type { BrsType } from './types/BrsType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
@@ -24,10 +26,11 @@ import { StringType } from './types/StringType';
 import { UninitializedType } from './types/UninitializedType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import { DottedGetExpression, VariableExpression } from './parser/Expression';
+import type { DottedGetExpression, VariableExpression } from './parser/Expression';
 import { LogLevel } from './Logger';
-import { TokenKind, Token } from './lexer';
-import { CompilerPlugin } from '.';
+import type { Token } from './lexer';
+import { TokenKind } from './lexer';
+import type { CompilerPlugin } from '.';
 import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
 
 export class Util {
@@ -204,7 +207,7 @@ export class Util {
     public resolvePluginPaths(config: BsConfig, configFilePath: string) {
         if (config.plugins?.length > 0) {
             const relPath = path.dirname(configFilePath);
-            const exists: { [key: string]: boolean } = {};
+            const exists: Record<string, boolean> = {};
             config.plugins = config.plugins.map(p => {
                 return p?.startsWith('.') ? path.resolve(relPath, p) : p;
             }).filter(p => {
@@ -493,52 +496,6 @@ export class Util {
     }
 
     /**
-     * Find all properties in an object that match the predicate.
-     * @param seenMap - used to prevent circular dependency infinite loops
-     */
-    public findAllDeep<T>(obj: any, predicate: (value: any) => boolean | undefined, parentKey?: string, ancestors?: any[], seenMap?: Map<any, boolean>) {
-        seenMap = seenMap ?? new Map<any, boolean>();
-        let result = [] as Array<{ key: string; value: T; ancestors: any[] }>;
-
-        //skip this object if we've already seen it
-        if (seenMap.has(obj)) {
-            return result;
-        }
-
-        //base case. If this object maches, keep it as a result
-        if (predicate(obj) === true) {
-            result.push({
-                key: parentKey,
-                ancestors: ancestors,
-                value: obj
-            });
-        }
-
-        seenMap.set(obj, true);
-
-        //look through all children
-        if (obj instanceof Object) {
-            for (let key in obj) {
-                let value = obj[key];
-                let fullKey = parentKey ? parentKey + '.' + key : key;
-                if (typeof value === 'object') {
-                    result = [...result, ...this.findAllDeep<T>(
-                        value,
-                        predicate,
-                        fullKey,
-                        [
-                            ...(ancestors ?? []),
-                            obj
-                        ],
-                        seenMap
-                    )];
-                }
-            }
-        }
-        return result;
-    }
-
-    /**
      * Test if `position` is in `range`. If the position is at the edges, will return true.
      * Adapted from core vscode
      * @param range
@@ -573,7 +530,7 @@ export class Util {
         });
     }
 
-    public propertyCount(object: object) {
+    public propertyCount(object: Record<string, unknown>) {
         let count = 0;
         for (let key in object) {
             if (object.hasOwnProperty(key)) {
@@ -1047,7 +1004,7 @@ export function standardizePath(stringParts, ...expressions: any[]) {
 }
 
 export function loadPlugins(pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
-    return pathOrModules.reduce((acc, pathOrModule) => {
+    return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
         if (typeof pathOrModule === 'string') {
             try {
                 // eslint-disable-next-line
@@ -1066,7 +1023,7 @@ export function loadPlugins(pathOrModules: string[], onError?: (pathOrModule: st
             }
         }
         return acc;
-    }, [] as CompilerPlugin[]);
+    }, []);
 }
 
 export let util = new Util();

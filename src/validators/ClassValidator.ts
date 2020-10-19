@@ -1,20 +1,20 @@
-import { Scope } from '../Scope';
+import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { BsDiagnostic } from '..';
-import { CallExpression } from '../parser/Expression';
+import type { BsDiagnostic } from '..';
+import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import { ClassMethodStatement, ClassStatement } from '../parser/Statement';
+import type { ClassMethodStatement, ClassStatement } from '../parser/Statement';
 import { CancellationTokenSource, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement } from '../astUtils/reflection';
-import { BscFile } from '../interfaces';
+import type { BscFile } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils';
 
 export class BsClassValidator {
     private scope: Scope;
     public diagnostics: BsDiagnostic[];
-    private classes: { [lowerClassName: string]: AugmentedClassStatement };
+    private classes: Record<string, AugmentedClassStatement>;
 
     public validate(scope: Scope) {
         this.scope = scope;

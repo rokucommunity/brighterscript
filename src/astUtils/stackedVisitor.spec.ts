@@ -16,15 +16,21 @@ describe('createStackedVisitor', () => {
         id: 1,
         children: [
             { id: 2 },
-            { id: 3, children: [
-                { id: 4 }
-            ] },
+            {
+                id: 3, children: [
+                    { id: 4 }
+                ]
+            },
             { id: 5 },
-            { id: 6, children: [
-                { id: 7, children: [
-                    { id: 8 }
-                ] }
-            ] },
+            {
+                id: 6, children: [
+                    {
+                        id: 7, children: [
+                            { id: 8 }
+                        ]
+                    }
+                ]
+            },
             { id: 9 }
         ]
     };
@@ -54,7 +60,7 @@ describe('createStackedVisitor', () => {
     it('calls open/close when visiting the structure', () => {
         const actual: string[] = [];
         const stackedVisitor = createStackedVisitor(
-            () => {},
+            () => { },
             (pushed: StructSpec, stack: StructSpec[]) => {
                 assert(pushed !== undefined, 'pushed is undefined');
                 assert(pushed.id !== undefined, 'pushed.id is undefined');

@@ -2,7 +2,7 @@ import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 
-import { Callable, CallableArg, CommentFlag, BsDiagnostic, VariableDeclaration } from '../interfaces';
+import type { Callable, CallableArg, CommentFlag, BsDiagnostic, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
@@ -13,7 +13,7 @@ import { BrsFile } from './BrsFile';
 import { SourceMapConsumer } from 'source-map';
 import { TokenKind, Lexer, Keywords } from '../lexer';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { StandardizedFileEntry } from 'roku-deploy';
+import type { StandardizedFileEntry } from 'roku-deploy';
 import { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
 import { loadPlugins } from '..';
@@ -70,13 +70,13 @@ describe('BrsFile', () => {
         } as StandardizedFileEntry;
 
         it('creates proper tokens', async () => {
-            let file = (await program.addOrReplaceFile(entry, `call(ModuleA.ModuleB.ModuleC.`) as any);
-            expect(file.getPartialVariableName(file.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
-            expect(file.getPartialVariableName(file.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
-            expect(file.getPartialVariableName(file.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
-            expect(file.getPartialVariableName(file.parser.tokens[4])).to.equal('ModuleA.ModuleB');
-            expect(file.getPartialVariableName(file.parser.tokens[3])).to.equal('ModuleA.');
-            expect(file.getPartialVariableName(file.parser.tokens[2])).to.equal('ModuleA');
+            file = await program.addOrReplaceFile<BrsFile>(entry, `call(ModuleA.ModuleB.ModuleC.`);
+            expect(file['getPartialVariableName'](file.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
+            expect(file['getPartialVariableName'](file.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
+            expect(file['getPartialVariableName'](file.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
+            expect(file['getPartialVariableName'](file.parser.tokens[4])).to.equal('ModuleA.ModuleB');
+            expect(file['getPartialVariableName'](file.parser.tokens[3])).to.equal('ModuleA.');
+            expect(file['getPartialVariableName'](file.parser.tokens[2])).to.equal('ModuleA');
         });
     });
 

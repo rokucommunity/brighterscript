@@ -3,10 +3,11 @@ import { RoArray } from './RoArray';
 import { Timespan } from './Timespan';
 import { createNodeByType } from './RoSGNode';
 import { RoRegex } from './RoRegex';
-import { BrsString } from '../BrsType';
+import type { BrsString } from '../BrsType';
 import { RoString } from './RoString';
 
 /** Map containing a list of brightscript components that can be created. */
+// eslint-disable-next-line @typescript-eslint/ban-types
 export const BrsObjects = new Map<string, Function>([
     ['roassociativearray', () => new RoAssociativeArray([])],
     ['roarray', () => new RoArray([])],

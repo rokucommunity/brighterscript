@@ -1,6 +1,8 @@
-import { BrsType, BrsBoolean } from '.';
-import { ValueKind, Comparable } from './BrsType';
-import { BrsNumber, Numeric } from './BrsNumber';
+import type { BrsType } from '.';
+import { BrsBoolean } from '.';
+import type { Comparable } from './BrsType';
+import { ValueKind } from './BrsType';
+import type { BrsNumber, Numeric } from './BrsNumber';
 import { Int32 } from './Int32';
 import { Int64 } from './Int64';
 import { Float } from './Float';

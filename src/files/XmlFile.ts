@@ -1,16 +1,17 @@
 import * as path from 'path';
-import { CodeWithSourceMap, SourceNode } from 'source-map';
-import { CompletionItem, Hover, Location, Position, Range, SignatureInformation } from 'vscode-languageserver';
+import type { CodeWithSourceMap } from 'source-map';
+import { SourceNode } from 'source-map';
+import type { CompletionItem, Hover, Position, Range } from 'vscode-languageserver';
 import { Deferred } from '../deferred';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { FunctionScope } from '../FunctionScope';
-import { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
-import { Program } from '../Program';
+import type { FunctionScope } from '../FunctionScope';
+import type { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
+import type { Program } from '../Program';
 import util from '../util';
 import { Parser } from '../parser/Parser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
-import { DependencyGraph } from '../DependencyGraph';
+import type { DependencyGraph } from '../DependencyGraph';
 
 export interface SGAstScript {
     $?: {
@@ -326,7 +327,7 @@ export class XmlFile {
             }
 
             //make a lookup of every uri range
-            let uriRanges = {} as { [uri: string]: Range[] };
+            let uriRanges = {} as Record<string, Range[]>;
             for (let lineIndex = 0; lineIndex < this.lines.length; lineIndex++) {
                 let line = this.lines[lineIndex];
                 //reset the regexes

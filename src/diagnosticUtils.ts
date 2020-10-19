@@ -1,7 +1,8 @@
+import type { Chalk } from 'chalk';
 import chalk from 'chalk';
-import { BsConfig } from './BsConfig';
+import type { BsConfig } from './BsConfig';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import { BsDiagnostic } from '.';
+import type { BsDiagnostic } from '.';
 
 /**
  * Prepare print diagnostic formatting options
@@ -13,11 +14,11 @@ export function getPrintDiagnosticOptions(options: BsConfig) {
 
     let diagnosticLevel = options?.diagnosticLevel || 'warn';
 
-    let diagnosticSeverityMap = {};
-    diagnosticSeverityMap['info'] = DiagnosticSeverity.Information;
-    diagnosticSeverityMap['hint'] = DiagnosticSeverity.Hint;
-    diagnosticSeverityMap['warn'] = DiagnosticSeverity.Warning;
-    diagnosticSeverityMap['error'] = DiagnosticSeverity.Error;
+    let diagnosticSeverityMap = {} as Record<string, DiagnosticSeverity>;
+    diagnosticSeverityMap.info = DiagnosticSeverity.Information;
+    diagnosticSeverityMap.hint = DiagnosticSeverity.Hint;
+    diagnosticSeverityMap.warn = DiagnosticSeverity.Warning;
+    diagnosticSeverityMap.error = DiagnosticSeverity.Error;
 
     let severityLevel = diagnosticSeverityMap[diagnosticLevel] || DiagnosticSeverity.Warning;
     let order = [DiagnosticSeverity.Information, DiagnosticSeverity.Hint, DiagnosticSeverity.Warning, DiagnosticSeverity.Error];
@@ -26,7 +27,7 @@ export function getPrintDiagnosticOptions(options: BsConfig) {
         return acc;
     }, {});
 
-    let typeColor = {} as any;
+    let typeColor = {} as Record<string, Chalk>;
     typeColor[DiagnosticSeverity.Information] = chalk.blue;
     typeColor[DiagnosticSeverity.Hint] = chalk.green;
     typeColor[DiagnosticSeverity.Warning] = chalk.yellow;

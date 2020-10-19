@@ -12,3 +12,4 @@ graph.svg
 .history
 *.tgz
 benchmarks/*.json
+benchmarks/*.brs

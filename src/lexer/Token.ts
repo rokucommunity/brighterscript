@@ -1,6 +1,6 @@
-import { TokenKind } from './TokenKind';
-import { BrsType } from '../brsTypes';
-import { Range } from 'vscode-languageserver';
+import type { TokenKind } from './TokenKind';
+import type { BrsType } from '../brsTypes';
+import type { Range } from 'vscode-languageserver';
 
 /**
  * Represents a chunk of BrightScript scanned by the lexer.
