@@ -544,7 +544,7 @@ export class XmlFile {
         return null;
     }
 
-    public getSignatureHelp(position: Position): Promise<SignatureInformation> { //eslint-disable-line
+    public getSignatureHelp(callable: Callable): Promise<SignatureInformation> { //eslint-disable-line
         //TODO implement
         return null;
     }

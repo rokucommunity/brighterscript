@@ -39,6 +39,7 @@ import { Logger } from './Logger';
 import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
 import { BrsFile } from './files/BrsFile';
+import { Lexer, Token } from './lexer';
 import { DiagnosticCollection } from './DiagnosticCollection';
 
 export class LanguageServer {
@@ -763,7 +764,7 @@ export class LanguageServer {
                 workspaces.map((workspace) => this.handleFileChanges(workspace, changes))
             );
 
-            //valdiate all workspaces
+            //validate all workspaces
             await this.validateAllThrottled();
         }
         this.connection.sendNotification('build-status', 'success');
@@ -985,10 +986,23 @@ export class LanguageServer {
             return;
         }
 
+        const { tokens } = Lexer.scan(info.line);
+        const character = info.position.character;
+        let matchingToken: Token;
+        for (const token of tokens) {
+            if (character >= token.range.start.character && character <= token.range.end.character) {
+                matchingToken = token;
+                break;
+            }
+        }
+        if (!matchingToken) {
+            return;
+        }
+
         let promises = [] as Promise<SignatureInformation>[];
         for (const workspace of this.getWorkspaces()) {
             const pathAbsolute = util.uriToPath(params.textDocument.uri);
-            const promise = workspace.builder.program.getSignatureHelp(pathAbsolute, info.position);
+            const promise = workspace.builder.program.getSignatureHelp(pathAbsolute, matchingToken.text);
             promises.push(promise);
         }
         const signatures = await Promise.all(promises);
@@ -1060,7 +1074,8 @@ export class LanguageServer {
         if (index > 0) {
             return {
                 commaCount: commaCount,
-                position: util.createPosition(position.line, index)
+                position: util.createPosition(position.line, index),
+                line: line
             };
         }
     }

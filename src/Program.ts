@@ -700,14 +700,25 @@ export class Program {
         return file.getHover(position);
     }
 
-    public getSignatureHelp(pathAbsolute: string, position: Position) {
+    public async getSignatureHelp(callSitePathAbsolute: string, callableName: string) {
         //find the file
-        let file = this.getFile(pathAbsolute);
+        let file = this.getFile(callSitePathAbsolute);
         if (!file) {
             return null;
         }
 
-        return file.getSignatureHelp(position);
+        const scopes = this.getScopesForFile(file);
+        for (const scope of scopes) {
+            const callable = scope.getCallableByName(callableName);
+            if (!callable) {
+                continue;
+            }
+
+            const signatureInformation = await callable.file.getSignatureHelp(callable);
+            if (signatureInformation) {
+                return signatureInformation;
+            }
+        }
     }
 
     public getReferences(pathAbsolute: string, position: Position) {

@@ -21,7 +21,6 @@ import { TranspileState } from '../parser/TranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { XmlFile } from './XmlFile';
 import { isAALiteralExpression, isAssignmentStatement, isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isFunctionType, isIfStatement, isImportStatement, isLibraryStatement, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
 import { WalkMode } from '../astUtils';
 import { createVisitor } from '../astUtils/visitors';
@@ -1160,70 +1159,57 @@ export class BrsFile {
         }
     }
 
-    public async getSignatureHelp(position: Position) {
+    public async getSignatureHelp(callable: Callable) {
         await this.isReady();
 
-        const callSiteToken = this.getTokenAt(position);
-        const scopes = this.program.getScopesForFile(this);
-        for (const scope of scopes) {
-            const callable = scope.getCallableByName(callSiteToken.text);
-            if (!callable) {
-                continue;
+        const statement = callable.functionStatement;
+        const func = statement.func;
+        const funcStartPosition = func.range.start;
+
+        // Get function comments in reverse order
+        let currentToken = this.getTokenAt(funcStartPosition);
+        let functionComments = [] as string[];
+        while (true) {
+            currentToken = this.getPreviousToken(currentToken);
+            if (!currentToken) {
+                break;
             }
-
-            const funcFile = callable.file;
-            if (funcFile instanceof XmlFile) {
-                continue;
-            }
-            const statement = callable.functionStatement;
-            const func = statement.func;
-            const funcStartPosition = func.range.start;
-
-            // Get function comments in reverse order
-            let currentToken = funcFile.getTokenAt(funcStartPosition);
-            let functionComments = [] as string[];
-            while (true) {
-                currentToken = funcFile.getPreviousToken(currentToken);
-                if (!currentToken) {
-                    break;
-                }
-                if (currentToken.range.start.line + 1 < funcStartPosition.line) {
-                    if (functionComments.length === 0) {
-                        break;
-                    }
-                }
-
-                const kind = currentToken.kind;
-                if (kind === TokenKind.Comment) {
-                    // Strip off common leading characters to make it easier to read
-                    const commentText = currentToken.text.replace(/^[' *\/]+/, '');
-                    functionComments.unshift(commentText);
-                } else if (kind === TokenKind.Newline) {
-                    if (functionComments.length === 0) {
-                        continue;
-                    }
-                    // if we already had a new line as the last token then exit out
-                    if (functionComments[0] === currentToken.text) {
-                        break;
-                    }
-                    functionComments.unshift(currentToken.text);
-                } else {
+            if (currentToken.range.start.line + 1 < funcStartPosition.line) {
+                if (functionComments.length === 0) {
                     break;
                 }
             }
-            const documentation = functionComments.join('').trim();
 
-            const lines = util.splitStringIntoLines(funcFile.fileContents);
-
-            const params = [] as ParameterInformation[];
-            for (const param of func.parameters) {
-                params.push(ParameterInformation.create(param.name.text));
+            const kind = currentToken.kind;
+            if (kind === TokenKind.Comment) {
+                // Strip off common leading characters to make it easier to read
+                const commentText = currentToken.text.replace(/^[' *\/]+/, '');
+                functionComments.unshift(commentText);
+            } else if (kind === TokenKind.Newline) {
+                if (functionComments.length === 0) {
+                    continue;
+                }
+                // if we already had a new line as the last token then exit out
+                if (functionComments[0] === currentToken.text) {
+                    break;
+                }
+                functionComments.unshift(currentToken.text);
+            } else {
+                break;
             }
-
-            const label = util.getTextForRange(lines, util.createRangeFromPositions(func.functionType.range.start, func.body.range.start)).trim();
-            const signature = SignatureInformation.create(label, documentation, ...params);
-            return signature;
         }
+        const documentation = functionComments.join('').trim();
+
+        const lines = util.splitStringIntoLines(this.fileContents);
+
+        const params = [] as ParameterInformation[];
+        for (const param of func.parameters) {
+            params.push(ParameterInformation.create(param.name.text));
+        }
+
+        const label = util.getTextForRange(lines, util.createRangeFromPositions(func.functionType.range.start, func.body.range.start)).trim();
+        const signature = SignatureInformation.create(label, documentation, ...params);
+        return signature;
     }
 
     public async getReferences(position: Position) {
