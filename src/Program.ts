@@ -350,7 +350,10 @@ export class Program {
                 });
                 file = brsFile;
 
-                this.dependencyGraph.addOrReplace(brsFile.dependencyGraphKey, brsFile.ownScriptImports.map(x => x.pkgPath.toLowerCase()));
+                this.dependencyGraph.addOrReplace(
+                    brsFile.dependencyGraphKey,
+                    brsFile.ownScriptImports.filter(x => !!x.pkgPath).map(x => x.pkgPath.toLowerCase())
+                );
 
                 this.plugins.emit('afterFileValidate', brsFile);
             } else if (
