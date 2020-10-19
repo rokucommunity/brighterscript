@@ -5,6 +5,22 @@
     "version": "0.1.0",
     "configurations": [
         {
+            "name": "Launch Program",
+            "program": "${workspaceFolder}/benchmarks/index.js",
+            "request": "launch",
+            "args": [
+                "--versions",
+                "current",
+                "--targets",
+                "lex-parse-validate",
+                "--noprepare"
+            ],
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "type": "pwa-node"
+        },
+        {
             "name": "Debug Tests (Current file)",
             "type": "node",
             "request": "launch",

@@ -1,19 +1,18 @@
 const fs = require('fs');
 const path = require('path');
 
-module.exports = (suite, name, brighterscript) => {
-    const filePath = path.join(__dirname, '..', 'Requests.brs');
+module.exports = (suite, name, brighterscript, projectPath) => {
     const ProgramBuilder = brighterscript.ProgramBuilder;
 
-    suite.add(name, function (deferred) {
-        var builder = new ProgramBuilder();
+    suite.add(name, (deferred) => {
+        const builder = new ProgramBuilder();
         builder.run({
-            files: [{
-                src: filePath,
-                dest: 'source/main.brs'
-            }],
+            cwd: projectPath,
+            rootDir: projectPath,
             createPackage: false,
             copyToStaging: false,
+            //ignore all diagnostics
+            diagnosticFilters: ['**/*'],
             logLevel: 'error'
         }).then(() => {
             deferred.resolve();
@@ -21,4 +20,4 @@ module.exports = (suite, name, brighterscript) => {
     }, {
         'defer': true
     });
-}
+};

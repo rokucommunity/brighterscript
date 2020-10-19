@@ -4,42 +4,73 @@ const syncRequest = require('sync-request');
 const path = require('path');
 const { spawnSync, execSync } = require('child_process');
 const yargs = require('yargs');
+const readline = require('readline');
 
 class Runner {
-    constructor(versions, targets, iterations) {
-        this.versions = versions;
-        this.targets = targets;
-        this.iterations = iterations;
+    constructor(options) {
+        this.versions = options.versions;
+        this.targets = options.targets;
+        this.iterations = options.iterations;
+        this.noprepare = options.noprepare;
+        this.project = options.project;
     }
-    async run() {
-        // this.downloadBrsFile();
-        // this.prepare();
+    run() {
+        this.downloadFiles();
+        if (!this.noprepare) {
+            this.prepare();
+        }
         this.runBenchmarks();
     }
 
     /**
-     * Download the `Requests.brs` file from rokucommunity, it has some decent variety
+     * Download the necessary files
      */
-    downloadBrsFile() {
-        const brsFilePath = path.join(__dirname, 'Requests.brs');
-        //download the latest copy of roku-requests
-        if (!fsExtra.pathExistsSync(brsFilePath)) {
-            console.log('benchmark: Downloading Requests.brs');
-            const response = syncRequest('GET', 'https://raw.githubusercontent.com/rokucommunity/roku-requests/master/src/source/Requests.brs')
-            fsExtra.writeFileSync(brsFilePath, response.getBody());
-            console.log('benchmark: Downloading Requests.brs complete');
-        } else {
-            console.log('benchmark: Downloading Requests.brs skipped: already downloaded');
+    downloadFiles() {
+        const tempDir = path.join(__dirname, '.tmp');
+        //ensure the `.tmp` folder exists
+        fsExtra.ensureDirSync(tempDir);
+
+        //use the given project, or use the default
+        this.project = this.project ?? 'https://github.com/chtaylo2/Roku-GooglePhotos';
+
+        if (this.project.startsWith('https://')) {
+            const projectName = this.project.split('/').pop();
+            const projectDir = path.join(tempDir, projectName);
+
+            //if no project was specified, download the default.
+            if (!fsExtra.pathExistsSync(projectDir)) {
+                console.log(`benchmark: Downloading project for validation benchmarking: ${this.project}`);
+                spawnSync(
+                    process.platform.startsWith('win') ? 'npx.cmd' : 'npx',
+                    ['degit', this.project, projectName],
+                    {
+                        stdio: 'inherit',
+                        cwd: tempDir
+                    }
+                );
+            }
+            //store the file system path for the project
+            this.project = projectDir;
         }
     }
 
+    buildCurrentTarball() {
+        const bscDir = path.resolve(__dirname, '..');
+        console.log('benchmark: build current brighterscript');
+        this.npmSync(['run', 'build'], {
+            cwd: bscDir
+        });
+        console.log('benchmark: pack current brighterscript');
+        const filename = this.npmSync(['pack'], { cwd: bscDir, stdio: 'pipe' }).stdout.toString().trim();
+        return path.resolve(bscDir, filename);
+    }
 
     /**
      * Clean out the node_modules folder for this folder, and load it up with the information needed for the versions in question
      */
     prepare() {
         console.log('benchmark: Clearing previous benchmark results');
-        fsExtra.outputFileSync(path.join(__dirname, 'results.json'), '[]');
+        fsExtra.outputFileSync(path.join(__dirname, 'results.json'), '{}');
 
         console.log('benchmark: Clearing any existing node_modules folder');
         const nodeModulesDir = path.join(__dirname, 'node_modules');
@@ -48,8 +79,16 @@ class Runner {
         fsExtra.emptyDirSync(nodeModulesDir);
 
         const dependencies = {};
-        for (var i = 0; i < this.versions.length; i++) {
-            dependencies[`brighterscript${i + 1}`] = `npm:brighterscript@${this.versions[i]}`;
+        for (let i = 0; i < this.versions.length; i++) {
+            const version = this.versions[i];
+            const name = `brighterscript${i + 1}`;
+
+            //if the version is "current", then make a local copy of the package from the dist folder to install (because npm link makes things slower)
+            if (version === 'current') {
+                dependencies[name] = this.buildCurrentTarball();
+            } else {
+                dependencies[name] = `npm:brighterscript@${version}`;
+            }
         }
         console.log('benchmark: Writing package.json');
         //write a package.json for this project
@@ -58,12 +97,17 @@ class Runner {
         }, null, 4));
         console.log('benchmark: npm install');
         //install packages
-        spawnSync(
+        this.npmSync(['install']);
+    }
+
+    npmSync(args, options = {}) {
+        return spawnSync(
             process.platform.startsWith('win') ? 'npm.cmd' : 'npm',
-            ['install'],
+            args,
             {
                 stdio: 'inherit',
-                cwd: __dirname
+                cwd: __dirname,
+                ...options
             }
         );
     }
@@ -72,25 +116,26 @@ class Runner {
         //run one target at a time
         for (let target of this.targets) {
             //run each of the versions within this target
-            for (var versionIndex = 0; versionIndex < this.versions.length; versionIndex++) {
+            for (let versionIndex = 0; versionIndex < this.versions.length; versionIndex++) {
                 const version = this.versions[versionIndex];
                 //run the same test several times and take an average
-                for (var iteration = 0; iteration < this.iterations; iteration++) {
-                    process.stdout.clearLine();
-                    process.stdout.cursorTo(0);
+                for (let iteration = 0; iteration < this.iterations; iteration++) {
+                    readline.clearLine(process.stdout);
+                    readline.cursorTo(process.stdout, 0);
                     process.stdout.write(`Benchmarking ${target}@${version} (${iteration + 1} of ${this.iterations})`);
 
-                    execSync(`node target-runner.js "${version}" "${target}" brighterscript${versionIndex + 1}`, {
+                    execSync(`node target-runner.js "${version}" "${target}" "brighterscript${versionIndex + 1}" "${this.project}"`, {
                         cwd: path.join(__dirname),
                         stdio: 'inherit'
                     });
                 }
-                process.stdout.clearLine();
-                process.stdout.cursorTo(0);
+                readline.clearLine(process.stdout);
+                readline.cursorTo(process.stdout, 0);
+
                 process.stdout.write(`Benchmarking ${target}@${version} (done)`);
             }
-            process.stdout.clearLine();
-            process.stdout.cursorTo(0);
+            readline.clearLine(process.stdout);
+            readline.cursorTo(process.stdout, 0);
             //log the final results to the console
             this.logTargetResults(target);
             process.stdout.write('\n');
@@ -101,12 +146,15 @@ class Runner {
         const results = fsExtra.readJsonSync(path.join(__dirname, 'results.json'));
         for (let version of this.versions) {
             const versionResults = results[target][version];
-            const average = versionResults.reduce((a, b) => { return a + b; }, 0) / versionResults.length;
+            const average = versionResults.reduce((a, b) => {
+                return a + b;
+            }, 0) / versionResults.length;
             console.log(`${target}@${version} x ${average.toFixed(3).toLocaleString('en')} ops/sec`);
         }
     }
 }
 
+let targets = fsExtra.readdirSync(path.join(__dirname, 'targets')).map(x => x.replace('.js', ''));
 
 let options = yargs
     .usage('$0', 'bsc benchmark tool')
@@ -118,25 +166,34 @@ let options = yargs
     })
     .option('targets', {
         type: 'array',
-        choices: ['lexer', 'parser', 'lex-parse-validate'],
-        default: ['lexer', 'parser', 'lex-parse-validate'],
+        choices: targets,
+        default: targets,
         description: 'Which benchmark targets should be run',
-        defaultDescription: '["lexer", "parser", "lex-parse-validate"]'
+        defaultDescription: JSON.stringify(targets)
     })
     .option('iterations', {
         type: 'number',
         description: 'The number of times the test should be run.',
         default: 3
     })
+    .option('noprepare', {
+        type: 'boolean',
+        description: 'Skip running npm install. Use this to speed up subsequent runs of the same test',
+        default: false
+    })
+    .option('project', {
+        type: 'string',
+        description: 'File path to a project that should be used for complex benchmarking (like validation). If omitted, the tool will download and use https://github.com/chtaylo2/Roku-GooglePhotos'
+    })
     .strict()
     .check(argv => {
         const idx = argv.versions.indexOf('latest');
         if (idx > -1) {
             //look up the latest version of brighterscript
-            argv.versions[idx] = spawnSync(process.platform.startsWith('win') ? 'npm.cmd' : 'npm', ['show', 'brighterscript', 'version']).stdout.toString().trim()
+            argv.versions[idx] = spawnSync(process.platform.startsWith('win') ? 'npm.cmd' : 'npm', ['show', 'brighterscript', 'version']).stdout.toString().trim();
         }
         return true;
     })
     .argv;
-const runner = new Runner(options.versions, options.targets, options.iterations);
+const runner = new Runner(options);
 runner.run();
