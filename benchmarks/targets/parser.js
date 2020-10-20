@@ -1,22 +1,21 @@
-const fs = require('fs');
-const path = require('path');
-const { Parser } = require('xml2js');
-
 module.exports = async (suite, name, brighterscript, projectPath) => {
-    const { Parser, ProgramBuilder } = brighterscript;
+    const { ProgramBuilder, Parser } = brighterscript;
 
     const builder = new ProgramBuilder();
     //run the first run
     await builder.run({
-        rootDir: projectPath,
+        cwd: projectPath,
         createPackage: false,
         copyToStaging: false,
-        //ignore all diagnostics
+        //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
         logLevel: 'error'
     });
     //collect all the brighterscript files
     const brsFiles = Object.values(builder.program.files).filter(x => x.extension === '.brs' || x.extension === '.bs');
+    if (brsFiles.length === 0) {
+        throw new Error('No files found in program');
+    }
 
     suite.add(name, () => {
         for (let brsFile of brsFiles) {

@@ -1,18 +1,19 @@
-const fs = require('fs');
-const path = require('path');
-
 module.exports = async (suite, name, brighterscript, projectPath) => {
-    const ProgramBuilder = brighterscript.ProgramBuilder;
+    const { ProgramBuilder } = brighterscript;
+
     const builder = new ProgramBuilder();
     //run the first run so we we can focus the test on validate
     await builder.run({
-        rootDir: projectPath,
+        cwd: projectPath,
         createPackage: false,
         copyToStaging: false,
-        //ignore all diagnostics (they still get collected which is what we're concerned with)
+        //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
         logLevel: 'error'
     });
+    if (Object.keys(builder.program.files).length === 0) {
+        throw new Error('No files found in program');
+    }
 
     suite.add(name, async (deferred) => {
         const scopes = Object.values(builder.program.scopes);

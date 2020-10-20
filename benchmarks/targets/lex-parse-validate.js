@@ -1,21 +1,25 @@
-const fs = require('fs');
-const path = require('path');
-
 module.exports = (suite, name, brighterscript, projectPath) => {
-    const ProgramBuilder = brighterscript.ProgramBuilder;
+    const { ProgramBuilder } = brighterscript;
 
     suite.add(name, (deferred) => {
         const builder = new ProgramBuilder();
+
         builder.run({
             cwd: projectPath,
-            rootDir: projectPath,
             createPackage: false,
             copyToStaging: false,
-            //ignore all diagnostics
+            //disable diagnostic reporting (they still get collected)
             diagnosticFilters: ['**/*'],
             logLevel: 'error'
         }).then(() => {
-            deferred.resolve();
+            if (Object.keys(builder.program.files).length === 0) {
+                throw new Error('No files found in program');
+            } else {
+                deferred.resolve();
+            }
+        }).catch((error) => {
+            deferred.reject(error);
+            console.error(error);
         });
     }, {
         'defer': true

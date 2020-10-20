@@ -16,6 +16,10 @@ class Runner {
     }
     run() {
         this.downloadFiles();
+
+        console.log('benchmark: Clearing previous benchmark results');
+        fsExtra.outputFileSync(path.join(__dirname, 'results.json'), '{}');
+
         if (!this.noprepare) {
             this.prepare();
         }
@@ -69,9 +73,6 @@ class Runner {
      * Clean out the node_modules folder for this folder, and load it up with the information needed for the versions in question
      */
     prepare() {
-        console.log('benchmark: Clearing previous benchmark results');
-        fsExtra.outputFileSync(path.join(__dirname, 'results.json'), '{}');
-
         console.log('benchmark: Clearing any existing node_modules folder');
         const nodeModulesDir = path.join(__dirname, 'node_modules');
         fsExtra.ensureDirSync(nodeModulesDir);
@@ -84,7 +85,7 @@ class Runner {
             const name = `brighterscript${i + 1}`;
 
             //if the version is "current", then make a local copy of the package from the dist folder to install (because npm link makes things slower)
-            if (version === 'current') {
+            if (version === 'local') {
                 dependencies[name] = this.buildCurrentTarball();
             } else {
                 dependencies[name] = `npm:brighterscript@${version}`;
@@ -114,7 +115,7 @@ class Runner {
 
     runBenchmarks() {
         //run one target at a time
-        for (let target of this.targets) {
+        for (const target of this.targets) {
             //run each of the versions within this target
             for (let versionIndex = 0; versionIndex < this.versions.length; versionIndex++) {
                 const version = this.versions[versionIndex];
@@ -122,7 +123,8 @@ class Runner {
                 for (let iteration = 0; iteration < this.iterations; iteration++) {
                     readline.clearLine(process.stdout);
                     readline.cursorTo(process.stdout, 0);
-                    process.stdout.write(`Benchmarking ${target}@${version} (${iteration + 1} of ${this.iterations})`);
+                    const opsPerSecondText = iteration > 0 ? ` (${this.getLatestOpsPerSecond(target, version).toFixed(3).toLocaleString('en')} ops/sec)` : '';
+                    process.stdout.write(`Benchmarking ${target}@${version} (${iteration + 1} of ${this.iterations})${opsPerSecondText}`);
 
                     execSync(`node target-runner.js "${version}" "${target}" "brighterscript${versionIndex + 1}" "${this.project}"`, {
                         cwd: path.join(__dirname),
@@ -139,6 +141,20 @@ class Runner {
             //log the final results to the console
             this.logTargetResults(target);
             process.stdout.write('\n');
+        }
+    }
+
+    /**
+     * Walk through the result list, and find the most recent result added
+     */
+    getLatestOpsPerSecond(target, version) {
+        const results = fsExtra.readJsonSync(path.join(__dirname, 'results.json'));
+        const targetData = results[target];
+        if (targetData) {
+            const versionData = targetData[version];
+            if (versionData && versionData.length > 0) {
+                return versionData[versionData.length - 1];
+            }
         }
     }
 
@@ -161,7 +177,7 @@ let options = yargs
     .help('help', 'View help information about this tool.')
     .option('versions', {
         type: 'array',
-        default: ['current', 'latest'],
+        default: ['local', 'latest'],
         description: 'The versions to benchmark. should be a semver value, or "local" for the current project.'
     })
     .option('targets', {
