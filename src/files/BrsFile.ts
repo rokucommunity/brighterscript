@@ -1014,7 +1014,8 @@ export class BrsFile {
         const token = this.getTokenAt(position);
 
         let definitionTokenTypes = [
-            TokenKind.Identifier
+            TokenKind.Identifier,
+            TokenKind.StringLiteral
         ];
 
         //throw out invalid tokens and the wrong kind of tokens
@@ -1022,7 +1023,18 @@ export class BrsFile {
             return results;
         }
 
-        const lowerTokenText = token.text.toLowerCase();
+        let textToSearchFor = token.text.toLowerCase();
+
+        if (token.kind === TokenKind.StringLiteral) {
+            // We need to strip off the quotes but only if present
+            const startIndex = textToSearchFor.startsWith('"') ? 1 : 0;
+
+            let endIndex = textToSearchFor.length;
+            if (textToSearchFor.endsWith('"')) {
+                endIndex--;
+            }
+            textToSearchFor = textToSearchFor.substring(startIndex, endIndex);
+        }
 
         //look through local variables first, get the function scope for this position (if it exists)
         const functionScope = this.getFunctionScopeAtPosition(position);
@@ -1030,7 +1042,7 @@ export class BrsFile {
             //find any variable with this name
             for (const varDeclaration of functionScope.variableDeclarations) {
                 //we found a variable declaration with this token text!
-                if (varDeclaration.name.toLowerCase() === lowerTokenText) {
+                if (varDeclaration.name.toLowerCase() === textToSearchFor) {
                     const uri = util.pathToUri(this.pathAbsolute);
                     results.push(Location.create(uri, varDeclaration.nameRange));
                 }
@@ -1039,7 +1051,7 @@ export class BrsFile {
 
         //look through all callables in relevant scopes
         for (const scope of this.program.getScopesForFile(this)) {
-            let callable = scope.getCallableByName(lowerTokenText);
+            let callable = scope.getCallableByName(textToSearchFor);
             if (callable) {
                 const uri = util.pathToUri(callable.file.pathAbsolute);
                 results.push(Location.create(uri, callable.range));
