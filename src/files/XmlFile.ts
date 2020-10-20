@@ -197,7 +197,7 @@ export class XmlFile {
      */
     public propertyNameCompletions = [] as CompletionItem[];
 
-    private uriRangeRegex = /(.*?\s+uri\s*=\s*")(.*?)"/g;
+    private uriRangeRegex = /(.*?\s+uri\s*=\s*(?:'|"))(.*?)(?:'|")/g;
     private scriptTypeRegex = /type\s*=\s*"(.*?)"/gi;
 
     public async parse(fileContents: string) {
@@ -354,19 +354,6 @@ export class XmlFile {
                         )
                     );
 
-                    //if this is a brighterscript file, validate that the `type` attribute is correct
-                    let scriptType = this.scriptTypeRegex.exec(line);
-                    let lowerScriptType = scriptType?.[1]?.toLowerCase();
-                    let lowerUri = uri.toLowerCase();
-                    //brighterscript script type with brightscript file extension
-                    if (lowerUri.endsWith('.bs') && (!scriptType || lowerScriptType !== 'text/brighterscript')) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.brighterscriptScriptTagMissingTypeAttribute(),
-                            file: this,
-                            //just flag the whole line; we'll get better location tracking when we have a formal xml parser
-                            range: util.createRange(lineIndex, 0, lineIndex, line.length - 1)
-                        });
-                    }
                     lineIndexOffset += match[0].length;
                 }
             }

@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [Unreleased]
+### Fixed
+ - bug when using single quotes in an xml script tag
+### Changed
+ - removed bs1106 (.bs file script tags must use the `type="brighterscript"`) diagnostic because it's unnecessary.
+
+
+
 ## [0.16.10] - 2020-10-20
 ### Fixed
  - prevent crash when a callable has the same name as a javascript reserved name ([#226](https://github.com/rokucommunity/brighterscript/pull/226))

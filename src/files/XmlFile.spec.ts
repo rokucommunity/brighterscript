@@ -542,46 +542,6 @@ describe('XmlFile', () => {
         });
     });
 
-    it('catches brighterscript script tags missing the proper type', async () => {
-        await program.addOrReplaceFile({
-            src: `${rootDir}/components/SimpleScene.bs`,
-            dest: `components/SimpleScene.bs`
-        }, '');
-
-        //missing type
-        await program.addOrReplaceFile({
-            src: `${rootDir}/components/SimpleScene.xml`,
-            dest: `components/SimpleScene.xml`
-        }, `
-            <?xml version="1.0" encoding="utf-8" ?>
-            <component name="SimpleScene" extends="Scene">
-                <script uri="SimpleScene.bs"/>
-            </component>
-        `);
-
-        await program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.exist.and.to.equal(
-            DiagnosticMessages.brighterscriptScriptTagMissingTypeAttribute().message
-        );
-
-        //wrong type
-        await program.addOrReplaceFile({
-            src: `${rootDir}/components/SimpleScene.xml`,
-            dest: `components/SimpleScene.xml`
-        }, `
-            <?xml version="1.0" encoding="utf-8" ?>
-            <component name="SimpleScene" extends="Scene">
-                <script type="text/brightscript" uri="SimpleScene.bs"/>
-            </component>
-        `);
-
-        //wrong type
-        await program.validate();
-        expect(program.getDiagnostics()[0]?.message).to.exist.and.to.equal(
-            DiagnosticMessages.brighterscriptScriptTagMissingTypeAttribute().message
-        );
-    });
-
     describe('Transform plugins', () => {
         async function parseFileWithPlugins(validateXml: (file: XmlFile) => void) {
             const rootDir = process.cwd();
@@ -634,5 +594,15 @@ describe('XmlFile', () => {
             message: 'Test diagnostic',
             code: 9999
         }]);
+    });
+
+    it('finds script imports for single-quoted script tags', async () => {
+        const file = await program.addOrReplaceFile<XmlFile>('components/file.xml', `
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Cmp1" extends="Scene">
+                <script uri='SingleQuotedFile.brs' />
+            </component>
+        `);
+        expect(file.scriptTagImports[0]?.text).to.eql('SingleQuotedFile.brs');
     });
 });
