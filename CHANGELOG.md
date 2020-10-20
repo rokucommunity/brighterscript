@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.16.10] - 2020-10-20
+### Fixed
+ - prevent crash when a callable has the same name as a javascript reserved name ([#226](https://github.com/rokucommunity/brighterscript/pull/226))
+ - prevent crash when `import` statement is malformed ([#224](https://github.com/rokucommunity/brighterscript/pull/224))
+
+
+
 ## [0.16.9] - 2020-10-18
 ### Fixed
  - reduce language server throttle for validation and parsing now that those have improved performance.
@@ -638,3 +645,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.16.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.6...v0.16.7
 [0.16.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.7...v0.16.8
 [0.16.9]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.8...v0.16.9
+[0.16.10]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.9...v0.16.10
