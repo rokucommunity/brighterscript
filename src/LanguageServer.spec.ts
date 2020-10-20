@@ -11,7 +11,7 @@ import type { ProgramBuilder } from './ProgramBuilder';
 import * as sinonImport from 'sinon';
 import { standardizePath as s, util } from './util';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import type { Program } from '.';
+import type { Program } from './Program';
 
 let sinon: sinonImport.SinonSandbox;
 beforeEach(() => {

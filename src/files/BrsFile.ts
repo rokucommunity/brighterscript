@@ -25,7 +25,7 @@ import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
 import { isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
-import { createVisitor, WalkMode } from '..';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
 
 /**
  * Holds all details about this file within the scope of the whole program
