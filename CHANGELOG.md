@@ -645,4 +645,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.16.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.6...v0.16.7
 [0.16.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.7...v0.16.8
 [0.16.9]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.8...v0.16.9
-[0.16.10]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.9...v0.16.10
+[0.16.10]:  https://github.com/rokucommunity/brighterscript/compare/v0.16.9...v0.16.10
