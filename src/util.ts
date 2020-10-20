@@ -374,18 +374,20 @@ export class Util {
      * Given a list of callables as a dictionary indexed by their full name (namespace included, transpiled to underscore-separated.
      * @param callables
      */
-    public getCallableContainersByLowerName(callables: CallableContainer[]) {
+    public getCallableContainersByLowerName(callables: CallableContainer[]): CallableContainerMap {
         //find duplicate functions
-        let result = {} as CallableContainerMap;
+        const result = new Map<string, CallableContainer[]>();
 
         for (let callableContainer of callables) {
             let lowerName = callableContainer.callable.getName(ParseMode.BrightScript).toLowerCase();
 
             //create a new array for this name
-            if (result[lowerName] === undefined) {
-                result[lowerName] = [];
+            const list = result.get(lowerName);
+            if (list) {
+                list.push(callableContainer);
+            } else {
+                result.set(lowerName, [callableContainer]);
             }
-            result[lowerName].push(callableContainer);
         }
         return result;
     }

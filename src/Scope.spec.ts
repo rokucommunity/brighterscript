@@ -469,6 +469,21 @@ describe('Scope', () => {
             );
         });
 
+        it('handles JavaScript reserved names', async () => {
+            await program.addOrReplaceFile('source/file.brs', `
+                sub constructor()
+                end sub
+                sub toString()
+                end sub
+                sub valueOf()
+                end sub
+                sub getPrototypeOf()
+                end sub
+            `);
+            await program.validate();
+            expect(program.getDiagnostics().length).to.equal(1); //'constructor' is Brs reserved
+        });
+
         it('Emits validation events', async () => {
             const validateStartScope = sinon.spy();
             const validateEndScope = sinon.spy();

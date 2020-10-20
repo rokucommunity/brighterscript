@@ -154,7 +154,7 @@ export interface CallableContainer {
     scope: Scope;
 }
 
-export type CallableContainerMap = Record<string, CallableContainer[]>;
+export type CallableContainerMap = Map<string, CallableContainer[]>;
 
 export interface CommentFlag {
     file: BrsFile;
