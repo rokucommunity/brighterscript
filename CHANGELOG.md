@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.16.11]
+## [0.16.11] - 2020-10-20
 ### Fixed
  - bug when using single quotes in an xml script tag
 ### Changed
