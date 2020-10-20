@@ -3,7 +3,7 @@ import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
@@ -431,7 +431,7 @@ export class Scope {
      */
     private diagnosticDetectFunctionCollisions(file: BscFile) {
         for (let func of file.callables) {
-            if (globalCallableMap[func.getName(ParseMode.BrighterScript).toLowerCase()]) {
+            if (globalCallableMap.has(func.getName(ParseMode.BrighterScript).toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction(),
                     range: func.nameRange,
@@ -465,10 +465,10 @@ export class Scope {
      * @param file
      * @param callableContainersByLowerName
      */
-    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: Record<string, CallableContainer[]>) {
+    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
         //validate all function calls
         for (let expCall of file.functionCalls) {
-            let callableContainersWithThisName = callableContainersByLowerName[expCall.name.toLowerCase()];
+            let callableContainersWithThisName = callableContainersByLowerName.get(expCall.name.toLowerCase());
 
             //use the first item from callablesByLowerName, because if there are more, that's a separate error
             let knownCallableContainer = callableContainersWithThisName ? callableContainersWithThisName[0] : undefined;
@@ -504,7 +504,7 @@ export class Scope {
      * @param file
      * @param callableContainerMap
      */
-    private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: Record<string, CallableContainer[]>) {
+    private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: CallableContainerMap) {
         //loop through every function scope
         for (let scope of file.functionScopes) {
             //every var declaration in this scope
@@ -516,7 +516,7 @@ export class Scope {
                     //local var function with same name as stdlib function
                     if (
                         //has same name as stdlib
-                        globalCallableMap[lowerVarName]
+                        globalCallableMap.has(lowerVarName)
                     ) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
@@ -528,7 +528,7 @@ export class Scope {
                         //in the scope function list
                     } else if (
                         //has same name as scope function
-                        callableContainerMap[lowerVarName]
+                        callableContainerMap.has(lowerVarName)
                     ) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
@@ -540,9 +540,9 @@ export class Scope {
                     //var is not a function
                 } else if (
                     //is same name as a callable
-                    callableContainerMap[lowerVarName] &&
+                    callableContainerMap.has(lowerVarName) &&
                     //is NOT a callable from stdlib (because non-function local vars can have same name as stdlib names)
-                    !globalCallableMap[lowerVarName]
+                    !globalCallableMap.has(lowerVarName)
                 ) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.localVarShadowedByScopedFunction(),
@@ -559,7 +559,7 @@ export class Scope {
      * @param file
      * @param callablesByLowerName
      */
-    private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: Record<string, CallableContainer[]>) {
+    private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: CallableContainerMap) {
         //validate all expression calls
         for (let expCall of file.functionCalls) {
             const lowerName = expCall.name.toLowerCase();
@@ -574,7 +574,7 @@ export class Scope {
 
             //if we don't already have a variable with this name.
             if (!scope?.getVariableByName(lowerName)) {
-                let callablesWithThisName = callablesByLowerName[lowerName];
+                let callablesWithThisName = callablesByLowerName.get(lowerName);
 
                 //use the first item from callablesByLowerName, because if there are more, that's a separate error
                 let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
@@ -598,10 +598,9 @@ export class Scope {
      * Create diagnostics for any duplicate function declarations
      * @param callablesByLowerName
      */
-    private diagnosticFindDuplicateFunctionDeclarations(callableContainersByLowerName: Record<string, CallableContainer[]>) {
+    private diagnosticFindDuplicateFunctionDeclarations(callableContainersByLowerName: CallableContainerMap) {
         //for each list of callables with the same name
-        for (let lowerName in callableContainersByLowerName) {
-            let callableContainers = callableContainersByLowerName[lowerName];
+        for (let [lowerName, callableContainers] of callableContainersByLowerName) {
 
             let globalCallables = [] as CallableContainer[];
             let nonGlobalCallables = [] as CallableContainer[];

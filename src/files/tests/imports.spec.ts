@@ -251,7 +251,7 @@ describe('import statements', () => {
         `, null, 'components/AuthenticationService.xml');
     });
 
-    it.only('handles malformed imports', async () => {
+    it('handles malformed imports', async () => {
         //shouldn't crash
         const brsFile = await program.addOrReplaceFile<BrsFile>('source/SomeFile.bs', `
             import ""
