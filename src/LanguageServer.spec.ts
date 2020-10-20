@@ -350,7 +350,7 @@ describe('LanguageServer', () => {
         });
 
         async function addXmlFile(name: string, additionalXmlContents = '') {
-            const filePath = `components/${name}.xml`;
+            const filePath = path.join('components', `${name}.xml`);
 
             const contents = `<?xml version="1.0" encoding="utf-8"?>
             <component name="${name}" extends="Group">
@@ -361,7 +361,7 @@ describe('LanguageServer', () => {
         }
 
         async function addBrsFile(name: string, contents: string) {
-            const filePath = `components/${name}.brs`;
+            const filePath = path.join('components', `${name}.brs`);
 
             await program.addOrReplaceFile(filePath, contents);
             for (const key in program.files) {
