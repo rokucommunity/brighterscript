@@ -431,7 +431,7 @@ export class Scope {
      */
     private diagnosticDetectFunctionCollisions(file: BscFile) {
         for (let func of file.callables) {
-            if (globalCallableMap[func.getName(ParseMode.BrighterScript).toLowerCase()]) {
+            if (globalCallableMap.has(func.getName(ParseMode.BrighterScript).toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction(),
                     range: func.nameRange,
@@ -516,7 +516,7 @@ export class Scope {
                     //local var function with same name as stdlib function
                     if (
                         //has same name as stdlib
-                        globalCallableMap[lowerVarName]
+                        globalCallableMap.has(lowerVarName)
                     ) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
@@ -542,7 +542,7 @@ export class Scope {
                     //is same name as a callable
                     callableContainerMap.has(lowerVarName) &&
                     //is NOT a callable from stdlib (because non-function local vars can have same name as stdlib names)
-                    !globalCallableMap[lowerVarName]
+                    !globalCallableMap.has(lowerVarName)
                 ) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.localVarShadowedByScopedFunction(),

@@ -481,7 +481,7 @@ describe('Scope', () => {
                 end sub
             `);
             await program.validate();
-            expect(program.getDiagnostics().length).to.equal(1); //'constructor' is Brs reserved
+            expect(program.getDiagnostics().length).to.equal(0);
         });
 
         it('Emits validation events', async () => {

@@ -337,7 +337,7 @@ describe('parser', () => {
         `);
 
         const expected = [
-            'constructor', 'valueOf', 'toString'
+            'constructor', 'tostring', 'valueof'
         ];
 
         const parser = Parser.parse(tokens);
