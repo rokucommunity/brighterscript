@@ -197,7 +197,7 @@ export class XmlFile {
      */
     public propertyNameCompletions = [] as CompletionItem[];
 
-    private uriRangeRegex = /(.*?\s+uri\s*=\s*")(.*?)"/g;
+    private uriRangeRegex = /(.*?\s+uri\s*=\s*(?:'|"))(.*?)(?:'|")/g;
     private scriptTypeRegex = /type\s*=\s*"(.*?)"/gi;
 
     public async parse(fileContents: string) {

@@ -635,4 +635,14 @@ describe('XmlFile', () => {
             code: 9999
         }]);
     });
+
+    it('finds script imports for single-quoted script tags', async () => {
+        const file = await program.addOrReplaceFile<XmlFile>('components/file.xml', `
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Cmp1" extends="Scene">
+                <script uri='SingleQuotedFile.brs' />
+            </component>
+        `);
+        expect(file.scriptTagImports[0]?.text).to.eql('SingleQuotedFile.brs');
+    });
 });
