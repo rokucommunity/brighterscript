@@ -915,6 +915,10 @@ export class Parser {
         if (this.check(TokenKind.Comment)) {
             comment = this.commentStatement();
         }
+        //support an optional single colon after the condition
+        if (this.check(TokenKind.Colon)) {
+            this.advance();
+        }
 
         this.consume(
             DiagnosticMessages.expectedNewlineAfterWhileCondition(),
@@ -974,9 +978,13 @@ export class Parser {
             // BrightScript for/to/step loops default to a step of 1 if no `step` is provided
             increment = new LiteralExpression(new Int32(1), this.peek().range);
         }
-        while (this.match(TokenKind.Newline)) {
 
+        //support an optional single colon after the `to` expression
+        if (this.check(TokenKind.Colon)) {
+            this.advance();
         }
+
+        while (this.match(TokenKind.Newline)) { }
 
         let body = this.block(TokenKind.EndFor, TokenKind.Next);
         if (!body) {
