@@ -35,7 +35,7 @@ class Runner {
         fsExtra.ensureDirSync(tempDir);
 
         //use the given project, or use the default
-        this.project = this.project ?? 'https://github.com/chtaylo2/Roku-GooglePhotos';
+        this.project = this.project || 'https://github.com/chtaylo2/Roku-GooglePhotos';
 
         if (this.project.startsWith('https://')) {
             const projectName = this.project.split('/').pop();
