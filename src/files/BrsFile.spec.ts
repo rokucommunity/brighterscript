@@ -17,7 +17,6 @@ import type { StandardizedFileEntry } from 'roku-deploy';
 import { loadPlugins, standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
 import { trim } from '../testHelpers.spec';
-import { XmlFile } from './XmlFile';
 
 let sinon = sinonImport.createSandbox();
 

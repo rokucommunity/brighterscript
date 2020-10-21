@@ -42,6 +42,15 @@ describe('parser while statements', () => {
         expect(statements).to.be.length.greaterThan(0);
     });
 
+    it('supports trailing colon at end of condition', () => {
+        const parser = Parser.parse(`
+            while i > 0:
+                print "while"
+            end while
+        `);
+        expect(parser.diagnostics[0]?.message).to.be.undefined;
+    });
+
     it('location tracking', () => {
         /**
          *    0   0   0   1   1

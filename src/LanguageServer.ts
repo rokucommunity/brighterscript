@@ -44,7 +44,7 @@ export class LanguageServer {
     /**
      * The number of milliseconds that should be used for language server typing debouncing
      */
-    private debounceTimeout = 350;
+    private debounceTimeout = 150;
 
     /**
      * These workspaces are created on the fly whenever a file is opened that is not included

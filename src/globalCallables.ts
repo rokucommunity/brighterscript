@@ -749,6 +749,6 @@ globalFile.callables = globalCallables;
  * so keep a single copy in memory to improve performance
  */
 export const globalCallableMap = globalCallables.reduce((map, x) => {
-    map[x.name.toLowerCase()] = x;
+    map.set(x.name.toLowerCase(), x);
     return map;
-}, {});
+}, new Map<string, Callable>());

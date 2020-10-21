@@ -187,7 +187,8 @@ export class BrsFile {
             this.cache.clear();
         });
 
-        const dependencies = this.ownScriptImports.map(x => x.pkgPath.toLowerCase());
+        const dependencies = this.ownScriptImports.filter(x => !!x.pkgPath).map(x => x.pkgPath.toLowerCase());
+
         //if this is a .brs file, watch for typedef changes
         if (this.extension === '.brs') {
             dependencies.push(
