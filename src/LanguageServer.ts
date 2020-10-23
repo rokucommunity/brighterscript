@@ -978,7 +978,15 @@ export class LanguageServer {
                 ...locations
             );
         }
-        return results;
+        const deduplicatedDefinitions = Object.values(results.reduce((map, location) => {
+            const range = location.range ?? util.createRange(0, 0, 0, 0);
+            const start = range.start;
+            const end = range.end;
+            const key = `${location.uri}:${start.line}_${start.character}-${end.line}_${end.character}`;
+            map[key] = location;
+            return map;
+        }, {}));
+        return deduplicatedDefinitions as Location[];
     }
 
     private async onSignatureHelp(params: SignatureHelpParams) {
