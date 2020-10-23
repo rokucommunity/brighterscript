@@ -639,8 +639,7 @@ describe('parser', () => {
         it('attaches multiple annotations to next statement', () => {
             let { statements, diagnostics } = parse(`
                 @meta1
-                @meta2
-                @meta3
+                @meta2 @meta3
                 function main()
                 end function
             `, ParseMode.BrighterScript);
