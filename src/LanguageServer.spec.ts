@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import * as fsExtra from 'fs-extra';
 import * as glob from 'glob';
 import * as path from 'path';
-import type { DidChangeWatchedFilesParams } from 'vscode-languageserver';
+import type { DidChangeWatchedFilesParams, Location } from 'vscode-languageserver';
 import { FileChangeType, Range } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import type { Workspace } from './LanguageServer';
@@ -67,6 +67,7 @@ describe('LanguageServer', () => {
             log: () => { }
         }
     };
+    let program: Program;
 
     beforeEach(() => {
         server = new LanguageServer();
@@ -100,6 +101,30 @@ describe('LanguageServer', () => {
         }
         server.dispose();
     });
+
+    async function addXmlFile(name: string, additionalXmlContents = '') {
+        const filePath = `components/${name}.xml`;
+
+        const contents = `<?xml version="1.0" encoding="utf-8"?>
+        <component name="${name}" extends="Group">
+            ${additionalXmlContents}
+            <script type="text/brightscript" uri="${name}.brs" />
+        </component>`;
+        await program.addOrReplaceFile(filePath, contents);
+    }
+
+    async function addBrsFile(name: string, contents: string) {
+        const filePath = `components/${name}.brs`;
+
+        await program.addOrReplaceFile(filePath, contents);
+        for (const key in program.files) {
+            if (key.includes(filePath)) {
+                const document = TextDocument.create(util.pathToUri(key), 'brightscript', 1, contents);
+                svr.documents._documents[document.uri] = document;
+                return document;
+            }
+        }
+    }
 
     function writeToFs(pathAbsolute: string, contents: string) {
         physicalFilePaths.push(pathAbsolute);
@@ -328,10 +353,9 @@ describe('LanguageServer', () => {
     });
 
     describe('onSignatureHelp', () => {
-        let program: Program;
         let callDocument: TextDocument;
         const functionFileBaseName = 'buildAwesome';
-        const funcDefinitionLine = 'function buildAwesome()';
+        const funcDefinitionLine = 'function buildAwesome(confirm = true as Boolean)';
         beforeEach(async () => {
             svr.connection = svr.createConnection();
             await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
@@ -348,30 +372,6 @@ describe('LanguageServer', () => {
             end sub`);
             await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
         });
-
-        async function addXmlFile(name: string, additionalXmlContents = '') {
-            const filePath = path.join('components', `${name}.xml`);
-
-            const contents = `<?xml version="1.0" encoding="utf-8"?>
-            <component name="${name}" extends="Group">
-                ${additionalXmlContents}
-                <script type="text/brightscript" uri="${name}.brs" />
-            </component>`;
-            await program.addOrReplaceFile(filePath, contents);
-        }
-
-        async function addBrsFile(name: string, contents: string) {
-            const filePath = path.join('components', `${name}.brs`);
-
-            await program.addOrReplaceFile(filePath, contents);
-            for (const key in program.files) {
-                if (key.includes(filePath)) {
-                    const document = TextDocument.create(util.pathToUri(key), 'brightscript', 1, contents);
-                    svr.documents._documents[document.uri] = document;
-                    return document;
-                }
-            }
-        }
 
         it('should return the expected signature info when a documentation is included', async () => {
             const funcDescriptionComment = '@description Builds awesome for you';
@@ -416,7 +416,6 @@ describe('LanguageServer', () => {
     });
 
     describe('onReferences', () => {
-        let program: Program;
         let functionDocument: TextDocument;
         let referenceFileUris = [];
 
@@ -425,7 +424,7 @@ describe('LanguageServer', () => {
             await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
             program = svr.workspaces[0].builder.program;
 
-            let functionFileBaseName = 'buildAwesome';
+            const functionFileBaseName = 'buildAwesome';
             functionDocument = await addBrsFile(functionFileBaseName, `function buildAwesome()
                 return 42
             end function`);
@@ -443,30 +442,6 @@ describe('LanguageServer', () => {
                 referenceFileUris.push(document.uri);
             }
         });
-
-        async function addXmlFile(name: string, additionalXmlContents = '') {
-            const filePath = `components/${name}.xml`;
-
-            const contents = `<?xml version="1.0" encoding="utf-8"?>
-            <component name="${name}" extends="Group">
-                ${additionalXmlContents}
-                <script type="text/brightscript" uri="${name}.brs" />
-            </component>`;
-            await program.addOrReplaceFile(filePath, contents);
-        }
-
-        async function addBrsFile(name: string, contents: string) {
-            const filePath = `components/${name}.brs`;
-
-            await program.addOrReplaceFile(filePath, contents);
-            for (const key in program.files) {
-                if (key.includes(filePath)) {
-                    const document = TextDocument.create(util.pathToUri(key), 'brightscript', 1, contents);
-                    svr.documents._documents[document.uri] = document;
-                    return document;
-                }
-            }
-        }
 
         it('should return the expected results if we entered on an identifier token', async () => {
             const references = await svr.onReferences({
@@ -503,6 +478,166 @@ describe('LanguageServer', () => {
             expect(references).to.be.empty;
         });
     });
+
+    describe('onDefinition', () => {
+        let functionDocument: TextDocument;
+        let referenceFileUris = [];
+
+        beforeEach(async () => {
+            svr.connection = svr.createConnection();
+            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
+            program = svr.workspaces[0].builder.program;
+
+            let functionFileBaseName = 'buildAwesome';
+            functionDocument = await addBrsFile('buildAwesome', `
+            function pi()
+                return 3.141592653589793
+            end function
+
+            function buildAwesome()
+                return 42
+            end function`);
+
+            for (let i = 0; i < 5; i++) {
+                let name = `CallComponent${i}`;
+                const document = await addBrsFile(name, `sub init()
+                    shouldBuildAwesome = true
+                    if shouldBuildAwesome then
+                        buildAwesome()
+                    else
+                        m.top.observeFieldScope("loadFinished", "buildAwesome")
+                    end if
+                end sub`);
+
+                await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
+                referenceFileUris.push(document.uri);
+            }
+        });
+
+        it('should return the expected location if we entered on an identifier token', async () => {
+            const locations = await svr.onDefinition({
+                textDocument: {
+                    uri: referenceFileUris[0]
+                },
+                position: util.createPosition(3, 29)
+            });
+
+            expect(locations.length).to.equal(1);
+            const location: Location = locations[0];
+            expect(location.uri).to.equal(functionDocument.uri);
+            expect(location.range.start.line).to.equal(5);
+            expect(location.range.start.character).to.equal(12);
+        });
+
+        it('should return the expected location if we entered on a StringLiteral token', async () => {
+            const locations = await svr.onDefinition({
+                textDocument: {
+                    uri: referenceFileUris[0]
+                },
+                position: util.createPosition(5, 73)
+            });
+
+            expect(locations.length).to.equal(1);
+            const location: Location = locations[0];
+            expect(location.uri).to.equal(functionDocument.uri);
+            expect(location.range.start.line).to.equal(5);
+            expect(location.range.start.character).to.equal(12);
+        });
+
+        it('should return nothing if neither StringLiteral or identifier token entry point', async () => {
+            const locations = await svr.onDefinition({
+                textDocument: {
+                    uri: referenceFileUris[0]
+                },
+                position: util.createPosition(0, 0)
+            });
+
+            expect(locations).to.be.empty;
+        });
+
+        it('should work on local variables as well', async () => {
+            const locations = await svr.onDefinition({
+                textDocument: {
+                    uri: referenceFileUris[0]
+                },
+                position: util.createPosition(2, 32)
+            });
+            expect(locations.length).to.equal(1);
+            const location: Location = locations[0];
+            expect(location.uri).to.equal(referenceFileUris[0]);
+            expect(location.range.start.line).to.equal(1);
+            expect(location.range.start.character).to.equal(20);
+            expect(location.range.end.line).to.equal(1);
+            expect(location.range.end.character).to.equal(38);
+        });
+    });
+
+    describe('onDocumentSymbol', () => {
+        let functionDocument: TextDocument;
+        beforeEach(async () => {
+            svr.connection = svr.createConnection();
+            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
+            program = svr.workspaces[0].builder.program;
+
+            functionDocument = await addBrsFile('buildAwesome', `
+            function pi()
+                return 3.141592653589793
+            end function
+
+            function buildAwesome()
+                return 42
+            end function`);
+        });
+
+        it('should return the expected symbols even if pulled from cache', async () => {
+            for (let i = 0; i < 2; i++) {
+                const symbols = await svr.onDocumentSymbol({
+                    textDocument: functionDocument
+                });
+                expect(symbols.length).to.equal(2);
+                expect(symbols[0].name).to.equal('pi');
+                expect(symbols[1].name).to.equal('buildAwesome');
+            }
+        });
+    });
+
+    describe('onWorkspaceSymbol', () => {
+        beforeEach(async () => {
+            svr.connection = svr.createConnection();
+            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
+            program = svr.workspaces[0].builder.program;
+
+            await addBrsFile('buildAwesome', `
+            function pi()
+                return 3.141592653589793
+            end function
+
+            function buildAwesome()
+                return 42
+            end function`);
+
+            await addBrsFile('buildAwesome2', `
+            function pi2()
+                return 3.141592653589793
+            end function
+
+            function buildAwesome2()
+                return 42
+            end function`);
+        });
+
+        it('should return the expected symbols even if pulled from cache', async () => {
+            for (let i = 0; i < 2; i++) {
+                const symbols = await svr.onWorkspaceSymbol();
+                expect(symbols.length).to.equal(4);
+                expect(symbols[0].name).to.equal('pi');
+                expect(symbols[1].name).to.equal('buildAwesome');
+                expect(symbols[2].name).to.equal('pi2');
+                expect(symbols[3].name).to.equal('buildAwesome2');
+            }
+        });
+    });
+
 });
 
 export function getFileProtocolPath(fullPath: string) {
