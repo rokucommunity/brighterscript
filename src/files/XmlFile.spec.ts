@@ -671,6 +671,61 @@ describe('XmlFile', () => {
             expect(functionNames).not.to.include('logInfo');
             expect(functionNames).not.to.include('logWarning');
         });
+
+        it('updates xml scope when typedef disappears', async () => {
+            const xmlFile = await program.addOrReplaceFile<XmlFile>('components/Component1.xml', `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script uri="Component1.brs" />
+                </component>
+            `);
+            const scope = program.getScopesForFile(xmlFile)[0];
+
+            //load brs file
+            await program.addOrReplaceFile('components/Component1.brs', `
+                sub logBrs()
+                end sub
+            `);
+            //load d.bs file, which should shadow out the .brs file
+            const typedef = await program.addOrReplaceFile('components/Component1.d.bs', `
+                sub logTypedef()
+                end sub
+            `);
+            await program.validate();
+            let functionNames = scope.getOwnCallables().map(x => x.callable.name);
+            expect(functionNames).to.include('logTypedef');
+            expect(functionNames).not.to.include('logBrs');
+
+            //remove the typdef file
+            program.removeFile(typedef.pathAbsolute);
+
+            await program.validate();
+            functionNames = scope.getOwnCallables().map(x => x.callable.name);
+            expect(functionNames).not.to.include('logTypedef');
+            expect(functionNames).to.include('logBrs');
+        });
+
+        it('deleting typedef file clears brs file cache', async () => {
+            const brsFile = await program.addOrReplaceFile<BrsFile>('source/logger.brs', `
+                sub logBrs()
+                end sub
+            `);
+            //load d.bs file, which should shadow out the .brs file
+            const typedef = await program.addOrReplaceFile('source/logger.d.bs', `
+                sub logTypedef()
+                end sub
+            `);
+            await program.validate();
+
+            //add item to cache
+            brsFile['cache'].getOrAdd('__test', () => 'value');
+
+            //delete the typedef
+            program.removeFile(typedef.pathAbsolute);
+
+            //the brsFile's cache should be empty now
+            expect(brsFile['cache'].getOrAdd('__test', () => 'newValue')).to.equal('newValue');
+        });
     });
 
     it('finds script imports for single-quoted script tags', async () => {

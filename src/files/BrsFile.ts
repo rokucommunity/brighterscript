@@ -185,6 +185,13 @@ export class BrsFile {
         this.unsubscribeFromDependencyGraph = this.program.dependencyGraph.onchange(this.dependencyGraphKey, () => {
             this.logDebug('clear cache because dependency graph changed');
             this.cache.clear();
+
+            //if there is no typedef file, and this file hasn't been parsed yet, parse it now
+            //(solves issue when typedef gets deleted and this file had skipped parsing)
+            if (!this.hasTypedef && this.wasParseSkipped) {
+                this.parseDeferred = new Deferred();
+                this.parse(this.fileContents);
+            }
         });
 
         const dependencies = this.ownScriptImports.filter(x => !!x.pkgPath).map(x => x.pkgPath.toLowerCase());
@@ -192,11 +199,16 @@ export class BrsFile {
         //if this is a .brs file, watch for typedef changes
         if (this.extension === '.brs') {
             dependencies.push(
-                util.getTypedefPath(this.pathAbsolute)
+                util.getTypedefPath(this.pkgPath)
             );
         }
         dependencyGraph.addOrReplace(this.dependencyGraphKey, dependencies);
     }
+
+    /**
+     * Was parsing skipped because the file has a typedef?
+     */
+    private wasParseSkipped = false;
 
     /**
      * Calculate the AST for this file
@@ -212,6 +224,7 @@ export class BrsFile {
 
             //if we have a typedef file, skip parsing this file
             if (this.hasTypedef) {
+                this.wasParseSkipped = true;
                 this.parseDeferred.resolve();
                 return;
             }
@@ -283,6 +296,7 @@ export class BrsFile {
                 ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(serializeError(e)))
             });
         }
+        this.wasParseSkipped = false;
         this.parseDeferred.resolve();
     }
 
