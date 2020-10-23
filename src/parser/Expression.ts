@@ -1163,12 +1163,14 @@ export class AnnotationExpression extends Expression {
         readonly nameToken: Token
     ) {
         super();
+        this.name = nameToken.text;
         this.range = util.createRangeFromPositions(
             atToken.range.start,
             nameToken.range.end
         );
     }
 
+    public name: string;
     public range: Range;
     public call: CallExpression;
 

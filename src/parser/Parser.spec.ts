@@ -611,6 +611,7 @@ describe('parser', () => {
             expect(fn.annotations).to.exist;
             expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
             expect(fn.annotations[0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations[0].name).to.equal('meta1');
 
             expect(statements[1]).to.be.instanceof(FunctionStatement);
             fn = statements[1] as FunctionStatement;
