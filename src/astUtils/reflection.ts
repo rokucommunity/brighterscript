@@ -1,5 +1,5 @@
 import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, Statement } from '../parser/Statement';
-import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
+import type { LiteralExpression, Expression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression } from '../parser/Expression';
 import type { BrsString, BrsInvalid, BrsBoolean, RoString, RoArray, RoAssociativeArray, RoSGNode, FunctionParameterExpression } from '../brsTypes';
 import { ValueKind } from '../brsTypes';
 import type { BrsNumber } from '../brsTypes/BrsNumber';
@@ -190,6 +190,9 @@ export function isTaggedTemplateStringExpression(element: Expression | Statement
 }
 export function isFunctionParameterExpression(element: Expression | Statement): element is FunctionParameterExpression {
     return element?.constructor.name === 'FunctionParameterExpression';
+}
+export function isAnnotationExpression(element: Statement | Expression): element is AnnotationExpression {
+    return element?.constructor.name === 'AnnotationExpression';
 }
 
 // Value/Type reflection

@@ -2,7 +2,7 @@
 import type { Token, Identifier } from '../lexer';
 import { TokenKind, CompoundAssignmentOperators } from '../lexer';
 import { SourceNode } from 'source-map';
-import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression } from './Expression';
+import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, AnnotationExpression } from './Expression';
 import { CallExpression, VariableExpression, LiteralExpression } from './Expression';
 import { util } from '../util';
 import { Range, Position } from 'vscode-languageserver';
@@ -22,6 +22,11 @@ export abstract class Statement {
      *  The starting and ending location of the statement.
      **/
     public abstract range: Range;
+
+    /**
+     * Statement annotations
+     */
+    public annotations: AnnotationExpression[];
 
     public abstract transpile(state: TranspileState): Array<SourceNode | string>;
 
