@@ -189,7 +189,7 @@ export class Parser {
     private allowedLocalIdentifiers: TokenKind[];
 
     /**
-     * A meta statement which should be attached to the next statement
+     * Annotations collected which should be attached to the next statement
      */
     private pendingAnnotations: AnnotationExpression[] = [];
 
