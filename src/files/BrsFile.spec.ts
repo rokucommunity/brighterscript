@@ -2254,6 +2254,30 @@ describe('BrsFile', () => {
                 end namespace
             `);
         });
+
+        it.only('includes class inheritance', async () => {
+            await testTypedef(`
+                class Human
+                    sub new(name as string)
+                        m.name = name
+                    end sub
+                end class
+                class Person extends Human
+                    sub new(name as string)
+                        super(name)
+                    end sub
+                end class
+            `, trim`
+                class Human
+                    sub new(name as string)
+                    end sub
+                end class
+                class Person extends Human
+                    sub new(name as string)
+                    end sub
+                end class
+            `);
+        });
     });
 
     describe('Plugins', () => {

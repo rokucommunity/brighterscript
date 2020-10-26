@@ -1245,9 +1245,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
         const result = [] as Array<string | SourceNode>;
         result.push(
             'class ',
-            this.name.text,
-            state.newline()
+            this.name.text
         );
+        if (this.extendsKeyword && this.parentClassName) {
+            result.push(
+                ` extends ${this.parentClassName.getName(ParseMode.BrighterScript)}`
+            );
+        }
+        result.push(state.newline());
         state.blockDepth++;
         for (const member of this.body) {
             if ('getTypedef' in member) {
@@ -1581,11 +1586,17 @@ export class ClassMethodStatement extends FunctionStatement {
     }
 
     getTypedef(state: TranspileState) {
-        return [
-            this.accessModifier.text,
-            ' ',
+        const result = [] as string[];
+        if (this.accessModifier) {
+            result.push(
+                this.accessModifier.text,
+                ' '
+            );
+        }
+        result.push(
             ...super.getTypedef(state)
-        ];
+        );
+        return result;
     }
 
     /**
