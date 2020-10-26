@@ -2255,7 +2255,7 @@ describe('BrsFile', () => {
             `);
         });
 
-        it.only('includes class inheritance', async () => {
+        it('includes class inheritance', async () => {
             await testTypedef(`
                 class Human
                     sub new(name as string)
