@@ -253,7 +253,7 @@ export class Parser {
                     let dec = this.declaration();
                     if (dec) {
                         //attach annotations to statements
-                        if (this.pendingAnnotations.length) {
+                        if (this.pendingAnnotations.length > 0) {
                             dec.annotations = this.pendingAnnotations;
                             this.pendingAnnotations = [];
                         }
@@ -2527,8 +2527,8 @@ function createReferences(): References {
     return {
         assignmentStatements: [],
         classStatements: [],
-        functionStatements: [],
         functionExpressions: [],
+        functionStatements: [],
         importStatements: [],
         libraryStatements: [],
         namespaceStatements: [],
@@ -2540,8 +2540,8 @@ function createReferences(): References {
 export interface References {
     assignmentStatements: AssignmentStatement[];
     classStatements: ClassStatement[];
-    functionStatements: FunctionStatement[];
     functionExpressions: FunctionExpression[];
+    functionStatements: FunctionStatement[];
     importStatements: ImportStatement[];
     libraryStatements: LibraryStatement[];
     namespaceStatements: NamespaceStatement[];
