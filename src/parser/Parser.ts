@@ -85,7 +85,8 @@ import {
     EscapedCharCodeLiteralExpression,
     TemplateStringQuasiExpression,
     TaggedTemplateStringExpression,
-    SourceLiteralExpression
+    SourceLiteralExpression,
+    AnnotationExpression
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
@@ -188,6 +189,11 @@ export class Parser {
     private allowedLocalIdentifiers: TokenKind[];
 
     /**
+     * Annotations collected which should be attached to the next statement
+     */
+    private pendingAnnotations: AnnotationExpression[] = [];
+
+    /**
      * Get the currently active global terminators
      */
     private peekGlobalTerminators() {
@@ -246,6 +252,11 @@ export class Parser {
                 ) {
                     let dec = this.declaration();
                     if (dec) {
+                        //attach annotations to statements
+                        if (this.pendingAnnotations.length > 0) {
+                            dec.annotations = this.pendingAnnotations;
+                            this.pendingAnnotations = [];
+                        }
                         body.statements.push(dec);
                     }
                 }
@@ -312,6 +323,11 @@ export class Parser {
 
             if (this.check(TokenKind.Namespace)) {
                 return this.namespaceStatement();
+            }
+
+            if (this.check(TokenKind.At) && this.checkNext(TokenKind.Identifier)) {
+                this.annotationExpression();
+                return;
             }
 
             // BrightScript is like python, in that variables can be declared without a `var`,
@@ -1265,6 +1281,23 @@ export class Parser {
         return importStatement;
     }
 
+    private annotationExpression(): void {
+        let annotation = new AnnotationExpression(
+            this.advance(),
+            this.advance()
+        );
+        this.pendingAnnotations.push(annotation);
+
+        //optional arguments
+        if (this.check(TokenKind.LeftParen)) {
+            let leftParen = this.advance();
+            annotation.call = this.finishCall(leftParen, annotation, false);
+        }
+
+        //consume to the next newline, eof, or colon
+        while (this.matchAny(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
+    }
+
     private templateString(isTagged: boolean): TemplateStringExpression | TaggedTemplateStringExpression {
         this.warnIfNotBrighterScriptMode('template string');
 
@@ -1820,6 +1853,11 @@ export class Parser {
             let dec = this.declaration();
 
             if (dec) {
+                //attach annotations to statements
+                if (this.pendingAnnotations.length) {
+                    dec.annotations = this.pendingAnnotations;
+                    this.pendingAnnotations = [];
+                }
                 statements.push(dec);
             } else {
                 //something went wrong. reset to the top of the loop
@@ -2314,9 +2352,8 @@ export class Parser {
      * @param tokenKinds
      */
     private tryConsume(diagnostic: DiagnosticInfo, ...tokenKinds: TokenKind[]): Token | undefined {
-        let foundTokenKind = tokenKinds
-            .map(tokenKind => this.peek().kind === tokenKind)
-            .reduce((foundAny, foundCurrent) => foundAny || foundCurrent, false);
+        const nextKind = this.peek().kind;
+        let foundTokenKind = tokenKinds.some(tokenKind => nextKind === tokenKind);
 
         if (foundTokenKind) {
             return this.advance();
@@ -2490,8 +2527,8 @@ function createReferences(): References {
     return {
         assignmentStatements: [],
         classStatements: [],
-        functionStatements: [],
         functionExpressions: [],
+        functionStatements: [],
         importStatements: [],
         libraryStatements: [],
         namespaceStatements: [],
@@ -2503,11 +2540,11 @@ function createReferences(): References {
 export interface References {
     assignmentStatements: AssignmentStatement[];
     classStatements: ClassStatement[];
-    namespaceStatements: NamespaceStatement[];
-    functionStatements: FunctionStatement[];
     functionExpressions: FunctionExpression[];
+    functionStatements: FunctionStatement[];
     importStatements: ImportStatement[];
     libraryStatements: LibraryStatement[];
+    namespaceStatements: NamespaceStatement[];
     newExpressions: NewExpression[];
     propertyHints: Record<string, string>;
 }

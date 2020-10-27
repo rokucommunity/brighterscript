@@ -1,4 +1,5 @@
-# Classes
+# BrighterScript Classes
+
 Traditional BrightScript supports object creation (see [roAssociativeArray](https://developer.roku.com/docs/references/brightscript/components/roassociativearray.md)), but these can get a bit complicated at times, are generally created in a factory function. These objects are also difficult to track from a type-checking perspective, as their shape can morph over time. In BrighterScript, you can declare actual classes, and compile them into pure BrightScript which can be used on any Roku device.
 
 ## Classes
@@ -16,7 +17,7 @@ end class
 ```
 
 And here's the transpiled BrightScript code
-  
+
 ```BrightScript
 function __Animal_builder()
     instance = {}
@@ -34,7 +35,7 @@ function Animal()
 end function
 ```
 
-Notice that there are two functions created in the transpiled code for the `Animal` class. At runtime, BrighterScript classes are built in two steps in order to support class inheritance. The first step uses the `__ClassName_Build()` method to create the skeleton structure of the class. Then the class's constructor function will be run. Child classes will call the parent's `__ParentClassName_Build()` method, then rename overridden  methods, and then call the child's constructor (without calling the parent constructor). Take a look at the transpiled output of the other examples below for more information on this. 
+Notice that there are two functions created in the transpiled code for the `Animal` class. At runtime, BrighterScript classes are built in two steps in order to support class inheritance. The first step uses the `__ClassName_Build()` method to create the skeleton structure of the class. Then the class's constructor function will be run. Child classes will call the parent's `__ParentClassName_Build()` method, then rename overridden  methods, and then call the child's constructor (without calling the parent constructor). Take a look at the transpiled output of the other examples below for more information on this.
 
 
 ## Inheritance
@@ -68,21 +69,21 @@ end class
 
 sub Main()
     smokey = new Animal("Smokey")
-    smokey.move(1) 
+    smokey.move(1)
     '> Bear moved 1 meters
 
     donald = new Duck("Donald")
-    donald.move(2) 
+    donald.move(2)
     '> Waddling...\nDonald moved 2 meters
 
     dewey = new BabyDuck("Dewey")
-    dewey.move(3) 
+    dewey.move(3)
     '> Waddling...\nDewey moved 2 meters\nFell over...I'm new at this
 end sub
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 function __Animal_builder()
     instance = {}
@@ -153,7 +154,7 @@ end sub
 
 
 ## Constructor function
-The constructor function for a class is called `new`. 
+The constructor function for a class is called `new`.
 
 ```vb
 class Duck
@@ -167,7 +168,7 @@ end sub
 
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 function __Duck_builder()
     instance = {}
@@ -209,7 +210,7 @@ end sub
 
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 function __Duck_builder()
     instance = {}
@@ -246,7 +247,7 @@ end function
 </details>
 
 ## Overrides
-Child classes can override methods on parent classes. In this example, the `BabyDuck.Eat()` method completely overrides the parent method. Note: the `override` keyword is mandatory, and you will get a compile error if it is not included in the child class and there is a matching method on the base class. Also, you will get a compile error if the override keyword is present in a child class, but that method doesn't exist in the parent class. 
+Child classes can override methods on parent classes. In this example, the `BabyDuck.Eat()` method completely overrides the parent method. Note: the `override` keyword is mandatory, and you will get a compile error if it is not included in the child class and there is a matching method on the base class. Also, you will get a compile error if the override keyword is present in a child class, but that method doesn't exist in the parent class.
 
 ```vb
 class Duck
@@ -265,7 +266,7 @@ end sub
 
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 function __Duck_builder()
     instance = {}
@@ -301,7 +302,7 @@ end function
 </details>
 
 ### Calling parent method from child
-You can also call the original methods on the base class from within an overridden method on a child class. 
+You can also call the original methods on the base class from within an overridden method on a child class.
 
 ```vb
 class Duck
@@ -320,7 +321,7 @@ end class
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 function __Duck_builder()
     instance = {}
@@ -358,7 +359,7 @@ end function
 </details>
 
 ## Public by default
-Class fields and methods are public by default, which aligns with the general BrightScript approach that "everything is public". 
+Class fields and methods are public by default, which aligns with the general BrightScript approach that "everything is public".
 
 ```vb
 class Person
@@ -381,7 +382,7 @@ end class
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 function __Person_builder()
     instance = {}
@@ -430,7 +431,7 @@ end class
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 function __Person_builder()
     instance = {}
@@ -455,7 +456,7 @@ end function
 </details>
 
 ## Property initialization
-Like most other object-oriented classes, you can initialze a property with a default value. 
+Like most other object-oriented classes, you can initialze a property with a default value.
 
 ```BrighterScript
 class Duck
@@ -465,7 +466,7 @@ end class
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 function __Duck_builder()
     instance = {}
@@ -493,7 +494,7 @@ daisy = new Person("Daisy")
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 donald = Person("Donald")
 daisy = Person("Daisy")
@@ -515,7 +516,7 @@ end namespace
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 function __Vertibrates_Birds_Animal_builder()
     instance = {}
