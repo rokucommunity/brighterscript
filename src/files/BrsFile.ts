@@ -56,6 +56,13 @@ export class BrsFile {
     }
 
     /**
+     * The parseMode used for the parser for this file
+     */
+    public get parseMode() {
+        return this.extension.endsWith('.bs') ? ParseMode.BrighterScript : ParseMode.BrightScript;
+    }
+
+    /**
      * The key used to identify this file in the dependency graph
      */
     public dependencyGraphKey: string;
@@ -259,9 +266,8 @@ export class BrsFile {
             let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
 
             this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.pathAbsolute)], () => {
-                const parseMode = this.extension === '.bs' ? ParseMode.BrighterScript : ParseMode.BrightScript;
                 this.parser.parse(tokens, {
-                    mode: parseMode,
+                    mode: this.parseMode,
                     logger: this.program.logger
                 });
             });

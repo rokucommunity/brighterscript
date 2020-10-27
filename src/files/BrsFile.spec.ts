@@ -352,6 +352,21 @@ describe('BrsFile', () => {
     });
 
     describe('parse', () => {
+        it('uses the proper parse mode based on file extension', async () => {
+            async function testParseMode(destPath: string, expectedParseMode: ParseMode) {
+                const file = await program.addOrReplaceFile<BrsFile>(destPath, '');
+                expect(file.parseMode).to.equal(expectedParseMode);
+            }
+
+            await testParseMode('source/main.brs', ParseMode.BrightScript);
+            await testParseMode('source/main.spec.brs', ParseMode.BrightScript);
+            await testParseMode('source/main.d.brs', ParseMode.BrightScript);
+
+            await testParseMode('source/main.bs', ParseMode.BrighterScript);
+            await testParseMode('source/main.d.bs', ParseMode.BrighterScript);
+            await testParseMode('source/main.spec.bs', ParseMode.BrighterScript);
+        });
+
         it('supports labels and goto statements', async () => {
             let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
