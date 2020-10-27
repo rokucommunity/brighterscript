@@ -1,7 +1,6 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
-
 import type { Callable, CallableArg, CommentFlag, BsDiagnostic, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
@@ -17,6 +16,7 @@ import type { StandardizedFileEntry } from 'roku-deploy';
 import { loadPlugins, standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
 import { trim } from '../testHelpers.spec';
+import { ParseMode } from '../parser/Parser';
 
 let sinon = sinonImport.createSandbox();
 
@@ -2291,6 +2291,38 @@ describe('BrsFile', () => {
                     sub new(name as string)
                     end sub
                 end class
+            `);
+        });
+
+        it('includes class inheritance cross-namespace', async () => {
+            await testTypedef(`
+                namespace NameA
+                    class Human
+                        sub new(name as string)
+                            m.name = name
+                        end sub
+                    end class
+                end namespace
+                namespace NameB
+                    class Person extends NameA.Human
+                        sub new(name as string)
+                            super(name)
+                        end sub
+                    end class
+                end namespace
+            `, trim`
+                namespace NameA
+                    class Human
+                        sub new(name as string)
+                        end sub
+                    end class
+                end namespace
+                namespace NameB
+                    class Person extends NameA.Human
+                        sub new(name as string)
+                        end sub
+                    end class
+                end namespace
             `);
         });
     });
