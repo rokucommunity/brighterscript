@@ -946,8 +946,7 @@ export class BrsFile {
         await this.isReady();
 
         for (const statement of this.ast.statements) {
-            const symbol = this.getWorkspaceSymbol(statement);
-            if (symbol) {
+            for (const symbol of this.generateWorkspaceSymbols(statement)) {
                 symbols.push(symbol);
             }
         }
@@ -973,6 +972,12 @@ export class BrsFile {
             }
         } else if (statement instanceof ClassStatement) {
             symbolKind = SymbolKind.Class;
+            for (const childStatement of statement.body) {
+                const symbol = this.getDocumentSymbol(childStatement);
+                if (symbol) {
+                    children.push(symbol);
+                }
+            }
         } else {
             return;
         }
@@ -984,21 +989,37 @@ export class BrsFile {
     /**
      * Builds a single SymbolInformation object for use by LanguageServer's onWorkspaceSymbol functionality
      */
-    private getWorkspaceSymbol(statement: Statement) {
+    private generateWorkspaceSymbols(statement: Statement, containerStatement?: ClassStatement | NamespaceStatement) {
         let symbolKind: SymbolKind;
+        const symbols = [];
+
         if (statement instanceof FunctionStatement) {
             symbolKind = SymbolKind.Function;
         } else if (statement instanceof NamespaceStatement) {
             symbolKind = SymbolKind.Namespace;
+
+            for (const childStatement of statement.body.statements) {
+                for (const symbol of this.generateWorkspaceSymbols(childStatement, statement)) {
+                    symbols.push(symbol);
+                }
+            }
         } else if (statement instanceof ClassStatement) {
             symbolKind = SymbolKind.Class;
+
+            for (const childStatement of statement.body) {
+                for (const symbol of this.generateWorkspaceSymbols(childStatement, statement)) {
+                    symbols.push(symbol);
+                }
+            }
         } else {
-            return;
+            return symbols;
         }
 
         const name = statement.getName(ParseMode.BrighterScript);
         const uri = util.pathToUri(this.pathAbsolute);
-        return SymbolInformation.create(name, symbolKind, statement.range, uri);
+        const symbol = SymbolInformation.create(name, symbolKind, statement.range, uri, containerStatement?.getName(ParseMode.BrighterScript));
+        symbols.push(symbol);
+        return symbols;
     }
 
     /**

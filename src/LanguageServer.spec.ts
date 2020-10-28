@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import * as fsExtra from 'fs-extra';
 import * as glob from 'glob';
 import * as path from 'path';
-import type { DidChangeWatchedFilesParams, Location } from 'vscode-languageserver';
+import type { DidChangeWatchedFilesParams, DocumentSymbol, Location } from 'vscode-languageserver';
 import { FileChangeType, Range } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import type { Workspace } from './LanguageServer';
@@ -113,8 +113,8 @@ describe('LanguageServer', () => {
         await program.addOrReplaceFile(filePath, contents);
     }
 
-    async function addBrsFile(name: string, contents: string) {
-        const filePath = `components/${name}.brs`;
+    async function addScriptFile(name: string, contents: string, extension = 'brs') {
+        const filePath = `components/${name}.${extension}`;
 
         await program.addOrReplaceFile(filePath, contents);
         for (const key in program.files) {
@@ -362,7 +362,7 @@ describe('LanguageServer', () => {
             program = svr.workspaces[0].builder.program;
 
             let name = `CallComponent`;
-            callDocument = await addBrsFile(name, `sub init()
+            callDocument = await addScriptFile(name, `sub init()
                 shouldBuildAwesome = true
                 if shouldBuildAwesome then
                     buildAwesome()
@@ -377,7 +377,7 @@ describe('LanguageServer', () => {
             const funcDescriptionComment = '@description Builds awesome for you';
             const funcReturnComment = '@return {Integer} The key to everything';
 
-            await addBrsFile(functionFileBaseName, `' /**
+            await addScriptFile(functionFileBaseName, `' /**
             ' * ${funcDescriptionComment}
             ' * ${funcReturnComment}
             ' */
@@ -399,7 +399,7 @@ describe('LanguageServer', () => {
         });
 
         it('should work if used on a property value', async () => {
-            await addBrsFile(functionFileBaseName, `${funcDefinitionLine}
+            await addScriptFile(functionFileBaseName, `${funcDefinitionLine}
                 return 42
             end function`);
 
@@ -425,13 +425,13 @@ describe('LanguageServer', () => {
             program = svr.workspaces[0].builder.program;
 
             const functionFileBaseName = 'buildAwesome';
-            functionDocument = await addBrsFile(functionFileBaseName, `function buildAwesome()
+            functionDocument = await addScriptFile(functionFileBaseName, `function buildAwesome()
                 return 42
             end function`);
 
             for (let i = 0; i < 5; i++) {
                 let name = `CallComponent${i}`;
-                const document = await addBrsFile(name, `sub init()
+                const document = await addScriptFile(name, `sub init()
                     shouldBuildAwesome = true
                     if shouldBuildAwesome then
                         buildAwesome()
@@ -489,7 +489,7 @@ describe('LanguageServer', () => {
             program = svr.workspaces[0].builder.program;
 
             let functionFileBaseName = 'buildAwesome';
-            functionDocument = await addBrsFile('buildAwesome', `
+            functionDocument = await addScriptFile('buildAwesome', `
             function pi()
                 return 3.141592653589793
             end function
@@ -500,7 +500,7 @@ describe('LanguageServer', () => {
 
             for (let i = 0; i < 5; i++) {
                 let name = `CallComponent${i}`;
-                const document = await addBrsFile(name, `sub init()
+                const document = await addScriptFile(name, `sub init()
                     shouldBuildAwesome = true
                     if shouldBuildAwesome then
                         buildAwesome()
@@ -573,30 +573,82 @@ describe('LanguageServer', () => {
     });
 
     describe('onDocumentSymbol', () => {
-        let functionDocument: TextDocument;
         beforeEach(async () => {
             svr.connection = svr.createConnection();
             await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
             program = svr.workspaces[0].builder.program;
-
-            functionDocument = await addBrsFile('buildAwesome', `
-            function pi()
-                return 3.141592653589793
-            end function
-
-            function buildAwesome()
-                return 42
-            end function`);
         });
 
         it('should return the expected symbols even if pulled from cache', async () => {
+            const document = await addScriptFile('buildAwesome', `
+                function pi()
+                    return 3.141592653589793
+                end function
+
+                function buildAwesome()
+                    return 42
+                end function`);
             for (let i = 0; i < 2; i++) {
                 const symbols = await svr.onDocumentSymbol({
-                    textDocument: functionDocument
+                    textDocument: document
                 });
                 expect(symbols.length).to.equal(2);
                 expect(symbols[0].name).to.equal('pi');
                 expect(symbols[1].name).to.equal('buildAwesome');
+            }
+        });
+
+        it('should work for brightscript classes as well', async () => {
+            const document = await addScriptFile('MyFirstClass', `
+            class MyFirstClass
+                function pi()
+                    return 3.141592653589793
+                end function
+
+                function buildAwesome()
+                    return 42
+                end function
+            end class`, 'bs');
+
+            for (let i = 0; i < 2; i++) {
+                const symbols = await svr.onDocumentSymbol({
+                    textDocument: document
+                }) as DocumentSymbol[];
+
+                expect(symbols.length).to.equal(1);
+                const classSymbol = symbols[0];
+                expect(classSymbol.name).to.equal('MyFirstClass');
+                const classChildrenSymbols = classSymbol.children;
+                expect(classChildrenSymbols.length).to.equal(2);
+                expect(classChildrenSymbols[0].name).to.equal('pi');
+                expect(classChildrenSymbols[1].name).to.equal('buildAwesome');
+            }
+        });
+
+        it('should work for brightscript namespaces as well', async () => {
+            const document = await addScriptFile('MyFirstNamespace', `
+            namespace MyFirstNamespace
+                function pi()
+                    return 3.141592653589793
+                end function
+
+                function buildAwesome()
+                    return 42
+                end function
+            end namespace`, 'bs');
+
+            for (let i = 0; i < 2; i++) {
+                const symbols = await svr.onDocumentSymbol({
+                    textDocument: document
+                }) as DocumentSymbol[];
+
+                expect(symbols.length).to.equal(1);
+                const namespaceSymbol = symbols[0];
+                expect(namespaceSymbol.name).to.equal('MyFirstNamespace');
+                const classChildrenSymbols = namespaceSymbol.children;
+                expect(classChildrenSymbols.length).to.equal(2);
+                expect(classChildrenSymbols[0].name).to.equal('MyFirstNamespace.pi');
+                expect(classChildrenSymbols[1].name).to.equal('MyFirstNamespace.buildAwesome');
             }
         });
     });
@@ -606,8 +658,13 @@ describe('LanguageServer', () => {
             svr.connection = svr.createConnection();
             await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
             program = svr.workspaces[0].builder.program;
+        });
 
-            await addBrsFile('buildAwesome', `
+        it('should return the expected symbols even if pulled from cache', async () => {
+            const className = 'MyFirstClass';
+            const namespaceName = 'MyFirstNamespace';
+
+            await addScriptFile('buildAwesome', `
             function pi()
                 return 3.141592653589793
             end function
@@ -616,28 +673,77 @@ describe('LanguageServer', () => {
                 return 42
             end function`);
 
-            await addBrsFile('buildAwesome2', `
-            function pi2()
-                return 3.141592653589793
-            end function
+            await addScriptFile(className, `
+            class MyFirstClass
+                function pi()
+                    return 3.141592653589793
+                end function
 
-            function buildAwesome2()
-                return 42
-            end function`);
+                function buildAwesome()
+                    return 42
+                end function
+            end class`, 'bs');
+
+
+            await addScriptFile(namespaceName, `
+            namespace ${namespaceName}
+                function pi()
+                    return 3.141592653589793
+                end function
+
+                function buildAwesome()
+                    return 42
+                end function
+            end namespace`, 'bs');
+
+            for (let i = 0; i < 2; i++) {
+                const symbols = await svr.onWorkspaceSymbol();
+                expect(symbols.length).to.equal(8);
+                expect(symbols[0].name).to.equal('pi');
+                expect(symbols[1].name).to.equal('buildAwesome');
+                expect(symbols[2].name).to.equal('pi');
+                expect(symbols[2].containerName).to.equal(className);
+                expect(symbols[3].name).to.equal('buildAwesome');
+                expect(symbols[3].containerName).to.equal(className);
+                expect(symbols[4].name).to.equal(className);
+                expect(symbols[5].name).to.equal(`${namespaceName}.pi`);
+                expect(symbols[5].containerName).to.equal(namespaceName);
+                expect(symbols[6].name).to.equal(`${namespaceName}.buildAwesome`);
+                expect(symbols[6].containerName).to.equal(namespaceName);
+                expect(symbols[7].name).to.equal(namespaceName);
+            }
         });
 
-        it('should return the expected symbols even if pulled from cache', async () => {
+        it('should work for nested class as well', async () => {
+            const nestedNamespace = 'containerNamespace';
+            const nestedClassName = 'nestedClass';
+
+            await addScriptFile('nested', `
+            namespace ${nestedNamespace}
+                class ${nestedClassName}
+                    function pi()
+                        return 3.141592653589793
+                    end function
+
+                    function buildAwesome()
+                        return 42
+                    end function
+                end class
+            end namespace`, 'bs');
+
             for (let i = 0; i < 2; i++) {
                 const symbols = await svr.onWorkspaceSymbol();
                 expect(symbols.length).to.equal(4);
-                expect(symbols[0].name).to.equal('pi');
-                expect(symbols[1].name).to.equal('buildAwesome');
-                expect(symbols[2].name).to.equal('pi2');
-                expect(symbols[3].name).to.equal('buildAwesome2');
+                expect(symbols[0].name).to.equal(`pi`);
+                expect(symbols[0].containerName).to.equal(`${nestedNamespace}.${nestedClassName}`);
+                expect(symbols[1].name).to.equal(`buildAwesome`);
+                expect(symbols[1].containerName).to.equal(`${nestedNamespace}.${nestedClassName}`);
+                expect(symbols[2].name).to.equal(`${nestedNamespace}.${nestedClassName}`);
+                expect(symbols[2].containerName).to.equal(nestedNamespace);
+                expect(symbols[3].name).to.equal(nestedNamespace);
             }
         });
     });
-
 });
 
 export function getFileProtocolPath(fullPath: string) {

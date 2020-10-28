@@ -946,6 +946,7 @@ export class LanguageServer {
             c => c
         );
 
+        // Remove duplicates
         const allSymbols = Object.values(results.reduce((map, symbol) => {
             const key = symbol.location.uri + symbol.name;
             map[key] = symbol;
@@ -955,6 +956,8 @@ export class LanguageServer {
     }
 
     public async onDocumentSymbol(params: DocumentSymbolParams) {
+        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+
         const pathAbsolute = util.uriToPath(params.textDocument.uri);
         for (const workspace of this.getWorkspaces()) {
             const file = workspace.builder.program.getFileByPathAbsolute(pathAbsolute);
@@ -1009,6 +1012,8 @@ export class LanguageServer {
         if (!matchingToken) {
             return;
         }
+
+        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
 
         let promises = [] as Promise<SignatureInformation>[];
         for (const workspace of this.getWorkspaces()) {
