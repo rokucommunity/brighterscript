@@ -1,4 +1,5 @@
-# Source Literals
+# BrighterScript Source Literals
+
 BrightScript provides the `LINE_NUM` literal, which represents the runtime 1-based line number of the current line of code. In a similar fashion, BrighterScript provides several more source literals.
 
 These source literals are converted into inline variables at transpile-time, so keep in mind that any post-processing to the transpiled files could  cause these values to be incorrect.
@@ -10,21 +11,21 @@ The absolute path to the source file, including a leading `file:/` scheme indica
 print SOURCE_FILE_PATH
 ```
 
-transpiles to: 
+transpiles to:
 
 ```BrightScript
 print "file:///c:/projects/roku/brighterscript/scripts/rootDir/source/main.bs"
 ```
 
 ## SOURCE_LINE_NUM
-The 1-based line number of the source file. 
+The 1-based line number of the source file.
 
 ```BrighterScript
 'I am line 1
 print SOURCE_LINE_NUM 'I am line 2
 ```
 
-transpiles to: 
+transpiles to:
 
 ```BrightScript
 'I am line 1
@@ -40,7 +41,7 @@ function RunFromZombie()
 end function
 ```
 
-transpiles to: 
+transpiles to:
 
 ```BrightScript
 function RunFromZombie()
@@ -58,7 +59,7 @@ namespace Human.Versus.Zombie
 end namespace
 ```
 
-transpiles to: 
+transpiles to:
 
 ```BrightScript
 function Human_Versus_Zombie_RunFromZombie()
@@ -91,7 +92,7 @@ namespace Human.Versus.Zombie
 end namespace
 ```
 
-transpiles to: 
+transpiles to:
 
 ```BrightScript
 function main()
@@ -128,7 +129,7 @@ namespace Human.Versus.Zombie
 end namespace
 ```
 
-transpiles to: 
+transpiles to:
 
 ```BrightScript
 function Human_Versus_Zombie_Eat()
@@ -148,7 +149,7 @@ function main()
 end function
 ```
 
-transpiles to: 
+transpiles to:
 
 ```BrightScript
 function main()
@@ -165,7 +166,7 @@ function main()
 end function
 ```
 
-transpiles to: 
+transpiles to:
 
 ```BrightScript
 function main()
@@ -174,12 +175,12 @@ end function
 ```
 
 ## PKG_LOCATION
-A combination of PKG_PATH and LINE_NUM. Keep in mind, LINE_NUM is a runtime variable provided by Roku. 
+A combination of PKG_PATH and LINE_NUM. Keep in mind, LINE_NUM is a runtime variable provided by Roku.
 ```BrighterScript
 print PKG_LOCATION
 ```
 
-transpiles to: 
+transpiles to:
 
 ```BrightScript
 print "pkg:/source/main.brs:" + str(LINE_NUM)

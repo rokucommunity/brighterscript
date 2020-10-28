@@ -6,7 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-### [0.16.12] - 2020-10-21
+## [0.17.0] - 2020-10-27
+### Added
+ - Annotation syntax and AST support ([#234](https://github.com/rokucommunity/brighterscript/pull/234))
+
+
+
+## [0.16.12] - 2020-10-21
 ### Fixed
  - parser bug when there was a trailing colon after `for` or `while` loop statements ([#230](https://github.com/rokucommunity/brighterscript/pull/230))
 
@@ -662,3 +668,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.16.10]:  https://github.com/rokucommunity/brighterscript/compare/v0.16.9...v0.16.10
 [0.16.11]:  https://github.com/rokucommunity/brighterscript/compare/v0.16.10...v0.16.11
 [0.16.12]:  https://github.com/rokucommunity/brighterscript/compare/v0.16.11...v0.16.12
+[0.17.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.12...v0.17.0
