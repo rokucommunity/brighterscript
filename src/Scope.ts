@@ -211,7 +211,7 @@ export class Scope {
         const files = this.getFiles();
         for (const file of files) {
             //skip files that have a typedef
-            if (file.extension === '.brs' && (file as BrsFile).hasTypedef) {
+            if (file.hasTypedef) {
                 continue;
             }
             callback(file);

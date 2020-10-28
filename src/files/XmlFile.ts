@@ -85,6 +85,11 @@ export class XmlFile {
     private unsubscribeFromDependencyGraph: () => void;
 
     /**
+     * If the file was given type definitions during parse. XML files never have a typedef
+     */
+    public hasTypedef = false;
+
+    /**
      * The range of the component's name value
      */
     public componentNameRange: Range;

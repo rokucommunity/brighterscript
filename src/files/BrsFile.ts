@@ -169,6 +169,8 @@ export class BrsFile {
                 const file = this.program.getFileByPathAbsolute<BrsFile>(this.typedefKey);
                 return file;
             });
+        } else {
+            return undefined;
         }
     }
 
