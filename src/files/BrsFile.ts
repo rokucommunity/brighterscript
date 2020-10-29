@@ -25,7 +25,6 @@ import { serializeError } from 'serialize-error';
 import { isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
 import type { DependencyGraph } from '../DependencyGraph';
 import * as extname from 'path-complete-extname';
-import { Cache } from '../Cache';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -168,8 +167,6 @@ export class BrsFile {
      */
     public typedefFile?: BrsFile;
 
-    private cache = new Cache();
-
     /**
      * An unsubscribe function for the dependencyGraph subscription
      */
@@ -195,7 +192,6 @@ export class BrsFile {
         //anytime a dependency changes, clean up some cached values
         this.unsubscribeFromDependencyGraph = this.program.dependencyGraph.onchange(this.dependencyGraphKey, () => {
             this.logDebug('clear cache because dependency graph changed');
-            this.cache.clear();
 
             this.resolveTypdef();
 
