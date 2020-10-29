@@ -704,28 +704,6 @@ describe('XmlFile', () => {
             expect(functionNames).not.to.include('logTypedef');
             expect(functionNames).to.include('logBrs');
         });
-
-        it('deleting typedef file clears brs file cache', async () => {
-            const brsFile = await program.addOrReplaceFile<BrsFile>('source/logger.brs', `
-                sub logBrs()
-                end sub
-            `);
-            //load d.bs file, which should shadow out the .brs file
-            const typedef = await program.addOrReplaceFile('source/logger.d.bs', `
-                sub logTypedef()
-                end sub
-            `);
-            await program.validate();
-
-            //add item to cache
-            brsFile['cache'].getOrAdd('__test', () => 'value');
-
-            //delete the typedef
-            program.removeFile(typedef.pathAbsolute);
-
-            //the brsFile's cache should be empty now
-            expect(brsFile['cache'].getOrAdd('__test', () => 'newValue')).to.equal('newValue');
-        });
     });
 
     it('finds script imports for single-quoted script tags', async () => {
