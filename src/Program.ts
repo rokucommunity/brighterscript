@@ -459,7 +459,9 @@ export class Program {
      * @param pathAbsolute
      */
     public removeFile(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
+        if (!path.isAbsolute(pathAbsolute)) {
+            throw new Error(`Path must be absolute: "${pathAbsolute}"`);
+        }
 
         let file = this.getFile(pathAbsolute);
         if (file) {
@@ -476,7 +478,7 @@ export class Program {
                 this.plugins.emit('afterScopeDispose', scope);
             }
             //remove the file from the program
-            delete this.files[pathAbsolute];
+            delete this.files[file.pathAbsolute];
             delete this.pkgMap[file.pkgPath.toLowerCase()];
 
             this.dependencyGraph.remove(file.dependencyGraphKey);

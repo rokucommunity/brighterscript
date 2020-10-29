@@ -53,6 +53,11 @@ export class BrsFile {
         if (!this.isTypedef) {
             this.typedefKey = util.getTypedefPath(this.pathAbsolute);
         }
+
+        //global file doesn't have a program, so only resolve typedef info if we have a program
+        if (this.program) {
+            this.resolveTypdef();
+        }
     }
 
     /**
@@ -156,23 +161,12 @@ export class BrsFile {
     /**
      * If the file was given type definitions during parse
      */
-    public get hasTypedef() {
-        return !!this.typedefFile;
-    }
+    public hasTypedef;
 
     /**
      * A reference to the typedef file (if one exists)
      */
-    public get typedefFile() {
-        if (this.typedefKey) {
-            return this.cache.getOrAdd('typedefFile', () => {
-                const file = this.program.getFileByPathAbsolute<BrsFile>(this.typedefKey);
-                return file;
-            });
-        } else {
-            return undefined;
-        }
-    }
+    public typedefFile?: BrsFile;
 
     private cache = new Cache();
 
@@ -180,6 +174,14 @@ export class BrsFile {
      * An unsubscribe function for the dependencyGraph subscription
      */
     private unsubscribeFromDependencyGraph: () => void;
+
+    /**
+     * Find and set the typedef variables (if a matching typedef file exists)
+     */
+    private resolveTypdef() {
+        this.typedefFile = this.program.getFileByPathAbsolute<BrsFile>(this.typedefKey);
+        this.hasTypedef = !!this.typedefFile;
+    }
 
     /**
      * Attach the file to the dependency graph so it can monitor changes.
@@ -194,6 +196,8 @@ export class BrsFile {
         this.unsubscribeFromDependencyGraph = this.program.dependencyGraph.onchange(this.dependencyGraphKey, () => {
             this.logDebug('clear cache because dependency graph changed');
             this.cache.clear();
+
+            this.resolveTypdef();
 
             //if there is no typedef file, and this file hasn't been parsed yet, parse it now
             //(solves issue when typedef gets deleted and this file had skipped parsing)

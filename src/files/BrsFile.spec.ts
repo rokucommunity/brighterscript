@@ -2139,7 +2139,7 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            const file = await program.addOrReplaceFile('source/main.brs', `
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
                 sub speak()
@@ -2150,6 +2150,39 @@ describe('BrsFile', () => {
             const functionNames = sourceScope.getAllCallables().map(x => x.callable.name);
             expect(functionNames).to.include('main');
             expect(functionNames).not.to.include('speak');
+        });
+
+        it('reacts to typedef file changes', async () => {
+            let file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+                sub main()
+                end sub
+                sub speak()
+                end sub
+            `);
+            expect(file.hasTypedef).to.be.false;
+            expect(file.typedefFile).not.to.exist;
+
+            await program.addOrReplaceFile('source/main.d.bs', `
+                sub main()
+                end sub
+            `);
+            expect(file.hasTypedef).to.be.true;
+            expect(file.typedefFile).to.exist;
+
+            //add replace file, does it still find the typedef
+            file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+                sub main()
+                end sub
+                sub speak()
+                end sub
+            `);
+            expect(file.hasTypedef).to.be.true;
+            expect(file.typedefFile).to.exist;
+
+            program.removeFile(s`${rootDir}/source/main.d.bs`);
+
+            expect(file.hasTypedef).to.be.false;
+            expect(file.typedefFile).not.to.exist;
         });
     });
 
