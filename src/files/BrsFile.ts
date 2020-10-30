@@ -1,4 +1,3 @@
-import * as path from 'path';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Hover, Range, Position } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
@@ -27,6 +26,8 @@ import { serializeError } from 'serialize-error';
 import { isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { XmlFile } from './XmlFile';
+import type { DependencyGraph } from '../DependencyGraph';
+import * as extname from 'path-complete-extname';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -44,12 +45,28 @@ export class BrsFile {
         this.pkgPath = s`${this.pkgPath}`;
         this.dependencyGraphKey = this.pkgPath.toLowerCase();
 
-        this.extension = path.extname(pathAbsolute).toLowerCase();
+        this.extension = extname(this.pkgPath).toLowerCase();
 
         //all BrighterScript files need to be transpiled
-        if (this.extension === '.bs') {
+        if (this.extension.endsWith('.bs')) {
             this.needsTranspiled = true;
         }
+        this.isTypedef = this.extension === '.d.bs';
+        if (!this.isTypedef) {
+            this.typedefKey = util.getTypedefPath(this.pathAbsolute);
+        }
+
+        //global file doesn't have a program, so only resolve typedef info if we have a program
+        if (this.program) {
+            this.resolveTypdef();
+        }
+    }
+
+    /**
+     * The parseMode used for the parser for this file
+     */
+    public get parseMode() {
+        return this.extension.endsWith('.bs') ? ParseMode.BrighterScript : ParseMode.BrightScript;
     }
 
     /**
@@ -57,7 +74,7 @@ export class BrsFile {
      */
     public dependencyGraphKey: string;
     /**
-     * The extension for this file
+     * The all-lowercase extension for this file (including the leading dot)
      */
     public extension: string;
 
@@ -128,10 +145,80 @@ export class BrsFile {
         }
     }
 
-
-    public parser: Parser;
+    public parser = new Parser();
 
     public fileContents: string;
+
+    /**
+     * If this is a typedef file
+     */
+    public isTypedef: boolean;
+
+    /**
+     * The key to find the typedef file in the program's files map.
+     * A falsey value means this file is ineligable for a typedef
+     */
+    public typedefKey?: string;
+
+    /**
+     * If the file was given type definitions during parse
+     */
+    public hasTypedef;
+
+    /**
+     * A reference to the typedef file (if one exists)
+     */
+    public typedefFile?: BrsFile;
+
+    /**
+     * An unsubscribe function for the dependencyGraph subscription
+     */
+    private unsubscribeFromDependencyGraph: () => void;
+
+    /**
+     * Find and set the typedef variables (if a matching typedef file exists)
+     */
+    private resolveTypdef() {
+        this.typedefFile = this.program.getFileByPathAbsolute<BrsFile>(this.typedefKey);
+        this.hasTypedef = !!this.typedefFile;
+    }
+
+    /**
+     * Attach the file to the dependency graph so it can monitor changes.
+     * Also notify the dependency graph of our current dependencies so other dependents can be notified.
+     */
+    public attachDependencyGraph(dependencyGraph: DependencyGraph) {
+        if (this.unsubscribeFromDependencyGraph) {
+            this.unsubscribeFromDependencyGraph();
+        }
+
+        //event that fires anytime a dependency changes
+        this.unsubscribeFromDependencyGraph = this.program.dependencyGraph.onchange(this.dependencyGraphKey, () => {
+            this.resolveTypdef();
+
+            //if there is no typedef file, and this file hasn't been parsed yet, parse it now
+            //(solves issue when typedef gets deleted and this file had skipped parsing)
+            if (!this.hasTypedef && this.wasParseSkipped) {
+                this.parseDeferred = new Deferred();
+                this.parse(this.fileContents);
+            }
+        });
+
+        const dependencies = this.ownScriptImports.filter(x => !!x.pkgPath).map(x => x.pkgPath.toLowerCase());
+
+        //if this is a .brs file, watch for typedef changes
+        if (this.extension === '.brs') {
+            dependencies.push(
+                util.getTypedefPath(this.pkgPath)
+            );
+        }
+        dependencyGraph.addOrReplace(this.dependencyGraphKey, dependencies);
+    }
+
+    /**
+     * Was parsing skipped because the file has a typedef?
+     */
+    private wasParseSkipped = false;
 
     /**
      * Calculate the AST for this file
@@ -142,6 +229,13 @@ export class BrsFile {
             this.fileContents = fileContents;
             if (this.parseDeferred.isCompleted) {
                 throw new Error(`File was already processed. Create a new instance of BrsFile instead. ${this.pathAbsolute}`);
+            }
+
+            //if we have a typedef file, skip parsing this file
+            if (this.hasTypedef) {
+                this.wasParseSkipped = true;
+                this.parseDeferred.resolve();
+                return;
             }
 
             //tokenize the input file
@@ -172,10 +266,9 @@ export class BrsFile {
             //if the preprocessor generated tokens, use them.
             let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
 
-            this.parser = new Parser();
             this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.pathAbsolute)], () => {
                 this.parser.parse(tokens, {
-                    mode: this.extension === '.brs' ? ParseMode.BrightScript : ParseMode.BrighterScript,
+                    mode: this.parseMode,
                     logger: this.program.logger
                 });
             });
@@ -210,6 +303,7 @@ export class BrsFile {
                 ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(serializeError(e)))
             });
         }
+        this.wasParseSkipped = false;
         this.parseDeferred.resolve();
     }
 
@@ -1279,6 +1373,12 @@ export class BrsFile {
             }
             return new SourceNode(null, null, state.pathAbsolute, chunks).toStringWithSourceMap();
         }
+    }
+
+    public getTypedef() {
+        const state = new TranspileState(this);
+        const programNode = new SourceNode(null, null, this.pathAbsolute, this.ast.getTypedef(state));
+        return programNode.toString();
     }
 
     public dispose() {

@@ -6,6 +6,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.18.0] - 2020-10-30
+### Added
+ - support for consuming and producing type definitions. ([188](https://github.com/rokucommunity/brighterscript/pull/188))
+
+
+
+## [0.17.0] - 2020-10-27
+### Added
+ - Annotation syntax and AST support ([#234](https://github.com/rokucommunity/brighterscript/pull/234))
+
+
+
+## [0.16.12] - 2020-10-21
+### Fixed
+ - parser bug when there was a trailing colon after `for` or `while` loop statements ([#230](https://github.com/rokucommunity/brighterscript/pull/230))
+
+
+
+## [0.16.11] - 2020-10-20
+### Fixed
+ - bug when using single quotes in an xml script tag
+### Changed
+ - removed bs1106 (.bs file script tags must use the `type="brighterscript"`) diagnostic because it's unnecessary.
+
+
+
+## [0.16.10] - 2020-10-20
+### Fixed
+ - prevent crash when a callable has the same name as a javascript reserved name ([#226](https://github.com/rokucommunity/brighterscript/pull/226))
+ - prevent crash when `import` statement is malformed ([#224](https://github.com/rokucommunity/brighterscript/pull/224))
+
+
+
 ## [0.16.9] - 2020-10-18
 ### Fixed
  - reduce language server throttle for validation and parsing now that those have improved performance.
@@ -638,3 +671,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.16.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.6...v0.16.7
 [0.16.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.7...v0.16.8
 [0.16.9]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.8...v0.16.9
+[0.16.10]:  https://github.com/rokucommunity/brighterscript/compare/v0.16.9...v0.16.10
+[0.16.11]:  https://github.com/rokucommunity/brighterscript/compare/v0.16.10...v0.16.11
+[0.16.12]:  https://github.com/rokucommunity/brighterscript/compare/v0.16.11...v0.16.12
+[0.17.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.12...v0.17.0
+[0.18.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.17.0...v0.18.0

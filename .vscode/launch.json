@@ -1,5 +1,5 @@
 {
-    "version": "0.1.0",
+    "version": "0.2.0",
     "configurations": [
         {
             "name": "Launch Program",
@@ -9,8 +9,10 @@
                 "--versions",
                 "current",
                 "--targets",
-                "lex-parse-validate",
-                "--noprepare"
+                "lexer",
+                "--noprepare",
+                "--project",
+                "C:/projects/roku/brighterscript-template"
             ],
             "skipFiles": [
                 "<node_internals>/**"
@@ -21,7 +23,7 @@
             "name": "Debug Tests (Current file)",
             "type": "node",
             "request": "launch",
-            "smartStep": false,
+            "smartStep": true,
             "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
             "sourceMaps": true,
             "args": [

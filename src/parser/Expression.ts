@@ -12,7 +12,8 @@ import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { walk, InternalWalkMode } from '../astUtils/visitors';
-import { isCommentStatement, isEscapedCharCodeLiteralExpression, isLiteralExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCommentStatement, isEscapedCharCodeLiteralExpression, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isVariableExpression } from '../astUtils/reflection';
+import type { TypedefProvider } from '../interfaces';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -118,7 +119,7 @@ export class CallExpression extends Expression {
     }
 }
 
-export class FunctionExpression extends Expression {
+export class FunctionExpression extends Expression implements TypedefProvider {
     constructor(
         readonly parameters: FunctionParameterExpression[],
         readonly returns: ValueKind,
@@ -164,7 +165,7 @@ export class FunctionExpression extends Expression {
         );
     }
 
-    transpile(state: TranspileState, name?: Identifier) {
+    transpile(state: TranspileState, name?: Identifier, includeBody = true) {
         let results = [];
         //'function'|'sub'
         results.push(
@@ -206,10 +207,12 @@ export class FunctionExpression extends Expression {
                 new SourceNode(this.returnTypeToken.range.start.line + 1, this.returnTypeToken.range.start.character, state.pathAbsolute, this.returnTypeToken.text.toLowerCase())
             );
         }
-        state.lineage.unshift(this);
-        let body = this.body.transpile(state);
-        state.lineage.shift();
-        results.push(...body);
+        if (includeBody) {
+            state.lineage.unshift(this);
+            let body = this.body.transpile(state);
+            state.lineage.shift();
+            results.push(...body);
+        }
         results.push('\n');
         //'end sub'|'end function'
         results.push(
@@ -217,6 +220,10 @@ export class FunctionExpression extends Expression {
             new SourceNode(this.end.range.start.line + 1, this.end.range.start.character, state.pathAbsolute, this.end.text)
         );
         return results;
+    }
+
+    getTypedef(state: TranspileState, name?: Identifier) {
+        return this.transpile(state, name, false);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1155,4 +1162,73 @@ export class TaggedTemplateStringExpression extends Expression {
             }
         }
     }
+}
+
+export class AnnotationExpression extends Expression {
+    constructor(
+        readonly atToken: Token,
+        readonly nameToken: Token
+    ) {
+        super();
+        this.name = nameToken.text;
+        this.range = util.createRangeFromPositions(
+            atToken.range.start,
+            nameToken.range.end
+        );
+    }
+
+    public name: string;
+    public range: Range;
+    public call: CallExpression;
+
+    /**
+     * Convert annotation arguments to JavaScript types
+     * @param strict If false, keep Expression objects not corresponding to JS types
+     */
+    getArguments(strict = true): ExpressionValue[] {
+        if (!this.call) {
+            return [];
+        }
+        return this.call.args.map(e => expressionToValue(e, strict));
+    }
+
+    transpile(state: TranspileState) {
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+}
+
+// eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
+type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue };
+
+function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
+    if (!expr) {
+        return null;
+    }
+    if (isLiteralString(expr)) {
+        return expr.value.value;
+    }
+    if (isLiteralNumber(expr)) {
+        return expr.value.getValue();
+    }
+    if (isLiteralBoolean(expr)) {
+        return expr.value.toBoolean();
+    }
+    if (isArrayLiteralExpression(expr)) {
+        return expr.elements
+            .filter(e => !isCommentStatement(e))
+            .map(e => expressionToValue(e, strict));
+    }
+    if (isAALiteralExpression(expr)) {
+        return expr.elements.reduce((acc, e) => {
+            if (!isCommentStatement(e)) {
+                acc[e.keyToken.text] = expressionToValue(e.value, strict);
+            }
+            return acc;
+        }, {});
+    }
+    return strict ? null : expr;
 }

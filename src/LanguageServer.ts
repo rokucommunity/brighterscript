@@ -914,7 +914,6 @@ export class LanguageServer {
             this.connection.tracer.log(e);
             this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
         }
-        console.log('Validate done');
     }
 
     private async validateAll() {
