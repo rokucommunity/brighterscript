@@ -970,7 +970,6 @@ export class LanguageServer {
     private async onDefinition(params: TextDocumentPositionParams) {
         await this.waitAllProgramFirstRuns();
         let results = [] as Location[];
-        console.time('onDefinition');
         const pathAbsolute = util.uriToPath(params.textDocument.uri);
         const workspaces = this.getWorkspaces();
         for (const workspace of workspaces) {
@@ -980,18 +979,7 @@ export class LanguageServer {
                 ...locations
             );
         }
-        console.timeEnd('onDefinition');
         return results;
-        const deduplicatedDefinitions = Object.values(results.reduce((map, location) => {
-            const range = location.range ?? util.createRange(0, 0, 0, 0);
-            const start = range.start;
-            const end = range.end;
-            const key = `${location.uri}:${start.line}_${start.character}-${end.line}_${end.character}`;
-            map[key] = location;
-            return map;
-        }, {}));
-
-        return deduplicatedDefinitions as Location[];
     }
 
     private async onSignatureHelp(params: SignatureHelpParams) {
@@ -1017,13 +1005,16 @@ export class LanguageServer {
 
         await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
 
-        let promises = [] as Promise<SignatureInformation>[];
+        let promises = [] as Promise<SignatureInformation[]>[];
         for (const workspace of this.getWorkspaces()) {
             const pathAbsolute = util.uriToPath(params.textDocument.uri);
             const promise = workspace.builder.program.getSignatureHelp(pathAbsolute, matchingToken.text);
             promises.push(promise);
         }
-        const signatures = await Promise.all(promises);
+        const signatures = util.flatMap(
+            await Promise.all(promises),
+            c => c
+        );
 
         const activeSignature = signatures.length > 0 ? 0 : null;
         const activeParameter = activeSignature >= 0 ? info.commaCount : null;

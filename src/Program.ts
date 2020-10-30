@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CompletionItem, Position } from 'vscode-languageserver';
+import type { CompletionItem, Position, SignatureInformation } from 'vscode-languageserver';
 import { Location, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -21,6 +21,8 @@ import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile } from './astUtils/reflection';
+import { createVisitor, WalkMode } from './astUtils/visitors';
+import type { ClassMethodStatement, FunctionStatement } from './parser/Statement';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {
@@ -704,24 +706,40 @@ export class Program {
     }
 
     public async getSignatureHelp(callSitePathAbsolute: string, callableName: string) {
+        const results = [] as SignatureInformation[];
+
+        callableName = callableName.toLowerCase();
+
         //find the file
         let file = this.getFile(callSitePathAbsolute);
         if (!file) {
-            return null;
+            return results;
         }
 
         const scopes = this.getScopesForFile(file);
         for (const scope of scopes) {
-            const callable = scope.getCallableByName(callableName);
-            if (!callable) {
-                continue;
-            }
+            for (const file of scope.getFiles()) {
+                if (file instanceof XmlFile) {
+                    continue;
+                }
 
-            const signatureInformation = await callable.file.getSignatureHelp(callable);
-            if (signatureInformation) {
-                return signatureInformation;
+                await file.isReady();
+
+                const statementHandler = (statement: FunctionStatement | ClassMethodStatement) => {
+                    if (statement.getName(file.getParseMode()).toLowerCase() === callableName) {
+                        results.push(file.getSignatureHelp(statement));
+                    }
+                };
+                file.parser.ast.walk(createVisitor({
+                    FunctionStatement: statementHandler,
+                    ClassMethodStatement: statementHandler
+                }), {
+                    walkMode: WalkMode.visitStatements
+                });
             }
         }
+
+        return results;
     }
 
     public getReferences(pathAbsolute: string, position: Position) {

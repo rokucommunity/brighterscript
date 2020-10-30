@@ -9,7 +9,7 @@ import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, B
 import { Deferred } from '../deferred';
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
-import { Parser, ParseMode } from '../parser';
+import { Parser, ParseMode, ClassMethodStatement } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import type { AssignmentStatement, LibraryStatement, ImportStatement, Statement } from '../parser/Statement';
 import { ClassStatement, FunctionStatement, NamespaceStatement } from '../parser/Statement';
@@ -619,13 +619,7 @@ export class BrsFile {
     }
 
     private findCallables() {
-        const functionsStatements = this.parser.references.functionStatements ?? [];
-        for (const statement of this.parser.references.functionExpressions ?? []) {
-            if (statement.functionStatement) {
-                functionsStatements.push(statement.functionStatement);
-            }
-        }
-        for (let statement of functionsStatements) {
+        for (let statement of this.parser.references.functionStatements ?? []) {
 
             let functionType = new FunctionType(util.valueKindToBrsType(statement.func.returns));
             functionType.setName(statement.name.text);
@@ -925,7 +919,7 @@ export class BrsFile {
     /**
      * Determine if this file is a brighterscript file
      */
-    private getParseMode() {
+    public getParseMode() {
         return this.pathAbsolute.toLowerCase().endsWith('.bs') ? ParseMode.BrighterScript : ParseMode.BrightScript;
     }
 
@@ -1171,8 +1165,6 @@ export class BrsFile {
             }
         }
 
-        const pattern = /((?:function|sub)\s+)([a-z0-9_]+)\s*\(.*\)/gi;
-
         const filesSearched = {};
         //look through all files in scope for matches
         for (const scope of this.program.getScopesForFile(this)) {
@@ -1182,22 +1174,21 @@ export class BrsFile {
                 }
                 filesSearched[file.pathAbsolute] = true;
 
-                const contents = file.fileContents;
-                let match;
-                while ((match = pattern.exec(contents)) !== null) {
-                    if (match[2].toLowerCase() === textToSearchFor) {
-                        const lines = util.splitStringIntoLines(contents.slice(0, match.index + match[1].length));
-                        const position = util.createPosition(lines.length - 1, lines.pop().length);
-                        const token = file.getTokenAt(position);
-                        console.log(token);
+                const statementHandler = (statement: FunctionStatement | ClassMethodStatement) => {
+                    if (statement.getName(this.getParseMode()).toLowerCase() === textToSearchFor) {
                         const uri = util.pathToUri(file.pathAbsolute);
-                        results.push(Location.create(uri, token.range));
+                        results.push(Location.create(uri, statement.range));
                     }
-                }
-                pattern.lastIndex = 0;
+                };
+
+                file.parser.ast.walk(createVisitor({
+                    FunctionStatement: statementHandler,
+                    ClassMethodStatement: statementHandler
+                }), {
+                    walkMode: WalkMode.visitStatements
+                });
             }
         }
-
         return results;
     }
 
@@ -1261,10 +1252,7 @@ export class BrsFile {
         }
     }
 
-    public async getSignatureHelp(callable: Callable) {
-        await this.isReady();
-
-        const statement = callable.functionStatement;
+    public getSignatureHelp(statement: FunctionStatement | ClassMethodStatement) {
         const func = statement.func;
         const funcStartPosition = func.range.start;
 
@@ -1332,18 +1320,20 @@ export class BrsFile {
 
         for (const scope of scopes) {
             for (const file of scope.getFiles()) {
-                if (file instanceof BrsFile) {
-                    file.ast.walk(createVisitor({
-                        VariableExpression: (e) => {
-                            if (e.name.text.toLowerCase() === searchFor) {
-                                locations.push(Location.create(util.pathToUri(file.pathAbsolute), e.range));
-                            }
-                        }
-                    }),
-                    {
-                        walkMode: WalkMode.visitExpressionsRecursive
-                    });
+                if (file instanceof XmlFile) {
+                    continue;
                 }
+
+                file.ast.walk(createVisitor({
+                    VariableExpression: (e) => {
+                        if (e.name.text.toLowerCase() === searchFor) {
+                            locations.push(Location.create(util.pathToUri(file.pathAbsolute), e.range));
+                        }
+                    }
+                }),
+                {
+                    walkMode: WalkMode.visitExpressionsRecursive
+                });
             }
         }
         return locations;

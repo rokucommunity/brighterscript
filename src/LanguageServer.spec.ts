@@ -373,7 +373,7 @@ describe('LanguageServer', () => {
             await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
         });
 
-        it('should return the expected signature info when a documentation is included', async () => {
+        it('should return the expected signature info when documentation is included', async () => {
             const funcDescriptionComment = '@description Builds awesome for you';
             const funcReturnComment = '@return {Integer} The key to everything';
 
@@ -413,6 +413,8 @@ describe('LanguageServer', () => {
             const signature = result.signatures[0];
             expect(signature.label).to.equal(funcDefinitionLine);
         });
+
+        // Add tests for class methods
     });
 
     describe('onReferences', () => {
