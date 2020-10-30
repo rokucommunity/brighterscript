@@ -1172,7 +1172,8 @@ export class ImportStatement extends Statement implements TypedefProvider {
         return [
             this.importToken.text,
             ' ',
-            this.filePathToken.text
+            //replace any `.bs` extension with `.brs`
+            this.filePathToken.text.replace(/\.bs"?$/i, '.brs"')
         ];
     }
 

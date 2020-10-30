@@ -32,6 +32,13 @@ function trimLeading(text: string) {
     return lines.join('\n');
 }
 
-export function trim(text: TemplateStringsArray, ...args) {
-    return trimLeading(text[0]);
+export function trim(strings: TemplateStringsArray, ...args) {
+    let text = '';
+    for (let i = 0; i < strings.length; i++) {
+        text += strings[i];
+        if (args[i]) {
+            text += args[i];
+        }
+    }
+    return trimLeading(text);
 }
