@@ -7,7 +7,6 @@ import * as rokuDeploy from 'roku-deploy';
 import type { Position, Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
-
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
@@ -631,6 +630,22 @@ export class Util {
 
         let files = await rokuDeploy.getFilePaths(options.files, rootDir);
         return files;
+    }
+
+    /**
+     * Given a path to a brs file, compute the path to a theoretical d.bs file.
+     * Only `.brs` files can have typedef path, so return undefined for everything else
+     */
+    public getTypedefPath(brsSrcPath: string) {
+        const typedefPath = brsSrcPath
+            .replace(/\.brs$/i, '.d.bs')
+            .toLowerCase();
+
+        if (typedefPath.endsWith('.d.bs')) {
+            return typedefPath;
+        } else {
+            return undefined;
+        }
     }
 
     /**

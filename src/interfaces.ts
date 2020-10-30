@@ -1,5 +1,4 @@
 import type { Range, Diagnostic } from 'vscode-languageserver';
-
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -9,6 +8,8 @@ import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program, SourceObj, TranspileObj } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
+import type { TranspileState } from './parser/TranspileState';
+import type { SourceNode } from 'source-map';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
@@ -195,4 +196,8 @@ export interface CompilerPlugin {
     afterFileTranspile?: (entry: TranspileObj) => void;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
+}
+
+export interface TypedefProvider {
+    getTypedef(state: TranspileState): Array<SourceNode | string>;
 }

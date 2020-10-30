@@ -11,6 +11,7 @@ import util from '../util';
 import { Parser } from '../parser/Parser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
+import * as extname from 'path-complete-extname';
 import type { DependencyGraph } from '../DependencyGraph';
 
 export interface SGAstScript {
@@ -84,6 +85,11 @@ export class XmlFile {
     private unsubscribeFromDependencyGraph: () => void;
 
     /**
+     * If the file was given type definitions during parse. XML files never have a typedef
+     */
+    public hasTypedef = false;
+
+    /**
      * The range of the component's name value
      */
     public componentNameRange: Range;
@@ -112,9 +118,10 @@ export class XmlFile {
      *  - implied codebehind file
      *  - import statements from imported scripts or their descendents
      */
-    public getAllScriptImports() {
-        return this.cache.getOrAdd('allScriptImports', () => {
+    public getAllDependencies() {
+        return this.cache.getOrAdd(`allScriptImports`, () => {
             let value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
+
             return value;
         });
     }
@@ -129,7 +136,11 @@ export class XmlFile {
      */
     public getAvailableScriptImports() {
         return this.cache.getOrAdd('allAvailableScriptImports', () => {
-            let allDependencies = this.getAllScriptImports();
+
+            let allDependencies = this.getAllDependencies()
+                //skip typedef files
+                .filter(x => extname(x) !== '.d.bs');
+
             let result = [] as string[];
             let filesInProgram = this.program.getFilesByPkgPaths(allDependencies);
             for (let file of filesInProgram) {
@@ -412,6 +423,16 @@ export class XmlFile {
                 this.pkgPath.replace(/\.xml$/i, '.brs').toLowerCase()
             );
         }
+        const len = dependencies.length;
+        for (let i = 0; i < len; i++) {
+            const dep = dependencies[i];
+
+            //add a dependency on `d.bs` file for every `.brs` file
+            if (dep.slice(-4).toLowerCase() === '.brs') {
+                dependencies.push(util.getTypedefPath(dep));
+            }
+        }
+
         if (this.parentComponentName) {
             dependencies.push(this.parentComponentDependencyGraphKey);
         }
@@ -461,8 +482,8 @@ export class XmlFile {
             if (file === this) {
                 return true;
             }
-            let allScriptImports = this.getAllScriptImports();
-            for (let importPkgPath of allScriptImports) {
+            let allDependencies = this.getAllDependencies();
+            for (let importPkgPath of allDependencies) {
                 if (importPkgPath.toLowerCase() === file.pkgPath.toLowerCase()) {
                     return true;
                 }
