@@ -142,10 +142,6 @@ export class BrsFile {
 
     public fileContents: string;
 
-    private logDebug(...args) {
-        this.program.logger.debug('BrsFile', chalk.green(this.pkgPath), ...args);
-    }
-
     /**
      * If this is a typedef file
      */
