@@ -21,6 +21,7 @@ import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isXmlFile } from './astUtils/reflection';
+import { LanguageServer } from './LanguageServer';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {

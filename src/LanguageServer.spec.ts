@@ -481,15 +481,15 @@ describe('LanguageServer', () => {
 
     describe('onDefinition', () => {
         let functionDocument: TextDocument;
-        let referenceFileUris = [];
+        let referenceDocument: TextDocument;
 
         beforeEach(async () => {
             svr.connection = svr.createConnection();
             await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
             program = svr.workspaces[0].builder.program;
 
-            let functionFileBaseName = 'buildAwesome';
-            functionDocument = await addScriptFile('buildAwesome', `
+            const functionFileBaseName = 'buildAwesome';
+            functionDocument = await addScriptFile(functionFileBaseName, `
             function pi()
                 return 3.141592653589793
             end function
@@ -498,26 +498,23 @@ describe('LanguageServer', () => {
                 return 42
             end function`);
 
-            for (let i = 0; i < 5; i++) {
-                let name = `CallComponent${i}`;
-                const document = await addScriptFile(name, `sub init()
-                    shouldBuildAwesome = true
-                    if shouldBuildAwesome then
-                        buildAwesome()
-                    else
-                        m.top.observeFieldScope("loadFinished", "buildAwesome")
-                    end if
-                end sub`);
+            const name = `CallComponent`;
+            referenceDocument = await addScriptFile(name, `sub init()
+                shouldBuildAwesome = true
+                if shouldBuildAwesome then
+                    buildAwesome()
+                else
+                    m.top.observeFieldScope("loadFinished", "buildAwesome")
+                end if
+            end sub`);
 
-                await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
-                referenceFileUris.push(document.uri);
-            }
+            await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
         });
 
         it('should return the expected location if we entered on an identifier token', async () => {
             const locations = await svr.onDefinition({
                 textDocument: {
-                    uri: referenceFileUris[0]
+                    uri: referenceDocument.uri
                 },
                 position: util.createPosition(3, 29)
             });
@@ -532,7 +529,7 @@ describe('LanguageServer', () => {
         it('should return the expected location if we entered on a StringLiteral token', async () => {
             const locations = await svr.onDefinition({
                 textDocument: {
-                    uri: referenceFileUris[0]
+                    uri: referenceDocument.uri
                 },
                 position: util.createPosition(5, 73)
             });
@@ -547,7 +544,7 @@ describe('LanguageServer', () => {
         it('should return nothing if neither StringLiteral or identifier token entry point', async () => {
             const locations = await svr.onDefinition({
                 textDocument: {
-                    uri: referenceFileUris[0]
+                    uri: referenceDocument.uri
                 },
                 position: util.createPosition(0, 0)
             });
@@ -558,17 +555,49 @@ describe('LanguageServer', () => {
         it('should work on local variables as well', async () => {
             const locations = await svr.onDefinition({
                 textDocument: {
-                    uri: referenceFileUris[0]
+                    uri: referenceDocument.uri
                 },
                 position: util.createPosition(2, 32)
             });
             expect(locations.length).to.equal(1);
             const location: Location = locations[0];
-            expect(location.uri).to.equal(referenceFileUris[0]);
+            expect(location.uri).to.equal(referenceDocument.uri);
             expect(location.range.start.line).to.equal(1);
-            expect(location.range.start.character).to.equal(20);
+            expect(location.range.start.character).to.equal(16);
             expect(location.range.end.line).to.equal(1);
-            expect(location.range.end.character).to.equal(38);
+            expect(location.range.end.character).to.equal(34);
+        });
+
+        it('should work for bs class functions as well', async () => {
+            const functionFileBaseName = 'Build';
+            functionDocument = await addScriptFile(functionFileBaseName, `
+            class ${functionFileBaseName}
+                function awesome()
+                    return 42
+                end function
+            end class`, 'bs');
+
+            const name = `CallComponent`;
+            referenceDocument = await addScriptFile(name, `sub init()
+                build = new Build()
+                build.awesome()
+            end sub`);
+
+            await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
+
+            const locations = await svr.onDefinition({
+                textDocument: {
+                    uri: referenceDocument.uri
+                },
+                position: util.createPosition(2, 26)
+            });
+            expect(locations.length).to.equal(1);
+            const location: Location = locations[0];
+            expect(location.uri).to.equal(functionDocument.uri);
+            expect(location.range.start.line).to.equal(2);
+            expect(location.range.start.character).to.equal(16);
+            expect(location.range.end.line).to.equal(4);
+            expect(location.range.end.character).to.equal(28);
         });
     });
 

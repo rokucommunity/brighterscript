@@ -133,19 +133,19 @@ export class LanguageServer {
         // the completion list.
         this.connection.onCompletionResolve(this.onCompletionResolve.bind(this));
 
+        this.connection.onHover(this.onHover.bind(this));
+
+        this.connection.onExecuteCommand(this.onExecuteCommand.bind(this));
+
+        this.connection.onDefinition(this.onDefinition.bind(this));
+
         this.connection.onDocumentSymbol(this.onDocumentSymbol.bind(this));
 
         this.connection.onWorkspaceSymbol(this.onWorkspaceSymbol.bind(this));
 
-        this.connection.onDefinition(this.onDefinition.bind(this));
-
         this.connection.onSignatureHelp(this.onSignatureHelp.bind(this));
 
-        this.connection.onHover(this.onHover.bind(this));
-
         this.connection.onReferences(this.onReferences.bind(this));
-
-        this.connection.onExecuteCommand(this.onExecuteCommand.bind(this));
 
         /*
         this.connection.onDidOpenTextDocument((params) => {
@@ -197,14 +197,14 @@ export class LanguageServer {
                     triggerCharacters: ['.'],
                     allCommitCharacters: ['.', '@']
                 },
-                definitionProvider: true,
                 documentSymbolProvider: true,
                 workspaceSymbolProvider: true,
-                hoverProvider: true,
                 referencesProvider: true,
                 signatureHelpProvider: {
                     triggerCharacters: ['(', ',']
                 },
+                definitionProvider: true,
+                hoverProvider: true,
                 executeCommandProvider: {
                     commands: [
                         CustomCommands.TranspileFile
@@ -971,7 +971,7 @@ export class LanguageServer {
     private async onDefinition(params: TextDocumentPositionParams) {
         await this.waitAllProgramFirstRuns();
         let results = [] as Location[];
-
+        console.time('onDefinition');
         const pathAbsolute = util.uriToPath(params.textDocument.uri);
         const workspaces = this.getWorkspaces();
         for (const workspace of workspaces) {
@@ -981,6 +981,8 @@ export class LanguageServer {
                 ...locations
             );
         }
+        console.timeEnd('onDefinition');
+        return results;
         const deduplicatedDefinitions = Object.values(results.reduce((map, location) => {
             const range = location.range ?? util.createRange(0, 0, 0, 0);
             const start = range.start;
@@ -989,6 +991,7 @@ export class LanguageServer {
             map[key] = location;
             return map;
         }, {}));
+
         return deduplicatedDefinitions as Location[];
     }
 

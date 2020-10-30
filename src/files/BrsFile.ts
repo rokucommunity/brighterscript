@@ -26,6 +26,7 @@ import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
 import { isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
+import { XmlFile } from './XmlFile';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -524,7 +525,13 @@ export class BrsFile {
     }
 
     private findCallables() {
-        for (let statement of this.parser.references.functionStatements ?? []) {
+        const functionsStatements = this.parser.references.functionStatements ?? [];
+        for (const statement of this.parser.references.functionExpressions ?? []) {
+            if (statement.functionStatement) {
+                functionsStatements.push(statement.functionStatement);
+            }
+        }
+        for (let statement of functionsStatements) {
 
             let functionType = new FunctionType(util.valueKindToBrsType(statement.func.returns));
             functionType.setName(statement.name.text);
@@ -1070,12 +1077,30 @@ export class BrsFile {
             }
         }
 
-        //look through all callables in relevant scopes
+        const pattern = /((?:function|sub)\s+)([a-z0-9_]+)\s*\(.*\)/gi;
+
+        const filesSearched = {};
+        //look through all files in scope for matches
         for (const scope of this.program.getScopesForFile(this)) {
-            let callable = scope.getCallableByName(textToSearchFor);
-            if (callable) {
-                const uri = util.pathToUri(callable.file.pathAbsolute);
-                results.push(Location.create(uri, callable.range));
+            for (const file of scope.getFiles()) {
+                if (file instanceof XmlFile || filesSearched[file.pathAbsolute]) {
+                    continue;
+                }
+                filesSearched[file.pathAbsolute] = true;
+
+                const contents = file.fileContents;
+                let match;
+                while ((match = pattern.exec(contents)) !== null) {
+                    if (match[2].toLowerCase() === textToSearchFor) {
+                        const lines = util.splitStringIntoLines(contents.slice(0, match.index + match[1].length));
+                        const position = util.createPosition(lines.length - 1, lines.pop().length);
+                        const token = file.getTokenAt(position);
+                        console.log(token);
+                        const uri = util.pathToUri(file.pathAbsolute);
+                        results.push(Location.create(uri, token.range));
+                    }
+                }
+                pattern.lastIndex = 0;
             }
         }
 
@@ -1206,7 +1231,7 @@ export class BrsFile {
         if (callSiteToken.kind !== TokenKind.Identifier) {
             return locations;
         }
-        console.log('callSiteToken.kind', callSiteToken.kind);
+
         const searchFor = callSiteToken.text.toLowerCase();
 
         const scopes = this.program.getScopesForFile(this);
