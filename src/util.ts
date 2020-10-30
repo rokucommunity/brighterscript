@@ -643,6 +643,8 @@ export class Util {
 
         if (typedefPath.endsWith('.d.bs')) {
             return typedefPath;
+        } else {
+            return undefined;
         }
     }
 

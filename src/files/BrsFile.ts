@@ -189,10 +189,8 @@ export class BrsFile {
             this.unsubscribeFromDependencyGraph();
         }
 
-        //anytime a dependency changes, clean up some cached values
+        //event that fires anytime a dependency changes
         this.unsubscribeFromDependencyGraph = this.program.dependencyGraph.onchange(this.dependencyGraphKey, () => {
-            this.logDebug('clear cache because dependency graph changed');
-
             this.resolveTypdef();
 
             //if there is no typedef file, and this file hasn't been parsed yet, parse it now
@@ -222,7 +220,6 @@ export class BrsFile {
     /**
      * Calculate the AST for this file
      * @param fileContents
-     * @param typedefContents - a string containing the d.bs file contents (type definitions)
      */
     public parse(fileContents: string) {
         try {
@@ -240,7 +237,6 @@ export class BrsFile {
 
             //tokenize the input file
             let lexer = this.program.logger.time(LogLevel.debug, ['lexer.lex', chalk.green(this.pathAbsolute)], () => {
-                //scan the d.bs file if present, otherwise the fileContents
                 return Lexer.scan(fileContents, {
                     includeWhitespace: false
                 });
