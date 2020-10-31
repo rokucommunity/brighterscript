@@ -205,7 +205,7 @@ class BabyDuck extends Duck
         m.age = age
     end sub
     age as integer
-end sub
+end class
 ```
 
 <details>
@@ -231,7 +231,6 @@ function __BabyDuck_builder()
     instance.new = sub(name as string, age as integer)
         m.super0_new()
         m.age = invalid
-        m.end sub = invalid
         'the first line in this constructor must be a call to super()
         m.super0_new(name)
         m.age = age
