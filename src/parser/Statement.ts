@@ -1748,12 +1748,17 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
     getTypedef(state: TranspileState) {
         const result = [];
         if (this.name) {
+            let type = valueKindToString(this.getType()).toLowerCase();
+            if (type === 'invalid' || type === 'void' || type === '<uninitialized>') {
+                type = 'dynamic';
+            }
+
             result.push(
                 this.accessModifier?.text ?? 'public',
                 ' ',
                 this.name?.text,
                 ' as ',
-                valueKindToString(this.getType()).toLowerCase()
+                type
             );
         }
         return result;

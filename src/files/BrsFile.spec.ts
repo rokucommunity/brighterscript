@@ -2303,6 +2303,20 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('sets properties to dynamic when initialized to invalid', async () => {
+            await testTypedef(`
+                class Human
+                    public firstName = invalid
+                    public lastName as string = invalid
+                end class
+            `, trim`
+                class Human
+                    public firstName as dynamic
+                    public lastName as string
+                end class
+            `);
+        });
+
         it('includes class inheritance', async () => {
             await testTypedef(`
                 class Human
