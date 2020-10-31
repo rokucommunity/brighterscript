@@ -1599,6 +1599,9 @@ export class ClassMethodStatement extends FunctionStatement {
                 ' '
             );
         }
+        if (this.overrides) {
+            result.push('override ');
+        }
         result.push(
             ...super.getTypedef(state)
         );
