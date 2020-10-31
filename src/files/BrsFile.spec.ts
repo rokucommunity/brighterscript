@@ -2303,6 +2303,20 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('sets properties to dynamic when initialized to invalid', async () => {
+            await testTypedef(`
+                class Human
+                    public firstName = invalid
+                    public lastName as string = invalid
+                end class
+            `, trim`
+                class Human
+                    public firstName as dynamic
+                    public lastName as string
+                end class
+            `);
+        });
+
         it('includes class inheritance', async () => {
             await testTypedef(`
                 class Human
@@ -2322,6 +2336,61 @@ describe('BrsFile', () => {
                 end class
                 class Person extends Human
                     sub new(name as string)
+                    end sub
+                end class
+            `);
+        });
+
+        it('includes access modifier keyword', async () => {
+            await testTypedef(`
+                class Human
+                    public firstName as string
+                    protected middleName as string
+                    private lastName as string
+                    public function getFirstName()
+                        return m.firstName
+                    end function
+                    protected function getMiddleName()
+                        return m.middleName
+                    end function
+                    private function getLastName()
+                        return m.lastName
+                    end function
+                end class
+            `, trim`
+                class Human
+                    public firstName as string
+                    protected middleName as string
+                    private lastName as string
+                    public function getFirstName()
+                    end function
+                    protected function getMiddleName()
+                    end function
+                    private function getLastName()
+                    end function
+                end class
+            `);
+        });
+
+        it('includes overrides keyword if present in source', async () => {
+            await testTypedef(`
+                class Animal
+                    public sub speak()
+                        print "Hello Animal"
+                    end sub
+                end class
+                class Dog extends Animal
+                    public override sub speak()
+                        print "Hello Dog"
+                    end sub
+                end class
+            `, trim`
+                class Animal
+                    public sub speak()
+                    end sub
+                end class
+                class Dog extends Animal
+                    public override sub speak()
                     end sub
                 end class
             `);
