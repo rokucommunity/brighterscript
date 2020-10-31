@@ -210,7 +210,7 @@ export class BsClassValidator {
                             //is a method
                             isClassMethodStatement(member) &&
                             //does not have an override keyword
-                            !member.overrides &&
+                            !member.override &&
                             //is not the constructur function
                             member.name.text.toLowerCase() !== 'new'
                         ) {

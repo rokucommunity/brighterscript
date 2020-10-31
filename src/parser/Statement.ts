@@ -1418,7 +1418,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 //store overridden parent methods as super{parentIndex}_{methodName}
                 if (
                     //is override method
-                    statement.overrides ||
+                    statement.override ||
                     //is constructor function in child class
                     (statement.name.text.toLowerCase() === 'new' && ancestors[0])
                 ) {
@@ -1548,7 +1548,7 @@ export class ClassMethodStatement extends FunctionStatement {
         readonly accessModifier: Token,
         name: Identifier,
         func: FunctionExpression,
-        readonly overrides: Token
+        readonly override: Token
     ) {
         super(name, func, undefined);
         this.range = util.createRangeFromPositions(
@@ -1599,7 +1599,7 @@ export class ClassMethodStatement extends FunctionStatement {
                 ' '
             );
         }
-        if (this.overrides) {
+        if (this.override) {
             result.push('override ');
         }
         result.push(
