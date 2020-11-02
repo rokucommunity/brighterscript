@@ -49,8 +49,7 @@ export class BsClassValidator {
      * and make sure we can find a class with that name
      */
     private verifyNewExpressions() {
-        let files = this.scope.getFiles();
-        for (let file of files) {
+        this.scope.enumerateBrsFiles((file) => {
             let newExpressions = file.parser.references.newExpressions;
             for (let newExpression of newExpressions) {
                 let className = newExpression.className.getName(ParseMode.BrighterScript);
@@ -81,7 +80,7 @@ export class BsClassValidator {
                     }
                 }
             }
-        }
+        });
     }
 
     private findNamespaceNonNamespaceCollisions() {
@@ -264,10 +263,7 @@ export class BsClassValidator {
 
     private findClasses() {
         this.classes = {};
-
-        let files = this.scope.getFiles();
-
-        for (let file of files) {
+        this.scope.enumerateBrsFiles((file) => {
             for (let x of file.parser.references.classStatements ?? []) {
                 let classStatement = x as AugmentedClassStatement;
                 let name = classStatement.getName(ParseMode.BrighterScript);
@@ -300,7 +296,7 @@ export class BsClassValidator {
                     });
                 }
             }
-        }
+        });
     }
 
     private linkClassesWithParents() {

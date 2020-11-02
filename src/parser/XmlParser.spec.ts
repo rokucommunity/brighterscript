@@ -1,9 +1,10 @@
 import { expect } from 'chai';
-import { parse } from './XmlParser';
+import XmlParser from './XmlParser';
 
 describe('XmlParser', () => {
     it('Parses well formed SG component', () => {
-        const ast = parse(
+        const parser = new XmlParser();
+        parser.parse(
             `<?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>
@@ -27,8 +28,9 @@ describe('XmlParser', () => {
                 </children>
             </component>`
         );
+        const { ast, diagnostics } = parser;
         expect(ast.prolog).to.exist;
         expect(ast.root).to.exist;
-        expect(ast.diagnostics.length).to.equal(0);
+        expect(diagnostics.length).to.equal(0);
     });
 });

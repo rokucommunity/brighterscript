@@ -7,8 +7,7 @@ import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
-import { Parser } from '../parser/Parser';
-import { parse } from '../parser/XmlParser';
+import XmlParser from '../parser/XmlParser';
 import type { XmlAst, XmlAstNode, XmlAstAttribute, XmlAstToken } from '../parser/XmlParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
@@ -44,11 +43,6 @@ export class XmlFile {
      * An unsubscribe function for the dependencyGraph subscription
      */
     private unsubscribeFromDependencyGraph: () => void;
-
-    /**
-     * If the file was given type definitions during parse. XML files never have a typedef
-     */
-    public hasTypedef = false;
 
     /**
      * The range of the component's name value
@@ -127,8 +121,7 @@ export class XmlFile {
 
     public diagnostics = [] as BsDiagnostic[];
 
-    public ast: XmlAst;
-    public parser = new Parser();
+    public parser = new XmlParser();
 
     //TODO implement the xml CDATA parsing, which would populate this list
     public callables = [] as Callable[];
@@ -152,8 +145,16 @@ export class XmlFile {
 
     /**
      * Does this file need to be transpiled?
+     * (always true for XML file because of the lib we import)
      */
-    public needsTranspiled = false;
+    public needsTranspiled = true;
+
+    /**
+     * The AST for this file
+     */
+    public get ast() {
+        return this.parser.ast;
+    }
 
     /**
      * The full file contents
@@ -168,14 +169,13 @@ export class XmlFile {
     public parse(fileContents: string) {
         this.fileContents = fileContents;
 
-        this.ast = parse(fileContents);
-        this.diagnostics.push(
-            ...this.ast.diagnostics.map(diagnostic => ({
-                ...diagnostic,
-                file: this
-            }))
-        );
-        if (!this.ast.root) {
+        this.parser.parse(fileContents);
+        this.diagnostics = this.parser.diagnostics.map(diagnostic => ({
+            ...diagnostic,
+            file: this
+        }));
+
+        if (!this.parser.ast.root) {
             //empty XML
             return;
         }
@@ -184,7 +184,7 @@ export class XmlFile {
         this.program.plugins.emit('afterFileParse', this);
 
         //walk AST
-        this.walkComponent(this.ast.root);
+        this.walkComponent(this.parser.ast.root);
 
         //catch script imports with same path as the auto-imported codebehind file
         let explicitCodebehindScriptTag = this.program.options.autoImportComponentScript === true
@@ -479,43 +479,23 @@ export class XmlFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        this.logDebug('transpile');
-
-        const { prolog, root } = this.ast;
-
-        //create a clone
-        let component = {
-            ...root,
-            children: [
-                ...root.children?.map(updateScript)
-            ]
-        };
-        //insert extra imports
-        const extraImports = this.getMissingImportsForTranspile()
-            .map(uri => createXmlAstNode('script', {
-                type: 'text/brightscript',
-                uri: util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'))
-            }));
-        if (extraImports.length) {
-            component.children.push(...extraImports);
-        }
-
         const source = this.pathAbsolute;
-        const chunks = [] as Array<SourceNode | string>;
-
-        //write XML prolog
-        if (prolog) {
-            const offset = rangeToSourceOffset(prolog.range);
-            chunks.push(new SourceNode(offset.line, offset.column, source, [
-                '<?xml',
-                ...transpileAttributes(source, prolog.attributes),
-                ' ?>\n'
-            ]));
+        if (this.needsTranspiled) {
+            //emit an XML document with sourcemaps from the AST
+            return transpileAst(source, this.parser.ast, this.getMissingImportsForTranspile());
+        } else {
+            //create a source map from the original source code
+            let chunks = [] as (SourceNode | string)[];
+            let lines = this.fileContents.split(/\r?\n/g);
+            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+                let line = lines[lineIndex];
+                chunks.push(
+                    lineIndex > 0 ? '\n' : '',
+                    new SourceNode(lineIndex + 1, 0, source, line)
+                );
+            }
+            return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
         }
-        //write content
-        chunks.push(transpileNode(source, component, ''));
-
-        return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
     }
 
     public dispose() {
@@ -523,6 +503,41 @@ export class XmlFile {
             this.unsubscribeFromDependencyGraph();
         }
     }
+}
+
+function transpileAst(source: string, ast: XmlAst, extraImports: string[]) {
+    const { prolog, root } = ast;
+    //create a clone
+    let component = {
+        ...root,
+        children: [
+            ...root.children?.map(updateScript)
+        ]
+    };
+    //insert extra imports
+    const extraScripts = extraImports
+        .map(uri => createXmlAstNode('script', {
+            type: 'text/brightscript',
+            uri: util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'))
+        }));
+    if (extraScripts.length) {
+        component.children.push(...extraScripts);
+    }
+
+    const chunks = [] as Array<SourceNode | string>;
+    //write XML prolog
+    if (prolog) {
+        const offset = rangeToSourceOffset(prolog.range);
+        chunks.push(new SourceNode(offset.line, offset.column, source, [
+            '<?xml',
+            ...transpileAttributes(source, prolog.attributes),
+            ' ?>\n'
+        ]));
+    }
+    //write content
+    chunks.push(transpileNode(source, component, ''));
+
+    return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
 }
 
 function updateScript(node: XmlAstNode): XmlAstNode {

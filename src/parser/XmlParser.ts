@@ -4,51 +4,64 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { Range, Diagnostic } from 'vscode-languageserver';
 import util from '../util';
 
-export function parse(fileContents: string) {
-    const diagnostics: Diagnostic[] = [];
+export default class XmlParser {
 
-    const { cst, tokenVector, lexErrors, parseErrors } = parser.parse(fileContents);
+    /**
+     * The AST of the XML document, not including the inline scripts
+     */
+    public ast: XmlAst;
 
-    if (lexErrors.length) {
-        lexErrors.forEach(err => {
-            diagnostics.push({
-                ...DiagnosticMessages.xmlGenericParseError(`Syntax error: ${err.message}`),
-                range: util.createRange(
-                    err.line - 1,
-                    err.column,
-                    err.line - 1,
-                    err.column + err.length
-                )
-            });
-        });
-    }
-    if (parseErrors.length) {
-        const err = parseErrors[0];
-        const token = err.token;
-        diagnostics.push({
-            ...DiagnosticMessages.xmlGenericParseError(`Syntax error: ${err.message}`),
-            range: !isNaN(token.startLine) ? rangeFromTokens(token) : util.createRange(0, 0, 0, Number.MAX_VALUE)
-        });
-    }
+    /**
+     * The list of diagnostics found during the parse process
+     */
+    public diagnostics = [] as Diagnostic[];
 
-    const ast = new XmlAst(cst as DocumentCstNode, diagnostics);
+    public parse(fileContents: string) {
+        this.diagnostics = [];
 
-    if (!ast.root) {
-        const token1 = tokenVector[0];
-        const token2 = tokenVector[1];
-        //whitespace before the prolog isn't allowed by the parser
-        if (
-            token1?.image.trim().length === 0 &&
-            token2?.image.trim() === '<?xml'
-        ) {
-            diagnostics.push({
-                ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
-                range: rangeFromTokens(token1)
+        const { cst, tokenVector, lexErrors, parseErrors } = parser.parse(fileContents);
+
+        if (lexErrors.length) {
+            lexErrors.forEach(err => {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.xmlGenericParseError(`Syntax error: ${err.message}`),
+                    range: util.createRange(
+                        err.line - 1,
+                        err.column,
+                        err.line - 1,
+                        err.column + err.length
+                    )
+                });
             });
         }
-    }
+        if (parseErrors.length) {
+            const err = parseErrors[0];
+            const token = err.token;
+            this.diagnostics.push({
+                ...DiagnosticMessages.xmlGenericParseError(`Syntax error: ${err.message}`),
+                range: !isNaN(token.startLine) ? rangeFromTokens(token) : util.createRange(0, 0, 0, Number.MAX_VALUE)
+            });
+        }
 
-    return ast;
+        const ast = new XmlAst(cst as DocumentCstNode);
+
+        if (!ast.root) {
+            const token1 = tokenVector[0];
+            const token2 = tokenVector[1];
+            //whitespace before the prolog isn't allowed by the parser
+            if (
+                token1?.image.trim().length === 0 &&
+                token2?.image.trim() === '<?xml'
+            ) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
+                    range: rangeFromTokens(token1)
+                });
+            }
+        }
+
+        this.ast = ast;
+    }
 }
 
 export interface XmlAstToken {
@@ -91,7 +104,7 @@ export class XmlAst {
     prolog: XmlAstProlog;
     root: XmlAstNode;
 
-    constructor(cst: DocumentCstNode, public diagnostics: Diagnostic[]) {
+    constructor(cst: DocumentCstNode) {
         const { prolog, element } = cst.children;
         if (prolog?.[0]) {
             const ctx = prolog[0].children;

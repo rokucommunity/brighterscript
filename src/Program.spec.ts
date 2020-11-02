@@ -119,7 +119,7 @@ describe('Program', () => {
         });
 
         it('supports empty statements for transpile', async () => {
-            const file = await program.addOrReplaceFile('source/main.bs', `
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.bs', `
                 sub main()
                     m.logError()
                     'some comment
@@ -580,7 +580,7 @@ describe('Program', () => {
             let xmlPath = s`${rootDir}/components/component1.xml`;
             await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="HeroScene" extends="Scene" >');
+                <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);
@@ -603,13 +603,14 @@ describe('Program', () => {
             let xmlPath = `${rootDir}/components/component1.xml`;
             await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="HeroScene" extends="Scene" >');
+                <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);
             await program.validate();
-            expect(program.getDiagnostics().length).to.equal(1);
-            expect(program.getDiagnostics()[0]).to.deep.include(<BsDiagnostic>{
+            let diagnostics = program.getDiagnostics();
+            expect(diagnostics.length).to.equal(1);
+            expect(diagnostics[0]).to.deep.include(<BsDiagnostic>{
                 ...DiagnosticMessages.referencedFileDoesNotExist(),
                 file: program.getFileByPathAbsolute(xmlPath),
                 range: Range.create(2, 42, 2, 72)
@@ -619,7 +620,7 @@ describe('Program', () => {
         it('adds warning instead of error on mismatched upper/lower case script import', async () => {
             await program.addOrReplaceFile('components/component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="HeroScene" extends="Scene" >');
+                <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="component1.brs" />
                 </component>
             `);
@@ -640,7 +641,7 @@ describe('Program', () => {
             let xmlPath = s`${rootDir}/components/component1.xml`;
             await program.addOrReplaceFile({ src: xmlPath, dest: 'components/comonent1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="HeroScene" extends="Scene" >');
+                <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);
@@ -658,7 +659,7 @@ describe('Program', () => {
             //add the xml file back in, but change the component brs file name. Should have an error again
             await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="HeroScene" extends="Scene" >');
+                <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/component2.brs" />
                 </component>
             `);
@@ -675,7 +676,7 @@ describe('Program', () => {
             let xmlPath = s`${rootDir}/components/component1.xml`;
             let xmlFile = await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="HeroScene" extends="Scene" >');
+                <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);
@@ -692,7 +693,7 @@ describe('Program', () => {
             let xmlPath = s`${rootDir}/components/component1.xml`;
             let xmlFile = await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="HeroScene" extends="Scene" >');
+                <component name="HeroScene" extends="Scene">
 
                 </component>
             `);
@@ -703,7 +704,7 @@ describe('Program', () => {
             //reload the xml file contents, adding a new script reference.
             xmlFile = await program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="HeroScene" extends="Scene" >');
+                <component name="HeroScene" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/components/component1.brs" />
                 </component>
             `);

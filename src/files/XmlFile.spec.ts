@@ -36,7 +36,7 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterFileParse: () => {
-                    file.ast.root.attributes[0].value.text = expected;
+                    file.parser.ast.root.attributes[0].value.text = expected;
                 }
             });
             file.parse(trim`
@@ -557,6 +557,26 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 </component>
             `, 'none', 'components/SimpleScene.xml');
+        });
+
+        it('returns the XML unmodified if needsTranspiled is false', async () => {
+            let file = await program.addOrReplaceFile(
+                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
+                trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <!-- should stay as-is -->
+                <component name="SimpleScene" extends="Scene" >
+                <script type="text/brightscript" uri="SimpleScene.brs"/>
+                </component>
+            `);
+            file.needsTranspiled = false;
+            expect(file.transpile().code).to.equal(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <!-- should stay as-is -->
+                <component name="SimpleScene" extends="Scene" >
+                <script type="text/brightscript" uri="SimpleScene.brs"/>
+                </component>
+            `);
         });
     });
 
