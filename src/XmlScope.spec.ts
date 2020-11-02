@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { Position } from 'vscode-languageserver';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
+import { trim } from './testHelpers.spec';
 import { standardizePath as s, util } from './util';
 let rootDir = s`${process.cwd()}/rootDir`;
 
@@ -19,7 +20,7 @@ describe('XmlScope', () => {
 
     describe('constructor', () => {
         it('listens for attach/detach parent events', async () => {
-            let parentXmlFile = await program.addOrReplaceFile<XmlFile>('components/parent.xml', `
+            let parentXmlFile = await program.addOrReplaceFile<XmlFile>('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Parent" extends="Scene">
                 </component>
@@ -29,7 +30,7 @@ describe('XmlScope', () => {
             //should default to global scope
             expect(scope.getParentScope()).to.equal(program.globalScope);
 
-            let childXmlFile = await program.addOrReplaceFile<XmlFile>('components/child.xml', `
+            let childXmlFile = await program.addOrReplaceFile<XmlFile>('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Child" extends="Parent">
                 </component>
@@ -55,18 +56,18 @@ describe('XmlScope', () => {
 
     describe('getDefinition', () => {
         it('finds parent file', async () => {
-            let parentXmlFile = await program.addOrReplaceFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, `
+            let parentXmlFile = await program.addOrReplaceFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentComponent">
                 </component>
             `);
-            let childXmlFile = await program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, `
+            let childXmlFile = await program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildComponent" extends="ParentComponent">
                 </component>
             `);
             let childScope = program.getScopesForFile(childXmlFile);
-            let definition = childScope[0].getDefinition(childXmlFile, Position.create(2, 64));
+            let definition = childScope[0].getDefinition(childXmlFile, Position.create(1, 48));
             expect(definition).to.be.lengthOf(1);
             expect(definition[0].uri).to.equal(util.pathToUri(parentXmlFile.pathAbsolute));
         });
@@ -74,7 +75,7 @@ describe('XmlScope', () => {
 
     describe('getFiles', () => {
         it('includes the xml file', async () => {
-            let xmlFile = await program.addOrReplaceFile('components/child.xml', `
+            let xmlFile = await program.addOrReplaceFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Child">
                 </component>

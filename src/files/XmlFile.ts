@@ -2,58 +2,19 @@ import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
-import { Deferred } from '../deferred';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
 import { Parser } from '../parser/Parser';
+import { parse } from '../parser/XmlParser';
+import type { XmlAst, XmlAstNode, XmlAstAttribute, XmlAstToken } from '../parser/XmlParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import * as extname from 'path-complete-extname';
 import type { DependencyGraph } from '../DependencyGraph';
-
-export interface SGAstScript {
-    $?: {
-        uri: string;
-        type?: string;
-    };
-}
-
-export interface SGAstFunction {
-    $?: {
-        name: string;
-    };
-}
-
-export interface SGAstField {
-    $?: {
-        id: string;
-        type?: string;
-        alwaysNotify?: string;
-        onChange?: string;
-    };
-}
-
-export interface SGAstInterface {
-    function?: SGAstFunction[];
-    field?: SGAstField[];
-}
-
-export interface SGAstComponent {
-    $?: {
-        name: string;
-        extends: string;
-    };
-    script?: SGAstScript[];
-    interface?: SGAst;
-    children?: any;
-}
-
-export interface SGAst {
-    component?: SGAstComponent;
-}
+import { createXmlAstNode, findXmlAstAttribute } from '../astUtils/xml';
 
 export class XmlFile {
     constructor(
@@ -166,8 +127,7 @@ export class XmlFile {
 
     public diagnostics = [] as BsDiagnostic[];
 
-    //TODO implement parsing
-    public parsedXml: SGAst;
+    public ast: XmlAst;
     public parser = new Parser();
 
     //TODO implement the xml CDATA parsing, which would populate this list
@@ -195,9 +155,6 @@ export class XmlFile {
      */
     public needsTranspiled = false;
 
-    //the lines of the xml file
-    public lines: string[];
-
     /**
      * The full file contents
      */
@@ -208,177 +165,26 @@ export class XmlFile {
      */
     public propertyNameCompletions = [] as CompletionItem[];
 
-    private uriRangeRegex = /(.*?\s+uri\s*=\s*(?:'|"))(.*?)(?:'|")/g;
-    private scriptTypeRegex = /type\s*=\s*"(.*?)"/gi;
-
-    public async parse(fileContents: string) {
+    public parse(fileContents: string) {
         this.fileContents = fileContents;
-        if (this.parseDeferred.isCompleted) {
-            throw new Error(`File was already processed. Create a new file instead. ${this.pathAbsolute}`);
-        }
-        //split the text into lines
-        this.lines = util.getLines(fileContents);
 
-        this.parentNameRange = this.findExtendsPosition(fileContents);
-
-        //create a range of the entire file
-        this.fileRange = util.createRange(0, 0, this.lines.length, this.lines[this.lines.length - 1].length - 1);
-
-        this.parsedXml = {};
-        try {
-            this.parsedXml = (await util.parseXml(fileContents)) || {};
-
-            //notify AST ready
-            this.program.plugins.emit('afterFileParse', this);
-
-            if (this.parsedXml.component) {
-                if (this.parsedXml.component.$) {
-                    this.componentName = this.parsedXml.component.$.name;
-                    this.parentComponentName = this.parsedXml.component.$.extends;
-                }
-                let componentRange: Range;
-
-                //find the range for the component element's opening tag
-                for (let lineIndex = 0; lineIndex < this.lines.length; lineIndex++) {
-                    let idx = this.lines[lineIndex].indexOf('<component');
-                    if (idx > -1) {
-                        componentRange = util.createRange(
-                            lineIndex,
-                            idx,
-                            lineIndex,
-                            idx + 10
-                        );
-                        //calculate the range of the component's name (if it exists)
-                        const match = /(.*?name\s*=\s*(?:'|"))(.*?)('|")/.exec(this.lines[lineIndex]);
-                        if (match) {
-                            this.componentNameRange = util.createRange(
-                                lineIndex,
-                                match[1].length,
-                                lineIndex,
-                                match[1].length + match[2].length
-                            );
-                        }
-                        break;
-                    }
-                }
-                //component name not defined
-                if (!this.componentName) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
-                        range: util.createRange(
-                            componentRange.start.line,
-                            componentRange.start.character,
-                            componentRange.start.line,
-                            componentRange.end.character
-                        ),
-                        file: this
-                    });
-                }
-
-                //parent component name not defined
-                if (!this.parentComponentName) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
-                        range: util.createRange(
-                            componentRange.start.line,
-                            componentRange.start.character,
-                            componentRange.start.line,
-                            componentRange.end.character
-                        ),
-                        file: this
-                    });
-                }
-            } else {
-                //the component xml element was not found in the file
-                this.diagnostics.push({
-                    ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
-                    range: util.createRange(
-                        0,
-                        0,
-                        0,
-                        Number.MAX_VALUE
-                    ),
-                    file: this
-                });
-            }
-        } catch (e) {
-            let match = /(.*)\r?\nLine:\s*(\d+)\r?\nColumn:\s*(\d+)\r?\nChar:\s*(\d*)/gi.exec(e.message);
-            if (match) {
-                let lineIndex = parseInt(match[2]);
-                let columnIndex = parseInt(match[3]) - 1;
-                //add basic xml parse diagnostic errors
-                this.diagnostics.push({
-                    ...DiagnosticMessages.xmlGenericParseError(match[1]),
-                    range: util.createRange(
-                        lineIndex,
-                        columnIndex,
-                        lineIndex,
-                        columnIndex
-                    ),
-                    file: this
-                });
-            }
+        this.ast = parse(fileContents);
+        this.diagnostics.push(
+            ...this.ast.diagnostics.map(diagnostic => ({
+                ...diagnostic,
+                file: this
+            }))
+        );
+        if (!this.ast.root) {
+            //empty XML
+            return;
         }
 
-        //find script imports
-        if (this.parsedXml.component) {
-            let scripts = this.parsedXml.component.script || [];
-            let scriptImports = [] as FileReference[];
-            //get a list of all scripts
-            for (let script of scripts) {
-                let uri = script.$?.uri;
-                if (typeof uri === 'string') {
-                    scriptImports.push({
-                        filePathRange: null,
-                        sourceFile: this,
-                        text: uri,
-                        pkgPath: util.getPkgPathFromTarget(this.pkgPath, uri)
-                    });
-                }
-            }
+        //notify AST ready
+        this.program.plugins.emit('afterFileParse', this);
 
-            //make a lookup of every uri range
-            let uriRanges = {} as Record<string, Range[]>;
-            for (let lineIndex = 0; lineIndex < this.lines.length; lineIndex++) {
-                let line = this.lines[lineIndex];
-                //reset the regexes
-                this.uriRangeRegex.lastIndex = 0;
-                this.scriptTypeRegex.lastIndex = 0;
-
-                let lineIndexOffset = 0;
-                let match: RegExpExecArray;
-                while (match = this.uriRangeRegex.exec(line)) { //eslint-disable-line no-cond-assign
-                    let preUriContent = match[1];
-                    let uri = match[2];
-                    if (!uriRanges[uri]) {
-                        uriRanges[uri] = [];
-                    }
-                    let startColumnIndex = lineIndexOffset + preUriContent.length;
-                    let endColumnIndex = startColumnIndex + uri.length;
-
-                    uriRanges[uri].push(
-                        util.createRange(
-                            lineIndex,
-                            startColumnIndex,
-                            lineIndex,
-                            endColumnIndex
-                        )
-                    );
-
-                    lineIndexOffset += match[0].length;
-                }
-            }
-
-            //try to compute the locations of each script import
-            for (let scriptImport of scriptImports) {
-                //take and remove the first item from the list
-                let range = uriRanges[scriptImport.text].shift();
-                scriptImport.filePathRange = range;
-            }
-
-            //add all of these script imports
-            this.scriptTagImports = scriptImports;
-        }
+        //walk AST
+        this.walkComponent(this.ast.root);
 
         //catch script imports with same path as the auto-imported codebehind file
         let explicitCodebehindScriptTag = this.program.options.autoImportComponentScript === true
@@ -391,8 +197,86 @@ export class XmlFile {
                 range: explicitCodebehindScriptTag.filePathRange
             });
         }
+    }
 
-        this.parseDeferred.resolve();
+    private walkComponent(node: XmlAstNode) {
+        if (node.name.text !== 'component') {
+            //not a SG component
+            this.diagnostics.push({
+                ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
+                range: node.range,
+                file: this
+            });
+            return;
+        }
+
+        const nameAttr = findXmlAstAttribute(node, 'name');
+        if (!nameAttr) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
+                range: node.name.range,
+                file: this
+            });
+        } else {
+            this.componentName = nameAttr.value.text;
+            this.componentNameRange = nameAttr.value.range;
+        }
+
+        const extendsAttr = findXmlAstAttribute(node, 'extends');
+        if (!extendsAttr) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
+                range: node.name.range,
+                file: this
+            });
+        } else {
+            this.parentComponentName = extendsAttr.value.text;
+            this.parentNameRange = extendsAttr.value.range;
+        }
+
+        //validate tags and find script
+        this.validateChildrenOf(node, {
+            'interface': node => {
+                //TODO: validate interface
+                this.validateChildrenOf(node, {
+                    'field': () => {},
+                    'function': () => {}
+                });
+            },
+            'script': node => {
+                const uriAttr = findXmlAstAttribute(node, 'uri');
+                if (uriAttr) {
+                    this.scriptTagImports.push({
+                        filePathRange: uriAttr.value.range,
+                        sourceFile: this,
+                        text: uriAttr.value.text,
+                        pkgPath: util.getPkgPathFromTarget(this.pkgPath, uriAttr.value.text)
+                    });
+                }
+                //TODO: parse inline script
+            },
+            'children': () => {
+                //TODO: validate children components
+            }
+        });
+    }
+
+    private validateChildrenOf(node: XmlAstNode, validate: Record<string, (node: XmlAstNode) => void>) {
+        node.children?.forEach(node => {
+            const name = node.name?.text;
+            if (!name) {
+                return;
+            }
+            if (validate[name]) {
+                validate[name](node);
+            } else {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.xmlUnknownTag(name),
+                    range: node.name.range,
+                    file: this
+                });
+            }
+        });
     }
 
     /**
@@ -409,7 +293,6 @@ export class XmlFile {
             this.logDebug('clear cache because dependency graph changed');
             this.cache.clear();
         });
-
 
         let dependencies = [
             ...this.scriptTagImports.map(x => x.pkgPath.toLowerCase())
@@ -464,15 +347,6 @@ export class XmlFile {
         }
     }
 
-    private parseDeferred = new Deferred();
-
-    /**
-     * Indicates that the file is completely ready for interaction
-     */
-    public isReady() {
-        return this.parseDeferred.promise;
-    }
-
     /**
      * Determines if this xml file has a reference to the specified file (or if it's itself)
      * @param file
@@ -504,36 +378,12 @@ export class XmlFile {
      * @param lineIndex
      * @param columnIndex
      */
-    public async getCompletions(position: Position): Promise<CompletionItem[]> {
+    public getCompletions(position: Position): CompletionItem[] {
         let scriptImport = util.getScriptImportAtPosition(this.scriptTagImports, position);
         if (scriptImport) {
             return this.program.getScriptImportCompletions(this.pkgPath, scriptImport);
         } else {
-            return Promise.resolve([]);
-        }
-    }
-
-    /**
-     * Scan the xml and find the range of the parent component's name in the `extends="ParentComponentName"` attribute of the component
-     */
-    public findExtendsPosition(fullText: string) {
-        let regexp = /.*<component[^>]*((extends\s*=\s*")(\w*)")/gms;
-        let match = regexp.exec(fullText);
-        if (match) {
-            let extendsText = match[1]; // `extends="something"`
-            let extendsToFirstQuote = match[2]; // `extends="`
-            let componentName = match[3]; // `something`
-            let lines = util.getLines(match[0]);
-            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                let line = lines[lineIndex];
-                let extendsIdx = line.indexOf(extendsText);
-                //we found the line index
-                if (extendsIdx > -1) {
-                    let colStartIndex = extendsIdx + extendsToFirstQuote.length;
-                    let colEndIndex = colStartIndex + componentName.length;
-                    return util.createRange(lineIndex, colStartIndex, lineIndex, colEndIndex);
-                }
-            }
+            return [];
         }
     }
 
@@ -546,8 +396,7 @@ export class XmlFile {
         });
     }
 
-
-    public getHover(position: Position): Promise<Hover> { //eslint-disable-line
+    public getHover(position: Position): Hover { //eslint-disable-line
         //TODO implement
         // let result = {} as Hover;
         return null;
@@ -617,6 +466,8 @@ export class XmlFile {
                 result.push(ownImport);
             }
         }
+
+        result.push('source/bslib.brs');
         return result;
     }
 
@@ -629,50 +480,42 @@ export class XmlFile {
      */
     public transpile(): CodeWithSourceMap {
         this.logDebug('transpile');
-        //eventually we want to support sourcemaps and a full xml parser. However, for now just do some string transformations
-        let chunks = [] as Array<SourceNode | string>;
-        for (let i = 0; i < this.lines.length; i++) {
-            let line = this.lines[i];
-            let lowerLine = line.toLowerCase();
 
-            let componentLocationIndex = lowerLine.indexOf('</component>');
-            //include any bs import statements
-            if (componentLocationIndex > -1) {
-                let missingImports = this.getMissingImportsForTranspile()
-                    //change the file extension to .brs since they will be transpiled
-                    .map(x => x.replace('.bs', '.brs'));
-                //always include the bslib file
-                missingImports.push('source/bslib.brs');
+        const { prolog, root } = this.ast;
 
-                for (let missingImport of missingImports) {
-                    let scriptTag = `<script type="text/brightscript" uri="${util.getRokuPkgPath(missingImport)}" />`;
-                    //indent the script tag
-                    let indent = ''.padStart(componentLocationIndex + 4, ' ');
-                    chunks.push(
-                        '\n',
-                        new SourceNode(1, 0, this.pathAbsolute, indent + scriptTag)
-                    );
-                }
-            } else {
-                //we couldn't find the closing component tag....so maybe there's something wrong? or this isn't actually a component?
-            }
-
-            //convert .bs extensions to .brs
-            let idx = line.indexOf('.bs"');
-            if (idx > -1) {
-                line = line.substring(0, idx) + '.brs' + line.substring(idx + 3);
-            }
-
-            //convert "text/brighterscript" to "text/brightscript"
-            line = line.replace(`"text/brighterscript"`, `"text/brightscript"`);
-
-            chunks.push(
-                chunks.length > 0 ? '\n' : '',
-                line
-            );
+        //create a clone
+        let component = {
+            ...root,
+            children: [
+                ...root.children?.map(updateScript)
+            ]
+        };
+        //insert extra imports
+        const extraImports = this.getMissingImportsForTranspile()
+            .map(uri => createXmlAstNode('script', {
+                type: 'text/brightscript',
+                uri: util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'))
+            }));
+        if (extraImports.length) {
+            component.children.push(...extraImports);
         }
 
-        return new SourceNode(null, null, this.pathAbsolute, chunks).toStringWithSourceMap();
+        const source = this.pathAbsolute;
+        const chunks = [] as Array<SourceNode | string>;
+
+        //write XML prolog
+        if (prolog) {
+            const offset = rangeToSourceOffset(prolog.range);
+            chunks.push(new SourceNode(offset.line, offset.column, source, [
+                '<?xml',
+                ...transpileAttributes(source, prolog.attributes),
+                ' ?>\n'
+            ]));
+        }
+        //write content
+        chunks.push(transpileNode(source, component, ''));
+
+        return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
     }
 
     public dispose() {
@@ -680,4 +523,99 @@ export class XmlFile {
             this.unsubscribeFromDependencyGraph();
         }
     }
+}
+
+function updateScript(node: XmlAstNode): XmlAstNode {
+    if (node.name.text !== 'script') {
+        return node;
+    }
+    //replace type and file extension of brighterscript references
+    const typeAttr = findXmlAstAttribute(node, 'type');
+    const uriAttr = findXmlAstAttribute(node, 'uri');
+    if (typeAttr?.value.text.indexOf('brighterscript') || uriAttr?.value.text.endsWith('.bs')) {
+        const temp = createXmlAstNode('script', {
+            type: 'text/brightscript',
+            uri: uriAttr?.value.text.replace(/\.bs$/, '.brs')
+        });
+        temp.cdata = node.cdata;
+        return temp;
+    }
+    return node;
+}
+
+function rangeToSourceOffset(range: Range) {
+    if (!range) {
+        return {
+            line: null,
+            column: null
+        };
+    }
+    return {
+        line: range.start.line + 1,
+        column: range.start.character
+    };
+}
+
+function transpileNode(source: string, node: XmlAstNode, indent: string): string | SourceNode {
+    return new SourceNode(null, null, source, [
+        indent,
+        '<',
+        transpileToken(source, node.name),
+        ...transpileAttributes(source, node.attributes),
+        ...transpileNodeBody(source, node, indent)
+    ]);
+}
+
+function transpileToken(source: string, token: XmlAstToken) {
+    const { range, text } = token;
+    if (range) {
+        const offset = rangeToSourceOffset(range);
+        return new SourceNode(offset.line, offset.column, source, text);
+    } else {
+        return text;
+    }
+}
+
+function transpileAttributes(source: string, attributes: XmlAstAttribute[]): (string | SourceNode)[] {
+    return attributes.map(attr => {
+        const offset = rangeToSourceOffset(attr.range);
+        return new SourceNode(
+            offset.line,
+            offset.column,
+            source,
+            [
+                ' ',
+                attr.key.text,
+                '="',
+                attr.value.text,
+                '"'
+            ]);
+    });
+}
+
+function transpileNodeBody(source: string, node: XmlAstNode, indent: string): (string | SourceNode)[] {
+    if (node.children?.length > 0) {
+        const bodyIndent = incIndent(indent);
+        return [
+            '>\n',
+            ...node.children.map(snode => transpileNode(source, snode, bodyIndent)),
+            indent,
+            '</',
+            node.endName ? transpileToken(source, node.endName) : node.name.text,
+            '>\n'
+        ];
+    } else if (node.cdata) {
+        return [
+            '>',
+            transpileToken(source, node.cdata),
+            '</',
+            transpileToken(source, node.name),
+            '>\n'
+        ];
+    }
+    return [' />\n'];
+}
+
+function incIndent(indent: string): string {
+    return indent + '    ';
 }

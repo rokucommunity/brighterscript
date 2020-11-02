@@ -363,8 +363,8 @@ export let DiagnosticMessages = {
         code: 1069,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1070: () => ({
-        message: ``,
+    xmlUnknownTag: (tagName: string) => ({
+        message: `Unknown tag '${tagName}'`,
         code: 1070,
         severity: DiagnosticSeverity.Error
     }),

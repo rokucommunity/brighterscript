@@ -371,7 +371,7 @@ export class Program {
                     source: await getFileContents()
                 };
                 this.plugins.emit('beforeFileParse', fileContents);
-                await xmlFile.parse(fileContents.source);
+                xmlFile.parse(fileContents.source);
 
                 file = xmlFile;
 
@@ -624,9 +624,6 @@ export class Program {
             return [];
         }
 
-        //wait for the file to finish loading
-        await file.isReady();
-
         //find the scopes for this file
         let scopes = this.getScopesForFile(file);
 
@@ -637,9 +634,7 @@ export class Program {
 
         //get the completions from all scopes for this file
         let allCompletions = util.flatMap(
-            await Promise.all(
-                scopes.map(async ctx => file.getCompletions(position, ctx))
-            ),
+            scopes.map(ctx => file.getCompletions(position, ctx)),
             c => c
         );
 
@@ -654,7 +649,7 @@ export class Program {
                 result.push(completion);
             }
         }
-        return result;
+        return Promise.resolve(result);
     }
 
     /**
@@ -702,7 +697,7 @@ export class Program {
             return null;
         }
 
-        return file.getHover(position);
+        return Promise.resolve(file.getHover(position));
     }
 
     public async getSignatureHelp(callSitePathAbsolute: string, callableName: string) {
@@ -722,9 +717,6 @@ export class Program {
                 if (isXmlFile(file)) {
                     continue;
                 }
-
-                await file.isReady();
-
                 const statementHandler = (statement: FunctionStatement | ClassMethodStatement) => {
                     if (statement.getName(file.getParseMode()).toLowerCase() === callableName) {
                         results.push(file.getSignatureHelp(statement));
@@ -812,10 +804,8 @@ export class Program {
      * Transpile a single file and get the result as a string.
      * This does not write anything to the file system.
      */
-    public async getTranspiledFileContents(pathAbsolute: string) {
+    public getTranspiledFileContents(pathAbsolute: string) {
         let file = this.getFile(pathAbsolute);
-        //wait for the file to finish being parsed
-        await file.isReady();
         let result = file.transpile();
         return {
             ...result,

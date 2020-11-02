@@ -81,6 +81,7 @@
         "@types/node": "^11.9.0",
         "@types/request": "^2.47.0",
         "@types/sinon": "^9.0.4",
+        "@types/yargs": "^15.0.5",
         "@typescript-eslint/eslint-plugin": "^4.4.1",
         "@typescript-eslint/parser": "^4.4.1",
         "benchmark": "^2.1.4",
@@ -106,7 +107,7 @@
         "vscode-jsonrpc": "^5.0.1"
     },
     "dependencies": {
-        "@types/yargs": "^15.0.5",
+        "@xml-tools/parser": "^1.0.7",
         "array-flat-polyfill": "^1.0.1",
         "chalk": "^2.4.2",
         "chokidar": "^3.0.2",
