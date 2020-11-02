@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.18.2] - 2020-11-2
 ### Fixed
- - support on-demand parse for typedef-shadowed files ((#237)[https://github.com/rokucommunity/brighterscript/pull/237])
+ - support on-demand parse for typedef-shadowed files ([#237](https://github.com/rokucommunity/brighterscript/pull/237))
 
 
 
