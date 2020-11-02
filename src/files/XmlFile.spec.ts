@@ -569,8 +569,8 @@ describe('XmlFile', () => {
                 <script type="text/brightscript" uri="SimpleScene.brs"/>
                 </component>
             `);
+            //prevent the default auto-imports to ensure no transpilation from AST
             (file as any).getMissingImportsForTranspile = () => [];
-            file.needsTranspiled = false;
             expect(file.transpile().code).to.equal(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <!-- should stay as-is -->
@@ -578,6 +578,29 @@ describe('XmlFile', () => {
                 <script type="text/brightscript" uri="SimpleScene.brs"/>
                 </component>
             `);
+        });
+
+        it('needsTranspiled is false by default', async () => {
+            let file = await program.addOrReplaceFile(
+                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
+                trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" >
+                </component>
+            `);
+            expect(file.needsTranspiled).to.be.false;
+        });
+
+        it('needsTranspiled is true if an import is brighterscript', async () => {
+            let file = await program.addOrReplaceFile(
+                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
+                trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" >
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
+                </component>
+            `);
+            expect(file.needsTranspiled).to.be.true;
         });
     });
 

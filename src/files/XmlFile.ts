@@ -245,12 +245,16 @@ export class XmlFile {
             'script': node => {
                 const uriAttr = findXmlAstAttribute(node, 'uri');
                 if (uriAttr) {
+                    const uri = uriAttr.value.text;
                     this.scriptTagImports.push({
                         filePathRange: uriAttr.value.range,
                         sourceFile: this,
-                        text: uriAttr.value.text,
+                        text: uri,
                         pkgPath: util.getPkgPathFromTarget(this.pkgPath, uriAttr.value.text)
                     });
+                    if (uri?.endsWith('.bs')) {
+                        this.needsTranspiled = true;
+                    }
                 }
                 //TODO: parse inline script
             },
@@ -480,7 +484,7 @@ export class XmlFile {
     public transpile(): CodeWithSourceMap {
         const source = this.pathAbsolute;
         const extraImports = this.getMissingImportsForTranspile();
-        if (extraImports.length > 0 || this.needsTranspiled) {
+        if (this.needsTranspiled || extraImports.length > 0) {
             //emit an XML document with sourcemaps from the AST
             return transpileAst(source, this.parser.ast, extraImports);
         } else {
