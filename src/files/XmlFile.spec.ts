@@ -569,6 +569,7 @@ describe('XmlFile', () => {
                 <script type="text/brightscript" uri="SimpleScene.brs"/>
                 </component>
             `);
+            (file as any).getMissingImportsForTranspile = () => [];
             file.needsTranspiled = false;
             expect(file.transpile().code).to.equal(trim`
                 <?xml version="1.0" encoding="utf-8" ?>

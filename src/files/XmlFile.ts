@@ -145,9 +145,8 @@ export class XmlFile {
 
     /**
      * Does this file need to be transpiled?
-     * (always true for XML file because of the lib we import)
      */
-    public needsTranspiled = true;
+    public needsTranspiled = false;
 
     /**
      * The AST for this file
@@ -480,9 +479,10 @@ export class XmlFile {
      */
     public transpile(): CodeWithSourceMap {
         const source = this.pathAbsolute;
-        if (this.needsTranspiled) {
+        const extraImports = this.getMissingImportsForTranspile();
+        if (extraImports.length > 0 || this.needsTranspiled) {
             //emit an XML document with sourcemaps from the AST
-            return transpileAst(source, this.parser.ast, this.getMissingImportsForTranspile());
+            return transpileAst(source, this.parser.ast, extraImports);
         } else {
             //create a source map from the original source code
             let chunks = [] as (SourceNode | string)[];
