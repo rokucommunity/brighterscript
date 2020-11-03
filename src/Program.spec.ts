@@ -4,7 +4,7 @@ import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range, DiagnosticSeverity, Location } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
@@ -93,7 +93,6 @@ describe('Program', () => {
                 expect(stub.called).to.be.true;
 
             });
-
         });
 
         it('only parses xml files as components when file is found within the "components" folder', async () => {
