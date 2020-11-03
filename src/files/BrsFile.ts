@@ -217,6 +217,7 @@ export class BrsFile {
     public parse(fileContents: string) {
         try {
             this.fileContents = fileContents;
+            this.diagnostics = [];
 
             //if we have a typedef file, skip parsing this file
             if (this.hasTypedef) {

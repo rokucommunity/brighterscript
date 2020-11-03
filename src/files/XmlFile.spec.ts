@@ -54,7 +54,7 @@ describe('XmlFile', () => {
                 <component name="ChildScene" extends="Scene">
                     <script type="text/brightscript" uri="ChildScene.bs" />
                 </component>
-            `) as any;
+            `);
             expect(file.scriptTagImports.map(x => x.pkgPath)[0]).to.equal(
                 s`components/ChildScene.bs`
             );
@@ -68,7 +68,7 @@ describe('XmlFile', () => {
                         <script type="text/brightscript" uri="ChildScene.brs" />
                     -->
                 </component>
-            `) as any;
+            `);
             expect(
                 file.scriptTagImports?.[0]?.pkgPath
             ).to.eql(
@@ -121,12 +121,11 @@ describe('XmlFile', () => {
             );
             expect(file.diagnostics).to.be.lengthOf(2);
             expect(file.diagnostics[0]).to.deep.include({ // expecting opening tag but got prolog
-                code: 1008,
+                code: DiagnosticMessages.xmlGenericParseError('').code,
                 range: Range.create(1, 16, 1, 22)
             });
             expect(file.diagnostics[1]).to.deep.include({
-                code: 1008,
-                message: DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog').message,
+                ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
                 range: Range.create(0, 0, 1, 16)
             });
         });
@@ -227,7 +226,7 @@ describe('XmlFile', () => {
                 <component name="Cmp1" extends="Scene">
                     <script type="text/brightscript" uri="cmp1.brs" />
                 </component>
-            `) as any;
+            `);
             expect(file.scriptTagImports.length).to.equal(1);
             expect(file.scriptTagImports[0]).to.deep.include(<FileReference>{
                 text: 'cmp1.brs',
@@ -244,7 +243,7 @@ describe('XmlFile', () => {
                 <component name="Cmp1" extends="Scene">
                     <script type="text/brightscript" uri="" />
                 </component>
-            `) as any;
+            `);
             expect(file.scriptTagImports.length).to.equal(1);
             expect(file.scriptTagImports[0]?.filePathRange).to.eql(
                 Range.create(2, 42, 2, 42)
@@ -383,7 +382,7 @@ describe('XmlFile', () => {
                 <component name="ChildScene" extends="BaseScene">
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                 </component>
-            `) as any;
+            `);
             expect(file.getAllDependencies().sort()).to.eql([
                 s`source/lib.brs`,
                 s`source/lib.d.bs`
@@ -392,7 +391,7 @@ describe('XmlFile', () => {
     });
 
     it('invalidates dependent scopes on change', async () => {
-        let xmlFile = await program.addOrReplaceFile({
+        let xmlFile = await program.addOrReplaceFile<XmlFile>({
             src: `${rootDir}/components/comp1.xml`,
             dest: `components/comp1.xml`
         }, trim`
@@ -400,7 +399,7 @@ describe('XmlFile', () => {
             <component name="ChildScene" extends="BaseScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.bs" />
             </component>
-        `) as any as XmlFile;
+        `);
         await program.validate();
         let scope = program.getScopesForFile(xmlFile)[0];
         //scope should be validated
@@ -445,7 +444,7 @@ describe('XmlFile', () => {
     });
 
     it('does not invalidate unrelated scopes on change', async () => {
-        let xmlFile1 = await program.addOrReplaceFile({
+        let xmlFile1 = await program.addOrReplaceFile<XmlFile>({
             src: `${rootDir}/components/comp1.xml`,
             dest: `components/comp1.xml`
         }, trim`
@@ -453,16 +452,16 @@ describe('XmlFile', () => {
             <component name="ChildScene1" extends="BaseScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.brs" />
             </component>
-        `) as any as XmlFile;
+        `);
 
-        let xmlFile2 = await program.addOrReplaceFile({
+        let xmlFile2 = await program.addOrReplaceFile<XmlFile>({
             src: `${rootDir}/components/comp2.xml`,
             dest: `components/comp2.xml`
         }, trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene2" extends="BaseScene">
             </component>
-        `) as any as XmlFile;
+        `);
 
         await program.validate();
         //scope should be validated
@@ -490,7 +489,38 @@ describe('XmlFile', () => {
     });
 
     describe('component extends', () => {
-        it('adds warning when no "extends" attribute is found', async () => {
+        it('works for single-line', async () => {
+            file = await program.addOrReplaceFile(
+                {
+                    src: `${rootDir}/components/comp1.xml`,
+                    dest: `components/comp1.xml`
+                },
+                trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="ChildScene" extends="BaseScene">
+                    </component>
+                `
+            ) as any;
+            expect(file.parentNameRange).to.eql(Range.create(1, 38, 1, 47));
+        });
+
+        it('works for multi-line', async () => {
+            file = await program.addOrReplaceFile(
+                {
+                    src: `${rootDir}/components/comp1.xml`,
+                    dest: `components/comp1.xml`
+                },
+                trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="ChildScene"
+                        extends="BaseScene">
+                    </component>
+                `
+            ) as any;
+            expect(file.parentNameRange).to.eql(Range.create(2, 13, 2, 22));
+        });
+
+        it('does not throw when unable to find extends', async () => {
             file = await program.addOrReplaceFile(
                 {
                     src: `${rootDir}/components/comp1.xml`,
@@ -502,6 +532,21 @@ describe('XmlFile', () => {
                     </component>
                 `
             ) as any;
+            expect(file.parentNameRange).to.not.exist;
+        });
+
+        it('adds warning when no "extends" attribute is found', async () => {
+            file = await program.addOrReplaceFile<XmlFile>(
+                {
+                    src: `${rootDir}/components/comp1.xml`,
+                    dest: `components/comp1.xml`
+                },
+                trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="ChildScene">
+                    </component>
+                `
+            );
 
             expect(file.getDiagnostics()[0]).to.include({
                 severity: DiagnosticSeverity.Warning,

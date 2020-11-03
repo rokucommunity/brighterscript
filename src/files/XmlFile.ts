@@ -165,6 +165,10 @@ export class XmlFile {
      */
     public propertyNameCompletions = [] as CompletionItem[];
 
+    /**
+     * Calculate the AST for this file
+     * @param fileContents
+     */
     public parse(fileContents: string) {
         this.fileContents = fileContents;
 
