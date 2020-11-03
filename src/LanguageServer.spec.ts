@@ -114,8 +114,7 @@ describe('LanguageServer', () => {
     }
 
     async function addScriptFile(name: string, contents: string, extension = 'brs') {
-        const filePath = `components/${name}.${extension}`;
-
+        const filePath = s`components/${name}.${extension}`;
         await program.addOrReplaceFile(filePath, contents);
         for (const key in program.files) {
             if (key.includes(filePath)) {
