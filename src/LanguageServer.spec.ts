@@ -360,7 +360,7 @@ describe('LanguageServer', () => {
             await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
             program = svr.workspaces[0].builder.program;
 
-            let name = `CallComponent`;
+            const name = `CallComponent`;
             callDocument = await addScriptFile(name, `sub init()
                 shouldBuildAwesome = true
                 if shouldBuildAwesome then
@@ -369,7 +369,7 @@ describe('LanguageServer', () => {
                     m.buildAwesome()
                 end if
             end sub`);
-            await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
+            await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
         });
 
         it('should return the expected signature info when documentation is included', async () => {
@@ -382,7 +382,7 @@ describe('LanguageServer', () => {
             ' */
             ${funcDefinitionLine}
                 return 42
-            end function`);
+            end function`, 'bs');
 
             const result = await svr.onSignatureHelp({
                 textDocument: {
@@ -400,7 +400,7 @@ describe('LanguageServer', () => {
         it('should work if used on a property value', async () => {
             await addScriptFile(functionFileBaseName, `${funcDefinitionLine}
                 return 42
-            end function`);
+            end function`, 'bs');
 
             const result = await svr.onSignatureHelp({
                 textDocument: {
@@ -413,7 +413,26 @@ describe('LanguageServer', () => {
             expect(signature.label).to.equal(funcDefinitionLine);
         });
 
-        // Add tests for class methods
+        it('should give the correct signature for a class method', async () => {
+            const classMethodDefinitionLine = 'function buildAwesome(classVersion = true as Boolean)';
+            await addScriptFile(functionFileBaseName, `
+            class ${functionFileBaseName}
+                ${classMethodDefinitionLine}
+                    return 42
+                end function
+            end class`, 'bs');
+
+            const result = await svr.onSignatureHelp({
+                textDocument: {
+                    uri: callDocument.uri
+                },
+                position: util.createPosition(5, 35)
+            });
+
+            expect(result.signatures).to.not.be.empty;
+            const signature = result.signatures[0];
+            expect(signature.label).to.equal(classMethodDefinitionLine);
+        });
     });
 
     describe('onReferences', () => {

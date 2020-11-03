@@ -9,7 +9,8 @@ import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, B
 import { Deferred } from '../deferred';
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
-import { Parser, ParseMode, ClassMethodStatement } from '../parser';
+import { Parser, ParseMode } from '../parser';
+import type { ClassMethodStatement } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import type { AssignmentStatement, LibraryStatement, ImportStatement, Statement } from '../parser/Statement';
 import { ClassStatement, FunctionStatement, NamespaceStatement } from '../parser/Statement';
