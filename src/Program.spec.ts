@@ -96,30 +96,6 @@ describe('Program', () => {
 
         });
 
-        describe('parseError', () => {
-            let orig;
-            beforeEach(() => {
-                orig = BrsFile.prototype.parse;
-                BrsFile.prototype.parse = () => {
-                    return Promise.reject(new Error('some error'));
-                };
-            });
-            afterEach(() => {
-                BrsFile.prototype.parse = orig;
-            });
-
-            it('still adds the file even when it errors', async () => {
-                try {
-                    //add a file, which will immediately error during parse (because of the beforeEach above)
-                    await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `'comment`);
-                    assert.fail(null, null, 'Should have thrown exception');
-                } catch (e) {
-                    //the file should still be in the files list
-                    expect(program.hasFile(`${rootDir}/source/main.brs`)).to.be.true;
-                }
-            });
-        });
-
         it('only parses xml files as components when file is found within the "components" folder', async () => {
             expect(Object.keys(program.files).length).to.equal(0);
 
