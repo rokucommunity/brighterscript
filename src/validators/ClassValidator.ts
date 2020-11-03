@@ -1,6 +1,5 @@
 import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import type { BsDiagnostic } from '..';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
 import type { ClassMethodStatement, ClassStatement } from '../parser/Statement';
@@ -8,8 +7,9 @@ import { CancellationTokenSource, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement } from '../astUtils/reflection';
-import type { BscFile } from '../interfaces';
+import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils';
+import type { BrsFile } from '../files/BrsFile';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -143,8 +143,8 @@ export class BsClassValidator {
                     cancel: cancellationToken.token
                 });
 
-                //every child class constructor must include a call to `super()`
-                if (!superCall) {
+                //every child class constructor must include a call to `super()` (except for typedef files)
+                if (!superCall && !(classStatement.file as BrsFile).isTypedef) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.classConstructorMissingSuperCall(),
                         file: classStatement.file,
@@ -210,7 +210,7 @@ export class BsClassValidator {
                             //is a method
                             isClassMethodStatement(member) &&
                             //does not have an override keyword
-                            !member.overrides &&
+                            !member.override &&
                             //is not the constructur function
                             member.name.text.toLowerCase() !== 'new'
                         ) {

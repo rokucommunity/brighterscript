@@ -1424,4 +1424,23 @@ describe('Program', () => {
         });
     });
 
+    describe('typedef', () => {
+        it('ignores bs1018 for d.bs files', async () => {
+            await program.addOrReplaceFile<BrsFile>('source/main.d.bs', `
+                class Duck
+                    sub new(name as string)
+                    end sub
+                    name as string
+                end class
+
+                class BabyDuck extends Duck
+                    sub new(name as string, age as integer)
+                    end sub
+                    age as integer
+                end class
+            `);
+            await program.validate();
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+    });
 });

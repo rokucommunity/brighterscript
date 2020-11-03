@@ -145,7 +145,23 @@ export class BrsFile {
         }
     }
 
-    public parser = new Parser();
+    public get parser() {
+        if (!this._parser) {
+            //remove the typedef file (if it exists)
+            this.hasTypedef = false;
+            this.typedefFile = undefined;
+
+            //reset the deferred
+            this.parseDeferred = new Deferred();
+            //parse the file (it should parse fully since there's no linked typedef
+            this.parse(this.fileContents);
+
+            //re-link the typedef (if it exists...which it should)
+            this.resolveTypdef();
+        }
+        return this._parser;
+    }
+    private _parser: Parser;
 
     public fileContents: string;
 
@@ -195,13 +211,6 @@ export class BrsFile {
         //event that fires anytime a dependency changes
         this.unsubscribeFromDependencyGraph = this.program.dependencyGraph.onchange(this.dependencyGraphKey, () => {
             this.resolveTypdef();
-
-            //if there is no typedef file, and this file hasn't been parsed yet, parse it now
-            //(solves issue when typedef gets deleted and this file had skipped parsing)
-            if (!this.hasTypedef && this.wasParseSkipped) {
-                this.parseDeferred = new Deferred();
-                this.parse(this.fileContents);
-            }
         });
 
         const dependencies = this.ownScriptImports.filter(x => !!x.pkgPath).map(x => x.pkgPath.toLowerCase());
@@ -216,11 +225,6 @@ export class BrsFile {
     }
 
     /**
-     * Was parsing skipped because the file has a typedef?
-     */
-    private wasParseSkipped = false;
-
-    /**
      * Calculate the AST for this file
      * @param fileContents
      */
@@ -233,7 +237,6 @@ export class BrsFile {
 
             //if we have a typedef file, skip parsing this file
             if (this.hasTypedef) {
-                this.wasParseSkipped = true;
                 this.parseDeferred.resolve();
                 return;
             }
@@ -267,7 +270,7 @@ export class BrsFile {
             let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
 
             this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.pathAbsolute)], () => {
-                this.parser.parse(tokens, {
+                this._parser = Parser.parse(tokens, {
                     mode: this.parseMode,
                     logger: this.program.logger
                 });
@@ -277,7 +280,7 @@ export class BrsFile {
             this.diagnostics.push(
                 ...lexer.diagnostics as BsDiagnostic[],
                 ...preprocessor.diagnostics as BsDiagnostic[],
-                ...this.parser.diagnostics as BsDiagnostic[]
+                ...this._parser.diagnostics as BsDiagnostic[]
             );
 
             //notify AST ready
@@ -296,14 +299,13 @@ export class BrsFile {
                 diagnostic.file = this;
             }
         } catch (e) {
-            this.parser = new Parser();
+            this._parser = new Parser();
             this.diagnostics.push({
                 file: this,
                 range: util.createRange(0, 0, 0, Number.MAX_VALUE),
                 ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(serializeError(e)))
             });
         }
-        this.wasParseSkipped = false;
         this.parseDeferred.resolve();
     }
 
@@ -325,8 +327,8 @@ export class BrsFile {
         }
 
         let statements = [
-            ...this.parser.references.libraryStatements,
-            ...this.parser.references.importStatements
+            ...this._parser.references.libraryStatements,
+            ...this._parser.references.importStatements
         ];
         for (let result of statements) {
             //register import statements
@@ -660,7 +662,7 @@ export class BrsFile {
     private findFunctionCalls() {
         this.functionCalls = [];
         //for every function in the file
-        for (let func of this.parser.references.functionExpressions) {
+        for (let func of this._parser.references.functionExpressions) {
             //for all function calls in this function
             for (let expression of func.callExpressions) {
 
@@ -899,8 +901,9 @@ export class BrsFile {
 
         //consume tokens backwards until we find something other than a dot or an identifier
         let tokens = [];
-        for (let i = this.parser.tokens.indexOf(currentToken); i >= 0; i--) {
-            currentToken = this.parser.tokens[i];
+        const parser = this.parser;
+        for (let i = parser.tokens.indexOf(currentToken); i >= 0; i--) {
+            currentToken = parser.tokens[i];
             if (identifierAndDotKinds.includes(currentToken.kind)) {
                 tokens.unshift(currentToken.text);
             } else {
@@ -940,8 +943,9 @@ export class BrsFile {
     }
 
     public getPreviousToken(token: Token) {
-        let idx = this.parser.tokens.indexOf(token);
-        return this.parser.tokens[idx - 1];
+        const parser = this.parser;
+        let idx = parser.tokens.indexOf(token);
+        return parser.tokens[idx - 1];
     }
 
     /**
@@ -1372,7 +1376,7 @@ export class BrsFile {
     }
 
     public dispose() {
-        this.parser?.dispose();
+        this._parser?.dispose();
     }
 }
 

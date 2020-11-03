@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.18.2] - 2020-11-2
+### Fixed
+ - support on-demand parse for typedef-shadowed files ([#237](https://github.com/rokucommunity/brighterscript/pull/237))
+
+
+
+## [0.18.1] - 2020-10-30
+### Fixed
+ - exclude bs1100 for typedef files (`Missing "super()" call in class constructor method.`)
+ - fix some invalid class field types in typedef files
+ - include `override` keyword in class methods in typedef files
+
+
+
 ## [0.18.0] - 2020-10-30
 ### Added
  - support for consuming and producing type definitions. ([188](https://github.com/rokucommunity/brighterscript/pull/188))
@@ -676,3 +690,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.16.12]:  https://github.com/rokucommunity/brighterscript/compare/v0.16.11...v0.16.12
 [0.17.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.12...v0.17.0
 [0.18.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.17.0...v0.18.0
+[0.18.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.18.0...v0.18.1
+[0.18.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.18.1...v0.18.2

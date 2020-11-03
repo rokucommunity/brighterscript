@@ -1418,7 +1418,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 //store overridden parent methods as super{parentIndex}_{methodName}
                 if (
                     //is override method
-                    statement.overrides ||
+                    statement.override ||
                     //is constructor function in child class
                     (statement.name.text.toLowerCase() === 'new' && ancestors[0])
                 ) {
@@ -1548,7 +1548,7 @@ export class ClassMethodStatement extends FunctionStatement {
         readonly accessModifier: Token,
         name: Identifier,
         func: FunctionExpression,
-        readonly overrides: Token
+        readonly override: Token
     ) {
         super(name, func, undefined);
         this.range = util.createRangeFromPositions(
@@ -1598,6 +1598,9 @@ export class ClassMethodStatement extends FunctionStatement {
                 this.accessModifier.text,
                 ' '
             );
+        }
+        if (this.override) {
+            result.push('override ');
         }
         result.push(
             ...super.getTypedef(state)
@@ -1748,12 +1751,17 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
     getTypedef(state: TranspileState) {
         const result = [];
         if (this.name) {
+            let type = valueKindToString(this.getType()).toLowerCase();
+            if (type === 'invalid' || type === 'void' || type === '<uninitialized>') {
+                type = 'dynamic';
+            }
+
             result.push(
                 this.accessModifier?.text ?? 'public',
                 ' ',
                 this.name?.text,
                 ' as ',
-                valueKindToString(this.getType()).toLowerCase()
+                type
             );
         }
         return result;

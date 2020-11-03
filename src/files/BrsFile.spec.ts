@@ -2134,18 +2134,19 @@ describe('BrsFile', () => {
 
     describe('type definitions', () => {
         it('only exposes defined functions even if source has more', async () => {
-            await program.addOrReplaceFile('source/main.d.bs', `
-                sub main()
-                end sub
-            `);
-
-            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            //parse the .brs file first so it doesn't know about the typedef
+            await program.addOrReplaceFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
                 sub speak()
                 end sub
             `);
-            expect(file.parser.references.functionStatements).to.be.empty;
+
+            await program.addOrReplaceFile('source/main.d.bs', `
+                sub main()
+                end sub
+            `);
+
             const sourceScope = program.getScopeByName('source');
             const functionNames = sourceScope.getAllCallables().map(x => x.callable.name);
             expect(functionNames).to.include('main');
@@ -2303,6 +2304,20 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('sets properties to dynamic when initialized to invalid', async () => {
+            await testTypedef(`
+                class Human
+                    public firstName = invalid
+                    public lastName as string = invalid
+                end class
+            `, trim`
+                class Human
+                    public firstName as dynamic
+                    public lastName as string
+                end class
+            `);
+        });
+
         it('includes class inheritance', async () => {
             await testTypedef(`
                 class Human
@@ -2322,6 +2337,61 @@ describe('BrsFile', () => {
                 end class
                 class Person extends Human
                     sub new(name as string)
+                    end sub
+                end class
+            `);
+        });
+
+        it('includes access modifier keyword', async () => {
+            await testTypedef(`
+                class Human
+                    public firstName as string
+                    protected middleName as string
+                    private lastName as string
+                    public function getFirstName()
+                        return m.firstName
+                    end function
+                    protected function getMiddleName()
+                        return m.middleName
+                    end function
+                    private function getLastName()
+                        return m.lastName
+                    end function
+                end class
+            `, trim`
+                class Human
+                    public firstName as string
+                    protected middleName as string
+                    private lastName as string
+                    public function getFirstName()
+                    end function
+                    protected function getMiddleName()
+                    end function
+                    private function getLastName()
+                    end function
+                end class
+            `);
+        });
+
+        it('includes overrides keyword if present in source', async () => {
+            await testTypedef(`
+                class Animal
+                    public sub speak()
+                        print "Hello Animal"
+                    end sub
+                end class
+                class Dog extends Animal
+                    public override sub speak()
+                        print "Hello Dog"
+                    end sub
+                end class
+            `, trim`
+                class Animal
+                    public sub speak()
+                    end sub
+                end class
+                class Dog extends Animal
+                    public override sub speak()
                     end sub
                 end class
             `);
@@ -2357,6 +2427,46 @@ describe('BrsFile', () => {
                     end class
                 end namespace
             `);
+        });
+    });
+
+    describe('parser getter', () => {
+        it('recreates the parser when missing', async () => {
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+                sub main()
+                end sub
+            `);
+            const parser = file['_parser'];
+            //clear the private _parser instance
+            file['_parser'] = undefined;
+
+            //force the file to get a new instance of parser
+            const newParser = file.parser;
+
+            expect(newParser).to.exist.and.to.not.equal(parser);
+
+            //reference shouldn't change in subsequent accesses
+            expect(file.parser).to.equal(newParser);
+        });
+
+        it('call parse when previously skipped', async () => {
+            await program.addOrReplaceFile<BrsFile>('source/main.d.bs', `
+                sub main()
+                end sub
+            `);
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+                sub main()
+                end sub
+            `);
+            //no functions should be found since the parser was skipped
+            expect(file['_parser']).to.not.exist;
+
+            const stub = sinon.stub(file, 'parse').callThrough();
+
+            //`file.parser` is a getter, so that should force the parse to occur
+            expect(file.parser.references.functionStatements).to.be.lengthOf(1);
+            expect(stub.called).to.be.true;
+            //parse should have been called
         });
     });
 
