@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [unreleased]
+### Changed
+ - `emitDefinitions` now defaults to `false` (it previously defaulted to `true`)
+### Fixed
+ - don't transpile `d.bs` files (which would produce `d.brs` files with duplicate information in them)
+
+
+
 ## [0.18.2] - 2020-11-2
 ### Fixed
  - support on-demand parse for typedef-shadowed files ([#237](https://github.com/rokucommunity/brighterscript/pull/237))
