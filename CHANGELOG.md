@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [unreleased]
+## [0.19.0]
 ### Changed
  - `emitDefinitions` now defaults to `false` (it previously defaulted to `true`)
 ### Fixed
@@ -700,3 +700,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.18.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.17.0...v0.18.0
 [0.18.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.18.0...v0.18.1
 [0.18.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.18.1...v0.18.2
+[0.19.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.18.2...v0.19.0
