@@ -779,6 +779,10 @@ export class Program {
         this.plugins.emit('beforeProgramTranspile', this, entries);
 
         const promises = entries.map(async (entry) => {
+            //skip transpiling typedef files
+            if (isBrsFile(entry.file) && entry.file.isTypedef) {
+                return;
+            }
             this.plugins.emit('beforeFileTranspile', entry);
             const { file, outputPath } = entry;
             const result = file.transpile();
@@ -795,7 +799,7 @@ export class Program {
                 writeMapPromise
             ]);
 
-            if (isBrsFile(file) && this.options.emitDefinitions !== false) {
+            if (isBrsFile(file) && this.options.emitDefinitions) {
                 const typedef = file.getTypedef();
                 const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
                 await fsExtra.writeFile(typedefPath, typedef);

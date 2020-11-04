@@ -1400,6 +1400,35 @@ describe('Program', () => {
     });
 
     describe('typedef', () => {
+        describe('emitDefinitions', () => {
+            it('generates typedef for .bs files', async () => {
+                await program.addOrReplaceFile<BrsFile>('source/Duck.bs', `
+                    class Duck
+                    end class
+                `);
+                program.options.emitDefinitions = true;
+                await program.validate();
+                await program.transpile([], stagingFolderPath);
+
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.brs`)).to.be.true;
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.d.bs`)).to.be.true;
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.d.brs`)).to.be.false;
+            });
+
+            it('does not generate typedef for typedef file', async () => {
+                await program.addOrReplaceFile<BrsFile>('source/Duck.d.bs', `
+                    class Duck
+                    end class
+                `);
+                program.options.emitDefinitions = true;
+                await program.validate();
+                await program.transpile([], stagingFolderPath);
+
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.d.brs`)).to.be.false;
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.brs`)).to.be.false;
+            });
+        });
+
         it('ignores bs1018 for d.bs files', async () => {
             await program.addOrReplaceFile<BrsFile>('source/main.d.bs', `
                 class Duck

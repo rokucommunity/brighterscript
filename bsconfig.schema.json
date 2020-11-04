@@ -131,7 +131,7 @@
         "emitDefinitions": {
             "description": "Emit type definition files (`d.bs`) during transpile",
             "type": "boolean",
-            "default": true
+            "default": false
         },
         "diagnosticFilters": {
             "description": "A collection of filters used to hide diagnostics for certain files",
