@@ -18,7 +18,7 @@ export interface SGAttribute {
 export type SGTagKind = 'prolog' | 'component' | 'interface' | 'field' | 'function' | 'script' | 'children' | 'node';
 
 export class SGTag {
-    readonly kind: SGTagKind;
+    readonly sgkind: SGTagKind;
 
     get id() {
         return this.getAttribute('id');
@@ -74,7 +74,7 @@ export class SGTag {
 }
 
 export class SGProlog extends SGTag {
-    readonly kind: SGTagKind = 'prolog';
+    readonly sgkind: SGTagKind = 'prolog';
 
     transpile(state: SGTranspileState) {
         return new SourceNode(null, null, state.source, [
@@ -86,7 +86,7 @@ export class SGProlog extends SGTag {
 }
 
 export class SGNode extends SGTag {
-    readonly kind: SGTagKind = 'node';
+    readonly sgkind: SGTagKind = 'node';
 
     constructor(
         tag: SGToken,
@@ -112,7 +112,7 @@ export class SGNode extends SGTag {
 }
 
 export class SGChildren extends SGNode {
-    readonly kind: SGTagKind = 'children';
+    readonly sgkind: SGTagKind = 'children';
 
     constructor(
         tag: SGToken = { text: 'children' },
@@ -124,7 +124,7 @@ export class SGChildren extends SGNode {
 }
 
 export class SGScript extends SGTag {
-    readonly kind: SGTagKind = 'script';
+    readonly sgkind: SGTagKind = 'script';
 
     get type() {
         return this.getAttribute('type');
@@ -168,7 +168,7 @@ export class SGScript extends SGTag {
 }
 
 export class SGField extends SGTag {
-    readonly kind: SGTagKind = 'field';
+    readonly sgkind: SGTagKind = 'field';
 
     get type() {
         return this.getAttribute('type');
@@ -215,7 +215,7 @@ export class SGField extends SGTag {
 }
 
 export class SGFunction extends SGTag {
-    readonly kind: SGTagKind = 'function';
+    readonly sgkind: SGTagKind = 'function';
 
     get name() {
         return this.getAttribute('name');
@@ -234,7 +234,7 @@ export class SGFunction extends SGTag {
 }
 
 export class SGInterface extends SGTag {
-    readonly kind: SGTagKind = 'interface';
+    readonly sgkind: SGTagKind = 'interface';
     fields: SGField[] = [];
     functions: SGFunction[] = [];
 
@@ -303,7 +303,7 @@ export class SGInterface extends SGTag {
 }
 
 export class SGComponent extends SGTag {
-    readonly kind: SGTagKind = 'component';
+    readonly sgkind: SGTagKind = 'component';
     interface: SGInterface;
     scripts: SGScript[] = [];
     children: SGChildren;

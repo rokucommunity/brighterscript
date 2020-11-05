@@ -1,23 +1,23 @@
 import type { SGChildren, SGComponent, SGField, SGFunction, SGInterface, SGNode, SGScript, SGTag } from '../parser/SGTypes';
 
 export function isSGComponent(tag: SGTag): tag is SGComponent {
-    return tag?.kind === 'component';
+    return tag?.sgkind === 'component';
 }
 export function isSGInterface(tag: SGTag): tag is SGInterface {
-    return tag?.kind === 'interface';
+    return tag?.sgkind === 'interface';
 }
 export function isSGScript(tag: SGTag): tag is SGScript {
-    return tag?.kind === 'script';
+    return tag?.sgkind === 'script';
 }
 export function isSGChildren(tag: SGTag): tag is SGChildren {
-    return tag?.kind === 'children';
+    return tag?.sgkind === 'children';
 }
 export function isSGField(tag: SGTag): tag is SGField {
-    return tag?.kind === 'field';
+    return tag?.sgkind === 'field';
 }
 export function isSGFunction(tag: SGTag): tag is SGFunction {
-    return tag?.kind === 'function';
+    return tag?.sgkind === 'function';
 }
 export function isSGNode(tag: SGTag): tag is SGNode {
-    return tag?.kind === 'node';
+    return tag?.sgkind === 'node';
 }
