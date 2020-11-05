@@ -938,6 +938,8 @@ export class LanguageServer {
     }
 
     public async onWorkspaceSymbol(params: WorkspaceSymbolParams) {
+        await this.waitAllProgramFirstRuns();
+
         const results = util.flatMap(
             await Promise.all(this.getWorkspaces().map(workspace => {
                 return workspace.builder.program.getWorkspaceSymbols();
@@ -955,6 +957,8 @@ export class LanguageServer {
     }
 
     public async onDocumentSymbol(params: DocumentSymbolParams) {
+        await this.waitAllProgramFirstRuns();
+
         await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
 
         const pathAbsolute = util.uriToPath(params.textDocument.uri);
@@ -969,6 +973,7 @@ export class LanguageServer {
 
     private async onDefinition(params: TextDocumentPositionParams) {
         await this.waitAllProgramFirstRuns();
+
         let results = [] as Location[];
         const pathAbsolute = util.uriToPath(params.textDocument.uri);
         const workspaces = this.getWorkspaces();
@@ -1090,6 +1095,8 @@ export class LanguageServer {
     }
 
     private async onReferences(params: ReferenceParams) {
+        await this.waitAllProgramFirstRuns();
+
         const position = params.position;
         const pathAbsolute = util.uriToPath(params.textDocument.uri);
 
