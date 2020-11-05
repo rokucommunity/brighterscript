@@ -10,10 +10,8 @@ import { Deferred } from '../deferred';
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
-import type { ClassMethodStatement } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
-import type { AssignmentStatement, LibraryStatement, ImportStatement, Statement } from '../parser/Statement';
-import { ClassStatement, FunctionStatement, NamespaceStatement } from '../parser/Statement';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement } from '../parser/Statement';
 import type { Program } from '../Program';
 import type { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
@@ -24,7 +22,7 @@ import { TranspileState } from '../parser/TranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isStringType, isVariableExpression } from '../astUtils/reflection';
+import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { XmlFile } from './XmlFile';
 import type { DependencyGraph } from '../DependencyGraph';
@@ -1059,10 +1057,13 @@ export class BrsFile {
      */
     private getDocumentSymbol(statement: Statement) {
         let symbolKind: SymbolKind;
-        let children = [] as DocumentSymbol[];
-        if (statement instanceof FunctionStatement) {
+        const children = [] as DocumentSymbol[];
+
+        if (isFunctionStatement(statement)) {
             symbolKind = SymbolKind.Function;
-        } else if (statement instanceof NamespaceStatement) {
+        } else if (isClassMethodStatement(statement)) {
+            symbolKind = SymbolKind.Method;
+        } else if (isNamespaceStatement(statement)) {
             symbolKind = SymbolKind.Namespace;
             for (const childStatement of statement.body.statements) {
                 const symbol = this.getDocumentSymbol(childStatement);
@@ -1070,7 +1071,7 @@ export class BrsFile {
                     children.push(symbol);
                 }
             }
-        } else if (statement instanceof ClassStatement) {
+        } else if (isClassStatement(statement)) {
             symbolKind = SymbolKind.Class;
             for (const childStatement of statement.body) {
                 const symbol = this.getDocumentSymbol(childStatement);
@@ -1093,9 +1094,11 @@ export class BrsFile {
         let symbolKind: SymbolKind;
         const symbols = [];
 
-        if (statement instanceof FunctionStatement) {
+        if (isFunctionStatement(statement)) {
             symbolKind = SymbolKind.Function;
-        } else if (statement instanceof NamespaceStatement) {
+        } else if (isClassMethodStatement(statement)) {
+            symbolKind = SymbolKind.Method;
+        } else if (isNamespaceStatement(statement)) {
             symbolKind = SymbolKind.Namespace;
 
             for (const childStatement of statement.body.statements) {
@@ -1103,7 +1106,7 @@ export class BrsFile {
                     symbols.push(symbol);
                 }
             }
-        } else if (statement instanceof ClassStatement) {
+        } else if (isClassStatement(statement)) {
             symbolKind = SymbolKind.Class;
 
             for (const childStatement of statement.body) {
