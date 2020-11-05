@@ -13,7 +13,7 @@ import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import type { FunctionStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { trim } from './testHelpers.spec';
+import { trim, trimMap } from './testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -1301,31 +1301,31 @@ describe('Program', () => {
 
     describe('transpile', () => {
         it('transpiles in-memory-only files', async () => {
-            await program.addOrReplaceFile('source/logger.bs', `
+            await program.addOrReplaceFile('source/logger.bs', trim`
                 sub logInfo()
                     print SOURCE_LINE_NUM
                 end sub
             `);
             await program.transpile([], program.options.stagingFolderPath);
-            expect(
-                fsExtra.readFileSync(s`${stagingFolderPath}/source/logger.brs`).toString().split(/\r?\n/).map(x => x.trim())
-            ).to.eql([
-                'sub logInfo()',
-                'print 3',
-                'end sub'
-            ]);
+            expect(trimMap(
+                fsExtra.readFileSync(s`${stagingFolderPath}/source/logger.brs`).toString()
+            ) + '\n').to.eql(trim`
+                sub logInfo()
+                    print 2
+                end sub
+            `);
         });
 
         it('copies in-memory-only .brs files to stagingDir', async () => {
-            await program.addOrReplaceFile('source/logger.brs', `
+            await program.addOrReplaceFile('source/logger.brs', trim`
                 sub logInfo()
                     print "logInfo"
                 end sub
             `);
             await program.transpile([], program.options.stagingFolderPath);
-            expect(
+            expect(trimMap(
                 fsExtra.readFileSync(s`${stagingFolderPath}/source/logger.brs`).toString()
-            ).to.eql(`
+            )).to.eql(trim`
                 sub logInfo()
                     print "logInfo"
                 end sub
@@ -1339,9 +1339,9 @@ describe('Program', () => {
                 </component>
             `);
             await program.transpile([], program.options.stagingFolderPath);
-            expect(
+            expect(trimMap(
                 fsExtra.readFileSync(s`${stagingFolderPath}/components/Component1.xml`).toString()
-            ).to.eql(trim`
+            )).to.eql(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />

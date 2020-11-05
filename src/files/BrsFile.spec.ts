@@ -16,7 +16,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { loadPlugins, standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { trim } from '../testHelpers.spec';
+import { trim, trimMap } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 
 let sinon = sinonImport.createSandbox();
@@ -2064,6 +2064,25 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('simple mapped files include a reference to the source map', async () => {
+            let file = await program.addOrReplaceFile('source/logger.brs', trim`
+                sub logInfo()
+                end sub
+            `);
+            file.needsTranspiled = false;
+            const { code } = file.transpile();
+            expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
+        });
+
+        it('AST generated files include a reference to the source map', async () => {
+            let file = await program.addOrReplaceFile('source/logger.brs', trim`
+                sub logInfo()
+                end sub
+            `);
+            file.needsTranspiled = true;
+            const { code } = file.transpile();
+            expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
+        });
     });
 
     describe('callfunc operator', () => {
@@ -2601,7 +2620,7 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
 
             }
         }
-        expect(sources[0]).to.equal(sources[1]);
+        expect(trimMap(sources[0])).to.equal(sources[1]);
         return transpiled;
     };
 }

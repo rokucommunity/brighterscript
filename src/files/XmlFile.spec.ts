@@ -11,7 +11,7 @@ import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
 import { getTestTranspile } from './BrsFile.spec';
-import { trim } from '../testHelpers.spec';
+import { trim, trimMap } from '../testHelpers.spec';
 
 describe('XmlFile', () => {
     let rootDir = process.cwd();
@@ -663,7 +663,7 @@ describe('XmlFile', () => {
             `);
             //prevent the default auto-imports to ensure no transpilation from AST
             (file as any).getMissingImportsForTranspile = () => [];
-            expect(file.transpile().code).to.equal(trim`
+            expect(trimMap(file.transpile().code)).to.equal(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <!-- should stay as-is -->
                 <component name="SimpleScene" extends="Scene" >
@@ -693,6 +693,33 @@ describe('XmlFile', () => {
                 </component>
             `);
             expect(file.needsTranspiled).to.be.true;
+        });
+
+        it('simple source mapping includes sourcemap reference', async () => {
+            let file = await program.addOrReplaceFile(
+                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
+                trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                </component>
+            `);
+            //prevent the default auto-imports to ensure no transpilation from AST
+            (file as any).getMissingImportsForTranspile = () => [];
+            const code = file.transpile().code;
+            expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
+        });
+
+        it('AST-based source mapping includes sourcemap reference', async () => {
+            let file = await program.addOrReplaceFile(
+                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
+                trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                </component>
+            `);
+            file.needsTranspiled = true;
+            const code = file.transpile().code;
+            expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
         });
     });
 

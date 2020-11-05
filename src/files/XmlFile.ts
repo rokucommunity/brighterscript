@@ -458,17 +458,8 @@ export class XmlFile {
             //emit an XML document with sourcemaps from the AST
             return transpileAst(source, this.parser.ast, extraImports);
         } else {
-            //create a source map from the original source code
-            let chunks = [] as (SourceNode | string)[];
-            let lines = this.fileContents.split(/\r?\n/g);
-            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                let line = lines[lineIndex];
-                chunks.push(
-                    lineIndex > 0 ? '\n' : '',
-                    new SourceNode(lineIndex + 1, 0, source, line)
-                );
-            }
-            return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
+            //emit the XML as-is with a simple map to the original XML location
+            return simpleMap(source, this.fileContents);
         }
     }
 
@@ -477,6 +468,24 @@ export class XmlFile {
             this.unsubscribeFromDependencyGraph();
         }
     }
+}
+
+function simpleMap(source: string, src: string) {
+    //create a source map from the original source code
+    let chunks = [] as (SourceNode | string)[];
+    let lines = src.split(/\r?\n/g);
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        let line = lines[lineIndex];
+        chunks.push(
+            lineIndex > 0 ? '\n' : '',
+            new SourceNode(lineIndex + 1, 0, source, line)
+        );
+    }
+
+    //sourcemap reference
+    chunks.push(`<!--//# sourceMappingURL=./${path.basename(source)}.map -->`);
+
+    return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
 }
 
 function transpileAst(source: string, ast: SGAst, extraImports: string[]) {
@@ -508,12 +517,15 @@ function transpileAst(source: string, ast: SGAst, extraImports: string[]) {
     //write content
     chunks.push(temp.transpile(state));
 
+    //sourcemap reference
+    chunks.push(`<!--//# sourceMappingURL=./${path.basename(source)}.map -->`);
+
     return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
 }
 
 function updateScript(script: SGScript): SGScript {
     //replace type and file extension of brighterscript references
-    if (script.type.indexOf('brighterscript') || script.uri?.endsWith('.bs')) {
+    if (script.type.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')) {
         const temp = new SGScript();
         temp.uri = script.uri?.replace(/\.bs$/, '.brs');
         temp.cdata = script.cdata;

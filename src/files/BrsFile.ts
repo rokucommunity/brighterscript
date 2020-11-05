@@ -2,6 +2,7 @@ import { SourceNode } from 'source-map';
 import type { CompletionItem, Hover, Range, Position } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
 import chalk from 'chalk';
+import * as path from 'path';
 import type { Scope } from '../Scope';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
@@ -1335,8 +1336,13 @@ export class BrsFile {
         const state = new TranspileState(this);
         if (this.needsTranspiled) {
             let programNode = new SourceNode(null, null, this.pathAbsolute, this.ast.transpile(state));
-            let result = programNode.toStringWithSourceMap({
-                file: this.pathAbsolute
+            //sourcemap reference
+            let programWithMap = new SourceNode(null, null, null, [
+                programNode,
+                `'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`
+            ]);
+            let result = programWithMap.toStringWithSourceMap({
+                file: state.pathAbsolute
             });
             return result;
         } else {
@@ -1350,6 +1356,8 @@ export class BrsFile {
                     new SourceNode(lineIndex + 1, 0, state.pathAbsolute, line)
                 );
             }
+            //sourcemap reference
+            chunks.push(`'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`);
             return new SourceNode(null, null, state.pathAbsolute, chunks).toStringWithSourceMap();
         }
     }

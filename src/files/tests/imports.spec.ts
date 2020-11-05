@@ -7,7 +7,7 @@ import { standardizePath as s } from '../../util';
 import type { XmlFile } from '../XmlFile';
 import type { BrsFile } from '../BrsFile';
 import { getTestTranspile } from '../BrsFile.spec';
-import { trim } from '../../testHelpers.spec';
+import { trim, trimMap } from '../../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -62,7 +62,7 @@ describe('import statements', () => {
         });
         await program.transpile(files, stagingFolderPath);
         expect(
-            fsExtra.readFileSync(`${stagingFolderPath}/components/ChildScene.xml`).toString()
+            trimMap(fsExtra.readFileSync(`${stagingFolderPath}/components/ChildScene.xml`).toString())
         ).to.equal(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="Scene">
@@ -197,7 +197,7 @@ describe('import statements', () => {
             end function
         `);
         await program.validate();
-        expect(component.transpile().code).to.equal(trim`
+        expect(trimMap(component.transpile().code)).to.equal(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.brs" />
