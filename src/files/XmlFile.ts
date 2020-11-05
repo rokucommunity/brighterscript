@@ -483,8 +483,7 @@ function transpileAst(source: string, ast: SGAst, extraImports: string[]) {
     const { prolog, component } = ast;
 
     //create a clone to make our changes
-    const temp = new SGComponent();
-    temp.attributes = component.attributes;
+    const temp = new SGComponent(component.tag, component.attributes);
     temp.interface = component.interface;
     temp.scripts = component.scripts.map(updateScript);
     temp.children = component.children;
