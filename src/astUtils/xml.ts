@@ -1,17 +1,20 @@
-import type { XmlAstAttribute, XmlAstNode } from '../parser/XmlParser';
+import type { SGChildren, SGComponent, SGField, SGFunction, SGInterface, SGScript, SGTag } from '../parser/SGTypes';
 
-export function findXmlAstAttribute(node: XmlAstNode, name: string): XmlAstAttribute | undefined {
-    return node.attributes.find(att => att.key.text.toLowerCase() === name);
+export function isSGComponent(tag: SGTag): tag is SGComponent {
+    return tag?.kind === 'component';
 }
-
-export function createXmlAstNode(name: string, attributes: Record<string, string>): XmlAstNode {
-    return {
-        name: { text: name },
-        attributes: Object.keys(attributes)
-            .filter(key => attributes[key] !== undefined)
-            .map(key => ({
-                key: { text: key },
-                value: { text: attributes[key] }
-            }))
-    };
+export function isSGInterface(tag: SGTag): tag is SGInterface {
+    return tag?.kind === 'interface';
+}
+export function isSGScript(tag: SGTag): tag is SGScript {
+    return tag?.kind === 'script';
+}
+export function isSGChildren(tag: SGTag): tag is SGChildren {
+    return tag?.kind === 'children';
+}
+export function isSGField(tag: SGTag): tag is SGField {
+    return tag?.kind === 'field';
+}
+export function isSGFunction(tag: SGTag): tag is SGFunction {
+    return tag?.kind === 'function';
 }

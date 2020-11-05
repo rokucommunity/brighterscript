@@ -109,7 +109,7 @@ export class Parser {
      * References for significant statements/expressions in the parser.
      * These are initially extracted during parse-time to improve performance, but will also be dynamically regenerated if need be.
      *
-     * If a plugin modifies the AST, then the plugin should call Parser#invalidateReferences() to force this list to refresh
+     * If a plugin modifies the AST, then the plugin should call Parser#invalidateReferences() to force this object to refresh
      */
     public get references() {
         //build the references object if it's missing.

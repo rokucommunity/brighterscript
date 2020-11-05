@@ -155,8 +155,14 @@ describe('XmlFile', () => {
         it('Adds error when no component is declared in xml', () => {
             file = new XmlFile('abs', 'rel', program);
             file.parse('<script type="text/brightscript" uri="ChildScene.brs" />');
-            expect(file.diagnostics).to.be.lengthOf(1);
-            expect(file.diagnostics[0].message).to.equal(DiagnosticMessages.xmlComponentMissingComponentDeclaration().message);
+            expect(file.diagnostics).to.be.lengthOf(2);
+            expect(file.diagnostics[0]).to.deep.include({
+                ...DiagnosticMessages.xmlUnknownTag('script'),
+                range: Range.create(0, 1, 0, 7)
+            });
+            expect(file.diagnostics[1]).to.deep.include(
+                DiagnosticMessages.xmlComponentMissingComponentDeclaration()
+            );
         });
 
         it('adds error when component does not declare a name', () => {
@@ -337,11 +343,10 @@ describe('XmlFile', () => {
             program.files[scriptPath] = new BrsFile(scriptPath, s`components/component1/component1.brs`, program);
 
             let xmlFile = new XmlFile(s`${rootDir}/components/component1/component1.xml`, s`components/component1/component1.xml`, <any>program);
-            xmlFile.scriptTagImports.push({
+            xmlFile.parser.references.scriptTagImports.push({
                 pkgPath: s`components/component1/component1.brs`,
                 text: 'component1.brs',
-                filePathRange: Range.create(1, 1, 1, 1),
-                sourceFile: xmlFile
+                filePathRange: Range.create(1, 1, 1, 1)
             });
 
             expect(xmlFile.getCompletions(Position.create(1, 1))[0]).to.include({
@@ -583,6 +588,48 @@ describe('XmlFile', () => {
     });
 
     describe('transpile', () => {
+        it('keeps all content of the XML', async () => {
+            await program.addOrReplaceFile(`components/SimpleScene.bs`, `
+                sub init()
+                end sub
+            `);
+
+            await testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component
+                    name="SimpleScene" extends="Scene"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
+                >
+                    <interface>
+                        <field id="a" />
+                        <function name="b" />
+                    </interface>
+                    <script type="text/brightscript" uri="SimpleScene.brs"/>
+                    <children>
+                        <aa id="aa">
+                            <bb id="bb" />
+                        </aa>
+                    </children>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
+                    <interface>
+                        <field id="a" />
+                        <function name="b" />
+                    </interface>
+                    <script type="text/brightscript" uri="SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    <children>
+                        <aa id="aa">
+                            <bb id="bb" />
+                        </aa>
+                    </children>
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
+        });
+
         it('changes file extensions to brs from bs', async () => {
             await program.addOrReplaceFile(`components/SimpleScene.bs`, `
                 import "pkg:/source/lib.bs"
