@@ -1,4 +1,4 @@
-import type { SGChildren, SGComponent, SGField, SGFunction, SGInterface, SGScript, SGTag } from '../parser/SGTypes';
+import type { SGChildren, SGComponent, SGField, SGFunction, SGInterface, SGNode, SGScript, SGTag } from '../parser/SGTypes';
 
 export function isSGComponent(tag: SGTag): tag is SGComponent {
     return tag?.kind === 'component';
@@ -17,4 +17,7 @@ export function isSGField(tag: SGTag): tag is SGField {
 }
 export function isSGFunction(tag: SGTag): tag is SGFunction {
     return tag?.kind === 'function';
+}
+export function isSGNode(tag: SGTag): tag is SGNode {
+    return tag?.kind === 'node';
 }
