@@ -8,7 +8,6 @@ import type {
     DidChangeWatchedFilesParams,
     Hover,
     InitializeParams,
-    Location,
     ServerCapabilities,
     TextDocumentPositionParams,
     Position,
@@ -18,8 +17,7 @@ import type {
     DocumentSymbolParams,
     ReferenceParams,
     SignatureHelp,
-    SignatureHelpParams,
-    SignatureInformation
+    SignatureHelpParams
 } from 'vscode-languageserver';
 import {
     createConnection,
