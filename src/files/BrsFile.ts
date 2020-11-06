@@ -1318,7 +1318,7 @@ export class BrsFile {
         let locations = [] as Location[];
 
         // No need to actually look if they didn't select a token we can search against
-        if (callSiteToken.kind !== TokenKind.Identifier) {
+        if (callSiteToken?.kind !== TokenKind.Identifier) {
             return locations;
         }
 

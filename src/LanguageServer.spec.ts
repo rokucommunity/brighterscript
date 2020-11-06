@@ -12,6 +12,7 @@ import * as sinonImport from 'sinon';
 import { standardizePath as s, util } from './util';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
+import * as assert from 'assert';
 
 let sinon: sinonImport.SinonSandbox;
 beforeEach(() => {
@@ -361,14 +362,16 @@ describe('LanguageServer', () => {
             program = svr.workspaces[0].builder.program;
 
             const name = `CallComponent`;
-            callDocument = await addScriptFile(name, `sub init()
-                shouldBuildAwesome = true
-                if shouldBuildAwesome then
-                    buildAwesome()
-                else
-                    m.buildAwesome()
-                end if
-            end sub`);
+            callDocument = await addScriptFile(name, `
+                sub init()
+                    shouldBuildAwesome = true
+                    if shouldBuildAwesome then
+                        buildAwesome()
+                    else
+                        m.buildAwesome()
+                    end if
+                end sub
+            `);
             await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
         });
 
@@ -376,19 +379,21 @@ describe('LanguageServer', () => {
             const funcDescriptionComment = '@description Builds awesome for you';
             const funcReturnComment = '@return {Integer} The key to everything';
 
-            await addScriptFile(functionFileBaseName, `' /**
-            ' * ${funcDescriptionComment}
-            ' * ${funcReturnComment}
-            ' */
-            ${funcDefinitionLine}
-                return 42
-            end function`, 'bs');
+            await addScriptFile(functionFileBaseName, `
+                ' /**
+                ' * ${funcDescriptionComment}
+                ' * ${funcReturnComment}
+                ' */
+                ${funcDefinitionLine}
+                    return 42
+                end function
+            `, 'bs');
 
             const result = await svr.onSignatureHelp({
                 textDocument: {
                     uri: callDocument.uri
                 },
-                position: util.createPosition(3, 33)
+                position: util.createPosition(4, 37)
             });
             expect(result.signatures).to.not.be.empty;
             const signature = result.signatures[0];
@@ -398,15 +403,17 @@ describe('LanguageServer', () => {
         });
 
         it('should work if used on a property value', async () => {
-            await addScriptFile(functionFileBaseName, `${funcDefinitionLine}
-                return 42
-            end function`, 'bs');
+            await addScriptFile(functionFileBaseName, `
+                ${funcDefinitionLine}
+                    return 42
+                end function
+            `, 'bs');
 
             const result = await svr.onSignatureHelp({
                 textDocument: {
                     uri: callDocument.uri
                 },
-                position: util.createPosition(5, 35)
+                position: util.createPosition(6, 39)
             });
             expect(result.signatures).to.not.be.empty;
             const signature = result.signatures[0];
@@ -416,17 +423,18 @@ describe('LanguageServer', () => {
         it('should give the correct signature for a class method', async () => {
             const classMethodDefinitionLine = 'function buildAwesome(classVersion = true as Boolean)';
             await addScriptFile(functionFileBaseName, `
-            class ${functionFileBaseName}
-                ${classMethodDefinitionLine}
-                    return 42
-                end function
-            end class`, 'bs');
+                class ${functionFileBaseName}
+                    ${classMethodDefinitionLine}
+                        return 42
+                    end function
+                end class
+            `, 'bs');
 
             const result = await svr.onSignatureHelp({
                 textDocument: {
                     uri: callDocument.uri
                 },
-                position: util.createPosition(5, 35)
+                position: util.createPosition(6, 39)
             });
 
             expect(result.signatures).to.not.be.empty;
@@ -445,18 +453,22 @@ describe('LanguageServer', () => {
             program = svr.workspaces[0].builder.program;
 
             const functionFileBaseName = 'buildAwesome';
-            functionDocument = await addScriptFile(functionFileBaseName, `function buildAwesome()
-                return 42
-            end function`);
+            functionDocument = await addScriptFile(functionFileBaseName, `
+                function buildAwesome()
+                    return 42
+                end function
+            `);
 
             for (let i = 0; i < 5; i++) {
                 let name = `CallComponent${i}`;
-                const document = await addScriptFile(name, `sub init()
-                    shouldBuildAwesome = true
-                    if shouldBuildAwesome then
-                        buildAwesome()
-                    end if
-                end sub`);
+                const document = await addScriptFile(name, `
+                    sub init()
+                        shouldBuildAwesome = true
+                        if shouldBuildAwesome then
+                            buildAwesome()
+                        end if
+                    end sub
+                `);
 
                 await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
                 referenceFileUris.push(document.uri);
@@ -468,7 +480,7 @@ describe('LanguageServer', () => {
                 textDocument: {
                     uri: functionDocument.uri
                 },
-                position: util.createPosition(0, 13)
+                position: util.createPosition(1, 32)
             });
 
             expect(references.length).to.equal(referenceFileUris.length);
@@ -483,7 +495,7 @@ describe('LanguageServer', () => {
                 textDocument: {
                     uri: functionDocument.uri
                 },
-                position: util.createPosition(0, 0) // function token
+                position: util.createPosition(1, 20) // function token
             });
 
             expect(references).to.be.empty;
@@ -510,23 +522,26 @@ describe('LanguageServer', () => {
 
             const functionFileBaseName = 'buildAwesome';
             functionDocument = await addScriptFile(functionFileBaseName, `
-            function pi()
-                return 3.141592653589793
-            end function
+                function pi()
+                    return 3.141592653589793
+                end function
 
-            function buildAwesome()
-                return 42
-            end function`);
+                function buildAwesome()
+                    return 42
+                end function
+            `);
 
             const name = `CallComponent`;
-            referenceDocument = await addScriptFile(name, `sub init()
-                shouldBuildAwesome = true
-                if shouldBuildAwesome then
-                    buildAwesome()
-                else
-                    m.top.observeFieldScope("loadFinished", "buildAwesome")
-                end if
-            end sub`);
+            referenceDocument = await addScriptFile(name, `
+                sub init()
+                    shouldBuildAwesome = true
+                    if shouldBuildAwesome then
+                        buildAwesome()
+                    else
+                        m.top.observeFieldScope("loadFinished", "buildAwesome")
+                    end if
+                end sub
+            `);
 
             await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
         });
@@ -536,14 +551,14 @@ describe('LanguageServer', () => {
                 textDocument: {
                     uri: referenceDocument.uri
                 },
-                position: util.createPosition(3, 29)
+                position: util.createPosition(4, 33)
             });
 
             expect(locations.length).to.equal(1);
             const location: Location = locations[0];
             expect(location.uri).to.equal(functionDocument.uri);
             expect(location.range.start.line).to.equal(5);
-            expect(location.range.start.character).to.equal(12);
+            expect(location.range.start.character).to.equal(16);
         });
 
         it('should return the expected location if we entered on a StringLiteral token', async () => {
@@ -551,14 +566,14 @@ describe('LanguageServer', () => {
                 textDocument: {
                     uri: referenceDocument.uri
                 },
-                position: util.createPosition(5, 73)
+                position: util.createPosition(6, 77)
             });
 
             expect(locations.length).to.equal(1);
             const location: Location = locations[0];
             expect(location.uri).to.equal(functionDocument.uri);
             expect(location.range.start.line).to.equal(5);
-            expect(location.range.start.character).to.equal(12);
+            expect(location.range.start.character).to.equal(16);
         });
 
         it('should return nothing if neither StringLiteral or identifier token entry point', async () => {
@@ -566,7 +581,7 @@ describe('LanguageServer', () => {
                 textDocument: {
                     uri: referenceDocument.uri
                 },
-                position: util.createPosition(0, 0)
+                position: util.createPosition(1, 18)
             });
 
             expect(locations).to.be.empty;
@@ -577,31 +592,34 @@ describe('LanguageServer', () => {
                 textDocument: {
                     uri: referenceDocument.uri
                 },
-                position: util.createPosition(2, 32)
+                position: util.createPosition(3, 36)
             });
             expect(locations.length).to.equal(1);
             const location: Location = locations[0];
             expect(location.uri).to.equal(referenceDocument.uri);
-            expect(location.range.start.line).to.equal(1);
-            expect(location.range.start.character).to.equal(16);
-            expect(location.range.end.line).to.equal(1);
-            expect(location.range.end.character).to.equal(34);
+            expect(location.range.start.line).to.equal(2);
+            expect(location.range.start.character).to.equal(20);
+            expect(location.range.end.line).to.equal(2);
+            expect(location.range.end.character).to.equal(38);
         });
 
         it('should work for bs class functions as well', async () => {
             const functionFileBaseName = 'Build';
             functionDocument = await addScriptFile(functionFileBaseName, `
-            class ${functionFileBaseName}
-                function awesome()
-                    return 42
-                end function
-            end class`, 'bs');
+                class ${functionFileBaseName}
+                    function awesome()
+                        return 42
+                    end function
+                end class
+            `, 'bs');
 
             const name = `CallComponent`;
-            referenceDocument = await addScriptFile(name, `sub init()
-                build = new Build()
-                build.awesome()
-            end sub`);
+            referenceDocument = await addScriptFile(name, `
+                sub init()
+                    build = new Build()
+                    build.awesome()
+                end sub
+            `);
 
             await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
 
@@ -609,15 +627,15 @@ describe('LanguageServer', () => {
                 textDocument: {
                     uri: referenceDocument.uri
                 },
-                position: util.createPosition(2, 26)
+                position: util.createPosition(3, 30)
             });
             expect(locations.length).to.equal(1);
             const location: Location = locations[0];
             expect(location.uri).to.equal(functionDocument.uri);
             expect(location.range.start.line).to.equal(2);
-            expect(location.range.start.character).to.equal(16);
+            expect(location.range.start.character).to.equal(20);
             expect(location.range.end.line).to.equal(4);
-            expect(location.range.end.character).to.equal(28);
+            expect(location.range.end.character).to.equal(32);
         });
     });
 
@@ -636,7 +654,10 @@ describe('LanguageServer', () => {
 
                 function buildAwesome()
                     return 42
-                end function`);
+                end function
+            `);
+
+            // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
                 const symbols = await svr.onDocumentSymbol({
                     textDocument: document
@@ -649,16 +670,18 @@ describe('LanguageServer', () => {
 
         it('should work for brightscript classes as well', async () => {
             const document = await addScriptFile('MyFirstClass', `
-            class MyFirstClass
-                function pi()
-                    return 3.141592653589793
-                end function
+                class MyFirstClass
+                    function pi()
+                        return 3.141592653589793
+                    end function
 
-                function buildAwesome()
-                    return 42
-                end function
-            end class`, 'bs');
+                    function buildAwesome()
+                        return 42
+                    end function
+                end class
+            `, 'bs');
 
+            // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
                 const symbols = await svr.onDocumentSymbol({
                     textDocument: document
@@ -676,16 +699,18 @@ describe('LanguageServer', () => {
 
         it('should work for brightscript namespaces as well', async () => {
             const document = await addScriptFile('MyFirstNamespace', `
-            namespace MyFirstNamespace
-                function pi()
-                    return 3.141592653589793
-                end function
+                namespace MyFirstNamespace
+                    function pi()
+                        return 3.141592653589793
+                    end function
 
-                function buildAwesome()
-                    return 42
-                end function
-            end namespace`, 'bs');
+                    function buildAwesome()
+                        return 42
+                    end function
+                end namespace
+            `, 'bs');
 
+            // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
                 const symbols = await svr.onDocumentSymbol({
                     textDocument: document
@@ -714,16 +739,6 @@ describe('LanguageServer', () => {
             const namespaceName = 'MyFirstNamespace';
 
             await addScriptFile('buildAwesome', `
-            function pi()
-                return 3.141592653589793
-            end function
-
-            function buildAwesome()
-                return 42
-            end function`);
-
-            await addScriptFile(className, `
-            class MyFirstClass
                 function pi()
                     return 3.141592653589793
                 end function
@@ -731,35 +746,63 @@ describe('LanguageServer', () => {
                 function buildAwesome()
                     return 42
                 end function
-            end class`, 'bs');
+            `);
+
+            await addScriptFile(className, `
+                class ${className}
+                    function ${className}pi()
+                        return 3.141592653589793
+                    end function
+
+                    function ${className}buildAwesome()
+                        return 42
+                    end function
+                end class
+            `, 'bs');
 
 
             await addScriptFile(namespaceName, `
-            namespace ${namespaceName}
-                function pi()
-                    return 3.141592653589793
-                end function
+                namespace ${namespaceName}
+                    function pi()
+                        return 3.141592653589793
+                    end function
 
-                function buildAwesome()
-                    return 42
-                end function
-            end namespace`, 'bs');
+                    function buildAwesome()
+                        return 42
+                    end function
+                end namespace
+            `, 'bs');
 
+            // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
                 const symbols = await svr.onWorkspaceSymbol();
                 expect(symbols.length).to.equal(8);
-                expect(symbols[0].name).to.equal('pi');
-                expect(symbols[1].name).to.equal('buildAwesome');
-                expect(symbols[2].name).to.equal('pi');
-                expect(symbols[2].containerName).to.equal(className);
-                expect(symbols[3].name).to.equal('buildAwesome');
-                expect(symbols[3].containerName).to.equal(className);
-                expect(symbols[4].name).to.equal(className);
-                expect(symbols[5].name).to.equal(`${namespaceName}.pi`);
-                expect(symbols[5].containerName).to.equal(namespaceName);
-                expect(symbols[6].name).to.equal(`${namespaceName}.buildAwesome`);
-                expect(symbols[6].containerName).to.equal(namespaceName);
-                expect(symbols[7].name).to.equal(namespaceName);
+                for (const symbol of symbols) {
+                    switch (symbol.name) {
+                        case 'pi':
+                            break;
+                        case 'buildAwesome':
+                            break;
+                        case `${className}`:
+                            break;
+                        case `${className}pi`:
+                            expect(symbol.containerName).to.equal(className);
+                            break;
+                        case `${className}buildAwesome`:
+                            expect(symbol.containerName).to.equal(className);
+                            break;
+                        case `${namespaceName}`:
+                            break;
+                        case `${namespaceName}.pi`:
+                            expect(symbol.containerName).to.equal(namespaceName);
+                            break;
+                        case `${namespaceName}.buildAwesome`:
+                            expect(symbol.containerName).to.equal(namespaceName);
+                            break;
+                        default:
+                            assert.fail(`'${symbol.name}' was not expected in list of symbols`);
+                    }
+                }
             }
         });
 
@@ -768,18 +811,20 @@ describe('LanguageServer', () => {
             const nestedClassName = 'nestedClass';
 
             await addScriptFile('nested', `
-            namespace ${nestedNamespace}
-                class ${nestedClassName}
-                    function pi()
-                        return 3.141592653589793
-                    end function
+                namespace ${nestedNamespace}
+                    class ${nestedClassName}
+                        function pi()
+                            return 3.141592653589793
+                        end function
 
-                    function buildAwesome()
-                        return 42
-                    end function
-                end class
-            end namespace`, 'bs');
+                        function buildAwesome()
+                            return 42
+                        end function
+                    end class
+                end namespace
+            `, 'bs');
 
+            // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
                 const symbols = await svr.onWorkspaceSymbol();
                 expect(symbols.length).to.equal(4);

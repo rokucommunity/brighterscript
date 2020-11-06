@@ -974,16 +974,14 @@ export class LanguageServer {
     private async onDefinition(params: TextDocumentPositionParams) {
         await this.waitAllProgramFirstRuns();
 
-        let results = [] as Location[];
         const pathAbsolute = util.uriToPath(params.textDocument.uri);
-        const workspaces = this.getWorkspaces();
-        for (const workspace of workspaces) {
-            // TODO should probably do promise all instead
-            const locations = await workspace.builder.program.getDefinition(pathAbsolute, params.position);
-            results = results.concat(
-                ...locations
-            );
-        }
+
+        const results = util.flatMap(
+            await Promise.all(this.getWorkspaces().map(workspace => {
+                return workspace.builder.program.getDefinition(pathAbsolute, params.position);
+            })),
+            c => c
+        );
         return results;
     }
 
@@ -1010,14 +1008,10 @@ export class LanguageServer {
 
         await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
 
-        let promises = [] as Promise<SignatureInformation[]>[];
-        for (const workspace of this.getWorkspaces()) {
-            const pathAbsolute = util.uriToPath(params.textDocument.uri);
-            const promise = workspace.builder.program.getSignatureHelp(pathAbsolute, matchingToken.text);
-            promises.push(promise);
-        }
         const signatures = util.flatMap(
-            await Promise.all(promises),
+            await Promise.all(this.getWorkspaces().map(workspace => {
+                return workspace.builder.program.getSignatureHelp(util.uriToPath(params.textDocument.uri), matchingToken.text);
+            })),
             c => c
         );
 
