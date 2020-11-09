@@ -132,7 +132,7 @@ export default class SGParser {
             if (root) {
                 //error: not a component
                 this.diagnostics.push({
-                    ...DiagnosticMessages.xmlUnknownTag(root.tag.text),
+                    ...DiagnosticMessages.xmlUnexpectedTag(root.tag.text),
                     range: root.tag.range
                 });
             }
@@ -155,9 +155,6 @@ function buildAST(cst: DocumentCstNode, diagnostics: Diagnostic[]) {
             mapAttributes(ctx.attribute),
             rangeFromTokens(ctx.XMLDeclOpen[0], ctx.SPECIAL_CLOSE[0])
         );
-    }
-    if (element.length > 1) {
-        // TODO: error - extra nodes
     }
 
     let root: SGTag;
@@ -205,17 +202,17 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
             return new SGInterface(name, interfaceContent, range);
         case 'field':
             if (hasElements(content)) {
-                // TODO: error
+                reportUnexpectedChildren(name, diagnostics);
             }
             return new SGField(name, attributes, range);
         case 'function':
             if (hasElements(content)) {
-                // TODO: error
+                reportUnexpectedChildren(name, diagnostics);
             }
             return new SGFunction(name, attributes, range);
         case 'script':
             if (hasElements(content)) {
-                // TODO: error
+                reportUnexpectedChildren(name, diagnostics);
             }
             const cdata = getCdata(content);
             return new SGScript(name, attributes, cdata, range);
@@ -226,6 +223,13 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
             const nodeContent = mapNodes(content);
             return new SGNode(name, attributes, nodeContent, range);
     }
+}
+
+function reportUnexpectedChildren(name: SGToken, diagnostics: Diagnostic[]) {
+    diagnostics.push({
+        ...DiagnosticMessages.xmlUnexpectedChildren(name.text),
+        range: name.range
+    });
 }
 
 function mapNode({ children }: ElementCstNode): SGNode {
@@ -259,7 +263,7 @@ function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diag
         } else {
             //unexpected tag
             diagnostics.push({
-                ...DiagnosticMessages.xmlUnknownTag(name.image),
+                ...DiagnosticMessages.xmlUnexpectedTag(name.image),
                 range: rangeFromTokens(name)
             });
         }

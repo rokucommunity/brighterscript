@@ -157,7 +157,7 @@ describe('XmlFile', () => {
             file.parse('<script type="text/brightscript" uri="ChildScene.brs" />');
             expect(file.diagnostics).to.be.lengthOf(2);
             expect(file.diagnostics[0]).to.deep.include({
-                ...DiagnosticMessages.xmlUnknownTag('script'),
+                ...DiagnosticMessages.xmlUnexpectedTag('script'),
                 range: Range.create(0, 1, 0, 7)
             });
             expect(file.diagnostics[1]).to.deep.include(

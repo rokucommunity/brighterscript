@@ -353,13 +353,13 @@ export let DiagnosticMessages = {
         code: 1067,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1068: () => ({
-        message: ``,
+    xmlUnexpectedTag: (tagName: string) => ({
+        message: `Unexpected tag '${tagName}'`,
         code: 1068,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1069: () => ({
-        message: ``,
+    xmlUnexpectedChildren: (tagName: string) => ({
+        message: `Tag '${tagName}' should not have children`,
         code: 1069,
         severity: DiagnosticSeverity.Error
     }),
