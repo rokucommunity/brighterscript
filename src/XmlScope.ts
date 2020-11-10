@@ -6,7 +6,8 @@ import type { BscFile, CallableContainerMap, FileReference } from './interfaces'
 import type { Program } from './Program';
 import util from './util';
 import { isXmlFile } from './astUtils/reflection';
-import { SGFieldTypes, SGTag } from './parser/SGTypes';
+import { SGFieldTypes } from './parser/SGTypes';
+import type { SGTag } from './parser/SGTypes';
 
 export class XmlScope extends Scope {
     constructor(
