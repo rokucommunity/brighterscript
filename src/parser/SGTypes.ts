@@ -206,6 +206,13 @@ export class SGField extends SGTag {
     }
 }
 
+export const SGFieldTypes = [
+    'integer', 'int', 'longinteger', 'float', 'string', 'str', 'boolean', 'bool',
+    'vector2d', 'color', 'time', 'uri', 'node', 'floatarray', 'intarray', 'boolarray',
+    'stringarray', 'vector2darray', 'colorarray', 'timearray', 'nodearray', 'assocarray',
+    'array', 'roarray', 'rect2d', 'rect2darray'
+];
+
 export class SGFunction extends SGTag {
 
     get name() {
@@ -295,7 +302,7 @@ export class SGInterface extends SGTag {
 
 export class SGComponent extends SGTag {
 
-    interface: SGInterface;
+    api: SGInterface;
     scripts: SGScript[] = [];
     children: SGChildren;
 
@@ -322,7 +329,7 @@ export class SGComponent extends SGTag {
         super(tag, attributes, range);
         content?.forEach(tag => {
             if (isSGInterface(tag)) {
-                this.interface = tag;
+                this.api = tag;
             } else if (isSGScript(tag)) {
                 this.scripts.push(tag);
             } else if (isSGChildren(tag)) {
@@ -336,8 +343,8 @@ export class SGComponent extends SGTag {
     protected transpileBody(state: SGTranspileState): (string | SourceNode)[] {
         const body: (string | SourceNode)[] = ['>\n'];
         state.blockDepth++;
-        if (this.interface) {
-            body.push(this.interface.transpile(state));
+        if (this.api) {
+            body.push(this.api.transpile(state));
         }
         if (this.scripts.length > 0) {
             body.push(...this.scripts.map(node => node.transpile(state)));

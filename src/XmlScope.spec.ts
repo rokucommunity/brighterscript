@@ -1,5 +1,6 @@
 import { expect } from 'chai';
-import { Position } from 'vscode-languageserver';
+import { Position, Range } from 'vscode-languageserver';
+import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
 import { trim } from './testHelpers.spec';
@@ -82,6 +83,77 @@ describe('XmlScope', () => {
             `);
             await program.validate();
             expect(program.getComponentScope('Child').getFiles()[0]).to.equal(xmlFile);
+        });
+    });
+
+    describe('validate', () => {
+        it('adds an error when an interface function cannot be found', async () => {
+            program = new Program({ rootDir: rootDir });
+
+            await program.addOrReplaceFile('components/child.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="child" extends="parent">
+                    <interface>
+                        <function name="func1" />
+                        <function name="func2" />
+                        <function id="func3" />
+                    </interface>
+                    <script uri="child.brs"/>
+                </component>
+            `);
+            await program.addOrReplaceFile(s`components/child.brs`, `
+                sub func1()
+                end sub
+            `);
+            await program.validate();
+            let childScope = program.getComponentScope('child');
+            let diagnostics = childScope.getDiagnostics();
+            expect(diagnostics.length).to.equal(2);
+            expect(diagnostics[0]).to.deep.include({
+                ...DiagnosticMessages.xmlFunctionNotFound('func2'),
+                range: Range.create(4, 24, 4, 29)
+            });
+            expect(diagnostics[1]).to.deep.include({
+                ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
+                range: Range.create(5, 9, 5, 17)
+            });
+        });
+
+        it('adds an error when an interface field is invalid', async () => {
+            program = new Program({ rootDir: rootDir });
+
+            await program.addOrReplaceFile('components/child.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="child" extends="parent">
+                    <interface>
+                        <field id="field1" type="node" />
+                        <field id="field2" type="no" />
+                        <field id="field3" />
+                        <field name="field4" type="str" />
+                    </interface>
+                    <script uri="child.brs"/>
+                </component>
+            `);
+            await program.addOrReplaceFile(s`components/child.brs`, `
+                sub init()
+                end sub
+            `);
+            await program.validate();
+            let childScope = program.getComponentScope('child');
+            let diagnostics = childScope.getDiagnostics();
+            expect(diagnostics.length).to.equal(3);
+            expect(diagnostics[0]).to.deep.include({
+                ...DiagnosticMessages.xmlInvalidFieldType('no'),
+                range: Range.create(4, 33, 4, 35)
+            });
+            expect(diagnostics[1]).to.deep.include({
+                ...DiagnosticMessages.xmlTagMissingAttribute('field', 'type'),
+                range: Range.create(5, 9, 5, 14)
+            });
+            expect(diagnostics[2]).to.deep.include({
+                ...DiagnosticMessages.xmlTagMissingAttribute('field', 'id'),
+                range: Range.create(6, 9, 6, 14)
+            });
         });
     });
 });

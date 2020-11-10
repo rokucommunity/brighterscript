@@ -376,30 +376,33 @@ export class Scope {
             //get a list of all callables, indexed by their lower case names
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
             let files = this.getFiles();
-
             this.program.plugins.emit('beforeScopeValidate', this, files, callableContainerMap);
 
-            //find all duplicate function declarations
-            this.diagnosticFindDuplicateFunctionDeclarations(callableContainerMap);
-
-            //detect missing and incorrect-case script imports
-            this.diagnosticValidateScriptImportPaths();
-
-            //enforce a series of checks on the bodies of class methods
-            this.validateClasses();
-
-            //do many per-file checks
-            this.enumerateBrsFiles((file) => {
-                this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
-                this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
-                this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
-                this.diagnosticDetectFunctionCollisions(file);
-                this.detectVariableNamespaceCollisions(file);
-            });
+            this._validate(callableContainerMap);
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
 
             (this as any).isValidated = true;
+        });
+    }
+
+    protected _validate(callableContainerMap: CallableContainerMap) {
+        //find all duplicate function declarations
+        this.diagnosticFindDuplicateFunctionDeclarations(callableContainerMap);
+
+        //detect missing and incorrect-case script imports
+        this.diagnosticValidateScriptImportPaths();
+
+        //enforce a series of checks on the bodies of class methods
+        this.validateClasses();
+
+        //do many per-file checks
+        this.enumerateBrsFiles((file) => {
+            this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
+            this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
+            this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
+            this.diagnosticDetectFunctionCollisions(file);
+            this.detectVariableNamespaceCollisions(file);
         });
     }
 

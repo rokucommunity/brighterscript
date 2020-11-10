@@ -338,8 +338,8 @@ export let DiagnosticMessages = {
         code: 1064,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1065: () => ({
-        message: ``,
+    xmlUnexpectedTag: (tagName: string) => ({
+        message: `Unexpected tag '${tagName}'`,
         code: 1065,
         severity: DiagnosticSeverity.Error
     }),
@@ -348,13 +348,13 @@ export let DiagnosticMessages = {
         code: 1066,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1067: () => ({
-        message: ``,
+    xmlFunctionNotFound: (name: string) => ({
+        message: `Cannot find function with name '${name}' in component scope`,
         code: 1067,
         severity: DiagnosticSeverity.Error
     }),
-    xmlUnexpectedTag: (tagName: string) => ({
-        message: `Unexpected tag '${tagName}'`,
+    xmlInvalidFieldType: (name: string) => ({
+        message: `Invalid field type ${name}`,
         code: 1068,
         severity: DiagnosticSeverity.Error
     }),
@@ -363,9 +363,9 @@ export let DiagnosticMessages = {
         code: 1069,
         severity: DiagnosticSeverity.Error
     }),
-    xmlUnknownTag: (tagName: string) => ({
-        message: `Unknown tag '${tagName}'`,
-        code: 1070,
+    xmlTagMissingAttribute: (tagName: string, attrName: string) => ({
+        message: `Tag '${tagName}' must have a ${attrName} attribute`,
+        code: 1118,
         severity: DiagnosticSeverity.Error
     }),
     expectedLabelIdentifierAfterGotoKeyword: () => ({

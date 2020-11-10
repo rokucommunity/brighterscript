@@ -493,7 +493,7 @@ function transpileAst(source: string, ast: SGAst, extraImports: string[]) {
 
     //create a clone to make our changes
     const temp = new SGComponent(component.tag, component.attributes);
-    temp.interface = component.interface;
+    temp.api = component.api;
     temp.scripts = component.scripts.map(updateScript);
     temp.children = component.children;
 

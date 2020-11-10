@@ -2,10 +2,11 @@ import type { Location, Position } from 'vscode-languageserver';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
-import type { BscFile, FileReference } from './interfaces';
+import type { BscFile, CallableContainerMap, FileReference } from './interfaces';
 import type { Program } from './Program';
 import util from './util';
 import { isXmlFile } from './astUtils/reflection';
+import { SGFieldTypes, SGTag } from './parser/SGTypes';
 
 export class XmlScope extends Scope {
     constructor(
@@ -34,16 +35,59 @@ export class XmlScope extends Scope {
         });
     }
 
-    public validate() {
-        if (this.isValidated === false) {
-            super.validate();
-            (this as any).isValidated = false;
+    protected _validate(callableContainerMap: CallableContainerMap) {
+        //validate brs files
+        super._validate(callableContainerMap);
 
-            //detect when the child imports a script that its ancestor also imports
-            this.diagnosticDetectDuplicateAncestorScriptImports();
+        //detect when the child imports a script that its ancestor also imports
+        this.diagnosticDetectDuplicateAncestorScriptImports();
 
-            (this as any).isValidated = true;
+        //validate component interface
+        this.diagnosticValidateInterface(callableContainerMap);
+    }
+
+    private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
+        const { api } = this.xmlFile.parser.ast?.component;
+        if (api) {
+            //functions
+            api.functions.forEach(fun => {
+                const name = fun.name;
+                if (!name) {
+                    this.diagnosticMissingAttribute(fun, 'name');
+                } else if (!callableContainerMap.has(name.toLowerCase())) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.xmlFunctionNotFound(name),
+                        range: fun.getSGAttribute('name').value.range,
+                        file: this.xmlFile
+                    });
+                }
+            });
+            //fields
+            api.fields.forEach(field => {
+                const { id, type } = field;
+                if (!id) {
+                    this.diagnosticMissingAttribute(field, 'id');
+                }
+                if (!type) {
+                    this.diagnosticMissingAttribute(field, 'type');
+                } else if (!SGFieldTypes.includes(type.toLowerCase())) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.xmlInvalidFieldType(type),
+                        range: field.getSGAttribute('type').value.range,
+                        file: this.xmlFile
+                    });
+                }
+            });
         }
+    }
+
+    private diagnosticMissingAttribute(tag: SGTag, name: string) {
+        const { text, range } = tag.tag;
+        this.diagnostics.push({
+            ...DiagnosticMessages.xmlTagMissingAttribute(text, name),
+            range: range,
+            file: this.xmlFile
+        });
     }
 
     /**
