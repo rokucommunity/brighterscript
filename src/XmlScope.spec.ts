@@ -97,6 +97,8 @@ describe('XmlScope', () => {
                         <function name="func1" />
                         <function name="func2" />
                         <function id="func3" />
+                        <function name="" />
+                        <function name />
                     </interface>
                     <script uri="child.brs"/>
                 </component>
@@ -108,7 +110,7 @@ describe('XmlScope', () => {
             await program.validate();
             let childScope = program.getComponentScope('child');
             let diagnostics = childScope.getDiagnostics();
-            expect(diagnostics.length).to.equal(2);
+            expect(diagnostics.length).to.equal(5);
             expect(diagnostics[0]).to.deep.include({
                 ...DiagnosticMessages.xmlFunctionNotFound('func2'),
                 range: Range.create(4, 24, 4, 29)
@@ -116,6 +118,17 @@ describe('XmlScope', () => {
             expect(diagnostics[1]).to.deep.include({
                 ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
                 range: Range.create(5, 9, 5, 17)
+            });
+            expect(diagnostics[2]).to.deep.include({
+                ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
+                range: Range.create(6, 9, 6, 17)
+            });
+            expect(diagnostics[3]).to.deep.include({
+                ...DiagnosticMessages.xmlTagMissingAttribute('function', 'name'),
+                range: Range.create(7, 9, 7, 17)
+            });
+            expect(diagnostics[4]).to.deep.include({ // syntax error expecting '=' but found '/>'
+                code: DiagnosticMessages.xmlGenericParseError('').code
             });
         });
 
@@ -131,6 +144,8 @@ describe('XmlScope', () => {
                         <field id="field3" />
                         <field name="field4" type="str" />
                         <field id="field5" alias="other.field" />
+                        <field id="" type="int" />
+                        <field id />
                     </interface>
                     <script uri="child.brs"/>
                 </component>
@@ -142,7 +157,7 @@ describe('XmlScope', () => {
             await program.validate();
             let childScope = program.getComponentScope('child');
             let diagnostics = childScope.getDiagnostics();
-            expect(diagnostics.length).to.equal(3);
+            expect(diagnostics.length).to.equal(7);
             expect(diagnostics[0]).to.deep.include({
                 ...DiagnosticMessages.xmlInvalidFieldType('no'),
                 range: Range.create(4, 33, 4, 35)
@@ -154,6 +169,21 @@ describe('XmlScope', () => {
             expect(diagnostics[2]).to.deep.include({
                 ...DiagnosticMessages.xmlTagMissingAttribute('field', 'id'),
                 range: Range.create(6, 9, 6, 14)
+            });
+            expect(diagnostics[3]).to.deep.include({
+                ...DiagnosticMessages.xmlTagMissingAttribute('field', 'id'),
+                range: Range.create(8, 9, 8, 14)
+            });
+            expect(diagnostics[4]).to.deep.include({
+                ...DiagnosticMessages.xmlTagMissingAttribute('field', 'id'),
+                range: Range.create(9, 9, 9, 14)
+            });
+            expect(diagnostics[5]).to.deep.include({
+                ...DiagnosticMessages.xmlTagMissingAttribute('field', 'type'),
+                range: Range.create(9, 9, 9, 14)
+            });
+            expect(diagnostics[6]).to.deep.include({ // syntax error expecting '=' but found '/>'
+                code: DiagnosticMessages.xmlGenericParseError('').code
             });
         });
     });

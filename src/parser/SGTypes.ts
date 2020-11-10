@@ -35,7 +35,7 @@ export class SGTag {
     }
 
     getAttribute(name: string): string | undefined {
-        return this.getSGAttribute(name)?.value.text;
+        return this.getSGAttribute(name)?.value?.text;
     }
 
     setAttribute(name: string, value: string) {
