@@ -50,7 +50,7 @@ export class XmlScope extends Scope {
     private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
         const { api } = this.xmlFile.parser.ast?.component;
         if (api) {
-            //functions
+            //validate functions
             api.functions.forEach(fun => {
                 const name = fun.name;
                 if (!name) {
@@ -63,7 +63,7 @@ export class XmlScope extends Scope {
                     });
                 }
             });
-            //fields
+            //validate fields
             api.fields.forEach(field => {
                 const { id, type } = field;
                 if (!id) {

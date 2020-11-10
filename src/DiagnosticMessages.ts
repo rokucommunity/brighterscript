@@ -364,7 +364,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     xmlTagMissingAttribute: (tagName: string, attrName: string) => ({
-        message: `Tag '${tagName}' must have a ${attrName} attribute`,
+        message: `Tag '${tagName}' must have a '${attrName}' attribute`,
         code: 1118,
         severity: DiagnosticSeverity.Error
     }),
