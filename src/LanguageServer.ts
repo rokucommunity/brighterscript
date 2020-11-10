@@ -38,7 +38,6 @@ import { standardizePath as s, util } from './util';
 import { Logger } from './Logger';
 import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
-import { BrsFile } from './files/BrsFile';
 import type { Token } from './lexer';
 import { Lexer } from './lexer';
 import { DiagnosticCollection } from './DiagnosticCollection';

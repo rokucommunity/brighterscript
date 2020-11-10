@@ -24,7 +24,6 @@ import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
 import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
-import { XmlFile } from './XmlFile';
 import type { DependencyGraph } from '../DependencyGraph';
 import * as extname from 'path-complete-extname';
 
