@@ -70,7 +70,9 @@ export class XmlScope extends Scope {
                     this.diagnosticMissingAttribute(field, 'id');
                 }
                 if (!type) {
-                    this.diagnosticMissingAttribute(field, 'type');
+                    if (!field.alias) {
+                        this.diagnosticMissingAttribute(field, 'type');
+                    }
                 } else if (!SGFieldTypes.includes(type.toLowerCase())) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.xmlInvalidFieldType(type),

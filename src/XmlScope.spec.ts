@@ -130,6 +130,7 @@ describe('XmlScope', () => {
                         <field id="field2" type="no" />
                         <field id="field3" />
                         <field name="field4" type="str" />
+                        <field id="field5" alias="other.field" />
                     </interface>
                     <script uri="child.brs"/>
                 </component>
