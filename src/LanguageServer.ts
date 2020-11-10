@@ -42,6 +42,7 @@ import { BrsFile } from './files/BrsFile';
 import type { Token } from './lexer';
 import { Lexer } from './lexer';
 import { DiagnosticCollection } from './DiagnosticCollection';
+import { isBrsFile } from './astUtils/reflection';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
@@ -962,7 +963,7 @@ export class LanguageServer {
         const pathAbsolute = util.uriToPath(params.textDocument.uri);
         for (const workspace of this.getWorkspaces()) {
             const file = workspace.builder.program.getFileByPathAbsolute(pathAbsolute);
-            if (file instanceof BrsFile) {
+            if (isBrsFile(file)) {
                 const symbols = await file.getDocumentSymbols();
                 return symbols;
             }

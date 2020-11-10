@@ -490,7 +490,7 @@ describe('LanguageServer', () => {
             }
         });
 
-        it('should return an empty response if we entered on anything other than an identifier token', async () => {
+        it('should return an empty response if we entered on a token that should not return any results', async () => {
             let references = await svr.onReferences({
                 textDocument: {
                     uri: functionDocument.uri

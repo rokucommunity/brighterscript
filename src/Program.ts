@@ -664,7 +664,7 @@ export class Program {
         const results = await Promise.all(
             Object.keys(this.files).map(async key => {
                 const file = this.files[key];
-                if (file instanceof BrsFile) {
+                if (isBrsFile(file)) {
                     return file.getWorkspaceSymbols();
                 }
                 return [];
@@ -683,7 +683,7 @@ export class Program {
             return [];
         }
 
-        if (file instanceof BrsFile) {
+        if (isBrsFile(file)) {
             return file.getDefinition(position);
         } else {
             let results = [] as Location[];
@@ -719,7 +719,7 @@ export class Program {
         const scopes = this.getScopesForFile(file);
         for (const scope of scopes) {
             for (const file of scope.getFiles()) {
-                if (file instanceof XmlFile) {
+                if (isXmlFile(file)) {
                     continue;
                 }
 

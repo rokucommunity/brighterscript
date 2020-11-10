@@ -22,7 +22,7 @@ import { TranspileState } from '../parser/TranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression } from '../astUtils/reflection';
+import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { XmlFile } from './XmlFile';
 import type { DependencyGraph } from '../DependencyGraph';
@@ -1137,6 +1137,7 @@ export class BrsFile {
         //get the token at the position
         const token = this.getTokenAt(position);
 
+        // While certain other tokens are allowed as local variables (AllowedLocalIdentifiers: https://github.com/rokucommunity/brighterscript/blob/master/src/lexer/TokenKind.ts#L418), these are converted by the parser to TokenKind.Identifier by the time we retrieve the token using getTokenAt
         let definitionTokenTypes = [
             TokenKind.Identifier,
             TokenKind.StringLiteral
@@ -1177,7 +1178,7 @@ export class BrsFile {
         //look through all files in scope for matches
         for (const scope of this.program.getScopesForFile(this)) {
             for (const file of scope.getFiles()) {
-                if (file instanceof XmlFile || filesSearched[file.pathAbsolute]) {
+                if (isXmlFile(file) || filesSearched[file.pathAbsolute]) {
                     continue;
                 }
                 filesSearched[file.pathAbsolute] = true;
@@ -1298,7 +1299,7 @@ export class BrsFile {
         }
         const documentation = functionComments.join('').trim();
 
-        const lines = util.splitStringIntoLines(this.fileContents);
+        const lines = util.splitIntoLines(this.fileContents);
 
         const params = [] as ParameterInformation[];
         for (const param of func.parameters) {
@@ -1317,18 +1318,13 @@ export class BrsFile {
 
         let locations = [] as Location[];
 
-        // No need to actually look if they didn't select a token we can search against
-        if (callSiteToken?.kind !== TokenKind.Identifier) {
-            return locations;
-        }
-
         const searchFor = callSiteToken.text.toLowerCase();
 
         const scopes = this.program.getScopesForFile(this);
 
         for (const scope of scopes) {
             for (const file of scope.getFiles()) {
-                if (file instanceof XmlFile) {
+                if (isXmlFile(file)) {
                     continue;
                 }
 
@@ -1361,7 +1357,7 @@ export class BrsFile {
         } else {
             //create a source map from the original source code
             let chunks = [] as (SourceNode | string)[];
-            let lines = util.splitStringIntoLines(this.fileContents);
+            let lines = util.splitIntoLines(this.fileContents);
             for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
                 let line = lines[lineIndex];
                 chunks.push(

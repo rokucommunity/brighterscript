@@ -919,7 +919,7 @@ export class Util {
         }
     }
 
-    public splitStringIntoLines(string: string) {
+    public splitIntoLines(string: string) {
         return string.split(/\r?\n/g);
     }
 
@@ -928,7 +928,7 @@ export class Util {
         if (Array.isArray(string)) {
             lines = string;
         } else {
-            lines = this.splitStringIntoLines(string);
+            lines = this.splitIntoLines(string);
         }
 
         const start = range.start;
