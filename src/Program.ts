@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CompletionItem, Position } from 'vscode-languageserver';
+import type { CompletionItem, Position, SignatureInformation } from 'vscode-languageserver';
 import { Location, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -21,6 +21,8 @@ import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile } from './astUtils/reflection';
+import { createVisitor, WalkMode } from './astUtils/visitors';
+import type { ClassMethodStatement, FunctionStatement } from './parser/Statement';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {
@@ -174,7 +176,7 @@ export class Program {
     }
 
     /**
-     * Get a list of all files that are inlcuded in the project but are not referenced
+     * Get a list of all files that are included in the project but are not referenced
      * by any scope in the program.
      */
     public getUnreferencedFiles() {
@@ -656,23 +658,44 @@ export class Program {
     }
 
     /**
+     * Goes through each file and builds a list of workspace symbols for the program. Used by LanguageServer's onWorkspaceSymbol functionality
+     */
+    public async getWorkspaceSymbols() {
+        const results = await Promise.all(
+            Object.keys(this.files).map(async key => {
+                const file = this.files[key];
+                if (isBrsFile(file)) {
+                    return file.getWorkspaceSymbols();
+                }
+                return [];
+            }));
+        const allSymbols = util.flatMap(results, c => c);
+        return allSymbols;
+    }
+
+    /**
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
      */
-    public getDefinition(pathAbsolute: string, position: Position): Location[] {
+    public getDefinition(pathAbsolute: string, position: Position) {
         let file = this.getFile(pathAbsolute);
         if (!file) {
             return [];
         }
-        let results = [] as Location[];
-        let scopes = this.getScopesForFile(file);
-        for (let scope of scopes) {
-            results = results.concat(...scope.getDefinition(file, position));
+
+        if (isBrsFile(file)) {
+            return file.getDefinition(position);
+        } else {
+            let results = [] as Location[];
+            const scopes = this.getScopesForFile(file);
+            for (const scope of scopes) {
+                results = results.concat(...scope.getDefinition(file, position));
+            }
+            return results;
         }
-        return results;
     }
 
-    public async getHover(pathAbsolute: string, position: Position) {
+    public getHover(pathAbsolute: string, position: Position) {
         //find the file
         let file = this.getFile(pathAbsolute);
         if (!file) {
@@ -682,6 +705,52 @@ export class Program {
         return file.getHover(position);
     }
 
+    public async getSignatureHelp(callSitePathAbsolute: string, callableName: string) {
+        const results = [] as SignatureInformation[];
+
+        callableName = callableName.toLowerCase();
+
+        //find the file
+        let file = this.getFile(callSitePathAbsolute);
+        if (!file) {
+            return results;
+        }
+
+        const scopes = this.getScopesForFile(file);
+        for (const scope of scopes) {
+            for (const file of scope.getFiles()) {
+                if (isXmlFile(file)) {
+                    continue;
+                }
+
+                await file.isReady();
+
+                const statementHandler = (statement: FunctionStatement | ClassMethodStatement) => {
+                    if (statement.getName(file.getParseMode()).toLowerCase() === callableName) {
+                        results.push(file.getSignatureHelp(statement));
+                    }
+                };
+                file.parser.ast.walk(createVisitor({
+                    FunctionStatement: statementHandler,
+                    ClassMethodStatement: statementHandler
+                }), {
+                    walkMode: WalkMode.visitStatements
+                });
+            }
+        }
+
+        return results;
+    }
+
+    public getReferences(pathAbsolute: string, position: Position) {
+        //find the file
+        let file = this.getFile(pathAbsolute);
+        if (!file) {
+            return null;
+        }
+
+        return file.getReferences(position);
+    }
 
     /**
      * Get a list of all script imports, relative to the specified pkgPath

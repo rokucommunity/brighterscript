@@ -26,7 +26,7 @@ export class KeyedThrottler {
     public async onIdleOnce(key: string, resolveImmediatelyIfIdle = true) {
         const throttler = this.throttlers[key];
         if (throttler) {
-            return throttler.onIdleOnce(true);
+            return throttler.onIdleOnce(resolveImmediatelyIfIdle);
         } else {
             return Promise.resolve();
         }

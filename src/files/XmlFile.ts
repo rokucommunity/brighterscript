@@ -1,7 +1,7 @@
 import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
 import { Deferred } from '../deferred';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
@@ -132,7 +132,7 @@ export class XmlFile {
      * coming from:
      *  - script tags
      *  - inferred codebehind file
-     *  - import statements from imported scripts or their descendents
+     *  - import statements from imported scripts or their descendants
      */
     public getAvailableScriptImports() {
         return this.cache.getOrAdd('allAvailableScriptImports', () => {
@@ -550,6 +550,11 @@ export class XmlFile {
     public getHover(position: Position): Promise<Hover> { //eslint-disable-line
         //TODO implement
         // let result = {} as Hover;
+        return null;
+    }
+
+    public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
+        //TODO implement
         return null;
     }
 

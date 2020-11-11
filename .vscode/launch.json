@@ -23,7 +23,6 @@
             "name": "Debug Tests (Current file)",
             "type": "node",
             "request": "launch",
-            // "preLaunchTask": "build",
             "smartStep": true,
             "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
             "sourceMaps": true,

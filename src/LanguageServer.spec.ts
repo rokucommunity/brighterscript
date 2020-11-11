@@ -2,14 +2,17 @@ import { expect } from 'chai';
 import * as fsExtra from 'fs-extra';
 import * as glob from 'glob';
 import * as path from 'path';
-import type { DidChangeWatchedFilesParams } from 'vscode-languageserver';
-import { FileChangeType, TextDocumentSyncKind, Range } from 'vscode-languageserver';
+import type { DidChangeWatchedFilesParams, DocumentSymbol, Location } from 'vscode-languageserver';
+import { FileChangeType, Range } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import type { Workspace } from './LanguageServer';
 import { LanguageServer } from './LanguageServer';
 import type { ProgramBuilder } from './ProgramBuilder';
 import * as sinonImport from 'sinon';
 import { standardizePath as s, util } from './util';
+import { TextDocument } from 'vscode-languageserver-textdocument';
+import type { Program } from './Program';
+import * as assert from 'assert';
 
 let sinon: sinonImport.SinonSandbox;
 beforeEach(() => {
@@ -39,12 +42,22 @@ describe('LanguageServer', () => {
         onDidChangeWatchedFiles: () => null,
         onCompletion: () => null,
         onCompletionResolve: () => null,
+        onDocumentSymbol: () => null,
+        onWorkspaceSymbol: () => null,
         onDefinition: () => null,
+        onSignatureHelp: () => null,
+        onReferences: () => null,
         onHover: () => null,
         listen: () => null,
         sendNotification: () => null,
         sendDiagnostics: () => null,
         onExecuteCommand: () => null,
+        onDidOpenTextDocument: () => null,
+        onDidChangeTextDocument: () => null,
+        onDidCloseTextDocument: () => null,
+        onWillSaveTextDocument: () => null,
+        onWillSaveTextDocumentWaitUntil: () => null,
+        onDidSaveTextDocument: () => null,
         workspace: {
             getWorkspaceFolders: () => workspaceFolders,
             getConfiguration: () => {
@@ -55,6 +68,7 @@ describe('LanguageServer', () => {
             log: () => { }
         }
     };
+    let program: Program;
 
     beforeEach(() => {
         server = new LanguageServer();
@@ -77,15 +91,6 @@ describe('LanguageServer', () => {
         svr.createConnection = () => {
             return connection;
         };
-
-        svr.documents = {
-            onDidChangeContent: () => null,
-            onDidClose: () => null,
-            listen: () => null,
-            get: () => { },
-            all: () => [],
-            syncKind: TextDocumentSyncKind.Full
-        };
     });
     afterEach(async () => {
         try {
@@ -97,6 +102,29 @@ describe('LanguageServer', () => {
         }
         server.dispose();
     });
+
+    async function addXmlFile(name: string, additionalXmlContents = '') {
+        const filePath = `components/${name}.xml`;
+
+        const contents = `<?xml version="1.0" encoding="utf-8"?>
+        <component name="${name}" extends="Group">
+            ${additionalXmlContents}
+            <script type="text/brightscript" uri="${name}.brs" />
+        </component>`;
+        await program.addOrReplaceFile(filePath, contents);
+    }
+
+    async function addScriptFile(name: string, contents: string, extension = 'brs') {
+        const filePath = s`components/${name}.${extension}`;
+        await program.addOrReplaceFile(filePath, contents);
+        for (const key in program.files) {
+            if (key.includes(filePath)) {
+                const document = TextDocument.create(util.pathToUri(key), 'brightscript', 1, contents);
+                svr.documents._documents[document.uri] = document;
+                return document;
+            }
+        }
+    }
 
     function writeToFs(pathAbsolute: string, contents: string) {
         physicalFilePaths.push(pathAbsolute);
@@ -321,6 +349,493 @@ describe('LanguageServer', () => {
                 type: FileChangeType.Created,
                 pathAbsolute: s`${rootDir}/source/lib.brs`
             }]);
+        });
+    });
+
+    describe('onSignatureHelp', () => {
+        let callDocument: TextDocument;
+        const functionFileBaseName = 'buildAwesome';
+        const funcDefinitionLine = 'function buildAwesome(confirm = true as Boolean)';
+        beforeEach(async () => {
+            svr.connection = svr.createConnection();
+            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
+            program = svr.workspaces[0].builder.program;
+
+            const name = `CallComponent`;
+            callDocument = await addScriptFile(name, `
+                sub init()
+                    shouldBuildAwesome = true
+                    if shouldBuildAwesome then
+                        buildAwesome()
+                    else
+                        m.buildAwesome()
+                    end if
+                end sub
+            `);
+            await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
+        });
+
+        it('should return the expected signature info when documentation is included', async () => {
+            const funcDescriptionComment = '@description Builds awesome for you';
+            const funcReturnComment = '@return {Integer} The key to everything';
+
+            await addScriptFile(functionFileBaseName, `
+                ' /**
+                ' * ${funcDescriptionComment}
+                ' * ${funcReturnComment}
+                ' */
+                ${funcDefinitionLine}
+                    return 42
+                end function
+            `, 'bs');
+
+            const result = await svr.onSignatureHelp({
+                textDocument: {
+                    uri: callDocument.uri
+                },
+                position: util.createPosition(4, 37)
+            });
+            expect(result.signatures).to.not.be.empty;
+            const signature = result.signatures[0];
+            expect(signature.label).to.equal(funcDefinitionLine);
+            expect(signature.documentation).to.include(funcDescriptionComment);
+            expect(signature.documentation).to.include(funcReturnComment);
+        });
+
+        it('should work if used on a property value', async () => {
+            await addScriptFile(functionFileBaseName, `
+                ${funcDefinitionLine}
+                    return 42
+                end function
+            `, 'bs');
+
+            const result = await svr.onSignatureHelp({
+                textDocument: {
+                    uri: callDocument.uri
+                },
+                position: util.createPosition(6, 39)
+            });
+            expect(result.signatures).to.not.be.empty;
+            const signature = result.signatures[0];
+            expect(signature.label).to.equal(funcDefinitionLine);
+        });
+
+        it('should give the correct signature for a class method', async () => {
+            const classMethodDefinitionLine = 'function buildAwesome(classVersion = true as Boolean)';
+            await addScriptFile(functionFileBaseName, `
+                class ${functionFileBaseName}
+                    ${classMethodDefinitionLine}
+                        return 42
+                    end function
+                end class
+            `, 'bs');
+
+            const result = await svr.onSignatureHelp({
+                textDocument: {
+                    uri: callDocument.uri
+                },
+                position: util.createPosition(6, 39)
+            });
+
+            expect(result.signatures).to.not.be.empty;
+            const signature = result.signatures[0];
+            expect(signature.label).to.equal(classMethodDefinitionLine);
+        });
+    });
+
+    describe('onReferences', () => {
+        let functionDocument: TextDocument;
+        let referenceFileUris = [];
+
+        beforeEach(async () => {
+            svr.connection = svr.createConnection();
+            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
+            program = svr.workspaces[0].builder.program;
+
+            const functionFileBaseName = 'buildAwesome';
+            functionDocument = await addScriptFile(functionFileBaseName, `
+                function buildAwesome()
+                    return 42
+                end function
+            `);
+
+            for (let i = 0; i < 5; i++) {
+                let name = `CallComponent${i}`;
+                const document = await addScriptFile(name, `
+                    sub init()
+                        shouldBuildAwesome = true
+                        if shouldBuildAwesome then
+                            buildAwesome()
+                        end if
+                    end sub
+                `);
+
+                await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
+                referenceFileUris.push(document.uri);
+            }
+        });
+
+        it('should return the expected results if we entered on an identifier token', async () => {
+            const references = await svr.onReferences({
+                textDocument: {
+                    uri: functionDocument.uri
+                },
+                position: util.createPosition(1, 32)
+            });
+
+            expect(references.length).to.equal(referenceFileUris.length);
+
+            for (const reference of references) {
+                expect(referenceFileUris).to.contain(reference.uri);
+            }
+        });
+
+        it('should return an empty response if we entered on a token that should not return any results', async () => {
+            let references = await svr.onReferences({
+                textDocument: {
+                    uri: functionDocument.uri
+                },
+                position: util.createPosition(1, 20) // function token
+            });
+
+            expect(references).to.be.empty;
+
+            references = await svr.onReferences({
+                textDocument: {
+                    uri: functionDocument.uri
+                },
+                position: util.createPosition(1, 20) // return token
+            });
+
+            expect(references).to.be.empty;
+        });
+    });
+
+    describe('onDefinition', () => {
+        let functionDocument: TextDocument;
+        let referenceDocument: TextDocument;
+
+        beforeEach(async () => {
+            svr.connection = svr.createConnection();
+            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
+            program = svr.workspaces[0].builder.program;
+
+            const functionFileBaseName = 'buildAwesome';
+            functionDocument = await addScriptFile(functionFileBaseName, `
+                function pi()
+                    return 3.141592653589793
+                end function
+
+                function buildAwesome()
+                    return 42
+                end function
+            `);
+
+            const name = `CallComponent`;
+            referenceDocument = await addScriptFile(name, `
+                sub init()
+                    shouldBuildAwesome = true
+                    if shouldBuildAwesome then
+                        buildAwesome()
+                    else
+                        m.top.observeFieldScope("loadFinished", "buildAwesome")
+                    end if
+                end sub
+            `);
+
+            await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
+        });
+
+        it('should return the expected location if we entered on an identifier token', async () => {
+            const locations = await svr.onDefinition({
+                textDocument: {
+                    uri: referenceDocument.uri
+                },
+                position: util.createPosition(4, 33)
+            });
+
+            expect(locations.length).to.equal(1);
+            const location: Location = locations[0];
+            expect(location.uri).to.equal(functionDocument.uri);
+            expect(location.range.start.line).to.equal(5);
+            expect(location.range.start.character).to.equal(16);
+        });
+
+        it('should return the expected location if we entered on a StringLiteral token', async () => {
+            const locations = await svr.onDefinition({
+                textDocument: {
+                    uri: referenceDocument.uri
+                },
+                position: util.createPosition(6, 77)
+            });
+
+            expect(locations.length).to.equal(1);
+            const location: Location = locations[0];
+            expect(location.uri).to.equal(functionDocument.uri);
+            expect(location.range.start.line).to.equal(5);
+            expect(location.range.start.character).to.equal(16);
+        });
+
+        it('should return nothing if neither StringLiteral or identifier token entry point', async () => {
+            const locations = await svr.onDefinition({
+                textDocument: {
+                    uri: referenceDocument.uri
+                },
+                position: util.createPosition(1, 18)
+            });
+
+            expect(locations).to.be.empty;
+        });
+
+        it('should work on local variables as well', async () => {
+            const locations = await svr.onDefinition({
+                textDocument: {
+                    uri: referenceDocument.uri
+                },
+                position: util.createPosition(3, 36)
+            });
+            expect(locations.length).to.equal(1);
+            const location: Location = locations[0];
+            expect(location.uri).to.equal(referenceDocument.uri);
+            expect(location.range.start.line).to.equal(2);
+            expect(location.range.start.character).to.equal(20);
+            expect(location.range.end.line).to.equal(2);
+            expect(location.range.end.character).to.equal(38);
+        });
+
+        it('should work for bs class functions as well', async () => {
+            const functionFileBaseName = 'Build';
+            functionDocument = await addScriptFile(functionFileBaseName, `
+                class ${functionFileBaseName}
+                    function awesome()
+                        return 42
+                    end function
+                end class
+            `, 'bs');
+
+            const name = `CallComponent`;
+            referenceDocument = await addScriptFile(name, `
+                sub init()
+                    build = new Build()
+                    build.awesome()
+                end sub
+            `);
+
+            await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
+
+            const locations = await svr.onDefinition({
+                textDocument: {
+                    uri: referenceDocument.uri
+                },
+                position: util.createPosition(3, 30)
+            });
+            expect(locations.length).to.equal(1);
+            const location: Location = locations[0];
+            expect(location.uri).to.equal(functionDocument.uri);
+            expect(location.range.start.line).to.equal(2);
+            expect(location.range.start.character).to.equal(20);
+            expect(location.range.end.line).to.equal(4);
+            expect(location.range.end.character).to.equal(32);
+        });
+    });
+
+    describe('onDocumentSymbol', () => {
+        beforeEach(async () => {
+            svr.connection = svr.createConnection();
+            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
+            program = svr.workspaces[0].builder.program;
+        });
+
+        it('should return the expected symbols even if pulled from cache', async () => {
+            const document = await addScriptFile('buildAwesome', `
+                function pi()
+                    return 3.141592653589793
+                end function
+
+                function buildAwesome()
+                    return 42
+                end function
+            `);
+
+            // We run the check twice as the first time is with it not cached and second time is with it cached
+            for (let i = 0; i < 2; i++) {
+                const symbols = await svr.onDocumentSymbol({
+                    textDocument: document
+                });
+                expect(symbols.length).to.equal(2);
+                expect(symbols[0].name).to.equal('pi');
+                expect(symbols[1].name).to.equal('buildAwesome');
+            }
+        });
+
+        it('should work for brightscript classes as well', async () => {
+            const document = await addScriptFile('MyFirstClass', `
+                class MyFirstClass
+                    function pi()
+                        return 3.141592653589793
+                    end function
+
+                    function buildAwesome()
+                        return 42
+                    end function
+                end class
+            `, 'bs');
+
+            // We run the check twice as the first time is with it not cached and second time is with it cached
+            for (let i = 0; i < 2; i++) {
+                const symbols = await svr.onDocumentSymbol({
+                    textDocument: document
+                }) as DocumentSymbol[];
+
+                expect(symbols.length).to.equal(1);
+                const classSymbol = symbols[0];
+                expect(classSymbol.name).to.equal('MyFirstClass');
+                const classChildrenSymbols = classSymbol.children;
+                expect(classChildrenSymbols.length).to.equal(2);
+                expect(classChildrenSymbols[0].name).to.equal('pi');
+                expect(classChildrenSymbols[1].name).to.equal('buildAwesome');
+            }
+        });
+
+        it('should work for brightscript namespaces as well', async () => {
+            const document = await addScriptFile('MyFirstNamespace', `
+                namespace MyFirstNamespace
+                    function pi()
+                        return 3.141592653589793
+                    end function
+
+                    function buildAwesome()
+                        return 42
+                    end function
+                end namespace
+            `, 'bs');
+
+            // We run the check twice as the first time is with it not cached and second time is with it cached
+            for (let i = 0; i < 2; i++) {
+                const symbols = await svr.onDocumentSymbol({
+                    textDocument: document
+                }) as DocumentSymbol[];
+
+                expect(symbols.length).to.equal(1);
+                const namespaceSymbol = symbols[0];
+                expect(namespaceSymbol.name).to.equal('MyFirstNamespace');
+                const classChildrenSymbols = namespaceSymbol.children;
+                expect(classChildrenSymbols.length).to.equal(2);
+                expect(classChildrenSymbols[0].name).to.equal('MyFirstNamespace.pi');
+                expect(classChildrenSymbols[1].name).to.equal('MyFirstNamespace.buildAwesome');
+            }
+        });
+    });
+
+    describe('onWorkspaceSymbol', () => {
+        beforeEach(async () => {
+            svr.connection = svr.createConnection();
+            await svr.createWorkspace(s`${rootDir}/TestRokuApp`);
+            program = svr.workspaces[0].builder.program;
+        });
+
+        it('should return the expected symbols even if pulled from cache', async () => {
+            const className = 'MyFirstClass';
+            const namespaceName = 'MyFirstNamespace';
+
+            await addScriptFile('buildAwesome', `
+                function pi()
+                    return 3.141592653589793
+                end function
+
+                function buildAwesome()
+                    return 42
+                end function
+            `);
+
+            await addScriptFile(className, `
+                class ${className}
+                    function ${className}pi()
+                        return 3.141592653589793
+                    end function
+
+                    function ${className}buildAwesome()
+                        return 42
+                    end function
+                end class
+            `, 'bs');
+
+
+            await addScriptFile(namespaceName, `
+                namespace ${namespaceName}
+                    function pi()
+                        return 3.141592653589793
+                    end function
+
+                    function buildAwesome()
+                        return 42
+                    end function
+                end namespace
+            `, 'bs');
+
+            // We run the check twice as the first time is with it not cached and second time is with it cached
+            for (let i = 0; i < 2; i++) {
+                const symbols = await svr.onWorkspaceSymbol();
+                expect(symbols.length).to.equal(8);
+                for (const symbol of symbols) {
+                    switch (symbol.name) {
+                        case 'pi':
+                            break;
+                        case 'buildAwesome':
+                            break;
+                        case `${className}`:
+                            break;
+                        case `${className}pi`:
+                            expect(symbol.containerName).to.equal(className);
+                            break;
+                        case `${className}buildAwesome`:
+                            expect(symbol.containerName).to.equal(className);
+                            break;
+                        case `${namespaceName}`:
+                            break;
+                        case `${namespaceName}.pi`:
+                            expect(symbol.containerName).to.equal(namespaceName);
+                            break;
+                        case `${namespaceName}.buildAwesome`:
+                            expect(symbol.containerName).to.equal(namespaceName);
+                            break;
+                        default:
+                            assert.fail(`'${symbol.name}' was not expected in list of symbols`);
+                    }
+                }
+            }
+        });
+
+        it('should work for nested class as well', async () => {
+            const nestedNamespace = 'containerNamespace';
+            const nestedClassName = 'nestedClass';
+
+            await addScriptFile('nested', `
+                namespace ${nestedNamespace}
+                    class ${nestedClassName}
+                        function pi()
+                            return 3.141592653589793
+                        end function
+
+                        function buildAwesome()
+                            return 42
+                        end function
+                    end class
+                end namespace
+            `, 'bs');
+
+            // We run the check twice as the first time is with it not cached and second time is with it cached
+            for (let i = 0; i < 2; i++) {
+                const symbols = await svr.onWorkspaceSymbol();
+                expect(symbols.length).to.equal(4);
+                expect(symbols[0].name).to.equal(`pi`);
+                expect(symbols[0].containerName).to.equal(`${nestedNamespace}.${nestedClassName}`);
+                expect(symbols[1].name).to.equal(`buildAwesome`);
+                expect(symbols[1].containerName).to.equal(`${nestedNamespace}.${nestedClassName}`);
+                expect(symbols[2].name).to.equal(`${nestedNamespace}.${nestedClassName}`);
+                expect(symbols[2].containerName).to.equal(nestedNamespace);
+                expect(symbols[3].name).to.equal(nestedNamespace);
+            }
         });
     });
 });
