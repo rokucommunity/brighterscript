@@ -239,6 +239,14 @@ describe('util', () => {
     });
 
     describe('normalizeConfig', () => {
+        it('sets emitDefinitions to false by default and in edge cases', () => {
+            expect(util.normalizeConfig({}).emitDefinitions).to.be.false;
+            expect((util as any).normalizeConfig().emitDefinitions).to.be.false;
+            expect(util.normalizeConfig(<any>{ emitDefinitions: 123 }).emitDefinitions).to.be.false;
+            expect(util.normalizeConfig(<any>{ emitDefinitions: undefined }).emitDefinitions).to.be.false;
+            expect(util.normalizeConfig(<any>{ emitDefinitions: 'true' }).emitDefinitions).to.be.false;
+        });
+
         it('loads project from disc', async () => {
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
             let config = await util.normalizeAndResolveConfig({

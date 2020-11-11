@@ -4,7 +4,7 @@ import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range, DiagnosticSeverity, Location } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
@@ -92,31 +92,6 @@ describe('Program', () => {
                 await program.addOrReplaceFile({ src: `${rootDir}/components/B.brs`, dest: 'components/B.brs' });
                 expect(stub.called).to.be.true;
 
-            });
-
-        });
-
-        describe('parseError', () => {
-            let orig;
-            beforeEach(() => {
-                orig = BrsFile.prototype.parse;
-                BrsFile.prototype.parse = () => {
-                    return Promise.reject(new Error('some error'));
-                };
-            });
-            afterEach(() => {
-                BrsFile.prototype.parse = orig;
-            });
-
-            it('still adds the file even when it errors', async () => {
-                try {
-                    //add a file, which will immediately error during parse (because of the beforeEach above)
-                    await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `'comment`);
-                    assert.fail(null, null, 'Should have thrown exception');
-                } catch (e) {
-                    //the file should still be in the files list
-                    expect(program.hasFile(`${rootDir}/source/main.brs`)).to.be.true;
-                }
             });
         });
 
@@ -1425,6 +1400,35 @@ describe('Program', () => {
     });
 
     describe('typedef', () => {
+        describe('emitDefinitions', () => {
+            it('generates typedef for .bs files', async () => {
+                await program.addOrReplaceFile<BrsFile>('source/Duck.bs', `
+                    class Duck
+                    end class
+                `);
+                program.options.emitDefinitions = true;
+                await program.validate();
+                await program.transpile([], stagingFolderPath);
+
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.brs`)).to.be.true;
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.d.bs`)).to.be.true;
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.d.brs`)).to.be.false;
+            });
+
+            it('does not generate typedef for typedef file', async () => {
+                await program.addOrReplaceFile<BrsFile>('source/Duck.d.bs', `
+                    class Duck
+                    end class
+                `);
+                program.options.emitDefinitions = true;
+                await program.validate();
+                await program.transpile([], stagingFolderPath);
+
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.d.brs`)).to.be.false;
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.brs`)).to.be.false;
+            });
+        });
+
         it('ignores bs1018 for d.bs files', async () => {
             await program.addOrReplaceFile<BrsFile>('source/main.d.bs', `
                 class Duck
