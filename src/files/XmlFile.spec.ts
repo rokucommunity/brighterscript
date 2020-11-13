@@ -595,6 +595,57 @@ describe('XmlFile', () => {
     });
 
     describe('typedef', () => {
+        it('loads d.bs files from parent scope', async () => {
+            await program.addOrReplaceFile<XmlFile>('components/ParentComponent.xml', `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ParentComponent" extends="Scene">
+                    <script uri="ParentComponent.brs" />
+                </component>
+            `);
+
+            await program.addOrReplaceFile('components/ParentComponent.d.bs', `
+                import "Lib.brs"
+                namespace Parent
+                    sub log()
+                    end sub
+                end namespace
+            `);
+            await program.addOrReplaceFile('components/ParentComponent.brs', `
+                sub Parent_log()
+                end sub
+            `);
+
+            await program.addOrReplaceFile('components/Lib.d.bs', `
+                namespace Lib
+                    sub log()
+                    end sub
+                end namespace
+            `);
+            await program.addOrReplaceFile('components/Lib.brs', `
+                sub Lib_log()
+                end sub
+            `);
+
+            await program.addOrReplaceFile<XmlFile>('components/ChildComponent.xml', `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildComponent" extends="ParentComponent">
+                    <script uri="ChildComponent.bs" />
+                </component>
+            `);
+            await program.addOrReplaceFile('components/ChildComponent.bs', `
+                sub init()
+                    Parent.log()
+                    Lib.log()
+                end sub
+            `);
+            await program.validate();
+            const scope = program.getComponentScope('ChildComponent');
+            expect(Object.keys(scope.namespaceLookup).sort()).to.eql([
+                'lib',
+                'parent'
+            ]);
+        });
+
         it('loads `d.bs` files into scope', async () => {
             const xmlFile = await program.addOrReplaceFile<XmlFile>('components/Component1.xml', `
                 <?xml version="1.0" encoding="utf-8" ?>
