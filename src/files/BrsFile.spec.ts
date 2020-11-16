@@ -1,5 +1,6 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
+import * as path from 'path';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import type { Callable, CallableArg, CommentFlag, BsDiagnostic, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
@@ -2471,13 +2472,7 @@ describe('BrsFile', () => {
     });
 
     describe('Plugins', () => {
-        it('can load a plugin which transforms the AST', async () => {
-            program.plugins = new PluginInterface(
-                loadPlugins([
-                    require.resolve('../examples/plugins/removePrint')
-                ]),
-                undefined
-            );
+        async function testPluginTranspile() {
             await testTranspile(`
                 sub main()
                     sayHello(sub()
@@ -2500,6 +2495,36 @@ describe('BrsFile', () => {
                     fn()
                     \n                end sub
             `);
+        }
+
+        it('can use a plugin object which transforms the AST', async () => {
+            program.plugins = new PluginInterface(
+                loadPlugins('', [
+                    require.resolve('../examples/plugins/removePrint')
+                ]),
+                undefined
+            );
+            await testPluginTranspile();
+        });
+
+        it('can load an absolute plugin which transforms the AST', async () => {
+            program.plugins = new PluginInterface(
+                loadPlugins('', [
+                    path.resolve(process.cwd(), './dist/examples/plugins/removePrint.js')
+                ]),
+                undefined
+            );
+            await testPluginTranspile();
+        });
+
+        it('can load a relative plugin which transforms the AST', async () => {
+            program.plugins = new PluginInterface(
+                loadPlugins(process.cwd(), [
+                    './dist/examples/plugins/removePrint.js'
+                ]),
+                undefined
+            );
+            await testPluginTranspile();
         });
     });
 });
