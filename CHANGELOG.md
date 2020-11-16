@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.20.1] - 2020-11-16
 ### Changed
- - modified reflection utilities so they are compatible with TS strict null checks
+ - load plugins relatively to the project ([#242](https://github.com/rokucommunity/brighterscript/pull/242))
+ - modified reflection utilities so they are compatible with TS strict null checks ([#243](https://github.com/rokucommunity/brighterscript/pull/243))
 
 
 
