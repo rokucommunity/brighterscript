@@ -28,90 +28,90 @@ export function isXmlFile(file: (BscFile)): file is XmlFile {
  * directly extend Statement or FunctionStatement,
  * so it only checks the immediate parent's class name.
  */
-export function isStatement(element: Statement | Expression): element is Statement {
+export function isStatement(element: Statement | Expression | undefined): element is Statement {
     // eslint-disable-next-line no-bitwise
     return !!(element && element.visitMode & InternalWalkMode.visitStatements);
 }
 
-export function isBody(element: Statement | Expression): element is Body {
+export function isBody(element: Statement | Expression | undefined): element is Body {
     return element?.constructor?.name === 'Body';
 }
-export function isAssignmentStatement(element: Statement | Expression): element is AssignmentStatement {
+export function isAssignmentStatement(element: Statement | Expression | undefined): element is AssignmentStatement {
     return element?.constructor?.name === 'AssignmentStatement';
 }
-export function isBlock(element: Statement | Expression): element is Block {
+export function isBlock(element: Statement | Expression | undefined): element is Block {
     return element?.constructor?.name === 'Block';
 }
-export function isExpressionStatement(element: Statement | Expression): element is ExpressionStatement {
+export function isExpressionStatement(element: Statement | Expression | undefined): element is ExpressionStatement {
     return element?.constructor?.name === 'ExpressionStatement';
 }
-export function isCommentStatement(element: Statement | Expression): element is CommentStatement {
+export function isCommentStatement(element: Statement | Expression | undefined): element is CommentStatement {
     return element?.constructor?.name === 'CommentStatement';
 }
-export function isExitForStatement(element: Statement | Expression): element is ExitForStatement {
+export function isExitForStatement(element: Statement | Expression | undefined): element is ExitForStatement {
     return element?.constructor?.name === 'ExitForStatement';
 }
-export function isExitWhileStatement(element: Statement | Expression): element is ExitWhileStatement {
+export function isExitWhileStatement(element: Statement | Expression | undefined): element is ExitWhileStatement {
     return element?.constructor?.name === 'ExitWhileStatement';
 }
-export function isFunctionStatement(element: Statement | Expression): element is FunctionStatement {
+export function isFunctionStatement(element: Statement | Expression | undefined): element is FunctionStatement {
     return element?.constructor?.name === 'FunctionStatement';
 }
-export function isIfStatement(element: Statement | Expression): element is IfStatement {
+export function isIfStatement(element: Statement | Expression | undefined): element is IfStatement {
     return element?.constructor?.name === 'IfStatement';
 }
-export function isIncrementStatement(element: Statement | Expression): element is IncrementStatement {
+export function isIncrementStatement(element: Statement | Expression | undefined): element is IncrementStatement {
     return element?.constructor?.name === 'IncrementStatement';
 }
-export function isPrintStatement(element: Statement | Expression): element is PrintStatement {
+export function isPrintStatement(element: Statement | Expression | undefined): element is PrintStatement {
     return element?.constructor?.name === 'PrintStatement';
 }
-export function isGotoStatement(element: Statement | Expression): element is GotoStatement {
+export function isGotoStatement(element: Statement | Expression | undefined): element is GotoStatement {
     return element?.constructor?.name === 'GotoStatement';
 }
-export function isLabelStatement(element: Statement | Expression): element is LabelStatement {
+export function isLabelStatement(element: Statement | Expression | undefined): element is LabelStatement {
     return element?.constructor?.name === 'LabelStatement';
 }
-export function isReturnStatement(element: Statement | Expression): element is ReturnStatement {
+export function isReturnStatement(element: Statement | Expression | undefined): element is ReturnStatement {
     return element?.constructor?.name === 'ReturnStatement';
 }
-export function isEndStatement(element: Statement | Expression): element is EndStatement {
+export function isEndStatement(element: Statement | Expression | undefined): element is EndStatement {
     return element?.constructor?.name === 'EndStatement';
 }
-export function isStopStatement(element: Statement | Expression): element is StopStatement {
+export function isStopStatement(element: Statement | Expression | undefined): element is StopStatement {
     return element?.constructor?.name === 'StopStatement';
 }
-export function isForStatement(element: Statement | Expression): element is ForStatement {
+export function isForStatement(element: Statement | Expression | undefined): element is ForStatement {
     return element?.constructor?.name === 'ForStatement';
 }
-export function isForEachStatement(element: Statement | Expression): element is ForEachStatement {
+export function isForEachStatement(element: Statement | Expression | undefined): element is ForEachStatement {
     return element?.constructor?.name === 'ForEachStatement';
 }
-export function isWhileStatement(element: Statement | Expression): element is WhileStatement {
+export function isWhileStatement(element: Statement | Expression | undefined): element is WhileStatement {
     return element?.constructor?.name === 'WhileStatement';
 }
-export function isDottedSetStatement(element: Statement | Expression): element is DottedSetStatement {
+export function isDottedSetStatement(element: Statement | Expression | undefined): element is DottedSetStatement {
     return element?.constructor?.name === 'DottedSetStatement';
 }
-export function isIndexedSetStatement(element: Statement | Expression): element is IndexedSetStatement {
+export function isIndexedSetStatement(element: Statement | Expression | undefined): element is IndexedSetStatement {
     return element?.constructor?.name === 'IndexedSetStatement';
 }
-export function isLibraryStatement(element: Statement | Expression): element is LibraryStatement {
+export function isLibraryStatement(element: Statement | Expression | undefined): element is LibraryStatement {
     return element?.constructor?.name === 'LibraryStatement';
 }
-export function isNamespaceStatement(element: Statement | Expression): element is NamespaceStatement {
+export function isNamespaceStatement(element: Statement | Expression | undefined): element is NamespaceStatement {
     return element?.constructor?.name === 'NamespaceStatement';
 }
-export function isClassStatement(element: Statement | Expression): element is ClassStatement {
+export function isClassStatement(element: Statement | Expression | undefined): element is ClassStatement {
     return element?.constructor?.name === 'ClassStatement';
 }
-export function isImportStatement(element: Statement | Expression): element is ImportStatement {
+export function isImportStatement(element: Statement | Expression | undefined): element is ImportStatement {
     return element?.constructor?.name === 'ImportStatement';
 }
-export function isClassMethodStatement(element: Statement | Expression): element is ClassMethodStatement {
+export function isClassMethodStatement(element: Statement | Expression | undefined): element is ClassMethodStatement {
     return element?.constructor.name === 'ClassMethodStatement';
 }
-export function isClassFieldStatement(element: Statement | Expression): element is ClassFieldStatement {
+export function isClassFieldStatement(element: Statement | Expression | undefined): element is ClassFieldStatement {
     return element?.constructor.name === 'ClassFieldStatement';
 }
 
@@ -123,75 +123,75 @@ export function isClassFieldStatement(element: Statement | Expression): element 
  * this will work for StringLiteralExpression -> Expression,
  * but will not work CustomStringLiteralExpression -> StringLiteralExpression -> Expression
  */
-export function isExpression(element: Expression | Statement): element is Expression {
+export function isExpression(element: Statement | Expression | undefined): element is Expression {
     // eslint-disable-next-line no-bitwise
     return !!(element && element.visitMode & InternalWalkMode.visitExpressions);
 }
 
-export function isBinaryExpression(element: Expression | Statement): element is BinaryExpression {
+export function isBinaryExpression(element: Statement | Expression | undefined): element is BinaryExpression {
     return element?.constructor.name === 'BinaryExpression';
 }
-export function isCallExpression(element: Expression | Statement): element is CallExpression {
+export function isCallExpression(element: Statement | Expression | undefined): element is CallExpression {
     return element?.constructor.name === 'CallExpression';
 }
-export function isFunctionExpression(element: Expression | Statement): element is FunctionExpression {
+export function isFunctionExpression(element: Statement | Expression | undefined): element is FunctionExpression {
     return element?.constructor.name === 'FunctionExpression';
 }
-export function isNamespacedVariableNameExpression(element: Expression | Statement): element is NamespacedVariableNameExpression {
+export function isNamespacedVariableNameExpression(element: Statement | Expression | undefined): element is NamespacedVariableNameExpression {
     return element?.constructor.name === 'NamespacedVariableNameExpression';
 }
-export function isDottedGetExpression(element: Expression | Statement): element is DottedGetExpression {
+export function isDottedGetExpression(element: Statement | Expression | undefined): element is DottedGetExpression {
     return element?.constructor.name === 'DottedGetExpression';
 }
-export function isXmlAttributeGetExpression(element: Expression | Statement): element is XmlAttributeGetExpression {
+export function isXmlAttributeGetExpression(element: Statement | Expression | undefined): element is XmlAttributeGetExpression {
     return element?.constructor.name === 'XmlAttributeGetExpression';
 }
-export function isIndexedGetExpression(element: Expression | Statement): element is IndexedGetExpression {
+export function isIndexedGetExpression(element: Statement | Expression | undefined): element is IndexedGetExpression {
     return element?.constructor.name === 'IndexedGetExpression';
 }
-export function isGroupingExpression(element: Expression | Statement): element is GroupingExpression {
+export function isGroupingExpression(element: Statement | Expression | undefined): element is GroupingExpression {
     return element?.constructor.name === 'GroupingExpression';
 }
-export function isLiteralExpression(element: Expression | Statement): element is LiteralExpression {
+export function isLiteralExpression(element: Statement | Expression | undefined): element is LiteralExpression {
     return element?.constructor.name === 'LiteralExpression';
 }
-export function isEscapedCharCodeLiteralExpression(element: Expression | Statement): element is EscapedCharCodeLiteralExpression {
+export function isEscapedCharCodeLiteralExpression(element: Statement | Expression | undefined): element is EscapedCharCodeLiteralExpression {
     return element?.constructor.name === 'EscapedCharCodeLiteralExpression';
 }
-export function isArrayLiteralExpression(element: Expression | Statement): element is ArrayLiteralExpression {
+export function isArrayLiteralExpression(element: Statement | Expression | undefined): element is ArrayLiteralExpression {
     return element?.constructor.name === 'ArrayLiteralExpression';
 }
-export function isAALiteralExpression(element: Expression | Statement): element is AALiteralExpression {
+export function isAALiteralExpression(element: Statement | Expression | undefined): element is AALiteralExpression {
     return element?.constructor.name === 'AALiteralExpression';
 }
-export function isUnaryExpression(element: Expression | Statement): element is UnaryExpression {
+export function isUnaryExpression(element: Statement | Expression | undefined): element is UnaryExpression {
     return element?.constructor.name === 'UnaryExpression';
 }
-export function isVariableExpression(element: Expression | Statement): element is VariableExpression {
+export function isVariableExpression(element: Statement | Expression | undefined): element is VariableExpression {
     return element?.constructor.name === 'VariableExpression';
 }
-export function isSourceLiteralExpression(element: Expression | Statement): element is SourceLiteralExpression {
+export function isSourceLiteralExpression(element: Statement | Expression | undefined): element is SourceLiteralExpression {
     return element?.constructor.name === 'SourceLiteralExpression';
 }
-export function isNewExpression(element: Expression | Statement): element is NewExpression {
+export function isNewExpression(element: Statement | Expression | undefined): element is NewExpression {
     return element?.constructor.name === 'NewExpression';
 }
-export function isCallfuncExpression(element: Expression | Statement): element is CallfuncExpression {
+export function isCallfuncExpression(element: Statement | Expression | undefined): element is CallfuncExpression {
     return element?.constructor.name === 'CallfuncExpression';
 }
-export function isTemplateStringQuasiExpression(element: Expression | Statement): element is TemplateStringQuasiExpression {
+export function isTemplateStringQuasiExpression(element: Statement | Expression | undefined): element is TemplateStringQuasiExpression {
     return element?.constructor.name === 'TemplateStringQuasiExpression';
 }
-export function isTemplateStringExpression(element: Expression | Statement): element is TemplateStringExpression {
+export function isTemplateStringExpression(element: Statement | Expression | undefined): element is TemplateStringExpression {
     return element?.constructor.name === 'TemplateStringExpression';
 }
-export function isTaggedTemplateStringExpression(element: Expression | Statement): element is TaggedTemplateStringExpression {
+export function isTaggedTemplateStringExpression(element: Statement | Expression | undefined): element is TaggedTemplateStringExpression {
     return element?.constructor.name === 'TaggedTemplateStringExpression';
 }
-export function isFunctionParameterExpression(element: Expression | Statement): element is FunctionParameterExpression {
+export function isFunctionParameterExpression(element: Statement | Expression | undefined): element is FunctionParameterExpression {
     return element?.constructor.name === 'FunctionParameterExpression';
 }
-export function isAnnotationExpression(element: Statement | Expression): element is AnnotationExpression {
+export function isAnnotationExpression(element: Statement | Expression | undefined): element is AnnotationExpression {
     return element?.constructor.name === 'AnnotationExpression';
 }
 
