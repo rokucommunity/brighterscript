@@ -115,6 +115,7 @@ export class ProgramBuilder {
 
     protected loadPlugins() {
         loadPlugins(
+            this.options.cwd ?? process.cwd(),
             this.options.plugins,
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
         ).forEach(plugin => this.plugins.add(plugin));

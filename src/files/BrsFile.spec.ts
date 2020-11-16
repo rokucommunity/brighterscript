@@ -2473,7 +2473,7 @@ describe('BrsFile', () => {
     describe('Plugins', () => {
         it('can load a plugin which transforms the AST', async () => {
             program.plugins = new PluginInterface(
-                loadPlugins([
+                loadPlugins(process.cwd(), [
                     require.resolve('../examples/plugins/removePrint')
                 ]),
                 undefined
