@@ -1021,12 +1021,11 @@ export function standardizePath(stringParts, ...expressions: any[]) {
     );
 }
 
-export function loadPlugins(pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
+export function loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
     return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
         if (typeof pathOrModule === 'string') {
             try {
-                // eslint-disable-next-line
-                let loaded = require(pathOrModule);
+                let loaded = resolveRequire(cwd, pathOrModule);
                 let plugin: CompilerPlugin = loaded.default ? loaded.default : loaded;
                 if (!plugin.name) {
                     plugin.name = pathOrModule;
@@ -1042,6 +1041,23 @@ export function loadPlugins(pathOrModules: string[], onError?: (pathOrModule: st
         }
         return acc;
     }, []);
+}
+
+function resolveRequire(cwd: string, pathOrModule: string) {
+    let target = pathOrModule;
+    if (!path.isAbsolute(pathOrModule)) {
+        const localPath = path.resolve(cwd, pathOrModule);
+        if (fs.existsSync(localPath)) {
+            target = localPath;
+        } else {
+            const modulePath = path.resolve(cwd, 'node_modules', pathOrModule);
+            if (fs.existsSync(modulePath)) {
+                target = modulePath;
+            }
+        }
+    }
+    // eslint-disable-next-line
+    return require(target);
 }
 
 export let util = new Util();
