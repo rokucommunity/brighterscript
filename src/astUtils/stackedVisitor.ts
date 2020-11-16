@@ -9,7 +9,7 @@ export function createStackedVisitor<T>(
 ) {
     const stack: T[] = [];
     let curr: T;
-    return (item: T, parent: T) => {
+    return (item: T, parent?: T) => {
         // stack/de-stack
         if (parent !== undefined && parent === curr) {
             stack.push(parent);

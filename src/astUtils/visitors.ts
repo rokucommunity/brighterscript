@@ -10,7 +10,7 @@ import { isExpression, isStatement } from './reflection';
  */
 export function walkStatements(
     statement: Statement,
-    visitor: (statement: Statement, parent: Statement) => Statement | void,
+    visitor: (statement: Statement, parent?: Statement) => Statement | void,
     cancel?: CancellationToken
 ): void {
     statement.walk(visitor as any, {
@@ -20,7 +20,7 @@ export function walkStatements(
 }
 
 
-export type WalkVisitor = <T = Statement | Expression>(stmtExpr: Statement | Expression, parent: Statement | Expression) => void | T;
+export type WalkVisitor = <T = Statement | Expression>(stmtExpr: Statement | Expression, parent?: Statement | Expression) => void | T;
 
 /**
  * A helper function for Statement and Expression `walkAll` calls.
@@ -70,57 +70,57 @@ export function walk<T>(keyParent: T, key: keyof T, visitor: WalkVisitor, option
 export function createVisitor(
     visitor: {
         //statements
-        Body?: (statement: Body, parent: Statement) => Statement | void;
-        AssignmentStatement?: (statement: AssignmentStatement, parent: Statement) => Statement | void;
-        Block?: (statement: Block, parent: Statement) => Statement | void;
-        ExpressionStatement?: (statement: ExpressionStatement, parent: Statement) => Statement | void;
-        CommentStatement?: (statement: CommentStatement, parent: Statement) => Statement | void;
-        ExitForStatement?: (statement: ExitForStatement, parent: Statement) => Statement | void;
-        ExitWhileStatement?: (statement: ExitWhileStatement, parent: Statement) => Statement | void;
-        FunctionStatement?: (statement: FunctionStatement, parent: Statement) => Statement | void;
-        IfStatement?: (statement: IfStatement, parent: Statement) => Statement | void;
-        IncrementStatement?: (statement: IncrementStatement, parent: Statement) => Statement | void;
-        PrintStatement?: (statement: PrintStatement, parent: Statement) => Statement | void;
-        GotoStatement?: (statement: GotoStatement, parent: Statement) => Statement | void;
-        LabelStatement?: (statement: LabelStatement, parent: Statement) => Statement | void;
-        ReturnStatement?: (statement: ReturnStatement, parent: Statement) => Statement | void;
-        EndStatement?: (statement: EndStatement, parent: Statement) => Statement | void;
-        StopStatement?: (statement: StopStatement, parent: Statement) => Statement | void;
-        ForStatement?: (statement: ForStatement, parent: Statement) => Statement | void;
-        ForEachStatement?: (statement: ForEachStatement, parent: Statement) => Statement | void;
-        WhileStatement?: (statement: WhileStatement, parent: Statement) => Statement | void;
-        DottedSetStatement?: (statement: DottedSetStatement, parent: Statement) => Statement | void;
-        IndexedSetStatement?: (statement: IndexedSetStatement, parent: Statement) => Statement | void;
-        LibraryStatement?: (statement: LibraryStatement, parent: Statement) => Statement | void;
-        NamespaceStatement?: (statement: NamespaceStatement, parent: Statement) => Statement | void;
-        ImportStatement?: (statement: ImportStatement, parent: Statement) => Statement | void;
-        ClassStatement?: (statement: ClassStatement, parent: Statement) => Statement | void;
-        ClassMethodStatement?: (statement: ClassMethodStatement, parent: Statement) => Statement | void;
-        ClassFieldStatement?: (statement: ClassFieldStatement, parent: Statement) => Statement | void;
+        Body?: (statement: Body, parent?: Statement) => Statement | void;
+        AssignmentStatement?: (statement: AssignmentStatement, parent?: Statement) => Statement | void;
+        Block?: (statement: Block, parent?: Statement) => Statement | void;
+        ExpressionStatement?: (statement: ExpressionStatement, parent?: Statement) => Statement | void;
+        CommentStatement?: (statement: CommentStatement, parent?: Statement) => Statement | void;
+        ExitForStatement?: (statement: ExitForStatement, parent?: Statement) => Statement | void;
+        ExitWhileStatement?: (statement: ExitWhileStatement, parent?: Statement) => Statement | void;
+        FunctionStatement?: (statement: FunctionStatement, parent?: Statement) => Statement | void;
+        IfStatement?: (statement: IfStatement, parent?: Statement) => Statement | void;
+        IncrementStatement?: (statement: IncrementStatement, parent?: Statement) => Statement | void;
+        PrintStatement?: (statement: PrintStatement, parent?: Statement) => Statement | void;
+        GotoStatement?: (statement: GotoStatement, parent?: Statement) => Statement | void;
+        LabelStatement?: (statement: LabelStatement, parent?: Statement) => Statement | void;
+        ReturnStatement?: (statement: ReturnStatement, parent?: Statement) => Statement | void;
+        EndStatement?: (statement: EndStatement, parent?: Statement) => Statement | void;
+        StopStatement?: (statement: StopStatement, parent?: Statement) => Statement | void;
+        ForStatement?: (statement: ForStatement, parent?: Statement) => Statement | void;
+        ForEachStatement?: (statement: ForEachStatement, parent?: Statement) => Statement | void;
+        WhileStatement?: (statement: WhileStatement, parent?: Statement) => Statement | void;
+        DottedSetStatement?: (statement: DottedSetStatement, parent?: Statement) => Statement | void;
+        IndexedSetStatement?: (statement: IndexedSetStatement, parent?: Statement) => Statement | void;
+        LibraryStatement?: (statement: LibraryStatement, parent?: Statement) => Statement | void;
+        NamespaceStatement?: (statement: NamespaceStatement, parent?: Statement) => Statement | void;
+        ImportStatement?: (statement: ImportStatement, parent?: Statement) => Statement | void;
+        ClassStatement?: (statement: ClassStatement, parent?: Statement) => Statement | void;
+        ClassMethodStatement?: (statement: ClassMethodStatement, parent?: Statement) => Statement | void;
+        ClassFieldStatement?: (statement: ClassFieldStatement, parent?: Statement) => Statement | void;
         //expressions
-        BinaryExpression?: (expression: BinaryExpression, parent: Statement | Expression) => Expression | void;
-        CallExpression?: (expression: CallExpression, parent: Statement | Expression) => Expression | void;
-        FunctionExpression?: (expression: FunctionExpression, parent: Statement | Expression) => Expression | void;
-        NamespacedVariableNameExpression?: (expression: NamespacedVariableNameExpression, parent: Statement | Expression) => Expression | void;
-        DottedGetExpression?: (expression: DottedGetExpression, parent: Statement | Expression) => Expression | void;
-        XmlAttributeGetExpression?: (expression: XmlAttributeGetExpression, parent: Statement | Expression) => Expression | void;
-        IndexedGetExpression?: (expression: IndexedGetExpression, parent: Statement | Expression) => Expression | void;
-        GroupingExpression?: (expression: GroupingExpression, parent: Statement | Expression) => Expression | void;
-        LiteralExpression?: (expression: LiteralExpression, parent: Statement | Expression) => Expression | void;
-        EscapedCharCodeLiteralExpression?: (expression: EscapedCharCodeLiteralExpression, parent: Statement | Expression) => Expression | void;
-        ArrayLiteralExpression?: (expression: ArrayLiteralExpression, parent: Statement | Expression) => Expression | void;
-        AALiteralExpression?: (expression: AALiteralExpression, parent: Statement | Expression) => Expression | void;
-        UnaryExpression?: (expression: UnaryExpression, parent: Statement | Expression) => Expression | void;
-        VariableExpression?: (expression: VariableExpression, parent: Statement | Expression) => Expression | void;
-        SourceLiteralExpression?: (expression: SourceLiteralExpression, parent: Statement | Expression) => Expression | void;
-        NewExpression?: (expression: NewExpression, parent: Statement | Expression) => Expression | void;
-        CallfuncExpression?: (expression: CallfuncExpression, parent: Statement | Expression) => Expression | void;
-        TemplateStringQuasiExpression?: (expression: TemplateStringQuasiExpression, parent: Statement | Expression) => Expression | void;
-        TemplateStringExpression?: (expression: TemplateStringExpression, parent: Statement | Expression) => Expression | void;
-        TaggedTemplateStringExpression?: (expression: TaggedTemplateStringExpression, parent: Statement | Expression) => Expression | void;
+        BinaryExpression?: (expression: BinaryExpression, parent?: Statement | Expression) => Expression | void;
+        CallExpression?: (expression: CallExpression, parent?: Statement | Expression) => Expression | void;
+        FunctionExpression?: (expression: FunctionExpression, parent?: Statement | Expression) => Expression | void;
+        NamespacedVariableNameExpression?: (expression: NamespacedVariableNameExpression, parent?: Statement | Expression) => Expression | void;
+        DottedGetExpression?: (expression: DottedGetExpression, parent?: Statement | Expression) => Expression | void;
+        XmlAttributeGetExpression?: (expression: XmlAttributeGetExpression, parent?: Statement | Expression) => Expression | void;
+        IndexedGetExpression?: (expression: IndexedGetExpression, parent?: Statement | Expression) => Expression | void;
+        GroupingExpression?: (expression: GroupingExpression, parent?: Statement | Expression) => Expression | void;
+        LiteralExpression?: (expression: LiteralExpression, parent?: Statement | Expression) => Expression | void;
+        EscapedCharCodeLiteralExpression?: (expression: EscapedCharCodeLiteralExpression, parent?: Statement | Expression) => Expression | void;
+        ArrayLiteralExpression?: (expression: ArrayLiteralExpression, parent?: Statement | Expression) => Expression | void;
+        AALiteralExpression?: (expression: AALiteralExpression, parent?: Statement | Expression) => Expression | void;
+        UnaryExpression?: (expression: UnaryExpression, parent?: Statement | Expression) => Expression | void;
+        VariableExpression?: (expression: VariableExpression, parent?: Statement | Expression) => Expression | void;
+        SourceLiteralExpression?: (expression: SourceLiteralExpression, parent?: Statement | Expression) => Expression | void;
+        NewExpression?: (expression: NewExpression, parent?: Statement | Expression) => Expression | void;
+        CallfuncExpression?: (expression: CallfuncExpression, parent?: Statement | Expression) => Expression | void;
+        TemplateStringQuasiExpression?: (expression: TemplateStringQuasiExpression, parent?: Statement | Expression) => Expression | void;
+        TemplateStringExpression?: (expression: TemplateStringExpression, parent?: Statement | Expression) => Expression | void;
+        TaggedTemplateStringExpression?: (expression: TaggedTemplateStringExpression, parent?: Statement | Expression) => Expression | void;
     }
 ) {
-    return <WalkVisitor>((statement: Statement, parent: Statement): Statement | void => {
+    return <WalkVisitor>((statement: Statement, parent?: Statement): Statement | void => {
         return visitor[statement.constructor.name]?.(statement, parent);
     });
 }
