@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind, Lexer } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
@@ -48,7 +47,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'Lorem ipsum', new BrsString('Lorem ipsum')),
+                token(TokenKind.StringLiteral, 'Lorem ipsum'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndFunction, 'end function'),
                 EOF
@@ -109,19 +108,19 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Comma, ','),
 
                 identifier('b'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
+                token(TokenKind.IntegerLiteral, '4'),
                 token(TokenKind.Comma, ','),
 
                 identifier('c'),
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.RightParen, ')'),
 
                 token(TokenKind.Newline, '\\n'),
@@ -142,7 +141,7 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
@@ -151,7 +150,7 @@ describe('parser', () => {
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
@@ -250,7 +249,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'Lorem ipsum', new BrsString('Lorem ipsum')),
+                token(TokenKind.StringLiteral, 'Lorem ipsum'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndSub, 'end sub'),
                 EOF
@@ -298,7 +297,7 @@ describe('parser', () => {
                 EOF
             ]);
 
-            expect(diagnostics).to.be.lengthOf(0);
+            expect(diagnostics[0]?.message).not.to.exist;
             expect(statements).to.length.greaterThan(0);
 
         });
@@ -311,19 +310,19 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Comma, ','),
 
                 identifier('b'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
+                token(TokenKind.IntegerLiteral, '4'),
                 token(TokenKind.Comma, ','),
 
                 identifier('c'),
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.RightParen, ')'),
 
                 token(TokenKind.Newline, '\\n'),
@@ -343,7 +342,7 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
@@ -352,7 +351,7 @@ describe('parser', () => {
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),

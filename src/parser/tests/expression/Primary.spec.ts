@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
@@ -13,7 +12,7 @@ describe('parser primary expressions', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             equals,
-            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5'),
             EOF
         ]);
         expect(diagnostics).to.be.lengthOf(0);
@@ -25,7 +24,7 @@ describe('parser primary expressions', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             equals,
-            token(TokenKind.StringLiteral, 'hello', new BrsString('hello')),
+            token(TokenKind.StringLiteral, 'hello'),
             EOF
         ]);
 
@@ -37,12 +36,12 @@ describe('parser primary expressions', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+            token(TokenKind.IntegerLiteral, '1'),
             token(TokenKind.Plus, '+'),
             token(TokenKind.LeftParen, '('),
-            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+            token(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.Star, '*'),
-            token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+            token(TokenKind.IntegerLiteral, '3'),
             token(TokenKind.RightParen, ')'),
             EOF
         ]);
@@ -77,7 +76,6 @@ describe('parser primary expressions', () => {
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
-                literal: new Int32(5),
                 isReserved: false,
                 range: Range.create(0, 4, 0, 5)
             },
@@ -102,7 +100,6 @@ describe('parser primary expressions', () => {
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
-                literal: new BrsString('foo'),
                 isReserved: false,
                 range: Range.create(1, 4, 1, 9)
             },
@@ -133,7 +130,6 @@ describe('parser primary expressions', () => {
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
-                literal: new Int32(0),
                 isReserved: false,
                 range: Range.create(2, 6, 2, 7)
             },

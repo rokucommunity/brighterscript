@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsInvalid, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
@@ -41,7 +40,7 @@ describe('parser variable declarations', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('foo'),
             token(TokenKind.Equal),
-            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5'),
             EOF
         ]);
 
@@ -54,9 +53,9 @@ describe('parser variable declarations', () => {
         let { statements, diagnostics } = Parser.parse([
             identifier('bar'),
             token(TokenKind.Equal),
-            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5'),
             token(TokenKind.Caret),
-            token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+            token(TokenKind.IntegerLiteral, '3'),
             EOF
         ]);
 
@@ -101,7 +100,6 @@ describe('parser variable declarations', () => {
             {
                 kind: TokenKind.Invalid,
                 text: 'invalid',
-                literal: BrsInvalid.Instance,
                 isReserved: true,
                 range: Range.create(0, 6, 0, 13)
             },

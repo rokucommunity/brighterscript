@@ -185,7 +185,7 @@ describe('TemplateStringExpression', () => {
         });
 
         describe('tagged template strings', () => {
-            it('properly transpiles', async () => {
+            it('properly transpiles with escaped characters and quasis', async () => {
                 await testTranspile(`
                     function zombify(strings, values)
                     end function

@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsBoolean, Int32 } from '../../../brsTypes';
 import { TokenKind, Lexer } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
@@ -9,7 +8,7 @@ describe('parser if statements', () => {
     it('allows empty if blocks', () => {
         let { tokens } = Lexer.scan(`
             if true then
-                
+
             else if true then
                 stop
             else
@@ -45,7 +44,7 @@ describe('parser if statements', () => {
             else if true then
                 stop
             else
-                
+
             end if
         `);
         let { statements, diagnostics } = Parser.parse(tokens);
@@ -104,13 +103,13 @@ describe('parser if statements', () => {
         it('parses if only', () => {
             let { statements, diagnostics } = Parser.parse([
                 token(TokenKind.If, 'if'),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Less, '<'),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Then, 'then'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.True, 'true', BrsBoolean.True),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.Newline, '\n'),
                 EOF
             ]);
@@ -122,17 +121,17 @@ describe('parser if statements', () => {
         it('parses if-else', () => {
             let { statements, diagnostics } = Parser.parse([
                 token(TokenKind.If, 'if'),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Less, '<'),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Then, 'then'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.True, 'true', BrsBoolean.True),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.Else, 'else'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.False, 'true', BrsBoolean.False),
+                token(TokenKind.False, 'true'),
                 token(TokenKind.Newline, '\n'),
                 EOF
             ]);
@@ -144,25 +143,25 @@ describe('parser if statements', () => {
         it('parses if-elseif-else', () => {
             let { statements, diagnostics } = Parser.parse([
                 token(TokenKind.If, 'if'),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Less, '<'),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Then, 'then'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.True, 'true', BrsBoolean.True),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.ElseIf, 'else if'),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Then, 'then'),
                 identifier('same'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.True, 'true', BrsBoolean.True),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.Else, 'else'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.True, 'true', BrsBoolean.False),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.Newline, '\n'),
                 EOF
             ]);
@@ -174,23 +173,23 @@ describe('parser if statements', () => {
         it('allows \'then\' to be skipped', () => {
             let { statements, diagnostics } = Parser.parse([
                 token(TokenKind.If, 'if'),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Less, '<'),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.True, 'true', BrsBoolean.True),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.ElseIf, 'else if'),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2'),
                 identifier('same'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.True, 'true', BrsBoolean.True),
+                token(TokenKind.True, 'true'),
                 token(TokenKind.Else, 'else'),
                 identifier('foo'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.False, 'false', BrsBoolean.False),
+                token(TokenKind.False, 'false'),
                 token(TokenKind.Newline, '\n'),
                 EOF
             ]);

@@ -13,7 +13,6 @@ import { Parser, ParseMode } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement } from '../parser/Statement';
 import type { Program } from '../Program';
-import type { BrsType } from '../types/BrsType';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
@@ -23,6 +22,7 @@ import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
 import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile } from '../astUtils/reflection';
+import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import * as extname from 'path-complete-extname';
@@ -533,7 +533,7 @@ export class BrsFile {
                     nameRange: param.name.range,
                     lineIndex: param.name.range.start.line,
                     name: param.name.text,
-                    type: util.valueKindToBrsType(param.type.kind)
+                    type: param.type
                 });
             }
 
@@ -557,33 +557,33 @@ export class BrsFile {
                     nameRange: statement.name.range,
                     lineIndex: statement.name.range.start.line,
                     name: statement.name.text,
-                    type: this.getBRSTypeFromAssignment(statement, scope)
+                    type: this.getBscTypeFromAssignment(statement, scope)
                 });
             }
         }
     }
 
-    private getBRSTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BrsType {
+    private getBscTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BscType {
         try {
             //function
             if (isFunctionExpression(assignment.value)) {
-                let functionType = new FunctionType(util.valueKindToBrsType(assignment.value.returns));
+                let functionType = new FunctionType(assignment.value.returnType);
                 functionType.isSub = assignment.value.functionType.text === 'sub';
                 if (functionType.isSub) {
                     functionType.returnType = new VoidType();
                 }
 
                 functionType.setName(assignment.name.text);
-                for (let argument of assignment.value.parameters) {
-                    let isRequired = !argument.defaultValue;
+                for (let param of assignment.value.parameters) {
+                    let isRequired = !param.defaultValue;
                     //TODO compute optional parameters
-                    functionType.addParameter(argument.name.text, util.valueKindToBrsType(argument.type.kind), isRequired);
+                    functionType.addParameter(param.name.text, param.type, isRequired);
                 }
                 return functionType;
 
                 //literal
             } else if (isLiteralExpression(assignment.value)) {
-                return util.valueKindToBrsType((assignment.value as any).value.kind);
+                return assignment.value.type;
 
                 //function call
             } else if (isCallExpression(assignment.value)) {
@@ -621,7 +621,7 @@ export class BrsFile {
     private findCallables() {
         for (let statement of this.parser.references.functionStatements ?? []) {
 
-            let functionType = new FunctionType(util.valueKindToBrsType(statement.func.returns));
+            let functionType = new FunctionType(statement.func.returnType);
             functionType.setName(statement.name.text);
             functionType.isSub = statement.func.functionType.text.toLowerCase() === 'sub';
             if (functionType.isSub) {
@@ -633,7 +633,7 @@ export class BrsFile {
             for (let param of statement.func.parameters) {
                 let callableParam = {
                     name: param.name.text,
-                    type: util.valueKindToBrsType(param.type.kind),
+                    type: param.type,
                     isOptional: !!param.defaultValue,
                     isRestArgument: false
                 };
@@ -683,14 +683,24 @@ export class BrsFile {
                 let args = [] as CallableArg[];
                 //TODO convert if stmts to use instanceof instead
                 for (let arg of expression.args as any) {
-                    //is variable being passed into argument
-                    if (arg.name) {
+
+                    //is a literal parameter value
+                    if (isLiteralExpression(arg)) {
+                        args.push({
+                            range: arg.range,
+                            type: arg.type,
+                            text: arg.token.text
+                        });
+
+                        //is variable being passed into argument
+                    } else if (arg.name) {
                         args.push({
                             range: arg.range,
                             //TODO - look up the data type of the actual variable
                             type: new DynamicType(),
                             text: arg.name.text
                         });
+
                     } else if (arg.value) {
                         let text = '';
                         /* istanbul ignore next: TODO figure out why value is undefined sometimes */
@@ -699,7 +709,8 @@ export class BrsFile {
                         }
                         let callableArg = {
                             range: arg.range,
-                            type: util.valueKindToBrsType(arg.value.kind),
+                            //TODO not sure what to do here
+                            type: new DynamicType(), // util.valueKindToBrsType(arg.value.kind),
                             text: text
                         };
                         //wrap the value in quotes because that's how it appears in the code
@@ -707,6 +718,7 @@ export class BrsFile {
                             callableArg.text = '"' + callableArg.text + '"';
                         }
                         args.push(callableArg);
+
                     } else {
                         args.push({
                             range: arg.range,
@@ -1333,8 +1345,7 @@ export class BrsFile {
                             locations.push(Location.create(util.pathToUri(file.pathAbsolute), e.range));
                         }
                     }
-                }),
-                {
+                }), {
                     walkMode: WalkMode.visitExpressionsRecursive
                 });
             }
@@ -1370,7 +1381,8 @@ export class BrsFile {
 
     public getTypedef() {
         const state = new TranspileState(this);
-        const programNode = new SourceNode(null, null, this.pathAbsolute, this.ast.getTypedef(state));
+        const typedef = this.ast.getTypedef(state);
+        const programNode = new SourceNode(null, null, this.pathAbsolute, typedef);
         return programNode.toString();
     }
 

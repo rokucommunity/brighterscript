@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsString } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
@@ -29,9 +28,9 @@ describe('parser print statements', () => {
     it('parses print lists with no separator', () => {
         let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Print),
-            token(TokenKind.StringLiteral, 'Foo', new BrsString('Foo')),
-            token(TokenKind.StringLiteral, 'bar', new BrsString('bar')),
-            token(TokenKind.StringLiteral, 'baz', new BrsString('baz')),
+            token(TokenKind.StringLiteral, 'Foo'),
+            token(TokenKind.StringLiteral, 'bar'),
+            token(TokenKind.StringLiteral, 'baz'),
             EOF
         ]);
 
@@ -43,11 +42,11 @@ describe('parser print statements', () => {
     it('parses print lists with separators', () => {
         let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Print),
-            token(TokenKind.StringLiteral, 'Foo', new BrsString('Foo')),
+            token(TokenKind.StringLiteral, 'Foo'),
             token(TokenKind.Semicolon),
-            token(TokenKind.StringLiteral, 'bar', new BrsString('bar')),
+            token(TokenKind.StringLiteral, 'bar'),
             token(TokenKind.Semicolon),
-            token(TokenKind.StringLiteral, 'baz', new BrsString('baz')),
+            token(TokenKind.StringLiteral, 'baz'),
             EOF
         ]);
 
@@ -74,7 +73,6 @@ describe('parser print statements', () => {
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
-                literal: new BrsString('foo'),
                 isReserved: false,
                 range: Range.create(0, 6, 0, 11),
                 leadingWhitespace: ''

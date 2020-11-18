@@ -13,18 +13,6 @@ import {
     BrighterScriptSourceLiterals,
     isToken
 } from '../lexer';
-
-import type { Argument } from '../brsTypes';
-import {
-    BrsInvalid,
-    BrsBoolean,
-    BrsString,
-    Int32,
-    ValueKind,
-    StdlibArgument,
-    FunctionParameterExpression,
-    valueKindFromString
-} from '../brsTypes';
 import type {
     Statement,
     PrintSeparatorTab,
@@ -86,12 +74,14 @@ import {
     TemplateStringQuasiExpression,
     TaggedTemplateStringExpression,
     SourceLiteralExpression,
-    AnnotationExpression
+    AnnotationExpression,
+    FunctionParameterExpression
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
 import { isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
+import { createStringLiteral } from '../astUtils/creators';
 
 export class Parser {
     /**
@@ -521,7 +511,7 @@ export class Parser {
             fieldType = this.advance();
 
             //no field type specified
-            if (!valueKindFromString(`${fieldType.text}`) && !this.check(TokenKind.Identifier)) {
+            if (!util.tokenToBscType(fieldType) && !this.check(TokenKind.Identifier)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
                     range: this.peek().range
@@ -583,14 +573,7 @@ export class Parser {
             let isSub = functionType && functionType.kind === TokenKind.Sub;
             let functionTypeText = isSub ? 'sub' : 'function';
             let name: Identifier;
-            let returnType: ValueKind;
             let leftParen: Token;
-
-            if (isSub) {
-                returnType = ValueKind.Void;
-            } else {
-                returnType = ValueKind.Dynamic;
-            }
 
             if (isAnonymous) {
                 leftParen = this.consume(
@@ -619,7 +602,7 @@ export class Parser {
                 }
             }
 
-            let params: FunctionParameterExpression[] = [];
+            let params = [] as FunctionParameterExpression[];
             let asToken: Token;
             let typeToken: Token;
             if (!this.check(TokenKind.RightParen)) {
@@ -640,28 +623,24 @@ export class Parser {
                 asToken = this.advance();
 
                 typeToken = this.advance();
-                let typeString = typeToken.text || '';
-                let maybeReturnType = valueKindFromString(typeString);
 
-                if (!maybeReturnType) {
+                if (!util.tokenToBscType(typeToken)) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.invalidFunctionReturnType(typeString),
+                        ...DiagnosticMessages.invalidFunctionReturnType(typeToken.text ?? ''),
                         range: typeToken.range
                     });
                 }
-
-                returnType = maybeReturnType;
             }
 
-            params.reduce((haveFoundOptional: boolean, arg: Argument) => {
-                if (haveFoundOptional && !arg.defaultValue) {
+            params.reduce((haveFoundOptional: boolean, param: FunctionParameterExpression) => {
+                if (haveFoundOptional && !param.defaultValue) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(arg.name.text),
-                        range: arg.range
+                        ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(param.name.text),
+                        range: param.range
                     });
                 }
 
-                return haveFoundOptional || !!arg.defaultValue;
+                return haveFoundOptional || !!param.defaultValue;
             }, false);
             let comment: CommentStatement;
             //get a comment if available
@@ -677,7 +656,6 @@ export class Parser {
             while (this.match(TokenKind.Newline)) { }
             let func = new FunctionExpression(
                 params,
-                returnType,
                 undefined, //body
                 functionType,
                 undefined, //ending keyword
@@ -762,7 +740,6 @@ export class Parser {
         // force the name into an identifier so the AST makes some sense
         name.kind = TokenKind.Identifier;
 
-        let type: ValueKind = ValueKind.Dynamic;
         let typeToken: Token | undefined;
         let defaultValue;
 
@@ -777,25 +754,18 @@ export class Parser {
             asToken = this.advance();
 
             typeToken = this.advance();
-            let typeValueKind = valueKindFromString(typeToken.text);
 
-            if (!typeValueKind) {
+            if (!util.tokenToBscType(typeToken)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeToken.text),
                     range: typeToken.range
                 });
                 throw this.lastDiagnosticAsError();
             }
-
-            type = typeValueKind;
         }
 
         return new FunctionParameterExpression(
             name,
-            {
-                kind: type,
-                range: typeToken ? typeToken.range : StdlibArgument.InternalRange
-            },
             typeToken,
             defaultValue,
             asToken
@@ -980,19 +950,18 @@ export class Parser {
     }
 
     private forStatement(): ForStatement {
-        const forKeyword = this.advance();
+        const forToken = this.advance();
         const initializer = this.assignment(TokenKind.To);
-        const to = this.advance();
+        const toToken = this.advance();
         const finalValue = this.expression();
-        let increment: Expression | undefined;
-        let step: Token | undefined;
+        let incrementExpression: Expression | undefined;
+        let stepToken: Token | undefined;
 
         if (this.check(TokenKind.Step)) {
-            step = this.advance();
-            increment = this.expression();
+            stepToken = this.advance();
+            incrementExpression = this.expression();
         } else {
             // BrightScript for/to/step loops default to a step of 1 if no `step` is provided
-            increment = new LiteralExpression(new Int32(1), this.peek().range);
         }
 
         //support an optional single colon after the `to` expression
@@ -1010,22 +979,20 @@ export class Parser {
             });
             throw this.lastDiagnosticAsError();
         }
-        let endFor = this.advance();
+        let endForToken = this.advance();
         while (this.match(TokenKind.Newline)) { }
 
         // WARNING: BrightScript doesn't delete the loop initial value after a for/to loop! It just
         // stays around in scope with whatever value it was when the loop exited.
         return new ForStatement(
-            {
-                for: forKeyword,
-                to: to,
-                step: step,
-                endFor: endFor
-            },
+            forToken,
             initializer,
+            toToken,
             finalValue,
-            increment,
-            body
+            body,
+            endForToken,
+            stepToken,
+            incrementExpression
         );
     }
 
@@ -1319,7 +1286,7 @@ export class Parser {
             if (next.kind === TokenKind.TemplateStringQuasi) {
                 //a quasi can actually be made up of multiple quasis when it includes char literals
                 currentQuasiExpressionParts.push(
-                    new LiteralExpression(next.literal, next.range)
+                    new LiteralExpression(next)
                 );
                 this.advance();
             } else if (next.kind === TokenKind.EscapedCharCodeLiteral) {
@@ -1720,7 +1687,8 @@ export class Parser {
 
         //print statements can be empty, so look for empty print conditions
         if (this.isAtEnd() || this.checkAny(TokenKind.Newline, TokenKind.Colon)) {
-            let emptyStringLiteral = new LiteralExpression(new BrsString(''), printKeyword.range);
+            //TODO we aren't a runtime, so do we need to do this?
+            let emptyStringLiteral = createStringLiteral('');
             values.push(emptyStringLiteral);
         } else {
             values.push(this.expression());
@@ -2129,21 +2097,18 @@ export class Parser {
 
     private primary(): Expression {
         switch (true) {
-            case this.match(TokenKind.False):
-                return new LiteralExpression(BrsBoolean.False, this.previous().range);
-            case this.match(TokenKind.True):
-                return new LiteralExpression(BrsBoolean.True, this.previous().range);
-            case this.match(TokenKind.Invalid):
-                return new LiteralExpression(BrsInvalid.Instance, this.previous().range);
             case this.matchAny(
+                TokenKind.False,
+                TokenKind.True,
+                TokenKind.Invalid,
                 TokenKind.IntegerLiteral,
                 TokenKind.LongIntegerLiteral,
                 TokenKind.FloatLiteral,
                 TokenKind.DoubleLiteral,
                 TokenKind.StringLiteral
             ):
-                return new LiteralExpression(this.previous().literal, this.previous().range);
-            //capture source literals (LINE_NUM if brightscript, or a bunch of them if brighterscript
+                return new LiteralExpression(this.previous());
+            //capture source literals (LINE_NUM if brightscript, or a bunch of them if brighterscript)
             case this.matchAny(TokenKind.LineNumLiteral, ...(this.options.mode === ParseMode.BrightScript ? [] : BrighterScriptSourceLiterals)):
                 return new SourceLiteralExpression(this.previous());
             case this.matchAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
@@ -2205,15 +2170,12 @@ export class Parser {
                     let result = {
                         colonToken: null as Token,
                         keyToken: null as Token,
-                        key: null as BrsString,
                         range: null as Range
                     };
                     if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
                         result.keyToken = this.advance();
-                        result.key = new BrsString(result.keyToken.text);
                     } else if (this.check(TokenKind.StringLiteral)) {
                         result.keyToken = this.advance();
-                        result.key = result.keyToken.literal as BrsString;
                     } else {
                         this.diagnostics.push({
                             ...DiagnosticMessages.unexpectedAAKey(),
@@ -2240,7 +2202,6 @@ export class Parser {
                         let k = key();
                         let expr = this.expression();
                         members.push(new AAMemberExpression(
-                            k.key,
                             k.keyToken,
                             k.colonToken,
                             expr
@@ -2269,7 +2230,6 @@ export class Parser {
                             let k = key();
                             let expr = this.expression();
                             members.push(new AAMemberExpression(
-                                k.key,
                                 k.keyToken,
                                 k.colonToken,
                                 expr
