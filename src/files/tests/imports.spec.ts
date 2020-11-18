@@ -5,6 +5,7 @@ import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
 import type { XmlFile } from '../XmlFile';
+import type { BrsFile } from '../BrsFile';
 import { getTestTranspile } from '../BrsFile.spec';
 
 let sinon = sinonImport.createSandbox();
@@ -243,10 +244,23 @@ describe('import statements', () => {
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brightscript" uri="AuthManager.brs" />
-                <script type="text/brightscript" uri="pkg:/source/maestro/ioc/IOCMixin.brs" />
                 <script type="text/brightscript" uri="pkg:/source/BaseClass.brs" />
+                <script type="text/brightscript" uri="pkg:/source/maestro/ioc/IOCMixin.brs" />
                 <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
             </component>
         `, null, 'components/AuthenticationService.xml');
+    });
+
+    it('handles malformed imports', async () => {
+        //shouldn't crash
+        const brsFile = await program.addOrReplaceFile<BrsFile>('source/SomeFile.bs', `
+            import ""
+            import ":"
+            import ":/"
+            import "pkg:"
+            import "pkg:/"
+        `);
+        expect(brsFile.ownScriptImports.length).to.equal(5);
+        expect(brsFile.ownScriptImports.filter(p => !!p.pkgPath).length).to.equal(3);
     });
 });

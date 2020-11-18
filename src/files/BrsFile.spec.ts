@@ -1,5 +1,6 @@
 import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
+import * as path from 'path';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import type { Callable, CommentFlag, BsDiagnostic, VariableDeclaration } from '../interfaces';
 import { Program } from '../Program';
@@ -13,21 +14,24 @@ import { SourceMapConsumer } from 'source-map';
 import { TokenKind, Lexer, Keywords } from '../lexer';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
-import util, { standardizePath as s } from '../util';
+import util, { loadPlugins, standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { loadPlugins } from '..';
+import { trim } from '../testHelpers.spec';
+import { ParseMode } from '../parser/Parser';
 
 let sinon = sinonImport.createSandbox();
 
 describe('BrsFile', () => {
-    let rootDir = process.cwd();
+    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
+    let srcPath = s`${rootDir}/source/main.brs`;
+    let destPath = 'source/main.brs';
     let file: BrsFile;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
         program = new Program({ rootDir: rootDir });
-        file = new BrsFile('abs', 'rel', program);
+        file = new BrsFile(srcPath, destPath, program);
     });
     afterEach(() => {
         sinon.restore();
@@ -349,6 +353,21 @@ describe('BrsFile', () => {
     });
 
     describe('parse', () => {
+        it('uses the proper parse mode based on file extension', async () => {
+            async function testParseMode(destPath: string, expectedParseMode: ParseMode) {
+                const file = await program.addOrReplaceFile<BrsFile>(destPath, '');
+                expect(file.parseMode).to.equal(expectedParseMode);
+            }
+
+            await testParseMode('source/main.brs', ParseMode.BrightScript);
+            await testParseMode('source/main.spec.brs', ParseMode.BrightScript);
+            await testParseMode('source/main.d.brs', ParseMode.BrightScript);
+
+            await testParseMode('source/main.bs', ParseMode.BrighterScript);
+            await testParseMode('source/main.d.bs', ParseMode.BrighterScript);
+            await testParseMode('source/main.spec.bs', ParseMode.BrighterScript);
+        });
+
         it('supports labels and goto statements', async () => {
             let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
@@ -2095,14 +2114,365 @@ describe('BrsFile', () => {
         });
     });
 
-    describe('Plugins', () => {
-        it('can load a plugin which transforms the AST', async () => {
-            program.plugins = new PluginInterface(
-                loadPlugins([
-                    require.resolve('../examples/plugins/removePrint')
-                ]),
-                undefined
+    describe('typedefKey', () => {
+        it('works for .brs files', async () => {
+            expect(
+                s((await program.addOrReplaceFile<BrsFile>('source/main.brs', '')).typedefKey)
+            ).to.equal(
+                s`${rootDir.toLowerCase()}/source/main.d.bs`
             );
+        });
+        it('returns undefined for files that should not have a typedef', async () => {
+            expect((await program.addOrReplaceFile<BrsFile>('source/main.bs', '')).typedefKey).to.be.undefined;
+
+            expect((await program.addOrReplaceFile<BrsFile>('source/main.d.bs', '')).typedefKey).to.be.undefined;
+
+            const xmlFile = await program.addOrReplaceFile<BrsFile>('components/comp.xml', '');
+            expect(xmlFile.typedefKey).to.be.undefined;
+        });
+    });
+
+
+    describe('type definitions', () => {
+        it('only exposes defined functions even if source has more', async () => {
+            //parse the .brs file first so it doesn't know about the typedef
+            await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+                sub main()
+                end sub
+                sub speak()
+                end sub
+            `);
+
+            await program.addOrReplaceFile('source/main.d.bs', `
+                sub main()
+                end sub
+            `);
+
+            const sourceScope = program.getScopeByName('source');
+            const functionNames = sourceScope.getAllCallables().map(x => x.callable.name);
+            expect(functionNames).to.include('main');
+            expect(functionNames).not.to.include('speak');
+        });
+
+        it('reacts to typedef file changes', async () => {
+            let file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+                sub main()
+                end sub
+                sub speak()
+                end sub
+            `);
+            expect(file.hasTypedef).to.be.false;
+            expect(file.typedefFile).not.to.exist;
+
+            await program.addOrReplaceFile('source/main.d.bs', `
+                sub main()
+                end sub
+            `);
+            expect(file.hasTypedef).to.be.true;
+            expect(file.typedefFile).to.exist;
+
+            //add replace file, does it still find the typedef
+            file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+                sub main()
+                end sub
+                sub speak()
+                end sub
+            `);
+            expect(file.hasTypedef).to.be.true;
+            expect(file.typedefFile).to.exist;
+
+            program.removeFile(s`${rootDir}/source/main.d.bs`);
+
+            expect(file.hasTypedef).to.be.false;
+            expect(file.typedefFile).not.to.exist;
+        });
+    });
+
+    describe('typedef', () => {
+        it('sets typedef path properly', async () => {
+            expect((await program.addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefKey).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
+            expect((await program.addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefKey).to.equal(undefined);
+            expect((await program.addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefKey).to.equal(undefined);
+            //works for dest with `.brs` extension
+            expect((await program.addOrReplaceFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefKey).to.equal(undefined);
+        });
+
+        it('does not link when missing from program', async () => {
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            expect(file.typedefFile).not.to.exist;
+        });
+
+        it('links typedef when added BEFORE .brs file', async () => {
+            const typedef = await program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            expect(file.typedefFile).to.equal(typedef);
+        });
+
+        it('links typedef when added AFTER .brs file', async () => {
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            const typedef = await program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+            expect(file.typedefFile).to.eql(typedef);
+        });
+
+        it('removes typedef link when typedef is removed', async () => {
+            const typedef = await program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            program.removeFile(typedef.pathAbsolute);
+            expect(file.typedefFile).to.be.undefined;
+        });
+    });
+
+    describe('getTypedef', () => {
+        async function testTypedef(original: string, expected: string) {
+            let file = await program.addOrReplaceFile<BrsFile>('source/main.brs', original);
+            expect(file.getTypedef()).to.eql(expected);
+        }
+
+        it('strips function body', async () => {
+            await testTypedef(`
+                sub main(param1 as string)
+                    print "main"
+                end sub
+            `, trim`
+                sub main(param1 as string)
+                end sub
+            `);
+        });
+
+        it('includes import statements', async () => {
+            await testTypedef(`
+               import "pkg:/source/lib.brs"
+            `, trim`
+                import "pkg:/source/lib.brs"
+            `);
+        });
+
+        it('includes namespace statements', async () => {
+            await testTypedef(`
+                namespace Name
+                    sub logInfo()
+                    end sub
+                end namespace
+                namespace NameA.NameB
+                    sub logInfo()
+                    end sub
+                end namespace
+            `, trim`
+                namespace Name
+                    sub logInfo()
+                    end sub
+                end namespace
+                namespace NameA.NameB
+                    sub logInfo()
+                    end sub
+                end namespace
+            `);
+        });
+
+        it('includes classes', async () => {
+            await testTypedef(`
+                class Person
+                    public name as string
+                    public age = 12
+                    public sub getAge() as integer
+                        return m.age
+                    end sub
+                end class
+                namespace NameA.NameB
+                    class Person
+                        public name as string
+                        public age = 12
+                        public sub getAge() as integer
+                            return m.age
+                        end sub
+                    end class
+                end namespace
+            `, trim`
+                class Person
+                    public name as string
+                    public age as integer
+                    public sub getAge() as integer
+                    end sub
+                end class
+                namespace NameA.NameB
+                    class Person
+                        public name as string
+                        public age as integer
+                        public sub getAge() as integer
+                        end sub
+                    end class
+                end namespace
+            `);
+        });
+
+        it('sets properties to dynamic when initialized to invalid', async () => {
+            await testTypedef(`
+                class Human
+                    public firstName = invalid
+                    public lastName as string = invalid
+                end class
+            `, trim`
+                class Human
+                    public firstName as dynamic
+                    public lastName as string
+                end class
+            `);
+        });
+
+        it('includes class inheritance', async () => {
+            await testTypedef(`
+                class Human
+                    sub new(name as string)
+                        m.name = name
+                    end sub
+                end class
+                class Person extends Human
+                    sub new(name as string)
+                        super(name)
+                    end sub
+                end class
+            `, trim`
+                class Human
+                    sub new(name as string)
+                    end sub
+                end class
+                class Person extends Human
+                    sub new(name as string)
+                    end sub
+                end class
+            `);
+        });
+
+        it('includes access modifier keyword', async () => {
+            await testTypedef(`
+                class Human
+                    public firstName as string
+                    protected middleName as string
+                    private lastName as string
+                    public function getFirstName()
+                        return m.firstName
+                    end function
+                    protected function getMiddleName()
+                        return m.middleName
+                    end function
+                    private function getLastName()
+                        return m.lastName
+                    end function
+                end class
+            `, trim`
+                class Human
+                    public firstName as string
+                    protected middleName as string
+                    private lastName as string
+                    public function getFirstName()
+                    end function
+                    protected function getMiddleName()
+                    end function
+                    private function getLastName()
+                    end function
+                end class
+            `);
+        });
+
+        it('includes overrides keyword if present in source', async () => {
+            await testTypedef(`
+                class Animal
+                    public sub speak()
+                        print "Hello Animal"
+                    end sub
+                end class
+                class Dog extends Animal
+                    public override sub speak()
+                        print "Hello Dog"
+                    end sub
+                end class
+            `, trim`
+                class Animal
+                    public sub speak()
+                    end sub
+                end class
+                class Dog extends Animal
+                    public override sub speak()
+                    end sub
+                end class
+            `);
+        });
+
+        it('includes class inheritance cross-namespace', async () => {
+            await testTypedef(`
+                namespace NameA
+                    class Human
+                        sub new(name as string)
+                            m.name = name
+                        end sub
+                    end class
+                end namespace
+                namespace NameB
+                    class Person extends NameA.Human
+                        sub new(name as string)
+                            super(name)
+                        end sub
+                    end class
+                end namespace
+            `, trim`
+                namespace NameA
+                    class Human
+                        sub new(name as string)
+                        end sub
+                    end class
+                end namespace
+                namespace NameB
+                    class Person extends NameA.Human
+                        sub new(name as string)
+                        end sub
+                    end class
+                end namespace
+            `);
+        });
+    });
+
+    describe('parser getter', () => {
+        it('recreates the parser when missing', async () => {
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+                sub main()
+                end sub
+            `);
+            const parser = file['_parser'];
+            //clear the private _parser instance
+            file['_parser'] = undefined;
+
+            //force the file to get a new instance of parser
+            const newParser = file.parser;
+
+            expect(newParser).to.exist.and.to.not.equal(parser);
+
+            //reference shouldn't change in subsequent accesses
+            expect(file.parser).to.equal(newParser);
+        });
+
+        it('call parse when previously skipped', async () => {
+            await program.addOrReplaceFile<BrsFile>('source/main.d.bs', `
+                sub main()
+                end sub
+            `);
+            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+                sub main()
+                end sub
+            `);
+            //no functions should be found since the parser was skipped
+            expect(file['_parser']).to.not.exist;
+
+            const stub = sinon.stub(file, 'parse').callThrough();
+
+            //`file.parser` is a getter, so that should force the parse to occur
+            expect(file.parser.references.functionStatements).to.be.lengthOf(1);
+            expect(stub.called).to.be.true;
+            //parse should have been called
+        });
+    });
+
+    describe('Plugins', () => {
+        async function testPluginTranspile() {
             await testTranspile(`
                 sub main()
                     sayHello(sub()
@@ -2125,6 +2495,36 @@ describe('BrsFile', () => {
                     fn()
                     \n                end sub
             `);
+        }
+
+        it('can use a plugin object which transforms the AST', async () => {
+            program.plugins = new PluginInterface(
+                loadPlugins('', [
+                    require.resolve('../examples/plugins/removePrint')
+                ]),
+                undefined
+            );
+            await testPluginTranspile();
+        });
+
+        it('can load an absolute plugin which transforms the AST', async () => {
+            program.plugins = new PluginInterface(
+                loadPlugins('', [
+                    path.resolve(process.cwd(), './dist/examples/plugins/removePrint.js')
+                ]),
+                undefined
+            );
+            await testPluginTranspile();
+        });
+
+        it('can load a relative plugin which transforms the AST', async () => {
+            program.plugins = new PluginInterface(
+                loadPlugins(process.cwd(), [
+                    './dist/examples/plugins/removePrint.js'
+                ]),
+                undefined
+            );
+            await testPluginTranspile();
         });
     });
 });

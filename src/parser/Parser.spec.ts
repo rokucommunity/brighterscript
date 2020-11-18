@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
-import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression } from './Expression';
+import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
 import type { AssignmentStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
@@ -575,6 +575,130 @@ describe('parser', () => {
                 DiagnosticMessages.expectedStringLiteralAfterKeyword('import').message
             );
             expect(statements[0]).to.be.instanceof(ImportStatement);
+        });
+    });
+
+    describe('Annotations', () => {
+        it('parses without errors', () => {
+            let { statements, diagnostics } = parse(`
+                @meta1
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(statements.length).to.equal(0);
+        });
+
+        it('parses with error if malformed', () => {
+            let { diagnostics } = parse(`
+                @
+                sub main()
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.code).to.equal(1081); //unexpected token '@'
+        });
+
+        it('attaches an annotation to next statement', () => {
+            let { statements, diagnostics } = parse(`
+                @meta1
+                function main()
+                end function
+
+                @meta2 sub init()
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = statements[0] as FunctionStatement;
+            expect(fn.annotations).to.exist;
+            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations[0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations[0].name).to.equal('meta1');
+
+            expect(statements[1]).to.be.instanceof(FunctionStatement);
+            fn = statements[1] as FunctionStatement;
+            expect(fn.annotations).to.exist;
+            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations[0].nameToken.text).to.equal('meta2');
+        });
+
+        it('attaches annotations inside a function body', () => {
+            let { statements, diagnostics } = parse(`
+                function main()
+                    @meta1
+                    print "hello"
+                end function
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            let fn = statements[0] as FunctionStatement;
+            let fnStatements = fn.func.body.statements;
+            let stat = fnStatements[0];
+            expect(stat).to.exist;
+            expect(stat.annotations?.length).to.equal(1);
+            expect(stat.annotations[0]).to.be.instanceof(AnnotationExpression);
+        });
+
+        it('attaches multiple annotations to next statement', () => {
+            let { statements, diagnostics } = parse(`
+                @meta1
+                @meta2 @meta3
+                function main()
+                end function
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = statements[0] as FunctionStatement;
+            expect(fn.annotations).to.exist;
+            expect(fn.annotations.length).to.equal(3);
+            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations[1]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations[2]).to.be.instanceof(AnnotationExpression);
+        });
+
+        it('allows annotations with parameters', () => {
+            let { statements, diagnostics } = parse(`
+                @meta1("arg", 2, true, { prop: "value" })
+                function main()
+                end function
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            let fn = statements[0] as FunctionStatement;
+            expect(fn.annotations).to.exist;
+            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations[0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations[0].call).to.be.instanceof(CallExpression);
+        });
+
+        it('can convert argument of an annotation to JS types', () => {
+            let { statements, diagnostics } = parse(`
+                @meta1
+                function main()
+                end function
+
+                @meta2(
+                    "arg", 2, true,
+                    { prop: "value" }, [1, 2],
+                    sub()
+                    end sub
+                )
+                sub init()
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = statements[0] as FunctionStatement;
+            expect(fn.annotations).to.exist;
+            expect(fn.annotations[0].getArguments()).to.deep.equal([]);
+
+            expect(statements[1]).to.be.instanceof(FunctionStatement);
+            fn = statements[1] as FunctionStatement;
+            expect(fn.annotations).to.exist;
+            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations[0].getArguments()).to.deep.equal([
+                'arg', 2, true,
+                { prop: 'value' }, [1, 2],
+                null
+            ]);
+            let allArgs = fn.annotations[0].getArguments(false);
+            expect(allArgs.pop()).to.be.instanceOf(FunctionExpression);
         });
     });
 });

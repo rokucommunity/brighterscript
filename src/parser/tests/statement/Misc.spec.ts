@@ -320,4 +320,32 @@ describe('parser', () => {
         const { propertyHints: refreshedHints } = parser.references;
         expect(Object.keys(refreshedHints).sort()).to.deep.equal(expected, 'Refreshed hints');
     });
+
+    it('extracts property names matching JavaScript reserved names', () => {
+        const { tokens } = Lexer.scan(`
+            function main(arg as string)
+                aa1 = {
+                    "constructor": 0,
+                    constructor: 1
+                    valueOf: {
+                        toString: 2
+                    }
+                }
+                aa1.constructor = 1
+                aa1.valueOf.toString = 2
+            end function
+        `);
+
+        const expected = [
+            'constructor', 'tostring', 'valueof'
+        ];
+
+        const parser = Parser.parse(tokens);
+        const { propertyHints: initialHints } = parser.references;
+        expect(Object.keys(initialHints).sort()).to.deep.equal(expected, 'Initial hints');
+
+        parser.invalidateReferences();
+        const { propertyHints: refreshedHints } = parser.references;
+        expect(Object.keys(refreshedHints).sort()).to.deep.equal(expected, 'Refreshed hints');
+    });
 });

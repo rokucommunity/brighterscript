@@ -6,6 +6,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.20.1] - 2020-11-16
+### Changed
+ - load plugins relatively to the project ([#242](https://github.com/rokucommunity/brighterscript/pull/242))
+ - modified reflection utilities so they are compatible with TS strict null checks ([#243](https://github.com/rokucommunity/brighterscript/pull/243))
+
+
+
+## [0.20.0] - 2020-11-13
+### Added
+ - more language server features: onWorkspaceSymbol, onSignatureHelp, onDocumentSymbol, onReferences, improve onDefinition ([#191](https://github.com/rokucommunity/brighterscript/pull/191))
+
+
+
+## [0.19.0] - 2020-11-04
+### Changed
+ - `emitDefinitions` now defaults to `false` (it previously defaulted to `true`)
+### Fixed
+ - don't transpile `d.bs` files (which would produce `d.brs` files with duplicate information in them)
+
+
+
+## [0.18.2] - 2020-11-2
+### Fixed
+ - support on-demand parse for typedef-shadowed files ([#237](https://github.com/rokucommunity/brighterscript/pull/237))
+
+
+
+## [0.18.1] - 2020-10-30
+### Fixed
+ - exclude bs1100 for typedef files (`Missing "super()" call in class constructor method.`)
+ - fix some invalid class field types in typedef files
+ - include `override` keyword in class methods in typedef files
+
+
+
+## [0.18.0] - 2020-10-30
+### Added
+ - support for consuming and producing type definitions. ([188](https://github.com/rokucommunity/brighterscript/pull/188))
+
+
+
+## [0.17.0] - 2020-10-27
+### Added
+ - Annotation syntax and AST support ([#234](https://github.com/rokucommunity/brighterscript/pull/234))
+
+
+
+## [0.16.12] - 2020-10-21
+### Fixed
+ - parser bug when there was a trailing colon after `for` or `while` loop statements ([#230](https://github.com/rokucommunity/brighterscript/pull/230))
+
+
+
+## [0.16.11] - 2020-10-20
+### Fixed
+ - bug when using single quotes in an xml script tag
+### Changed
+ - removed bs1106 (.bs file script tags must use the `type="brighterscript"`) diagnostic because it's unnecessary.
+
+
+
+## [0.16.10] - 2020-10-20
+### Fixed
+ - prevent crash when a callable has the same name as a javascript reserved name ([#226](https://github.com/rokucommunity/brighterscript/pull/226))
+ - prevent crash when `import` statement is malformed ([#224](https://github.com/rokucommunity/brighterscript/pull/224))
+
+
+
+## [0.16.9] - 2020-10-18
+### Fixed
+ - reduce language server throttle for validation and parsing now that those have improved performance.
+ - massively improve validation performance by refactoring `getFileByPkgPath`
+ - micro-optimization of hot parser functions
+ - change codebase to use `import type` many places, which reduces the number of files imported at runtime
+
+
+
 ## [0.16.8] - 2020-10-15
 ### Fixed
  - bug when printing diagnostics that would crash if the contents were missing (like for in-memory-only files injected by plugins) ([#217](https://github.com/rokucommunity/brighterscript/pull/217))
@@ -628,3 +705,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.16.6]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.5...v0.16.6
 [0.16.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.6...v0.16.7
 [0.16.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.7...v0.16.8
+[0.16.9]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.8...v0.16.9
+[0.16.10]:  https://github.com/rokucommunity/brighterscript/compare/v0.16.9...v0.16.10
+[0.16.11]:  https://github.com/rokucommunity/brighterscript/compare/v0.16.10...v0.16.11
+[0.16.12]:  https://github.com/rokucommunity/brighterscript/compare/v0.16.11...v0.16.12
+[0.17.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.16.12...v0.17.0
+[0.18.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.17.0...v0.18.0
+[0.18.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.18.0...v0.18.1
+[0.18.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.18.1...v0.18.2
+[0.19.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.18.2...v0.19.0
+[0.20.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.19.0...v0.20.0
+[0.20.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.20.0...v0.20.1

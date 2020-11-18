@@ -5,8 +5,19 @@ import { ParseMode, Parser } from './Parser';
 import { CancellationTokenSource, WalkMode } from '../astUtils';
 import { Range } from 'vscode-languageserver';
 import { NamespacedVariableNameExpression, VariableExpression } from './Expression';
+import { Program } from '../Program';
+import * as path from 'path';
+import { trim } from '../testHelpers.spec';
+import type { BrsFile } from '../files/BrsFile';
 
+const tempDir = path.join(process.cwd(), '.tmp');
 describe('Statement', () => {
+    let program: Program;
+    beforeEach(() => {
+        program = new Program({
+            cwd: tempDir
+        });
+    });
     describe('EmptyStatement', () => {
         it('returns empty array for transpile', () => {
             const statement = new EmptyStatement();
@@ -75,6 +86,24 @@ describe('Statement', () => {
                 let stmt = create('Animal', 'NameA');
                 expect(stmt.getName(ParseMode.BrightScript)).to.equal('NameA_Animal');
                 expect(stmt.getName(ParseMode.BrighterScript)).to.equal('NameA.Animal');
+            });
+        });
+    });
+
+    describe('ImportStatement', () => {
+        describe('getTypedef', () => {
+            it('changes .bs file extensions to .brs', async () => {
+                const file = await program.addOrReplaceFile<BrsFile>('source/main.bs', `
+                    import "lib1.bs"
+                    import "pkg:/source/lib2.bs"
+                `);
+
+                expect(
+                    trim`${file.getTypedef()}`
+                ).to.eql(trim`
+                    import "lib1.brs"
+                    import "pkg:/source/lib2.brs"
+                `);
             });
         });
     });

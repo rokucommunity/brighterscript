@@ -9,12 +9,10 @@ import { IntegerType } from './types/IntegerType';
 import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
-import { Parser } from './parser';
 import util from './util';
 
 export let globalFile = new BrsFile('global', 'global', null);
-globalFile.parser = new Parser();
-globalFile.parser.parse([]);
+globalFile.parse('');
 
 let mathFunctions = [{
     name: 'Abs',
@@ -748,6 +746,6 @@ globalFile.callables = globalCallables;
  * so keep a single copy in memory to improve performance
  */
 export const globalCallableMap = globalCallables.reduce((map, x) => {
-    map[x.name.toLowerCase()] = x;
+    map.set(x.name.toLowerCase(), x);
     return map;
-}, {});
+}, new Map<string, Callable>());

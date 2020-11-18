@@ -68,6 +68,15 @@ describe('parser for loops', () => {
         expect(statements).to.be.length.greaterThan(0);
     });
 
+    it('supports a single trailing colon after the `to` expression', () => {
+        const parser = Parser.parse(`
+            for i = 1 to 3:
+                print "for"
+            end for
+        `);
+        expect(parser.diagnostics[0]?.message).to.be.undefined;
+    });
+
     it('location tracking', () => {
         /**
          *    0   0   0   1   1

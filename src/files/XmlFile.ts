@@ -1,7 +1,7 @@
 import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
 import { Deferred } from '../deferred';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
@@ -11,6 +11,7 @@ import util from '../util';
 import { Parser } from '../parser/Parser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
+import * as extname from 'path-complete-extname';
 import type { DependencyGraph } from '../DependencyGraph';
 
 export interface SGAstScript {
@@ -84,6 +85,11 @@ export class XmlFile {
     private unsubscribeFromDependencyGraph: () => void;
 
     /**
+     * If the file was given type definitions during parse. XML files never have a typedef
+     */
+    public hasTypedef = false;
+
+    /**
      * The range of the component's name value
      */
     public componentNameRange: Range;
@@ -112,9 +118,10 @@ export class XmlFile {
      *  - implied codebehind file
      *  - import statements from imported scripts or their descendents
      */
-    public getAllScriptImports() {
-        return this.cache.getOrAdd('allScriptImports', () => {
+    public getAllDependencies() {
+        return this.cache.getOrAdd(`allScriptImports`, () => {
             let value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
+
             return value;
         });
     }
@@ -125,11 +132,15 @@ export class XmlFile {
      * coming from:
      *  - script tags
      *  - inferred codebehind file
-     *  - import statements from imported scripts or their descendents
+     *  - import statements from imported scripts or their descendants
      */
     public getAvailableScriptImports() {
         return this.cache.getOrAdd('allAvailableScriptImports', () => {
-            let allDependencies = this.getAllScriptImports();
+
+            let allDependencies = this.getAllDependencies()
+                //skip typedef files
+                .filter(x => extname(x) !== '.d.bs');
+
             let result = [] as string[];
             let filesInProgram = this.program.getFilesByPkgPaths(allDependencies);
             for (let file of filesInProgram) {
@@ -197,7 +208,7 @@ export class XmlFile {
      */
     public propertyNameCompletions = [] as CompletionItem[];
 
-    private uriRangeRegex = /(.*?\s+uri\s*=\s*")(.*?)"/g;
+    private uriRangeRegex = /(.*?\s+uri\s*=\s*(?:'|"))(.*?)(?:'|")/g;
     private scriptTypeRegex = /type\s*=\s*"(.*?)"/gi;
 
     public async parse(fileContents: string) {
@@ -354,19 +365,6 @@ export class XmlFile {
                         )
                     );
 
-                    //if this is a brighterscript file, validate that the `type` attribute is correct
-                    let scriptType = this.scriptTypeRegex.exec(line);
-                    let lowerScriptType = scriptType?.[1]?.toLowerCase();
-                    let lowerUri = uri.toLowerCase();
-                    //brighterscript script type with brightscript file extension
-                    if (lowerUri.endsWith('.bs') && (!scriptType || lowerScriptType !== 'text/brighterscript')) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.brighterscriptScriptTagMissingTypeAttribute(),
-                            file: this,
-                            //just flag the whole line; we'll get better location tracking when we have a formal xml parser
-                            range: util.createRange(lineIndex, 0, lineIndex, line.length - 1)
-                        });
-                    }
                     lineIndexOffset += match[0].length;
                 }
             }
@@ -425,6 +423,16 @@ export class XmlFile {
                 this.pkgPath.replace(/\.xml$/i, '.brs').toLowerCase()
             );
         }
+        const len = dependencies.length;
+        for (let i = 0; i < len; i++) {
+            const dep = dependencies[i];
+
+            //add a dependency on `d.bs` file for every `.brs` file
+            if (dep.slice(-4).toLowerCase() === '.brs') {
+                dependencies.push(util.getTypedefPath(dep));
+            }
+        }
+
         if (this.parentComponentName) {
             dependencies.push(this.parentComponentDependencyGraphKey);
         }
@@ -474,8 +482,8 @@ export class XmlFile {
             if (file === this) {
                 return true;
             }
-            let allScriptImports = this.getAllScriptImports();
-            for (let importPkgPath of allScriptImports) {
+            let allDependencies = this.getAllDependencies();
+            for (let importPkgPath of allDependencies) {
                 if (importPkgPath.toLowerCase() === file.pkgPath.toLowerCase()) {
                     return true;
                 }
@@ -542,6 +550,11 @@ export class XmlFile {
     public getHover(position: Position): Promise<Hover> { //eslint-disable-line
         //TODO implement
         // let result = {} as Hover;
+        return null;
+    }
+
+    public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
+        //TODO implement
         return null;
     }
 

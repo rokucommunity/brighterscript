@@ -1,8 +1,8 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer';
-import { TokenKind, CompoundAssignmentOperators } from '../lexer';
+import { CompoundAssignmentOperators, TokenKind } from '../lexer';
 import { SourceNode } from 'source-map';
-import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression } from './Expression';
+import type { BinaryExpression, Expression, NamespacedVariableNameExpression, FunctionExpression, AnnotationExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Range } from 'vscode-languageserver';
@@ -10,9 +10,11 @@ import { Position } from 'vscode-languageserver';
 import type { TranspileState } from './TranspileState';
 import { ParseMode, Parser } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
-import { walk, InternalWalkMode, createVisitor, WalkMode } from '../astUtils/visitors';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement } from '../astUtils/reflection';
+import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement, isInvalidType, isLiteralExpression, isVoidType } from '../astUtils/reflection';
+import type { TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createToken } from '../astUtils/creators';
+import { DynamicType } from '../types/DynamicType';
 
 /**
  * A BrightScript statement
@@ -23,6 +25,11 @@ export abstract class Statement {
      *  The starting and ending location of the statement.
      **/
     public abstract range: Range;
+
+    /**
+     * Statement annotations
+     */
+    public annotations: AnnotationExpression[];
 
     public abstract transpile(state: TranspileState): Array<SourceNode | string>;
 
@@ -52,7 +59,10 @@ export class EmptyStatement extends Statement {
     }
 }
 
-export class Body extends Statement {
+/**
+ * This is a top-level statement. Consider this the root of the AST
+ */
+export class Body extends Statement implements TypedefProvider {
     constructor(
         public statements: Statement[] = []
     ) {
@@ -95,6 +105,20 @@ export class Body extends Statement {
             }
 
             result.push(...statement.transpile(state));
+        }
+        return result;
+    }
+
+    getTypedef(state: TranspileState) {
+        let result = [];
+        for (const statement of this.statements) {
+            //if the current statement supports generating typedef, call it
+            if ('getTypedef' in statement) {
+                result.push(
+                    ...(statement as TypedefProvider).getTypedef(state),
+                    state.newline()
+                );
+            }
         }
         return result;
     }
@@ -222,7 +246,7 @@ export class ExpressionStatement extends Statement {
     }
 }
 
-export class CommentStatement extends Statement implements Expression {
+export class CommentStatement extends Statement implements Expression, TypedefProvider {
     constructor(
         public comments: Token[]
     ) {
@@ -259,6 +283,10 @@ export class CommentStatement extends Statement implements Expression {
             }
         }
         return result;
+    }
+
+    public getTypedef(state: TranspileState) {
+        return this.transpile(state);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -313,7 +341,7 @@ export class ExitWhileStatement extends Statement {
     }
 }
 
-export class FunctionStatement extends Statement {
+export class FunctionStatement extends Statement implements TypedefProvider {
     constructor(
         public name: Identifier,
         public func: FunctionExpression,
@@ -347,6 +375,10 @@ export class FunctionStatement extends Statement {
         };
 
         return this.func.transpile(state, nameToken);
+    }
+
+    getTypedef(state: TranspileState) {
+        return this.func.getTypedef(state, this.name);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -993,7 +1025,7 @@ export class IndexedSetStatement extends Statement {
     }
 }
 
-export class LibraryStatement extends Statement {
+export class LibraryStatement extends Statement implements TypedefProvider {
     constructor(
         readonly tokens: {
             library: Token;
@@ -1024,12 +1056,16 @@ export class LibraryStatement extends Statement {
         return result;
     }
 
+    getTypedef(state: TranspileState) {
+        return this.transpile(state);
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
 }
 
-export class NamespaceStatement extends Statement {
+export class NamespaceStatement extends Statement implements TypedefProvider {
     constructor(
         public keyword: Token,
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
@@ -1062,6 +1098,25 @@ export class NamespaceStatement extends Statement {
         return this.body.transpile(state);
     }
 
+    getTypedef(state: TranspileState) {
+        let result = [
+            'namespace ',
+            ...this.nameExpression.getName(ParseMode.BrighterScript),
+            state.newline()
+        ];
+        state.blockDepth++;
+        result.push(
+            state.indent(),
+            ...this.body.getTypedef(state)
+        );
+        state.blockDepth--;
+
+        result.push(
+            'end namespace'
+        );
+        return result;
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'nameExpression', visitor, options);
@@ -1072,7 +1127,7 @@ export class NamespaceStatement extends Statement {
     }
 }
 
-export class ImportStatement extends Statement {
+export class ImportStatement extends Statement implements TypedefProvider {
     constructor(
         readonly importToken: Token,
         readonly filePathToken: Token
@@ -1110,12 +1165,24 @@ export class ImportStatement extends Statement {
         ];
     }
 
+    /**
+     * Get the typedef for this statement
+     */
+    public getTypedef(state: TranspileState) {
+        return [
+            this.importToken.text,
+            ' ',
+            //replace any `.bs` extension with `.brs`
+            this.filePathToken.text.replace(/\.bs"?$/i, '.brs"')
+        ];
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
 }
 
-export class ClassStatement extends Statement {
+export class ClassStatement extends Statement implements TypedefProvider {
 
     constructor(
         readonly classKeyword: Token,
@@ -1180,6 +1247,36 @@ export class ClassStatement extends Statement {
         return result;
     }
 
+    getTypedef(state: TranspileState) {
+        const result = [] as Array<string | SourceNode>;
+        result.push(
+            'class ',
+            this.name.text
+        );
+        if (this.extendsKeyword && this.parentClassName) {
+            result.push(
+                ` extends ${this.parentClassName.getName(ParseMode.BrighterScript)}`
+            );
+        }
+        result.push(state.newline());
+        state.blockDepth++;
+        for (const member of this.body) {
+            if ('getTypedef' in member) {
+                result.push(
+                    state.indent(),
+                    ...(member as TypedefProvider).getTypedef(state),
+                    state.newline()
+                );
+            }
+        }
+        state.blockDepth--;
+        result.push(
+            state.indent(),
+            'end class'
+        );
+        return result;
+    }
+
     /**
      * Find the parent index for this class's parent.
      * For class inheritance, every class is given an index.
@@ -1212,7 +1309,7 @@ export class ClassStatement extends Statement {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                let fullyQualifiedClassName = util.getFulllyQualifiedClassName(
+                let fullyQualifiedClassName = util.getFullyQualifiedClassName(
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
                     this.namespaceName?.getName(ParseMode.BrighterScript)
                 );
@@ -1286,7 +1383,7 @@ export class ClassStatement extends Statement {
 
         //construct parent class or empty object
         if (ancestors[0]) {
-            let fullyQualifiedClassName = util.getFulllyQualifiedClassName(
+            let fullyQualifiedClassName = util.getFullyQualifiedClassName(
                 this.parentClassName.getName(ParseMode.BrighterScript),
                 this.namespaceName?.getName(ParseMode.BrighterScript)
             );
@@ -1321,7 +1418,7 @@ export class ClassStatement extends Statement {
                 //store overridden parent methods as super{parentIndex}_{methodName}
                 if (
                     //is override method
-                    statement.overrides ||
+                    statement.override ||
                     //is constructor function in child class
                     (statement.name.text.toLowerCase() === 'new' && ancestors[0])
                 ) {
@@ -1451,7 +1548,7 @@ export class ClassMethodStatement extends FunctionStatement {
         readonly accessModifier: Token,
         name: Identifier,
         func: FunctionExpression,
-        readonly overrides: Token
+        readonly override: Token
     ) {
         super(name, func, undefined);
         this.range = util.createRangeFromPositions(
@@ -1492,6 +1589,23 @@ export class ClassMethodStatement extends FunctionStatement {
             statement.walk(visitor, walkOptions);
         }
         return this.func.transpile(state);
+    }
+
+    getTypedef(state: TranspileState) {
+        const result = [] as string[];
+        if (this.accessModifier) {
+            result.push(
+                this.accessModifier.text,
+                ' '
+            );
+        }
+        if (this.override) {
+            result.push('override ');
+        }
+        result.push(
+            ...super.getTypedef(state)
+        );
+        return result;
     }
 
     /**
@@ -1587,7 +1701,7 @@ export class ClassMethodStatement extends FunctionStatement {
     }
 }
 
-export class ClassFieldStatement extends Statement {
+export class ClassFieldStatement extends Statement implements TypedefProvider {
 
     constructor(
         readonly accessModifier?: Token,
@@ -1604,10 +1718,43 @@ export class ClassFieldStatement extends Statement {
         );
     }
 
+    /**
+     * Derive a ValueKind from the type token, or the intial value.
+     * Defaults to `ValueKind.Dynamic`
+     */
+    private getType() {
+        if (this.type) {
+            return util.tokenToBscType(this.type);
+        } else if (isLiteralExpression(this.initialValue)) {
+            return this.initialValue.type;
+        } else {
+            return new DynamicType();
+        }
+    }
+
     public readonly range: Range;
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
+    }
+
+    getTypedef(state: TranspileState) {
+        const result = [];
+        if (this.name) {
+            let type = this.getType();
+            if (isInvalidType(type) || isVoidType(type)) {
+                type = new DynamicType();
+            }
+
+            result.push(
+                this.accessModifier?.text ?? 'public',
+                ' ',
+                this.name?.text,
+                ' as ',
+                type.toString()
+            );
+        }
+        return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

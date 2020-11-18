@@ -115,6 +115,7 @@ export class ProgramBuilder {
 
     protected loadPlugins() {
         loadPlugins(
+            this.options.cwd ?? process.cwd(),
             this.options.plugins,
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
         ).forEach(plugin => this.plugins.add(plugin));
@@ -388,9 +389,33 @@ export class ProgramBuilder {
             return util.getFilePaths(this.options);
         });
         this.logger.debug('ProgramBuilder.loadAllFilesAST() files:', files);
-        //parse every file
+
+        const typedefFiles = [] as FileObj[];
+        const nonTypedefFiles = [] as FileObj[];
+        for (const file of files) {
+            const srcLower = file.src.toLowerCase();
+            if (srcLower.endsWith('.d.bs')) {
+                typedefFiles.push(file);
+            } else {
+                nonTypedefFiles.push(file);
+            }
+        }
+
+        //preload every type definition file first, which eliminates duplicate file loading
         await Promise.all(
-            files.map(async (file) => {
+            typedefFiles.map(async (file) => {
+                try {
+                    await this.program.addOrReplaceFile(file);
+                } catch (e) {
+                    //log the error, but don't fail this process because the file might be fixable later
+                    this.logger.log(e);
+                }
+            })
+        );
+
+        //parse every file other than the type definitions
+        await Promise.all(
+            nonTypedefFiles.map(async (file) => {
                 try {
                     let fileExtension = path.extname(file.src).toLowerCase();
 

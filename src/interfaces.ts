@@ -1,5 +1,4 @@
 import type { Range, Diagnostic } from 'vscode-languageserver';
-
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -8,6 +7,9 @@ import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program, SourceObj, TranspileObj } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
+import type { FunctionStatement } from './parser';
+import type { TranspileState } from './parser/TranspileState';
+import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 
 export interface BsDiagnostic extends Diagnostic {
@@ -47,6 +49,10 @@ export interface Callable {
      * Indicates whether or not this callable has an associated namespace
      */
     hasNamespace: boolean;
+    /**
+     * Gives access to the whole statement if you need more data than provided by the interface
+     */
+    functionStatement: FunctionStatement;
 }
 
 export interface FunctionCall {
@@ -138,7 +144,7 @@ export interface CallableContainer {
     scope: Scope;
 }
 
-export type CallableContainerMap = Record<string, CallableContainer[]>;
+export type CallableContainerMap = Map<string, CallableContainer[]>;
 
 export interface CommentFlag {
     file: BrsFile;
@@ -179,4 +185,8 @@ export interface CompilerPlugin {
     afterFileTranspile?: (entry: TranspileObj) => void;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
+}
+
+export interface TypedefProvider {
+    getTypedef(state: TranspileState): Array<SourceNode | string>;
 }

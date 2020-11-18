@@ -8,11 +8,16 @@ import type {
     DidChangeWatchedFilesParams,
     Hover,
     InitializeParams,
-    Location,
     ServerCapabilities,
     TextDocumentPositionParams,
     Position,
-    ExecuteCommandParams
+    ExecuteCommandParams,
+    WorkspaceSymbolParams,
+    SymbolInformation,
+    DocumentSymbolParams,
+    ReferenceParams,
+    SignatureHelp,
+    SignatureHelpParams
 } from 'vscode-languageserver';
 import {
     createConnection,
@@ -33,7 +38,10 @@ import { standardizePath as s, util } from './util';
 import { Logger } from './Logger';
 import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
+import type { Token } from './lexer';
+import { Lexer } from './lexer';
 import { DiagnosticCollection } from './DiagnosticCollection';
+import { isBrsFile } from './astUtils/reflection';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
@@ -44,7 +52,7 @@ export class LanguageServer {
     /**
      * The number of milliseconds that should be used for language server typing debouncing
      */
-    private debounceTimeout = 350;
+    private debounceTimeout = 150;
 
     /**
      * These workspaces are created on the fly whenever a file is opened that is not included
@@ -123,11 +131,19 @@ export class LanguageServer {
         // the completion list.
         this.connection.onCompletionResolve(this.onCompletionResolve.bind(this));
 
-        this.connection.onDefinition(this.onDefinition.bind(this));
-
         this.connection.onHover(this.onHover.bind(this));
 
         this.connection.onExecuteCommand(this.onExecuteCommand.bind(this));
+
+        this.connection.onDefinition(this.onDefinition.bind(this));
+
+        this.connection.onDocumentSymbol(this.onDocumentSymbol.bind(this));
+
+        this.connection.onWorkspaceSymbol(this.onWorkspaceSymbol.bind(this));
+
+        this.connection.onSignatureHelp(this.onSignatureHelp.bind(this));
+
+        this.connection.onReferences(this.onReferences.bind(this));
 
         /*
         this.connection.onDidOpenTextDocument((params) => {
@@ -178,6 +194,12 @@ export class LanguageServer {
                     //anytime the user types a period, auto-show the completion results
                     triggerCharacters: ['.'],
                     allCommitCharacters: ['.', '@']
+                },
+                documentSymbolProvider: true,
+                workspaceSymbolProvider: true,
+                referencesProvider: true,
+                signatureHelpProvider: {
+                    triggerCharacters: ['(', ',']
                 },
                 definitionProvider: true,
                 hoverProvider: true,
@@ -498,7 +520,7 @@ export class LanguageServer {
 
         let filePath = util.uriToPath(uri);
 
-        //wait until the fle has settled
+        //wait until the file has settled
         await this.keyedThrottler.onIdleOnce(filePath, true);
 
         let workspaceCompletionPromises = [] as Array<Promise<CompletionItem[]>>;
@@ -743,7 +765,7 @@ export class LanguageServer {
                 workspaces.map((workspace) => this.handleFileChanges(workspace, changes))
             );
 
-            //valdiate all workspaces
+            //validate all workspaces
             await this.validateAllThrottled();
         }
         this.connection.sendNotification('build-status', 'success');
@@ -855,7 +877,6 @@ export class LanguageServer {
     }
 
     private async validateTextDocument(textDocument: TextDocument): Promise<void> {
-
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
 
@@ -885,19 +906,17 @@ export class LanguageServer {
                     })
                 );
             });
-            // valdiate all workspaces
+            // validate all workspaces
             await this.validateAllThrottled();
         } catch (e) {
             this.connection.tracer.log(e);
             this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
         }
-        console.log('Validate done');
     }
 
     private async validateAll() {
         try {
-
-            //synchronze parsing for open files that were included/excluded from projects
+            //synchronize parsing for open files that were included/excluded from projects
             await this.synchronizeStandaloneWorkspaces();
 
             let workspaces = this.getWorkspaces();
@@ -916,21 +935,169 @@ export class LanguageServer {
         this.connection.sendNotification('build-status', 'success');
     }
 
-    private async onDefinition(params: TextDocumentPositionParams): Promise<Location[]> {
-        //WARNING: This only works for a few small xml cases because the vscode-brightscript-language extension
-        //already implemented this feature, and I haven't had time to port all of that functionality over to
-        //this codebase
-        //TODO implement for brs/bs also
+    public async onWorkspaceSymbol(params: WorkspaceSymbolParams) {
         await this.waitAllProgramFirstRuns();
-        let results = [] as Location[];
 
-        let pathAbsolute = util.uriToPath(params.textDocument.uri);
-        let workspaces = this.getWorkspaces();
-        for (let workspace of workspaces) {
-            results = results.concat(
-                ...workspace.builder.program.getDefinition(pathAbsolute, params.position)
-            );
+        const results = util.flatMap(
+            await Promise.all(this.getWorkspaces().map(workspace => {
+                return workspace.builder.program.getWorkspaceSymbols();
+            })),
+            c => c
+        );
+
+        // Remove duplicates
+        const allSymbols = Object.values(results.reduce((map, symbol) => {
+            const key = symbol.location.uri + symbol.name;
+            map[key] = symbol;
+            return map;
+        }, {}));
+        return allSymbols as SymbolInformation[];
+    }
+
+    public async onDocumentSymbol(params: DocumentSymbolParams) {
+        await this.waitAllProgramFirstRuns();
+
+        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+
+        const pathAbsolute = util.uriToPath(params.textDocument.uri);
+        for (const workspace of this.getWorkspaces()) {
+            const file = workspace.builder.program.getFileByPathAbsolute(pathAbsolute);
+            if (isBrsFile(file)) {
+                const symbols = await file.getDocumentSymbols();
+                return symbols;
+            }
         }
+    }
+
+    private async onDefinition(params: TextDocumentPositionParams) {
+        await this.waitAllProgramFirstRuns();
+
+        const pathAbsolute = util.uriToPath(params.textDocument.uri);
+
+        const results = util.flatMap(
+            await Promise.all(this.getWorkspaces().map(workspace => {
+                return workspace.builder.program.getDefinition(pathAbsolute, params.position);
+            })),
+            c => c
+        );
+        return results;
+    }
+
+    private async onSignatureHelp(params: SignatureHelpParams) {
+        await this.waitAllProgramFirstRuns();
+
+        const info = this.getIdentifierInfo(params);
+        if (!info) {
+            return;
+        }
+
+        const { tokens } = Lexer.scan(info.line);
+        const character = info.position.character;
+        let matchingToken: Token;
+        for (const token of tokens) {
+            if (character >= token.range.start.character && character <= token.range.end.character) {
+                matchingToken = token;
+                break;
+            }
+        }
+        if (!matchingToken) {
+            return;
+        }
+
+        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+
+        const signatures = util.flatMap(
+            await Promise.all(this.getWorkspaces().map(workspace => {
+                return workspace.builder.program.getSignatureHelp(util.uriToPath(params.textDocument.uri), matchingToken.text);
+            })),
+            c => c
+        );
+
+        const activeSignature = signatures.length > 0 ? 0 : null;
+        const activeParameter = activeSignature >= 0 ? info.commaCount : null;
+        let results: SignatureHelp = {
+            signatures: signatures,
+            activeSignature: activeSignature,
+            activeParameter: activeParameter
+        };
+
+        return results;
+    }
+
+    private getIdentifierInfo(params: SignatureHelpParams|ReferenceParams) {
+        // Courtesy of George Cook :) He might call it whack but it works ¯\_(ツ)_/¯
+        //get the position of a symbol to our left
+        //1. get first bracket to our left, - then get the symbol before that..
+        //really crude crappy parser..
+        //TODO this is whack - it's not even LTR ugh..
+        const position = params.position;
+        const line = this.documents.get(params.textDocument.uri).getText(util.createRange(position.line, 0, position.line, position.character));
+
+        const bracketCounts = { normal: 0, square: 0, curly: 0 };
+        let commaCount = 0;
+        let index = position.character;
+        let isArgStartFound = false;
+        while (index >= 0) {
+            if (isArgStartFound) {
+                if (line.charAt(index) !== ' ') {
+                    break;
+                }
+            } else {
+                if (line.charAt(index) === ')') {
+                    bracketCounts.normal++;
+                }
+
+                if (line.charAt(index) === ']') {
+                    bracketCounts.square++;
+                }
+
+                if (line.charAt(index) === '}') {
+                    bracketCounts.curly++;
+                }
+
+                if (line.charAt(index) === ',' && bracketCounts.normal <= 0 && bracketCounts.curly <= 0 && bracketCounts.square <= 0) {
+                    commaCount++;
+                }
+
+                if (line.charAt(index) === '(') {
+                    if (bracketCounts.normal === 0) {
+                        isArgStartFound = true;
+                    } else {
+                        bracketCounts.normal--;
+                    }
+                }
+
+                if (line.charAt(index) === '[') {
+                    bracketCounts.square--;
+                }
+
+                if (line.charAt(index) === '{') {
+                    bracketCounts.curly--;
+                }
+            }
+            index--;
+        }
+        if (index > 0) {
+            return {
+                commaCount: commaCount,
+                position: util.createPosition(position.line, index),
+                line: line
+            };
+        }
+    }
+
+    private async onReferences(params: ReferenceParams) {
+        await this.waitAllProgramFirstRuns();
+
+        const position = params.position;
+        const pathAbsolute = util.uriToPath(params.textDocument.uri);
+
+        const results = util.flatMap(
+            await Promise.all(this.getWorkspaces().map(workspace => {
+                return workspace.builder.program.getReferences(pathAbsolute, position);
+            })),
+            c => c
+        );
         return results;
     }
 

@@ -12,13 +12,14 @@ import { Range } from '.';
 import { DiagnosticSeverity } from './astUtils';
 import { BrsFile } from './files/BrsFile';
 
-let tmpPath = s`${process.cwd()}/.tmp`;
-let rootDir = s`${tmpPath}/rootDir`;
-let stagingFolderPath = s`${tmpPath}/staging`;
-
 describe('ProgramBuilder', () => {
+
+    let tmpPath = s`${process.cwd()}/.tmp`;
+    let rootDir = s`${tmpPath}/rootDir`;
+    let stagingFolderPath = s`${tmpPath}/staging`;
+
     beforeEach(() => {
-        fsExtra.ensureDirSync(tmpPath);
+        fsExtra.ensureDirSync(rootDir);
         fsExtra.emptyDirSync(tmpPath);
     });
     afterEach(() => {
@@ -28,13 +29,13 @@ describe('ProgramBuilder', () => {
     });
 
     let builder: ProgramBuilder;
-    let b: any;
     beforeEach(async () => {
         builder = new ProgramBuilder();
-        b = builder;
-        b.options = await util.normalizeAndResolveConfig(undefined);
-        b.program = new Program(b.options);
-        b.logger = new Logger();
+        builder.options = await util.normalizeAndResolveConfig({
+            rootDir: rootDir
+        });
+        builder.program = new Program(builder.options);
+        builder.logger = new Logger();
     });
 
     afterEach(() => {
@@ -54,12 +55,44 @@ describe('ProgramBuilder', () => {
                 dest: 'file.xml'
             }]));
 
-            b.program = {
-                addOrReplaceFile: () => { }
-            };
-            let stub = sinon.stub(b.program, 'addOrReplaceFile');
-            await b.loadAllFilesAST();
+            let stub = sinon.stub(builder.program, 'addOrReplaceFile');
+            await builder['loadAllFilesAST']();
             expect(stub.getCalls()).to.be.lengthOf(3);
+        });
+
+        it('loads all type definitions first', async () => {
+            const requestedFiles = [] as string[];
+            builder.program.fileResolvers.push((filePath) => {
+                requestedFiles.push(s(filePath));
+            });
+            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/main.d.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.d.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
+            const stub = sinon.stub(builder.program, 'addOrReplaceFile');
+            await builder['loadAllFilesAST']();
+            const srcPaths = stub.getCalls().map(x => x.args[0].src);
+            //the d files should be first
+            expect(srcPaths.indexOf(s`${rootDir}/source/main.d.bs`)).within(0, 1);
+            expect(srcPaths.indexOf(s`${rootDir}/source/lib.d.bs`)).within(0, 1);
+            //the non-d files should be last
+            expect(srcPaths.indexOf(s`${rootDir}/source/main.brs`)).within(2, 3);
+            expect(srcPaths.indexOf(s`${rootDir}/source/lib.brs`)).within(2, 3);
+
+            //the d files should NOT be requested from the FS
+            expect(requestedFiles).not.to.include(s`${rootDir}/source/lib.d.bs`);
+            expect(requestedFiles).not.to.include(s`${rootDir}/source/main.d.bs`);
+        });
+
+        it('does not load non-existent type definition file', async () => {
+            const requestedFiles = [] as string[];
+            builder.program.fileResolvers.push((filePath) => {
+                requestedFiles.push(s(filePath));
+            });
+            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
+            await builder['loadAllFilesAST']();
+            //the d file should not be requested because `loadAllFilesAST` knows it doesn't exist
+            expect(requestedFiles).not.to.include(s`${rootDir}/source/main.d.bs`);
         });
     });
 

@@ -4,7 +4,7 @@ import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range, DiagnosticSeverity, Location } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
@@ -61,7 +61,10 @@ describe('Program', () => {
 
                 //resolve lib.brs from memory instead of going to disk
                 program.fileResolvers.push((pathAbsolute) => {
-                    if (pathAbsolute === s`${rootDir}/source/lib.brs`) {
+                    if (
+                        pathAbsolute === s`${rootDir}/source/lib.brs` ||
+                        pathAbsolute === s`${rootDir}/source/lib.d.bs`
+                    ) {
                         return `'comment`;
                     }
                 });
@@ -89,31 +92,6 @@ describe('Program', () => {
                 await program.addOrReplaceFile({ src: `${rootDir}/components/B.brs`, dest: 'components/B.brs' });
                 expect(stub.called).to.be.true;
 
-            });
-
-        });
-
-        describe('parseError', () => {
-            let orig;
-            beforeEach(() => {
-                orig = BrsFile.prototype.parse;
-                BrsFile.prototype.parse = () => {
-                    return Promise.reject(new Error('some error'));
-                };
-            });
-            afterEach(() => {
-                BrsFile.prototype.parse = orig;
-            });
-
-            it('still adds the file even when it errors', async () => {
-                try {
-                    //add a file, which will immediately error during parse (because of the beforeEach above)
-                    await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `'comment`);
-                    assert.fail(null, null, 'Should have thrown exception');
-                } catch (e) {
-                    //the file should still be in the files list
-                    expect(program.hasFile(`${rootDir}/source/main.brs`)).to.be.true;
-                }
             });
         });
 
@@ -736,7 +714,7 @@ describe('Program', () => {
 
     describe('getCompletions', () => {
         it('should include first-level namespace names for brighterscript files', async () => {
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+            await program.addOrReplaceFile('source/main.bs', `
                 namespace NameA.NameB.NameC
                     sub DoSomething()
                     end sub
@@ -754,7 +732,7 @@ describe('Program', () => {
         });
 
         it('resolves completions for namespaces with next namespace part for brighterscript file', async () => {
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+            const file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
                 namespace NameA.NameB.NameC
                     sub DoSomething()
                     end sub
@@ -763,6 +741,7 @@ describe('Program', () => {
                     NameA.
                 end sub
             `);
+            await file.isReady();
             let completions = (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(6, 26))).map(x => x.label);
             expect(completions).to.include('NameB');
             expect(completions).not.to.include('NameA');
@@ -1123,21 +1102,21 @@ describe('Program', () => {
 
     describe('getFileByPkgPath', () => {
         it('finds file in source folder', async () => {
-            expect(program.getFileByPkgPath('source/main.brs')).not.to.exist;
-            expect(program.getFileByPkgPath('source/main2.brs')).not.to.exist;
+            expect(program.getFileByPkgPath(s`source/main.brs`)).not.to.exist;
+            expect(program.getFileByPkgPath(s`source/main2.brs`)).not.to.exist;
             await program.addOrReplaceFile({ src: `${rootDir}/source/main2.brs`, dest: 'source/main2.brs' }, '');
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
-            expect(program.getFileByPkgPath('source/main.brs')).to.exist;
-            expect(program.getFileByPkgPath('source/main2.brs')).to.exist;
+            expect(program.getFileByPkgPath(s`source/main.brs`)).to.exist;
+            expect(program.getFileByPkgPath(s`source/main2.brs`)).to.exist;
         });
     });
 
     describe('removeFiles', () => {
         it('removes files by absolute paths', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
-            expect(program.getFileByPkgPath('source/main.brs')).to.exist;
+            expect(program.getFileByPkgPath(s`source/main.brs`)).to.exist;
             program.removeFiles([`${rootDir}/source/main.brs`]);
-            expect(program.getFileByPkgPath('source/main.brs')).not.to.exist;
+            expect(program.getFileByPkgPath(s`source/main.brs`)).not.to.exist;
         });
     });
 
@@ -1420,4 +1399,52 @@ describe('Program', () => {
         });
     });
 
+    describe('typedef', () => {
+        describe('emitDefinitions', () => {
+            it('generates typedef for .bs files', async () => {
+                await program.addOrReplaceFile<BrsFile>('source/Duck.bs', `
+                    class Duck
+                    end class
+                `);
+                program.options.emitDefinitions = true;
+                await program.validate();
+                await program.transpile([], stagingFolderPath);
+
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.brs`)).to.be.true;
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.d.bs`)).to.be.true;
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.d.brs`)).to.be.false;
+            });
+
+            it('does not generate typedef for typedef file', async () => {
+                await program.addOrReplaceFile<BrsFile>('source/Duck.d.bs', `
+                    class Duck
+                    end class
+                `);
+                program.options.emitDefinitions = true;
+                await program.validate();
+                await program.transpile([], stagingFolderPath);
+
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.d.brs`)).to.be.false;
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.brs`)).to.be.false;
+            });
+        });
+
+        it('ignores bs1018 for d.bs files', async () => {
+            await program.addOrReplaceFile<BrsFile>('source/main.d.bs', `
+                class Duck
+                    sub new(name as string)
+                    end sub
+                    name as string
+                end class
+
+                class BabyDuck extends Duck
+                    sub new(name as string, age as integer)
+                    end sub
+                    age as integer
+                end class
+            `);
+            await program.validate();
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+    });
 });

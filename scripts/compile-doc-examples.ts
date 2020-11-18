@@ -1,7 +1,7 @@
 import * as fsExtra from 'fs-extra';
 import * as glob from 'glob';
 import * as path from 'path';
-import { Range } from 'vscode-languageserver';
+import { util } from '../src/util';
 import { Program } from '../src/Program';
 
 class DocCompiler {
@@ -24,7 +24,7 @@ class DocCompiler {
 
     public async processDoc(docPath: string) {
         let contents = fsExtra.readFileSync(docPath).toString();
-        this.lines = contents.split(/\r?\n/g);
+        this.lines = util.splitIntoLines(contents);
         this.index = 0;
         while (this.index < this.lines.length) {
             let line = this.lines[this.index];
@@ -61,7 +61,7 @@ class DocCompiler {
 
         var transpiledStartIndex: number;
         var transpiledStopIndex: number;
-        //find the transpiled code block (there must be one after every 
+        //find the transpiled code block (there must be one after every
         //+2 to step past the last line of code, and the final ```
         outer: for (var i = sourceStopIndex + 2; i < this.lines.length; i++) {
             let line = this.lines[i];

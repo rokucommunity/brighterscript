@@ -3,7 +3,7 @@ import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
@@ -86,15 +86,14 @@ export class Scope {
      */
     public isKnownNamespace(namespaceName: string) {
         let namespaceNameLower = namespaceName.toLowerCase();
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             for (let namespace of file.parser.references.namespaceStatements) {
                 let loopNamespaceNameLower = namespace.name.toLowerCase();
                 if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
                     return true;
                 }
             }
-        }
+        });
         return false;
     }
 
@@ -160,11 +159,10 @@ export class Scope {
     public getDiagnostics() {
         let diagnosticLists = [this.diagnostics] as BsDiagnostic[][];
 
-        let files = this.getFiles();
         //add diagnostics from every referenced file
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             diagnosticLists.push(file.getDiagnostics());
-        }
+        });
         let allDiagnostics = Array.prototype.concat.apply([], diagnosticLists) as BsDiagnostic[];
 
         let filteredDiagnostics = allDiagnostics.filter((x) => {
@@ -208,25 +206,34 @@ export class Scope {
         }
     }
 
+    public enumerateFiles(callback: (file: BscFile) => void) {
+        const files = this.getFiles();
+        for (const file of files) {
+            //skip files that have a typedef
+            if (file.hasTypedef) {
+                continue;
+            }
+            callback(file);
+        }
+    }
+
     /**
      * Get the list of callables explicitly defined in files in this scope.
      * This excludes ancestor callables
      */
     public getOwnCallables(): CallableContainer[] {
         let result = [] as CallableContainer[];
-        let files = this.getFiles();
-
         this.logDebug('getOwnCallables() files: ', () => this.getFiles().map(x => x.pkgPath));
 
         //get callables from own files
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             for (let callable of file.callables) {
                 result.push({
                     callable: callable,
                     scope: this
                 });
             }
-        }
+        });
         return result;
     }
 
@@ -235,8 +242,7 @@ export class Scope {
      */
     public buildNamespaceLookup() {
         let namespaceLookup = {} as Record<string, NamespaceContainer>;
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             for (let namespace of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
                 let name = namespace.nameExpression.getName(ParseMode.BrighterScript);
@@ -282,27 +288,25 @@ export class Scope {
                     namespaceLookup[parentName.toLowerCase()].namespaces[ns.lastPartName.toLowerCase()] = ns;
                 }
             }
-        }
+        });
         return namespaceLookup;
     }
 
     private buildClassLookup() {
         let lookup = {} as Record<string, ClassStatement>;
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             for (let cls of file.parser.references.classStatements) {
                 lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
             }
-        }
+        });
         return lookup;
     }
 
     public getNamespaceStatements() {
         let result = [] as NamespaceStatement[];
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             result.push(...file.parser.references.namespaceStatements);
-        }
+        });
         return result;
     }
 
@@ -358,13 +362,13 @@ export class Scope {
             this.validateClasses();
 
             //do many per-file checks
-            for (let file of files) {
+            this.enumerateFiles((file) => {
                 this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
                 this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
                 this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
                 this.diagnosticDetectFunctionCollisions(file);
                 this.detectVariableNamespaceCollisions(file);
-            }
+            });
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
 
@@ -431,7 +435,7 @@ export class Scope {
      */
     private diagnosticDetectFunctionCollisions(file: BscFile) {
         for (let func of file.callables) {
-            if (globalCallableMap[func.getName(ParseMode.BrighterScript).toLowerCase()]) {
+            if (globalCallableMap.has(func.getName(ParseMode.BrighterScript).toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction(),
                     range: func.nameRange,
@@ -443,14 +447,13 @@ export class Scope {
 
     public getNewExpressions() {
         let result = [] as AugmentedNewExpression[];
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             let expressions = file.parser.references.newExpressions as AugmentedNewExpression[];
             for (let expression of expressions) {
                 expression.file = file;
                 result.push(expression);
             }
-        }
+        });
         return result;
     }
 
@@ -465,10 +468,10 @@ export class Scope {
      * @param file
      * @param callableContainersByLowerName
      */
-    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: Record<string, CallableContainer[]>) {
+    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
         //validate all function calls
         for (let expCall of file.functionCalls) {
-            let callableContainersWithThisName = callableContainersByLowerName[expCall.name.toLowerCase()];
+            let callableContainersWithThisName = callableContainersByLowerName.get(expCall.name.toLowerCase());
 
             //use the first item from callablesByLowerName, because if there are more, that's a separate error
             let knownCallableContainer = callableContainersWithThisName ? callableContainersWithThisName[0] : undefined;
@@ -504,7 +507,7 @@ export class Scope {
      * @param file
      * @param callableContainerMap
      */
-    private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: Record<string, CallableContainer[]>) {
+    private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: CallableContainerMap) {
         //loop through every function scope
         for (let scope of file.functionScopes) {
             //every var declaration in this scope
@@ -516,7 +519,7 @@ export class Scope {
                     //local var function with same name as stdlib function
                     if (
                         //has same name as stdlib
-                        globalCallableMap[lowerVarName]
+                        globalCallableMap.has(lowerVarName)
                     ) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
@@ -528,7 +531,7 @@ export class Scope {
                         //in the scope function list
                     } else if (
                         //has same name as scope function
-                        callableContainerMap[lowerVarName]
+                        callableContainerMap.has(lowerVarName)
                     ) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
@@ -540,9 +543,9 @@ export class Scope {
                     //var is not a function
                 } else if (
                     //is same name as a callable
-                    callableContainerMap[lowerVarName] &&
+                    callableContainerMap.has(lowerVarName) &&
                     //is NOT a callable from stdlib (because non-function local vars can have same name as stdlib names)
-                    !globalCallableMap[lowerVarName]
+                    !globalCallableMap.has(lowerVarName)
                 ) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.localVarShadowedByScopedFunction(),
@@ -559,7 +562,7 @@ export class Scope {
      * @param file
      * @param callablesByLowerName
      */
-    private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: Record<string, CallableContainer[]>) {
+    private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: CallableContainerMap) {
         //validate all expression calls
         for (let expCall of file.functionCalls) {
             const lowerName = expCall.name.toLowerCase();
@@ -574,7 +577,7 @@ export class Scope {
 
             //if we don't already have a variable with this name.
             if (!scope?.getVariableByName(lowerName)) {
-                let callablesWithThisName = callablesByLowerName[lowerName];
+                let callablesWithThisName = callablesByLowerName.get(lowerName);
 
                 //use the first item from callablesByLowerName, because if there are more, that's a separate error
                 let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
@@ -598,10 +601,9 @@ export class Scope {
      * Create diagnostics for any duplicate function declarations
      * @param callablesByLowerName
      */
-    private diagnosticFindDuplicateFunctionDeclarations(callableContainersByLowerName: Record<string, CallableContainer[]>) {
+    private diagnosticFindDuplicateFunctionDeclarations(callableContainersByLowerName: CallableContainerMap) {
         //for each list of callables with the same name
-        for (let lowerName in callableContainersByLowerName) {
-            let callableContainers = callableContainersByLowerName[lowerName];
+        for (let [lowerName, callableContainers] of callableContainersByLowerName) {
 
             let globalCallables = [] as CallableContainer[];
             let nonGlobalCallables = [] as CallableContainer[];
@@ -672,19 +674,18 @@ export class Scope {
      */
     private getScriptImports() {
         let result = [] as FileReference[];
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             if (isBrsFile(file)) {
                 result.push(...file.ownScriptImports);
             } else if (isXmlFile(file)) {
                 result.push(...file.scriptTagImports);
             }
-        }
+        });
         return result;
     }
 
     /**
-     * Verify that all of the scripts ipmorted by each file in this scope actually exist
+     * Verify that all of the scripts imported by each file in this scope actually exist
      */
     private diagnosticValidateScriptImportPaths() {
         let scriptImports = this.getScriptImports();
@@ -765,8 +766,8 @@ export class Scope {
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
-    public getDefinition(file: BscFile, position: Position): Location[] { //eslint-disable-line
-        //TODO implement for brs files
+    public getDefinition(file: BscFile, position: Position): Location[] {
+        // Overridden in XMLScope. Brs files use implementation in BrsFile
         return [];
     }
 
@@ -775,10 +776,9 @@ export class Scope {
      */
     public getPropertyNameCompletions() {
         let results = [] as CompletionItem[];
-        let files = this.getFiles();
-        for (let file of files) {
+        this.enumerateFiles((file) => {
             results.push(...file.propertyNameCompletions);
-        }
+        });
         return results;
     }
 }

@@ -7,7 +7,8 @@ module.exports = {
         es6: true
     },
     parserOptions: {
-        project: './tsconfig.json'
+        project: ['./tsconfig.json'],
+        createDefaultProgram: true
     },
     plugins: [
         '@typescript-eslint'
@@ -90,6 +91,7 @@ module.exports = {
         'func-style': 'off',
         'function-call-argument-newline': 'off',
         'function-paren-newline': 'off',
+        'getter-return': 'off',
         'guard-for-in': 'off',
         'id-length': 'off',
         'indent': 'off',
@@ -185,6 +187,12 @@ module.exports = {
             '@typescript-eslint/dot-notation': 'off',
             'new-cap': 'off',
             'no-shadow': 'off'
+        }
+    }, {
+        files: ['benchmarks/**/*'],
+        rules: {
+            '@typescript-eslint/no-require-imports': 'off',
+            '@typescript-eslint/no-var-requires': 'off'
         }
     }]
 };

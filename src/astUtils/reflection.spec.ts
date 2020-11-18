@@ -1,10 +1,10 @@
 /* eslint-disable no-multi-spaces */
 import { expect } from 'chai';
 import { PrintStatement, Block, Body, AssignmentStatement, CommentStatement, ExitForStatement, ExitWhileStatement, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, EmptyStatement } from '../parser/Statement';
-import { FunctionExpression, NamespacedVariableNameExpression, BinaryExpression, CallExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, XmlAttributeGetExpression, TemplateStringExpression, TaggedTemplateStringExpression } from '../parser/Expression';
+import { FunctionExpression, NamespacedVariableNameExpression, BinaryExpression, CallExpression, DottedGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, XmlAttributeGetExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression } from '../parser/Expression';
 import type { Token } from '../lexer';
 import { TokenKind } from '../lexer';
-import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isNamespacedVariableNameExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteralExpression, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement, isStatement } from './reflection';
+import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isCommentStatement, isExitForStatement, isExitWhileStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isNamespacedVariableNameExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteralExpression, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement, isStatement, isAnnotationExpression } from './reflection';
 import { createToken, createStringLiteral, createIdentifier, interpolatedRange as range } from './creators';
 import { Program } from '../Program';
 import { BrsFile } from '../files/BrsFile';
@@ -12,13 +12,15 @@ import { XmlFile } from '../files/XmlFile';
 
 describe('reflection', () => {
     describe('Files', () => {
-        const program = new Program({});
-        const file = new BrsFile('path/to/source/file.brs', 'pkg:/source/file.brs', program);
-        const comp = new XmlFile('path/to/components/file.xml', 'pkg:/components/file.brs', program);
-        expect(isBrsFile(file)).to.be.true;
-        expect(isXmlFile(file)).to.be.false;
-        expect(isBrsFile(comp)).to.be.false;
-        expect(isXmlFile(comp)).to.be.true;
+        it('recognizes files', () => {
+            const program = new Program({});
+            const file = new BrsFile('path/to/source/file.brs', 'pkg:/source/file.brs', program);
+            const comp = new XmlFile('path/to/components/file.xml', 'pkg:/components/file.brs', program);
+            expect(isBrsFile(file)).to.be.true;
+            expect(isXmlFile(file)).to.be.false;
+            expect(isBrsFile(comp)).to.be.false;
+            expect(isXmlFile(comp)).to.be.true;
+        });
     });
 
     describe('Statements', () => {
@@ -50,7 +52,6 @@ describe('reflection', () => {
         const namespace = new NamespaceStatement(token, new NamespacedVariableNameExpression(createIdentifier('a', range)), body, token);
         const cls = new ClassStatement(token, ident, [], token);
         const imports = new ImportStatement(token, token);
-
 
         it('isStatement', () => {
             expect(isStatement(library)).to.be.true;
@@ -198,6 +199,7 @@ describe('reflection', () => {
         const tplQuasi = new TemplateStringQuasiExpression([expr]);
         const tplString = new TemplateStringExpression(token, [tplQuasi], [], token);
         const taggedTpl = new TaggedTemplateStringExpression(ident, token, [tplQuasi], [], token);
+        const annotation = new AnnotationExpression(token, token);
 
         it('isExpression', () => {
             expect(isExpression(binary)).to.be.true;
@@ -282,6 +284,10 @@ describe('reflection', () => {
         it('isTaggedTemplateStringExpression', () => {
             expect(isTaggedTemplateStringExpression(taggedTpl)).to.be.true;
             expect(isTaggedTemplateStringExpression(fun)).to.be.false;
+        });
+        it('isAnnotationExpression', () => {
+            expect(isAnnotationExpression(annotation)).to.be.true;
+            expect(isAnnotationExpression(fun)).to.be.false;
         });
 
         it('isExpression', () => {

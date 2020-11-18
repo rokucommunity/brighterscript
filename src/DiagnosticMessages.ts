@@ -546,8 +546,8 @@ export let DiagnosticMessages = {
         code: 1105,
         severity: DiagnosticSeverity.Error
     }),
-    brighterscriptScriptTagMissingTypeAttribute: () => ({
-        message: `All BrighterScript script tags must include the type="text/brighterscript" attribute`,
+    __unused: () => ({
+        message: ``,
         code: 1106,
         severity: DiagnosticSeverity.Error
     }),

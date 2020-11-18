@@ -239,6 +239,14 @@ describe('util', () => {
     });
 
     describe('normalizeConfig', () => {
+        it('sets emitDefinitions to false by default and in edge cases', () => {
+            expect(util.normalizeConfig({}).emitDefinitions).to.be.false;
+            expect((util as any).normalizeConfig().emitDefinitions).to.be.false;
+            expect(util.normalizeConfig(<any>{ emitDefinitions: 123 }).emitDefinitions).to.be.false;
+            expect(util.normalizeConfig(<any>{ emitDefinitions: undefined }).emitDefinitions).to.be.false;
+            expect(util.normalizeConfig(<any>{ emitDefinitions: 'true' }).emitDefinitions).to.be.false;
+        });
+
         it('loads project from disc', async () => {
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
             let config = await util.normalizeAndResolveConfig({
@@ -492,6 +500,25 @@ describe('util', () => {
                     range: Range.create(0, 21, 0, 22)
                 }]
             });
+        });
+    });
+
+    describe('getTextForRange', () => {
+        const testArray = ['The quick', 'brown fox', 'jumps over', 'the lazy dog'];
+        const testString = testArray.join('\n');
+        it('should work if string is passed in', () => {
+            const result = util.getTextForRange(testString, Range.create(0, 0, 1, 5));
+            expect(result).to.equal('The quick\nbrown');
+        });
+
+        it('should work if array is passed in', () => {
+            const result = util.getTextForRange(testArray, Range.create(0, 0, 1, 5));
+            expect(result).to.equal('The quick\nbrown');
+        });
+
+        it('should work if start and end are on the same line', () => {
+            const result = util.getTextForRange(testArray, Range.create(0, 4, 0, 7));
+            expect(result).to.equal('qui');
         });
     });
 });

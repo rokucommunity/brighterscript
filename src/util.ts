@@ -7,7 +7,6 @@ import * as rokuDeploy from 'roku-deploy';
 import type { Position, Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
-
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
@@ -298,6 +297,7 @@ export class Util {
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
         config.cwd = config.cwd ?? process.cwd();
+        config.emitDefinitions = config.emitDefinitions === true ? true : false;
         if (typeof config.logLevel === 'string') {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
         }
@@ -339,18 +339,20 @@ export class Util {
      * Given a list of callables as a dictionary indexed by their full name (namespace included, transpiled to underscore-separated.
      * @param callables
      */
-    public getCallableContainersByLowerName(callables: CallableContainer[]) {
+    public getCallableContainersByLowerName(callables: CallableContainer[]): CallableContainerMap {
         //find duplicate functions
-        let result = {} as CallableContainerMap;
+        const result = new Map<string, CallableContainer[]>();
 
         for (let callableContainer of callables) {
             let lowerName = callableContainer.callable.getName(ParseMode.BrightScript).toLowerCase();
 
             //create a new array for this name
-            if (result[lowerName] === undefined) {
-                result[lowerName] = [];
+            const list = result.get(lowerName);
+            if (list) {
+                list.push(callableContainer);
+            } else {
+                result.set(lowerName, [callableContainer]);
             }
-            result[lowerName].push(callableContainer);
         }
         return result;
     }
@@ -594,6 +596,22 @@ export class Util {
 
         let files = await rokuDeploy.getFilePaths(options.files, rootDir);
         return files;
+    }
+
+    /**
+     * Given a path to a brs file, compute the path to a theoretical d.bs file.
+     * Only `.brs` files can have typedef path, so return undefined for everything else
+     */
+    public getTypedefPath(brsSrcPath: string) {
+        const typedefPath = brsSrcPath
+            .replace(/\.brs$/i, '.d.bs')
+            .toLowerCase();
+
+        if (typedefPath.endsWith('.d.bs')) {
+            return typedefPath;
+        } else {
+            return undefined;
+        }
     }
 
     /**
@@ -859,12 +877,42 @@ export class Util {
      * If the name does not have a period, and a namespaceName was provided, return the class name prepended by the namespace name.
      * If no namespace is provided, return the `className` unchanged.
      */
-    public getFulllyQualifiedClassName(className: string, namespaceName?: string) {
+    public getFullyQualifiedClassName(className: string, namespaceName?: string) {
         if (className.includes('.') === false && namespaceName) {
             return `${namespaceName}.${className}`;
         } else {
             return className;
         }
+    }
+
+    public splitIntoLines(string: string) {
+        return string.split(/\r?\n/g);
+    }
+
+    public getTextForRange(string: string|string[], range: Range) {
+        let lines: string[];
+        if (Array.isArray(string)) {
+            lines = string;
+        } else {
+            lines = this.splitIntoLines(string);
+        }
+
+        const start = range.start;
+        const end = range.end;
+
+        let endCharacter = end.character;
+        // If lines are the same we need to subtract out our new starting position to make it work correctly
+        if (start.line === end.line) {
+            endCharacter -= start.character;
+        }
+
+        let rangeLines = [lines[start.line].substring(start.character)];
+        for (let i = start.line + 1; i <= end.line; i++) {
+            rangeLines.push(lines[i]);
+        }
+        const lastLine = rangeLines.pop();
+        rangeLines.push(lastLine.substring(0, endCharacter));
+        return rangeLines.join('\n');
     }
 
     /**
@@ -1004,12 +1052,11 @@ export function standardizePath(stringParts, ...expressions: any[]) {
     );
 }
 
-export function loadPlugins(pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
+export function loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
     return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
         if (typeof pathOrModule === 'string') {
             try {
-                // eslint-disable-next-line
-                let loaded = require(pathOrModule);
+                let loaded = resolveRequire(cwd, pathOrModule);
                 let plugin: CompilerPlugin = loaded.default ? loaded.default : loaded;
                 if (!plugin.name) {
                     plugin.name = pathOrModule;
@@ -1025,6 +1072,23 @@ export function loadPlugins(pathOrModules: string[], onError?: (pathOrModule: st
         }
         return acc;
     }, []);
+}
+
+function resolveRequire(cwd: string, pathOrModule: string) {
+    let target = pathOrModule;
+    if (!path.isAbsolute(pathOrModule)) {
+        const localPath = path.resolve(cwd, pathOrModule);
+        if (fs.existsSync(localPath)) {
+            target = localPath;
+        } else {
+            const modulePath = path.resolve(cwd, 'node_modules', pathOrModule);
+            if (fs.existsSync(modulePath)) {
+                target = modulePath;
+            }
+        }
+    }
+    // eslint-disable-next-line
+    return require(target);
 }
 
 export let util = new Util();

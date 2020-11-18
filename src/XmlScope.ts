@@ -85,7 +85,7 @@ export class XmlScope extends Scope {
             let result = [
                 this.xmlFile
             ] as BscFile[];
-            let scriptPkgPaths = this.xmlFile.getAllScriptImports();
+            let scriptPkgPaths = this.xmlFile.getAllDependencies();
             for (let scriptPkgPath of scriptPkgPaths) {
                 let file = this.program.getFileByPkgPath(scriptPkgPath);
                 if (file) {
