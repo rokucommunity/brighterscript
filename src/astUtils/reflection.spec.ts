@@ -36,6 +36,7 @@ describe('reflection', () => {
         const exitWhile = new ExitWhileStatement({ exitWhile: token });
         const funs = new FunctionStatement(ident, new FunctionExpression([], block, token, token, token, token), undefined);
         const ifs = new IfStatement({ if: token }, expr, block, []);
+        const elseifs = new ElseIfStatement({ elseIfToken: token }, expr, block);
         const increment = new IncrementStatement(expr, token);
         const print = new PrintStatement({ print: token }, []);
         const gotos = new GotoStatement({ goto: token, label: token });
@@ -99,6 +100,10 @@ describe('reflection', () => {
         it('isIfStatement', () => {
             expect(isIfStatement(ifs)).to.be.true;
             expect(isIfStatement(body)).to.be.false;
+        });
+        it('isElseIfStatement', () => {
+            expect(isElseIfStatement(elseifs)).to.be.true;
+            expect(isElseIfStatement(body)).to.be.false;
         });
         it('isIncrementStatement', () => {
             expect(isIncrementStatement(increment)).to.be.true;

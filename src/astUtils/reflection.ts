@@ -64,6 +64,9 @@ export function isFunctionStatement(element: Statement | Expression | undefined)
 export function isIfStatement(element: Statement | Expression | undefined): element is IfStatement {
     return element?.constructor?.name === 'IfStatement';
 }
+export function isElseIfStatement(element: Statement | Expression | undefined): element is ElseIfStatement {
+    return element?.constructor?.name === 'ElseIfStatement';
+}
 export function isIncrementStatement(element: Statement | Expression | undefined): element is IncrementStatement {
     return element?.constructor?.name === 'IncrementStatement';
 }

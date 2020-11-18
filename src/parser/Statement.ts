@@ -388,11 +388,67 @@ export class FunctionStatement extends Statement implements TypedefProvider {
     }
 }
 
-export interface ElseIf {
-    elseIfToken: Token;
-    thenToken?: Token;
-    condition: Expression;
-    thenBranch: Block;
+export class ElseIfStatement extends Statement {
+    constructor(
+        readonly tokens: {
+            elseIfToken: Token;
+            thenToken?: Token;
+        },
+        readonly condition: Expression,
+        readonly thenBranch: Block
+    ) {
+        super();
+        this.range = util.createRangeFromPositions(
+            this.tokens.elseIfToken.range.start,
+            (this.thenBranch ?? this.tokens.thenToken ?? this.condition).range.end
+        );
+    }
+    public readonly range: Range;
+
+    transpile(state: TranspileState) {
+        const { elseIfToken, thenToken } = this.tokens;
+        const { condition, thenBranch } = this;
+        const results = [];
+
+        results.push(
+            state.indent(),
+            new SourceNode(elseIfToken.range.start.line + 1, elseIfToken.range.start.character, state.pathAbsolute, 'else if'),
+            ' '
+        );
+
+        //condition
+        results.push(...condition.transpile(state));
+        //then
+        results.push(' ');
+        if (thenToken) {
+            results.push(
+                new SourceNode(thenToken.range.start.line + 1, thenToken.range.start.character, state.pathAbsolute, 'then')
+            );
+        } else {
+            results.push('then');
+        }
+
+        //then body
+        state.lineage.unshift(thenBranch);
+        let body = thenBranch.transpile(state);
+        state.lineage.shift();
+
+        if (body.length > 0) {
+            results.push(...body);
+        }
+        results.push('\n');
+
+        return results;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'condition', visitor, options);
+        }
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'thenBranch', visitor, options);
+        }
+    }
 }
 
 export class IfStatement extends Statement {
@@ -405,7 +461,7 @@ export class IfStatement extends Statement {
         },
         readonly condition: Expression,
         readonly thenBranch: Block,
-        readonly elseIfs: ElseIf[],
+        readonly elseIfs: ElseIfStatement[],
         readonly elseBranch?: Block
     ) {
         super();
@@ -443,34 +499,8 @@ export class IfStatement extends Statement {
 
         //else if blocks
         for (let elseif of this.elseIfs) {
-            //elseif
-            results.push(
-                state.indent(),
-                new SourceNode(elseif.elseIfToken.range.start.line + 1, elseif.elseIfToken.range.start.character, state.pathAbsolute, 'else if'),
-                ' '
-            );
-
-            //condition
-            results.push(...elseif.condition.transpile(state));
-            //then
-            results.push(' ');
-            if (elseif.thenToken) {
-                results.push(
-                    new SourceNode(elseif.thenToken.range.start.line + 1, elseif.thenToken.range.start.character, state.pathAbsolute, 'then')
-                );
-            } else {
-                results.push('then');
-            }
-
-            //then body
-            state.lineage.unshift(elseif.thenBranch);
-            let body = elseif.thenBranch.transpile(state);
-            state.lineage.shift();
-
-            if (body.length > 0) {
-                results.push(...body);
-            }
-            results.push('\n');
+            let elseifNodes = elseif.transpile(state);
+            results.push(elseifNodes);
         }
 
         //else branch
@@ -512,17 +542,13 @@ export class IfStatement extends Statement {
             walk(this, 'thenBranch', visitor, options);
         }
 
-        for (let i = 0; i < this.elseIfs.length; i++) {
-            if (options.walkMode & InternalWalkMode.walkExpressions) {
-                walk(this.elseIfs[i], 'condition', visitor, options, this);
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            for (let i = 0; i < this.elseIfs.length; i++) {
+                walk(this.elseIfs, i, visitor, options, this);
             }
-            if (options.walkMode & InternalWalkMode.walkStatements) {
-                walk(this.elseIfs[i], 'thenBranch', visitor, options, this);
+            if (this.elseBranch) {
+                walk(this, 'elseBranch', visitor, options);
             }
-        }
-
-        if (this.elseBranch && options.walkMode & InternalWalkMode.walkStatements) {
-            walk(this, 'elseBranch', visitor, options);
         }
     }
 }

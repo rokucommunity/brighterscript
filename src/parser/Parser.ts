@@ -17,10 +17,10 @@ import {
 import type {
     Statement,
     PrintSeparatorTab,
-    PrintSeparatorSpace,
-    ElseIf
+    PrintSeparatorSpace
 } from './Statement';
 import {
+    ElseIfStatement,
     FunctionStatement,
     CommentStatement,
     AssignmentStatement,
@@ -1416,7 +1416,7 @@ export class Parser {
 
         const condition = this.expression();
         let thenBranch: Block;
-        let elseIfBranches: ElseIf[] = [];
+        let elseIfBranches: ElseIfStatement[] = [];
         let elseBranch: Block | undefined;
 
         let thenToken: Token | undefined;
@@ -1507,12 +1507,14 @@ export class Parser {
                     endIfToken = blockEnd;
                 }
 
-                elseIfBranches.push({
-                    condition: elseIfCondition,
-                    thenBranch: elseIfThen,
-                    thenToken: thenToken,
-                    elseIfToken: elseIfToken
-                });
+                elseIfBranches.push(new ElseIfStatement(
+                    {
+                        thenToken: thenToken,
+                        elseIfToken: elseIfToken
+                    },
+                    elseIfCondition,
+                    elseIfThen
+                ));
             }
 
             if (this.match(TokenKind.Else)) {
@@ -1593,12 +1595,14 @@ export class Parser {
                     throw this.lastDiagnosticAsError();
                 }
 
-                elseIfBranches.push({
-                    condition: elseIfCondition,
-                    thenBranch: new Block([elseIfThen], this.peek().range),
-                    thenToken: thenToken,
-                    elseIfToken: elseIf
-                });
+                elseIfBranches.push(new ElseIfStatement(
+                    {
+                        thenToken: thenToken,
+                        elseIfToken: elseIf
+                    },
+                    elseIfCondition,
+                    new Block([elseIfThen], this.peek().range)
+                ));
             }
             if (this.previous().kind !== TokenKind.Newline && this.match(TokenKind.Else)) {
                 elseToken = this.previous();
