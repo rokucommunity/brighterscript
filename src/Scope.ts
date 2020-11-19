@@ -452,7 +452,7 @@ export class Scope {
             if (lowerFuncName) {
 
                 //find function declarations with the same name as a stdlib function
-                if (globalCallableMap.has(func.getName(ParseMode.BrighterScript))) {
+                if (globalCallableMap.has(lowerFuncName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction(),
                         range: func.nameRange,
