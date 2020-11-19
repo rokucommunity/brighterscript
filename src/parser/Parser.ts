@@ -8,6 +8,7 @@ import {
     AllowedLocalIdentifiers,
     AssignmentOperators,
     DisallowedLocalIdentifiersText,
+    DisallowedFunctionIdentifiersText,
     AllowedProperties,
     Lexer,
     BrighterScriptSourceLiterals,
@@ -404,7 +405,7 @@ export class Parser {
 
                 //methods (function/sub keyword OR identifier followed by opening paren)
                 if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
-                    let funcDeclaration = this.functionDeclaration(false);
+                    let funcDeclaration = this.functionDeclaration(false, false);
 
                     //remove this function from the lists because it's not a callable
                     const functionStatement = this._references.functionStatements.pop();
@@ -542,9 +543,9 @@ export class Parser {
      */
     private callExpressions = [];
 
-    private functionDeclaration(isAnonymous: true): FunctionExpression;
-    private functionDeclaration(isAnonymous: false): FunctionStatement;
-    private functionDeclaration(isAnonymous: boolean) {
+    private functionDeclaration(isAnonymous: true, checkIdentifier?: boolean): FunctionExpression;
+    private functionDeclaration(isAnonymous: false, checkIdentifier?: boolean): FunctionStatement;
+    private functionDeclaration(isAnonymous: boolean, checkIdentifier = true) {
         let previousCallExpressions = this.callExpressions;
         this.callExpressions = [];
         try {
@@ -597,6 +598,14 @@ export class Parser {
                     //don't throw this error; let the parser continue
                     this.diagnostics.push({
                         ...DiagnosticMessages.functionNameCannotEndWithTypeDesignator(functionTypeText, name.text, lastChar),
+                        range: name.range
+                    });
+                }
+
+                //flag functions with keywords for names (only for standard functions)
+                if (checkIdentifier && DisallowedFunctionIdentifiersText.has(name.text.toLowerCase())) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(name.text),
                         range: name.range
                     });
                 }
