@@ -371,7 +371,7 @@ export class BrsFile {
         //if the class is namespace-prefixed, look only for this exact name
         if (className.includes('.')) {
             for (let scope of scopes) {
-                let cls = scope.classLookup[lowerClassName];
+                const cls = scope.getClass(lowerClassName);
                 if (cls) {
                     return cls;
                 }
@@ -383,12 +383,12 @@ export class BrsFile {
             let namespacedClass: ClassStatement;
             for (let scope of scopes) {
                 //get the global class if it exists
-                let possibleGlobalClass = scope.classLookup[lowerClassName];
+                let possibleGlobalClass = scope.getClass(lowerClassName);
                 if (possibleGlobalClass && !globalClass) {
                     globalClass = possibleGlobalClass;
                 }
                 if (namespaceName) {
-                    let possibleNamespacedClass = scope.classLookup[namespaceName.toLowerCase() + '.' + lowerClassName];
+                    let possibleNamespacedClass = scope.getClass(namespaceName.toLowerCase() + '.' + lowerClassName);
                     if (possibleNamespacedClass) {
                         namespacedClass = possibleNamespacedClass;
                         break;

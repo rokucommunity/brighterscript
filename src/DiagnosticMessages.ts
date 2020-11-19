@@ -590,6 +590,11 @@ export let DiagnosticMessages = {
         message: `There are multiple components with the name '${componentName}'`,
         code: 1115,
         severity: DiagnosticSeverity.Error
+    }),
+    functionCannotHaveSameNameAsClass: (className: string) => ({
+        message: `Function cannot have the same name as class '${className}'`,
+        code: 1116,
+        severity: DiagnosticSeverity.Error
     })
 };
 

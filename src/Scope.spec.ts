@@ -481,7 +481,7 @@ describe('Scope', () => {
                 end sub
             `);
             await program.validate();
-            expect(program.getDiagnostics().length).to.equal(0);
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
 
         it('Emits validation events', async () => {

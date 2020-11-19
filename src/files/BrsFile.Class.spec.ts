@@ -875,6 +875,18 @@ describe('BrsFile BrighterScript classes', () => {
         );
     });
 
+    it('catches class with same name as function', async () => {
+        await program.addOrReplaceFile('source/main.bs', `
+            class Animal
+            end class
+            sub Animal()
+            end sub
+        `);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.equal(
+            DiagnosticMessages.functionCannotHaveSameNameAsClass('Animal').message
+        );
+    });
 
     it('catches variable with same name as class', async () => {
         await program.addOrReplaceFile('source/main.bs', `

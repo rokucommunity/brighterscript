@@ -57,8 +57,29 @@ export class Scope {
      * A dictionary of all classes in this scope. This includes namespaced classes always with their full name.
      * The key is stored in lower case
      */
-    public get classLookup() {
-        return this.cache.getOrAdd('classLookup', () => this.buildClassLookup());
+    private getClassMap() {
+        return this.cache.getOrAdd('classMap', () => {
+            const map = new Map<string, ClassStatement>();
+            this.enumerateFiles((file) => {
+                for (let cls of file.parser.references.classStatements) {
+                    const lowerClassName = cls.getName(ParseMode.BrighterScript)?.toLowerCase();
+                    //only track classes with a defined name (i.e. exclude nameless malformed classes)
+                    if (lowerClassName) {
+                        map.set(lowerClassName, cls);
+                    }
+                }
+            });
+            return map;
+        });
+    }
+
+    /**
+     * Get the class with the specified name.
+     * @param className - the all-lower-case namespace-included class name
+     */
+    public getClass(className: string) {
+        const classMap = this.getClassMap();
+        return classMap.get(className);
     }
 
     /**
@@ -292,20 +313,6 @@ export class Scope {
         return namespaceLookup;
     }
 
-    private buildClassLookup() {
-        let lookup = {} as Record<string, ClassStatement>;
-        this.enumerateFiles((file) => {
-            for (let cls of file.parser.references.classStatements) {
-                const name = cls.getName(ParseMode.BrighterScript)?.toLowerCase();
-                //only track classes with a defined name (i.e. exclude nameless malformed classes)
-                if (name) {
-                    lookup[name] = cls;
-                }
-            }
-        });
-        return lookup;
-    }
-
     public getNamespaceStatements() {
         let result = [] as NamespaceStatement[];
         this.enumerateFiles((file) => {
@@ -435,16 +442,32 @@ export class Scope {
     }
 
     /**
-     * Find function declarations with the same name as a stdlib function
+     * Find various function collisions
      */
     private diagnosticDetectFunctionCollisions(file: BscFile) {
+        const classMap = this.getClassMap();
         for (let func of file.callables) {
-            if (globalCallableMap.has(func.getName(ParseMode.BrighterScript).toLowerCase())) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction(),
-                    range: func.nameRange,
-                    file: file
-                });
+            const funcName = func.getName(ParseMode.BrighterScript);
+            const lowerFuncName = funcName?.toLowerCase();
+            if (lowerFuncName) {
+
+                //find function declarations with the same name as a stdlib function
+                if (globalCallableMap.has(func.getName(ParseMode.BrighterScript))) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction(),
+                        range: func.nameRange,
+                        file: file
+                    });
+                }
+
+                //find any functions that have the same name as a class
+                if (classMap.has(lowerFuncName)) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.functionCannotHaveSameNameAsClass(funcName),
+                        range: func.nameRange,
+                        file: file
+                    });
+                }
             }
         }
     }
@@ -512,12 +535,13 @@ export class Scope {
      * @param callableContainerMap
      */
     private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: CallableContainerMap) {
-        const classLookup = this.classLookup;
+        const classMap = this.getClassMap();
         //loop through every function scope
         for (let scope of file.functionScopes) {
             //every var declaration in this function scope
             for (let varDeclaration of scope.variableDeclarations) {
-                let lowerVarName = varDeclaration.name.toLowerCase();
+                const varName = varDeclaration.name;
+                const lowerVarName = varName.toLowerCase();
 
                 //if the var is a function
                 if (isFunctionType(varDeclaration.type)) {
@@ -559,9 +583,9 @@ export class Scope {
                             file: file
                         });
                         //has the same name as an in-scope class
-                    } else if (classLookup[lowerVarName]) {
+                    } else if (classMap.has(lowerVarName)) {
                         this.diagnostics.push({
-                            ...DiagnosticMessages.localVarSameNameAsClass(classLookup[lowerVarName].getName(ParseMode.BrighterScript)),
+                            ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(lowerVarName).getName(ParseMode.BrighterScript)),
                             range: varDeclaration.nameRange,
                             file: file
                         });
