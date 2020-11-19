@@ -1192,4 +1192,16 @@ describe('lexer', () => {
         const { tokens } = Lexer.scan(text, { includeWhitespace: false });
         expect(util.tokensToString(tokens)).to.equal(text);
     });
+
+    it.only('properly detects try/catch tokens', () => {
+        const { tokens } = Lexer.scan(`try catch endtry end try throw`, { includeWhitespace: false });
+        expect(tokens.map(x => x.kind)).to.eql([
+            TokenKind.Try,
+            TokenKind.Catch,
+            TokenKind.EndTry,
+            TokenKind.EndTry,
+            TokenKind.Throw,
+            TokenKind.Eof
+        ]);
+    });
 });
