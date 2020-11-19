@@ -595,6 +595,11 @@ export let DiagnosticMessages = {
         message: `Function has same name as class '${className}'`,
         code: 1116,
         severity: DiagnosticSeverity.Error
+    }),
+    expectedExceptionVarToFollowCatch: () => ({
+        message: `Expected exception variable to follow 'catch' keyword`,
+        code: 1117,
+        severity: DiagnosticSeverity.Error
     })
 };
 

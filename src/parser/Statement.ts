@@ -1768,20 +1768,21 @@ export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;
 export class TryCatchStatement extends Statement {
     constructor(
         public tryToken: Token,
-        public tryBranch: Block,
-        public catchToken: Token,
-        public exceptionVariable: VariableExpression,
-        public catchBranch: Block,
-        public endTryToken: Token
+        public tryBranch?: Block,
+        public catchToken?: Token,
+        public exceptionVariable?: VariableExpression,
+        public catchBranch?: Block,
+        public endTryToken?: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
             this.tryToken.range.start,
             (this.endTryToken ?? this.catchBranch ?? this.exceptionVariable ?? this.catchToken ?? this.tryBranch ?? this.tryToken).range.end
         );
     }
-
-    public range: Range;
 
     public transpile(state: TranspileState): TranspileResult {
         return [

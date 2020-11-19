@@ -47,7 +47,8 @@ import {
     ImportStatement,
     ClassFieldStatement,
     ClassMethodStatement,
-    ClassStatement
+    ClassStatement,
+    TryCatchStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -857,6 +858,10 @@ export class Parser {
             return this.ifStatement();
         }
 
+        if (this.check(TokenKind.Try)) {
+            return this.tryCatchStatement();
+        }
+
         if (this.check(TokenKind.Print)) {
             return this.printStatement(...additionalterminators);
         }
@@ -1349,6 +1354,32 @@ export class Parser {
                 return new TemplateStringExpression(openingBacktick, quasis, expressions, closingBacktick);
             }
         }
+    }
+
+    private tryCatchStatement(): TryCatchStatement {
+        const tryToken = this.advance();
+        const statement = new TryCatchStatement(
+            tryToken
+        );
+        //consume one or more newlines
+        while (this.check(TokenKind.Newline)) {
+            this.advance();
+        }
+        statement.tryBranch = this.block(TokenKind.Catch);
+        statement.catchToken = this.advance();
+        const exceptionVarToken = this.tryConsume(DiagnosticMessages.expectedExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
+        if (exceptionVarToken) {
+            // force it into an identifier so the AST makes some sense
+            exceptionVarToken.kind = TokenKind.Identifier;
+            statement.exceptionVariable = new VariableExpression(this.previous() as Identifier, null);
+        }
+        //consume one or more newlines
+        while (this.check(TokenKind.Newline)) {
+            this.advance();
+        }
+        statement.catchBranch = this.block(TokenKind.EndTry);
+        statement.endTryToken = this.advance();
+        return statement;
     }
 
     private ifStatement(): IfStatement {
