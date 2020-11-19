@@ -547,7 +547,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     localVarSameNameAsClass: (className: string) => ({
-        message: `Local variable has same name as class ${className}`,
+        message: `Local variable has same name as class '${className}'`,
         code: 1106,
         severity: DiagnosticSeverity.Error
     }),
@@ -592,7 +592,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     functionCannotHaveSameNameAsClass: (className: string) => ({
-        message: `Function cannot have the same name as class '${className}'`,
+        message: `Function has same name as class '${className}'`,
         code: 1116,
         severity: DiagnosticSeverity.Error
     })
