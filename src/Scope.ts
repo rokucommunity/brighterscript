@@ -296,7 +296,11 @@ export class Scope {
         let lookup = {} as Record<string, ClassStatement>;
         this.enumerateFiles((file) => {
             for (let cls of file.parser.references.classStatements) {
-                lookup[cls.getName(ParseMode.BrighterScript).toLowerCase()] = cls;
+                const name = cls.getName(ParseMode.BrighterScript)?.toLowerCase();
+                //only track classes with a defined name (i.e. exclude nameless malformed classes)
+                if (name) {
+                    lookup[name] = cls;
+                }
             }
         });
         return lookup;
@@ -508,9 +512,10 @@ export class Scope {
      * @param callableContainerMap
      */
     private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: CallableContainerMap) {
+        const classLookup = this.classLookup;
         //loop through every function scope
         for (let scope of file.functionScopes) {
-            //every var declaration in this scope
+            //every var declaration in this function scope
             for (let varDeclaration of scope.variableDeclarations) {
                 let lowerVarName = varDeclaration.name.toLowerCase();
 
@@ -542,16 +547,25 @@ export class Scope {
 
                     //var is not a function
                 } else if (
-                    //is same name as a callable
-                    callableContainerMap.has(lowerVarName) &&
                     //is NOT a callable from stdlib (because non-function local vars can have same name as stdlib names)
                     !globalCallableMap.has(lowerVarName)
                 ) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                        range: varDeclaration.nameRange,
-                        file: file
-                    });
+
+                    //is same name as a callable
+                    if (callableContainerMap.has(lowerVarName)) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.localVarShadowedByScopedFunction(),
+                            range: varDeclaration.nameRange,
+                            file: file
+                        });
+                        //has the same name as an in-scope class
+                    } else if (classLookup[lowerVarName]) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.localVarSameNameAsClass(classLookup[lowerVarName].getName(ParseMode.BrighterScript)),
+                            range: varDeclaration.nameRange,
+                            file: file
+                        });
+                    }
                 }
             }
         }

@@ -875,4 +875,18 @@ describe('BrsFile BrighterScript classes', () => {
         );
     });
 
+
+    it('catches variable with same name as class', async () => {
+        await program.addOrReplaceFile('source/main.bs', `
+            class Animal
+            end class
+            sub main()
+                animal = new Animal()
+            end sub
+        `);
+        await program.validate();
+        expect(program.getDiagnostics()[0]?.message).to.equal(
+            DiagnosticMessages.localVarSameNameAsClass('Animal').message
+        );
+    });
 });

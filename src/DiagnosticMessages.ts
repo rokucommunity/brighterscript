@@ -546,8 +546,8 @@ export let DiagnosticMessages = {
         code: 1105,
         severity: DiagnosticSeverity.Error
     }),
-    __unused: () => ({
-        message: ``,
+    localVarSameNameAsClass: (className: string) => ({
+        message: `Local variable has same name as class ${className}`,
         code: 1106,
         severity: DiagnosticSeverity.Error
     }),
