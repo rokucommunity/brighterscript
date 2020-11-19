@@ -132,6 +132,10 @@ export enum TokenKind {
     True = 'True',
     Type = 'Type',
     While = 'While',
+    Try = 'Try',
+    Catch = 'Catch',
+    EndTry = 'EndTry',
+    Throw = 'Throw',
 
     //misc
     Library = 'Library',
@@ -211,6 +215,7 @@ export const ReservedWords = new Set([
     'sub',
     'tab',
     'then',
+    'throw',
     'to',
     'true',
     'type',
@@ -297,7 +302,10 @@ export const Keywords: Record<string, TokenKind> = {
     'source_function_name': TokenKind.SourceFunctionNameLiteral,
     'source_location': TokenKind.SourceLocationLiteral,
     'pkg_path': TokenKind.PkgPathLiteral,
-    'pkg_location': TokenKind.PkgLocationLiteral
+    'pkg_location': TokenKind.PkgLocationLiteral,
+    try: TokenKind.Try,
+    catch: TokenKind.Catch,
+    endtry: TokenKind.EndTry
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
@@ -412,7 +420,11 @@ export const AllowedProperties = [
     TokenKind.SourceFunctionNameLiteral,
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
-    TokenKind.PkgLocationLiteral
+    TokenKind.PkgLocationLiteral,
+    TokenKind.Try,
+    TokenKind.Catch,
+    TokenKind.EndTry,
+    TokenKind.Throw
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -441,7 +453,10 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Override,
     TokenKind.Namespace,
     TokenKind.EndNamespace,
-    TokenKind.Import
+    TokenKind.Import,
+    TokenKind.Try,
+    TokenKind.Catch,
+    TokenKind.EndTry
 ];
 
 export const BrighterScriptSourceLiterals = [
@@ -508,10 +523,59 @@ export const DisallowedLocalIdentifiers = [
     TokenKind.SourceFunctionNameLiteral,
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
-    TokenKind.PkgLocationLiteral
+    TokenKind.PkgLocationLiteral,
+    TokenKind.Throw
 ];
 
 export const DisallowedLocalIdentifiersText = new Set([
     'run',
     ...DisallowedLocalIdentifiers.map(x => x.toLowerCase())
+]);
+
+/**
+ * List of string versions of TokenKind and various globals that are NOT allowed as scope function names.
+ * Used to throw more helpful "you can't use a reserved word as a function name" errors.
+ */
+export const DisallowedFunctionIdentifiers = [
+    TokenKind.And,
+    TokenKind.CreateObject,
+    TokenKind.Dim,
+    TokenKind.Each,
+    TokenKind.Else,
+    TokenKind.ElseIf,
+    TokenKind.End,
+    TokenKind.EndFunction,
+    TokenKind.EndIf,
+    TokenKind.EndSub,
+    TokenKind.EndWhile,
+    TokenKind.Exit,
+    TokenKind.ExitWhile,
+    TokenKind.False,
+    TokenKind.For,
+    TokenKind.Function,
+    TokenKind.Goto,
+    TokenKind.If,
+    TokenKind.Invalid,
+    TokenKind.Let,
+    TokenKind.Next,
+    TokenKind.Not,
+    TokenKind.ObjFun,
+    TokenKind.Or,
+    TokenKind.Print,
+    TokenKind.Rem,
+    TokenKind.Return,
+    TokenKind.Step,
+    TokenKind.Sub,
+    TokenKind.Tab,
+    TokenKind.Then,
+    TokenKind.To,
+    TokenKind.True,
+    TokenKind.Type,
+    TokenKind.While,
+    TokenKind.Throw
+];
+
+export const DisallowedFunctionIdentifiersText = new Set([
+    'run',
+    ...DisallowedFunctionIdentifiers.map(x => x.toLowerCase())
 ]);
