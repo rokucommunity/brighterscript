@@ -54,6 +54,15 @@ export class Scope {
     }
 
     /**
+     * Get the class with the specified name.
+     * @param className - the all-lower-case namespace-included class name
+     */
+    public getClass(className: string) {
+        const classMap = this.getClassMap();
+        return classMap.get(className);
+    }
+
+    /**
      * A dictionary of all classes in this scope. This includes namespaced classes always with their full name.
      * The key is stored in lower case
      */
@@ -71,15 +80,6 @@ export class Scope {
             });
             return map;
         });
-    }
-
-    /**
-     * Get the class with the specified name.
-     * @param className - the all-lower-case namespace-included class name
-     */
-    public getClass(className: string) {
-        const classMap = this.getClassMap();
-        return classMap.get(className);
     }
 
     /**
