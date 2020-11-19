@@ -546,8 +546,8 @@ export let DiagnosticMessages = {
         code: 1105,
         severity: DiagnosticSeverity.Error
     }),
-    __unused: () => ({
-        message: ``,
+    localVarSameNameAsClass: (className: string) => ({
+        message: `Local variable has same name as class '${className}'`,
         code: 1106,
         severity: DiagnosticSeverity.Error
     }),
@@ -589,6 +589,11 @@ export let DiagnosticMessages = {
     duplicateComponentName: (componentName: string) => ({
         message: `There are multiple components with the name '${componentName}'`,
         code: 1115,
+        severity: DiagnosticSeverity.Error
+    }),
+    functionCannotHaveSameNameAsClass: (className: string) => ({
+        message: `Function has same name as class '${className}'`,
+        code: 1116,
         severity: DiagnosticSeverity.Error
     })
 };

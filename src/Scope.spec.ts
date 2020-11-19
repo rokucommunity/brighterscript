@@ -297,12 +297,12 @@ describe('Scope', () => {
                 });
             });
 
-            it('detects scope function with same name as built-in function', async () => {
+            it('flags scope function with same name (but different case) as built-in function', async () => {
                 await program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         print str(12345) ' prints 12345 (i.e. our str() function below is ignored)
                     end sub
-                    function str(num)
+                    function STR(num)
                         return "override"
                     end function
                 `);
@@ -481,7 +481,7 @@ describe('Scope', () => {
                 end sub
             `);
             await program.validate();
-            expect(program.getDiagnostics().length).to.equal(0);
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
 
         it('Emits validation events', async () => {
