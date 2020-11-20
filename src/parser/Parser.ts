@@ -1365,19 +1365,35 @@ export class Parser {
         while (this.check(TokenKind.Newline)) {
             this.advance();
         }
+        //consume exactly 1 colon token if exists
+        if (this.check(TokenKind.Colon)) {
+            this.advance();
+        }
         statement.tryBranch = this.block(TokenKind.Catch);
         statement.catchToken = this.advance();
         const exceptionVarToken = this.tryConsume(DiagnosticMessages.expectedExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
         if (exceptionVarToken) {
             // force it into an identifier so the AST makes some sense
             exceptionVarToken.kind = TokenKind.Identifier;
-            statement.exceptionVariable = new VariableExpression(this.previous() as Identifier, null);
+            statement.exceptionVariable = new VariableExpression(exceptionVarToken as Identifier, null);
         }
         //consume one or more newlines
         while (this.check(TokenKind.Newline)) {
             this.advance();
         }
+
+        //consume exactly 1 colon token if exists
+        if (this.check(TokenKind.Colon)) {
+            this.advance();
+        }
+
         statement.catchBranch = this.block(TokenKind.EndTry);
+
+        //consume exactly 1 colon token if exists
+        if (this.check(TokenKind.Colon)) {
+            this.advance();
+        }
+
         statement.endTryToken = this.advance();
         return statement;
     }
