@@ -1805,6 +1805,9 @@ export class TryCatchStatement extends Statement {
             walk(this, 'tryBranch', visitor, options);
             walk(this, 'catchBranch', visitor, options);
         }
+        if (this.exceptionVariable && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'exceptionVariable', visitor, options);
+        }
     }
 }
 
