@@ -1541,6 +1541,20 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        describe('try/catch', () => {
+            it('transpiles properly', async () => {
+                await testTranspile(`
+                    sub main()
+                        try
+                            print a.b.c
+                        catch e
+                            print e
+                        end try
+                    end sub
+                `);
+            });
+        });
+
         describe('namespaces', () => {
             it('properly transpiles namespace functions for assignments', async () => {
                 await testTranspile(`

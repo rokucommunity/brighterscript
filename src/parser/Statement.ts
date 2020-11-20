@@ -1787,19 +1787,15 @@ export class TryCatchStatement extends Statement {
     public transpile(state: TranspileState): TranspileResult {
         return [
             state.sourceNode(this.tryToken, 'try'),
-            state.newline(),
-            state.indent(1),
             ...this.tryBranch.transpile(state),
             state.newline(),
-            state.indent(-1),
+            state.indent(),
             state.sourceNode(this.catchToken, 'catch'),
             ' ',
             ...this.exceptionVariable.transpile(state),
-            state.newline(),
-            state.indent(1),
             this.catchBranch.transpile(state),
             state.newline(),
-            state.indent(-1),
+            state.indent(),
             state.sourceNode(this.endTryToken, 'end try')
         ];
     }
