@@ -73,12 +73,12 @@ describe('parser class', () => {
     it('does not allow "throw" to be defined as a local var', () => {
         const parser = Parser.parse(`
             sub main()
-                'not allowed to define throw as local var
+                'not allowed to define "throw" as local var
                 throw = true
             end sub
         `);
 
-        expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.cannotUseReservedWordAsIdentifier('throw').message);
+        expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.foundUnexpectedToken('throw').message);
     });
 
     it('does not allow function named "throw"', () => {
