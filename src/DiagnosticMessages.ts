@@ -595,6 +595,16 @@ export let DiagnosticMessages = {
         message: `Function has same name as class '${className}'`,
         code: 1116,
         severity: DiagnosticSeverity.Error
+    }),
+    missingExceptionVarToFollowCatch: () => ({
+        message: `Missing exception variable after 'catch' keyword`,
+        code: 1117,
+        severity: DiagnosticSeverity.Error
+    }),
+    missingExceptionExpressionAfterThrowKeyword: () => ({
+        message: `Missing exception expression after 'throw' keyword`,
+        code: 1118,
+        severity: DiagnosticSeverity.Error
     })
 };
 

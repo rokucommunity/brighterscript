@@ -12,7 +12,7 @@ import { ParseMode, Parser } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement, isInvalidType, isLiteralExpression, isVoidType } from '../astUtils/reflection';
-import type { TypedefProvider } from '../interfaces';
+import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 
@@ -31,7 +31,7 @@ export abstract class Statement {
      */
     public annotations: AnnotationExpression[];
 
-    public abstract transpile(state: TranspileState): Array<SourceNode | string>;
+    public abstract transpile(state: TranspileState): TranspileResult;
 
     /**
      * When being considered by the walk visitor, this describes what type of element the current class is.
@@ -77,7 +77,7 @@ export class Body extends Statement implements TypedefProvider {
     }
 
     transpile(state: TranspileState) {
-        let result = [] as Array<string | SourceNode>;
+        let result = [] as TranspileResult;
         for (let i = 0; i < this.statements.length; i++) {
             let statement = this.statements[i];
             let previousStatement = this.statements[i - 1];
@@ -185,7 +185,7 @@ export class Block extends Statement {
 
     transpile(state: TranspileState) {
         state.blockDepth++;
-        let results = [] as Array<SourceNode | string>;
+        let results = [] as TranspileResult;
         for (let i = 0; i < this.statements.length; i++) {
             let previousStatement = this.statements[i - 1];
             let statement = this.statements[i];
@@ -1764,3 +1764,85 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
     }
 }
 export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;
+
+export class TryCatchStatement extends Statement {
+    constructor(
+        public tryToken: Token,
+        public tryBranch?: Block,
+        public catchToken?: Token,
+        public exceptionVariable?: Identifier,
+        public catchBranch?: Block,
+        public endTryToken?: Token
+    ) {
+        super();
+    }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tryToken.range.start,
+            (this.endTryToken ?? this.catchBranch ?? this.exceptionVariable ?? this.catchToken ?? this.tryBranch ?? this.tryToken).range.end
+        );
+    }
+
+    public transpile(state: TranspileState): TranspileResult {
+        return [
+            state.sourceNode(this.tryToken, 'try'),
+            ...this.tryBranch.transpile(state),
+            state.newline(),
+            state.indent(),
+            state.sourceNode(this.catchToken, 'catch'),
+            ' ',
+            state.sourceNode(this.exceptionVariable, this.exceptionVariable.text),
+            ...this.catchBranch.transpile(state),
+            state.newline(),
+            state.indent(),
+            state.sourceNode(this.endTryToken, 'end try')
+        ];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.tryBranch && options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'tryBranch', visitor, options);
+            walk(this, 'catchBranch', visitor, options);
+        }
+    }
+}
+
+export class ThrowStatement extends Statement {
+    constructor(
+        public throwToken: Token,
+        public expression?: Expression
+    ) {
+        super();
+        this.range = util.createRangeFromPositions(
+            this.throwToken.range.start,
+            (this.expression ?? this.throwToken).range.end
+        );
+    }
+    public range: Range;
+
+    public transpile(state: TranspileState) {
+        const result = [
+            state.sourceNode(this.throwToken, 'throw'),
+            ' '
+        ];
+
+        //if we have an expression, transpile it
+        if (this.expression) {
+            result.push(
+                ...this.expression.transpile(state)
+            );
+
+            //no expression found. Rather than emit syntax errors, provide a generic error message
+        } else {
+            result.push('"An error has occurred"');
+        }
+        return result;
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.expression && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
+    }
+}

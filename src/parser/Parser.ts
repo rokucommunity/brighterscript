@@ -47,7 +47,9 @@ import {
     ImportStatement,
     ClassFieldStatement,
     ClassMethodStatement,
-    ClassStatement
+    ClassStatement,
+    TryCatchStatement,
+    ThrowStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -857,6 +859,14 @@ export class Parser {
             return this.ifStatement();
         }
 
+        if (this.check(TokenKind.Try)) {
+            return this.tryCatchStatement();
+        }
+
+        if (this.check(TokenKind.Throw)) {
+            return this.throwStatement();
+        }
+
         if (this.check(TokenKind.Print)) {
             return this.printStatement(...additionalterminators);
         }
@@ -1349,6 +1359,55 @@ export class Parser {
                 return new TemplateStringExpression(openingBacktick, quasis, expressions, closingBacktick);
             }
         }
+    }
+
+    private tryCatchStatement(): TryCatchStatement {
+        const tryToken = this.advance();
+        const statement = new TryCatchStatement(
+            tryToken
+        );
+        //consume one or more newlines
+        while (this.match(TokenKind.Newline)) { }
+
+        //consume exactly 1 colon token if exists
+        this.match(TokenKind.Colon);
+
+        statement.tryBranch = this.block(TokenKind.Catch);
+        statement.catchToken = this.advance();
+        const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
+        if (exceptionVarToken) {
+            // force it into an identifier so the AST makes some sense
+            exceptionVarToken.kind = TokenKind.Identifier;
+            statement.exceptionVariable = exceptionVarToken as Identifier;
+        }
+
+        //consume one or more newlines
+        while (this.match(TokenKind.Newline)) { }
+
+        //consume exactly 1 colon token if exists
+        this.match(TokenKind.Colon);
+
+        statement.catchBranch = this.block(TokenKind.EndTry);
+
+        //consume exactly 1 colon token if exists
+        this.match(TokenKind.Colon);
+
+        statement.endTryToken = this.advance();
+        return statement;
+    }
+
+    private throwStatement() {
+        const throwToken = this.advance();
+        let expression: Expression;
+        if (this.checkAny(TokenKind.Newline, TokenKind.Colon)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.missingExceptionExpressionAfterThrowKeyword(),
+                range: throwToken.range
+            });
+        } else {
+            expression = this.expression();
+        }
+        return new ThrowStatement(throwToken, expression);
     }
 
     private ifStatement(): IfStatement {
@@ -2283,8 +2342,7 @@ export class Parser {
     }
 
     /**
-     * Pop tokens until we encounter a token not in the specified list
-     * @param tokenKinds
+     * Pop tokens until we encounter a token other than the specified one
      */
     private match(tokenKind: TokenKind) {
         if (this.check(tokenKind)) {
@@ -2294,6 +2352,10 @@ export class Parser {
         return false;
     }
 
+    /**
+     * Pop tokens until we encounter a token not in the specified list
+     * @param tokenKinds
+     */
     private matchAny(...tokenKinds: TokenKind[]) {
         for (let tokenKind of tokenKinds) {
             if (this.check(tokenKind)) {
