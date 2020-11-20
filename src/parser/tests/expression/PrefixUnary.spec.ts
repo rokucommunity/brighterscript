@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsBoolean, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
@@ -13,7 +12,7 @@ describe('parser prefix unary expressions', () => {
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Not, 'not'),
-            token(TokenKind.True, 'true', BrsBoolean.True),
+            token(TokenKind.True, 'true'),
             EOF
         ]);
 
@@ -30,7 +29,7 @@ describe('parser prefix unary expressions', () => {
             token(TokenKind.Not, 'not'),
             token(TokenKind.Not, 'not'),
             token(TokenKind.Not, 'not'),
-            token(TokenKind.True, 'true', BrsBoolean.True),
+            token(TokenKind.True, 'true'),
             EOF
         ]);
 
@@ -43,7 +42,7 @@ describe('parser prefix unary expressions', () => {
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.Minus, '-'),
-            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5'),
             EOF
         ]);
 
@@ -60,7 +59,7 @@ describe('parser prefix unary expressions', () => {
             token(TokenKind.Minus, '-'),
             token(TokenKind.Minus, '-'),
             token(TokenKind.Minus, '-'),
-            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5'),
             EOF
         ]);
 
@@ -97,7 +96,6 @@ describe('parser prefix unary expressions', () => {
             {
                 kind: TokenKind.True,
                 text: 'true',
-                literal: BrsBoolean.True,
                 isReserved: true,
                 range: Range.create(0, 13, 0, 17)
             },

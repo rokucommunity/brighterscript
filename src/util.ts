@@ -10,9 +10,7 @@ import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
-import { ValueKind } from './interfaces';
 import { BooleanType } from './types/BooleanType';
-import type { BrsType } from './types/BrsType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
@@ -22,7 +20,6 @@ import { InvalidType } from './types/InvalidType';
 import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
-import { UninitializedType } from './types/UninitializedType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { DottedGetExpression, VariableExpression } from './parser/Expression';
@@ -336,38 +333,6 @@ export class Util {
         return subject.replace(/{(\d+)}/g, (match, num) => {
             return typeof args[num] !== 'undefined' ? args[num] : match;
         });
-    }
-
-    public valueKindToBrsType(kind: ValueKind): BrsType {
-        switch (kind) {
-            case ValueKind.Boolean:
-                return new BooleanType();
-            //TODO refine the function type on the outside (I don't think this ValueKind is actually returned)
-            case ValueKind.Callable:
-                return new FunctionType(new VoidType());
-            case ValueKind.Double:
-                return new DoubleType();
-            case ValueKind.Dynamic:
-                return new DynamicType();
-            case ValueKind.Float:
-                return new FloatType();
-            case ValueKind.Int32:
-                return new IntegerType();
-            case ValueKind.Int64:
-                return new LongIntegerType();
-            case ValueKind.Invalid:
-                return new InvalidType();
-            case ValueKind.Object:
-                return new ObjectType();
-            case ValueKind.String:
-                return new StringType();
-            case ValueKind.Uninitialized:
-                return new UninitializedType();
-            case ValueKind.Void:
-                return new VoidType();
-            default:
-                return undefined;
-        }
     }
 
     /**
@@ -1004,6 +969,72 @@ export class Util {
         }
         return result;
     }
+
+    /**
+     * Convert a token into a BscType
+     */
+    public tokenToBscType(token: Token) {
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        switch (token.kind) {
+            case TokenKind.Boolean:
+            case TokenKind.True:
+            case TokenKind.False:
+                return new BooleanType();
+            case TokenKind.Double:
+            case TokenKind.DoubleLiteral:
+                return new DoubleType();
+            case TokenKind.Dynamic:
+                return new DynamicType();
+            case TokenKind.Float:
+            case TokenKind.FloatLiteral:
+                return new FloatType();
+            case TokenKind.Function:
+                //TODO should there be a more generic function type without a signature that's assignable to all other function types?
+                return new FunctionType(new DynamicType());
+            case TokenKind.Integer:
+            case TokenKind.IntegerLiteral:
+                return new IntegerType();
+            case TokenKind.Invalid:
+                return new InvalidType();
+            case TokenKind.LongInteger:
+            case TokenKind.LongIntegerLiteral:
+                return new LongIntegerType();
+            case TokenKind.Object:
+                return new ObjectType();
+            case TokenKind.String:
+            case TokenKind.StringLiteral:
+            case TokenKind.TemplateStringExpressionBegin:
+            case TokenKind.TemplateStringExpressionEnd:
+            case TokenKind.TemplateStringQuasi:
+                return new StringType();
+            case TokenKind.Void:
+                return new VoidType();
+            case TokenKind.Identifier:
+                switch (token.text.toLowerCase()) {
+                    case 'boolean':
+                        return new BooleanType();
+                    case 'double':
+                        return new DoubleType();
+                    case 'float':
+                        return new FloatType();
+                    case 'function':
+                        return new FunctionType(new DynamicType());
+                    case 'integer':
+                        return new IntegerType();
+                    case 'invalid':
+                        return new InvalidType();
+                    case 'longinteger':
+                        return new LongIntegerType();
+                    case 'object':
+                        return new ObjectType();
+                    case 'string':
+                        return new StringType();
+                    case 'void':
+                        return new VoidType();
+                }
+        }
+
+    }
 }
 
 /**
@@ -1021,12 +1052,11 @@ export function standardizePath(stringParts, ...expressions: any[]) {
     );
 }
 
-export function loadPlugins(pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
+export function loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
     return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
         if (typeof pathOrModule === 'string') {
             try {
-                // eslint-disable-next-line
-                let loaded = require(pathOrModule);
+                let loaded = resolveRequire(cwd, pathOrModule);
                 let plugin: CompilerPlugin = loaded.default ? loaded.default : loaded;
                 if (!plugin.name) {
                     plugin.name = pathOrModule;
@@ -1042,6 +1072,23 @@ export function loadPlugins(pathOrModules: string[], onError?: (pathOrModule: st
         }
         return acc;
     }, []);
+}
+
+function resolveRequire(cwd: string, pathOrModule: string) {
+    let target = pathOrModule;
+    if (!path.isAbsolute(pathOrModule)) {
+        const localPath = path.resolve(cwd, pathOrModule);
+        if (fs.existsSync(localPath)) {
+            target = localPath;
+        } else {
+            const modulePath = path.resolve(cwd, 'node_modules', pathOrModule);
+            if (fs.existsSync(modulePath)) {
+                target = modulePath;
+            }
+        }
+    }
+    // eslint-disable-next-line
+    return require(target);
 }
 
 export let util = new Util();

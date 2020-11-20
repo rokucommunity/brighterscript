@@ -1,9 +1,9 @@
-import type { BrsType } from './BrsType';
+import type { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 
-export class FunctionType implements BrsType {
+export class FunctionType implements BscType {
     constructor(
-        public returnType: BrsType
+        public returnType: BscType
     ) {
 
     }
@@ -18,14 +18,14 @@ export class FunctionType implements BrsType {
      */
     public isSub = false;
 
-    public params = [] as Array<{ name: string; type: BrsType; isRequired: boolean }>;
+    public params = [] as Array<{ name: string; type: BscType; isRequired: boolean }>;
 
     public setName(name: string) {
         this.name = name;
         return this;
     }
 
-    public addParameter(name: string, type: BrsType, isRequired: boolean) {
+    public addParameter(name: string, type: BscType, isRequired: boolean) {
         this.params.push({
             name: name,
             type: type,
@@ -34,7 +34,7 @@ export class FunctionType implements BrsType {
         return this;
     }
 
-    public isAssignableTo(targetType: BrsType) {
+    public isAssignableTo(targetType: BscType) {
         if (targetType instanceof DynamicType) {
             return true;
         } else if (targetType instanceof FunctionType) {
@@ -60,7 +60,7 @@ export class FunctionType implements BrsType {
         }
     }
 
-    public isConvertibleTo(targetType: BrsType) {
+    public isConvertibleTo(targetType: BscType) {
         return this.isAssignableTo(targetType);
     }
 

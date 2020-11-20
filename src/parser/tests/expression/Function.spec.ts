@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
@@ -34,7 +33,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Colon, ':'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'Lorem ipsum', new BrsString('Lorem ipsum')),
+                token(TokenKind.StringLiteral, 'Lorem ipsum'),
                 token(TokenKind.Colon, ':'),
                 token(TokenKind.EndFunction, 'end function'),
                 EOF
@@ -53,7 +52,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'Lorem ipsum', new BrsString('Lorem ipsum')),
+                token(TokenKind.StringLiteral, 'Lorem ipsum'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndFunction, 'end function'),
                 EOF
@@ -118,19 +117,19 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Comma, ','),
 
                 identifier('b'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
+                token(TokenKind.IntegerLiteral, '4'),
                 token(TokenKind.Comma, ','),
 
                 identifier('c'),
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.RightParen, ')'),
 
                 token(TokenKind.Newline, '\\n'),
@@ -151,7 +150,7 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
@@ -160,7 +159,7 @@ describe('parser', () => {
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
@@ -219,7 +218,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'Lorem ipsum', new BrsString('Lorem ipsum')),
+                token(TokenKind.StringLiteral, 'Lorem ipsum'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndSub, 'end sub'),
                 EOF
@@ -284,19 +283,19 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Comma, ','),
 
                 identifier('b'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
+                token(TokenKind.IntegerLiteral, '4'),
                 token(TokenKind.Comma, ','),
 
                 identifier('c'),
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.RightParen, ')'),
 
                 token(TokenKind.Newline, '\\n'),
@@ -317,7 +316,7 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
@@ -326,7 +325,7 @@ describe('parser', () => {
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
@@ -353,7 +352,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'I\'m a callback', new BrsString('I\'m a callback')),
+                token(TokenKind.StringLiteral, 'I\'m a callback'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndFunction, 'end function'),
                 token(TokenKind.Newline, '\\n'),
@@ -376,7 +375,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'I\'m anonymous', new BrsString('I\'m anonymous')),
+                token(TokenKind.StringLiteral, 'I\'m anonymous'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndFunction, 'end function'),
 

@@ -52,7 +52,7 @@ describe('parser class', () => {
                 end class
             `);
             let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            expect(diagnostics).to.be.lengthOf(0);
+            expect(diagnostics[0]?.message).not.to.exist;
             expect(statements[0]).instanceof(ClassStatement);
         });
     }
@@ -69,6 +69,74 @@ describe('parser class', () => {
             expect(statements[0]).instanceof(ClassStatement);
         });
     }
+
+    it('does not allow "throw" to be defined as a local var', () => {
+        const parser = Parser.parse(`
+            sub main()
+                'not allowed to define throw as local var
+                throw = true
+            end sub
+        `);
+
+        expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.cannotUseReservedWordAsIdentifier('throw').message);
+    });
+
+    it('does not allow function named "throw"', () => {
+        const parser = Parser.parse(`
+            'not allowed to define a function called "throw"
+            sub throw()
+            end sub
+        `);
+
+        expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.cannotUseReservedWordAsIdentifier('throw').message);
+    });
+
+    it('supports the try/catch keywords in various places', () => {
+        const parser = Parser.parse(`
+            sub main()
+                'allowed to be local vars
+                try = true
+                catch = true
+                endTry = true
+                'not allowed to use throw as local variable
+                'throw = true
+
+                'allowed to be object props
+                person = {
+                try: true,
+                catch: true,
+                endTry: true,
+                throw: true
+                }
+
+                person.try = true
+                person.catch = true
+                person.endTry = true
+                person.throw = true
+
+                'allowed as object property reference
+                print person.try
+                print person.catch
+                print person.endTry
+                print person.throw
+            end sub
+
+            sub try()
+            end sub
+
+            sub catch()
+            end sub
+
+            sub endTry()
+            end sub
+
+            'not allowed to define a function called "throw"
+            ' sub throw()
+            ' end sub
+        `);
+
+        expect(parser.diagnostics[0]?.message).not.to.exist;
+    });
 
     it('parses empty class', () => {
         let { tokens } = Lexer.scan(`

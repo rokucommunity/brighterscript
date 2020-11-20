@@ -1,54 +1,51 @@
-import type { Position } from 'vscode-languageserver';
+import { Range } from 'vscode-languageserver';
 import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Expression, NamespacedVariableNameExpression } from '../parser/Expression';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression } from '../parser/Expression';
-import type { BrsType } from '../brsTypes';
-import { BrsString, BrsInvalid, Int32, Float } from '../brsTypes';
-import util from '../util';
 
-export function createRange(pos: Position) {
-    return util.createRange(pos.line, pos.character, pos.line, pos.character);
-}
+export const interpolatedRange = Range.create(-1, -1, -1, -1);
 
-export function createToken<T extends TokenKind>(kind: T, pos: Position, text?: string, literal?: BrsType): Token & { kind: T } {
+export function createToken<T extends TokenKind>(kind: T, text?: string, range = interpolatedRange): Token & { kind: T } {
     return {
         kind: kind,
         text: text || kind.toString(),
         isReserved: !text || text === kind.toString(),
-        range: createRange(pos),
-        literal: literal,
+        range: range,
         leadingWhitespace: ''
     };
 }
 
-export function createIdentifier(ident: string, pos: Position, namespaceName?: NamespacedVariableNameExpression): VariableExpression {
-    return new VariableExpression(createToken(TokenKind.Identifier, pos, ident), namespaceName);
+export function createIdentifier(ident: string, range?: Range, namespaceName?: NamespacedVariableNameExpression): VariableExpression {
+    return new VariableExpression(createToken(TokenKind.Identifier, ident, range), namespaceName);
 }
-export function createDottedIdentifier(path: string[], pos: Position, namespaceName?: NamespacedVariableNameExpression): DottedGetExpression {
+export function createDottedIdentifier(path: string[], range?: Range, namespaceName?: NamespacedVariableNameExpression): DottedGetExpression {
     const ident = path.pop();
-    const obj = path.length > 1 ? createDottedIdentifier(path, pos, namespaceName) : createIdentifier(path[0], pos, namespaceName);
-    return new DottedGetExpression(obj, createToken(TokenKind.Identifier, pos, ident), createToken(TokenKind.Dot, pos, '.'));
+    const obj = path.length > 1 ? createDottedIdentifier(path, range, namespaceName) : createIdentifier(path[0], range, namespaceName);
+    return new DottedGetExpression(obj, createToken(TokenKind.Identifier, ident, range), createToken(TokenKind.Dot, '.', range));
 }
 
-export function createStringLiteral(value: string, pos: Position) {
-    return new LiteralExpression(new BrsString(value), createRange(pos));
+export function createStringLiteral(value: string, range?: Range) {
+    return new LiteralExpression(createToken(TokenKind.StringLiteral, value, range));
 }
-export function createIntegerLiteral(value: number, pos: Position) {
-    return new LiteralExpression(new Int32(value), createRange(pos));
+export function createIntegerLiteral(value: string, range?: Range) {
+    return new LiteralExpression(createToken(TokenKind.IntegerLiteral, value, range));
 }
-export function createFloatLiteral(value: number, pos: Position) {
-    return new LiteralExpression(new Float(value), createRange(pos));
+export function createFloatLiteral(value: string, range?: Range) {
+    return new LiteralExpression(createToken(TokenKind.FloatLiteral, value, range));
 }
-export function createInvalidLiteral(pos: Position) {
-    return new LiteralExpression(new BrsInvalid(), createRange(pos));
+export function createInvalidLiteral(value?: string, range?: Range) {
+    return new LiteralExpression(createToken(TokenKind.Invalid, value, range));
+}
+export function createBooleanLiteral(value: 'true' | 'false', range?: Range) {
+    return new LiteralExpression(createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, range));
 }
 
 export function createCall(callee: Expression, args?: Expression[], namespaceName?: NamespacedVariableNameExpression) {
     return new CallExpression(
         callee,
-        createToken(TokenKind.LeftParen, callee.range.end, '('),
-        createToken(TokenKind.RightParen, callee.range.end, ')'),
+        createToken(TokenKind.LeftParen, '('),
+        createToken(TokenKind.RightParen, ')'),
         args || [],
         namespaceName
     );

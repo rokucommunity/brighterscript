@@ -1,5 +1,4 @@
 import type { TokenKind } from './TokenKind';
-import type { BrsType } from '../brsTypes';
 import type { Range } from 'vscode-languageserver';
 
 /**
@@ -12,8 +11,6 @@ export interface Token {
     text: string;
     /** True if this token's `text` is a reserved word, otherwise `false`. */
     isReserved: boolean;
-    /** The literal value (using the BRS type system) associated with this token, if any. */
-    literal?: BrsType;
     /** Where the token was found. */
     range: Range;
     /**

@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.21.0] - 2020-11-19
+### Added
+ - Catch when local variables and scope functions have the same name as a class. ([#246](https://github.com/rokucommunity/brighterscript/pull/246))
+ - Catch when functions use keyword names ([#247](https://github.com/rokucommunity/brighterscript/pull/247))
+### Changed
+ - many internal changes:
+   - remove all the `BrsType` objects leftover from the upstream `brs` project. Things like `ValueKind`, `BrsType`, the `Token.literal` property.
+   - rename the brighterscript `BrsType` class to `BscType` for more distinction from the  now deleted from-upstream `BrsType`.
+   - Modify the `createToken` function in `astUtils/creators.ts` to accept a range, or use a default negative range.
+   - Use the `BscType` objects for basic parser type tracking (this replaces `ValueKind` and `BrsType` from upstream `brs` project).
+   - minor AST property changes for `ForStatement` and `FunctionStatement`,
+   - any `ValueKind` references in code have been replaced with an instance of a `BscType` (which will be the backbone of future type tracking)
+   - Updated `ForStatement` to no longer include synthetic `step 1` tokens when those were not included in the source file.
+   - remove eliminated `BrsType` items from `reflection.ts`.
+
+
+## [0.20.1] - 2020-11-16
+### Changed
+ - load plugins relatively to the project ([#242](https://github.com/rokucommunity/brighterscript/pull/242))
+ - modified reflection utilities so they are compatible with TS strict null checks ([#243](https://github.com/rokucommunity/brighterscript/pull/243))
+
+
+
 ## [0.20.0] - 2020-11-13
 ### Added
  - more language server features: onWorkspaceSymbol, onSignatureHelp, onDocumentSymbol, onReferences, improve onDefinition ([#191](https://github.com/rokucommunity/brighterscript/pull/191))
@@ -708,3 +731,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.18.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.18.1...v0.18.2
 [0.19.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.18.2...v0.19.0
 [0.20.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.19.0...v0.20.0
+[0.20.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.20.0...v0.20.1
+[0.21.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.20.1...v0.21.0
