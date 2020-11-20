@@ -1367,13 +1367,11 @@ export class Parser {
             tryToken
         );
         //consume one or more newlines
-        while (this.check(TokenKind.Newline)) {
-            this.advance();
-        }
+        while (this.match(TokenKind.Newline)) { }
+
         //consume exactly 1 colon token if exists
-        if (this.check(TokenKind.Colon)) {
-            this.advance();
-        }
+        this.match(TokenKind.Colon);
+
         statement.tryBranch = this.block(TokenKind.Catch);
         statement.catchToken = this.advance();
         const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
@@ -1382,22 +1380,17 @@ export class Parser {
             exceptionVarToken.kind = TokenKind.Identifier;
             statement.exceptionVariable = new VariableExpression(exceptionVarToken as Identifier, null);
         }
+
         //consume one or more newlines
-        while (this.check(TokenKind.Newline)) {
-            this.advance();
-        }
+        while (this.match(TokenKind.Newline)) { }
 
         //consume exactly 1 colon token if exists
-        if (this.check(TokenKind.Colon)) {
-            this.advance();
-        }
+        this.match(TokenKind.Colon);
 
         statement.catchBranch = this.block(TokenKind.EndTry);
 
         //consume exactly 1 colon token if exists
-        if (this.check(TokenKind.Colon)) {
-            this.advance();
-        }
+        this.match(TokenKind.Colon);
 
         statement.endTryToken = this.advance();
         return statement;
@@ -2349,8 +2342,7 @@ export class Parser {
     }
 
     /**
-     * Pop tokens until we encounter a token not in the specified list
-     * @param tokenKinds
+     * Pop tokens until we encounter a token other than the specified one
      */
     private match(tokenKind: TokenKind) {
         if (this.check(tokenKind)) {
@@ -2360,6 +2352,10 @@ export class Parser {
         return false;
     }
 
+    /**
+     * Pop tokens until we encounter a token not in the specified list
+     * @param tokenKinds
+     */
     private matchAny(...tokenKinds: TokenKind[]) {
         for (let tokenKind of tokenKinds) {
             if (this.check(tokenKind)) {
