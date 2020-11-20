@@ -11,7 +11,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { walk, InternalWalkMode } from '../astUtils/visitors';
 import { isAALiteralExpression, isArrayLiteralExpression, isCommentStatement, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isVariableExpression } from '../astUtils/reflection';
-import type { TypedefProvider } from '../interfaces';
+import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
@@ -25,7 +25,7 @@ export abstract class Expression {
      */
     public abstract range: Range;
 
-    public abstract transpile(state: TranspileState): Array<SourceNode | string>;
+    public abstract transpile(state: TranspileState): TranspileResult;
     /**
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */

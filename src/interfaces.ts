@@ -191,4 +191,4 @@ export interface TypedefProvider {
     getTypedef(state: TranspileState): Array<SourceNode | string>;
 }
 
-export type TranspileResult = Array<SourceNode | string | TranspileResult | Array<TranspileResult>>;
+export type TranspileResult = Array<(string | SourceNode)>;
