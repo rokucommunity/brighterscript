@@ -596,9 +596,14 @@ export let DiagnosticMessages = {
         code: 1116,
         severity: DiagnosticSeverity.Error
     }),
-    expectedExceptionVarToFollowCatch: () => ({
-        message: `Expected exception variable to follow 'catch' keyword`,
+    missingExceptionVarToFollowCatch: () => ({
+        message: `Missing exception variable after 'catch' keyword`,
         code: 1117,
+        severity: DiagnosticSeverity.Error
+    }),
+    missingExceptionExpressionAfterThrowKeyword: () => ({
+        message: `Missing exception expression after 'throw' keyword`,
+        code: 1118,
         severity: DiagnosticSeverity.Error
     })
 };

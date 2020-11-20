@@ -1807,3 +1807,42 @@ export class TryCatchStatement extends Statement {
         }
     }
 }
+
+export class ThrowStatement extends Statement {
+    constructor(
+        public throwToken: Token,
+        public expression?: Expression
+    ) {
+        super();
+        this.range = util.createRangeFromPositions(
+            this.throwToken.range.start,
+            (this.expression ?? this.throwToken).range.end
+        );
+    }
+    public range: Range;
+
+    public transpile(state: TranspileState) {
+        const result = [
+            state.sourceNode(this.throwToken, 'throw'),
+            ' '
+        ];
+
+        //if we have an expression, transpile it
+        if (this.expression) {
+            result.push(
+                ...this.expression.transpile(state)
+            );
+
+            //no expression found. Rather than emit syntax errors, provide a generic error message
+        } else {
+            result.push('"An error has occurred"');
+        }
+        return result;
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.expression && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
+    }
+}

@@ -48,7 +48,8 @@ import {
     ClassFieldStatement,
     ClassMethodStatement,
     ClassStatement,
-    TryCatchStatement
+    TryCatchStatement,
+    ThrowStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -862,6 +863,10 @@ export class Parser {
             return this.tryCatchStatement();
         }
 
+        if (this.check(TokenKind.Throw)) {
+            return this.throwStatement();
+        }
+
         if (this.check(TokenKind.Print)) {
             return this.printStatement(...additionalterminators);
         }
@@ -1371,7 +1376,7 @@ export class Parser {
         }
         statement.tryBranch = this.block(TokenKind.Catch);
         statement.catchToken = this.advance();
-        const exceptionVarToken = this.tryConsume(DiagnosticMessages.expectedExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
+        const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
         if (exceptionVarToken) {
             // force it into an identifier so the AST makes some sense
             exceptionVarToken.kind = TokenKind.Identifier;
@@ -1396,6 +1401,20 @@ export class Parser {
 
         statement.endTryToken = this.advance();
         return statement;
+    }
+
+    private throwStatement() {
+        const throwToken = this.advance();
+        let expression: Expression;
+        if (this.checkAny(TokenKind.Newline, TokenKind.Colon)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.missingExceptionExpressionAfterThrowKeyword(),
+                range: throwToken.range
+            });
+        } else {
+            expression = this.expression();
+        }
+        return new ThrowStatement(throwToken, expression);
     }
 
     private ifStatement(): IfStatement {
