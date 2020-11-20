@@ -1,5 +1,4 @@
 import { expect } from 'chai';
-import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Parser } from '../../Parser';
 import { TryCatchStatement } from '../../Statement';
 
