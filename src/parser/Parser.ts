@@ -1378,7 +1378,7 @@ export class Parser {
         if (exceptionVarToken) {
             // force it into an identifier so the AST makes some sense
             exceptionVarToken.kind = TokenKind.Identifier;
-            statement.exceptionVariable = new VariableExpression(exceptionVarToken as Identifier, null);
+            statement.exceptionVariable = exceptionVarToken as Identifier;
         }
 
         //consume one or more newlines

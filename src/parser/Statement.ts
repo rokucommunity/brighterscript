@@ -1770,7 +1770,7 @@ export class TryCatchStatement extends Statement {
         public tryToken: Token,
         public tryBranch?: Block,
         public catchToken?: Token,
-        public exceptionVariable?: VariableExpression,
+        public exceptionVariable?: Identifier,
         public catchBranch?: Block,
         public endTryToken?: Token
     ) {
@@ -1792,8 +1792,8 @@ export class TryCatchStatement extends Statement {
             state.indent(),
             state.sourceNode(this.catchToken, 'catch'),
             ' ',
-            ...this.exceptionVariable.transpile(state),
-            this.catchBranch.transpile(state),
+            state.sourceNode(this.exceptionVariable, this.exceptionVariable.text),
+            ...this.catchBranch.transpile(state),
             state.newline(),
             state.indent(),
             state.sourceNode(this.endTryToken, 'end try')
@@ -1804,9 +1804,6 @@ export class TryCatchStatement extends Statement {
         if (this.tryBranch && options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'tryBranch', visitor, options);
             walk(this, 'catchBranch', visitor, options);
-        }
-        if (this.exceptionVariable && options.walkMode & InternalWalkMode.walkExpressions) {
-            walk(this, 'exceptionVariable', visitor, options);
         }
     }
 }
