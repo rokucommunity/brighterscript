@@ -259,9 +259,5 @@ This project also contributes a class that aligns with Microsoft's [Language Ser
 ## Changelog
 [Click here](CHANGELOG.md) to view the changelog.
 
-## Sponsors
-![image](https://user-images.githubusercontent.com/2544493/96571912-377af280-129a-11eb-8295-49eb12e54aeb.png)
-
-
 ## Special Thanks
 Special thanks to the [brs](https://github.com/sjbarag/brs) project for its fantastic work on its blazing fast BrightScript parser which was used as the foundation for the BrighterScript parser.
