@@ -205,8 +205,8 @@ export let DiagnosticMessages = {
         code: 1038,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineOrColonAfterCallableSignature: (callableType: string) => ({
-        message: `Expected newline or ':' after ${callableType} signature`,
+    expectedNewlineOrColon: () => ({
+        message: `Expected newline or ':' at the end of a statement`,
         code: 1039,
         severity: DiagnosticSeverity.Error
     }),
@@ -248,13 +248,13 @@ export let DiagnosticMessages = {
             severity: DiagnosticSeverity.Error
         };
     },
-    expectedNewlineOrColonAfterAssignment: () => ({
-        message: `Expected newline or ':' after assignment`,
+    expectedInlineIfStatement: () => ({
+        message: `If/else statement within an inline if should be also inline`,
         code: 1047,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineAfterWhileCondition: () => ({
-        message: `Expected newline after while condition`,
+    expectedFinalNewline: () => ({
+        message: `Expected newline at the end of an inline if statement`,
         code: 1048,
         severity: DiagnosticSeverity.Error
     }),
@@ -263,8 +263,8 @@ export let DiagnosticMessages = {
         code: 1049,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineAfterExitWhile: () => ({
-        message: `Expected newline after 'exit while'`,
+    __unused1050: () => ({
+        message: ``,
         code: 1050,
         severity: DiagnosticSeverity.Error
     }),
@@ -283,8 +283,8 @@ export let DiagnosticMessages = {
         code: 1053,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineAfterExitFor: () => ({
-        message: `Expected newline after 'exit for'`,
+    unexpectedColonBeforeIfStatement: () => ({
+        message: `Colon before 'if' statement is not allowed`,
         code: 1054,
         severity: DiagnosticSeverity.Error
     }),
@@ -308,8 +308,8 @@ export let DiagnosticMessages = {
         code: 1058,
         severity: DiagnosticSeverity.Error
     }),
-    expectedColonToPreceedEndIf: () => ({
-        message: `Expected ':' to preceed 'end if'`,
+    __unused1059: () => ({
+        message: ``,
         code: 1059,
         severity: DiagnosticSeverity.Error
     }),
@@ -338,8 +338,8 @@ export let DiagnosticMessages = {
         code: 1064,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineOrColonAfterExpressionStatement: () => ({
-        message: `Expected newline or ':' after expression statement`,
+    __unused1065: () => ({
+        message: ``,
         code: 1065,
         severity: DiagnosticSeverity.Error
     }),
@@ -348,18 +348,18 @@ export let DiagnosticMessages = {
         code: 1066,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineOrColonAfterIndexedSetStatement: () => ({
-        message: `Expected newline or ':' after indexed set statement`,
+    __unused1067: () => ({
+        message: ``,
         code: 1067,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineOrColonAfterDottedSetStatement: () => ({
-        message: `Expected newline or ':' after dotted set statement`,
+    __unused1068: () => ({
+        message: ``,
         code: 1068,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineOrColonAfterPrintedValues: () => ({
-        message: `Expected newline or ':' after printed values`,
+    __unused1069: () => ({
+        message: ``,
         code: 1069,
         severity: DiagnosticSeverity.Error
     }),
@@ -531,8 +531,8 @@ export let DiagnosticMessages = {
         code: 1102,
         severity: DiagnosticSeverity.Error
     }),
-    autoImportComponentScriptCollision: () => ({
-        message: `Component script auto-import found '.bs' and '.brs' files with the same name and will import only the '.bs' file`,
+    __unused1103: () => ({
+        message: ``,
         code: 1103,
         severity: DiagnosticSeverity.Warning
     }),
@@ -561,8 +561,8 @@ export let DiagnosticMessages = {
         code: 1108,
         severity: DiagnosticSeverity.Error
     }),
-    callfuncExpressionMustHaveAtLeastOneArgument: () => ({
-        message: `A callfunc expression must have at least one argument`,
+    __unused1109: () => ({
+        message: ``,
         code: 1109,
         severity: DiagnosticSeverity.Error
     }),

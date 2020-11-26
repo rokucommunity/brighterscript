@@ -103,7 +103,6 @@ describe('parser', () => {
             TokenKind.Dim,
             TokenKind.Then,
             TokenKind.Else,
-            TokenKind.ElseIf,
             TokenKind.End,
             TokenKind.EndFunction,
             TokenKind.EndFor,

@@ -114,11 +114,11 @@ describe('astUtils visitors', () => {
                 'IfStatement:1',          // if a = 1
                 'Block:2',                // then block
                 'PrintStatement:3',       // print 3
-                'ElseIfStatement:2',      // elseif statement
+                'IfStatement:2',          // elseif statement
                 'Block:3',                // elseif block
                 'PrintStatement:4',       // print 4
-                'Block:2',                // else block
-                'PrintStatement:3',       // print 5
+                'Block:3',                // else block
+                'PrintStatement:4',       // print 5
                 'WhileStatement:1',       // while a <> invalid
                 'Block:2',                // while block
                 'PrintStatement:3',       // print 6
@@ -151,7 +151,7 @@ describe('astUtils visitors', () => {
                 'IfStatement',          // if a = 1
                 'Block',                // then block
                 'PrintStatement',       // print 3
-                'ElseIfStatement',      // elseif statement
+                'IfStatement',          // elseif statement
                 'Block',                // elseif block
                 'PrintStatement',       // print 4
                 'Block',                // else block
@@ -196,7 +196,7 @@ describe('astUtils visitors', () => {
                 'IfStatement',          // if a = 1
                 'Block',                // then block
                 'PrintStatement',       // print 3
-                'ElseIfStatement',      // elseif statement
+                'IfStatement',          // elseif statement
                 'Block',                // elseif block
                 'PrintStatement'        // print 4
             ]);
@@ -303,10 +303,10 @@ describe('astUtils visitors', () => {
                 'IfStatement:1:BinaryExpression',                 // if <j > 0>
                 'IfStatement:1:VariableExpression',               // if <j> > 0
                 'IfStatement:1:LiteralExpression',                // if j > <0>
-                'ElseIfStatement:2:BinaryExpression',             // else if <j < -10>
-                'ElseIfStatement:2:VariableExpression',           // else if <j> < -10
-                'ElseIfStatement:2:UnaryExpression',              // else if j < <-10>
-                'ElseIfStatement:2:LiteralExpression',            // else if j < -<10>
+                'IfStatement:2:BinaryExpression',                 // else if <j < -10>
+                'IfStatement:2:VariableExpression',               // else if <j> < -10
+                'IfStatement:2:UnaryExpression',                  // else if j < <-10>
+                'IfStatement:2:LiteralExpression',                // else if j < -<10>
                 'ReturnStatement:1:LiteralExpression'             // return <invalid>
             ]);
         });
@@ -376,7 +376,7 @@ describe('astUtils visitors', () => {
                 'PrintStatement',
                 'LiteralExpression',
                 //else if
-                'ElseIfStatement',
+                'IfStatement',
                 'LiteralExpression',
                 'Block',
                 'PrintStatement',
@@ -751,7 +751,7 @@ describe('astUtils visitors', () => {
                 'Block',
                 'ReturnStatement',
                 //else if
-                'ElseIfStatement',
+                'IfStatement',
                 'BinaryExpression',
                 'VariableExpression',
                 'LiteralExpression',

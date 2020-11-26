@@ -11,7 +11,7 @@ import type { TranspileState } from './TranspileState';
 import { ParseMode, Parser } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement, isInvalidType, isLiteralExpression, isVoidType } from '../astUtils/reflection';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement, isIfStatement, isInvalidType, isLiteralExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createToken } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
@@ -388,69 +388,6 @@ export class FunctionStatement extends Statement implements TypedefProvider {
     }
 }
 
-export class ElseIfStatement extends Statement {
-    constructor(
-        readonly tokens: {
-            elseIfToken: Token;
-            thenToken?: Token;
-        },
-        readonly condition: Expression,
-        readonly thenBranch: Block
-    ) {
-        super();
-        this.range = util.createRangeFromPositions(
-            this.tokens.elseIfToken.range.start,
-            (this.thenBranch ?? this.tokens.thenToken ?? this.condition).range.end
-        );
-    }
-    public readonly range: Range;
-
-    transpile(state: TranspileState) {
-        const { elseIfToken, thenToken } = this.tokens;
-        const { condition, thenBranch } = this;
-        const results = [];
-
-        results.push(
-            state.indent(),
-            new SourceNode(elseIfToken.range.start.line + 1, elseIfToken.range.start.character, state.pathAbsolute, 'else if'),
-            ' '
-        );
-
-        //condition
-        results.push(...condition.transpile(state));
-        //then
-        results.push(' ');
-        if (thenToken) {
-            results.push(
-                new SourceNode(thenToken.range.start.line + 1, thenToken.range.start.character, state.pathAbsolute, 'then')
-            );
-        } else {
-            results.push('then');
-        }
-
-        //then body
-        state.lineage.unshift(thenBranch);
-        let body = thenBranch.transpile(state);
-        state.lineage.shift();
-
-        if (body.length > 0) {
-            results.push(...body);
-        }
-        results.push('\n');
-
-        return results;
-    }
-
-    walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkMode & InternalWalkMode.walkExpressions) {
-            walk(this, 'condition', visitor, options);
-        }
-        if (options.walkMode & InternalWalkMode.walkStatements) {
-            walk(this, 'thenBranch', visitor, options);
-        }
-    }
-}
-
 export class IfStatement extends Statement {
     constructor(
         readonly tokens: {
@@ -461,13 +398,13 @@ export class IfStatement extends Statement {
         },
         readonly condition: Expression,
         readonly thenBranch: Block,
-        readonly elseIfs: ElseIfStatement[],
-        readonly elseBranch?: Block
+        readonly elseBranch?: IfStatement | Block,
+        readonly isInline?: boolean
     ) {
         super();
         this.range = util.createRangeFromPositions(
             this.tokens.if.range.start,
-            (this.tokens.endIf ?? this.elseBranch ?? this.elseIfs?.[this.elseIfs?.length - 1]?.thenBranch ?? this.thenBranch).range.end
+            (this.tokens.endIf ?? this.elseBranch ?? this.thenBranch).range.end
         );
     }
     public readonly range: Range;
@@ -489,6 +426,7 @@ export class IfStatement extends Statement {
             results.push('then');
         }
         state.lineage.unshift(this);
+
         //if statement body
         let thenNodes = this.thenBranch.transpile(state);
         state.lineage.shift();
@@ -497,12 +435,6 @@ export class IfStatement extends Statement {
         }
         results.push('\n');
 
-        //else if blocks
-        for (let elseif of this.elseIfs) {
-            let elseifNodes = elseif.transpile(state);
-            results.push(elseifNodes);
-        }
-
         //else branch
         if (this.tokens.else) {
             //else
@@ -510,17 +442,38 @@ export class IfStatement extends Statement {
                 state.indent(),
                 new SourceNode(this.tokens.else.range.start.line + 1, this.tokens.else.range.start.character, state.pathAbsolute, 'else')
             );
-
-            //then body
-            state.lineage.unshift(this.elseBranch);
-            let body = this.elseBranch.transpile(state);
-            state.lineage.shift();
-
-            if (body.length > 0) {
-                results.push(...body);
-            }
-            results.push('\n');
         }
+
+        if (this.elseBranch) {
+            if (isIfStatement(this.elseBranch)) {
+                //chained elseif
+                state.lineage.unshift(this.elseBranch);
+                let body = this.elseBranch.transpile(state);
+                state.lineage.shift();
+
+                if (body.length > 0) {
+                    results.push(' ');
+                    results.push(...body);
+
+                    // stop here because chained if will transpile the rest
+                    return results;
+                } else {
+                    results.push('\n');
+                }
+
+            } else {
+                //else body
+                state.lineage.unshift(this.elseBranch);
+                let body = this.elseBranch.transpile(state);
+                state.lineage.shift();
+
+                if (body.length > 0) {
+                    results.push(...body);
+                }
+                results.push('\n');
+            }
+        }
+
         //end if
         results.push(state.indent());
         if (this.tokens.endIf) {
@@ -530,7 +483,6 @@ export class IfStatement extends Statement {
         } else {
             results.push('end if');
         }
-
         return results;
     }
 
@@ -541,14 +493,8 @@ export class IfStatement extends Statement {
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walk(this, 'thenBranch', visitor, options);
         }
-
-        if (options.walkMode & InternalWalkMode.walkStatements) {
-            for (let i = 0; i < this.elseIfs.length; i++) {
-                walk(this.elseIfs, i, visitor, options, this);
-            }
-            if (this.elseBranch) {
-                walk(this, 'elseBranch', visitor, options);
-            }
+        if (this.elseBranch && options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'elseBranch', visitor, options);
         }
     }
 }
@@ -563,7 +509,6 @@ export class IncrementStatement extends Statement {
     }
 
     public readonly range: Range;
-
 
     transpile(state: TranspileState): Array<SourceNode | string> {
         return [
