@@ -795,7 +795,7 @@ export class Parser {
             return this.ifStatement();
         }
 
-        if (this.check(TokenKind.Try)) {
+        if (this.check(TokenKind.Try) && this.checkAnyNext(TokenKind.Newline, TokenKind.Colon)) {
             return this.tryCatchStatement();
         }
 
@@ -1248,14 +1248,27 @@ export class Parser {
         const statement = new TryCatchStatement(
             tryToken
         );
-        //consume one or more newlines
-        while (this.match(TokenKind.Newline)) { }
 
-        //consume exactly 1 colon token if exists
-        this.match(TokenKind.Colon);
+        //ensure statement separator
+        this.consumeStatementSeparators();
 
-        statement.tryBranch = this.block(TokenKind.Catch);
-        statement.catchToken = this.advance();
+        statement.tryBranch = this.block(TokenKind.Catch, TokenKind.EndTry);
+
+        const peek = this.peek();
+        if (peek.kind !== TokenKind.Catch) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedCatchBlockInTryCatch(),
+                range: this.peek().range
+            });
+            //gracefully handle end-try
+            if (peek.kind === TokenKind.EndTry) {
+                statement.endTryToken = this.advance();
+            }
+            return statement;
+        } else {
+            statement.catchToken = this.advance();
+        }
+
         const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
         if (exceptionVarToken) {
             // force it into an identifier so the AST makes some sense
@@ -1263,18 +1276,19 @@ export class Parser {
             statement.exceptionVariable = exceptionVarToken as Identifier;
         }
 
-        //consume one or more newlines
-        while (this.match(TokenKind.Newline)) { }
-
-        //consume exactly 1 colon token if exists
-        this.match(TokenKind.Colon);
+        //ensure statement sepatator
+        this.consumeStatementSeparators();
 
         statement.catchBranch = this.block(TokenKind.EndTry);
 
-        //consume exactly 1 colon token if exists
-        this.match(TokenKind.Colon);
-
-        statement.endTryToken = this.advance();
+        if (this.peek().kind !== TokenKind.EndTry) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedEndTryToTerminateTryCatch(),
+                range: this.peek().range
+            });
+        } else {
+            statement.endTryToken = this.advance();
+        }
         return statement;
     }
 
@@ -1451,9 +1465,6 @@ export class Parser {
     }
 
     private tryParseBranch(ifToken: Token) {
-        //consume newlines/colons
-        while (this.matchAny(TokenKind.Newline, TokenKind.Colon)) {}
-
         //keep track of the current error count, because if the then branch fails,
         //we will trash them in favor of a single error on if
         let diagnosticsLengthBeforeBlock = this.diagnostics.length;
@@ -1475,17 +1486,6 @@ export class Parser {
             });
             throw this.lastDiagnosticAsError();
         }
-
-        //did we reach a bad terminator? we should restore the statement separator to recover
-        let prev = this.previous().kind;
-        let peek = this.peek().kind;
-        if (
-            (peek === TokenKind.EndSub || peek === TokenKind.EndFunction) &&
-            (prev === TokenKind.Newline || prev === TokenKind.Colon)
-        ) {
-            this.current--;
-        }
-
         return branch;
     }
 
@@ -1771,6 +1771,17 @@ export class Parser {
         if (this.isAtEnd()) {
             return undefined;
             // TODO: Figure out how to handle unterminated blocks well
+        } else if (terminators.length > 0) {
+            //did we hit end-sub / end-function while looking for some other terminator?
+            //if so, we need to restore the statement separator
+            let prev = this.previous().kind;
+            let peek = this.peek().kind;
+            if (
+                (peek === TokenKind.EndSub || peek === TokenKind.EndFunction) &&
+                (prev === TokenKind.Newline || prev === TokenKind.Colon)
+            ) {
+                this.current--;
+            }
         }
 
         return new Block(statements, startingToken.range);

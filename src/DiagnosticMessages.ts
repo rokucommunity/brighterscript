@@ -263,8 +263,8 @@ export let DiagnosticMessages = {
         code: 1049,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1050: () => ({
-        message: ``,
+    expectedCatchBlockInTryCatch: () => ({
+        message: `Expected 'catch' block in 'try' statement`,
         code: 1050,
         severity: DiagnosticSeverity.Error
     }),
@@ -308,8 +308,8 @@ export let DiagnosticMessages = {
         code: 1058,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1059: () => ({
-        message: ``,
+    expectedEndTryToTerminateTryCatch: () => ({
+        message: `Expected 'end try' to terminate 'try-catch' statement`,
         code: 1059,
         severity: DiagnosticSeverity.Error
     }),

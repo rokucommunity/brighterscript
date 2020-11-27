@@ -540,7 +540,6 @@ export const DisallowedFunctionIdentifiers = [
     TokenKind.Dim,
     TokenKind.Each,
     TokenKind.Else,
-    TokenKind.ElseIf,
     TokenKind.End,
     TokenKind.EndFunction,
     TokenKind.EndIf,

@@ -82,24 +82,24 @@ describe('parser try/catch', () => {
             : print a.b.c : catch e : print "error" : end try
         `);
 
-        // expectNoParseErrors(`
-        //     try : print a.b.c
-        //     : catch e : print "error" : end try
-        // `);
+        expectNoParseErrors(`
+            try : print a.b.c
+            : catch e : print "error" : end try
+        `);
 
-        // expectNoParseErrors(`
-        //     try : print a.b.c
-        //     : catch e
-        //     : print "error" : end try
-        // `);
+        expectNoParseErrors(`
+            try : print a.b.c
+            : catch e
+            : print "error" : end try
+        `);
 
-        // expectNoParseErrors(`
-        //     try
-        //     : print a.b.c
-        //     : catch e
-        //     : print "error"
-        //     : end try
-        // `);
+        expectNoParseErrors(`
+            try
+            : print a.b.c
+            : catch e
+            : print "error"
+            : end try
+        `);
     });
 
     it('recovers gracefully with syntax errors', () => {
@@ -113,5 +113,40 @@ describe('parser try/catch', () => {
             end sub
         `);
         expect(parser.diagnostics[0]?.message).not.to.exist;
+    });
+
+    it('recovers from missing end-try when reaching function boundary', () => {
+        const parser = Parser.parse(`
+            sub new()
+                try
+                    print "hello"
+                catch e
+                    print "error"
+            end sub
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(1);
+    });
+
+    it('recovers from missing catch', () => {
+        const parser = Parser.parse(`
+            sub new()
+                try
+                    print "hello"
+                    print "error"
+                end try
+            end sub
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(1);
+    });
+
+    it('recovers from missing catch and end-try when reaching function boundary', () => {
+        const parser = Parser.parse(`
+            sub new()
+                try
+                    print "hello"
+                    print "error"
+            end sub
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(1);
     });
 });
