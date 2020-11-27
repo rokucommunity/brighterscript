@@ -841,7 +841,14 @@ export class Parser {
 
         //does this line look like a label? (i.e.  `someIdentifier:` )
         if (this.check(TokenKind.Identifier) && this.checkNext(TokenKind.Colon) && this.checkPrevious(TokenKind.Newline)) {
-            return this.labelStatement();
+            try {
+                return this.labelStatement();
+            } catch (err) {
+                if (!(err instanceof CancelStatementError)) {
+                    throw err;
+                }
+                //not a label, try something else
+            }
         }
 
         // BrightScript is like python, in that variables can be declared without a `var`,
@@ -1681,12 +1688,11 @@ export class Parser {
             colon: this.advance()
         };
 
-        //label must be alone on its line
+        //label must be alone on its line, this is probably not a label
         if (!this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.labelsMustBeDeclaredOnTheirOwnLine(),
-                range: this.peek().range
-            });
+            //rewind and cancel
+            this.current -= 2;
+            throw new CancelStatementError();
         }
 
         return new LabelStatement(tokens);
@@ -2472,4 +2478,10 @@ export interface References {
     namespaceStatements: NamespaceStatement[];
     newExpressions: NewExpression[];
     propertyHints: Record<string, string>;
+}
+
+class CancelStatementError extends Error {
+    constructor() {
+        super('CancelStatement');
+    }
 }

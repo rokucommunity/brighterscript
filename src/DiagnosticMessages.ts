@@ -363,8 +363,8 @@ export let DiagnosticMessages = {
         code: 1069,
         severity: DiagnosticSeverity.Error
     }),
-    labelsMustBeDeclaredOnTheirOwnLine: () => ({
-        message: `Labels must be declared on their own line`,
+    __unused1070: () => ({
+        message: ``,
         code: 1070,
         severity: DiagnosticSeverity.Error
     }),
