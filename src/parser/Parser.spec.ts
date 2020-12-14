@@ -264,7 +264,7 @@ describe('parser', () => {
         });
 
         it('supports single-line if statements', () => {
-            expect(parse(`If true Then print "error"\nStop`).diagnostics[0]?.message).to.not.exist;
+            expect(parse(`If true Then print "error" : Stop`).diagnostics[0]?.message).to.not.exist;
         });
 
         it('works with excess newlines', () => {

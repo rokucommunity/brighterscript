@@ -795,7 +795,8 @@ export class Parser {
             return this.ifStatement();
         }
 
-        if (this.check(TokenKind.Try) && this.checkAnyNext(TokenKind.Newline, TokenKind.Colon)) {
+        //`try` must be followed by a block, otherwise it could be a local variable
+        if (this.check(TokenKind.Try) && this.checkAnyNext(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
             return this.tryCatchStatement();
         }
 
@@ -1349,7 +1350,7 @@ export class Parser {
         if (isInlineIfThen) {
             /*** PARSE INLINE IF STATEMENT ***/
 
-            thenBranch = this.inlineBranch(TokenKind.Else, TokenKind.EndIf);
+            thenBranch = this.inlineConditionalBranch(TokenKind.Else, TokenKind.EndIf);
 
             if (!thenBranch) {
                 this.diagnostics.push({
@@ -1385,7 +1386,7 @@ export class Parser {
                     });
                     throw this.lastDiagnosticAsError();
                 } else {
-                    elseBranch = this.inlineBranch(TokenKind.Else, TokenKind.EndIf);
+                    elseBranch = this.inlineConditionalBranch(TokenKind.Else, TokenKind.EndIf);
 
                     if (elseBranch) {
                         this.ensureInline(elseBranch.statements);
@@ -1422,7 +1423,7 @@ export class Parser {
         } else {
             /*** PARSE MULTI-LINE IF STATEMENT ***/
 
-            thenBranch = this.tryParseBranch(ifToken);
+            thenBranch = this.blockConditionalBranch(ifToken);
 
             //ensure newline/colon before next keyword
             this.ensureNewLineOrColon();
@@ -1436,7 +1437,7 @@ export class Parser {
                     elseBranch = this.ifStatement();
 
                 } else {
-                    elseBranch = this.tryParseBranch(ifToken);
+                    elseBranch = this.blockConditionalBranch(ifToken);
 
                     //ensure newline/colon before next keyword
                     this.ensureNewLineOrColon();
@@ -1471,7 +1472,8 @@ export class Parser {
         );
     }
 
-    private tryParseBranch(ifToken: Token) {
+    //consume a `then` or `else` branch block of an `if` statement
+    private blockConditionalBranch(ifToken: Token) {
         //keep track of the current error count, because if the then branch fails,
         //we will trash them in favor of a single error on if
         let diagnosticsLengthBeforeBlock = this.diagnostics.length;
@@ -1510,19 +1512,20 @@ export class Parser {
         return true;
     }
 
+    //ensure each statement of an inline block is single-line
     private ensureInline(statements: Statement[]) {
-        statements.forEach(stat => {
+        for (const stat of statements) {
             if (isIfStatement(stat) && !stat.isInline) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedInlineIfStatement(),
                     range: stat.range
                 });
             }
-        });
+        }
     }
 
-    //consume then branch of inline if statement
-    private inlineBranch(...additionalTerminators: BlockTerminator[]): Block | undefined {
+    //consume inline branch of an `if` statement
+    private inlineConditionalBranch(...additionalTerminators: BlockTerminator[]): Block | undefined {
         let statements = [];
         //attempt to get the next statement without using `this.declaration`
         //which seems a bit hackish to get to work properly
@@ -1542,7 +1545,7 @@ export class Parser {
         if (foundColon) {
             if (!this.checkAny(TokenKind.Newline, ...additionalTerminators)) {
                 //if not an ending keyword, add next statement
-                let extra = this.inlineBranch(...additionalTerminators);
+                let extra = this.inlineConditionalBranch(...additionalTerminators);
                 if (!extra) {
                     return undefined;
                 }
@@ -1735,6 +1738,7 @@ export class Parser {
 
     /**
      * Parses a block, looking for a specific terminating TokenKind to denote completion.
+     * Always looks for `end sub`/`end function` to handle unterminated blocks.
      * @param terminators the token(s) that signifies the end of this block; all other terminators are
      *                    ignored.
      */

@@ -95,7 +95,6 @@ export enum TokenKind {
     Each = 'Each',
     Else = 'Else',
     Then = 'Then',
-    // ElseIf = 'ElseIf',
     End = 'End',
     EndFunction = 'EndFunction',
     EndFor = 'EndFor',
