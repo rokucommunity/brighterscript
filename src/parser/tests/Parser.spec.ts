@@ -1,6 +1,6 @@
 import type { Token } from '../../lexer';
 import { TokenKind, ReservedWords } from '../../lexer';
-import { Range } from 'vscode-languageserver';
+import { interpolatedRange } from '../../astUtils/creators';
 
 /* A set of utilities to be used while writing tests for the BRS parser. */
 
@@ -16,7 +16,7 @@ export function token(kind: TokenKind, text?: string): Token {
         kind: kind,
         text: text,
         isReserved: ReservedWords.has((text || '').toLowerCase()),
-        range: Range.create(-9, -9, -9, -9),
+        range: interpolatedRange,
         leadingWhitespace: ''
     };
 }

@@ -13,7 +13,7 @@ import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode } from '../astUtils/visitors';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCommentStatement, isExpression, isExpressionStatement, isFunctionStatement, isInvalidType, isLiteralExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
-import { createInvalidLiteral, createToken } from '../astUtils/creators';
+import { createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 
 /**
@@ -46,7 +46,7 @@ export class EmptyStatement extends Statement {
         /**
          * Create a negative range to indicate this is an interpolated location
          */
-        public range: Range = util.createRange(-1, -1, -1, -1)
+        public range: Range = interpolatedRange
     ) {
         super();
     }
