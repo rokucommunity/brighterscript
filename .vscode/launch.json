@@ -27,7 +27,9 @@
             "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
             "sourceMaps": true,
             "args": [
-                "${relativeFile}"
+                "${relativeFile}",
+                "--timeout",
+                "240"
             ],
             "skipFiles": [
                 "${workspaceFolder}/node_modules/**/*.js",
