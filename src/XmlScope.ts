@@ -76,16 +76,24 @@ export class XmlScope extends Scope {
         }
     }
 
+    public getAllFiles() {
+        return this.cache.getOrAdd('getAllFiles-xmlScope', () => {
+            const allFiles = super.getAllFiles();
+            allFiles.push(this.xmlFile);
+            return allFiles;
+        });
+    }
+
     /**
      * Get the list of files referenced by this scope that are actually loaded in the program.
      * This does not account for parent scope.
      */
-    public getFiles() {
-        return this.cache.getOrAdd('files', () => {
+    public getOwnFiles() {
+        return this.cache.getOrAdd('getOwnFiles', () => {
             let result = [
                 this.xmlFile
             ] as BscFile[];
-            let scriptPkgPaths = this.xmlFile.getAllDependencies();
+            let scriptPkgPaths = this.xmlFile.getOwnDependencies();
             for (let scriptPkgPath of scriptPkgPaths) {
                 let file = this.program.getFileByPkgPath(scriptPkgPath);
                 if (file) {

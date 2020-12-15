@@ -340,7 +340,7 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="pkg:/source/lib.brs" />
                 </component>
             `) as any;
-            expect(file.getAllDependencies().sort()).to.eql([
+            expect(file.getOwnDependencies().sort()).to.eql([
                 s`source/lib.brs`,
                 s`source/lib.d.bs`
             ]);
@@ -639,6 +639,7 @@ describe('XmlFile', () => {
                 end sub
             `);
             await program.validate();
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
             const scope = program.getComponentScope('ChildComponent');
             expect(Object.keys(scope.namespaceLookup).sort()).to.eql([
                 'lib',

@@ -80,7 +80,7 @@ describe('XmlScope', () => {
                 </component>
             `);
             await program.validate();
-            expect(program.getComponentScope('Child').getFiles()[0]).to.equal(xmlFile);
+            expect(program.getComponentScope('Child').getOwnFiles()[0]).to.equal(xmlFile);
         });
     });
 });

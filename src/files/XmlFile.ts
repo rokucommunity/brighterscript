@@ -111,8 +111,8 @@ export class XmlFile {
     public scriptTagImports = [] as FileReference[];
 
     /**
-     * List of all pkgPaths to scripts that this XmlFile depends on directly, regardless of whether they are loaded in the program or not.
-     * This does not account for parent component scripts
+     * List of all pkgPaths to scripts that this XmlFile depends, regardless of whether they are loaded in the program or not.
+     * This includes own dependencies and all parent compoent dependencies
      * coming from:
      *  - script tags
      *  - implied codebehind file
@@ -120,8 +120,22 @@ export class XmlFile {
      */
     public getAllDependencies() {
         return this.cache.getOrAdd(`allScriptImports`, () => {
-            let value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
+            const value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
+            return value;
+        });
+    }
 
+    /**
+     * List of all pkgPaths to scripts that this XmlFile depends on directly, regardless of whether they are loaded in the program or not.
+     * This does not account for parent component scripts
+     * coming from:
+     *  - script tags
+     *  - implied codebehind file
+     *  - import statements from imported scripts or their descendents
+     */
+    public getOwnDependencies() {
+        return this.cache.getOrAdd(`allScriptImports`, () => {
+            const value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
             return value;
         });
     }
@@ -137,7 +151,7 @@ export class XmlFile {
     public getAvailableScriptImports() {
         return this.cache.getOrAdd('allAvailableScriptImports', () => {
 
-            let allDependencies = this.getAllDependencies()
+            let allDependencies = this.getOwnDependencies()
                 //skip typedef files
                 .filter(x => extname(x) !== '.d.bs');
 
@@ -482,7 +496,7 @@ export class XmlFile {
             if (file === this) {
                 return true;
             }
-            let allDependencies = this.getAllDependencies();
+            let allDependencies = this.getOwnDependencies();
             for (let importPkgPath of allDependencies) {
                 if (importPkgPath.toLowerCase() === file.pkgPath.toLowerCase()) {
                     return true;

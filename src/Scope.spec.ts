@@ -106,7 +106,7 @@ describe('Scope', () => {
 
             await program.validate();
 
-            expect(sourceScope.getFiles().map(x => x.pathAbsolute).sort()).eql([
+            expect(sourceScope.getOwnFiles().map(x => x.pathAbsolute).sort()).eql([
                 s`${rootDir}/source/lib.brs`,
                 s`${rootDir}/source/main.brs`
             ]);

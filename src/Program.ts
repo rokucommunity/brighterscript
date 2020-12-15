@@ -68,7 +68,7 @@ export class Program {
         this.globalScope = new Scope('global', 'scope:global', this);
         this.scopes.global = this.globalScope;
         //hardcode the files list for global scope to only contain the global file
-        this.globalScope.getFiles = () => [globalFile];
+        this.globalScope.getAllFiles = () => [globalFile];
         this.globalScope.validate();
         //for now, disable validation of global scope because the global files have some duplicate method declarations
         this.globalScope.getDiagnostics = () => [];
@@ -718,7 +718,8 @@ export class Program {
 
         const scopes = this.getScopesForFile(file);
         for (const scope of scopes) {
-            for (const file of scope.getFiles()) {
+            const files = scope.getOwnFiles();
+            for (const file of files) {
                 if (isXmlFile(file)) {
                     continue;
                 }
