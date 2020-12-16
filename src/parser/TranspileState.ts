@@ -54,9 +54,10 @@ export class TranspileState {
 
     /**
      * Append whitespace until we reach the current blockDepth amount
-     * @param state
+     * @param blockDepthChange - if provided, change the block depth before indenting
      */
-    public indent() {
+    public indent(blockDepthChange = 0) {
+        this.blockDepth += blockDepthChange;
         let totalSpaceCount = this.blockDepth * 4;
         totalSpaceCount = totalSpaceCount > -1 ? totalSpaceCount : 0;
         return ' '.repeat(totalSpaceCount);

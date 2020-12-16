@@ -305,7 +305,9 @@ export const Keywords: Record<string, TokenKind> = {
     'pkg_location': TokenKind.PkgLocationLiteral,
     try: TokenKind.Try,
     catch: TokenKind.Catch,
-    endtry: TokenKind.EndTry
+    endtry: TokenKind.EndTry,
+    'end try': TokenKind.EndTry,
+    throw: TokenKind.Throw
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
@@ -320,7 +322,9 @@ export type BlockTerminator =
     | TokenKind.EndWhile
     | TokenKind.EndSub
     | TokenKind.EndFunction
-    | TokenKind.EndNamespace;
+    | TokenKind.EndNamespace
+    | TokenKind.Catch
+    | TokenKind.EndTry;
 
 /** The set of operators valid for use in assignment statements. */
 export const AssignmentOperators = [

@@ -1,10 +1,23 @@
-import { Range } from 'vscode-languageserver';
+import type { Range } from 'vscode-languageserver';
 import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Expression, NamespacedVariableNameExpression } from '../parser/Expression';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression } from '../parser/Expression';
 
-export const interpolatedRange = Range.create(-1, -1, -1, -1);
+/**
+ * A range that points to nowhere. Used to give non-null ranges to programmatically-added source code.
+ * (Hardcoded range to prevent circular dependency issue in `../util.ts`
+ */
+export const interpolatedRange = {
+    start: {
+        line: -1,
+        character: -1
+    },
+    end: {
+        line: -1,
+        character: -1
+    }
+} as Range;
 
 export function createToken<T extends TokenKind>(kind: T, text?: string, range = interpolatedRange): Token & { kind: T } {
     return {

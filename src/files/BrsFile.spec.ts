@@ -251,7 +251,7 @@ describe('BrsFile', () => {
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: null,
                     range: Range.create(2, 24, 2, 45),
-                    affectedRange: Range.create(3, 0, 3, Number.MAX_SAFE_INTEGER)
+                    affectedRange: util.createRange(3, 0, 3, Number.MAX_SAFE_INTEGER)
                 } as CommentFlag);
                 await program.validate();
                 //the "unterminated string" error should be filtered out
@@ -269,7 +269,7 @@ describe('BrsFile', () => {
                 expect(file.commentFlags[0]).to.deep.include({
                     codes: [1083, 1001],
                     range: Range.create(2, 24, 2, 57),
-                    affectedRange: Range.create(3, 0, 3, Number.MAX_SAFE_INTEGER)
+                    affectedRange: util.createRange(3, 0, 3, Number.MAX_SAFE_INTEGER)
                 } as CommentFlag);
                 //the "unterminated string" error should be filtered out
                 expect(program.getDiagnostics()[0]?.message).to.not.exist;
@@ -1541,6 +1541,33 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        describe('throwStatement', () => {
+            it('transpiles properly', async () => {
+                await testTranspile(`
+                    sub main()
+                        try
+                            throw "some message"
+                        catch e
+                        end try
+                    end sub
+                `);
+            });
+        });
+
+        describe('try/catch', () => {
+            it('transpiles properly', async () => {
+                await testTranspile(`
+                    sub main()
+                        try
+                            print a.b.c
+                        catch e
+                            print e
+                        end try
+                    end sub
+                `);
+            });
+        });
+
         describe('namespaces', () => {
             it('properly transpiles namespace functions for assignments', async () => {
                 await testTranspile(`
