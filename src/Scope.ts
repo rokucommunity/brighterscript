@@ -277,9 +277,6 @@ export class Scope {
         let result = [] as CallableContainer[];
         this.logDebug('getOwnCallables() files: ', () => this.getOwnFiles().map(x => x.pkgPath));
 
-        if (this.name === 'components\\child.xml') {
-            debugger;
-        }
         //get callables from own files
         this.enumerateOwnFiles((file) => {
             for (let callable of file.callables) {
