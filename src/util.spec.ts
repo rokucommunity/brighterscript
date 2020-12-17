@@ -521,6 +521,17 @@ describe('util', () => {
             expect(result).to.equal('qui');
         });
     });
+
+    describe('getExtension', () => {
+        it('handles edge cases', () => {
+            expect(util.getExtension('main.bs')).to.eql('.bs');
+            expect(util.getExtension('main.brs')).to.eql('.brs');
+            expect(util.getExtension('main.spec.bs')).to.eql('.bs');
+            expect(util.getExtension('main.d.bs')).to.eql('.d.bs');
+            expect(util.getExtension('main.xml')).to.eql('.xml');
+            expect(util.getExtension('main.component.xml')).to.eql('.xml');
+        });
+    });
 });
 
 async function expectThrowAsync(callback) {

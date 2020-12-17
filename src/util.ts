@@ -889,7 +889,7 @@ export class Util {
         return string.split(/\r?\n/g);
     }
 
-    public getTextForRange(string: string|string[], range: Range) {
+    public getTextForRange(string: string | string[], range: Range) {
         let lines: string[];
         if (Array.isArray(string)) {
             lines = string;
@@ -1033,7 +1033,22 @@ export class Util {
                         return new VoidType();
                 }
         }
+    }
 
+    /**
+     * Get the extension for the given file path. Basically the part after the final dot, except for
+     * `d.bs` which is treated as single extension
+     */
+    public getExtension(filePath: string) {
+        filePath = filePath.toLowerCase();
+        if (filePath.endsWith('.d.bs')) {
+            return '.d.bs';
+        } else {
+            const parts = filePath.split('.');
+            if (parts.length > 0) {
+                return '.' + parts[parts.length - 1];
+            }
+        }
     }
 }
 

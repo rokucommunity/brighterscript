@@ -8,6 +8,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { Diagnostic } from 'vscode-languageserver';
 import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 import { ParseMode } from '../parser/Parser';
+import { expectZeroDiagnostics } from '../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 
@@ -913,5 +914,37 @@ describe('BrsFile BrighterScript classes', () => {
         expect(program.getDiagnostics()[0]?.message).to.equal(
             DiagnosticMessages.localVarSameNameAsClass('Animal').message
         );
+    });
+
+    it('allows extending classes with more than one dot in the filename', async () => {
+        await program.addOrReplaceFile('source/testclass.bs', `
+            class Foo
+            end class
+
+            class Bar extends Foo
+                sub new()
+                    super()
+                end sub
+            end class
+        `);
+
+        await program.addOrReplaceFile('source/testclass_no_testdot.bs', `
+            class BarNoDot extends Foo
+                sub new()
+                    super()
+                end sub
+            end class
+        `);
+
+        await program.addOrReplaceFile('source/testclass.dot.bs', `
+            class BarDot extends Foo
+                sub new()
+                super()
+                end sub
+            end class
+        `);
+
+        await program.validate();
+        expectZeroDiagnostics(program);
     });
 });

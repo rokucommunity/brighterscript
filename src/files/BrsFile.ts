@@ -25,7 +25,6 @@ import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentSt
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
-import * as extname from 'path-complete-extname';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -43,7 +42,7 @@ export class BrsFile {
         this.pkgPath = s`${this.pkgPath}`;
         this.dependencyGraphKey = this.pkgPath.toLowerCase();
 
-        this.extension = extname(this.pkgPath).toLowerCase();
+        this.extension = util.getExtension(this.pkgPath);
 
         //all BrighterScript files need to be transpiled
         if (this.extension.endsWith('.bs')) {
