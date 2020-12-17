@@ -778,6 +778,12 @@ describe('lexer', () => {
             expect(f.text).to.eql('2.5e3');
         });
 
+        it.only('supports larger-than-supported-precision floats to be defined with exponents', () => {
+            let f = Lexer.scan('2.3659475627512424e-38').tokens[0];
+            expect(f.kind).to.equal(TokenKind.FloatLiteral);
+            expect(f.text).to.eql('2.3659475627512424e-38');
+        });
+
         it('allows digits before `.` to be elided', () => {
             let f = Lexer.scan('.123').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
@@ -792,6 +798,12 @@ describe('lexer', () => {
     });
 
     describe('long integer literals', () => {
+        it('respects \'&\' suffix', () => {
+            let f = Lexer.scan('1&').tokens[0];
+            expect(f.kind).to.equal(TokenKind.LongIntegerLiteral);
+            expect(f.text).to.eql('1&');
+        });
+
         it('supports hexadecimal literals', () => {
             let i = Lexer.scan('&hf00d&').tokens[0];
             expect(i.kind).to.equal(TokenKind.LongIntegerLiteral);
@@ -812,6 +824,18 @@ describe('lexer', () => {
     });
 
     describe('integer literals', () => {
+        it('respects \'%\' suffix', () => {
+            let f = Lexer.scan('1%').tokens[0];
+            expect(f.kind).to.equal(TokenKind.IntegerLiteral);
+            expect(f.text).to.eql('1%');
+        });
+
+        it.only('does not allow decimal numbers to end with %', () => {
+            let f = Lexer.scan('1.2%').tokens[0];
+            expect(f.kind).to.equal(TokenKind.FloatLiteral);
+            expect(f.text).to.eql('1.2');
+        });
+
         it('supports hexadecimal literals', () => {
             let i = Lexer.scan('&hFf').tokens[0];
             expect(i.kind).to.equal(TokenKind.IntegerLiteral);
