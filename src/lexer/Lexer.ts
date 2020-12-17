@@ -626,7 +626,7 @@ export class Lexer {
         let numberOfDigits = containsDecimal ? asString.length - 1 : asString.length;
         let designator = this.peek().toLowerCase();
 
-        if (numberOfDigits >= 10 && designator !== '&') {
+        if (numberOfDigits >= 10 && designator !== '&' && designator !== 'e') {
             // numeric literals over 10 digits with no type designator are implicitly Doubles
             this.addToken(TokenKind.DoubleLiteral);
         } else if (designator === '#') {
