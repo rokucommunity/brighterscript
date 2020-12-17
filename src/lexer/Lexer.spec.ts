@@ -778,6 +778,12 @@ describe('lexer', () => {
             expect(f.text).to.eql('2.5e3');
         });
 
+        it.only('supports larger-than-supported-precision floats to be defined with exponents', () => {
+            let f = Lexer.scan('2.3659475627512424e-38').tokens[0];
+            expect(f.kind).to.equal(TokenKind.FloatLiteral);
+            expect(f.text).to.eql('2.3659475627512424e-38');
+        });
+
         it('allows digits before `.` to be elided', () => {
             let f = Lexer.scan('.123').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
