@@ -626,16 +626,13 @@ export class Lexer {
         let numberOfDigits = containsDecimal ? asString.length - 1 : asString.length;
         let designator = this.peek().toLowerCase();
 
-        if (numberOfDigits >= 10 && designator !== '&') {
+        if (numberOfDigits >= 10 && designator !== '&' && designator !== 'e') {
             // numeric literals over 10 digits with no type designator are implicitly Doubles
             this.addToken(TokenKind.DoubleLiteral);
-            return;
         } else if (designator === '#') {
             // numeric literals ending with "#" are forced to Doubles
             this.advance();
-            asString = this.source.slice(this.start, this.current);
             this.addToken(TokenKind.DoubleLiteral);
-            return;
         } else if (designator === 'd') {
             // literals that use "D" as the exponent are also automatic Doubles
 
@@ -655,15 +652,10 @@ export class Lexer {
             // replace the exponential marker with a JavaScript-friendly "e"
             asString = this.source.slice(this.start, this.current).replace(/[dD]/, 'e');
             this.addToken(TokenKind.DoubleLiteral);
-            return;
-        }
-
-        if (designator === '!') {
+        } else if (designator === '!') {
             // numeric literals ending with "!" are forced to Floats
             this.advance();
-            asString = this.source.slice(this.start, this.current);
             this.addToken(TokenKind.FloatLiteral);
-            return;
         } else if (designator === 'e') {
             // literals that use "E" as the exponent are also automatic Floats
 
@@ -680,21 +672,18 @@ export class Lexer {
                 this.advance();
             }
 
-            asString = this.source.slice(this.start, this.current);
             this.addToken(TokenKind.FloatLiteral);
-            return;
         } else if (containsDecimal) {
             // anything with a decimal but without matching Double rules is a Float
             this.addToken(TokenKind.FloatLiteral);
-            return;
-        }
-
-        if (designator === '&') {
+        } else if (designator === '&') {
             // numeric literals ending with "&" are forced to LongIntegers
-            asString = this.source.slice(this.start, this.current);
             this.advance();
             this.addToken(TokenKind.LongIntegerLiteral);
-
+        } else if (designator === '%') {
+            //numeric literals ending with "%" are forced to Integer
+            this.advance();
+            this.addToken(TokenKind.IntegerLiteral);
         } else {
             // otherwise, it's a regular integer
             this.addToken(TokenKind.IntegerLiteral);
