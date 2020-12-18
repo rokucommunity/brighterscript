@@ -11,7 +11,8 @@ module.exports = {
         createDefaultProgram: true
     },
     plugins: [
-        '@typescript-eslint'
+        '@typescript-eslint',
+        'no-only-tests'
     ],
     extends: [
         'eslint:all',
@@ -107,6 +108,7 @@ module.exports = {
         'max-lines-per-function': 'off',
         'max-params': 'off',
         'max-statements': 'off',
+        'no-only-tests/no-only-tests': 'error',
         'multiline-comment-style': 'off',
         'multiline-ternary': 'off',
         'new-cap': 'off',
