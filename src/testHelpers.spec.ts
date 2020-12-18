@@ -1,4 +1,5 @@
 import type { BsDiagnostic } from './interfaces';
+import * as assert from 'assert';
 
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
@@ -55,6 +56,6 @@ export function expectZeroDiagnostics(obj: { getDiagnostics(): BsDiagnostic[] })
         for (const diagnostic of diagnostics) {
             message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file.pathAbsolute}#${diagnostic.range.start.line}:${diagnostic.range.start.character}-${diagnostic.range.end.line}:${diagnostic.range.end.character}`;
         }
-        throw new Error(message);
+        assert.fail(message);
     }
 }
