@@ -806,7 +806,7 @@ export class ForEachStatement extends Statement {
             in: Token;
             endFor: Token;
         },
-        readonly item: Token,
+        readonly item: VariableExpression,
         readonly target: Expression,
         readonly body: Block
     ) {
@@ -825,7 +825,7 @@ export class ForEachStatement extends Statement {
         );
         //item
         result.push(
-            new SourceNode(this.tokens.forEach.range.start.line + 1, this.tokens.forEach.range.start.character, state.pathAbsolute, this.item.text),
+            ...this.item.transpile(state),
             ' '
         );
         //in
@@ -852,6 +852,7 @@ export class ForEachStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'item', visitor, options);
             walk(this, 'target', visitor, options);
         }
         if (options.walkMode & InternalWalkMode.walkStatements) {

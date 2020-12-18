@@ -990,7 +990,7 @@ export class Parser {
                 in: maybeIn,
                 endFor: endFor
             },
-            name,
+            new VariableExpression(name as Identifier, this.currentNamespaceName),
             target,
             body
         );
