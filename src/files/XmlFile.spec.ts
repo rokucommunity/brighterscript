@@ -143,11 +143,11 @@ describe('XmlFile', () => {
             `);
             expect(file.diagnostics).to.be.lengthOf(2);
             expect(file.diagnostics[0]).to.deep.include({
-                ...DiagnosticMessages.xmlUnknownTag('unexpected'),
+                ...DiagnosticMessages.xmlUnexpectedTag('unexpected'),
                 range: Range.create(3, 9, 3, 19)
             });
             expect(file.diagnostics[1]).to.deep.include({
-                ...DiagnosticMessages.xmlUnknownTag('unexpectedToo'),
+                ...DiagnosticMessages.xmlUnexpectedTag('unexpectedToo'),
                 range: Range.create(5, 5, 5, 18)
             });
         });
