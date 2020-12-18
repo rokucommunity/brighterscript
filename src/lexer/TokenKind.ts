@@ -95,7 +95,6 @@ export enum TokenKind {
     Each = 'Each',
     Else = 'Else',
     Then = 'Then',
-    ElseIf = 'ElseIf',
     End = 'End',
     EndFunction = 'EndFunction',
     EndFor = 'EndFor',
@@ -185,7 +184,6 @@ export const ReservedWords = new Set([
     'dim',
     'each',
     'else',
-    'elseif',
     'endsub',
     'endwhile',
     'eval',
@@ -235,7 +233,6 @@ export const Keywords: Record<string, TokenKind> = {
     end: TokenKind.End,
     then: TokenKind.Then,
     else: TokenKind.Else,
-    elseif: TokenKind.ElseIf,
     void: TokenKind.Void,
     boolean: TokenKind.Boolean,
     integer: TokenKind.Integer,
@@ -246,7 +243,6 @@ export const Keywords: Record<string, TokenKind> = {
     object: TokenKind.Object,
     interface: TokenKind.Interface,
     dynamic: TokenKind.Dynamic,
-    'else if': TokenKind.ElseIf,
     endfor: TokenKind.EndFor,
     'end for': TokenKind.EndFor,
     endfunction: TokenKind.EndFunction,
@@ -314,7 +310,6 @@ Keywords.constructor = undefined;
 
 /** Set of all keywords that end blocks. */
 export type BlockTerminator =
-    | TokenKind.ElseIf
     | TokenKind.Else
     | TokenKind.EndFor
     | TokenKind.Next
@@ -357,7 +352,6 @@ export const AllowedProperties = [
     TokenKind.Dim,
     TokenKind.Then,
     TokenKind.Else,
-    TokenKind.ElseIf,
     TokenKind.End,
     TokenKind.EndFunction,
     TokenKind.EndFor,
@@ -484,7 +478,6 @@ export const DisallowedLocalIdentifiers = [
     TokenKind.Dim,
     TokenKind.Each,
     TokenKind.Else,
-    TokenKind.ElseIf,
     TokenKind.End,
     TokenKind.EndFunction,
     TokenKind.EndIf,
@@ -546,7 +539,6 @@ export const DisallowedFunctionIdentifiers = [
     TokenKind.Dim,
     TokenKind.Each,
     TokenKind.Else,
-    TokenKind.ElseIf,
     TokenKind.End,
     TokenKind.EndFunction,
     TokenKind.EndIf,

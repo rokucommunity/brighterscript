@@ -736,13 +736,11 @@ export class Lexer {
 
         // some identifiers can be split into two words, so check the "next" word and see what we get
         if (
-            (lowerText === 'end' || lowerText === 'else' || lowerText === 'exit' || lowerText === 'for') &&
+            (lowerText === 'end' || lowerText === 'exit' || lowerText === 'for') &&
             (this.peek() === ' ' || this.peek() === '\t')
         ) {
-            let endOfFirstWord = {
-                position: this.current,
-                column: this.columnEnd
-            };
+            let savedCurrent = this.current;
+            let savedColumnEnd = this.columnEnd;
 
             // skip past any whitespace
             let whitespace = '';
@@ -756,7 +754,7 @@ export class Lexer {
             } // read the next word
 
             let twoWords = this.source.slice(this.start, this.current);
-            //replace all of the whitespace with a single space character so we can properly match keyword token types
+            // replace all of the whitespace with a single space character so we can properly match keyword token types
             twoWords = twoWords.replace(whitespace, ' ');
             let maybeTokenType = Keywords[twoWords.toLowerCase()];
             if (maybeTokenType) {
@@ -764,9 +762,25 @@ export class Lexer {
                 return;
             } else {
                 // reset if the last word and the current word didn't form a multi-word TokenKind
-                this.current = endOfFirstWord.position;
-                this.columnEnd = endOfFirstWord.column;
+                this.current = savedCurrent;
+                this.columnEnd = savedColumnEnd;
             }
+        }
+
+        // split `elseif` into `else` and `if` tokens
+        if (lowerText === 'elseif' && !this.checkPreviousToken(TokenKind.Dot)) {
+            let savedCurrent = this.current;
+            let savedColumnEnd = this.columnEnd;
+            this.current -= 2;
+            this.columnEnd -= 2;
+            this.addToken(TokenKind.Else);
+
+            this.start = savedCurrent - 2;
+            this.current = savedCurrent;
+            this.columnBegin = savedColumnEnd - 2;
+            this.columnEnd = savedColumnEnd;
+            this.addToken(TokenKind.If);
+            return;
         }
 
         // look for a type designator character ($ % ! # &). vars may have them, but functions

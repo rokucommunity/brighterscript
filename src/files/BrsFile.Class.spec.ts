@@ -33,6 +33,8 @@ describe('BrsFile BrighterScript classes', () => {
             class Animal
             end class
             class Duck
+
+
             end class
         `);
         expect(file.parser.references.classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);

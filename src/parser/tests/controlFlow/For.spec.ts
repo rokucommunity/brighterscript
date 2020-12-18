@@ -49,6 +49,18 @@ describe('parser for loops', () => {
         expect((statements[0] as ForStatement).increment).not.to.exist;
     });
 
+    it('catches unterminated for reaching function boundary', () => {
+        const parser = Parser.parse(`
+            function test()
+                for i = 1 to 10
+                    print "while"
+            end function
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(1);
+        expect(parser.statements).to.be.lengthOf(1);
+        expect(parser.references.functionStatements[0].func.body.statements).to.be.lengthOf(1);
+    });
+
     it('allows \'next\' to terminate loop', () => {
         let { statements, diagnostics } = Parser.parse([
             token(TokenKind.For, 'for'),

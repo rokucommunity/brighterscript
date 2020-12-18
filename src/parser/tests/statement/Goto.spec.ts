@@ -34,4 +34,16 @@ describe('parser goto statements', () => {
         let { diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
     });
+
+    it('ignores "labels" not alone on their line', () => {
+        let { tokens } = Lexer.scan(`
+            sub Main()
+                label1: 'some comment
+                notalabel1: print "ko"
+                print "ko": notalabel2:
+            end sub
+        `);
+        let { diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(2);
+    });
 });
