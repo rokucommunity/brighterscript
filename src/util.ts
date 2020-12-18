@@ -1044,9 +1044,9 @@ export class Util {
         if (filePath.endsWith('.d.bs')) {
             return '.d.bs';
         } else {
-            const parts = filePath.split('.');
-            if (parts.length > 0) {
-                return '.' + parts[parts.length - 1];
+            const idx = filePath.lastIndexOf('.');
+            if (idx > -1) {
+                return filePath.substring(idx);
             }
         }
     }

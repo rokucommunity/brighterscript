@@ -45,7 +45,7 @@ export class BrsFile {
         this.extension = util.getExtension(this.pkgPath);
 
         //all BrighterScript files need to be transpiled
-        if (this.extension.endsWith('.bs')) {
+        if (this.extension?.endsWith('.bs')) {
             this.needsTranspiled = true;
         }
         this.isTypedef = this.extension === '.d.bs';
