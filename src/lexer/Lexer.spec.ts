@@ -135,12 +135,15 @@ describe('lexer', () => {
         expect(tokens[5].text.charCodeAt(0), 'should contain \\r\\n').to.eql(10);
     });
 
-    it('correctly identifies the elseif token', () => {
+    it('correctly splits the elseif token', () => {
         let { tokens } = Lexer.scan('else if elseif else   if');
         expect(tokens.map(t => t.kind)).to.deep.equal([
-            TokenKind.ElseIf,
-            TokenKind.ElseIf,
-            TokenKind.ElseIf,
+            TokenKind.Else,
+            TokenKind.If,
+            TokenKind.Else,
+            TokenKind.If,
+            TokenKind.Else,
+            TokenKind.If,
             TokenKind.Eof
         ]);
     });
@@ -891,9 +894,8 @@ describe('lexer', () => {
         });
 
         it('matches multi-word keywords', () => {
-            let { tokens } = Lexer.scan('else if end if end while End Sub end Function Exit wHILe');
+            let { tokens } = Lexer.scan('end if end while End Sub end Function Exit wHILe');
             expect(tokens.map(w => w.kind)).to.deep.equal([
-                TokenKind.ElseIf,
                 TokenKind.EndIf,
                 TokenKind.EndWhile,
                 TokenKind.EndSub,
@@ -1095,21 +1097,6 @@ describe('lexer', () => {
                 TokenKind.ForEach,
                 TokenKind.ForEach,
                 TokenKind.ForEach,
-                TokenKind.Eof
-            ]);
-        });
-        it('supports various spacing between else if', () => {
-            let { tokens } = Lexer.scan(
-                'else if else  if else    if else\tif else\t if else \tif else \t if'
-            );
-            expect(tokens.map(t => t.kind)).to.deep.equal([
-                TokenKind.ElseIf,
-                TokenKind.ElseIf,
-                TokenKind.ElseIf,
-                TokenKind.ElseIf,
-                TokenKind.ElseIf,
-                TokenKind.ElseIf,
-                TokenKind.ElseIf,
                 TokenKind.Eof
             ]);
         });
