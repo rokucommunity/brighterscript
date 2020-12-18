@@ -537,6 +537,20 @@ export class BrsFile {
                 });
             }
 
+            //add every loop-defined variable
+            func.body.walk(createVisitor({
+                ForEachStatement: (stmt) => {
+                    scope.variableDeclarations.push({
+                        nameRange: stmt.item.range,
+                        lineIndex: stmt.item.range.start.line,
+                        name: stmt.item.text,
+                        type: new DynamicType()
+                    });
+                }
+            }), {
+                walkMode: WalkMode.visitStatements
+            });
+
             this.scopesByFunc.set(func, scope);
 
             //find every statement in the scope

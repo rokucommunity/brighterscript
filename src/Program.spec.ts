@@ -713,6 +713,34 @@ describe('Program', () => {
     });
 
     describe('getCompletions', () => {
+        it('includes `for each` variable', async () => {
+            await program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    items = [1, 2, 3]
+                    for each thing in items
+                        t =
+                    end for
+                    end for
+                end sub
+            `);
+            await program.validate();
+            let completions = (await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(4, 28))).map(x => x.label);
+            expect(completions).to.include('thing');
+        });
+
+        it('includes `for` variable', async () => {
+            await program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    for i = 0 to 10
+                        t =
+                    end for
+                end sub
+            `);
+            await program.validate();
+            let completions = (await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 28))).map(x => x.label);
+            expect(completions).to.include('i');
+        });
+
         it('should include first-level namespace names for brighterscript files', async () => {
             await program.addOrReplaceFile('source/main.bs', `
                 namespace NameA.NameB.NameC
