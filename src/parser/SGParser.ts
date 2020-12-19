@@ -3,8 +3,8 @@ import * as parser from '@xml-tools/parser';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import util from '../util';
-import { SGProlog, SGChildren, SGComponent, SGField, SGFunction, SGInterface, SGNode, SGScript } from './SGTypes';
-import type { SGAst, SGTag, SGToken, SGAttribute, SGReferences } from './SGTypes';
+import { SGAst, SGProlog, SGChildren, SGComponent, SGField, SGFunction, SGInterface, SGNode, SGScript } from './SGTypes';
+import type { SGTag, SGToken, SGAttribute, SGReferences } from './SGTypes';
 import { isSGComponent } from '../astUtils/xml';
 
 export default class SGParser {
@@ -12,7 +12,7 @@ export default class SGParser {
     /**
      * The AST of the XML document, not including the inline scripts
      */
-    public ast: SGAst = {};
+    public ast: SGAst = new SGAst();
 
     /**
      * The list of diagnostics found during the parse process
@@ -56,13 +56,11 @@ export default class SGParser {
 
         const nameAttr = component.getSGAttribute('name');
         if (nameAttr?.value) {
-            this._references.name = nameAttr.value.text;
-            this._references.nameRange = nameAttr.value.range;
+            this._references.name = nameAttr.value;
         }
         const extendsAttr = component.getSGAttribute('extends');
         if (extendsAttr?.value) {
-            this._references.extends = extendsAttr.value.text;
-            this._references.extendsRange = extendsAttr.value.range;
+            this._references.extends = extendsAttr.value;
         }
 
         component.scripts.forEach(script => {
@@ -123,11 +121,7 @@ export default class SGParser {
         }
 
         if (isSGComponent(root)) {
-            this.ast = {
-                prolog: prolog,
-                component: root,
-                root: root
-            };
+            this.ast = new SGAst(prolog, root, root);
         } else {
             if (root) {
                 //error: not a component
@@ -136,10 +130,7 @@ export default class SGParser {
                     range: root.tag.range
                 });
             }
-            this.ast = {
-                prolog: prolog,
-                root: root
-            };
+            this.ast = new SGAst(prolog, root);
         }
     }
 }

@@ -137,6 +137,8 @@ export class Program {
     public getComponent(componentName: string) {
         if (componentName) {
             return this.components[componentName.toLowerCase()];
+        } else {
+            return undefined;
         }
     }
 
@@ -145,7 +147,7 @@ export class Program {
      */
     private registerComponent(xmlFile: XmlFile, scope: XmlScope) {
         //store a reference to this component by its component name
-        this.components[(xmlFile.componentName ?? xmlFile.pkgPath).toLowerCase()] = {
+        this.components[(xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase()] = {
             file: xmlFile,
             scope: scope
         };
@@ -155,7 +157,7 @@ export class Program {
      * Remove the specified component from the components map
      */
     private unregisterComponent(xmlFile: XmlFile) {
-        delete this.components[(xmlFile.componentName ?? xmlFile.pkgPath).toLowerCase()];
+        delete this.components[(xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase()];
     }
 
     /**
@@ -541,8 +543,8 @@ export class Program {
         const componentsByName = Object.keys(this.files).reduce<Record<string, XmlFile[]>>((map, filePath) => {
             const file = this.files[filePath];
             //if this is an XmlFile, and it has a valid `componentName` property
-            if (isXmlFile(file) && file.componentName) {
-                let lowerName = file.componentName.toLowerCase();
+            if (isXmlFile(file) && file.componentName?.text) {
+                let lowerName = file.componentName.text.toLowerCase();
                 if (!map[lowerName]) {
                     map[lowerName] = [];
                 }
@@ -551,20 +553,21 @@ export class Program {
             return map;
         }, {});
 
-        for (let componentName in componentsByName) {
-            const xmlFiles = componentsByName[componentName];
+        for (let name in componentsByName) {
+            const xmlFiles = componentsByName[name];
             //add diagnostics for every duplicate component with this name
             if (xmlFiles.length > 1) {
                 for (let xmlFile of xmlFiles) {
+                    const { componentName } = xmlFile;
                     this.diagnostics.push({
-                        ...DiagnosticMessages.duplicateComponentName(xmlFile.componentName),
-                        range: xmlFile.componentNameRange,
+                        ...DiagnosticMessages.duplicateComponentName(componentName.text),
+                        range: xmlFile.componentName.range,
                         file: xmlFile,
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
                                 location: Location.create(
                                     URI.file(xmlFile.pathAbsolute).toString(),
-                                    x.componentNameRange
+                                    x.componentName.range
                                 ),
                                 message: 'Also defined here'
                             };
@@ -655,15 +658,14 @@ export class Program {
     /**
      * Goes through each file and builds a list of workspace symbols for the program. Used by LanguageServer's onWorkspaceSymbol functionality
      */
-    public async getWorkspaceSymbols() {
-        const results = await Promise.all(
-            Object.keys(this.files).map(async key => {
-                const file = this.files[key];
-                if (isBrsFile(file)) {
-                    return file.getWorkspaceSymbols();
-                }
-                return [];
-            }));
+    public getWorkspaceSymbols() {
+        const results = Object.keys(this.files).map(key => {
+            const file = this.files[key];
+            if (isBrsFile(file)) {
+                return file.getWorkspaceSymbols();
+            }
+            return [];
+        });
         const allSymbols = util.flatMap(results, c => c);
         return allSymbols;
     }
@@ -700,7 +702,7 @@ export class Program {
         return Promise.resolve(file.getHover(position));
     }
 
-    public async getSignatureHelp(callSitePathAbsolute: string, callableName: string) {
+    public getSignatureHelp(callSitePathAbsolute: string, callableName: string) {
         const results = [] as SignatureInformation[];
 
         callableName = callableName.toLowerCase();

@@ -12,9 +12,7 @@ import chalk from 'chalk';
 import { Cache } from '../Cache';
 import * as extname from 'path-complete-extname';
 import type { DependencyGraph } from '../DependencyGraph';
-import { SGComponent, SGScript } from '../parser/SGTypes';
-import type { SGAst } from '../parser/SGTypes';
-import { SGTranspileState } from '../parser/SGTranspileState';
+import type { SGAst, SGToken } from '../parser/SGTypes';
 
 export class XmlFile {
     constructor(
@@ -44,20 +42,6 @@ export class XmlFile {
      * An unsubscribe function for the dependencyGraph subscription
      */
     private unsubscribeFromDependencyGraph: () => void;
-
-    /**
-     * The range of the component's name value
-     */
-    public get componentNameRange(): Range {
-        return this.parser.references.nameRange;
-    }
-
-    /**
-     * The range of the component's parent name (if exist)
-     */
-    public get parentNameRange(): Range {
-        return this.parser.references.extendsRange;
-    }
 
     /**
      * The extension for this file
@@ -146,7 +130,7 @@ export class XmlFile {
      * The name of the component that this component extends.
      * Available after `parse()`
      */
-    public get parentComponentName(): string {
+    public get parentComponentName(): SGToken {
         return this.parser?.references.extends;
     }
 
@@ -154,8 +138,8 @@ export class XmlFile {
      * The name of the component declared in this xml file
      * Available after `parse()`
      */
-    public get componentName(): string {
-        return this.parser.references.name;
+    public get componentName(): SGToken {
+        return this.parser?.references.name;
     }
 
     /**
@@ -302,7 +286,7 @@ export class XmlFile {
      */
     public get dependencyGraphKey() {
         if (this.componentName) {
-            return `component:${this.componentName}`.toLowerCase();
+            return `component:${this.componentName.text}`.toLowerCase();
         } else {
             return this.pkgPath.toLowerCase();
         }
@@ -314,7 +298,7 @@ export class XmlFile {
      */
     public get parentComponentDependencyGraphKey() {
         if (this.parentComponentName) {
-            return `component:${this.parentComponentName}`.toLowerCase();
+            return `component:${this.parentComponentName.text}`.toLowerCase();
         } else {
             return undefined;
         }
@@ -365,7 +349,7 @@ export class XmlFile {
      */
     public get parentComponent() {
         return this.cache.getOrAdd('parent', () => {
-            return this.program.getComponent(this.parentComponentName)?.file ?? null;
+            return this.program.getComponent(this.parentComponentName?.text)?.file ?? null;
         });
     }
 
@@ -456,7 +440,7 @@ export class XmlFile {
         const extraImports = this.getMissingImportsForTranspile();
         if (this.needsTranspiled || extraImports.length > 0) {
             //emit an XML document with sourcemaps from the AST
-            return transpileAst(source, this.parser.ast, extraImports);
+            return this.parser.ast.transpile(source, extraImports);
         } else {
             //emit the XML as-is with a simple map to the original XML location
             return simpleMap(source, this.fileContents);
@@ -486,50 +470,4 @@ function simpleMap(source: string, src: string) {
     chunks.push(`<!--//# sourceMappingURL=./${path.basename(source)}.map -->`);
 
     return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
-}
-
-function transpileAst(source: string, ast: SGAst, extraImports: string[]) {
-    const { prolog, component } = ast;
-
-    //create a clone to make our changes
-    const temp = new SGComponent(component.tag, component.attributes);
-    temp.api = component.api;
-    temp.scripts = component.scripts.map(updateScript);
-    temp.children = component.children;
-
-    //insert extra imports
-    const extraScripts = extraImports
-        .map(uri => {
-            const script = new SGScript();
-            script.uri = util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'));
-            return script;
-        });
-    if (extraScripts.length) {
-        temp.scripts.push(...extraScripts);
-    }
-
-    const state = new SGTranspileState(source);
-    const chunks = [] as Array<SourceNode | string>;
-    //write XML prolog
-    if (prolog) {
-        chunks.push(prolog.transpile(state));
-    }
-    //write content
-    chunks.push(temp.transpile(state));
-
-    //sourcemap reference
-    chunks.push(`<!--//# sourceMappingURL=./${path.basename(source)}.map -->`);
-
-    return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
-}
-
-function updateScript(script: SGScript): SGScript {
-    //replace type and file extension of brighterscript references
-    if (script.type.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')) {
-        const temp = new SGScript();
-        temp.uri = script.uri?.replace(/\.bs$/, '.brs');
-        temp.cdata = script.cdata;
-        return temp;
-    }
-    return script;
 }

@@ -1,8 +1,10 @@
+import * as path from 'path';
+import util from '../util';
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import { isSGChildren, isSGField, isSGFunction, isSGInterface, isSGScript } from '../astUtils/xml';
 import type { FileReference } from '../interfaces';
-import type { SGTranspileState } from './SGTranspileState';
+import { SGTranspileState } from './SGTranspileState';
 
 export interface SGToken {
     text: string;
@@ -359,15 +361,66 @@ export class SGComponent extends SGTag {
 }
 
 export interface SGReferences {
-    name?: string;
-    nameRange?: Range;
-    extends?: string;
-    extendsRange?: Range;
+    name?: SGToken;
+    extends?: SGToken;
     scriptTagImports: Pick<FileReference, 'pkgPath' | 'text' | 'filePathRange'>[];
 }
 
-export interface SGAst {
-    prolog?: SGProlog;
-    root?: SGTag;
-    component?: SGComponent;
+export class SGAst {
+
+    constructor(
+        public prolog?: SGProlog,
+        public root?: SGTag,
+        public component?: SGComponent
+    ) {
+    }
+
+    transpile(source: string, extraImports: string[]) {
+        const { prolog, component } = this;
+        if (!component) {
+            return new SourceNode(null, null, null, '');
+        }
+
+        //create a clone to make our changes
+        const temp = new SGComponent(component.tag, component.attributes);
+        temp.api = component.api;
+        temp.scripts = component.scripts.map(this.updateScript);
+        temp.children = component.children;
+
+        //insert extra imports
+        const extraScripts = extraImports
+            .map(uri => {
+                const script = new SGScript();
+                script.uri = util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'));
+                return script;
+            });
+        if (extraScripts.length > 0) {
+            temp.scripts.push(...extraScripts);
+        }
+
+        const state = new SGTranspileState(source);
+        const chunks = [] as Array<SourceNode | string>;
+        //write XML prolog
+        if (prolog) {
+            chunks.push(prolog.transpile(state));
+        }
+        //write content
+        chunks.push(temp.transpile(state));
+
+        //sourcemap reference
+        chunks.push(`<!--//# sourceMappingURL=./${path.basename(source)}.map -->`);
+
+        return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
+    }
+
+    private updateScript(script: SGScript): SGScript {
+        //replace type and file extension of brighterscript references
+        if (script.type.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')) {
+            const temp = new SGScript();
+            temp.uri = script.uri?.replace(/\.bs$/, '.brs');
+            temp.cdata = script.cdata;
+            return temp;
+        }
+        return script;
+    }
 }

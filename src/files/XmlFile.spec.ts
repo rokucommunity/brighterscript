@@ -45,7 +45,7 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="ChildScene1.brs" /> <script type="text/brightscript" uri="ChildScene2.brs" /> <script type="text/brightscript" uri="ChildScene3.brs" />
                 </component>
             `);
-            expect(file.componentName).to.equal(expected);
+            expect(file.componentName.text).to.equal(expected);
         });
 
         it('supports importing BrighterScript files', async () => {
@@ -107,8 +107,8 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="ChildScene.brs" />
                 </component>
             `);
-            expect(file.parentComponentName).to.equal('ParentScene');
-            expect(file.componentName).to.equal('ChildScene');
+            expect(file.parentComponentName.text).to.equal('ParentScene');
+            expect(file.componentName.text).to.equal('ChildScene');
         });
 
         it('Adds error when whitespace appears before the prolog', () => {
@@ -506,7 +506,7 @@ describe('XmlFile', () => {
                     </component>
                 `
             ) as any;
-            expect(file.parentNameRange).to.eql(Range.create(1, 38, 1, 47));
+            expect(file.parentComponentName.range).to.eql(Range.create(1, 38, 1, 47));
         });
 
         it('works for multi-line', async () => {
@@ -522,7 +522,7 @@ describe('XmlFile', () => {
                     </component>
                 `
             ) as any;
-            expect(file.parentNameRange).to.eql(Range.create(2, 13, 2, 22));
+            expect(file.parentComponentName.range).to.eql(Range.create(2, 13, 2, 22));
         });
 
         it('does not throw when unable to find extends', async () => {
@@ -537,7 +537,7 @@ describe('XmlFile', () => {
                     </component>
                 `
             ) as any;
-            expect(file.parentNameRange).to.not.exist;
+            expect(file.parentComponentName).to.not.exist;
         });
 
         it('adds warning when no "extends" attribute is found', async () => {

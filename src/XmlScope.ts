@@ -24,7 +24,7 @@ export class XmlScope extends Scope {
     public getParentScope() {
         return this.cache.getOrAdd('parentScope', () => {
             let scope: Scope;
-            let parentComponentName = this.xmlFile.parentComponentName;
+            let parentComponentName = this.xmlFile.parentComponentName?.text;
             if (parentComponentName) {
                 scope = this.program.getComponentScope(parentComponentName);
             }
@@ -112,7 +112,8 @@ export class XmlScope extends Scope {
             for (let scriptImport of this.xmlFile.scriptTagImports) {
                 let ancestorScriptImport = lookup[scriptImport.pkgPath];
                 if (ancestorScriptImport) {
-                    let ancestorComponentName = (ancestorScriptImport.sourceFile as XmlFile).componentName;
+                    let ancestorComponent = ancestorScriptImport.sourceFile as XmlFile;
+                    let ancestorComponentName = ancestorComponent.componentName?.text ?? ancestorComponent.pkgPath;
                     this.diagnostics.push({
                         file: this.xmlFile,
                         range: scriptImport.filePathRange,
@@ -152,8 +153,8 @@ export class XmlScope extends Scope {
         if (
             isXmlFile(file) &&
             file.parentComponent &&
-            file.parentNameRange &&
-            util.rangeContains(file.parentNameRange, position)
+            file.parentComponentName &&
+            util.rangeContains(file.parentComponentName.range, position)
         ) {
             results.push({
                 range: util.createRange(0, 0, 0, 0),

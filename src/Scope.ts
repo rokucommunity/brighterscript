@@ -229,7 +229,7 @@ export class Scope {
     }
 
     /**
-     * Iterate over Brs files for callables/references
+     * Iterate over Brs files not shadowed by typedefs
      */
     public enumerateBrsFiles(callback: (file: BrsFile) => void) {
         const files = this.getFiles();
@@ -242,7 +242,7 @@ export class Scope {
     }
 
     /**
-     * Iterates over XML and Brs files for diagnostics/imports
+     * Iterates over XML and Brs files not shadowed by typedefs
      */
     public enumerateFiles(callback: (file: BscFile) => void) {
         const files = this.getFiles();
