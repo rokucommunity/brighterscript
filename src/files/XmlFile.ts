@@ -10,7 +10,6 @@ import util from '../util';
 import SGParser from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
-import * as extname from 'path-complete-extname';
 import type { DependencyGraph } from '../DependencyGraph';
 import type { SGAst, SGToken } from '../parser/SGTypes';
 
@@ -89,7 +88,7 @@ export class XmlFile {
 
             let allDependencies = this.getAllDependencies()
                 //skip typedef files
-                .filter(x => extname(x) !== '.d.bs');
+                .filter(x => util.getExtension(x) !== '.d.bs');
 
             let result = [] as string[];
             let filesInProgram = this.program.getFilesByPkgPaths(allDependencies);

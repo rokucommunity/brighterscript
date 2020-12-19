@@ -1,6 +1,6 @@
 {
     "name": "brighterscript",
-    "version": "0.22.1",
+    "version": "0.23.0",
     "description": "A superset of Roku's BrightScript language.",
     "scripts": {
         "preversion": "npm run build && npm run lint && npm run test",
@@ -125,7 +125,6 @@
         "moment": "^2.23.0",
         "p-settle": "^2.1.0",
         "parse-ms": "^2.1.0",
-        "path-complete-extname": "^1.0.0",
         "roku-deploy": "^3.2.3",
         "serialize-error": "^7.0.1",
         "source-map": "^0.7.3",
