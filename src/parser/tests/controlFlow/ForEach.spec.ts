@@ -5,6 +5,7 @@ import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { ForEachStatement, VariableExpression } from '../..';
 import { Range } from 'vscode-languageserver';
+import { expectZeroDiagnostics } from '../../../testHelpers.spec';
 
 describe('parser foreach loops', () => {
     it('requires a name and target', () => {
@@ -21,13 +22,13 @@ describe('parser foreach loops', () => {
             EOF
         ]);
 
-        expect(diagnostics).to.be.lengthOf(0);
+        expectZeroDiagnostics(diagnostics);
         expect(statements).to.exist;
 
         let forEach = statements[0] as any;
         expect(forEach).to.be.instanceof(ForEachStatement);
 
-        expect(forEach.item.name.text).to.eql('word');
+        expect(forEach.item.text).to.eql('word');
         expect(forEach.target).to.be.instanceof(VariableExpression);
         expect(forEach.target.name).to.deep.include(identifier('lipsum'));
     });
@@ -46,7 +47,7 @@ describe('parser foreach loops', () => {
             EOF
         ]);
 
-        expect(diagnostics).to.be.lengthOf(0);
+        expectZeroDiagnostics(diagnostics);
         expect(statements).to.exist;
         expect(statements).to.be.length.greaterThan(0);
     });
@@ -106,7 +107,7 @@ describe('parser foreach loops', () => {
             EOF
         ]);
 
-        expect(diagnostics).to.be.lengthOf(0);
+        expectZeroDiagnostics(diagnostics);
         expect(statements).to.be.lengthOf(1);
         expect(statements[0].range).deep.include(
             Range.create(0, 0, 2, 7)

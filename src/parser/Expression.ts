@@ -255,9 +255,10 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 export class FunctionParameterExpression extends Expression {
     constructor(
         public name: Identifier,
-        public typeToken?: Token,
+        public equalsToken?: Token,
         public defaultValue?: Expression,
-        public asToken?: Token
+        public asToken?: Token,
+        public typeToken?: Token
     ) {
         super();
         if (typeToken) {
@@ -788,8 +789,8 @@ export class UnaryExpression extends Expression {
 
 export class VariableExpression extends Expression {
     constructor(
-        readonly name: Identifier,
-        readonly namespaceName: NamespacedVariableNameExpression
+        public name: Identifier,
+        public namespaceName: NamespacedVariableNameExpression
     ) {
         super();
         this.range = this.name.range;

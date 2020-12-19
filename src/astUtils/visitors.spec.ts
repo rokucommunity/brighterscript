@@ -295,7 +295,6 @@ describe('astUtils visitors', () => {
                 'ExpressionStatement:1:VariableExpression',       // exec("e", <some>())
                 'ForStatement:1:LiteralExpression',               // for i = <1> to 10
                 'AssignmentStatement:2:LiteralExpression',        // for <i = 1> to 10
-                'ForEachStatement:1:VariableExpression',          // for each <n> in aa
                 'ForEachStatement:1:VariableExpression',          // for each n in <aa>
                 'WhileStatement:1:BinaryExpression',              // while <i < 10>
                 'WhileStatement:1:VariableExpression',            // while <i> < 10
@@ -459,7 +458,6 @@ describe('astUtils visitors', () => {
                 'FunctionExpression',
                 'Block',
                 'ForEachStatement',
-                'VariableExpression',
                 'ArrayLiteralExpression',
                 'LiteralExpression',
                 'LiteralExpression',

@@ -508,11 +508,23 @@ export class Parser {
      */
     private callExpressions = [];
 
+    /**
+     * A stack of VariableExpression arrays for the current FunctionExpression
+     */
+    private functionLocalVarLists = [] as Array<Array<Identifier>>;
+    private get currentFunctionLocalVars() {
+        return this.functionLocalVarLists[this.functionLocalVarLists.length - 1];
+    }
+
     private functionDeclaration(isAnonymous: true, checkIdentifier?: boolean): FunctionExpression;
     private functionDeclaration(isAnonymous: false, checkIdentifier?: boolean): FunctionStatement;
     private functionDeclaration(isAnonymous: boolean, checkIdentifier = true) {
         let previousCallExpressions = this.callExpressions;
         this.callExpressions = [];
+
+        //start a new array of function variables for this FunctionExpression
+        this.functionLocalVarLists.push([]);
+
         try {
             //track depth to help certain statements need to know if they are contained within a function body
             this.namespaceAndFunctionDepth++;
@@ -640,6 +652,9 @@ export class Parser {
             let previousFunctionExpression = this.currentFunctionExpression;
             this.currentFunctionExpression = func;
 
+            //regiser new _references array for this function's local vars
+            this._references.localVars.set(func, this.currentFunctionLocalVars);
+
             //make sure to restore the currentFunctionExpression even if the body block fails to parse
             try {
                 //support ending the function with `end sub` OR `end function`
@@ -682,7 +697,16 @@ export class Parser {
             this.namespaceAndFunctionDepth--;
             //restore the previous CallExpression list
             this.callExpressions = previousCallExpressions;
+            //restore the previous function local var list
+            this.functionLocalVarLists.pop();
         }
+    }
+
+    private identifier() {
+        const identifier = this.advance() as Identifier;
+        // force the name into an identifier so the AST makes some sense
+        identifier.kind = TokenKind.Identifier;
+        return identifier;
     }
 
     private functionParameter(): FunctionParameterExpression {
@@ -694,15 +718,15 @@ export class Parser {
             throw this.lastDiagnosticAsError();
         }
 
-        let name = this.advance() as Identifier;
-        // force the name into an identifier so the AST makes some sense
-        name.kind = TokenKind.Identifier;
+        const name = this.identifier();
+        this.currentFunctionLocalVars?.push(name);
 
         let typeToken: Token | undefined;
-        let defaultValue;
-
+        let defaultValue: Expression;
+        let equalsToken: Token;
         // parse argument default value
         if (this.match(TokenKind.Equal)) {
+            equalsToken = this.previous();
             // it seems any expression is allowed here -- including ones that operate on other arguments!
             defaultValue = this.expression();
         }
@@ -724,14 +748,16 @@ export class Parser {
 
         return new FunctionParameterExpression(
             name,
-            typeToken,
+            equalsToken,
             defaultValue,
-            asToken
+            asToken,
+            typeToken
         );
     }
 
     private assignment(): AssignmentStatement {
-        let name = this.advance() as Identifier;
+        let name = this.identifier();
+        this.currentFunctionLocalVars.push(name);
         //add diagnostic if name is a reserved word that cannot be used as an identifier
         if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
             this.diagnostics.push({
@@ -747,11 +773,11 @@ export class Parser {
 
         let result: AssignmentStatement;
         if (operator.kind === TokenKind.Equal) {
-            result = new AssignmentStatement(operator, name, value, this.currentFunctionExpression);
+            result = new AssignmentStatement(name, operator, value, this.currentFunctionExpression);
         } else {
             result = new AssignmentStatement(
-                operator,
                 name,
+                operator,
                 new BinaryExpression(new VariableExpression(name, this.currentNamespaceName), operator, value),
                 this.currentFunctionExpression
             );
@@ -949,7 +975,8 @@ export class Parser {
 
     private forEachStatement(): ForEachStatement {
         let forEach = this.advance();
-        let name = this.advance();
+        let name = this.identifier();
+        this.currentFunctionLocalVars?.push(name);
 
         let maybeIn = this.peek();
         if (this.check(TokenKind.Identifier) && maybeIn.text.toLowerCase() === 'in') {
@@ -985,14 +1012,12 @@ export class Parser {
         let endFor = this.advance();
 
         return new ForEachStatement(
-            {
-                forEach: forEach,
-                in: maybeIn,
-                endFor: endFor
-            },
-            new VariableExpression(name as Identifier, this.currentNamespaceName),
+            forEach,
+            name,
+            maybeIn,
             target,
-            body
+            body,
+            endFor
         );
     }
 
@@ -2468,7 +2493,8 @@ function createReferences(): References {
         libraryStatements: [],
         namespaceStatements: [],
         newExpressions: [],
-        propertyHints: {}
+        propertyHints: {},
+        localVars: new Map<FunctionExpression, Identifier[]>()
     };
 }
 
@@ -2482,6 +2508,10 @@ export interface References {
     namespaceStatements: NamespaceStatement[];
     newExpressions: NewExpression[];
     propertyHints: Record<string, string>;
+    /**
+     * Array of local variables for each function expression
+     */
+    localVars: Map<FunctionExpression, Identifier[]>;
 }
 
 class CancelStatementError extends Error {

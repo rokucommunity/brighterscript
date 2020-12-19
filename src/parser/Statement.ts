@@ -134,8 +134,8 @@ export class Body extends Statement implements TypedefProvider {
 
 export class AssignmentStatement extends Statement {
     constructor(
-        readonly equals: Token,
         readonly name: Identifier,
+        readonly equals: Token,
         readonly value: Expression,
         readonly containingFunction: FunctionExpression
     ) {
@@ -801,17 +801,18 @@ export class ForStatement extends Statement {
 
 export class ForEachStatement extends Statement {
     constructor(
-        readonly tokens: {
-            forEach: Token;
-            in: Token;
-            endFor: Token;
-        },
-        readonly item: VariableExpression,
-        readonly target: Expression,
-        readonly body: Block
+        public forEachToken: Token,
+        public item: Identifier,
+        public inToken: Token,
+        public target: Expression,
+        public body: Block,
+        public endForToken: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.forEach.range.start, this.tokens.endFor.range.end);
+        this.range = util.createRangeFromPositions(
+            this.forEachToken.range.start,
+            (this.endForToken ?? this.body ?? this.target ?? this.inToken ?? this.item ?? this.forEachToken).range.end
+        );
     }
 
     public readonly range: Range;
@@ -820,21 +821,17 @@ export class ForEachStatement extends Statement {
         let result = [];
         //for each
         result.push(
-            new SourceNode(this.tokens.forEach.range.start.line + 1, this.tokens.forEach.range.start.character, state.pathAbsolute, 'for each'),
-            ' '
+            state.sourceNode(this.forEachToken, 'for each'),
+            ' ',
+            //item
+            state.sourceNode(this.item, this.item.text),
+            ' ',
+            //in
+            state.sourceNode(this.inToken, 'in'),
+            ' ',
+            //target
+            ...this.target.transpile(state)
         );
-        //item
-        result.push(
-            ...this.item.transpile(state),
-            ' '
-        );
-        //in
-        result.push(
-            new SourceNode(this.tokens.in.range.start.line + 1, this.tokens.in.range.start.character, state.pathAbsolute, 'in'),
-            ' '
-        );
-        //target
-        result.push(...this.target.transpile(state));
         //body
         state.lineage.unshift(this);
         result.push(...this.body.transpile(state));
@@ -845,14 +842,13 @@ export class ForEachStatement extends Statement {
         //end for
         result.push(
             state.indent(),
-            new SourceNode(this.tokens.endFor.range.start.line + 1, this.tokens.endFor.range.start.character, state.pathAbsolute, 'end for')
+            state.sourceNode(this.endForToken, 'end for')
         );
         return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            walk(this, 'item', visitor, options);
             walk(this, 'target', visitor, options);
         }
         if (options.walkMode & InternalWalkMode.walkStatements) {
@@ -1649,14 +1645,14 @@ export class ClassMethodStatement extends FunctionStatement {
             thisQualifiedName.text = 'm.' + field.name.text;
             if (field.initialValue) {
                 newStatements.push(
-                    new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue, this.func)
+                    new AssignmentStatement(thisQualifiedName, field.equal, field.initialValue, this.func)
                 );
             } else {
                 //if there is no initial value, set the initial value to `invalid`
                 newStatements.push(
                     new AssignmentStatement(
-                        createToken(TokenKind.Equal, '=', field.name.range),
                         thisQualifiedName,
+                        createToken(TokenKind.Equal, '=', field.name.range),
                         createInvalidLiteral('invalid', field.name.range),
                         this.func
                     )

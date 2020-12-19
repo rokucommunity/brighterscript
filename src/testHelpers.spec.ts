@@ -1,5 +1,6 @@
 import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
+import { Diagnostic } from 'vscode-languageserver';
 
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
@@ -49,12 +50,12 @@ export function trim(strings: TemplateStringsArray, ...args) {
 /**
  * Test that the given object has zero diagnostics. If diagnostics are found, they are printed to the console in a pretty fashion.
  */
-export function expectZeroDiagnostics(obj: { getDiagnostics(): BsDiagnostic[] }) {
-    const diagnostics = obj.getDiagnostics();
+export function expectZeroDiagnostics(obj: { getDiagnostics(): BsDiagnostic[] } | Diagnostic[]) {
+    const diagnostics = Array.isArray(obj) ? obj : obj.getDiagnostics();
     if (diagnostics.length > 0) {
         let message = `Expected 0 diagnostics, but instead found ${diagnostics.length}:`;
         for (const diagnostic of diagnostics) {
-            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file.pathAbsolute}#${diagnostic.range.start.line}:${diagnostic.range.start.character}-${diagnostic.range.end.line}:${diagnostic.range.end.character}`;
+            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${(diagnostic as BsDiagnostic).file?.pathAbsolute ?? ''}#(${diagnostic.range.start.line}:${diagnostic.range.start.character})-(${diagnostic.range.end.line}:${diagnostic.range.end.character})`;
         }
         assert.fail(message);
     }

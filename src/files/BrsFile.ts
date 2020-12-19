@@ -542,7 +542,7 @@ export class BrsFile {
                     scope.variableDeclarations.push({
                         nameRange: stmt.item.range,
                         lineIndex: stmt.item.range.start.line,
-                        name: stmt.item.name.text,
+                        name: stmt.item.text,
                         type: new DynamicType()
                     });
                 }
