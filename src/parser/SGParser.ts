@@ -54,17 +54,17 @@ export default class SGParser {
             return;
         }
 
-        const nameAttr = component.getSGAttribute('name');
+        const nameAttr = component.getAttribute('name');
         if (nameAttr?.value) {
             this._references.name = nameAttr.value;
         }
-        const extendsAttr = component.getSGAttribute('extends');
+        const extendsAttr = component.getAttribute('extends');
         if (extendsAttr?.value) {
             this._references.extends = extendsAttr.value;
         }
 
         component.scripts.forEach(script => {
-            const uriAttr = script.getSGAttribute('uri');
+            const uriAttr = script.getAttribute('uri');
             if (uriAttr) {
                 const uri = uriAttr.value.text;
                 this._references.scriptTagImports.push({

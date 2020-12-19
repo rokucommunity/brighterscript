@@ -58,7 +58,7 @@ export class XmlScope extends Scope {
                 } else if (!callableContainerMap.has(name.toLowerCase())) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.xmlFunctionNotFound(name),
-                        range: fun.getSGAttribute('name').value.range,
+                        range: fun.getAttribute('name').value.range,
                         file: this.xmlFile
                     });
                 }
@@ -76,7 +76,7 @@ export class XmlScope extends Scope {
                 } else if (!SGFieldTypes.includes(type.toLowerCase())) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.xmlInvalidFieldType(type),
-                        range: field.getSGAttribute('type').value.range,
+                        range: field.getAttribute('type').value.range,
                         file: this.xmlFile
                     });
                 }
