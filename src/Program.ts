@@ -666,8 +666,7 @@ export class Program {
             }
             return [];
         });
-        const allSymbols = util.flatMap(results, c => c);
-        return allSymbols;
+        return util.flatMap(results, c => c);
     }
 
     /**

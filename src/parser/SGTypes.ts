@@ -1,6 +1,6 @@
 import * as path from 'path';
 import util from '../util';
-import { SourceNode } from 'source-map';
+import { CodeWithSourceMap, SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import { isSGChildren, isSGField, isSGFunction, isSGInterface, isSGScript } from '../astUtils/xml';
 import type { FileReference } from '../interfaces';
@@ -375,10 +375,10 @@ export class SGAst {
     ) {
     }
 
-    transpile(source: string, extraImports: string[]) {
+    transpile(source: string, extraImports: string[]): CodeWithSourceMap {
         const { prolog, component } = this;
         if (!component) {
-            return new SourceNode(null, null, null, '');
+            return new SourceNode(null, null, null, '').toStringWithSourceMap();
         }
 
         //create a clone to make our changes
