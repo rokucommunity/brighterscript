@@ -459,6 +459,7 @@ describe('astUtils visitors', () => {
                 'FunctionExpression',
                 'Block',
                 'ForEachStatement',
+                'VariableExpression',
                 'ArrayLiteralExpression',
                 'LiteralExpression',
                 'LiteralExpression',
