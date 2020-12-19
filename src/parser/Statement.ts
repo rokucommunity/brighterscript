@@ -736,7 +736,7 @@ export class ForStatement extends Statement {
         public increment?: Expression
     ) {
         super();
-        const lastRange =this.endForToken?.range ?? body.range;
+        const lastRange = this.endForToken?.range ?? body.range;
         this.range = util.createRangeFromPositions(this.forToken.range.start, lastRange.end);
     }
 

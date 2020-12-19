@@ -1,6 +1,7 @@
 import * as path from 'path';
 import util from '../util';
-import { CodeWithSourceMap, SourceNode } from 'source-map';
+import { SourceNode } from 'source-map';
+import type { CodeWithSourceMap } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import { isSGChildren, isSGField, isSGFunction, isSGInterface, isSGScript } from '../astUtils/xml';
 import type { FileReference } from '../interfaces';
