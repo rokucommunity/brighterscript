@@ -530,29 +530,27 @@ export class Scope {
     }
 
     /**
-     * Detect local variables (function scope) that have the same name as scope calls
+     * Detect local variables (vars declared within a function expression) that have the same name as scope calls
      * @param file
      * @param callableContainerMap
      */
     private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: CallableContainerMap) {
         const classMap = this.getClassMap();
-        //loop through every function scope
-        for (let scope of file.functionScopes) {
-            //every var declaration in this function scope
-            for (let varDeclaration of scope.variableDeclarations) {
-                const varName = varDeclaration.name;
-                const lowerVarName = varName.toLowerCase();
 
+        for (let functionExpression of file.parser.references.functionExpressions) {
+            const localVars = file.parser.references.localVars.get(functionExpression);
+            //every var declaration in this function expression
+            for (let localVar of localVars) {
                 //if the var is a function
-                if (isFunctionType(varDeclaration.type)) {
+                if (isFunctionType(localVar.type)) {
                     //local var function with same name as stdlib function
                     if (
                         //has same name as stdlib
-                        globalCallableMap.has(lowerVarName)
+                        globalCallableMap.has(localVar.lowerName)
                     ) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
-                            range: varDeclaration.nameRange,
+                            range: localVar.nameToken.range,
                             file: file
                         });
 
@@ -560,11 +558,11 @@ export class Scope {
                         //in the scope function list
                     } else if (
                         //has same name as scope function
-                        callableContainerMap.has(lowerVarName)
+                        callableContainerMap.has(localVar.lowerName)
                     ) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
-                            range: varDeclaration.nameRange,
+                            range: localVar.nameToken.range,
                             file: file
                         });
                     }
@@ -572,21 +570,21 @@ export class Scope {
                     //var is not a function
                 } else if (
                     //is NOT a callable from stdlib (because non-function local vars can have same name as stdlib names)
-                    !globalCallableMap.has(lowerVarName)
+                    !globalCallableMap.has(localVar.lowerName)
                 ) {
 
                     //is same name as a callable
-                    if (callableContainerMap.has(lowerVarName)) {
+                    if (callableContainerMap.has(localVar.lowerName)) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                            range: varDeclaration.nameRange,
+                            range: localVar.nameToken.range,
                             file: file
                         });
                         //has the same name as an in-scope class
-                    } else if (classMap.has(lowerVarName)) {
+                    } else if (classMap.has(localVar.lowerName)) {
                         this.diagnostics.push({
-                            ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(lowerVarName).getName(ParseMode.BrighterScript)),
-                            range: varDeclaration.nameRange,
+                            ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(localVar.lowerName).getName(ParseMode.BrighterScript)),
+                            range: localVar.nameToken.range,
                             file: file
                         });
                     }
@@ -601,6 +599,7 @@ export class Scope {
      * @param callablesByLowerName
      */
     private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: CallableContainerMap) {
+
         //validate all expression calls
         for (let expCall of file.functionCalls) {
             const lowerName = expCall.name.toLowerCase();
@@ -610,11 +609,11 @@ export class Scope {
                 continue;
             }
 
-            //get the local scope for this expression
-            let scope = file.getFunctionScopeAtPosition(expCall.nameRange.start);
+            //find a local variable with this name
+            const localVar = file.getLocalVarsAtPosition(expCall.nameRange.start).find(x => x.lowerName === lowerName);
 
             //if we don't already have a variable with this name.
-            if (!scope?.getVariableByName(lowerName)) {
+            if (!localVar) {
                 let callablesWithThisName = callablesByLowerName.get(lowerName);
 
                 //use the first item from callablesByLowerName, because if there are more, that's a separate error

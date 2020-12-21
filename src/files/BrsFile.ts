@@ -4,14 +4,13 @@ import { CompletionItemKind, SymbolKind, Location, SignatureInformation, Paramet
 import chalk from 'chalk';
 import type { Scope } from '../Scope';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
-import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import { Deferred } from '../deferred';
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement } from '../parser/Statement';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
@@ -21,8 +20,7 @@ import { TranspileState } from '../parser/TranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile } from '../astUtils/reflection';
-import type { BscType } from '../types/BscType';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 
@@ -99,15 +97,6 @@ export class BrsFile {
     public callables = [] as Callable[];
 
     public functionCalls = [] as FunctionCall[];
-
-    private _functionScopes: FunctionScope[];
-
-    public get functionScopes(): FunctionScope[] {
-        if (!this._functionScopes) {
-            this.createFunctionScopes();
-        }
-        return this._functionScopes;
-    }
 
     /**
      * files referenced by import statements
@@ -499,138 +488,6 @@ export class BrsFile {
         }
     }
 
-    public scopesByFunc = new Map<FunctionExpression, FunctionScope>();
-
-    /**
-     * Create a scope for every function in this file
-     */
-    private createFunctionScopes() {
-        //find every function
-        let functions = this.parser.references.functionExpressions;
-
-        //create a functionScope for every function
-        this._functionScopes = [];
-
-        for (let func of functions) {
-            let scope = new FunctionScope(func);
-
-            //find parent function, and add this scope to it if found
-            {
-                let parentScope = this.scopesByFunc.get(func.parentFunction);
-
-                //add this child scope to its parent
-                if (parentScope) {
-                    parentScope.childrenScopes.push(scope);
-                }
-                //store the parent scope for this scope
-                scope.parentScope = parentScope;
-            }
-
-            //add every parameter
-            for (let param of func.parameters) {
-                scope.variableDeclarations.push({
-                    nameRange: param.name.range,
-                    lineIndex: param.name.range.start.line,
-                    name: param.name.text,
-                    type: param.type
-                });
-            }
-
-            //add every loop-defined variable
-            func.body.walk(createVisitor({
-                ForEachStatement: (stmt) => {
-                    scope.variableDeclarations.push({
-                        nameRange: stmt.item.range,
-                        lineIndex: stmt.item.range.start.line,
-                        name: stmt.item.text,
-                        type: new DynamicType()
-                    });
-                }
-            }), {
-                walkMode: WalkMode.visitStatements
-            });
-
-            this.scopesByFunc.set(func, scope);
-
-            //find every statement in the scope
-            this._functionScopes.push(scope);
-        }
-
-        //find every variable assignment in the whole file
-        let assignmentStatements = this.parser.references.assignmentStatements;
-
-        for (let statement of assignmentStatements) {
-
-            //find this statement's function scope
-            let scope = this.scopesByFunc.get(statement.containingFunction);
-
-            //skip variable declarations that are outside of any scope
-            if (scope) {
-                scope.variableDeclarations.push({
-                    nameRange: statement.name.range,
-                    lineIndex: statement.name.range.start.line,
-                    name: statement.name.text,
-                    type: this.getBscTypeFromAssignment(statement, scope)
-                });
-            }
-        }
-    }
-
-    private getBscTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BscType {
-        try {
-            //function
-            if (isFunctionExpression(assignment.value)) {
-                let functionType = new FunctionType(assignment.value.returnType);
-                functionType.isSub = assignment.value.functionType.text === 'sub';
-                if (functionType.isSub) {
-                    functionType.returnType = new VoidType();
-                }
-
-                functionType.setName(assignment.name.text);
-                for (let param of assignment.value.parameters) {
-                    let isRequired = !param.defaultValue;
-                    //TODO compute optional parameters
-                    functionType.addParameter(param.name.text, param.type, isRequired);
-                }
-                return functionType;
-
-                //literal
-            } else if (isLiteralExpression(assignment.value)) {
-                return assignment.value.type;
-
-                //function call
-            } else if (isCallExpression(assignment.value)) {
-                let calleeName = (assignment.value.callee as any).name.text;
-                if (calleeName) {
-                    let func = this.getCallableByName(calleeName);
-                    if (func) {
-                        return func.type.returnType;
-                    }
-                }
-            } else if (isVariableExpression(assignment.value)) {
-                let variableName = assignment.value.name.text;
-                let variable = scope.getVariableByName(variableName);
-                return variable.type;
-            }
-        } catch (e) {
-            //do nothing. Just return dynamic
-        }
-        //fallback to dynamic
-        return new DynamicType();
-    }
-
-    private getCallableByName(name: string) {
-        name = name ? name.toLowerCase() : undefined;
-        if (!name) {
-            return;
-        }
-        for (let func of this.callables) {
-            if (func.name.toLowerCase() === name) {
-                return func;
-            }
-        }
-    }
-
     private findCallables() {
         for (let statement of this.parser.references.functionStatements ?? []) {
 
@@ -741,37 +598,35 @@ export class BrsFile {
                         });
                     }
                 }
-                let functionCall: FunctionCall = {
+                let functionCall = {
                     range: util.createRangeFromPositions(expression.range.start, expression.closingParen.range.end),
-                    functionScope: this.getFunctionScopeAtPosition(callee.range.start),
+                    functionExpression: this.getFunctionExpressionAtPosition(callee.range.start),
                     file: this,
                     name: functionName,
                     nameRange: util.createRange(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
                     //TODO keep track of parameters
                     args: args
-                };
+                } as FunctionCall;
                 this.functionCalls.push(functionCall);
             }
         }
     }
 
     /**
-     * Find the function scope at the given position.
-     * @param position
-     * @param functionScopes
+     * Find the function expression at the given position.
      */
-    public getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]): FunctionScope {
-        if (!functionScopes) {
-            functionScopes = this.functionScopes;
+    public getFunctionExpressionAtPosition(position: Position, functionExpressions?: FunctionExpression[]): FunctionExpression {
+        if (!functionExpressions) {
+            functionExpressions = this.parser.references.functionExpressions;
         }
-        for (let scope of functionScopes) {
-            if (util.rangeContains(scope.range, position)) {
+        for (let functionExpression of functionExpressions) {
+            if (util.rangeContains(functionExpression.range, position)) {
                 //see if any of that scope's children match the position also, and give them priority
-                let childScope = this.getFunctionScopeAtPosition(position, scope.childrenScopes);
-                if (childScope) {
-                    return childScope;
+                let childFunc = this.getFunctionExpressionAtPosition(position, functionExpression.childFunctionExpressions);
+                if (childFunc) {
+                    return childFunc;
                 } else {
-                    return scope;
+                    return functionExpression;
                 }
             }
         }
@@ -802,9 +657,9 @@ export class BrsFile {
         }
 
         //determine if cursor is inside a function
-        let functionScope = this.getFunctionScopeAtPosition(position);
-        if (!functionScope) {
-            //we aren't in any function scope, so return the keyword completions
+        let functionExpression = this.getFunctionExpressionAtPosition(position);
+        if (!functionExpression) {
+            //we aren't in any function expression, so return the keyword completions
             return KeywordCompletions;
         }
 
@@ -832,17 +687,19 @@ export class BrsFile {
             result.push(...KeywordCompletions);
 
             //include local variables
-            let variables = functionScope.variableDeclarations;
+            let localVars = this.parser.references.localVars.get(functionExpression);
 
-            for (let variable of variables) {
+            for (let localVar of localVars) {
                 //skip duplicate variable names
-                if (names[variable.name.toLowerCase()]) {
+                if (names[localVar.lowerName]) {
                     continue;
                 }
-                names[variable.name.toLowerCase()] = true;
+                names[localVar.lowerName] = true;
                 result.push({
-                    label: variable.name,
-                    kind: isFunctionType(variable.type) ? CompletionItemKind.Function : CompletionItemKind.Variable
+                    label: localVar.nameToken.text,
+                    //TODO find type for local vars
+                    kind: CompletionItemKind.Variable
+                    // kind: isFunctionType(variable.type) ? CompletionItemKind.Function : CompletionItemKind.Variable
                 });
             }
 
@@ -1185,16 +1042,14 @@ export class BrsFile {
             textToSearchFor = textToSearchFor.substring(startIndex, endIndex);
         }
 
-        //look through local variables first, get the function scope for this position (if it exists)
-        const functionScope = this.getFunctionScopeAtPosition(position);
-        if (functionScope) {
-            //find any variable with this name
-            for (const varDeclaration of functionScope.variableDeclarations) {
-                //we found a variable declaration with this token text!
-                if (varDeclaration.name.toLowerCase() === textToSearchFor) {
-                    const uri = util.pathToUri(this.pathAbsolute);
-                    results.push(Location.create(uri, varDeclaration.nameRange));
-                }
+        //look through local variables first
+        const localVars = this.getLocalVarsAtPosition(position);
+        //find any variable with this name
+        for (const localVar of localVars) {
+            //we found a variable declaration with this token text
+            if (localVar.lowerName === textToSearchFor) {
+                const uri = util.pathToUri(this.pathAbsolute);
+                results.push(Location.create(uri, localVar.nameToken.range));
             }
         }
 
@@ -1225,6 +1080,15 @@ export class BrsFile {
         return results;
     }
 
+    /**
+     * Get local variables at the given position.
+     * Will return empty array if none are found or if position is outside function boundaries
+     */
+    public getLocalVarsAtPosition(position: Position) {
+        let functionExpression = this.getFunctionExpressionAtPosition(position);
+        return this.parser.references.localVars.get(functionExpression) ?? [];
+    }
+
     public async getHover(position: Position): Promise<Hover> {
         await this.isReady();
         //get the token at the position
@@ -1247,25 +1111,23 @@ export class BrsFile {
 
         //look through local variables first
         {
-            //get the function scope for this position (if exists)
-            let functionScope = this.getFunctionScopeAtPosition(position);
-            if (functionScope) {
-                //find any variable with this name
-                for (let varDeclaration of functionScope.variableDeclarations) {
-                    //we found a variable declaration with this token text!
-                    if (varDeclaration.name.toLowerCase() === lowerTokenText) {
-                        let typeText: string;
-                        if (isFunctionType(varDeclaration.type)) {
-                            typeText = varDeclaration.type.toString();
-                        } else {
-                            typeText = `${varDeclaration.name} as ${varDeclaration.type.toString()}`;
-                        }
-                        return {
-                            range: token.range,
-                            //append the variable name to the front for scope
-                            contents: typeText
-                        };
+            const localVars = this.getLocalVarsAtPosition(position);
+            //find any variable with this name
+            for (let localVar of localVars) {
+                //we found a variable declaration with this token text!
+                if (localVar.lowerName === lowerTokenText) {
+                    let typeText: string;
+                    //TODO figure out what type this var is
+                    if (isFunctionType(localVar.type)) {
+                        typeText = localVar.type.toString();
+                    } else {
+                        typeText = `${localVar.nameToken.text} as ${localVar.type.toString()}`;
                     }
+                    return {
+                        range: token.range,
+                        //append the variable name to the front for scope
+                        contents: typeText
+                    };
                 }
             }
         }

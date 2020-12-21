@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPlugin } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -26,7 +26,6 @@ import type { DottedGetExpression, VariableExpression } from './parser/Expressio
 import { LogLevel } from './Logger';
 import type { Token } from './lexer';
 import { TokenKind } from './lexer';
-import type { CompilerPlugin } from '.';
 import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
 
 export class Util {
@@ -974,6 +973,9 @@ export class Util {
      * Convert a token into a BscType
      */
     public tokenToBscType(token: Token) {
+        if (!token) {
+            return new DynamicType();
+        }
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:

@@ -4,7 +4,6 @@ import { SourceNode } from 'source-map';
 import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
 import { Deferred } from '../deferred';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
@@ -12,6 +11,7 @@ import { Parser } from '../parser/Parser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyGraph } from '../DependencyGraph';
+import type { FunctionExpression } from '../parser/Expression';
 
 export interface SGAstScript {
     $?: {
@@ -174,8 +174,6 @@ export class XmlFile {
 
     //TODO implement the xml CDATA parsing, which would populate this list
     public functionCalls = [] as FunctionCall[];
-
-    public functionScopes = [] as FunctionScope[];
 
     /**
      * The name of the component that this component extends.
@@ -552,14 +550,19 @@ export class XmlFile {
         return null;
     }
 
-    public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
+    public getReferences(position: Position): Promise<Location[]> {
         //TODO implement
         return null;
     }
 
-    public getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]): FunctionScope { //eslint-disable-line
+    public getFunctionExpressionAtPosition(position: Position, functionExpressions?: FunctionExpression[]): FunctionExpression {
         //TODO implement
         return null;
+    }
+
+    public getLocalVarsAtPosition(position: Position) {
+        //TODO implement
+        return [];
     }
 
     /**

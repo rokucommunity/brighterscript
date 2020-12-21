@@ -2,7 +2,7 @@ import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
 import * as path from 'path';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
-import type { Callable, CommentFlag, BsDiagnostic, VariableDeclaration } from '../interfaces';
+import type { Callable, CommentFlag, BsDiagnostic } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
@@ -18,6 +18,7 @@ import util, { loadPlugins, standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
 import { trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
+import { LazyType } from '../types/LazyType';
 
 let sinon = sinonImport.createSandbox();
 
@@ -616,7 +617,7 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('does not lose function scopes when mismatched end sub', () => {
+        it('does not lose function statements when mismatched end sub', () => {
             file.parse(`
                 sub main()
                     sayHi()
@@ -626,7 +627,7 @@ describe('BrsFile', () => {
                     print "hello world"
                 end sub
             `);
-            expect(file.functionScopes).to.be.lengthOf(2);
+            expect(file.parser.references.functionStatements).to.be.lengthOf(2);
         });
 
         it('does not lose sub scope when mismatched end function', () => {
@@ -639,7 +640,7 @@ describe('BrsFile', () => {
                     print "hello world"
                 end sub
             `);
-            expect(file.functionScopes).to.be.lengthOf(2);
+            expect(file.parser.references.functionStatements).to.be.lengthOf(2);
         });
 
         it('does not error with boolean in RHS of set statement', () => {
@@ -1253,14 +1254,14 @@ describe('BrsFile', () => {
         });
     });
 
-    describe('createFunctionScopes', () => {
+    describe('function local variable handling', () => {
         it('creates range properly', () => {
             file.parse(`
                 sub Main()
                     name = 'bob"
                 end sub
             `);
-            expect(file.functionScopes[0].range).to.eql(Range.create(1, 16, 3, 23));
+            expect(file.parser.references.functionStatements[0].range).to.eql(Range.create(1, 16, 3, 23));
         });
 
         it('creates scopes for parent and child functions', () => {
@@ -1275,26 +1276,10 @@ describe('BrsFile', () => {
                     end sub)
                 end sub
             `);
-            expect(file.functionScopes).to.length(3);
+            expect(file.parser.references.functionExpressions).to.be.length(3);
         });
 
-        it('outer function does not capture inner statements', () => {
-            file.parse(`
-                sub Main()
-                    name = "john"
-                    sayHi = sub()
-                        age = 12
-                    end sub
-                end sub
-            `);
-            let outerScope = file.getFunctionScopeAtPosition(Position.create(2, 25));
-            expect(outerScope.variableDeclarations).to.be.lengthOf(2);
-
-            let innerScope = file.getFunctionScopeAtPosition(Position.create(4, 10));
-            expect(innerScope.variableDeclarations).to.be.lengthOf(1);
-        });
-
-        it('finds variables declared in function scopes', () => {
+        it('finds variables declared in function expressions', () => {
             file.parse(`
                 sub Main()
                     sayHi = sub()
@@ -1306,26 +1291,20 @@ describe('BrsFile', () => {
                     end sub)
                 end sub
             `);
-            expect(file.functionScopes[0].variableDeclarations).to.be.length(1);
-            expect(file.functionScopes[0].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
-                lineIndex: 2,
-                name: 'sayHi'
-            });
-            expect(file.functionScopes[0].variableDeclarations[0].type).instanceof(FunctionType);
+            const outerVars = file.parser.references.localVars.get(file.parser.references.functionExpressions[0]);
+            expect(outerVars).to.be.length(1);
+            expect(outerVars[0].lowerName).to.eql('sayhi');
+            expect(outerVars[0].type).to.be.instanceof(FunctionType);
 
-            expect(file.functionScopes[1].variableDeclarations).to.be.length(1);
-            expect(file.functionScopes[1].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
-                lineIndex: 3,
-                name: 'age'
-            });
-            expect(file.functionScopes[1].variableDeclarations[0].type).instanceof(IntegerType);
+            const sayHiVars = file.parser.references.localVars.get(file.parser.references.functionExpressions[1]);
+            expect(sayHiVars).to.be.length(1);
+            expect(sayHiVars[0].lowerName).to.eql('age');
+            expect(sayHiVars[0].type).to.be.instanceof(IntegerType);
 
-            expect(file.functionScopes[2].variableDeclarations).to.be.length(1);
-            expect(file.functionScopes[2].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
-                lineIndex: 7,
-                name: 'name'
-            });
-            expect(file.functionScopes[2].variableDeclarations[0].type).instanceof(StringType);
+            const scheduleJobVars = file.parser.references.localVars.get(file.parser.references.functionExpressions[2]);
+            expect(scheduleJobVars).to.be.length(1);
+            expect(scheduleJobVars[0].lowerName).to.eql('name');
+            expect(scheduleJobVars[0].type).to.be.instanceof(StringType);
         });
 
         it('finds variable declarations inside of if statements', () => {
@@ -1336,9 +1315,9 @@ describe('BrsFile', () => {
                     end if
                 end sub
             `);
-            let scope = file.getFunctionScopeAtPosition(Position.create(3, 0));
-            expect(scope.variableDeclarations[0]).to.exist;
-            expect(scope.variableDeclarations[0].name).to.equal('theLength');
+            let localVars = file.getLocalVarsAtPosition(util.createPosition(3, 0));
+            expect(localVars[0].lowerName).to.eql('thelength');
+            expect(localVars[0].type).to.be.instanceof(IntegerType);
         });
 
         it('finds value from global return', async () => {
@@ -1352,12 +1331,10 @@ describe('BrsFile', () => {
                 end function
             `);
 
-            expect(file.functionScopes[0].variableDeclarations).to.be.length(1);
-            expect(file.functionScopes[0].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
-                lineIndex: 2,
-                name: 'myName'
-            });
-            expect(file.functionScopes[0].variableDeclarations[0].type).instanceof(StringType);
+            const localVars = file.parser.references.localVars.get(file.parser.references.functionExpressions[0]);
+            expect(localVars[0].lowerName).to.eql('myname');
+            expect(localVars[0].type).to.be.instanceof(LazyType);
+            expect((localVars[0].type as LazyType).type).to.be.instanceof(StringType);
         });
 
         it('finds variable type from other variable', () => {
@@ -1368,12 +1345,11 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            expect(file.functionScopes[0].variableDeclarations).to.be.length(2);
-            expect(file.functionScopes[0].variableDeclarations[1]).to.deep.include(<VariableDeclaration>{
-                lineIndex: 3,
-                name: 'nameCopy'
-            });
-            expect(file.functionScopes[0].variableDeclarations[1].type).instanceof(StringType);
+            const localVars = file.parser.references.localVars.get(file.parser.references.functionExpressions[0]);
+            expect(localVars).to.be.lengthOf(2);
+            expect(localVars[1].lowerName).to.eql('namecopy');
+            expect(localVars[1].type).to.be.instanceof(LazyType);
+            expect((localVars[1].type as LazyType).type).to.be.instanceof(StringType);
         });
 
         it('sets proper range for functions', () => {
@@ -1385,9 +1361,11 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            expect(file.functionScopes).to.be.length(2);
-            expect(file.functionScopes[0].range).to.eql(Range.create(1, 16, 5, 23));
-            expect(file.functionScopes[1].range).to.eql(Range.create(2, 30, 4, 32));
+            expect(file.parser.references.functionExpressions).to.be.length(2);
+            expect(file.parser.references.functionExpressions.map(x => x.range)).to.eql([
+                util.createRange(1, 16, 5, 23),
+                util.createRange(2, 30, 4, 32)
+            ]);
         });
     });
 

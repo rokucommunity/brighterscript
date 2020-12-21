@@ -81,9 +81,14 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral } from '../astUtils/creators';
+import type { BscType } from '../types/BscType';
+import { DynamicType } from '../types/DynamicType';
+import { FunctionType } from '../types/FunctionType';
+import { VoidType } from '../types/VoidType';
+import { LazyType } from '../types/LazyType';
 
 export class Parser {
     /**
@@ -511,7 +516,7 @@ export class Parser {
     /**
      * A stack of VariableExpression arrays for the current FunctionExpression
      */
-    private functionLocalVarLists = [] as Array<Array<Identifier>>;
+    private functionLocalVarLists = [] as Array<LocalVarEntry[]>;
     private get currentFunctionLocalVars() {
         return this.functionLocalVarLists[this.functionLocalVarLists.length - 1];
     }
@@ -719,7 +724,6 @@ export class Parser {
         }
 
         const name = this.identifier();
-        this.currentFunctionLocalVars?.push(name);
 
         let typeToken: Token | undefined;
         let defaultValue: Expression;
@@ -746,6 +750,12 @@ export class Parser {
             }
         }
 
+        this.currentFunctionLocalVars?.push({
+            lowerName: name.text.toLowerCase(),
+            nameToken: name,
+            type: util.tokenToBscType(typeToken)
+        });
+
         return new FunctionParameterExpression(
             name,
             equalsToken,
@@ -757,7 +767,6 @@ export class Parser {
 
     private assignment(): AssignmentStatement {
         let name = this.identifier();
-        this.currentFunctionLocalVars.push(name);
         //add diagnostic if name is a reserved word that cannot be used as an identifier
         if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
             this.diagnostics.push({
@@ -783,6 +792,13 @@ export class Parser {
             );
         }
         this._references.assignmentStatements.push(result);
+        this.currentFunctionLocalVars?.push({
+            lowerName: name.text.toLowerCase(),
+            nameToken: name,
+            //TODO
+            type: this.getBscTypeFromAssignment(result, this.currentFunctionExpression)
+        });
+
         return result;
     }
 
@@ -976,7 +992,6 @@ export class Parser {
     private forEachStatement(): ForEachStatement {
         let forEach = this.advance();
         let name = this.identifier();
-        this.currentFunctionLocalVars?.push(name);
 
         let maybeIn = this.peek();
         if (this.check(TokenKind.Identifier) && maybeIn.text.toLowerCase() === 'in') {
@@ -1010,6 +1025,13 @@ export class Parser {
         }
 
         let endFor = this.advance();
+
+        this.currentFunctionLocalVars?.push({
+            lowerName: name.text.toLowerCase(),
+            nameToken: name,
+            //TODO infer type from `target`
+            type: new DynamicType()
+        });
 
         return new ForEachStatement(
             forEach,
@@ -2414,6 +2436,54 @@ export class Parser {
         }
     }
 
+    private getBscTypeFromAssignment(assignment: AssignmentStatement, functionExpression: FunctionExpression): BscType {
+        try {
+            //function
+            if (isFunctionExpression(assignment.value)) {
+                let functionType = new FunctionType(assignment.value.returnType);
+                functionType.isSub = assignment.value.functionType.text === 'sub';
+                if (functionType.isSub) {
+                    functionType.returnType = new VoidType();
+                }
+
+                functionType.setName(assignment.name.text);
+                for (let param of assignment.value.parameters) {
+                    let isRequired = !param.defaultValue;
+                    //TODO compute optional parameters
+                    functionType.addParameter(param.name.text, param.type, isRequired);
+                }
+                return functionType;
+
+                //literal
+            } else if (isLiteralExpression(assignment.value)) {
+                return assignment.value.type;
+
+                //function call
+            } else if (isCallExpression(assignment.value)) {
+                let calleeName = ((assignment.value.callee as any).name.text as string).toLowerCase();
+                if (calleeName) {
+                    //make a lazy type which will not compute its type until the file is done parsing
+                    return new LazyType(() => {
+                        //TODO this should really be scope-aware...
+                        const func = this.references.functionStatements.find(x => x.name.text.toLowerCase() === calleeName);
+                        return func?.func.returnType ?? new DynamicType();
+                    });
+                }
+            } else if (isVariableExpression(assignment.value)) {
+                //defer the type until first read, which will allow us to derive types from variables defined after this one (like from a loop perhaps)
+                return new LazyType(() => {
+                    let variableName = (assignment.value as VariableExpression).name.text.toLowerCase();
+                    const localVars = this.references.localVars.get(functionExpression);
+                    return localVars.find(x => x.lowerName === variableName)?.type ?? new DynamicType();
+                });
+            }
+        } catch (e) {
+            //do nothing. Just return dynamic
+        }
+        //fallback to dynamic
+        return new DynamicType();
+    }
+
     /**
      * References are found during the initial parse.
      * However, sometimes plugins can modify the AST, requiring a full walk to re-compute all references.
@@ -2494,7 +2564,7 @@ function createReferences(): References {
         namespaceStatements: [],
         newExpressions: [],
         propertyHints: {},
-        localVars: new Map<FunctionExpression, Identifier[]>()
+        localVars: new Map<FunctionExpression, LocalVarEntry[]>()
     };
 }
 
@@ -2511,7 +2581,13 @@ export interface References {
     /**
      * Array of local variables for each function expression
      */
-    localVars: Map<FunctionExpression, Identifier[]>;
+    localVars: Map<FunctionExpression, LocalVarEntry[]>;
+}
+
+export interface LocalVarEntry {
+    lowerName: string;
+    nameToken: Identifier;
+    type: BscType;
 }
 
 class CancelStatementError extends Error {

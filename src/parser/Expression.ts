@@ -841,16 +841,16 @@ export class SourceLiteralExpression extends Expression {
     public readonly range: Range;
 
     private getFunctionName(state: TranspileState, parseMode: ParseMode) {
-        let func = state.file.getFunctionScopeAtPosition(this.token.range.start).func;
+        let functionExpression = state.file.getFunctionExpressionAtPosition(this.token.range.start);
         let nameParts = [];
-        while (func.parentFunction) {
-            let index = func.parentFunction.childFunctionExpressions.indexOf(func);
+        while (functionExpression.parentFunction) {
+            let index = functionExpression.parentFunction.childFunctionExpressions.indexOf(functionExpression);
             nameParts.unshift(`anon${index}`);
-            func = func.parentFunction;
+            functionExpression = functionExpression.parentFunction;
         }
         //get the index of this function in its parent
         nameParts.unshift(
-            func.functionStatement.getName(parseMode)
+            functionExpression.functionStatement.getName(parseMode)
         );
         return nameParts.join('$');
     }
