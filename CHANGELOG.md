@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.23.1] - 2020-12-22
+### Changed
+ - renamed `Scope.getFiles()` to `Scope.getAllFiles()` and added a new function called `Scope.getOwnFiles()`
+### Fixed
+ - bug preventing `d.bs` loaded in parent files from showing up in child files. ([#252](https://github.com/rokucommunity/brighterscript/pull/252))
+
+
+
 ## [0.23.0] - 2020-12-18
 ### Changed
  - AST parser refactoring ([#244](https://github.com/rokucommunity/brighterscript/pull/244))
@@ -764,3 +772,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.22.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.22.0...v0.22.1
 [0.22.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.22.0...v0.22.1
 [0.23.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.22.1...v0.23.0
+[0.23.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.23.0...v0.23.1
