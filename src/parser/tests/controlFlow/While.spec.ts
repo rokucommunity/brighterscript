@@ -50,6 +50,18 @@ describe('parser while statements', () => {
         expect(parser.diagnostics[0]?.message).to.be.undefined;
     });
 
+    it('catches unterminated while reaching function boundary', () => {
+        const parser = Parser.parse(`
+            function test()
+                while i > 0:
+                    print "while"
+            end function
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(1);
+        expect(parser.statements).to.be.lengthOf(1);
+        expect(parser.references.functionStatements[0].func.body.statements).to.be.lengthOf(1);
+    });
+
     it('location tracking', () => {
         /**
          *    0   0   0   1   1

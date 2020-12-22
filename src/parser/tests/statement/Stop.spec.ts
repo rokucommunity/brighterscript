@@ -14,7 +14,7 @@ describe('stop statement', () => {
         ]);
 
         //should be an error
-        expect(diagnostics).to.be.lengthOf(1);
+        expect(diagnostics).to.be.length.greaterThan(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
     });
