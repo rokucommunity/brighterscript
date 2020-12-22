@@ -60,5 +60,3 @@ jobs:
 
       #upload to npm
       - run: npm publish
-
-
