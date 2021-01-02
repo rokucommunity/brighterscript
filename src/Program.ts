@@ -730,6 +730,7 @@ export class Program {
         const scopes = this.getScopesForFile(file);
 
         for (const scope of scopes) {
+<<<<<<< HEAD
             const files = scope.getAllFiles();
             const processedFiles = new Set<BscFile>();
 
@@ -737,6 +738,10 @@ export class Program {
                 if (processedFiles.has(file)) {
                     continue;
                 }
+=======
+            const files = scope.getOwnFiles();
+            for (const file of files) {
+>>>>>>> master
                 if (isXmlFile(file)) {
                     continue;
                 }

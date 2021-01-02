@@ -25,7 +25,6 @@ import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentSt
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
-import * as extname from 'path-complete-extname';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -43,10 +42,10 @@ export class BrsFile {
         this.pkgPath = s`${this.pkgPath}`;
         this.dependencyGraphKey = this.pkgPath.toLowerCase();
 
-        this.extension = extname(this.pkgPath).toLowerCase();
+        this.extension = util.getExtension(this.pkgPath);
 
         //all BrighterScript files need to be transpiled
-        if (this.extension.endsWith('.bs')) {
+        if (this.extension?.endsWith('.bs')) {
             this.needsTranspiled = true;
         }
         this.isTypedef = this.extension === '.d.bs';
@@ -1202,7 +1201,11 @@ export class BrsFile {
         //look through all files in scope for matches
         for (const scope of this.program.getScopesForFile(this)) {
             for (const file of scope.getAllFiles()) {
+<<<<<<< HEAD
                 if (isXmlFile(file) || filesSearched.has(file)) {
+=======
+                if (isXmlFile(file) || filesSearched[file.pathAbsolute]) {
+>>>>>>> master
                     continue;
                 }
                 filesSearched.add(file);
@@ -1359,9 +1362,14 @@ export class BrsFile {
         const scopes = this.program.getScopesForFile(this);
 
         for (const scope of scopes) {
+<<<<<<< HEAD
             const processedFiles = new Set<BrsFile>();
             for (const file of scope.getAllFiles()) {
                 if (isXmlFile(file) || processedFiles.has(file)) {
+=======
+            for (const file of scope.getAllFiles()) {
+                if (isXmlFile(file)) {
+>>>>>>> master
                     continue;
                 }
                 processedFiles.add(file);

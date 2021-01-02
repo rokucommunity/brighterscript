@@ -1,11 +1,12 @@
-import { expect } from 'chai';
+import { expect, assert } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
 import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement } from './Statement';
+import type { AssignmentStatement, Statement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
+import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -72,7 +73,8 @@ describe('parser', () => {
                     call()a
                 end sub
             `).diagnostics.map(x => rangeToArray(x.range))).to.eql([
-                [2, 26, 2, 27]
+                [2, 26, 2, 27],
+                [2, 27, 2, 28]
             ]);
         });
 
@@ -255,7 +257,7 @@ describe('parser', () => {
                     if true then
                         print 1
                     else if true
-                        print 2
+                        return false
                     end if
                 end function
             `).diagnostics[0]?.message).not.to.exist;
@@ -414,24 +416,41 @@ describe('parser', () => {
                         end if 'comment 10
                     end function
                 `);
-                let { diagnostics, statements } = Parser.parse(tokens) as any;
+                let { diagnostics, statements } = Parser.parse(tokens);
                 expect(diagnostics).to.be.lengthOf(0, 'Should have zero diagnostics');
-                let ifStmt = statements[0].func.body.statements[0];
+                let fnSmt = statements[0];
+                if (isFunctionStatement(fnSmt)) {
+                    let ifStmt = fnSmt.func.body.statements[0];
+                    if (isIfStatement(ifStmt)) {
+                        expectCommentWithText(ifStmt.thenBranch.statements[0], `'comment 1`);
+                        expectCommentWithText(ifStmt.thenBranch.statements[1], `'comment 2`);
+                        expectCommentWithText(ifStmt.thenBranch.statements[3], `'comment 3`);
 
-                expect(ifStmt.thenBranch.statements[0].text).to.equal(`'comment 1`);
-                expect(ifStmt.thenBranch.statements[1].text).to.equal(`'comment 2`);
-                expect(ifStmt.thenBranch.statements[3].text).to.equal(`'comment 3`);
+                        let elseIfBranch = ifStmt.elseBranch;
+                        if (isIfStatement(elseIfBranch)) {
+                            expectCommentWithText(elseIfBranch.thenBranch.statements[0], `'comment 4`);
+                            expectCommentWithText(elseIfBranch.thenBranch.statements[1], `'comment 5`);
+                            expectCommentWithText(elseIfBranch.thenBranch.statements[3], `'comment 6`);
 
-                expect(ifStmt.elseIfs[0].thenBranch.statements[0].text).to.equal(`'comment 4`);
-                expect(ifStmt.elseIfs[0].thenBranch.statements[1].text).to.equal(`'comment 5`);
-                expect(ifStmt.elseIfs[0].thenBranch.statements[3].text).to.equal(`'comment 6`);
+                            let elseBranch = elseIfBranch.elseBranch;
+                            if (isBlock(elseBranch)) {
+                                expectCommentWithText(elseBranch.statements[0], `'comment 7`);
+                                expectCommentWithText(elseBranch.statements[1], `'comment 8`);
+                                expectCommentWithText(elseBranch.statements[3], `'comment 9`);
+                            } else {
+                                failStatementType(elseBranch, 'Block');
+                            }
 
-                expect(ifStmt.elseBranch.statements[0].text).to.equal(`'comment 7`);
-                expect(ifStmt.elseBranch.statements[1].text).to.equal(`'comment 8`);
-                expect(ifStmt.elseBranch.statements[3].text).to.equal(`'comment 9`);
-
-                expect(statements[0].func.body.statements[1].text).to.equal(`'comment 10`);
-
+                        } else {
+                            failStatementType(elseIfBranch, 'If');
+                        }
+                        expectCommentWithText(fnSmt.func.body.statements[1], `'comment 10`);
+                    } else {
+                        failStatementType(ifStmt, 'If');
+                    }
+                } else {
+                    failStatementType(fnSmt, 'Function');
+                }
             });
 
             it('while', () => {
@@ -529,7 +548,7 @@ describe('parser', () => {
                     end = true
                 end sub
             `);
-            expect(diagnostics).to.be.lengthOf(1);
+            expect(diagnostics).to.be.length.greaterThan(0);
         });
         it('none of them can be used as local variables', () => {
             let reservedWords = new Set(ReservedWords);
@@ -717,4 +736,16 @@ export function rangeToArray(range: Range) {
         range.end.line,
         range.end.character
     ];
+}
+
+function expectCommentWithText(stat: Statement, text: string) {
+    if (isCommentStatement(stat)) {
+        expect(stat.text).to.equal(text);
+    } else {
+        failStatementType(stat, 'Comment');
+    }
+}
+
+export function failStatementType(stat: Statement, type: string) {
+    assert.fail(`Statement ${stat.constructor.name} line ${stat.range.start.line} is not a ${type}`);
 }
