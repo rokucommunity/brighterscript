@@ -1161,6 +1161,19 @@ export class BrsFile {
 
         let textToSearchFor = token.text.toLowerCase();
 
+        const previousToken = this.getTokenAt({line:token.range.start.line, character:token.range.start.character});
+
+        if (previousToken?.kind === TokenKind.Callfunc) {
+            for (const scope of this.program.getScopes()) {
+                //to only get functions defined in interface methods
+                const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor);
+                if (callable) {
+                    results.push(Location.create(util.pathToUri((callable.callable.file as BrsFile).pathAbsolute), callable.callable.functionStatement.range));
+                }
+            }
+            return results;
+        }
+
         if (token.kind === TokenKind.StringLiteral) {
             // We need to strip off the quotes but only if present
             const startIndex = textToSearchFor.startsWith('"') ? 1 : 0;
@@ -1185,28 +1198,40 @@ export class BrsFile {
             }
         }
 
-        const filesSearched = {};
+        const filesSearched = new Set<BrsFile>();
         //look through all files in scope for matches
         for (const scope of this.program.getScopesForFile(this)) {
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || filesSearched[file.pathAbsolute]) {
+                if (isXmlFile(file) || filesSearched.has(file)) {
                     continue;
                 }
-                filesSearched[file.pathAbsolute] = true;
+                filesSearched.add(file);
 
-                const statementHandler = (statement: FunctionStatement | ClassMethodStatement) => {
-                    if (statement.getName(this.getParseMode()).toLowerCase() === textToSearchFor) {
-                        const uri = util.pathToUri(file.pathAbsolute);
-                        results.push(Location.create(uri, statement.range));
-                    }
-                };
+                if (previousToken?.kind === TokenKind.Dot) {
+                    const statementHandler = (statement: ClassMethodStatement) => {
+                        if (statement.getName(file.getParseMode()).toLowerCase() === textToSearchFor) {
+                            results.push(Location.create(util.pathToUri(file.pathAbsolute), statement.range));
+                        }
+                    };
+                    file.parser.ast.walk(createVisitor({
+                        ClassMethodStatement: statementHandler
+                    }), {
+                        walkMode: WalkMode.visitStatements
+                    });
+                } else {
+                    const statementHandler = (statement: FunctionStatement) => {
+                        if (statement.getName(this.getParseMode()).toLowerCase() === textToSearchFor) {
+                            const uri = util.pathToUri(file.pathAbsolute);
+                            results.push(Location.create(uri, statement.range));
+                        }
+                    };
 
-                file.parser.ast.walk(createVisitor({
-                    FunctionStatement: statementHandler,
-                    ClassMethodStatement: statementHandler
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });
+                    file.parser.ast.walk(createVisitor({
+                        FunctionStatement: statementHandler
+                    }), {
+                        walkMode: WalkMode.visitStatements
+                    });
+                }
             }
         }
         return results;
@@ -1334,11 +1359,12 @@ export class BrsFile {
         const scopes = this.program.getScopesForFile(this);
 
         for (const scope of scopes) {
+            const processedFiles = new Set<BrsFile>();
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file)) {
+                if (isXmlFile(file) || processedFiles.has(file)) {
                     continue;
                 }
-
+                processedFiles.add(file);
                 file.ast.walk(createVisitor({
                     VariableExpression: (e) => {
                         if (e.name.text.toLowerCase() === searchFor) {

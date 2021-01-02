@@ -778,7 +778,7 @@ describe('lexer', () => {
             expect(f.text).to.eql('2.5e3');
         });
 
-        it.only('supports larger-than-supported-precision floats to be defined with exponents', () => {
+        it('supports larger-than-supported-precision floats to be defined with exponents', () => {
             let f = Lexer.scan('2.3659475627512424e-38').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
             expect(f.text).to.eql('2.3659475627512424e-38');
@@ -830,7 +830,7 @@ describe('lexer', () => {
             expect(f.text).to.eql('1%');
         });
 
-        it.only('does not allow decimal numbers to end with %', () => {
+        it('does not allow decimal numbers to end with %', () => {
             let f = Lexer.scan('1.2%').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
             expect(f.text).to.eql('1.2');

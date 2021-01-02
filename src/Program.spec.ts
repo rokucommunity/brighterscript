@@ -19,7 +19,7 @@ let tmpPath = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tmpPath}/rootDir`;
 let stagingFolderPath = s`${tmpPath}/staging`;
 
-describe('Program', () => {
+describe.only('Program', () => {
     let program: Program;
     beforeEach(() => {
         fsExtra.ensureDirSync(tmpPath);

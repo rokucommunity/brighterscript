@@ -705,7 +705,7 @@ export class Program {
         return file.getHover(position);
     }
 
-    public async getSignatureHelp(callSitePathAbsolute: string, callableName: string) {
+    public async getSignatureHelp(callSitePathAbsolute: string, callableName: string, lookupType: string = '') {
         const results = [] as SignatureInformation[];
 
         callableName = callableName.toLowerCase();
@@ -716,27 +716,56 @@ export class Program {
             return results;
         }
 
+        if (lookupType === '@.') {
+            //TODO when we have proper xml info from Philippe's xml parsing branch, restrict the lookupType for '@.'
+            for (const scope of this.getScopes()) {
+                //to only get functions defined in interface methods
+                const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === callableName);
+                if (callable) {
+                    results.push((callable.callable.file as BrsFile).getSignatureHelp(callable.callable.functionStatement));
+                }
+            }
+        }
+
         const scopes = this.getScopesForFile(file);
+
         for (const scope of scopes) {
-            const files = scope.getOwnFiles();
+            const files = scope.getAllFiles();
+            const processedFiles = new Set<BscFile>();
+
             for (const file of files) {
+                if (processedFiles.has(file)) {
+                    continue;
+                }
                 if (isXmlFile(file)) {
                     continue;
                 }
-
+                processedFiles.add(file);
                 await file.isReady();
 
-                const statementHandler = (statement: FunctionStatement | ClassMethodStatement) => {
-                    if (statement.getName(file.getParseMode()).toLowerCase() === callableName) {
-                        results.push(file.getSignatureHelp(statement));
-                    }
-                };
-                file.parser.ast.walk(createVisitor({
-                    FunctionStatement: statementHandler,
-                    ClassMethodStatement: statementHandler
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });
+               if (lookupType === '.') {
+                    const statementHandler = (statement: ClassMethodStatement) => {
+                        if (statement.getName(file.getParseMode()).toLowerCase() === callableName) {
+                            results.push(file.getSignatureHelp(statement));
+                        }
+                    };
+                    file.parser.ast.walk(createVisitor({
+                        ClassMethodStatement: statementHandler
+                    }), {
+                        walkMode: WalkMode.visitStatements
+                    });
+                } else {
+                    const statementHandler = (statement: FunctionStatement) => {
+                        if (statement.getName(file.getParseMode()).toLowerCase() === callableName) {
+                            results.push(file.getSignatureHelp(statement));
+                        }
+                    };
+                    file.parser.ast.walk(createVisitor({
+                        FunctionStatement: statementHandler
+                    }), {
+                        walkMode: WalkMode.visitStatements
+                    });
+                }
             }
         }
 

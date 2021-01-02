@@ -38,7 +38,7 @@ import { standardizePath as s, util } from './util';
 import { Logger } from './Logger';
 import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
-import type { Token } from './lexer';
+import { Token, TokenKind } from './lexer';
 import { Lexer } from './lexer';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { isBrsFile } from './astUtils/reflection';
@@ -994,21 +994,31 @@ export class LanguageServer {
         const { tokens } = Lexer.scan(info.line);
         const character = info.position.character;
         let matchingToken: Token;
+        let previousToken: Token;
         for (const token of tokens) {
             if (character >= token.range.start.character && character <= token.range.end.character) {
                 matchingToken = token;
                 break;
             }
+            previousToken = token;
         }
         if (!matchingToken) {
             return;
+        }
+        let lookupType = '';
+
+        if (previousToken?.kind === TokenKind.Callfunc) {
+            lookupType = '@.';
+        } else if (previousToken?.kind === TokenKind.Dot) {
+            lookupType = '.';
         }
 
         await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
 
         const signatures = util.flatMap(
             await Promise.all(this.getWorkspaces().map(workspace => {
-                return workspace.builder.program.getSignatureHelp(util.uriToPath(params.textDocument.uri), matchingToken.text);
+
+                return workspace.builder.program.getSignatureHelp(util.uriToPath(params.textDocument.uri), matchingToken.text, lookupType);
             })),
             c => c
         );
@@ -1098,7 +1108,7 @@ export class LanguageServer {
             })),
             c => c
         );
-        return results;
+        return results.filter((r) => r);
     }
 
     private diagnosticCollection = new DiagnosticCollection();
