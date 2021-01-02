@@ -11,7 +11,7 @@ import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement } from '../parser/Statement';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
 import type { Program, SignatureInfoObj } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
@@ -1263,8 +1263,14 @@ export class BrsFile {
                             results.push(Location.create(util.pathToUri(file.pathAbsolute), statement.range));
                         }
                     };
+                    const fieldStatementHandler = (statement: ClassFieldStatement) => {
+                        if (statement.name.text.toLowerCase() === textToSearchFor) {
+                            results.push(Location.create(util.pathToUri(file.pathAbsolute), statement.range));
+                        }
+                    };
                     file.parser.ast.walk(createVisitor({
-                        ClassMethodStatement: statementHandler
+                        ClassMethodStatement: statementHandler,
+                        ClassFieldStatement: fieldStatementHandler
                     }), {
                         walkMode: WalkMode.visitStatements
                     });
