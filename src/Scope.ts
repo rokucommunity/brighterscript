@@ -6,7 +6,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
+import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement } from './parser';
 import { ParseMode } from './parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
@@ -14,6 +14,7 @@ import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
+import { createVisitor, WalkMode } from './astUtils';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -822,14 +823,18 @@ export class Scope {
         }
 
         for (let callableContainer of callables) {
-            completions.push({
-                label: callableContainer.callable.getName(parseMode),
-                kind: CompletionItemKind.Function,
-                detail: callableContainer.callable.shortDescription,
-                documentation: callableContainer.callable.documentation ? { kind: 'markdown', value: callableContainer.callable.documentation } : undefined
-            });
+            completions.push(this.createCompletionFromCallable(callableContainer));
         }
         return completions;
+    }
+
+    public createCompletionFromCallable(callableContainer: CallableContainer): CompletionItem {
+        return {
+            label: callableContainer.callable.getName(ParseMode.BrighterScript),
+            kind: CompletionItemKind.Function,
+            detail: callableContainer.callable.shortDescription,
+            documentation: callableContainer.callable.documentation ? { kind: 'markdown', value: callableContainer.callable.documentation } : undefined
+        }
     }
 
     /**
@@ -849,6 +854,42 @@ export class Scope {
             results.push(...file.propertyNameCompletions);
         });
         return results;
+    }
+
+    public getClassMemberCompletions(): CompletionItem[] {
+        let results = new Map<string, CompletionItem>();
+        let filesSearched = new Set<BscFile>();
+        for (const file of this.getAllFiles()) {
+            if (isXmlFile(file) || filesSearched.has(file)) {
+                continue;
+            }
+            filesSearched.add(file);
+
+            const statementHandler = (s: ClassMethodStatement) => {
+                if (!results.has(s.name.text)) {
+                    results.set(s.name.text, {
+                        label: s.name.text,
+                        kind: CompletionItemKind.Method
+                    });
+                }
+            };
+            const fieldStatementHandler = (s: ClassFieldStatement) => {
+                if (!results.has(s.name.text)) {
+                    results.set(s.name.text, {
+                        label: s.name.text,
+                        kind: CompletionItemKind.Field
+                    });
+                }
+            };
+            file.parser.ast.walk(createVisitor({
+                ClassMethodStatement: statementHandler,
+                ClassFieldStatement: fieldStatementHandler
+            }), {
+                walkMode: WalkMode.visitStatements
+            });
+
+        }
+        return [...results.values()];
     }
 }
 

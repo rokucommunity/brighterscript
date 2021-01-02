@@ -1,8 +1,8 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CompletionItem, Position, SignatureInformation } from 'vscode-languageserver';
-import { Location, CompletionItemKind } from 'vscode-languageserver';
+import type { CompletionItem, Position } from 'vscode-languageserver';
+import { Location, CompletionItemKind, SignatureInformation } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -34,6 +34,11 @@ export interface SourceObj {
 export interface TranspileObj {
     file: BscFile;
     outputPath: string;
+}
+
+export interface SignatureInfoObj {
+    key: string;
+    signature: SignatureInformation
 }
 
 export class Program {
@@ -705,15 +710,15 @@ export class Program {
         return file.getHover(position);
     }
 
-    public async getSignatureHelp(callSitePathAbsolute: string, callableName: string, lookupType: string = '') {
-        const results = [] as SignatureInformation[];
+    public async getSignatureHelp(callSitePathAbsolute: string, callableName: string, lookupType: string = '', dottedGetText: string = undefined): Promise<SignatureInformation[]> {
+        const results = new Map<string, SignatureInformation>();
 
         callableName = callableName.toLowerCase();
 
         //find the file
         let file = this.getFile(callSitePathAbsolute);
         if (!file) {
-            return results;
+            return [];
         }
 
         if (lookupType === '@.') {
@@ -722,15 +727,18 @@ export class Program {
                 //to only get functions defined in interface methods
                 const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === callableName);
                 if (callable) {
-                    results.push((callable.callable.file as BrsFile).getSignatureHelp(callable.callable.functionStatement));
+                    let result = (callable.callable.file as BrsFile).getSignatureHelp(callable.callable.functionStatement);
+                    if (!results.has[result.key]) {
+                        results.set(result.key, result.signature);
+                    }
                 }
             }
-        }
+            return [...results.values()];
+        };
 
         const scopes = this.getScopesForFile(file);
 
         for (const scope of scopes) {
-<<<<<<< HEAD
             const files = scope.getAllFiles();
             const processedFiles = new Set<BscFile>();
 
@@ -738,20 +746,19 @@ export class Program {
                 if (processedFiles.has(file)) {
                     continue;
                 }
-=======
-            const files = scope.getOwnFiles();
-            for (const file of files) {
->>>>>>> master
                 if (isXmlFile(file)) {
                     continue;
                 }
                 processedFiles.add(file);
                 await file.isReady();
 
-               if (lookupType === '.') {
+                if (lookupType === '.') {
                     const statementHandler = (statement: ClassMethodStatement) => {
                         if (statement.getName(file.getParseMode()).toLowerCase() === callableName) {
-                            results.push(file.getSignatureHelp(statement));
+                            let result = file.getSignatureHelp(statement);
+                            if (!results.has[result.key]) {
+                                results.set(result.key, result.signature);
+                            }
                         }
                     };
                     file.parser.ast.walk(createVisitor({
@@ -759,10 +766,19 @@ export class Program {
                     }), {
                         walkMode: WalkMode.visitStatements
                     });
+                    let namespaceResults = file.getSignatureHelpForNamespaceMethods(callableName, dottedGetText, scope);
+                    for (let namespaceResult of namespaceResults) {
+                        if (!results.has[namespaceResult.key]) {
+                            results.set(namespaceResult.key, namespaceResult.signature);
+                        }
+                    }
                 } else {
                     const statementHandler = (statement: FunctionStatement) => {
                         if (statement.getName(file.getParseMode()).toLowerCase() === callableName) {
-                            results.push(file.getSignatureHelp(statement));
+                            let result = file.getSignatureHelp(statement);
+                            if (!results.has[result.key]) {
+                                results.set(result.key, result.signature);
+                            }
                         }
                     };
                     file.parser.ast.walk(createVisitor({
@@ -774,7 +790,7 @@ export class Program {
             }
         }
 
-        return results;
+        return [...results.values()];
     }
 
     public getReferences(pathAbsolute: string, position: Position) {
@@ -791,6 +807,7 @@ export class Program {
      * Get a list of all script imports, relative to the specified pkgPath
      * @param sourcePkgPath - the pkgPath of the source that wants to resolve script imports.
      */
+
     public getScriptImportCompletions(sourcePkgPath: string, scriptImport: FileReference) {
         let lowerSourcePkgPath = sourcePkgPath.toLowerCase();
 

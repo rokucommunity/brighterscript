@@ -1006,11 +1006,12 @@ export class LanguageServer {
             return;
         }
         let lookupType = '';
-
+        let dottedGetText = undefined;
         if (previousToken?.kind === TokenKind.Callfunc) {
             lookupType = '@.';
         } else if (previousToken?.kind === TokenKind.Dot) {
             lookupType = '.';
+            dottedGetText = this.getFullDottedStatementFromLine(matchingToken, tokens)
         }
 
         await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
@@ -1018,7 +1019,7 @@ export class LanguageServer {
         const signatures = util.flatMap(
             await Promise.all(this.getWorkspaces().map(workspace => {
 
-                return workspace.builder.program.getSignatureHelp(util.uriToPath(params.textDocument.uri), matchingToken.text, lookupType);
+                return workspace.builder.program.getSignatureHelp(util.uriToPath(params.textDocument.uri), matchingToken.text, lookupType, dottedGetText);
             })),
             c => c
         );
@@ -1034,7 +1035,29 @@ export class LanguageServer {
         return results;
     }
 
-    private getIdentifierInfo(params: SignatureHelpParams|ReferenceParams) {
+    private getFullDottedStatementFromLine(currentToken: Token, lineTokens: Token[]): string {
+        let identifierAndDotKinds = [TokenKind.Identifier, TokenKind.Dot];
+
+        //consume tokens backwards until we find something other than a dot or an identifier
+        let tokens = [];
+        for (let i = lineTokens.indexOf(currentToken); i >= 0; i--) {
+            currentToken = lineTokens[i];
+            if (identifierAndDotKinds.includes(currentToken.kind)) {
+                tokens.unshift(currentToken.text);
+            } else {
+                break;
+            }
+        }
+
+        //if we found name and dot tokens, join them together to make the namespace name
+        if (tokens.length > 0) {
+            return tokens.join('');
+        } else {
+            return undefined;
+        }
+    }
+
+    private getIdentifierInfo(params: SignatureHelpParams | ReferenceParams) {
         // Courtesy of George Cook :) He might call it whack but it works ¯\_(ツ)_/¯
         //get the position of a symbol to our left
         //1. get first bracket to our left, - then get the symbol before that..
