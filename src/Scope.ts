@@ -6,7 +6,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
+import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement, FunctionExpression } from './parser';
 import { ParseMode } from './parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
@@ -14,6 +14,7 @@ import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
+import { CustomType } from './types/CustomType';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -410,6 +411,7 @@ export class Scope {
                 this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
                 this.diagnosticDetectFunctionCollisions(file);
                 this.detectVariableNamespaceCollisions(file);
+                this.diagnosticDetectInvalidFunctionExpressionTypes(file);
             });
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
@@ -498,6 +500,46 @@ export class Scope {
                         range: func.nameRange,
                         file: file
                     });
+                }
+            }
+        }
+    }
+
+    /**
+    * Find function parameters and function return types that are neither built-in types or known Class references
+    */
+    private diagnosticDetectInvalidFunctionExpressionTypes(file: BscFile) {
+        const classMap = this.getClassMap();
+        for (let func of file.parser.references.functionExpressions) {
+            if (func.returnType instanceof CustomType) {
+                const returnTypeName = func.returnType.customTypeName
+                const lowerReturnTypeName = returnTypeName?.toLowerCase();
+                if (lowerReturnTypeName) {
+                    //check if this custom type is in our class map
+                    if (!classMap.has(lowerReturnTypeName)) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.callableHasUnknownReturnType(returnTypeName),
+                            range: func.returnTypeToken.range,
+                            file: file
+                        });
+                    }
+                }
+            }
+
+            for (let param of func.parameters) {
+                if (param.type instanceof CustomType) {
+                    const paramTypeName = param.type.customTypeName
+                    const lowerParamTypeName = paramTypeName?.toLowerCase();
+                    if (lowerParamTypeName) {
+                        //check if this custom type is in our class map
+                        if (!classMap.has(lowerParamTypeName)) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.parameterHasUnknownType(paramTypeName),
+                                range: param.typeToken.range,
+                                file: file
+                            });
+                        }
+                    }
                 }
             }
         }

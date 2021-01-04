@@ -247,8 +247,16 @@ describe('parser', () => {
             let { statements, diagnostics } = parse(`
                 function log() as UNKNOWN_TYPE
                 end function
-            `);
+            `, ParseMode.BrightScript);
             expect(diagnostics.length).to.be.greaterThan(0);
+            expect(statements[0]).to.exist;
+        });
+        it('unknown function type is not a problem in Brighterscript mode', () => {
+            let { statements, diagnostics } = parse(`
+                function log() as UNKNOWN_TYPE
+                end function
+            `, ParseMode.BrighterScript);
+            expect(diagnostics.length).to.equal(0);
             expect(statements[0]).to.exist;
         });
         it('works with conditionals', () => {

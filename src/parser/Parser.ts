@@ -598,7 +598,7 @@ export class Parser {
 
                 typeToken = this.advance();
 
-                if (!util.tokenToBscType(typeToken)) {
+                if (!util.tokenToBscType(typeToken, this.options.mode == ParseMode.BrighterScript)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.invalidFunctionReturnType(typeToken.text ?? ''),
                         range: typeToken.range
@@ -713,7 +713,7 @@ export class Parser {
 
             typeToken = this.advance();
 
-            if (!util.tokenToBscType(typeToken)) {
+            if (!util.tokenToBscType(typeToken, this.options.mode == ParseMode.BrighterScript)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeToken.text),
                     range: typeToken.range
@@ -721,7 +721,6 @@ export class Parser {
                 throw this.lastDiagnosticAsError();
             }
         }
-
         return new FunctionParameterExpression(
             name,
             typeToken,

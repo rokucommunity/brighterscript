@@ -484,6 +484,62 @@ describe('Scope', () => {
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
 
+        it('detects an unknown function return type', async () => {
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                function a()
+                    return invalid
+                end function
+
+                function b() as integer
+                    return 1
+                end function
+
+                function c() as unknownType
+                    return 2
+                end function
+
+                class myClass
+                    function myClassMethod() as unknownType
+                        return 2
+                    end function
+                end class
+
+                function d() as myClass
+                    return new myClass()
+                end function
+            `);
+            await program.validate();
+            expect(program.getDiagnostics().length).to.equal(2);
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.callableHasUnknownReturnType("unknownType").message
+            );
+        });
+
+        it('detects an unknown function parameter type', async () => {
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                sub a(num as integer)
+                end sub
+
+                sub b(unknownParam as unknownType)
+                end sub
+
+                class myClass
+                    sub myClassMethod(unknownParam as unknownType)
+                    end sub
+                end class
+
+                sub d(obj as myClass)
+                end sub
+            `);
+            await program.validate();
+            expect(program.getDiagnostics().length).to.equal(2);
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.parameterHasUnknownType("unknownType").message
+            );
+        });
+
+
+
         it('Emits validation events', async () => {
             const validateStartScope = sinon.spy();
             const validateEndScope = sinon.spy();

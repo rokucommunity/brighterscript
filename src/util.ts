@@ -28,6 +28,7 @@ import type { Token } from './lexer';
 import { TokenKind } from './lexer';
 import type { CompilerPlugin } from '.';
 import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
+import { CustomType } from './types/CustomType';
 
 export class Util {
 
@@ -974,7 +975,7 @@ export class Util {
     /**
      * Convert a token into a BscType
      */
-    public tokenToBscType(token: Token) {
+    public tokenToBscType(token: Token, allowCustomType = true) {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
@@ -1032,6 +1033,9 @@ export class Util {
                         return new StringType();
                     case 'void':
                         return new VoidType();
+                }
+                if (allowCustomType) {
+                    return new CustomType(token.text);
                 }
         }
     }
