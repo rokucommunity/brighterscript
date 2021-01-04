@@ -67,7 +67,7 @@ export class Scope {
      * A dictionary of all classes in this scope. This includes namespaced classes always with their full name.
      * The key is stored in lower case
      */
-    private getClassMap() {
+    public getClassMap(): Map<string, ClassStatement> {
         return this.cache.getOrAdd('classMap', () => {
             const map = new Map<string, ClassStatement>();
             this.enumerateAllFiles((file) => {
@@ -856,7 +856,7 @@ export class Scope {
         return results;
     }
 
-    public getClassMemberCompletions(): CompletionItem[] {
+    public getAllClassMemberCompletions(): CompletionItem[] {
         let results = new Map<string, CompletionItem>();
         let filesSearched = new Set<BscFile>();
         for (const file of this.getAllFiles()) {
@@ -866,7 +866,7 @@ export class Scope {
             filesSearched.add(file);
 
             const statementHandler = (s: ClassMethodStatement) => {
-                if (!results.has(s.name.text)) {
+                if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
                     results.set(s.name.text, {
                         label: s.name.text,
                         kind: CompletionItemKind.Method

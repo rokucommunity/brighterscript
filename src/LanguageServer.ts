@@ -545,14 +545,6 @@ export class LanguageServer {
             completion.commitCharacters = ['.'];
         }
 
-        // completions = [{
-        //     label: 'bronley',
-        //     textEdit: {
-        //         newText: 'bronley2',
-        //         range: util.createRange(position, position)
-        //     }
-        // }] as CompletionItem[];
-
         return completions;
     }
 

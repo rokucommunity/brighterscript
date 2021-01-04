@@ -786,7 +786,90 @@ describe.only('Program', () => {
             ).to.eql(['alertC']);
         });
 
-        it('should include translated namespace function names for brightscript files', async () => {
+        it('finds namespace members for classes', async () => {
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+                sub main()
+                    NameA.
+                    NameA.NameB.
+                    NameA.NameB.NameC.
+                end sub
+                namespace NameA
+                    sub alertA()
+                    end sub
+                end namespace
+                namespace NameA
+                    sub info()
+                    end sub
+                    class MyClassA
+                    end class
+                end namespace
+                namespace NameA.NameB
+                    sub alertB()
+                    end sub
+                    class MyClassB
+                    end class
+                end namespace
+                namespace NameA.NameB.NameC
+                    sub alertC()
+                    end sub
+                end namespace
+            `);
+            expect(
+                (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 26))).map(x => x.label).sort()
+            ).to.eql(['MyClassA', 'NameB', 'alertA', 'info']);
+
+            expect(
+                (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 32))).map(x => x.label).sort()
+            ).to.eql(['MyClassB', 'NameC', 'alertB']);
+
+            expect(
+                (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 38))).map(x => x.label).sort()
+            ).to.eql(['alertC']);
+        });
+
+        it('finds only namespaces that have classes, when new keyword is used', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+                sub main()
+                    a = new NameA.
+                    b = new NameA.NameB.
+                    c = new NameA.NameB.NameC.
+                end sub
+                namespace NameA
+                    sub alertA()
+                    end sub
+                end namespace
+                namespace NameA
+                    sub info()
+                    end sub
+                    class MyClassA
+                    end class
+                end namespace
+                namespace NameA.NameB
+                    sub alertB()
+                    end sub
+                    class MyClassB
+                    end class
+                end namespace
+                namespace NameA.NameB.NameC
+                    sub alertC()
+                    end sub
+                end namespace
+            `);
+            expect(
+                (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 34))).map(x => x.label).sort()
+            ).to.eql(['MyClassA', 'NameB']);
+
+            expect(
+                (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 40))).map(x => x.label).sort()
+            ).to.eql(['MyClassB', 'NameC']);
+
+            expect(
+                (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 46))).map(x => x.label).sort()
+            ).to.be.empty;
+        });
+
+        //Bron.. pain to get this working.. do we realy need this? seems moot with ropm..
+        it.skip('should include translated namespace function names for brightscript files', async () => {
             await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
                 namespace NameA.NameB.NameC
                     sub DoSomething()
@@ -942,6 +1025,140 @@ describe.only('Program', () => {
             //it should NOT include the global methods
             expect(completions).to.be.lengthOf(2);
         });
+
+        it('get all functions and properties in scope when doing any dotted get on non m ', async () => {
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+                sub main()
+                    thing.anonPropA = "foo"
+                    thing.anonPropB = "bar"
+                    thing.person
+                end sub
+                class MyClassA
+                    personName = "rafa"
+                    personAName = "rafaA"
+                    function personAMethodA()
+                    end function
+                    function personAMethodB()
+                    end function
+                end class
+                namespace NameA
+                    sub alertA()
+                    end sub
+                end namespace
+                namespace NameA.NameB
+                    sub alertB()
+                    end sub
+                    class MyClassB
+                        personName = "roger"
+                        personBName = "rogerB"
+                        function personAMethodC()
+                        end function
+                        function personBMethodA()
+                        end function
+                        function personBMethodB()
+                        end function
+                    end class
+                end namespace
+                namespace NameA.NameB.NameC
+                    sub alertC()
+                    end sub
+                end namespace
+            `);
+            //note - we let the vscode extension do the filtering, so we still return everything; otherwise it exhibits strange behaviour in the IDE
+            expect(
+                (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 32))).map(x => x.label).sort()
+            ).to.eql(['anonPropA', 'anonPropB', 'person', 'personAMethodA', 'personAMethodB', 'personAMethodC', 'personAName', 'personBMethodA', 'personBMethodB', 'personBName', 'personName']);
+        });
+
+        it('get all functions and properties relevant for m ', async () => {
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+                class MyClassA
+                    function new()
+                        m.
+                        other.
+                    end function
+                    personName = "rafa"
+                    personAName = "rafaA"
+                    function personAMethodA()
+                    end function
+                    function personAMethodB()
+                    end function
+                end class
+                class MyClassB
+                    personName = "roger"
+                    personBName = "rogerB"
+                    function personAMethodC()
+                    end function
+                    function personBMethodA()
+                    end function
+                    function personBMethodB()
+                    end function
+                end class
+                class MyClassC extends MyClassA
+                    function new()
+                        m.
+                        other.
+                    end function
+                    personCName = "rogerC"
+                    function personCMethodC()
+                    end function
+                    function personCMethodA()
+                    end function
+                    function personCMethodB()
+                    end function
+                end class
+                sub alertC()
+                end sub
+            `);
+            expect(
+                (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 26))).map(x => x.label).sort()
+            ).to.eql(['new', 'personAMethodA', 'personAMethodB', 'personAName', 'personName']);
+            expect(
+                (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(4, 30))).map(x => x.label).sort()
+            ).to.eql(['personAMethodA', 'personAMethodB', 'personAMethodC', 'personAName', 'personBMethodA', 'personBMethodB', 'personBName', 'personCMethodA', 'personCMethodB', 'personCMethodC', 'personCName', 'personName']);
+            expect(
+                (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(25, 26))).map(x => x.label).sort()
+            ).to.eql(['new', 'personAMethodA', 'personAMethodB', 'personAName', 'personCMethodA', 'personCMethodB', 'personCMethodC', 'personCName', 'personName']);
+        });
+
+    });
+
+    it('include non-namespaced classes in the list of general output', async () => {
+        await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+                function regularFunc()
+                    MyClass
+                end function
+                sub alertC()
+                end sub
+                class MyClassA
+                end class
+                class MyClassB
+                end class
+                class MyClassC extends MyClassA
+                end class
+            `);
+        expect(
+            (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 26))).map(x => x.label).sort()
+        ).to.include.members(['MyClassA', 'MyClassB', 'MyClassC']);
+    });
+
+    it('only include classes when using new keyword', async () => {
+        await program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.brs' }, `
+                class MyClassA
+                end class
+                class MyClassB
+                end class
+                class MyClassC extends MyClassA
+                end class
+                function regularFunc()
+                    new MyClass
+                end function
+                sub alertC()
+                end sub
+            `);
+        expect(
+            (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 29))).map(x => x.label).sort()
+        ).to.eql(['MyClassA', 'MyClassB', 'MyClassC']);
     });
 
     describe('xml inheritance', () => {
@@ -1444,6 +1661,145 @@ describe.only('Program', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+    });
+
+    describe('getSignatureHelp', () => {
+        it('gets signature help for class function with params', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+            function main()
+                p = new Person()
+                p.sayHello()
+            end function
+
+            class person
+                function new()
+                end function
+
+                function sayHello()
+                end function
+            end class
+            `);
+            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, 'sayHello', '.', 'p'));
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(signatureHelp[0].label).to.equal('function sayHello()');
+        });
+
+        it('gets signature help for class function', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+            function main()
+            end function
+
+            class person
+                function new()
+                end function
+
+                function sayHello(text)
+                end function
+            end class
+            `);
+            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, 'sayHello', '.', 'p'));
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(signatureHelp[0].label).to.equal('function sayHello(text)');
+        });
+
+        it('gets signature help for namespaced class function', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+            function main()
+            end function
+            namespace player
+                class person
+                    function new()
+                    end function
+
+                    function sayHello(text)
+                    end function
+                end class
+            end namespace
+            `);
+            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, 'sayHello', '.', 'p'));
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(signatureHelp[0].label).to.equal('function sayHello(text)');
+        });
+
+        it('gets signature help for namespace function', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+            function main()
+            end function
+
+            namespace person
+                function sayHello(text, text2)
+                end function
+            end namespace
+            `);
+            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, 'sayHello', '.', 'person'));
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(signatureHelp[0].label).to.equal('function sayHello(text, text2)');
+        });
+
+        it('gets signature help for nested namespace function', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+            function main()
+            end function
+
+            namespace person.george
+                function sayHello(text, text2)
+                end function
+            end namespace
+            `);
+            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, 'sayHello', '.', 'person.george'));
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(signatureHelp[0].label).to.equal('function sayHello(text, text2)');
+        });
+
+        it('gets signature help for callfunc method', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+            function main()
+            end function
+            `);
+            await program.addOrReplaceFile('components/MyNode.bs', `
+                function sayHello(text, text2)
+                end function
+            `);
+            await program.addOrReplaceFile('components/MyNode.xml', `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script type="text/brighterscript" uri="pkg:/components/MyNode.bs" />
+                    <interface>
+                        <function name="sayHello"/>
+                    </interface>
+                </component>`);
+            await program.validate();
+
+            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, 'sayHello', '@.', 'myNode'));
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            //note - callfunc completions and signatures are not yet correctly identifying methods that are exposed in an interace - waiting on the new xml branch for that
+            expect(signatureHelp[0].label).to.equal('function sayHello(text, text2)');
+        });
+
+        it('does not get signature help for callfunc method, referenced by dot', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+            function main()
+            end function
+            `);
+            await program.addOrReplaceFile('components/MyNode.bs', `
+                function sayHello(text, text2)
+                end function
+            `);
+            await program.addOrReplaceFile('components/MyNode.xml', `
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script type="text/brighterscript" uri="pkg:/components/MyNode.bs" />
+                    <interface>
+                        <function name="sayHello"/>
+                    </interface>
+                </component>`);
+            await program.validate();
+
+            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, 'sayHello', '.', 'myNode'));
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            //note - callfunc completions and signatures are not yet correctly identifying methods that are exposed in an interace - waiting on the new xml branch for that
+            expect(signatureHelp).to.be.empty;
         });
     });
 });

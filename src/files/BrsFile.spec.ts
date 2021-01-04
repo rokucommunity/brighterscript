@@ -21,7 +21,7 @@ import { ParseMode } from '../parser/Parser';
 
 let sinon = sinonImport.createSandbox();
 
-describe.only('BrsFile', () => {
+describe('BrsFile', () => {
     let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
     let srcPath = s`${rootDir}/source/main.brs`;

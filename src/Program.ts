@@ -753,6 +753,15 @@ export class Program {
                 await file.isReady();
 
                 if (lookupType === '.') {
+                    let namespaceResults = file.getSignatureHelpForNamespaceMethods(callableName, dottedGetText, scope);
+                    for (let namespaceResult of namespaceResults) {
+                        if (!results.has[namespaceResult.key]) {
+                            results.set(namespaceResult.key, namespaceResult.signature);
+                        }
+                    }
+                    if (results.size > 0) {
+                        return [...results.values()];
+                    }
                     const statementHandler = (statement: ClassMethodStatement) => {
                         if (statement.getName(file.getParseMode()).toLowerCase() === callableName) {
                             let result = file.getSignatureHelp(statement);
@@ -766,12 +775,7 @@ export class Program {
                     }), {
                         walkMode: WalkMode.visitStatements
                     });
-                    let namespaceResults = file.getSignatureHelpForNamespaceMethods(callableName, dottedGetText, scope);
-                    for (let namespaceResult of namespaceResults) {
-                        if (!results.has[namespaceResult.key]) {
-                            results.set(namespaceResult.key, namespaceResult.signature);
-                        }
-                    }
+
                 } else {
                     const statementHandler = (statement: FunctionStatement) => {
                         if (statement.getName(file.getParseMode()).toLowerCase() === callableName) {
