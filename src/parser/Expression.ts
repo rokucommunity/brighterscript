@@ -216,7 +216,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pathAbsolute, 'as'),
                 ' ',
                 //return type
-                new SourceNode(this.returnTypeToken.range.start.line + 1, this.returnTypeToken.range.start.character, state.pathAbsolute, this.returnTypeToken.text.toLowerCase())
+                util.bscTypeToTypeString(this.returnType)
             );
         }
         if (includeBody) {
@@ -291,7 +291,7 @@ export class FunctionParameterExpression extends Expression {
             result.push(' ');
             result.push(new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pathAbsolute, 'as'));
             result.push(' ');
-            result.push(new SourceNode(this.typeToken.range.start.line + 1, this.typeToken.range.start.character, state.pathAbsolute, this.typeToken.text));
+            result.push(util.bscTypeToTypeString(this.type));
         }
 
         return result;
