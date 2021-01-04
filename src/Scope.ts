@@ -512,7 +512,7 @@ export class Scope {
         const classMap = this.getClassMap();
         for (let func of file.parser.references.functionExpressions) {
             if (func.returnType instanceof CustomType) {
-                const returnTypeName = func.returnType.customTypeName
+                const returnTypeName = func.returnType.customTypeName;
                 const lowerReturnTypeName = returnTypeName?.toLowerCase();
                 if (lowerReturnTypeName) {
                     //check if this custom type is in our class map
@@ -528,7 +528,7 @@ export class Scope {
 
             for (let param of func.parameters) {
                 if (param.type instanceof CustomType) {
-                    const paramTypeName = param.type.customTypeName
+                    const paramTypeName = param.type.customTypeName;
                     const lowerParamTypeName = paramTypeName?.toLowerCase();
                     if (lowerParamTypeName) {
                         //check if this custom type is in our class map

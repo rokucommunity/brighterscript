@@ -10,7 +10,7 @@ import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
-import { BscType } from './types/BscType';
+import type { BscType } from './types/BscType';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -1042,13 +1042,13 @@ export class Util {
     }
 
     /**
-   * Convert a BscType to a type string
-   */
+    * Convert a BscType to a type string
+    */
     public bscTypeToTypeString(bscType: BscType) {
         if (bscType instanceof FunctionType) {
-            return "Function"
+            return 'Function';
         }
-        return bscType.toString()
+        return bscType.toString();
     }
 
     /**

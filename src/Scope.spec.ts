@@ -511,7 +511,7 @@ describe('Scope', () => {
             await program.validate();
             expect(program.getDiagnostics().length).to.equal(2);
             expect(program.getDiagnostics().map(x => x.message)).to.include(
-                DiagnosticMessages.callableHasUnknownReturnType("unknownType").message
+                DiagnosticMessages.callableHasUnknownReturnType('unknownType').message
             );
         });
 
@@ -534,11 +534,9 @@ describe('Scope', () => {
             await program.validate();
             expect(program.getDiagnostics().length).to.equal(2);
             expect(program.getDiagnostics().map(x => x.message)).to.include(
-                DiagnosticMessages.parameterHasUnknownType("unknownType").message
+                DiagnosticMessages.parameterHasUnknownType('unknownType').message
             );
         });
-
-
 
         it('Emits validation events', async () => {
             const validateStartScope = sinon.spy();
