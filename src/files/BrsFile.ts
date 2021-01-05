@@ -832,7 +832,7 @@ export class BrsFile {
                 //and anything from any class in scope to a non m class
                 let classMemberCompletions = scope.getAllClassMemberCompletions();
                 result.push(...classMemberCompletions.values());
-                result.push(...scope.getPropertyNameCompletions().filter((i)=> !classMemberCompletions.has(i.label)));
+                result.push(...scope.getPropertyNameCompletions().filter((i) => !classMemberCompletions.has(i.label)));
             } else {
                 result.push(...scope.getPropertyNameCompletions());
             }
