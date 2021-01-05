@@ -14,7 +14,6 @@ import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType } from './astUtils/reflection';
-import { CustomType } from './types/CustomType';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
