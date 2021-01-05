@@ -20,9 +20,10 @@ import type { ManifestValue } from './preprocessor/Manifest';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isCallExpression, isCallfuncExpression, isNewExpression, isClassStatement, isClassMethodStatement, isFunctionStatement, isFunctionExpression, isDottedGetExpression } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
-import type { ClassMethodStatement, FunctionStatement } from './parser/Statement';
+import type { ClassStatement, FunctionStatement, Statement } from './parser/Statement';
+import type { CallExpression, CallfuncExpression, FunctionExpression, NewExpression } from './parser/Expression';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {
@@ -34,6 +35,17 @@ export interface SourceObj {
 export interface TranspileObj {
     file: BscFile;
     outputPath: string;
+}
+
+export interface SignatureInfoObj {
+    index: number;
+    key: string;
+    signature: SignatureInformation;
+}
+
+export interface ASTObj<T> {
+    item: T;
+    file: BrsFile;
 }
 
 export class Program {
@@ -612,6 +624,68 @@ export class Program {
         return result;
     }
 
+    public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): ASTObj<Statement>[] {
+        let results = new Map<Statement, ASTObj<Statement>>();
+        const filesSearched = new Set<BrsFile>();
+        let parseMode = originFile.getParseMode();
+        let lowerNamespaceName = namespaceName?.toLowerCase();
+        //look through all files in scope for matches
+        for (const scope of this.getScopesForFile(originFile)) {
+            for (const file of scope.getAllFiles()) {
+                if (isXmlFile(file) || filesSearched.has(file)) {
+                    continue;
+                }
+                filesSearched.add(file);
+
+                const statementHandler = (statement: FunctionStatement, parent: Statement) => {
+                    let parentNamespaceName = statement.namespaceName?.getName(parseMode)?.toLowerCase();
+                    if (statement.name.text.toLowerCase() === name && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
+                        if (!results.has(statement)) {
+                            results.set(statement, { item: statement, file: file });
+                        }
+                    }
+                };
+
+                file.parser.ast.walk(createVisitor({
+                    FunctionStatement: statementHandler,
+                    ClassMethodStatement: statementHandler
+                }), {
+                    walkMode: WalkMode.visitStatements
+                });
+            }
+        }
+        return [...results.values()];
+    }
+
+    public getFileForItem(item: ClassStatement | FunctionStatement | FunctionExpression, originFile?: BrsFile): BrsFile {
+
+        let scopes = originFile ? this.getScopesForFile(originFile) : [this.globalScope];
+        //if the class is namespace-prefixed, look only for this exact name
+        for (let scope of scopes) {
+            for (const file of scope.getAllFiles()) {
+                if (isBrsFile(file)) {
+                    let lookup = [];
+                    if (isClassStatement(item)) {
+                        lookup = file.parser.references.classStatements;
+                    } else if (isClassMethodStatement(item)) {
+                        lookup = file.parser.references.classStatements.flatMap(cs => cs.body);
+                    } else if (isFunctionStatement(item)) {
+                        lookup = file.parser.references.functionStatements;
+                    } else if (isFunctionExpression(item)) {
+                        lookup = file.parser.references.functionExpressions;
+                    }
+                    let matchedItem = lookup.find((i) => i === item);
+                    if (matchedItem) {
+                        return file;
+                    }
+                }
+            }
+        }
+
+        return undefined;
+    }
+
+
     /**
      * Find all available completion items at the given position
      * @param pathAbsolute
@@ -705,42 +779,73 @@ export class Program {
         return file.getHover(position);
     }
 
-    public async getSignatureHelp(callSitePathAbsolute: string, callableName: string) {
-        const results = [] as SignatureInformation[];
-
-        callableName = callableName.toLowerCase();
-
-        //find the file
-        let file = this.getFile(callSitePathAbsolute);
-        if (!file) {
-            return results;
+    public async getSignatureHelp(filepath: string, position: Position): Promise<SignatureInfoObj[]> {
+        let file: BrsFile = this.getFile(filepath);
+        if (!file || !isBrsFile(file)) {
+            return [];
         }
 
-        const scopes = this.getScopesForFile(file);
-        for (const scope of scopes) {
-            const files = scope.getOwnFiles();
-            for (const file of files) {
-                if (isXmlFile(file)) {
-                    continue;
-                }
+        await file.isReady();
 
-                await file.isReady();
-
-                const statementHandler = (statement: FunctionStatement | ClassMethodStatement) => {
-                    if (statement.getName(file.getParseMode()).toLowerCase() === callableName) {
-                        results.push(file.getSignatureHelp(statement));
+        const results = new Map<string, SignatureInfoObj>();
+        const statementHandler = (expr: CallExpression | CallfuncExpression | NewExpression) => {
+            if (util.rangeContains(expr.range, position)) {
+                if (isCallExpression(expr)) {
+                    let name;
+                    name = (expr.callee as any)?.name?.text?.toLowerCase();
+                    if (name) {
+                        let dotPart = isDottedGetExpression(expr.callee) ? file.getPartialVariableName(expr.callee.dot) : undefined;
+                        if (dotPart) {
+                            //remove last .
+                            if (dotPart.endsWith('.')) {
+                                dotPart = dotPart.substring(0, dotPart.length - 1);
+                            }
+                        }
+                        let statements = file.program.getStatementsByName(name, file, dotPart);
+                        for (let statement of statements) {
+                            //TODO better handling of collisions - if it's a namespace, then don't show any other overrides
+                            //if we're on m - then limit scope to the current class, if present
+                            let sigHelp = statement.file.getSignatureHelp(statement.item);
+                            if (sigHelp && !results.has[sigHelp.key]) {
+                                sigHelp.index = expr.args.findIndex((e) => util.rangeContains(e.range, position));
+                                results.set(sigHelp.key, sigHelp);
+                            }
+                        }
                     }
-                };
-                file.parser.ast.walk(createVisitor({
-                    FunctionStatement: statementHandler,
-                    ClassMethodStatement: statementHandler
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });
+                } else if (isCallfuncExpression(expr)) {
+                    for (const scope of this.getScopes()) {
+                        //to only get functions defined in interface methods
+                        const lowerName = expr.methodName.text.toLowerCase();
+                        const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === lowerName);
+                        if (callable) {
+                            let sigHelp = (callable.callable.file as BrsFile).getSignatureHelp(callable.callable.functionStatement);
+                            if (sigHelp && !results.has[sigHelp.key]) {
+                                sigHelp.index = expr.args.findIndex((e) => util.rangeContains(e.range, position));
+                                results.set(sigHelp.key, sigHelp);
+                            }
+                        }
+                    }
+                } else if (isNewExpression(expr)) {
+                    const nameParts = expr.className.getNameParts();
+                    let clazzItem = file.getClassByName(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
+                    let sigHelp = clazzItem?.file?.getClassSignatureHelp(clazzItem?.item);
+                    if (sigHelp && !results.has(sigHelp.key)) {
+                        sigHelp.index = expr.call.args.findIndex((e) => util.rangeContains(e.range, position));
+                        results.set(sigHelp.key, sigHelp);
+                    }
+                }
             }
-        }
+        };
 
-        return results;
+        file.parser.ast.walk(createVisitor({
+            CallExpression: statementHandler,
+            CallfuncExpression: statementHandler,
+            NewExpression: statementHandler
+        }), {
+            walkMode: WalkMode.visitAllRecursive
+        });
+
+        return [...results.values()];
     }
 
     public getReferences(pathAbsolute: string, position: Position) {
@@ -757,6 +862,7 @@ export class Program {
      * Get a list of all script imports, relative to the specified pkgPath
      * @param sourcePkgPath - the pkgPath of the source that wants to resolve script imports.
      */
+
     public getScriptImportCompletions(sourcePkgPath: string, scriptImport: FileReference) {
         let lowerSourcePkgPath = sourcePkgPath.toLowerCase();
 

@@ -1092,12 +1092,12 @@ export class Parser {
                     ...this.allowedLocalIdentifiers,
                     ...AllowedProperties
                 ) as Identifier;
-                // force it into an identifier so the AST makes some sense
-                identifier.kind = TokenKind.Identifier;
 
                 if (!identifier) {
                     break;
                 }
+                // force it into an identifier so the AST makes some sense
+                identifier.kind = TokenKind.Identifier;
                 expr = new DottedGetExpression(expr, identifier, dot);
             }
         }

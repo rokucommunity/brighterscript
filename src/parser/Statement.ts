@@ -1258,7 +1258,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                stmt = state.file.getClassByName(stmt.parentClassName.getName(ParseMode.BrighterScript));
+                stmt = state.file.getClassByName(stmt.parentClassName.getName(ParseMode.BrighterScript))?.item;
                 myIndex++;
             } else {
                 break;
@@ -1284,7 +1284,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
                     this.namespaceName?.getName(ParseMode.BrighterScript)
                 );
-                stmt = state.file.getClassByName(fullyQualifiedClassName);
+                stmt = state.file.getClassByName(fullyQualifiedClassName)?.item;
                 ancestors.push(stmt);
             } else {
                 break;

@@ -11,8 +11,8 @@ import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement } from '../parser/Statement';
-import type { Program } from '../Program';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
+import type { ASTObj, Program, SignatureInfoObj } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
@@ -21,7 +21,7 @@ import { TranspileState } from '../parser/TranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isImportStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile } from '../astUtils/reflection';
+import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
@@ -134,7 +134,7 @@ export class BrsFile {
      * Get the token at the specified position
      * @param position
      */
-    private getTokenAt(position: Position) {
+    public getTokenAt(position: Position) {
         for (let token of this.parser.tokens) {
             if (util.rangeContains(token.range, position)) {
                 return token;
@@ -363,31 +363,29 @@ export class BrsFile {
      * Returns undefined if not found.
      * @param namespaceName - the namespace to resolve relative classes from.
      */
-    public getClassByName(className: string, namespaceName?: string) {
+    public getClassByName(className: string, namespaceName?: string): ASTObj<ClassStatement> {
         let scopes = this.program.getScopesForFile(this);
         let lowerClassName = className.toLowerCase();
-
         //if the class is namespace-prefixed, look only for this exact name
         if (className.includes('.')) {
             for (let scope of scopes) {
-                const cls = scope.getClass(lowerClassName);
+                const cls = scope.getClassObject(lowerClassName);
                 if (cls) {
                     return cls;
                 }
             }
-
             //we have a class name without a namespace prefix.
         } else {
-            let globalClass: ClassStatement;
-            let namespacedClass: ClassStatement;
+            let globalClass: ASTObj<ClassStatement>;
+            let namespacedClass: ASTObj<ClassStatement>;
             for (let scope of scopes) {
                 //get the global class if it exists
-                let possibleGlobalClass = scope.getClass(lowerClassName);
+                let possibleGlobalClass = scope.getClassObject(lowerClassName);
                 if (possibleGlobalClass && !globalClass) {
                     globalClass = possibleGlobalClass;
                 }
                 if (namespaceName) {
-                    let possibleNamespacedClass = scope.getClass(namespaceName.toLowerCase() + '.' + lowerClassName);
+                    let possibleNamespacedClass = scope.getClassObject(namespaceName.toLowerCase() + '.' + lowerClassName);
                     if (possibleNamespacedClass) {
                         namespacedClass = possibleNamespacedClass;
                         break;
@@ -395,12 +393,7 @@ export class BrsFile {
                 }
 
             }
-
-            if (namespacedClass) {
-                return namespacedClass;
-            } else if (globalClass) {
-                return globalClass;
-            }
+            return namespacedClass ? namespacedClass : globalClass;
         }
     }
 
@@ -787,24 +780,67 @@ export class BrsFile {
             return [];
         }
 
+        let namespaceCompletions = this.getNamespaceCompletions(currentToken, parseMode, scope);
+        if (namespaceCompletions.length > 0) {
+            return namespaceCompletions;
+        }
         //determine if cursor is inside a function
         let functionScope = this.getFunctionScopeAtPosition(position);
         if (!functionScope) {
-            //we aren't in any function scope, so return the keyword completions
-            return KeywordCompletions;
+            //we aren't in any function scope, so return the keyword completions and namespaces
+            if (this.getTokenBefore(currentToken, TokenKind.New)) {
+                // there's a new keyword, so only class types are viable here
+                return [...this.getGlobalClassStatementCompletions(currentToken, parseMode)];
+            } else {
+                return [...KeywordCompletions, ...this.getGlobalClassStatementCompletions(currentToken, parseMode), ...namespaceCompletions];
+            }
         }
 
-        //is next to a period (or an identifier that is next to a period). include the property names
-        if (this.isPositionNextToDot(position)) {
-            let namespaceCompletions = this.getNamespaceCompletions(currentToken, parseMode, scope);
-            //if the text to the left of the dot is a part of a known namespace, complete with additional namespace information
+        if (this.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
+            // is next to a @. callfunc invocation
+            for (const scope of this.program.getScopes()) {
+                scope.getAllCallables().forEach((c) => {
+                    result.push(scope.createCompletionFromCallable(c));
+                });
+            }
+            //no other result is possible in this case
+            return result;
+
+        }
+        const classNameCompletions = this.getGlobalClassStatementCompletions(currentToken, parseMode);
+        const newToken = this.getTokenBefore(currentToken, TokenKind.New);
+        if (newToken) {
+            //we are after a new keyword; so we can only be namespaces or classes at this point
+            result.push(...classNameCompletions);
+            result.push(...namespaceCompletions);
+            return result;
+        }
+
+        if (this.isPositionNextToTokenKind(position, TokenKind.Dot)) {
             if (namespaceCompletions.length > 0) {
-                result.push(...namespaceCompletions);
-            } else {
-                result.push(...scope.getPropertyNameCompletions());
+                //if we matched a namespace, after a dot, it can't be anything else but something from our namespace completions
+                return namespaceCompletions;
             }
 
+            const selfClassMemberCompletions = this.getClassMemberCompletions(position, currentToken, functionScope, scope);
+            if (selfClassMemberCompletions.length > 0) {
+                //this is an m. dotted get, we are in a class, so no other option is possible
+                result.push(...selfClassMemberCompletions);
+                //add properties for more flexibility
+                result.push(...scope.getPropertyNameCompletions());
+                return result;
+            }
+
+            result.push(...scope.getPropertyNameCompletions());
+            //and anything from any class in scope
+            result.push(...scope.getAllClassMemberCompletions());
         } else {
+            //include namespaces
+            result.push(...namespaceCompletions);
+
+            //include class names
+            result.push(...classNameCompletions);
+
             //include the global callables
             result.push(...scope.getCallablesAsCompletions(parseMode));
 
@@ -852,19 +888,84 @@ export class BrsFile {
         return result;
     }
 
-    private getNamespaceCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope) {
+    private getClassMemberCompletions(position: Position, currentToken: Token, functionScope: FunctionScope, scope: Scope): CompletionItem[] {
+
+        let classStatement = this.getClassFromMReference(position, currentToken, functionScope);
+        let results = new Map<string, CompletionItem>();
+        if (classStatement) {
+
+            const statementHandler = (s: ClassFieldStatement | ClassMethodStatement) => {
+                if (!results.has(s.name.text)) {
+                    results.set(s.name.text, {
+                        label: s.name.text,
+                        kind: isClassFieldStatement(s) ? CompletionItemKind.Field : CompletionItemKind.Function
+                    });
+                }
+            };
+            while (classStatement) {
+                classStatement.walk(createVisitor({
+                    ClassMethodStatement: statementHandler,
+                    ClassFieldStatement: statementHandler
+                }), {
+                    walkMode: WalkMode.visitStatements
+                });
+                classStatement = scope.getClass(classStatement.parentClassName?.getName(ParseMode.BrighterScript)?.toLowerCase());
+            }
+        }
+        return [...results.values()];
+    }
+
+    private getClassFromMReference(position: Position, currentToken: Token, functionScope: FunctionScope): ClassStatement | undefined {
+        const previousToken = this.getPreviousToken(currentToken);
+        if (previousToken.kind === TokenKind.Identifier && previousToken.text.toLowerCase() === 'm' && isClassMethodStatement(functionScope.func.functionStatement)) {
+            return this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, position));
+        }
+        return undefined;
+    }
+
+    private getGlobalClassStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {
+        if (parseMode === ParseMode.BrightScript) {
+            return [];
+        }
+        let results = new Map<string, CompletionItem>();
+        let completionName = this.getPartialVariableName(currentToken, [TokenKind.New])?.toLowerCase();
+        if (completionName?.includes('.')) {
+            return [];
+        }
+        let scopes = this.program.getScopesForFile(this);
+        for (let scope of scopes) {
+            let classMap = scope.getClassMap();
+            // let viableKeys = [...classMap.keys()].filter((k) => k.startsWith(completionName));
+            for (const key of [...classMap.keys()]) {
+                let cs = classMap.get(key).item;
+                if (!results.has(cs.name.text)) {
+                    results.set(cs.name.text, {
+                        label: cs.name.text,
+                        kind: CompletionItemKind.Class
+                    });
+                }
+            }
+        }
+        return [...results.values()];
+    }
+
+    private getNamespaceCompletions(currentToken: Token, parseMode: ParseMode, scope: Scope): CompletionItem[] {
         //BrightScript does not support namespaces, so return an empty list in that case
         if (parseMode === ParseMode.BrightScript) {
             return [];
         }
 
-        let completionName = this.getPartialVariableName(currentToken);
+        let completionName = this.getPartialVariableName(currentToken, [TokenKind.New]);
+        if (!completionName) {
+            return [];
+        }
         //remove any trailing identifer and then any trailing dot, to give us the
         //name of its immediate parent namespace
         let closestParentNamespaceName = completionName.replace(/\.([a-z0-9_]*)?$/gi, '');
+        let newToken = this.getTokenBefore(currentToken, TokenKind.New);
 
         let namespaceLookup = scope.namespaceLookup;
-        let result = [] as CompletionItem[];
+        let result = new Map<string, CompletionItem>();
         for (let key in namespaceLookup) {
             let namespace = namespaceLookup[key.toLowerCase()];
             //completionName = "NameA."
@@ -873,39 +974,86 @@ export class BrsFile {
             //NameA.NameB
             //NameA.NameB.NameC
             if (namespace.fullName.toLowerCase() === closestParentNamespaceName.toLowerCase()) {
-                //add all of this namespace's immediate child namespaces
+                //add all of this namespace's immediate child namespaces, bearing in mind if we are after a new keyword
                 for (let childKey in namespace.namespaces) {
-                    result.push({
-                        label: namespace.namespaces[childKey].lastPartName,
-                        kind: CompletionItemKind.Module
-                    });
+                    const ns = namespace.namespaces[childKey];
+                    if (!newToken || ns.statements.find((s) => isClassStatement(s))) {
+                        if (!result.has(ns.lastPartName)) {
+                            result.set(ns.lastPartName, {
+                                label: ns.lastPartName,
+                                kind: CompletionItemKind.Module
+                            });
+                        }
+                    }
                 }
 
                 //add function and class statement completions
                 for (let stmt of namespace.statements) {
                     if (isClassStatement(stmt)) {
-                        result.push({
-                            label: stmt.name.text,
-                            kind: CompletionItemKind.Class
-                        });
-                    } else if (isFunctionStatement(stmt)) {
-                        result.push({
-                            label: stmt.name.text,
-                            kind: CompletionItemKind.Function
-                        });
+                        if (!result.has(stmt.name.text)) {
+                            result.set(stmt.name.text, {
+                                label: stmt.name.text,
+                                kind: CompletionItemKind.Class
+                            });
+                        }
+                    } else if (isFunctionStatement(stmt) && !newToken) {
+                        if (!result.has(stmt.name.text)) {
+                            result.set(stmt.name.text, {
+                                label: stmt.name.text,
+                                kind: CompletionItemKind.Function
+                            });
+                        }
                     }
 
                 }
 
             }
         }
+        return [...result.values()];
+    }
 
-        return result;
+    private getNamespaceDefinitions(token: Token, file: BrsFile): Location {
+        //BrightScript does not support namespaces, so return an empty list in that case
+        if (!token) {
+            return undefined;
+        }
+        let location;
+
+        const nameParts = this.getPartialVariableName(token, [TokenKind.New]).split('.');
+        const endName = nameParts[nameParts.length - 1].toLowerCase();
+        const namespaceName = nameParts.slice(0, -1).join('.').toLowerCase();
+
+        const statementHandler = (statement: NamespaceStatement) => {
+            if (!location && statement.getName(ParseMode.BrighterScript).toLowerCase() === namespaceName) {
+                const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
+                    if (!location && statement.name.text.toLowerCase() === endName) {
+                        const uri = util.pathToUri(file.pathAbsolute);
+                        location = Location.create(uri, statement.range);
+                    }
+                };
+
+                file.parser.ast.walk(createVisitor({
+                    ClassStatement: namespaceItemStatementHandler,
+                    FunctionStatement: namespaceItemStatementHandler
+                }), {
+                    walkMode: WalkMode.visitStatements
+                });
+
+            }
+        };
+
+        file.parser.ast.walk(createVisitor({
+            NamespaceStatement: statementHandler
+        }), {
+            walkMode: WalkMode.visitStatements
+        });
+
+        return location;
     }
     /**
      * Given a current token, walk
      */
-    private getPartialVariableName(currentToken: Token) {
+    public getPartialVariableName(currentToken: Token, excludeTokens: TokenKind[] = null) {
         let identifierAndDotKinds = [TokenKind.Identifier, ...AllowedLocalIdentifiers, TokenKind.Dot];
 
         //consume tokens backwards until we find something other than a dot or an identifier
@@ -913,7 +1061,7 @@ export class BrsFile {
         const parser = this.parser;
         for (let i = parser.tokens.indexOf(currentToken); i >= 0; i--) {
             currentToken = parser.tokens[i];
-            if (identifierAndDotKinds.includes(currentToken.kind)) {
+            if (identifierAndDotKinds.includes(currentToken.kind) && (!excludeTokens || !excludeTokens.includes(currentToken.kind))) {
                 tokens.unshift(currentToken.text);
             } else {
                 break;
@@ -935,20 +1083,44 @@ export class BrsFile {
         return this.pathAbsolute.toLowerCase().endsWith('.bs') ? ParseMode.BrighterScript : ParseMode.BrightScript;
     }
 
-    private isPositionNextToDot(position: Position) {
+    private isPositionNextToTokenKind(position: Position, tokenKind: TokenKind) {
         let closestToken = this.getClosestToken(position);
         let previousToken = this.getPreviousToken(closestToken);
-        //next to a dot
-        if (closestToken.kind === TokenKind.Dot) {
+        //next to matched token
+        if (closestToken.kind === tokenKind) {
             return true;
         } else if (closestToken.kind === TokenKind.Newline || previousToken.kind === TokenKind.Newline) {
             return false;
-            //next to an identifier, which is next to a dot
-        } else if (closestToken.kind === TokenKind.Identifier && previousToken.kind === TokenKind.Dot) {
+            //next to an identifier, which is next to token kind
+        } else if (closestToken.kind === TokenKind.Identifier && previousToken.kind === tokenKind) {
             return true;
         } else {
             return false;
         }
+    }
+
+    private getTokenBefore(currentToken: Token, tokenKind: TokenKind) {
+        for (let i = this.parser.tokens.indexOf(currentToken); i >= 0; i--) {
+            currentToken = this.parser.tokens[i];
+            if (currentToken.kind === TokenKind.Newline) {
+                break;
+            } else if (currentToken.kind === tokenKind) {
+                return currentToken;
+            }
+        }
+        return undefined;
+    }
+
+    public getTokensUntil(currentToken: Token, tokenKind: TokenKind, direction: -1 | 1 = -1) {
+        let tokens = [];
+        for (let i = this.parser.tokens.indexOf(currentToken); direction === -1 ? i >= 0 : i === this.parser.tokens.length; i += direction) {
+            currentToken = this.parser.tokens[i];
+            if (currentToken.kind === TokenKind.Newline || currentToken.kind === tokenKind) {
+                break;
+            }
+            tokens.push(currentToken);
+        }
+        return tokens;
     }
 
     public getPreviousToken(token: Token) {
@@ -1160,6 +1332,32 @@ export class BrsFile {
 
         let textToSearchFor = token.text.toLowerCase();
 
+        const previousToken = this.getTokenAt({ line: token.range.start.line, character: token.range.start.character });
+
+        if (previousToken?.kind === TokenKind.Callfunc) {
+            for (const scope of this.program.getScopes()) {
+                //to only get functions defined in interface methods
+                const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor);
+                if (callable) {
+                    results.push(Location.create(util.pathToUri((callable.callable.file as BrsFile).pathAbsolute), callable.callable.functionStatement.range));
+                }
+            }
+            return results;
+        }
+
+        let classToken = this.getTokenBefore(token, TokenKind.Class);
+        if (classToken) {
+            let cs = this.parser.references.classStatements.find((cs) => cs.classKeyword.range === classToken.range);
+            if (cs?.parentClassName) {
+                const nameParts = cs.parentClassName.getNameParts();
+                let extendedClass = this.getClassByName(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
+                if (extendedClass) {
+                    results.push(Location.create(util.pathToUri(extendedClass.file.pathAbsolute), extendedClass.item.range));
+                }
+            }
+            return results;
+        }
+
         if (token.kind === TokenKind.StringLiteral) {
             // We need to strip off the quotes but only if present
             const startIndex = textToSearchFor.startsWith('"') ? 1 : 0;
@@ -1184,16 +1382,23 @@ export class BrsFile {
             }
         }
 
-        const filesSearched = {};
+        const filesSearched = new Set<BrsFile>();
         //look through all files in scope for matches
         for (const scope of this.program.getScopesForFile(this)) {
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || filesSearched[file.pathAbsolute]) {
+                if (isXmlFile(file) || filesSearched.has(file)) {
                     continue;
                 }
-                filesSearched[file.pathAbsolute] = true;
+                filesSearched.add(file);
 
-                const statementHandler = (statement: FunctionStatement | ClassMethodStatement) => {
+                if (previousToken?.kind === TokenKind.Dot && file.parseMode === ParseMode.BrighterScript) {
+                    results.push(...this.getClassMemberDefinitions(textToSearchFor, file));
+                    const namespaceDefinition = this.getNamespaceDefinitions(token, file);
+                    if (namespaceDefinition) {
+                        results.push(namespaceDefinition);
+                    }
+                }
+                const statementHandler = (statement: FunctionStatement) => {
                     if (statement.getName(this.getParseMode()).toLowerCase() === textToSearchFor) {
                         const uri = util.pathToUri(file.pathAbsolute);
                         results.push(Location.create(uri, statement.range));
@@ -1201,13 +1406,35 @@ export class BrsFile {
                 };
 
                 file.parser.ast.walk(createVisitor({
-                    FunctionStatement: statementHandler,
-                    ClassMethodStatement: statementHandler
+                    FunctionStatement: statementHandler
                 }), {
                     walkMode: WalkMode.visitStatements
                 });
             }
         }
+        return results;
+    }
+
+    public getClassMemberDefinitions(textToSearchFor: string, file: BrsFile): Location[] {
+        let results: Location[] = [];
+        //get class fields and members
+        const statementHandler = (statement: ClassMethodStatement) => {
+            if (statement.getName(file.getParseMode()).toLowerCase() === textToSearchFor) {
+                results.push(Location.create(util.pathToUri(file.pathAbsolute), statement.range));
+            }
+        };
+        const fieldStatementHandler = (statement: ClassFieldStatement) => {
+            if (statement.name.text.toLowerCase() === textToSearchFor) {
+                results.push(Location.create(util.pathToUri(file.pathAbsolute), statement.range));
+            }
+        };
+        file.parser.ast.walk(createVisitor({
+            ClassMethodStatement: statementHandler,
+            ClassFieldStatement: fieldStatementHandler
+        }), {
+            walkMode: WalkMode.visitStatements
+        });
+
         return results;
     }
 
@@ -1271,15 +1498,49 @@ export class BrsFile {
         }
     }
 
-    public getSignatureHelp(statement: FunctionStatement | ClassMethodStatement) {
+    public getSignatureHelpForNamespaceMethods(callableName: string, dottedGetText: string, scope: Scope): { key: string; signature: SignatureInformation }[] {
+        if (!dottedGetText) {
+            return [];
+        }
+        let namespaceLookup = scope.namespaceLookup;
+        let resultsMap = new Map<string, SignatureInfoObj>();
+        for (let key in namespaceLookup) {
+            let namespace = namespaceLookup[key.toLowerCase()];
+            //completionName = "NameA."
+            //completionName = "NameA.Na
+            //NameA
+            //NameA.NameB
+            //NameA.NameB.NameC
+            if (namespace.fullName.toLowerCase() === dottedGetText.toLowerCase()) {
+                //add function and class statement completions
+                for (let stmt of namespace.statements) {
+                    if (isFunctionStatement(stmt) && stmt.name.text.toLowerCase() === callableName.toLowerCase()) {
+                        const result = (namespace.file as BrsFile)?.getSignatureHelp(stmt);
+                        if (!resultsMap.has(result.key)) {
+                            resultsMap.set(result.key, result);
+                        }
+                    }
+                }
+
+            }
+        }
+
+        return [...resultsMap.values()];
+    }
+
+    public getSignatureHelp(statement: Statement): SignatureInfoObj {
+        if (!isFunctionStatement(statement) && !isClassMethodStatement(statement)) {
+            return undefined;
+        }
         const func = statement.func;
         const funcStartPosition = func.range.start;
 
         // Get function comments in reverse order
         let currentToken = this.getTokenAt(funcStartPosition);
         let functionComments = [] as string[];
-        while (true) {
+        while (currentToken) {
             currentToken = this.getPreviousToken(currentToken);
+
             if (!currentToken) {
                 break;
             }
@@ -1307,18 +1568,58 @@ export class BrsFile {
                 break;
             }
         }
+
         const documentation = functionComments.join('').trim();
 
         const lines = util.splitIntoLines(this.fileContents);
-
+        let key = statement.name.text + documentation;
         const params = [] as ParameterInformation[];
         for (const param of func.parameters) {
             params.push(ParameterInformation.create(param.name.text));
+            key += param.name.text;
         }
 
         const label = util.getTextForRange(lines, util.createRangeFromPositions(func.functionType.range.start, func.body.range.start)).trim();
         const signature = SignatureInformation.create(label, documentation, ...params);
-        return signature;
+        const index = 1;
+        return { key: key, signature: signature, index: index };
+    }
+
+    private getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): ClassMethodStatement | undefined {
+        let statement;
+        const statementHandler = (e) => {
+            if (!statement && e.name.text.toLowerCase() === name.toLowerCase()) {
+                statement = e;
+            }
+        };
+        while (classStatement) {
+            classStatement.walk(createVisitor({
+                ClassMethodStatement: statementHandler
+            }), {
+                walkMode: WalkMode.visitStatements
+            });
+            if (statement) {
+                break;
+            }
+            if (walkParents && classStatement.parentClassName) {
+                const nameParts = classStatement.parentClassName.getNameParts();
+                classStatement = this.getClassByName(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'))?.item;
+            } else {
+                break;
+            }
+
+        }
+        return statement;
+    }
+
+    public getClassSignatureHelp(classStatement: ClassStatement): SignatureInfoObj | undefined {
+        const classConstructor = this.getClassMethod(classStatement, 'new');
+        let sigHelp = classConstructor ? this.getSignatureHelp(classConstructor) : undefined;
+        if (sigHelp) {
+            sigHelp.key = classStatement.getName(ParseMode.BrighterScript);
+            sigHelp.signature.label = sigHelp.signature.label.replace(/(function|sub) new/, sigHelp.key);
+        }
+        return sigHelp;
     }
 
     public async getReferences(position: Position) {
@@ -1333,11 +1634,12 @@ export class BrsFile {
         const scopes = this.program.getScopesForFile(this);
 
         for (const scope of scopes) {
+            const processedFiles = new Set<BrsFile>();
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file)) {
+                if (isXmlFile(file) || processedFiles.has(file)) {
                     continue;
                 }
-
+                processedFiles.add(file);
                 file.ast.walk(createVisitor({
                     VariableExpression: (e) => {
                         if (e.name.text.toLowerCase() === searchFor) {
