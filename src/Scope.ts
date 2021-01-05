@@ -863,7 +863,7 @@ export class Scope {
         return results;
     }
 
-    public getAllClassMemberCompletions(): CompletionItem[] {
+    public getAllClassMemberCompletions() {
         let results = new Map<string, CompletionItem>();
         let filesSearched = new Set<BscFile>();
         for (const file of this.getAllFiles()) {
@@ -896,7 +896,7 @@ export class Scope {
             });
 
         }
-        return [...results.values()];
+        return results;
     }
 
     public getClassHieararchy(className: string) {

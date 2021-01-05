@@ -825,15 +825,16 @@ export class BrsFile {
             const selfClassMemberCompletions = this.getClassMemberCompletions(position, currentToken, functionScope, scope);
 
             if (selfClassMemberCompletions.size > 0) {
-                //this is an m. dotted get, we are in a class, so no other option is possible
-
                 return [...selfClassMemberCompletions.values()].filter((i) => i.label !== 'new');
             }
 
-            result.push(...scope.getPropertyNameCompletions());
             if (!this.getClassFromMReference(position, currentToken, functionScope)) {
                 //and anything from any class in scope to a non m class
-                result.push(...scope.getAllClassMemberCompletions());
+                let classMemberCompletions = scope.getAllClassMemberCompletions();
+                result.push(...classMemberCompletions.values());
+                result.push(...scope.getPropertyNameCompletions().filter((i)=> !classMemberCompletions.has(i.label)));
+            } else {
+                result.push(...scope.getPropertyNameCompletions());
             }
         } else {
             //include namespaces
