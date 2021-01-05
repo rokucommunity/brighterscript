@@ -494,12 +494,12 @@ describe('Scope', () => {
                     return 1
                 end function
 
-                function c() as unknownType
+                function c() as unknownType 'error
                     return 2
                 end function
 
                 class myClass
-                    function myClassMethod() as unknownType
+                    function myClassMethod() as unknownType 'error
                         return 2
                     end function
                 end class
@@ -509,10 +509,10 @@ describe('Scope', () => {
                 end function
             `);
             await program.validate();
-            expect(program.getDiagnostics().length).to.equal(2);
-            expect(program.getDiagnostics().map(x => x.message)).to.include(
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                DiagnosticMessages.callableHasUnknownReturnType('unknownType').message,
                 DiagnosticMessages.callableHasUnknownReturnType('unknownType').message
-            );
+            ]);
         });
 
         it('detects an unknown function parameter type', async () => {
@@ -520,11 +520,11 @@ describe('Scope', () => {
                 sub a(num as integer)
                 end sub
 
-                sub b(unknownParam as unknownType)
+                sub b(unknownParam as unknownType) 'error
                 end sub
 
                 class myClass
-                    sub myClassMethod(unknownParam as unknownType)
+                    sub myClassMethod(unknownParam as unknownType) 'error
                     end sub
                 end class
 
@@ -532,10 +532,29 @@ describe('Scope', () => {
                 end sub
             `);
             await program.validate();
-            expect(program.getDiagnostics().length).to.equal(2);
-            expect(program.getDiagnostics().map(x => x.message)).to.include(
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                DiagnosticMessages.parameterHasUnknownType('unknownType').message,
                 DiagnosticMessages.parameterHasUnknownType('unknownType').message
-            );
+            ]);
+        });
+
+        it('detects an unknown field parameter type', async () => {
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                class myClass
+                    foo as unknownType 'error
+                end class
+
+                class myOtherClass
+                    foo as unknownType 'error
+                    bar as myClass
+                    buz as myOtherClass
+                end class
+            `);
+            await program.validate();
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message,
+                DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message
+            ]);
         });
 
         it('Emits validation events', async () => {

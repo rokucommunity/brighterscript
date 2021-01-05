@@ -16,4 +16,8 @@ export class ObjectType implements BscType {
     public toString() {
         return 'object';
     }
+
+    public toTypeString(): string {
+        return this.toString();
+    }
 }

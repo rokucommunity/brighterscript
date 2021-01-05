@@ -3,7 +3,7 @@ import { ObjectType } from './ObjectType';
 
 export class CustomType extends ObjectType implements BscType {
 
-    constructor(public customTypeName: string) {
+    constructor(public name: string) {
         super();
     }
 }

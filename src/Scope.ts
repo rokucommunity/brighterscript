@@ -13,7 +13,7 @@ import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType } from './astUtils/reflection';
 import { CustomType } from './types/CustomType';
 
 /**
@@ -511,8 +511,8 @@ export class Scope {
     private diagnosticDetectInvalidFunctionExpressionTypes(file: BscFile) {
         const classMap = this.getClassMap();
         for (let func of file.parser.references.functionExpressions) {
-            if (func.returnType instanceof CustomType) {
-                const returnTypeName = func.returnType.customTypeName;
+            if (isCustomType(func.returnType)) {
+                const returnTypeName = func.returnType.name;
                 const lowerReturnTypeName = returnTypeName?.toLowerCase();
                 if (lowerReturnTypeName) {
                     //check if this custom type is in our class map
@@ -527,8 +527,8 @@ export class Scope {
             }
 
             for (let param of func.parameters) {
-                if (param.type instanceof CustomType) {
-                    const paramTypeName = param.type.customTypeName;
+                if (isCustomType(param.type)) {
+                    const paramTypeName = param.type.name;
                     const lowerParamTypeName = paramTypeName?.toLowerCase();
                     if (lowerParamTypeName) {
                         //check if this custom type is in our class map

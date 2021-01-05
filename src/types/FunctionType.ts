@@ -72,4 +72,8 @@ export class FunctionType implements BscType {
         return `${this.isSub ? 'sub' : 'function'} ${this.name}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
 
     }
+
+    public toTypeString(): string {
+        return 'Function';
+    }
 }

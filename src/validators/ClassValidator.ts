@@ -2,11 +2,11 @@ import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import type { ClassMethodStatement, ClassStatement } from '../parser/Statement';
+import type { ClassFieldStatement, ClassMethodStatement, ClassStatement } from '../parser/Statement';
 import { CancellationTokenSource, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement } from '../astUtils/reflection';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCustomType } from '../astUtils/reflection';
 import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils';
 import type { BrsFile } from '../files/BrsFile';
@@ -27,6 +27,7 @@ export class BsClassValidator {
         this.validateMemberCollisions();
         this.verifyChildConstructor();
         this.verifyNewExpressions();
+        this.validateFieldTypes();
 
         this.cleanUp();
     }
@@ -44,10 +45,11 @@ export class BsClassValidator {
         return cls;
     }
 
+
     /**
-     * Find all "new" statements in the program,
-     * and make sure we can find a class with that name
-     */
+ * Find all "new" statements in the program,
+ * and make sure we can find a class with that name
+ */
     private verifyNewExpressions() {
         this.scope.enumerateOwnFiles((file) => {
             let newExpressions = file.parser.references.newExpressions;
@@ -231,6 +233,36 @@ export class BsClassValidator {
                     }
                 }
             }
+        }
+    }
+
+
+    /**
+     * Check the types for fields, and validate they are valid types
+     */
+    private validateFieldTypes() {
+        for (let key in this.classes) {
+            let classStatement = this.classes[key];
+            classStatement.body.filter(statement => isClassFieldStatement(statement))
+                .forEach((statement) => {
+                    let field = statement as ClassFieldStatement;
+                    let fieldType = field.getType();
+
+                    if (isCustomType(fieldType)) {
+                        const fieldTypeName = fieldType.name;
+                        const lowerFieldTypeName = fieldTypeName?.toLowerCase();
+                        if (lowerFieldTypeName) {
+                            //check if this custom type is in our class map
+                            if (!this.getClassByName(lowerFieldTypeName)) {
+                                this.diagnostics.push({
+                                    ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
+                                    range: field.type.range,
+                                    file: classStatement.file
+                                });
+                            }
+                        }
+                    }
+                });
         }
     }
 

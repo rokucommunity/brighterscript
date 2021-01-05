@@ -1042,16 +1042,6 @@ export class Util {
     }
 
     /**
-    * Convert a BscType to a type string
-    */
-    public bscTypeToTypeString(bscType: BscType) {
-        if (bscType instanceof FunctionType) {
-            return 'Function';
-        }
-        return bscType.toString();
-    }
-
-    /**
      * Get the extension for the given file path. Basically the part after the final dot, except for
      * `d.bs` which is treated as single extension
      */

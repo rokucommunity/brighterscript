@@ -16,4 +16,9 @@ export class VoidType implements BscType {
     public toString() {
         return 'void';
     }
+
+
+    public toTypeString(): string {
+        return this.toString();
+    }
 }
