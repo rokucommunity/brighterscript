@@ -12,7 +12,7 @@ import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
-import type { ASTObj, Program, SignatureInfoObj } from '../Program';
+import type { FileLink, Program, SignatureInfoObj } from '../Program';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
@@ -363,7 +363,7 @@ export class BrsFile {
      * Returns undefined if not found.
      * @param namespaceName - the namespace to resolve relative classes from.
      */
-    public getClassByName(className: string, namespaceName?: string): ASTObj<ClassStatement> {
+    public getClassByName(className: string, namespaceName?: string): FileLink<ClassStatement> {
         let scopes = this.program.getScopesForFile(this);
         let lowerClassName = className.toLowerCase();
         //if the class is namespace-prefixed, look only for this exact name
@@ -376,8 +376,8 @@ export class BrsFile {
             }
             //we have a class name without a namespace prefix.
         } else {
-            let globalClass: ASTObj<ClassStatement>;
-            let namespacedClass: ASTObj<ClassStatement>;
+            let globalClass: FileLink<ClassStatement>;
+            let namespacedClass: FileLink<ClassStatement>;
             for (let scope of scopes) {
                 //get the global class if it exists
                 let possibleGlobalClass = scope.getClassObject(lowerClassName);
@@ -823,17 +823,18 @@ export class BrsFile {
             }
 
             const selfClassMemberCompletions = this.getClassMemberCompletions(position, currentToken, functionScope, scope);
-            if (selfClassMemberCompletions.length > 0) {
+
+            if (selfClassMemberCompletions.size > 0) {
                 //this is an m. dotted get, we are in a class, so no other option is possible
-                result.push(...selfClassMemberCompletions);
-                //add properties for more flexibility
-                result.push(...scope.getPropertyNameCompletions());
-                return result;
+
+                return [...selfClassMemberCompletions.values()].filter((i) => i.label !== 'new');
             }
 
             result.push(...scope.getPropertyNameCompletions());
-            //and anything from any class in scope
-            result.push(...scope.getAllClassMemberCompletions());
+            if (!this.getClassFromMReference(position, currentToken, functionScope)) {
+                //and anything from any class in scope to a non m class
+                result.push(...scope.getAllClassMemberCompletions());
+            }
         } else {
             //include namespaces
             result.push(...namespaceCompletions);
@@ -888,37 +889,33 @@ export class BrsFile {
         return result;
     }
 
-    private getClassMemberCompletions(position: Position, currentToken: Token, functionScope: FunctionScope, scope: Scope): CompletionItem[] {
+    private getClassMemberCompletions(position: Position, currentToken: Token, functionScope: FunctionScope, scope: Scope) {
 
         let classStatement = this.getClassFromMReference(position, currentToken, functionScope);
         let results = new Map<string, CompletionItem>();
         if (classStatement) {
-
-            const statementHandler = (s: ClassFieldStatement | ClassMethodStatement) => {
-                if (!results.has(s.name.text)) {
-                    results.set(s.name.text, {
-                        label: s.name.text,
-                        kind: isClassFieldStatement(s) ? CompletionItemKind.Field : CompletionItemKind.Function
-                    });
+            let classes = scope.getClassHieararchy(classStatement.item.getName(ParseMode.BrighterScript).toLowerCase());
+            for (let cs of classes) {
+                for (let member of [...cs?.item?.fields, ...cs?.item?.methods]) {
+                    if (!results.has(member.name.text.toLowerCase())) {
+                        results.set(member.name.text.toLowerCase(), {
+                            label: member.name.text,
+                            kind: isClassFieldStatement(member) ? CompletionItemKind.Field : CompletionItemKind.Function
+                        });
+                    }
                 }
-            };
-            while (classStatement) {
-                classStatement.walk(createVisitor({
-                    ClassMethodStatement: statementHandler,
-                    ClassFieldStatement: statementHandler
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });
-                classStatement = scope.getClass(classStatement.parentClassName?.getName(ParseMode.BrighterScript)?.toLowerCase());
             }
         }
-        return [...results.values()];
+        return results;
     }
 
-    private getClassFromMReference(position: Position, currentToken: Token, functionScope: FunctionScope): ClassStatement | undefined {
-        const previousToken = this.getPreviousToken(currentToken);
+    public getClassFromMReference(position: Position, currentToken: Token, functionScope: FunctionScope): FileLink<ClassStatement> | undefined {
+        let previousToken = this.getPreviousToken(currentToken);
+        if (previousToken?.kind === TokenKind.Dot) {
+            previousToken = this.getPreviousToken(previousToken);
+        }
         if (previousToken.kind === TokenKind.Identifier && previousToken.text.toLowerCase() === 'm' && isClassMethodStatement(functionScope.func.functionStatement)) {
-            return this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, position));
+            return { item: this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, position)), file: this };
         }
         return undefined;
     }
@@ -1515,7 +1512,7 @@ export class BrsFile {
                 //add function and class statement completions
                 for (let stmt of namespace.statements) {
                     if (isFunctionStatement(stmt) && stmt.name.text.toLowerCase() === callableName.toLowerCase()) {
-                        const result = (namespace.file as BrsFile)?.getSignatureHelp(stmt);
+                        const result = (namespace.file as BrsFile)?.getSignatureHelpForStatement(stmt);
                         if (!resultsMap.has(result.key)) {
                             resultsMap.set(result.key, result);
                         }
@@ -1528,7 +1525,7 @@ export class BrsFile {
         return [...resultsMap.values()];
     }
 
-    public getSignatureHelp(statement: Statement): SignatureInfoObj {
+    public getSignatureHelpForStatement(statement: Statement): SignatureInfoObj {
         if (!isFunctionStatement(statement) && !isClassMethodStatement(statement)) {
             return undefined;
         }
@@ -1586,6 +1583,7 @@ export class BrsFile {
     }
 
     private getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): ClassMethodStatement | undefined {
+        //TODO - would like to write this with getClassHieararchy; but got stuck on working out the scopes to use... :(
         let statement;
         const statementHandler = (e) => {
             if (!statement && e.name.text.toLowerCase() === name.toLowerCase()) {
@@ -1614,7 +1612,7 @@ export class BrsFile {
 
     public getClassSignatureHelp(classStatement: ClassStatement): SignatureInfoObj | undefined {
         const classConstructor = this.getClassMethod(classStatement, 'new');
-        let sigHelp = classConstructor ? this.getSignatureHelp(classConstructor) : undefined;
+        let sigHelp = classConstructor ? this.getSignatureHelpForStatement(classConstructor) : undefined;
         if (sigHelp) {
             sigHelp.key = classStatement.getName(ParseMode.BrighterScript);
             sigHelp.signature.label = sigHelp.signature.label.replace(/(function|sub) new/, sigHelp.key);

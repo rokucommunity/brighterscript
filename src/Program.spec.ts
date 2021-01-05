@@ -1117,10 +1117,10 @@ describe('Program', () => {
             `);
             expect(
                 (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, 26))).map(x => x.label).sort()
-            ).to.eql(['new', 'personAMethodA', 'personAMethodB', 'personAName', 'personName']);
+            ).to.eql(['personAMethodA', 'personAMethodB', 'personAName', 'personName']);
             expect(
                 (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(24, 26))).map(x => x.label).sort()
-            ).to.eql(['new', 'personAMethodA', 'personAMethodB', 'personAName', 'personCMethodA', 'personCMethodB', 'personCMethodC', 'personCName', 'personName']);
+            ).to.eql(['personAMethodA', 'personAMethodB', 'personAName', 'personCMethodA', 'personCMethodB', 'personCMethodC', 'personCName', 'personName']);
         });
 
     });

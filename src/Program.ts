@@ -20,10 +20,11 @@ import type { ManifestValue } from './preprocessor/Manifest';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isCallExpression, isCallfuncExpression, isNewExpression, isClassStatement, isClassMethodStatement, isFunctionStatement, isFunctionExpression, isDottedGetExpression } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isCallExpression, isCallfuncExpression, isNewExpression, isClassMethodStatement, isDottedGetExpression } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
-import type { ClassStatement, FunctionStatement, Statement } from './parser/Statement';
-import type { CallExpression, CallfuncExpression, FunctionExpression, NewExpression } from './parser/Expression';
+import type { FunctionStatement, Statement } from './parser/Statement';
+import type { CallExpression, CallfuncExpression, NewExpression } from './parser/Expression';
+import { ParseMode } from './parser';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {
@@ -43,7 +44,7 @@ export interface SignatureInfoObj {
     signature: SignatureInformation;
 }
 
-export interface ASTObj<T> {
+export interface FileLink<T> {
     item: T;
     file: BrsFile;
 }
@@ -624,8 +625,8 @@ export class Program {
         return result;
     }
 
-    public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): ASTObj<Statement>[] {
-        let results = new Map<Statement, ASTObj<Statement>>();
+    public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {
+        let results = new Map<Statement, FileLink<Statement>>();
         const filesSearched = new Set<BrsFile>();
         let parseMode = originFile.getParseMode();
         let lowerNamespaceName = namespaceName?.toLowerCase();
@@ -637,7 +638,7 @@ export class Program {
                 }
                 filesSearched.add(file);
 
-                const statementHandler = (statement: FunctionStatement, parent: Statement) => {
+                const statementHandler = (statement: FunctionStatement) => {
                     let parentNamespaceName = statement.namespaceName?.getName(parseMode)?.toLowerCase();
                     if (statement.name.text.toLowerCase() === name && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                         if (!results.has(statement)) {
@@ -656,35 +657,6 @@ export class Program {
         }
         return [...results.values()];
     }
-
-    public getFileForItem(item: ClassStatement | FunctionStatement | FunctionExpression, originFile?: BrsFile): BrsFile {
-
-        let scopes = originFile ? this.getScopesForFile(originFile) : [this.globalScope];
-        //if the class is namespace-prefixed, look only for this exact name
-        for (let scope of scopes) {
-            for (const file of scope.getAllFiles()) {
-                if (isBrsFile(file)) {
-                    let lookup = [];
-                    if (isClassStatement(item)) {
-                        lookup = file.parser.references.classStatements;
-                    } else if (isClassMethodStatement(item)) {
-                        lookup = file.parser.references.classStatements.flatMap(cs => cs.body);
-                    } else if (isFunctionStatement(item)) {
-                        lookup = file.parser.references.functionStatements;
-                    } else if (isFunctionExpression(item)) {
-                        lookup = file.parser.references.functionExpressions;
-                    }
-                    let matchedItem = lookup.find((i) => i === item);
-                    if (matchedItem) {
-                        return file;
-                    }
-                }
-            }
-        }
-
-        return undefined;
-    }
-
 
     /**
      * Find all available completion items at the given position
@@ -801,11 +773,33 @@ export class Program {
                                 dotPart = dotPart.substring(0, dotPart.length - 1);
                             }
                         }
+                        //if m class reference.. then
+                        //only get statements from the class I am in..
+                        let functionScope = file.getFunctionScopeAtPosition(position);
+                        if (functionScope) {
+                            let myClass = file.getClassFromMReference(position, file.getTokenAt(position), functionScope);
+                            if (myClass) {
+                                for (let scope of this.getScopesForFile(myClass.file)) {
+                                    let classes = scope.getClassHieararchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
+                                    //and anything from any class in scope to a non m class
+                                    for (let statement of [...classes].filter((i) => isClassMethodStatement(i.item))) {
+                                        let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
+                                        if (sigHelp && !results.has[sigHelp.key]) {
+                                            sigHelp.index = expr.args.findIndex((e) => util.rangeContains(e.range, position));
+                                            results.set(sigHelp.key, sigHelp);
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        //else broader case VVVVV
                         let statements = file.program.getStatementsByName(name, file, dotPart);
                         for (let statement of statements) {
                             //TODO better handling of collisions - if it's a namespace, then don't show any other overrides
                             //if we're on m - then limit scope to the current class, if present
-                            let sigHelp = statement.file.getSignatureHelp(statement.item);
+                            let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
                             if (sigHelp && !results.has[sigHelp.key]) {
                                 sigHelp.index = expr.args.findIndex((e) => util.rangeContains(e.range, position));
                                 results.set(sigHelp.key, sigHelp);
@@ -818,7 +812,7 @@ export class Program {
                         const lowerName = expr.methodName.text.toLowerCase();
                         const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === lowerName);
                         if (callable) {
-                            let sigHelp = (callable.callable.file as BrsFile).getSignatureHelp(callable.callable.functionStatement);
+                            let sigHelp = (callable.callable.file as BrsFile).getSignatureHelpForStatement(callable.callable.functionStatement);
                             if (sigHelp && !results.has[sigHelp.key]) {
                                 sigHelp.index = expr.args.findIndex((e) => util.rangeContains(e.range, position));
                                 results.set(sigHelp.key, sigHelp);

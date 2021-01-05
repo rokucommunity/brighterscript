@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
-import type { ASTObj, Program } from './Program';
+import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement } from './parser';
 import { ParseMode } from './parser';
@@ -72,9 +72,9 @@ export class Scope {
      * A dictionary of all classes in this scope. This includes namespaced classes always with their full name.
      * The key is stored in lower case
      */
-    public getClassMap(): Map<string, ASTObj<ClassStatement>> {
+    public getClassMap(): Map<string, FileLink<ClassStatement>> {
         return this.cache.getOrAdd('classMap', () => {
-            const map = new Map<string, ASTObj<ClassStatement>>();
+            const map = new Map<string, FileLink<ClassStatement>>();
             this.enumerateAllFiles((file) => {
                 if (isBrsFile(file)) {
                     for (let cls of file.parser.references.classStatements) {
@@ -897,6 +897,16 @@ export class Scope {
 
         }
         return [...results.values()];
+    }
+
+    public getClassHieararchy(className: string) {
+        let items = [] as FileLink<ClassStatement>[];
+        let link = this.getClassObject(className);
+        while (link) {
+            items.push(link);
+            link = this.getClassObject(link.item.parentClassName?.getName(ParseMode.BrighterScript)?.toLowerCase());
+        }
+        return items;
     }
 }
 
