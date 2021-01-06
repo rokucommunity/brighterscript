@@ -128,6 +128,7 @@
         "serialize-error": "^7.0.1",
         "source-map": "^0.7.3",
         "vscode-languageserver": "^6.1.1",
+        "vscode-languageserver-protocol": "~3.15.3",
         "vscode-languageserver-textdocument": "^1.0.1",
         "vscode-uri": "^2.1.1",
         "xml2js": "^0.4.19",
