@@ -241,7 +241,7 @@ export function isNumberType(e: any): e is IntegerType | LongIntegerType | Float
 // Literal reflection
 
 export function isLiteralInvalid(e: any): e is LiteralExpression & { type: InvalidType } {
-    return isLiteralExpression(e) && isLiteralInvalid(e.type);
+    return isLiteralExpression(e) && isInvalidType(e.type);
 }
 export function isLiteralBoolean(e: any): e is LiteralExpression & { type: BooleanType } {
     return isLiteralExpression(e) && isBooleanType(e.type);
