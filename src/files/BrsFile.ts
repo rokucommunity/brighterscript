@@ -1335,7 +1335,7 @@ export class BrsFile {
         if (previousToken?.kind === TokenKind.Callfunc) {
             for (const scope of this.program.getScopes()) {
                 //to only get functions defined in interface methods
-                const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor);
+                const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                 if (callable) {
                     results.push(Location.create(util.pathToUri((callable.callable.file as BrsFile).pathAbsolute), callable.callable.functionStatement.range));
                 }
