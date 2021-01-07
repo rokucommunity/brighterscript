@@ -231,7 +231,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     functionParameterTypeIsInvalid: (parameterName: string, typeText: string) => ({
-        message: `Function parameter '${parameterName}' is of invalid type '${parameterName}'`,
+        message: `Function parameter '${parameterName}' is of invalid type '${typeText}'`,
         code: 1044,
         severity: DiagnosticSeverity.Error
     }),
@@ -604,16 +604,6 @@ export let DiagnosticMessages = {
     missingExceptionExpressionAfterThrowKeyword: () => ({
         message: `Missing exception expression after 'throw' keyword`,
         code: 1118,
-        severity: DiagnosticSeverity.Error
-    }),
-    callableHasUnknownReturnType: (returnType: string) => ({
-        message: `Callable has unknown return type '${returnType}'`,
-        code: 1119,
-        severity: DiagnosticSeverity.Error
-    }),
-    parameterHasUnknownType: (paramType: string) => ({
-        message: `Parameter has unknown type '${paramType}'`,
-        code: 1120,
         severity: DiagnosticSeverity.Error
     })
 };

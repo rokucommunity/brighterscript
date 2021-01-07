@@ -47,9 +47,9 @@ export class BsClassValidator {
 
 
     /**
- * Find all "new" statements in the program,
- * and make sure we can find a class with that name
- */
+    * Find all "new" statements in the program,
+    * and make sure we can find a class with that name
+    */
     private verifyNewExpressions() {
         this.scope.enumerateOwnFiles((file) => {
             let newExpressions = file.parser.references.newExpressions;
@@ -252,8 +252,9 @@ export class BsClassValidator {
                         const fieldTypeName = fieldType.name;
                         const lowerFieldTypeName = fieldTypeName?.toLowerCase();
                         if (lowerFieldTypeName) {
+                            const currentNamespaceName = classStatement.namespaceName?.getName(ParseMode.BrighterScript);
                             //check if this custom type is in our class map
-                            if (!this.getClassByName(lowerFieldTypeName)) {
+                            if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName)) {
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
                                     range: field.type.range,

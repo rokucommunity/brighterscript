@@ -133,7 +133,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         /**
          * If this function is enclosed within another function, this will reference that parent function
          */
-        readonly parentFunction?: FunctionExpression
+        readonly parentFunction?: FunctionExpression,
+        readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
         if (this.returnTypeToken) {
@@ -262,7 +263,8 @@ export class FunctionParameterExpression extends Expression {
         public name: Identifier,
         public typeToken?: Token,
         public defaultValue?: Expression,
-        public asToken?: Token
+        public asToken?: Token,
+        readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
         if (typeToken) {

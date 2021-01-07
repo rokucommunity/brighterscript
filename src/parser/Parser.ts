@@ -12,7 +12,8 @@ import {
     AllowedProperties,
     Lexer,
     BrighterScriptSourceLiterals,
-    isToken
+    isToken,
+    DeclarableTypes
 } from '../lexer';
 import type {
     Statement,
@@ -83,7 +84,7 @@ import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
 import { isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
-import { createStringLiteral } from '../astUtils/creators';
+import { createStringLiteral, createToken } from '../astUtils/creators';
 
 export class Parser {
     /**
@@ -474,7 +475,7 @@ export class Parser {
         //look for `as SOME_TYPE`
         if (this.check(TokenKind.As)) {
             asToken = this.advance();
-            fieldType = this.advance();
+            fieldType = this.typeToken();
 
             //no field type specified
             if (!util.tokenToBscType(fieldType) && !this.check(TokenKind.Identifier)) {
@@ -596,7 +597,7 @@ export class Parser {
             if (this.check(TokenKind.As)) {
                 asToken = this.advance();
 
-                typeToken = this.advance();
+                typeToken = this.typeToken();
 
                 if (!util.tokenToBscType(typeToken, this.options.mode === ParseMode.BrighterScript)) {
                     this.diagnostics.push({
@@ -628,7 +629,8 @@ export class Parser {
                 rightParen,
                 asToken,
                 typeToken,
-                this.currentFunctionExpression
+                this.currentFunctionExpression,
+                this.currentNamespaceName
             );
             //if there is a parent function, register this function with the parent
             if (this.currentFunctionExpression) {
@@ -711,7 +713,7 @@ export class Parser {
         if (this.check(TokenKind.As)) {
             asToken = this.advance();
 
-            typeToken = this.advance();
+            typeToken = this.typeToken();
 
             if (!util.tokenToBscType(typeToken, this.options.mode === ParseMode.BrighterScript)) {
                 this.diagnostics.push({
@@ -725,7 +727,8 @@ export class Parser {
             name,
             typeToken,
             defaultValue,
-            asToken
+            asToken,
+            this.currentNamespaceName
         );
     }
 
@@ -2039,6 +2042,33 @@ export class Parser {
             this.callExpressions.push(expression);
         }
         return expression;
+    }
+
+    /**
+     * Tries to get the next token as a type
+     * Allows for built-in types (double, string, etc.) or namespaced custom types in Brighterscript mode
+     * Will always return a token of whatever is next to be parsed
+     */
+    private typeToken(): Token {
+        let typeToken: Token;
+
+        if (this.checkAny(...DeclarableTypes)) {
+            // Token is a built in type
+            typeToken = this.advance();
+        } else if (this.options.mode === ParseMode.BrighterScript) {
+            try {
+                // see if we can get a namespaced identifer
+                const qualifiedType = this.getNamespacedVariableNameExpression();
+                typeToken = createToken(TokenKind.Identifier, qualifiedType.getName(this.options.mode), qualifiedType.range);
+            } catch {
+                //could not get an identifier - just get whatever's next
+                typeToken = this.advance();
+            }
+        } else {
+            // just get whatever's next
+            typeToken = this.advance();
+        }
+        return typeToken;
     }
 
     private primary(): Expression {

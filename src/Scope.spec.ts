@@ -510,8 +510,8 @@ describe('Scope', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                DiagnosticMessages.callableHasUnknownReturnType('unknownType').message,
-                DiagnosticMessages.callableHasUnknownReturnType('unknownType').message
+                DiagnosticMessages.invalidFunctionReturnType('unknownType').message,
+                DiagnosticMessages.invalidFunctionReturnType('unknownType').message
             ]);
         });
 
@@ -533,8 +533,8 @@ describe('Scope', () => {
             `);
             await program.validate();
             expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                DiagnosticMessages.parameterHasUnknownType('unknownType').message,
-                DiagnosticMessages.parameterHasUnknownType('unknownType').message
+                DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message,
+                DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message
             ]);
         });
 
@@ -554,6 +554,72 @@ describe('Scope', () => {
             expect(program.getDiagnostics().map(x => x.message)).to.eql([
                 DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message,
                 DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message
+            ]);
+        });
+
+        it('finds custom types inside namespaces', async () => {
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                namespace MyNamespace
+                    class MyClass
+                    end class
+
+                    function foo(param as MyClass) as MyClass
+                    end function
+
+                end namespace
+
+            `);
+            await program.validate();
+
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+
+        it('finds custom types from other namespaces', async () => {
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                namespace MyNamespace
+                    class MyClass
+                    end class
+                end namespace
+
+                function foo(param as MyNamespace.MyClass) as MyNamespace.MyClass
+                end function
+            `);
+            await program.validate();
+
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+
+        it('detects missing custom types from current namespaces', async () => {
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                namespace MyNamespace
+                    class MyClass
+                    end class
+
+                    function foo() as UnknownType
+                    end function
+                end namespace
+            `);
+            await program.validate();
+
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                DiagnosticMessages.invalidFunctionReturnType('UnknownType').message
+            ]);
+        });
+
+        it('detects missing custom types from another namespaces', async () => {
+            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                namespace MyNamespace
+                    class MyClass
+                    end class
+                end namespace
+
+                function foo() as MyNamespace.UnknownType
+                end function
+            `);
+            await program.validate();
+
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                DiagnosticMessages.invalidFunctionReturnType('MyNamespace.UnknownType').message
             ]);
         });
 

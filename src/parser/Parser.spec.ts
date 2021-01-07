@@ -259,6 +259,38 @@ describe('parser', () => {
             expect(diagnostics.length).to.equal(0);
             expect(statements[0]).to.exist;
         });
+        it('allows namespaced function type in Brighterscript mode', () => {
+            let { statements, diagnostics } = parse(`
+                function log() as SOME_NAMESPACE.UNKNOWN_TYPE
+                end function
+            `, ParseMode.BrighterScript);
+            expect(diagnostics.length).to.equal(0);
+            expect(statements[0]).to.exist;
+        });
+        it('allows custom parameter types in BrighterscriptMode', () => {
+            let { statements, diagnostics } = parse(`
+                sub foo(value as UNKNOWN_TYPE)
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics.length).to.equal(0);
+            expect(statements[0]).to.exist;
+        });
+        it('does not allow custom parameter types in Brightscript Mode', () => {
+            let { diagnostics } = parse(`
+                sub foo(value as UNKNOWN_TYPE)
+                end sub
+            `, ParseMode.BrightScript);
+            expect(diagnostics.length).not.to.equal(0);
+        });
+        it('allows custom namespaced parameter types in BrighterscriptMode', () => {
+            let { statements, diagnostics } = parse(`
+                sub foo(value as SOME_NAMESPACE.UNKNOWN_TYPE)
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics.length).to.equal(0);
+            expect(statements[0]).to.exist;
+        });
+
         it('works with conditionals', () => {
             expect(parse(`
                 function printNumber()
