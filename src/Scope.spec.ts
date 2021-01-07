@@ -566,6 +566,9 @@ describe('Scope', () => {
                     function foo(param as MyClass) as MyClass
                     end function
 
+                    function bar(param as MyNamespace.MyClass) as MyNamespace.MyClass
+                    end function
+
                 end namespace
 
             `);
