@@ -142,4 +142,9 @@ export interface BsConfig {
      * have their source maps changed. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
      */
     sourceRoot?: string;
+    /**
+     * Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.
+     * @default true
+     */
+    sourceMap?: boolean;
 }
