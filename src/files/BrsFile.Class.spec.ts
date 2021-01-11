@@ -949,4 +949,44 @@ describe('BrsFile BrighterScript classes', () => {
         await program.validate();
         expectZeroDiagnostics(program);
     });
+
+    it('computes correct super index for grandchild class', async () => {
+        await program.addOrReplaceFile('source/main.bs', `
+            sub Main()
+                c = new App.ClassC()
+            end sub
+
+            namespace App
+                class ClassA
+                end class
+
+                class ClassB extends ClassA
+                end class
+            end namespace
+        `);
+
+        await testTranspile(`
+            namespace App
+                class ClassC extends ClassB
+                    sub new()
+                        super()
+                    end sub
+                end class
+            end namespace
+        `, `
+            function __App_ClassC_builder()
+                instance = __App_ClassB_builder()
+                instance.super1_new = instance.new
+                instance.new = sub()
+                    m.super1_new()
+                end sub
+                return instance
+            end function
+            function App_ClassC()
+                instance = __App_ClassC_builder()
+                instance.new()
+                return instance
+            end function
+        `, 'trim', 'source/App.ClassC.bs');
+    });
 });
