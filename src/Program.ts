@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CompletionItem, Position, ReferenceParams, SignatureHelpParams, SignatureInformation } from 'vscode-languageserver';
+import type { CompletionItem, Position, SignatureInformation } from 'vscode-languageserver';
 import { Location, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -20,14 +20,11 @@ import type { ManifestValue } from './preprocessor/Manifest';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isCallExpression, isCallfuncExpression, isNewExpression, isClassMethodStatement, isDottedGetExpression } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isClassMethodStatement } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import type { FunctionStatement, Statement } from './parser/Statement';
-import type { CallExpression, CallfuncExpression, Expression, NewExpression } from './parser/Expression';
-import { ParseMode, Parser } from './parser';
-import { identifier } from './parser/tests/Parser.spec';
+import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
-import { SSL_OP_SSLEAY_080_CLIENT_DH_BUG } from 'constants';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {
