@@ -28,4 +28,8 @@ export class DoubleType implements BscType {
     public toString() {
         return 'double';
     }
+
+    public toTypeString(): string {
+        return this.toString();
+    }
 }
