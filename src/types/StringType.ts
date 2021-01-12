@@ -16,4 +16,8 @@ export class StringType implements BscType {
     public toString() {
         return 'string';
     }
+
+    public toTypeString(): string {
+        return this.toString();
+    }
 }

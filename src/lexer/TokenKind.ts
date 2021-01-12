@@ -575,3 +575,19 @@ export const DisallowedFunctionIdentifiersText = new Set([
     'run',
     ...DisallowedFunctionIdentifiers.map(x => x.toLowerCase())
 ]);
+
+
+/** List of TokenKind that are used as declared types on parameters/functions in Brightscript*/
+export const DeclarableTypes = [
+    TokenKind.Boolean,
+    TokenKind.Integer,
+    TokenKind.LongInteger,
+    TokenKind.Float,
+    TokenKind.Double,
+    TokenKind.String,
+    TokenKind.Object,
+    TokenKind.Interface,
+    TokenKind.Dynamic,
+    TokenKind.Void,
+    TokenKind.Function
+];

@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.24.2] - 2021-01-11
+### Fixed
+ - bug with transpiled child classes causing on-device stack overflows ([#267](https://github.com/rokucommunity/brighterscript/issues/267))
+
+
+
 ## [0.24.1] - 2021-01-09
 ### Changed
  - upgraded to [roku-deploy@3.2.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#324---2021-01-08)
@@ -797,3 +803,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.23.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.23.1...v0.23.2
 [0.24.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.23.2...v0.24.0
 [0.24.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.24.0...v0.24.1
+[0.24.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.24.1...v0.24.2
