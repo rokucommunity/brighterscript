@@ -17,11 +17,11 @@ function afterFileParse(file: BscFile) {
         return;
     }
     // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-    file.parser.references.functionExpressions.forEach((fun) => {
-        fun.body.walk(createVisitor({
+    for (const func of file.parser.references.functionExpressions) {
+        func.body.walk(createVisitor({
             PrintStatement: (statement) => new EmptyStatement()
         }), {
             walkMode: WalkMode.visitStatements
         });
-    });
+    }
 }

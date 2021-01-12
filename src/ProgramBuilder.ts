@@ -114,11 +114,14 @@ export class ProgramBuilder {
     }
 
     protected loadPlugins() {
-        loadPlugins(
+        const plugins = loadPlugins(
             this.options.cwd ?? process.cwd(),
             this.options.plugins,
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
-        ).forEach(plugin => this.plugins.add(plugin));
+        );
+        for (let plugin of plugins) {
+            this.plugins.add(plugin);
+        }
 
         this.plugins.emit('beforeProgramCreate', this);
     }
