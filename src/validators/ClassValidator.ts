@@ -2,7 +2,7 @@ import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import type { ClassFieldStatement, ClassMethodStatement, ClassStatement } from '../parser/Statement';
+import type { ClassMethodStatement, ClassStatement } from '../parser/Statement';
 import { CancellationTokenSource, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
@@ -47,9 +47,9 @@ export class BsClassValidator {
 
 
     /**
-    * Find all "new" statements in the program,
-    * and make sure we can find a class with that name
-    */
+     * Find all "new" statements in the program,
+     * and make sure we can find a class with that name
+     */
     private verifyNewExpressions() {
         this.scope.enumerateOwnFiles((file) => {
             let newExpressions = file.parser.references.newExpressions;
@@ -243,10 +243,9 @@ export class BsClassValidator {
     private validateFieldTypes() {
         for (let key in this.classes) {
             let classStatement = this.classes[key];
-            classStatement.body.filter(statement => isClassFieldStatement(statement))
-                .forEach((statement) => {
-                    let field = statement as ClassFieldStatement;
-                    let fieldType = field.getType();
+            for (let statement of classStatement.body) {
+                if (isClassFieldStatement(statement)) {
+                    let fieldType = statement.getType();
 
                     if (isCustomType(fieldType)) {
                         const fieldTypeName = fieldType.name;
@@ -257,13 +256,14 @@ export class BsClassValidator {
                             if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName)) {
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
-                                    range: field.type.range,
+                                    range: statement.type.range,
                                     file: classStatement.file
                                 });
                             }
                         }
                     }
-                });
+                }
+            }
         }
     }
 

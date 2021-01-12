@@ -484,148 +484,6 @@ describe('Scope', () => {
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
 
-        it('detects an unknown function return type', async () => {
-            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                function a()
-                    return invalid
-                end function
-
-                function b() as integer
-                    return 1
-                end function
-
-                function c() as unknownType 'error
-                    return 2
-                end function
-
-                class myClass
-                    function myClassMethod() as unknownType 'error
-                        return 2
-                    end function
-                end class
-
-                function d() as myClass
-                    return new myClass()
-                end function
-            `);
-            await program.validate();
-            expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                DiagnosticMessages.invalidFunctionReturnType('unknownType').message,
-                DiagnosticMessages.invalidFunctionReturnType('unknownType').message
-            ]);
-        });
-
-        it('detects an unknown function parameter type', async () => {
-            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                sub a(num as integer)
-                end sub
-
-                sub b(unknownParam as unknownType) 'error
-                end sub
-
-                class myClass
-                    sub myClassMethod(unknownParam as unknownType) 'error
-                    end sub
-                end class
-
-                sub d(obj as myClass)
-                end sub
-            `);
-            await program.validate();
-            expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message,
-                DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message
-            ]);
-        });
-
-        it('detects an unknown field parameter type', async () => {
-            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                class myClass
-                    foo as unknownType 'error
-                end class
-
-                class myOtherClass
-                    foo as unknownType 'error
-                    bar as myClass
-                    buz as myOtherClass
-                end class
-            `);
-            await program.validate();
-            expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message,
-                DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message
-            ]);
-        });
-
-        it('finds custom types inside namespaces', async () => {
-            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                namespace MyNamespace
-                    class MyClass
-                    end class
-
-                    function foo(param as MyClass) as MyClass
-                    end function
-
-                    function bar(param as MyNamespace.MyClass) as MyNamespace.MyClass
-                    end function
-
-                end namespace
-
-            `);
-            await program.validate();
-
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
-        });
-
-        it('finds custom types from other namespaces', async () => {
-            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                namespace MyNamespace
-                    class MyClass
-                    end class
-                end namespace
-
-                function foo(param as MyNamespace.MyClass) as MyNamespace.MyClass
-                end function
-            `);
-            await program.validate();
-
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
-        });
-
-        it('detects missing custom types from current namespaces', async () => {
-            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                namespace MyNamespace
-                    class MyClass
-                    end class
-
-                    function foo() as UnknownType
-                    end function
-                end namespace
-            `);
-            await program.validate();
-
-            expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                DiagnosticMessages.invalidFunctionReturnType('UnknownType').message
-            ]);
-        });
-
-        it('detects missing custom types from another namespaces', async () => {
-            await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                namespace MyNamespace
-                    class MyClass
-                    end class
-                end namespace
-
-                function foo() as MyNamespace.UnknownType
-                end function
-            `);
-            await program.validate();
-
-            expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                DiagnosticMessages.invalidFunctionReturnType('MyNamespace.UnknownType').message
-            ]);
-        });
-
         it('Emits validation events', async () => {
             const validateStartScope = sinon.spy();
             const validateEndScope = sinon.spy();
@@ -651,6 +509,244 @@ describe('Scope', () => {
             expect(validateEndScope.callCount).to.equal(2);
             expect(validateEndScope.calledWith(sourceScope)).to.be.true;
             expect(validateEndScope.calledWith(compScope)).to.be.true;
+        });
+
+        describe('custom types', () => {
+            it('detects an unknown function return type', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    function a()
+                        return invalid
+                    end function
+
+                    function b() as integer
+                        return 1
+                    end function
+
+                    function c() as unknownType 'error
+                        return 2
+                    end function
+
+                    class myClass
+                        function myClassMethod() as unknownType 'error
+                            return 2
+                        end function
+                    end class
+
+                    function d() as myClass
+                        return new myClass()
+                    end function
+                `);
+                await program.validate();
+                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                    DiagnosticMessages.invalidFunctionReturnType('unknownType').message,
+                    DiagnosticMessages.invalidFunctionReturnType('unknownType').message
+                ]);
+            });
+
+            it('detects an unknown function parameter type', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    sub a(num as integer)
+                    end sub
+
+                    sub b(unknownParam as unknownType) 'error
+                    end sub
+
+                    class myClass
+                        sub myClassMethod(unknownParam as unknownType) 'error
+                        end sub
+                    end class
+
+                    sub d(obj as myClass)
+                    end sub
+                `);
+                await program.validate();
+                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                    DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message,
+                    DiagnosticMessages.functionParameterTypeIsInvalid('unknownParam', 'unknownType').message
+                ]);
+            });
+
+            it('detects an unknown field parameter type', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    class myClass
+                        foo as unknownType 'error
+                    end class
+
+                    class myOtherClass
+                        foo as unknownType 'error
+                        bar as myClass
+                        buz as myOtherClass
+                    end class
+                `);
+                await program.validate();
+                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                    DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message,
+                    DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message
+                ]);
+            });
+
+            it('finds custom types inside namespaces', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    namespace MyNamespace
+                        class MyClass
+                        end class
+
+                        function foo(param as MyClass) as MyClass
+                        end function
+
+                        function bar(param as MyNamespace.MyClass) as MyNamespace.MyClass
+                        end function
+
+                    end namespace
+
+                `);
+                await program.validate();
+
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            });
+
+            it('finds custom types from other namespaces', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    namespace MyNamespace
+                        class MyClass
+                        end class
+                    end namespace
+
+                    function foo(param as MyNamespace.MyClass) as MyNamespace.MyClass
+                    end function
+                `);
+                await program.validate();
+
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            });
+
+            it('detects missing custom types from current namespaces', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    namespace MyNamespace
+                        class MyClass
+                        end class
+
+                        function foo() as UnknownType
+                        end function
+                    end namespace
+                `);
+                await program.validate();
+
+                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                    DiagnosticMessages.invalidFunctionReturnType('UnknownType').message
+                ]);
+            });
+
+            it('finds custom types from other other files', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    function foo(param as MyClass) as MyClass
+                    end function
+                `);
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/MyClass.bs`, dest: s`source/MyClass.bs` }, `
+                    class MyClass
+                    end class
+                `);
+                await program.validate();
+
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            });
+
+            it('finds custom types from other other files', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    function foo(param as MyNameSpace.MyClass) as MyNameSpace.MyClass
+                    end function
+                `);
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/MyNameSpace.bs`, dest: s`source/MyNameSpace.bs` }, `
+                    namespace MyNameSpace
+                      class MyClass
+                      end class
+                    end namespace
+                `);
+                await program.validate();
+
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            });
+
+            it('detects missing custom types from another namespaces', async () => {
+                await program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    namespace MyNamespace
+                        class MyClass
+                        end class
+                    end namespace
+
+                    function foo() as MyNamespace.UnknownType
+                    end function
+                `);
+                await program.validate();
+
+                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                    DiagnosticMessages.invalidFunctionReturnType('MyNamespace.UnknownType').message
+                ]);
+            });
+
+            it('scopes types to correct scope', async () => {
+                program = new Program({ rootDir: rootDir });
+
+                await program.addOrReplaceFile('components/foo.xml', `
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="foo" extends="Scene">
+                        <script uri="foo.bs"/>
+                    </component>
+                `);
+                await program.addOrReplaceFile(s`components/foo.bs`, `
+                    class MyClass
+                    end class
+                `);
+                await program.validate();
+
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+
+                await program.addOrReplaceFile('components/bar.xml', `
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="bar" extends="Scene">
+                        <script uri="bar.bs"/>
+                    </component>
+                `);
+                await program.addOrReplaceFile(s`components/bar.bs`, `
+                    function getFoo() as MyClass
+                    end function
+                `);
+                await program.validate();
+
+                expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                    DiagnosticMessages.invalidFunctionReturnType('MyClass').message
+                ]);
+            });
+
+            it('can reference types from parent component', async () => {
+                program = new Program({ rootDir: rootDir });
+
+                await program.addOrReplaceFile('components/parent.xml', `
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="parent" extends="Scene">
+                        <script uri="parent.bs"/>
+                    </component>
+                `);
+                await program.addOrReplaceFile(s`components/parent.bs`, `
+                    class MyClass
+                    end class
+                `);
+                await program.addOrReplaceFile('components/child.xml', `
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="child" extends="parent">
+                        <script uri="child.bs"/>
+                    </component>
+                `);
+                await program.addOrReplaceFile(s`components/child.bs`, `
+                    function getFoo() as MyClass
+                    end function
+                `);
+
+                await program.validate();
+
+                expect(program.getDiagnostics()[0]?.message).not.to.exist;
+
+            });
         });
     });
 
