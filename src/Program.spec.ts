@@ -1238,7 +1238,7 @@ describe('Program', () => {
 
             await program.validate();
             //the error should be gone because the child now has access to the parent script
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
         });
     });
 
@@ -1662,7 +1662,7 @@ describe('Program', () => {
                 end class
             `);
             await program.validate();
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
         });
     });
 
@@ -1682,7 +1682,7 @@ describe('Program', () => {
             end class
             `);
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 31)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('Person()');
         });
 
@@ -1701,19 +1701,19 @@ describe('Program', () => {
             end class
             `);
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 32)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
 
             signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
 
             signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 27)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
 
             signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 23)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
         });
 
@@ -1733,11 +1733,11 @@ describe('Program', () => {
             end namespace
             `);
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
 
             signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 26)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
         });
 
@@ -1753,7 +1753,7 @@ describe('Program', () => {
             end namespace
             `);
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
 
@@ -1774,7 +1774,7 @@ describe('Program', () => {
             end namespace
             `);
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 41)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
 
@@ -1799,7 +1799,7 @@ describe('Program', () => {
             await program.validate();
 
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             //note - callfunc completions and signatures are not yet correctly identifying methods that are exposed in an interace - waiting on the new xml branch for that
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
@@ -1825,7 +1825,7 @@ describe('Program', () => {
             await program.validate();
 
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             //note - callfunc completions and signatures are not yet correctly identifying methods that are exposed in an interace - waiting on the new xml branch for that
             expect(signatureHelp).to.be.empty;
         });
@@ -1842,7 +1842,7 @@ describe('Program', () => {
             end class
             `);
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('Person(arg1, arg2)');
         });
 
@@ -1860,7 +1860,7 @@ describe('Program', () => {
             end class
             `);
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('Roger(arg1, arg2)');
         });
 
@@ -1876,11 +1876,11 @@ describe('Program', () => {
             end class
             `);
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].index).to.equal(0);
 
             signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 40)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].index).to.equal(1);
         });
 
@@ -1897,7 +1897,7 @@ describe('Program', () => {
             end namespace
                     `);
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 47)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('people.coders.Person(arg1, arg2)');
             expect(signatureHelp[0].index).to.equal(0);
         });
@@ -1911,11 +1911,11 @@ describe('Program', () => {
             end function
             `);
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 23)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function test(arg1, arg2)');
             expect(signatureHelp[0].index).to.equal(0);
             signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 28)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function test(arg1, arg2)');
             expect(signatureHelp[0].index).to.equal(1);
         });
@@ -1933,7 +1933,7 @@ describe('Program', () => {
             end class
             `);
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 25)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
         });
 
@@ -1948,7 +1948,7 @@ describe('Program', () => {
             end namespace
             `);
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 31)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
         });
 
@@ -1963,7 +1963,7 @@ describe('Program', () => {
             end namespace
             `);
             let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 38)));
-            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+            expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
         });
 
@@ -1975,17 +1975,17 @@ describe('Program', () => {
             function test(arg1, arg2, arg3)
             end function
             `);
-            for (let col = 21; col < 24; col++) {
+            for (let col = 16; col < 23; col++) {
                 let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
             }
-            for (let col = 24; col < 28; col++) {
+            for (let col = 23; col < 27; col++) {
                 let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
             }
-            for (let col = 28; col < 31; col++) {
+            for (let col = 27; col < 31; col++) {
                 let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
@@ -2000,17 +2000,17 @@ describe('Program', () => {
             function test(arg1, arg2, arg3)
             end function
             `);
-            for (let col = 28; col < 31; col++) {
+            for (let col = 25; col < 30; col++) {
                 let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
             }
-            for (let col = 31; col < 35; col++) {
+            for (let col = 30; col < 34; col++) {
                 let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
             }
-            for (let col = 35; col < 38; col++) {
+            for (let col = 34; col < 37; col++) {
                 let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
@@ -2027,12 +2027,12 @@ describe('Program', () => {
                 end function
             end class
             `);
-            for (let col = 31; col < 34; col++) {
+            for (let col = 25; col < 33; col++) {
                 let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
             }
-            for (let col = 34; col < 38; col++) {
+            for (let col = 33; col < 37; col++) {
                 let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
@@ -2043,6 +2043,32 @@ describe('Program', () => {
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
             }
         });
+
+        it('gets signature help for partially typed line', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+            function main()
+                thing@.test(a1, a2,
+            end function
+            function test(arg1, arg2, arg3)
+            end function
+            `);
+            for (let col = 25; col < 29; col++) {
+                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
+                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
+            }
+            for (let col = 31; col < 34; col++) {
+                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
+                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
+            }
+            for (let col = 34; col < 38; col++) {
+                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
+                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
+            }
+        });
+
 
     });
 });

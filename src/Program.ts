@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CompletionItem, Position, SignatureInformation } from 'vscode-languageserver';
+import type { CompletionItem, Position, ReferenceParams, SignatureHelpParams, SignatureInformation } from 'vscode-languageserver';
 import { Location, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -24,7 +24,10 @@ import { isBrsFile, isXmlFile, isCallExpression, isCallfuncExpression, isNewExpr
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import type { FunctionStatement, Statement } from './parser/Statement';
 import type { CallExpression, CallfuncExpression, Expression, NewExpression } from './parser/Expression';
-import { ParseMode } from './parser';
+import { ParseMode, Parser } from './parser';
+import { identifier } from './parser/tests/Parser.spec';
+import { TokenKind } from './lexer';
+import { SSL_OP_SSLEAY_080_CLIENT_DH_BUG } from 'constants';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {
@@ -47,6 +50,14 @@ export interface SignatureInfoObj {
 export interface FileLink<T> {
     item: T;
     file: BrsFile;
+}
+
+
+interface PartialStatementInfo {
+    commaCount: number;
+    statementType: string;
+    name: string;
+    dotPart: string;
 }
 
 export class Program {
@@ -630,6 +641,7 @@ export class Program {
         const filesSearched = new Set<BrsFile>();
         let parseMode = originFile.getParseMode();
         let lowerNamespaceName = namespaceName?.toLowerCase();
+        let lowerName = name?.toLowerCase();
         //look through all files in scope for matches
         for (const scope of this.getScopesForFile(originFile)) {
             for (const file of scope.getAllFiles()) {
@@ -640,7 +652,7 @@ export class Program {
 
                 const statementHandler = (statement: FunctionStatement) => {
                     let parentNamespaceName = statement.namespaceName?.getName(parseMode)?.toLowerCase();
-                    if (statement.name.text.toLowerCase() === name && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
+                    if (statement.name.text.toLowerCase() === lowerName && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                         if (!results.has(statement)) {
                             results.set(statement, { item: statement, file: file });
                         }
@@ -760,96 +772,211 @@ export class Program {
         await file.isReady();
 
         const results = new Map<string, SignatureInfoObj>();
-        const statementHandler = (expr: CallExpression | CallfuncExpression | NewExpression) => {
-            if (util.rangeContains(expr.range, position)) {
-                if (isCallExpression(expr)) {
-                    let name;
-                    name = (expr.callee as any)?.name?.text?.toLowerCase();
-                    if (name) {
-                        let dotPart = isDottedGetExpression(expr.callee) ? file.getPartialVariableName(expr.callee.dot) : undefined;
-                        if (dotPart) {
-                            //remove last .
-                            if (dotPart.endsWith('.')) {
-                                dotPart = dotPart.substring(0, dotPart.length - 1);
-                            }
-                        }
-                        //if m class reference.. then
-                        //only get statements from the class I am in..
-                        let functionScope = file.getFunctionScopeAtPosition(position);
-                        if (functionScope) {
-                            let myClass = file.getClassFromMReference(position, file.getTokenAt(position), functionScope);
-                            if (myClass) {
-                                for (let scope of this.getScopesForFile(myClass.file)) {
-                                    let classes = scope.getClassHieararchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
-                                    //and anything from any class in scope to a non m class
-                                    for (let statement of [...classes].filter((i) => isClassMethodStatement(i.item))) {
-                                        let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
-                                        if (sigHelp && !results.has[sigHelp.key]) {
 
-                                            results.set(sigHelp.key, sigHelp);
-                                            return;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        //else broader case VVVVV
-                        let statements = file.program.getStatementsByName(name, file, dotPart);
-                        for (let statement of statements) {
-                            //TODO better handling of collisions - if it's a namespace, then don't show any other overrides
-                            //if we're on m - then limit scope to the current class, if present
+        let functionScope = file.getFunctionScopeAtPosition(position);
+        let identifierInfo = this.getPartialStatementInfo(file, position);
+        if (identifierInfo.statementType === '') {
+            // just general functoin calls
+            let statements = file.program.getStatementsByName(identifierInfo.name, file);
+            for (let statement of statements) {
+                //TODO better handling of collisions - if it's a namespace, then don't show any other overrides
+                //if we're on m - then limit scope to the current class, if present
+                let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
+                if (sigHelp && !results.has[sigHelp.key]) {
+                    sigHelp.index = identifierInfo.commaCount;
+                    results.set(sigHelp.key, sigHelp);
+                }
+            }
+        } else if (identifierInfo.statementType === '.') {
+            //if m class reference.. then
+            //only get statements from the class I am in..
+            if (functionScope) {
+                let myClass = file.getClassFromMReference(position, file.getTokenAt(position), functionScope);
+                if (myClass) {
+                    for (let scope of this.getScopesForFile(myClass.file)) {
+                        let classes = scope.getClassHieararchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
+                        //and anything from any class in scope to a non m class
+                        for (let statement of [...classes].filter((i) => isClassMethodStatement(i.item))) {
                             let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
                             if (sigHelp && !results.has[sigHelp.key]) {
-                                sigHelp.index = this.getSigHelpIndex(expr.args, position);
+
                                 results.set(sigHelp.key, sigHelp);
+                                return;
                             }
                         }
                     }
-                } else if (isCallfuncExpression(expr)) {
-                    for (const scope of this.getScopes()) {
-                        //to only get functions defined in interface methods
-                        const lowerName = expr.methodName.text.toLowerCase();
-                        const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === lowerName);
-                        if (callable) {
-                            let sigHelp = (callable.callable.file as BrsFile).getSignatureHelpForStatement(callable.callable.functionStatement);
-                            if (sigHelp && !results.has[sigHelp.key]) {
-                                sigHelp.index = this.getSigHelpIndex(expr.args, position);
-                                results.set(sigHelp.key, sigHelp);
-                            }
-                        }
-                    }
-                } else if (isNewExpression(expr)) {
-                    const nameParts = expr.className.getNameParts();
-                    let clazzItem = file.getClassByName(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
-                    let sigHelp = clazzItem?.file?.getClassSignatureHelp(clazzItem?.item);
-                    if (sigHelp && !results.has(sigHelp.key)) {
-                        sigHelp.index = this.getSigHelpIndex(expr.call.args, position);
+                }
+            }
+
+            if (identifierInfo.dotPart) {
+                //potential namespaces
+                let statements = file.program.getStatementsByName(identifierInfo.name, file, identifierInfo.dotPart);
+                if (statements.length === 0) {
+                    //was not a namespaced function, it could be any method on any class now
+                    statements = file.program.getStatementsByName(identifierInfo.name, file);
+                }
+                for (let statement of statements) {
+                    //TODO better handling of collisions - if it's a namespace, then don't show any other overrides
+                    //if we're on m - then limit scope to the current class, if present
+                    let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
+                    if (sigHelp && !results.has[sigHelp.key]) {
+                        sigHelp.index = identifierInfo.commaCount;
                         results.set(sigHelp.key, sigHelp);
                     }
                 }
             }
-        };
 
-        file.parser.ast.walk(createVisitor({
-            CallExpression: statementHandler,
-            CallfuncExpression: statementHandler,
-            NewExpression: statementHandler
-        }), {
-            walkMode: WalkMode.visitAllRecursive
-        });
+
+        } else if (identifierInfo.statementType === '@.') {
+            for (const scope of this.getScopes()) {
+                //to only get functions defined in interface methods
+                const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === identifierInfo.name);
+                if (callable) {
+                    let sigHelp = (callable.callable.file as BrsFile).getSignatureHelpForStatement(callable.callable.functionStatement);
+                    if (sigHelp && !results.has[sigHelp.key]) {
+                        sigHelp.index = identifierInfo.commaCount;
+                        results.set(sigHelp.key, sigHelp);
+                    }
+                }
+            }
+        } else if (identifierInfo.statementType === 'new') {
+            let clazzItem = file.getClassByName(identifierInfo.dotPart ? `${identifierInfo.dotPart}.${identifierInfo.name}` : identifierInfo.name);
+            let sigHelp = clazzItem?.file?.getClassSignatureHelp(clazzItem?.item);
+            if (sigHelp && !results.has(sigHelp.key)) {
+                sigHelp.index = identifierInfo.commaCount;
+                results.set(sigHelp.key, sigHelp);
+            }
+        }
 
         return [...results.values()];
     }
 
-    private getSigHelpIndex(args: Expression[], position: Position) {
-        let index = 0;
-        for (let i = args.length - 1; i >= 0; i--) {
-            if (util.comparePositionToRange(position, args[i].range) <= 0) {
-                index = i;
-            }
+    private getPartialStatementInfo(file: BrsFile, position: Position): PartialStatementInfo {
+        let lines = util.splitIntoLines(file.fileContents);
+        let line = lines[position.line].toLowerCase();
+        let index = position.character;
+        let itemCounts = this.getPartialItemCounts(line, index);
+        if (!itemCounts.isArgStartFound && line.charAt(index) === ')') {
+            //try previous char, in case we were on a close bracket..
+            index--;
+            itemCounts = this.getPartialItemCounts(line, index);
         }
-        return index;
+        let argStartIndex = itemCounts.argStartIndex;
+        index = itemCounts.argStartIndex - 1;
+        let statementType = '';
+        let name;
+        let dotPart;
+
+        if (!itemCounts.isArgStartFound) {
+            //try to get sig help based on the name
+            index = position.character;
+            let currentToken = file.getTokenAt(position);
+            name = file.getPartialVariableName(currentToken, [TokenKind.New]);
+            if (!name) {
+                //try the previous token, incase we're on a bracket
+                currentToken = file.getPreviousToken(currentToken);
+                name = file.getPartialVariableName(currentToken, [TokenKind.New]);
+            }
+            if (name.indexOf('.')) {
+                let parts = name.split('.');
+                name = parts[parts.length - 1];
+            }
+
+            index = currentToken.range.start.character;
+            argStartIndex = index;
+        }
+        while (index > 0) {
+            if (!(/[a-z0-9_\.\@]/i).test(line.charAt(index))) {
+                if (!name) {
+                    name = line.substring(index + 1, argStartIndex);
+                } else {
+                    dotPart = line.substring(index + 1, argStartIndex);
+                    if (dotPart.endsWith('.')) {
+                        dotPart = dotPart.substr(0, dotPart.length - 1);
+                    }
+                }
+                break;
+            }
+            if (line.substr(index - 2, 2) === '@.') {
+                statementType = '@.';
+                name = name || line.substring(index, argStartIndex);
+                break;
+            } else if (line.charAt(index - 1) === '.' && statementType === '') {
+                statementType = '.';
+                name = name || line.substring(index, argStartIndex);
+                argStartIndex = index;
+            }
+            index--;
+        }
+
+        if (line.substring(0, index).trim().endsWith('new')) {
+            statementType = 'new';
+        }
+
+        return {
+            commaCount: itemCounts.comma,
+            statementType: statementType,
+            name: name,
+            dotPart: dotPart
+        };
+    }
+
+    private getPartialItemCounts(line: string, index: number) {
+        let isArgStartFound = false;
+        let itemCounts = {
+            normal: 0,
+            square: 0,
+            curly: 0,
+            comma: 0,
+            endIndex: 0,
+            argStartIndex: index,
+            isArgStartFound: false
+        };
+        while (index >= 0) {
+            const currentChar = line.charAt(index);
+
+            if (isArgStartFound) {
+                if (currentChar !== ' ') {
+                    break;
+                }
+            } else {
+                if (currentChar === ')') {
+                    itemCounts.normal++;
+                }
+
+                if (currentChar === ']') {
+                    itemCounts.square++;
+                }
+
+                if (currentChar === '}') {
+                    itemCounts.curly++;
+                }
+
+                if (currentChar === ',' && itemCounts.normal <= 0 && itemCounts.curly <= 0 && itemCounts.square <= 0) {
+                    itemCounts.comma++;
+                }
+
+                if (currentChar === '(') {
+                    if (itemCounts.normal === 0) {
+                        itemCounts.isArgStartFound = true;
+                        itemCounts.argStartIndex = index;
+                    } else {
+                        itemCounts.normal--;
+                    }
+                }
+
+                if (currentChar === '[') {
+                    itemCounts.square--;
+                }
+
+                if (currentChar === '{') {
+                    itemCounts.curly--;
+                }
+            }
+            index--;
+        }
+        return itemCounts;
+
     }
 
     public getReferences(pathAbsolute: string, position: Position) {
