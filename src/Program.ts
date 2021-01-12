@@ -23,7 +23,7 @@ import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isCallExpression, isCallfuncExpression, isNewExpression, isClassMethodStatement, isDottedGetExpression } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import type { FunctionStatement, Statement } from './parser/Statement';
-import type { CallExpression, CallfuncExpression, NewExpression } from './parser/Expression';
+import type { CallExpression, CallfuncExpression, Expression, NewExpression } from './parser/Expression';
 import { ParseMode } from './parser';
 const startOfSourcePkgPath = `source${path.sep}`;
 
@@ -785,7 +785,7 @@ export class Program {
                                     for (let statement of [...classes].filter((i) => isClassMethodStatement(i.item))) {
                                         let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
                                         if (sigHelp && !results.has[sigHelp.key]) {
-                                            sigHelp.index = expr.args.findIndex((e) => util.rangeContains(e.range, position));
+
                                             results.set(sigHelp.key, sigHelp);
                                             return;
                                         }
@@ -801,7 +801,7 @@ export class Program {
                             //if we're on m - then limit scope to the current class, if present
                             let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
                             if (sigHelp && !results.has[sigHelp.key]) {
-                                sigHelp.index = expr.args.findIndex((e) => util.rangeContains(e.range, position));
+                                sigHelp.index = this.getSigHelpIndex(expr.args, position);
                                 results.set(sigHelp.key, sigHelp);
                             }
                         }
@@ -814,7 +814,7 @@ export class Program {
                         if (callable) {
                             let sigHelp = (callable.callable.file as BrsFile).getSignatureHelpForStatement(callable.callable.functionStatement);
                             if (sigHelp && !results.has[sigHelp.key]) {
-                                sigHelp.index = expr.args.findIndex((e) => util.rangeContains(e.range, position));
+                                sigHelp.index = this.getSigHelpIndex(expr.args, position);
                                 results.set(sigHelp.key, sigHelp);
                             }
                         }
@@ -824,7 +824,7 @@ export class Program {
                     let clazzItem = file.getClassByName(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
                     let sigHelp = clazzItem?.file?.getClassSignatureHelp(clazzItem?.item);
                     if (sigHelp && !results.has(sigHelp.key)) {
-                        sigHelp.index = expr.call.args.findIndex((e) => util.rangeContains(e.range, position));
+                        sigHelp.index = this.getSigHelpIndex(expr.call.args, position);
                         results.set(sigHelp.key, sigHelp);
                     }
                 }
@@ -840,6 +840,16 @@ export class Program {
         });
 
         return [...results.values()];
+    }
+
+    private getSigHelpIndex(args: Expression[], position: Position) {
+        let index = 0;
+        for (let i = args.length - 1; i >= 0; i--) {
+            if (util.comparePositionToRange(position, args[i].range) <= 0) {
+                index = i;
+            }
+        }
+        return index;
     }
 
     public getReferences(pathAbsolute: string, position: Position) {

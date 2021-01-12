@@ -1967,6 +1967,82 @@ describe('Program', () => {
             expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
         });
 
+        it('gets signature help for regular method call on various index points', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+            function main()
+                test(a1, a2, a3)
+            end function
+            function test(arg1, arg2, arg3)
+            end function
+            `);
+            for (let col = 21; col < 24; col++) {
+                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
+                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
+            }
+            for (let col = 24; col < 28; col++) {
+                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
+                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
+            }
+            for (let col = 28; col < 31; col++) {
+                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
+                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
+            }
+        });
+
+        it('gets signature help for callfunc method call on various index points', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+            function main()
+                thing@.test(a1, a2, a3)
+            end function
+            function test(arg1, arg2, arg3)
+            end function
+            `);
+            for (let col = 28; col < 31; col++) {
+                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
+                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
+            }
+            for (let col = 31; col < 35; col++) {
+                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
+                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
+            }
+            for (let col = 35; col < 38; col++) {
+                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
+                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
+            }
+        });
+
+        it('gets signature help for constructor method call on various index points', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+            function main()
+                a = new Person(a1, a2, a3)
+            end function
+            class Person
+                function new(arg1, arg2, arg3)
+                end function
+            end class
+            `);
+            for (let col = 31; col < 34; col++) {
+                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
+                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
+            }
+            for (let col = 34; col < 38; col++) {
+                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
+                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
+            }
+            for (let col = 38; col < 41; col++) {
+                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
+                expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
+            }
+        });
 
     });
 });

@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import * as path from 'path';
 import util, { standardizePath as s } from './util';
-import { Range } from 'vscode-languageserver';
+import { Position, Range } from 'vscode-languageserver';
 import { Lexer } from './lexer';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
@@ -522,6 +522,36 @@ describe('util', () => {
         });
     });
 
+    describe('compareRangeToPosition', () => {
+        it('correctly compares positions to ranges with one line range line', () => {
+            let range = Range.create(1, 10, 1, 15);
+            expect(util.comparePositionToRange(Position.create(0, 13), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 1), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 9), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 10), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 13), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 15), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 16), range)).to.equal(1);
+            expect(util.comparePositionToRange(Position.create(2, 10), range)).to.equal(1);
+        });
+        it('correctly compares positions to ranges with multiline range', () => {
+            let range = Range.create(1, 10, 3, 15);
+            expect(util.comparePositionToRange(Position.create(0, 13), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 1), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 9), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 10), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 13), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 15), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(2, 0), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(2, 10), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(2, 13), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(3, 0), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(3, 10), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(3, 13), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(3, 16), range)).to.equal(1);
+            expect(util.comparePositionToRange(Position.create(4, 10), range)).to.equal(1);
+        });
+    });
     describe('getExtension', () => {
         it('handles edge cases', () => {
             expect(util.getExtension('main.bs')).to.eql('.bs');
