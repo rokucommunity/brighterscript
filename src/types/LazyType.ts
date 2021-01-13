@@ -30,4 +30,9 @@ export class LazyType implements BscType {
     public toString() {
         return this.type.toString();
     }
+
+    public toTypeString(): string {
+        return this.type.toTypeString();
+    }
 }
+
