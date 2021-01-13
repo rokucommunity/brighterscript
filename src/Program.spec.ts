@@ -1286,6 +1286,18 @@ describe('Program', () => {
         });
     });
 
+    it('does not create map by default', async () => {
+        fsExtra.ensureDirSync(program.options.stagingFolderPath);
+        await program.addOrReplaceFile('source/main.brs', `
+            sub main()
+            end sub
+        `);
+        await program.validate();
+        await program.transpile([], program.options.stagingFolderPath);
+        expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/main.brs`)).is.true;
+        expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/main.brs.map`)).is.false;
+    });
+
     it('creates sourcemap for brs and xml files', async () => {
         fsExtra.ensureDirSync(program.options.stagingFolderPath);
         await program.addOrReplaceFile('source/main.brs', `
@@ -1309,7 +1321,7 @@ describe('Program', () => {
             src: s`${rootDir}/components/comp1.xml`,
             dest: s`components/comp1.xml`
         }];
-
+        program.options.sourceMap = true;
         await program.transpile(filePaths, program.options.stagingFolderPath);
 
         expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/main.brs.map`)).is.true;
@@ -1380,7 +1392,8 @@ describe('Program', () => {
             program = new Program({
                 rootDir: rootDir,
                 stagingFolderPath: stagingFolderPath,
-                sourceRoot: sourceRoot
+                sourceRoot: sourceRoot,
+                sourceMap: true
             });
             await program.addOrReplaceFile('source/main.brs', `
                 sub main()
@@ -1405,7 +1418,8 @@ describe('Program', () => {
             program = new Program({
                 rootDir: rootDir,
                 stagingFolderPath: stagingFolderPath,
-                sourceRoot: sourceRoot
+                sourceRoot: sourceRoot,
+                sourceMap: true
             });
             await program.addOrReplaceFile('source/main.bs', `
                 sub main()

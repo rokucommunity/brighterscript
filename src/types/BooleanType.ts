@@ -16,4 +16,8 @@ export class BooleanType implements BscType {
     public toString() {
         return 'boolean';
     }
+
+    public toTypeString(): string {
+        return this.toString();
+    }
 }

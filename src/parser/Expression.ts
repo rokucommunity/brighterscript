@@ -133,7 +133,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         /**
          * If this function is enclosed within another function, this will reference that parent function
          */
-        readonly parentFunction?: FunctionExpression
+        readonly parentFunction?: FunctionExpression,
+        readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
         if (this.returnTypeToken) {
@@ -216,7 +217,12 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pathAbsolute, 'as'),
                 ' ',
                 //return type
-                new SourceNode(this.returnTypeToken.range.start.line + 1, this.returnTypeToken.range.start.character, state.pathAbsolute, this.returnTypeToken.text.toLowerCase())
+                new SourceNode(
+                    this.returnTypeToken.range.start.line + 1,
+                    this.returnTypeToken.range.start.character,
+                    state.pathAbsolute,
+                    this.returnType.toTypeString()
+                )
             );
         }
         if (includeBody) {
@@ -258,7 +264,8 @@ export class FunctionParameterExpression extends Expression {
         public equalsToken?: Token,
         public defaultValue?: Expression,
         public asToken?: Token,
-        public typeToken?: Token
+        public typeToken?: Token,
+        readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
         if (typeToken) {
@@ -292,7 +299,12 @@ export class FunctionParameterExpression extends Expression {
             result.push(' ');
             result.push(new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pathAbsolute, 'as'));
             result.push(' ');
-            result.push(new SourceNode(this.typeToken.range.start.line + 1, this.typeToken.range.start.character, state.pathAbsolute, this.typeToken.text));
+            result.push(new SourceNode(
+                this.typeToken.range.start.line + 1,
+                this.typeToken.range.start.character,
+                state.pathAbsolute,
+                this.type.toTypeString()
+            ));
         }
 
         return result;

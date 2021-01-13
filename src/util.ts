@@ -27,6 +27,7 @@ import { LogLevel } from './Logger';
 import type { Token } from './lexer';
 import { TokenKind } from './lexer';
 import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
+import { CustomType } from './types/CustomType';
 
 export class Util {
 
@@ -284,6 +285,7 @@ export class Util {
         config.createPackage = config.createPackage === false ? false : true;
         let rootFolderName = path.basename(process.cwd());
         config.outFile = config.outFile ?? `./out/${rootFolderName}.zip`;
+        config.sourceMap = config.sourceMap === true;
         config.username = config.username ?? 'rokudev';
         config.watch = config.watch === true ? true : false;
         config.emitFullPaths = config.emitFullPaths === true ? true : false;
@@ -972,7 +974,7 @@ export class Util {
     /**
      * Convert a token into a BscType
      */
-    public tokenToBscType(token: Token) {
+    public tokenToBscType(token: Token, allowCustomType = true) {
         if (!token) {
             return new DynamicType();
         }
@@ -1033,6 +1035,9 @@ export class Util {
                         return new StringType();
                     case 'void':
                         return new VoidType();
+                }
+                if (allowCustomType) {
+                    return new CustomType(token.text);
                 }
         }
     }

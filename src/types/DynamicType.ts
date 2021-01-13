@@ -18,4 +18,8 @@ export class DynamicType implements BscType {
     public toString() {
         return 'dynamic';
     }
+
+    public toTypeString(): string {
+        return this.toString();
+    }
 }

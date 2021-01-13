@@ -1,3 +1,4 @@
+import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Hover, Range, Position } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
@@ -1231,26 +1232,41 @@ export class BrsFile {
     /**
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
-    public transpile() {
+    public transpile(): CodeWithSourceMap {
         const state = new TranspileState(this);
         if (this.needsTranspiled) {
             let programNode = new SourceNode(null, null, this.pathAbsolute, this.ast.transpile(state));
-            let result = programNode.toStringWithSourceMap({
-                file: this.pathAbsolute
-            });
-            return result;
-        } else {
-            //create a source map from the original source code
-            let chunks = [] as (SourceNode | string)[];
-            let lines = util.splitIntoLines(this.fileContents);
-            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                let line = lines[lineIndex];
-                chunks.push(
-                    lineIndex > 0 ? '\n' : '',
-                    new SourceNode(lineIndex + 1, 0, state.pathAbsolute, line)
-                );
+            if (this.program.options.sourceMap) {
+                return programNode.toStringWithSourceMap({
+                    file: this.pathAbsolute
+                });
+            } else {
+                //return the code without the source map
+                return {
+                    code: programNode.toString(),
+                    map: undefined
+                };
             }
-            return new SourceNode(null, null, state.pathAbsolute, chunks).toStringWithSourceMap();
+        } else {
+            if (this.program.options.sourceMap) {
+                //create a source map from the original source code
+                let chunks = [] as (SourceNode | string)[];
+                let lines = util.splitIntoLines(this.fileContents);
+                for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+                    let line = lines[lineIndex];
+                    chunks.push(
+                        lineIndex > 0 ? '\n' : '',
+                        new SourceNode(lineIndex + 1, 0, state.pathAbsolute, line)
+                    );
+                }
+                return new SourceNode(null, null, state.pathAbsolute, chunks).toStringWithSourceMap();
+            } else {
+                //return the original source code as-is
+                return {
+                    code: this.fileContents,
+                    map: undefined
+                };
+            }
         }
     }
 

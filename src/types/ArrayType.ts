@@ -40,4 +40,8 @@ export class ArrayType implements BscType {
     public toString() {
         return `Array<${this.innerTypes.map((x) => x.toString()).join(' | ')}>`;
     }
+
+    public toTypeString(): string {
+        return 'object';
+    }
 }

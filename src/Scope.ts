@@ -13,7 +13,7 @@ import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType } from './astUtils/reflection';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -56,10 +56,26 @@ export class Scope {
     /**
      * Get the class with the specified name.
      * @param className - the all-lower-case namespace-included class name
+     * @param namespaceName - teh current namespace name
      */
-    public getClass(className: string) {
+    public getClass(className: string, namespaceName?: string): ClassStatement {
         const classMap = this.getClassMap();
-        return classMap.get(className);
+        let lowerCaseFullName = util.getFullyQualifiedClassName(className, namespaceName).toLowerCase();
+        let cls = classMap.get(lowerCaseFullName);
+        //if we couldn't find the class by its full namespaced name, look for a global class with that name
+        if (!cls) {
+            cls = classMap.get(lowerCaseFullName);
+        }
+        return cls;
+    }
+
+    /**
+    * Tests if a class exists with the specified name
+    * @param className - the all-lower-case namespace-included class name
+    * @param namespaceName - teh current namespace name
+    */
+    public hasClass(className: string, namespaceName?: string): boolean {
+        return !!this.getClass(className, namespaceName);
     }
 
     /**
@@ -410,6 +426,7 @@ export class Scope {
                 this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
                 this.diagnosticDetectFunctionCollisions(file);
                 this.detectVariableNamespaceCollisions(file);
+                this.diagnosticDetectInvalidFunctionExpressionTypes(file);
             });
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
@@ -476,7 +493,6 @@ export class Scope {
      * Find various function collisions
      */
     private diagnosticDetectFunctionCollisions(file: BscFile) {
-        const classMap = this.getClassMap();
         for (let func of file.callables) {
             const funcName = func.getName(ParseMode.BrighterScript);
             const lowerFuncName = funcName?.toLowerCase();
@@ -492,12 +508,47 @@ export class Scope {
                 }
 
                 //find any functions that have the same name as a class
-                if (classMap.has(lowerFuncName)) {
+                if (this.hasClass(lowerFuncName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.functionCannotHaveSameNameAsClass(funcName),
                         range: func.nameRange,
                         file: file
                     });
+                }
+            }
+        }
+    }
+
+    /**
+    * Find function parameters and function return types that are neither built-in types or known Class references
+    */
+    private diagnosticDetectInvalidFunctionExpressionTypes(file: BscFile) {
+        for (let func of file.parser.references.functionExpressions) {
+            if (isCustomType(func.returnType) && func.returnTypeToken) {
+                // check if this custom type is in our class map
+                const returnTypeName = func.returnType.name;
+                const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
+                if (!this.hasClass(returnTypeName, currentNamespaceName)) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
+                        range: func.returnTypeToken.range,
+                        file: file
+                    });
+                }
+            }
+
+            for (let param of func.parameters) {
+                if (isCustomType(param.type) && param.typeToken) {
+                    const paramTypeName = param.type.name;
+                    const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
+                    if (!this.hasClass(paramTypeName, currentNamespaceName)) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),
+                            range: param.typeToken.range,
+                            file: file
+                        });
+
+                    }
                 }
             }
         }

@@ -29,4 +29,8 @@ export class LongIntegerType implements BscType {
     public toString() {
         return 'longinteger';
     }
+
+    public toTypeString(): string {
+        return this.toString();
+    }
 }

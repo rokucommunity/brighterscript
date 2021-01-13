@@ -13,6 +13,7 @@ import { IntegerType } from '../types/IntegerType';
 import { LongIntegerType } from '../types/LongIntegerType';
 import { FloatType } from '../types/FloatType';
 import { DoubleType } from '../types/DoubleType';
+import { CustomType } from '../types/CustomType';
 
 // File reflection
 
@@ -226,6 +227,9 @@ export function isInvalidType(e: any): e is InvalidType {
 }
 export function isVoidType(e: any): e is VoidType {
     return e?.constructor.name === VoidType.name;
+}
+export function isCustomType(e: any): e is CustomType {
+    return e?.constructor.name === CustomType.name;
 }
 
 const numberConstructorNames = [
