@@ -355,7 +355,7 @@ export class Parser {
         this.warnIfNotBrighterScriptMode('class declarations');
         let classAnnotations = this.pendingAnnotations;
         this.pendingAnnotations = [];
-        
+
         let classKeyword = this.consume(
             DiagnosticMessages.expectedClassKeyword(),
             TokenKind.Class

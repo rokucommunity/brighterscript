@@ -726,7 +726,7 @@ describe('parser', () => {
             expect(fn.annotations[0].call).to.be.instanceof(CallExpression);
         });
 
-        it.only('attaches annotations to a class', () => {
+        it('attaches annotations to a class', () => {
             let { statements, diagnostics } = parse(`
             @meta1
             class MyClass
