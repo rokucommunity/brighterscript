@@ -231,7 +231,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     functionParameterTypeIsInvalid: (parameterName: string, typeText: string) => ({
-        message: `Function parameter '${parameterName}' is of invalid type '${parameterName}'`,
+        message: `Function parameter '${parameterName}' is of invalid type '${typeText}'`,
         code: 1044,
         severity: DiagnosticSeverity.Error
     }),

@@ -28,6 +28,7 @@ import type { Token } from './lexer';
 import { TokenKind } from './lexer';
 import type { CompilerPlugin } from '.';
 import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
+import { CustomType } from './types/CustomType';
 
 export class Util {
 
@@ -285,6 +286,7 @@ export class Util {
         config.createPackage = config.createPackage === false ? false : true;
         let rootFolderName = path.basename(process.cwd());
         config.outFile = config.outFile ?? `./out/${rootFolderName}.zip`;
+        config.sourceMap = config.sourceMap === true;
         config.username = config.username ?? 'rokudev';
         config.watch = config.watch === true ? true : false;
         config.emitFullPaths = config.emitFullPaths === true ? true : false;
@@ -879,7 +881,7 @@ export class Util {
      * If no namespace is provided, return the `className` unchanged.
      */
     public getFullyQualifiedClassName(className: string, namespaceName?: string) {
-        if (className.includes('.') === false && namespaceName) {
+        if (className?.includes('.') === false && namespaceName) {
             return `${namespaceName}.${className}`;
         } else {
             return className;
@@ -974,7 +976,7 @@ export class Util {
     /**
      * Convert a token into a BscType
      */
-    public tokenToBscType(token: Token) {
+    public tokenToBscType(token: Token, allowCustomType = true) {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
@@ -1032,6 +1034,9 @@ export class Util {
                         return new StringType();
                     case 'void':
                         return new VoidType();
+                }
+                if (allowCustomType) {
+                    return new CustomType(token.text);
                 }
         }
     }

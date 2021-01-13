@@ -75,6 +75,11 @@
             "description": "Creates a zip package. Defaults to true. This setting is ignored when deploy is enabled.",
             "type": "boolean"
         },
+        "sourceMap": {
+            "description": "Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.",
+            "type": "boolean",
+            "default": false
+        },
         "copyToStaging": {
             "description": "If true, the files are copied to staging. This setting is ignored when deploy is enabled or if createPackage is enabled",
             "type": "boolean"

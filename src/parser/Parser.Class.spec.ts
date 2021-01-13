@@ -235,7 +235,7 @@ describe('parser class', () => {
             expect(diagnostics.length).to.be.greaterThan(0);
             let cls = statements[0] as ClassStatement;
             expect(cls.fields[0].name.text).to.equal('middleName');
-            expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedValidTypeToFollowAsKeyword().code);
+            expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifierAfterKeyword('as').code);
         });
 
         it('field access modifier defaults to undefined when omitted', () => {

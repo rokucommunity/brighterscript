@@ -17,4 +17,8 @@ export class InterfaceType implements BscType {
         //TODO make this match the actual interface of the object
         return 'interface';
     }
+
+    public toTypeString(): string {
+        return this.toString();
+    }
 }

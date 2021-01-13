@@ -13,7 +13,7 @@ import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils';
 
 /**
@@ -57,15 +57,36 @@ export class Scope {
     /**
      * Get the class with the specified name.
      * @param className - the all-lower-case namespace-included class name
+     * @param namespaceName - teh current namespace name
      */
-    public getClass(className: string) {
-        const classMap = this.getClassMap();
-        return classMap.get(className)?.item;
+    public getClass(className: string, namespaceName?: string): ClassStatement {
+        return this.getClassFileLink(className, namespaceName)?.item;
     }
 
-    public getClassObject(className: string) {
+    /**
+     * Get a class and its containing file by the class name
+     * @param className - The name of the class (including namespace if possible)
+     * @param callsiteNamespace - the name of the namespace where the call site resides (this is NOT the known namespace of the class).
+     *                            This is used to help resolve non-namespaced class names that reside in the same namespac as the call site.
+     */
+    public getClassFileLink(className: string, callsiteNamespace?: string): FileLink<ClassStatement> {
         const classMap = this.getClassMap();
-        return classMap.get(className);
+        let lowerCaseFullName = util.getFullyQualifiedClassName(className, callsiteNamespace)?.toLowerCase();
+        let cls = classMap.get(lowerCaseFullName);
+        //if we couldn't find the class by its full namespaced name, look for a global class with that name
+        if (!cls) {
+            cls = classMap.get(lowerCaseFullName);
+        }
+        return cls;
+    }
+
+    /**
+    * Tests if a class exists with the specified name
+    * @param className - the all-lower-case namespace-included class name
+    * @param namespaceName - teh current namespace name
+    */
+    public hasClass(className: string, namespaceName?: string): boolean {
+        return !!this.getClass(className, namespaceName);
     }
 
     /**
@@ -418,6 +439,7 @@ export class Scope {
                 this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
                 this.diagnosticDetectFunctionCollisions(file);
                 this.detectVariableNamespaceCollisions(file);
+                this.diagnosticDetectInvalidFunctionExpressionTypes(file);
             });
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
@@ -484,7 +506,6 @@ export class Scope {
      * Find various function collisions
      */
     private diagnosticDetectFunctionCollisions(file: BscFile) {
-        const classMap = this.getClassMap();
         for (let func of file.callables) {
             const funcName = func.getName(ParseMode.BrighterScript);
             const lowerFuncName = funcName?.toLowerCase();
@@ -500,12 +521,47 @@ export class Scope {
                 }
 
                 //find any functions that have the same name as a class
-                if (classMap.has(lowerFuncName)) {
+                if (this.hasClass(lowerFuncName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.functionCannotHaveSameNameAsClass(funcName),
                         range: func.nameRange,
                         file: file
                     });
+                }
+            }
+        }
+    }
+
+    /**
+    * Find function parameters and function return types that are neither built-in types or known Class references
+    */
+    private diagnosticDetectInvalidFunctionExpressionTypes(file: BscFile) {
+        for (let func of file.parser.references.functionExpressions) {
+            if (isCustomType(func.returnType) && func.returnTypeToken) {
+                // check if this custom type is in our class map
+                const returnTypeName = func.returnType.name;
+                const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
+                if (!this.hasClass(returnTypeName, currentNamespaceName)) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
+                        range: func.returnTypeToken.range,
+                        file: file
+                    });
+                }
+            }
+
+            for (let param of func.parameters) {
+                if (isCustomType(param.type) && param.typeToken) {
+                    const paramTypeName = param.type.name;
+                    const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
+                    if (!this.hasClass(paramTypeName, currentNamespaceName)) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),
+                            range: param.typeToken.range,
+                            file: file
+                        });
+
+                    }
                 }
             }
         }
@@ -899,12 +955,17 @@ export class Scope {
         return results;
     }
 
-    public getClassHieararchy(className: string) {
+    /**
+     * @param className - The name of the class (including namespace if possible)
+     * @param callsiteNamespace - the name of the namespace where the call site resides (this is NOT the known namespace of the class).
+     *                            This is used to help resolve non-namespaced class names that reside in the same namespac as the call site.
+     */
+    public getClassHieararchy(className: string, callsiteNamespace?: string) {
         let items = [] as FileLink<ClassStatement>[];
-        let link = this.getClassObject(className);
+        let link = this.getClassFileLink(className, callsiteNamespace);
         while (link) {
             items.push(link);
-            link = this.getClassObject(link.item.parentClassName?.getName(ParseMode.BrighterScript)?.toLowerCase());
+            link = this.getClassFileLink(link.item.parentClassName?.getName(ParseMode.BrighterScript)?.toLowerCase(), callsiteNamespace);
         }
         return items;
     }

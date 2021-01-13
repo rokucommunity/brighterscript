@@ -1,3 +1,4 @@
+import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Hover, Range, Position } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
@@ -369,7 +370,7 @@ export class BrsFile {
         //if the class is namespace-prefixed, look only for this exact name
         if (className.includes('.')) {
             for (let scope of scopes) {
-                const cls = scope.getClassObject(lowerClassName);
+                const cls = scope.getClassFileLink(lowerClassName, namespaceName);
                 if (cls) {
                     return cls;
                 }
@@ -380,12 +381,12 @@ export class BrsFile {
             let namespacedClass: FileLink<ClassStatement>;
             for (let scope of scopes) {
                 //get the global class if it exists
-                let possibleGlobalClass = scope.getClassObject(lowerClassName);
+                let possibleGlobalClass = scope.getClassFileLink(lowerClassName);
                 if (possibleGlobalClass && !globalClass) {
                     globalClass = possibleGlobalClass;
                 }
                 if (namespaceName) {
-                    let possibleNamespacedClass = scope.getClassObject(namespaceName.toLowerCase() + '.' + lowerClassName);
+                    let possibleNamespacedClass = scope.getClassFileLink(namespaceName.toLowerCase() + '.' + lowerClassName);
                     if (possibleNamespacedClass) {
                         namespacedClass = possibleNamespacedClass;
                         break;
@@ -799,9 +800,9 @@ export class BrsFile {
         if (this.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
             // is next to a @. callfunc invocation
             for (const scope of this.program.getScopes()) {
-                scope.getAllCallables().forEach((c) => {
-                    result.push(scope.createCompletionFromCallable(c));
-                });
+                for (const callable of scope.getAllCallables()) {
+                    result.push(scope.createCompletionFromCallable(callable));
+                }
             }
             //no other result is possible in this case
             return result;
@@ -1656,26 +1657,41 @@ export class BrsFile {
     /**
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
-    public transpile() {
+    public transpile(): CodeWithSourceMap {
         const state = new TranspileState(this);
         if (this.needsTranspiled) {
             let programNode = new SourceNode(null, null, this.pathAbsolute, this.ast.transpile(state));
-            let result = programNode.toStringWithSourceMap({
-                file: this.pathAbsolute
-            });
-            return result;
-        } else {
-            //create a source map from the original source code
-            let chunks = [] as (SourceNode | string)[];
-            let lines = util.splitIntoLines(this.fileContents);
-            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                let line = lines[lineIndex];
-                chunks.push(
-                    lineIndex > 0 ? '\n' : '',
-                    new SourceNode(lineIndex + 1, 0, state.pathAbsolute, line)
-                );
+            if (this.program.options.sourceMap) {
+                return programNode.toStringWithSourceMap({
+                    file: this.pathAbsolute
+                });
+            } else {
+                //return the code without the source map
+                return {
+                    code: programNode.toString(),
+                    map: undefined
+                };
             }
-            return new SourceNode(null, null, state.pathAbsolute, chunks).toStringWithSourceMap();
+        } else {
+            if (this.program.options.sourceMap) {
+                //create a source map from the original source code
+                let chunks = [] as (SourceNode | string)[];
+                let lines = util.splitIntoLines(this.fileContents);
+                for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+                    let line = lines[lineIndex];
+                    chunks.push(
+                        lineIndex > 0 ? '\n' : '',
+                        new SourceNode(lineIndex + 1, 0, state.pathAbsolute, line)
+                    );
+                }
+                return new SourceNode(null, null, state.pathAbsolute, chunks).toStringWithSourceMap();
+            } else {
+                //return the original source code as-is
+                return {
+                    code: this.fileContents,
+                    map: undefined
+                };
+            }
         }
     }
 
