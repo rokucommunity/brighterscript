@@ -2521,10 +2521,15 @@ export class Parser {
      */
     private findReferences() {
         this._references = createReferences();
-
+        let currentFunctionExpression: FunctionExpression;
         this.ast.walk(createVisitor({
             AssignmentStatement: s => {
                 this._references.assignmentStatements.push(s);
+                this._references.localVars.get(currentFunctionExpression)?.push({
+                    nameToken: s.name,
+                    lowerName: s.name.text.toLowerCase(),
+                    type: this.getBscTypeFromAssignment(s, currentFunctionExpression)
+                });
             },
             ClassStatement: s => {
                 this._references.classStatements.push(s);
@@ -2545,6 +2550,15 @@ export class Parser {
                 if (!isClassMethodStatement(parent)) {
                     this._references.functionExpressions.push(expression);
                 }
+                currentFunctionExpression = expression;
+                const parameterVars = expression.parameters.map(x => {
+                    return {
+                        nameToken: x.name,
+                        lowerName: x.name.text.toLowerCase(),
+                        type: x.type
+                    };
+                });
+                this._references.localVars.set(expression, parameterVars);
             },
             NewExpression: e => {
                 this._references.newExpressions.push(e);
@@ -2557,6 +2571,14 @@ export class Parser {
             },
             DottedSetStatement: e => {
                 this.addPropertyHints(e.name);
+            },
+            ForEachStatement: s => {
+                this._references.localVars.get(currentFunctionExpression)?.push({
+                    nameToken: s.item,
+                    lowerName: s.item.text.toLowerCase(),
+                    //TODO infer type from `target`
+                    type: new DynamicType()
+                });
             }
         }), {
             walkMode: WalkMode.visitAllRecursive

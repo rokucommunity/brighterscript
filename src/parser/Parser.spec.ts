@@ -17,6 +17,39 @@ describe('parser', () => {
     });
 
     describe('findReferences', () => {
+        it('recomputes localVars', () => {
+            const parser = Parser.parse(`
+                sub main(herd)
+                    for each zombie in herd
+                        isAlive = false
+                    end for
+                    for i = 0 to 10 step 1
+                        j = i
+                    end for
+                    humansAreAlive = false
+                end sub
+            `);
+            let vars = parser.references.localVars.get(parser.references.functionStatements[0].func);
+            expect(vars.map(x => x.nameToken.text).sort()).to.eql([
+                'herd',
+                'humansAreAlive',
+                'i',
+                'isAlive',
+                'j',
+                'zombie'
+            ]);
+            parser.invalidateReferences();
+            vars = parser.references.localVars.get(parser.references.functionStatements[0].func);
+            expect(vars.map(x => x.nameToken.text).sort()).to.eql([
+                'herd',
+                'humansAreAlive',
+                'i',
+                'isAlive',
+                'j',
+                'zombie'
+            ]);
+        });
+
         it('gets called if references are missing', () => {
             const parser = Parser.parse(`
                 sub main()
