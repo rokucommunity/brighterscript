@@ -705,7 +705,7 @@ export class BrsFile {
 
             if (parseMode === ParseMode.BrighterScript) {
                 //include the first part of namespaces
-                let namespaces = scope.getNamespaceStatements();
+                let namespaces = scope.getAllNamespaceStatements();
                 for (let stmt of namespaces) {
                     let firstPart = stmt.nameExpression.getNameParts().shift();
                     //skip duplicate namespace names
@@ -1056,7 +1056,7 @@ export class BrsFile {
         const filesSearched = {};
         //look through all files in scope for matches
         for (const scope of this.program.getScopesForFile(this)) {
-            for (const file of scope.getFiles()) {
+            for (const file of scope.getAllFiles()) {
                 if (isXmlFile(file) || filesSearched[file.pathAbsolute]) {
                     continue;
                 }
@@ -1209,7 +1209,7 @@ export class BrsFile {
         const scopes = this.program.getScopesForFile(this);
 
         for (const scope of scopes) {
-            for (const file of scope.getFiles()) {
+            for (const file of scope.getAllFiles()) {
                 if (isXmlFile(file)) {
                     continue;
                 }

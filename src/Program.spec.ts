@@ -140,7 +140,7 @@ describe('Program', () => {
         it(`adds files in the source folder to the 'source' scope`, async () => {
             expect(program.getScopeByName('source')).to.exist;
             //no files in source scope
-            expect(program.getScopeByName('source').fileCount).to.equal(0);
+            expect(program.getScopeByName('source').getOwnFiles().length).to.equal(0);
 
             let mainPath = s`${rootDir}/source/main.brs`;
             //add a new source file
@@ -587,7 +587,6 @@ describe('Program', () => {
             await program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
 
             let scope = program.getScopeByName(`components/component1.xml`);
-            s`components/component1.xml`;
             expect(scope.getFile(xmlPath).pkgPath).to.equal(s`components/component1.xml`);
             expect(scope.getFile(brsPath).pkgPath).to.equal(s`components/component1.brs`);
         });
@@ -1097,7 +1096,7 @@ describe('Program', () => {
             `);
 
             //the component scope should only have the xml file
-            expect(program.getScopeByName(xmlFile.pkgPath).fileCount).to.equal(1);
+            expect(program.getScopeByName(xmlFile.pkgPath).getOwnFiles().length).to.equal(1);
 
             //create the lib file
             let libFile = await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `'comment`);
@@ -1111,7 +1110,7 @@ describe('Program', () => {
             `);
             let ctx = program.getScopeByName(xmlFile.pkgPath);
             //the component scope should have the xml file AND the lib file
-            expect(ctx.fileCount).to.equal(2);
+            expect(ctx.getOwnFiles().length).to.equal(2);
             expect(ctx.getFile(xmlFile.pathAbsolute)).to.exist;
             expect(ctx.getFile(libFile.pathAbsolute)).to.exist;
 
@@ -1123,7 +1122,7 @@ describe('Program', () => {
             `);
 
             //the scope should again only have the xml file loaded
-            expect(program.getScopeByName(xmlFile.pkgPath).fileCount).to.equal(1);
+            expect(program.getScopeByName(xmlFile.pkgPath).getOwnFiles().length).to.equal(1);
             expect(program.getScopeByName(xmlFile.pkgPath)).to.exist;
         });
     });
