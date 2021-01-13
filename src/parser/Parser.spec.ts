@@ -2,7 +2,7 @@ import { expect, assert } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
 import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, Statement } from './Statement';
+import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -724,6 +724,21 @@ describe('parser', () => {
             expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
             expect(fn.annotations[0].nameToken.text).to.equal('meta1');
             expect(fn.annotations[0].call).to.be.instanceof(CallExpression);
+        });
+
+        it.only('attaches annotations to a class', () => {
+            let { statements, diagnostics } = parse(`
+            @meta1
+            class MyClass
+                function main()
+                    print "hello"
+                end function
+                end class
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            let cs = statements[0] as ClassStatement;
+            expect(cs.annotations?.length).to.equal(1);
+            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('can convert argument of an annotation to JS types', () => {

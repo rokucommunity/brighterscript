@@ -353,6 +353,9 @@ export class Parser {
      */
     private classDeclaration(): ClassStatement {
         this.warnIfNotBrighterScriptMode('class declarations');
+        let classAnnotations = this.pendingAnnotations;
+        this.pendingAnnotations = [];
+        
         let classKeyword = this.consume(
             DiagnosticMessages.expectedClassKeyword(),
             TokenKind.Class
@@ -460,6 +463,12 @@ export class Parser {
             parentClassName,
             this.currentNamespaceName
         );
+
+        //attach annotations to statements
+        if (classAnnotations?.length) {
+            result.annotations = classAnnotations;
+        }
+
         this._references.classStatements.push(result);
         return result;
     }
