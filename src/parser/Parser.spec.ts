@@ -769,14 +769,14 @@ describe('parser', () => {
 
         it('attaches annotations to a namespaced class', () => {
             let { statements, diagnostics } = parse(`
-            namespace ns
-                @meta1
-                class MyClass
-                    function main()
-                        print "hello"
-                    end function
-                end class
-            end namespace
+                namespace ns
+                    @meta1
+                    class MyClass
+                        function main()
+                            print "hello"
+                        end function
+                    end class
+                end namespace
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
             let ns = statements[0] as NamespaceStatement;
@@ -787,20 +787,20 @@ describe('parser', () => {
 
         it('attaches annotations to a namespaced class - multiple', () => {
             let { statements, diagnostics } = parse(`
-            namespace ns
-                @meta1
-                class MyClass
-                    function main()
-                        print "hello"
-                    end function
-                end class
-                @meta2
-                class MyClass2
-                    function main()
-                        print "hello"
-                    end function
-                end class
-            end namespace
+                namespace ns
+                    @meta1
+                    class MyClass
+                        function main()
+                            print "hello"
+                        end function
+                    end class
+                    @meta2
+                    class MyClass2
+                        function main()
+                            print "hello"
+                        end function
+                    end class
+                end namespace
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
             let ns = statements[0] as NamespaceStatement;
@@ -817,15 +817,15 @@ describe('parser', () => {
 
         it('attaches annotations to a class constructor', () => {
             let { statements, diagnostics } = parse(`
-            class MyClass
-                @meta1
-                function new()
-                    print "hello"
-                end function
-                function methodA()
-                    print "hello"
-                end function
-            end class
+                class MyClass
+                    @meta1
+                    function new()
+                        print "hello"
+                    end function
+                    function methodA()
+                        print "hello"
+                    end function
+                end class
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
@@ -836,15 +836,15 @@ describe('parser', () => {
 
         it('attaches annotations to a class methods', () => {
             let { statements, diagnostics } = parse(`
-            class MyClass
-                function new()
-                    print "hello"
-                end function
-                @meta1
-                function methodA()
-                    print "hello"
-                end function
-            end class
+                class MyClass
+                    function new()
+                        print "hello"
+                    end function
+                    @meta1
+                    function methodA()
+                        print "hello"
+                    end function
+                end class
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
@@ -854,24 +854,24 @@ describe('parser', () => {
         });
         it('attaches annotations to a class methods, fields and constructor', () => {
             let { statements, diagnostics } = parse(`
-            @meta2
-            @meta1
-            class MyClass
-                @meta3
-                @meta4
-                function new()
-                    print "hello"
-                end function
-                @meta5
-                @meta6
-                function methodA()
-                    print "hello"
-                end function
+                @meta2
+                @meta1
+                class MyClass
+                    @meta3
+                    @meta4
+                    function new()
+                        print "hello"
+                    end function
+                    @meta5
+                    @meta6
+                    function methodA()
+                        print "hello"
+                    end function
 
-                @meta5
-                @meta6
-                public foo="bar"
-            end class
+                    @meta5
+                    @meta6
+                    public foo="bar"
+                end class
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
