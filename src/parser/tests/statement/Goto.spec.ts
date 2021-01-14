@@ -7,6 +7,7 @@ import { EOF, identifier, token } from '../Parser.spec';
 describe('parser goto statements', () => {
     it('parses standalone statement properly', () => {
         let { diagnostics } = Parser.parse([
+            token(TokenKind.Newline, '\n'),
             token(TokenKind.Goto, 'goto'),
             identifier('SomeLabel'),
             EOF
@@ -16,8 +17,10 @@ describe('parser goto statements', () => {
 
     it('detects labels', () => {
         let { diagnostics } = Parser.parse([
+            token(TokenKind.Newline, '\n'),
             identifier('SomeLabel'),
             token(TokenKind.Colon, ':'),
+            token(TokenKind.Newline, '\n'),
             EOF
         ]);
         expect(diagnostics).to.be.lengthOf(0);

@@ -7,3 +7,4 @@ export * from './visitors';
 export * from './stackedVisitor';
 export * from './reflection';
 export * from './creators';
+export * from './xml';
