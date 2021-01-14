@@ -733,12 +733,98 @@ describe('parser', () => {
                 function main()
                     print "hello"
                 end function
-                end class
+            end class
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(1);
             expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
+        });
+
+        it('attaches annotations to a class constructor', () => {
+            let { statements, diagnostics } = parse(`
+            class MyClass
+                @meta1
+                function new()
+                    print "hello"
+                end function
+                function methodA()
+                    print "hello"
+                end function
+            end class
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            let cs = statements[0] as ClassStatement;
+            let stat = cs.body[0];
+            expect(stat.annotations?.length).to.equal(1);
+            expect(stat.annotations[0]).to.be.instanceof(AnnotationExpression);
+        });
+
+        it('attaches annotations to a class methods', () => {
+            let { statements, diagnostics } = parse(`
+            class MyClass
+                function new()
+                    print "hello"
+                end function
+                @meta1
+                function methodA()
+                    print "hello"
+                end function
+            end class
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            let cs = statements[0] as ClassStatement;
+            let stat = cs.body[1];
+            expect(stat.annotations?.length).to.equal(1);
+            expect(stat.annotations[0]).to.be.instanceof(AnnotationExpression);
+        });
+        it('attaches annotations to a class methods, fields and constructor', () => {
+            let { statements, diagnostics } = parse(`
+            @meta2
+            @meta1
+            class MyClass
+                @meta3
+                @meta4
+                function new()
+                    print "hello"
+                end function
+                @meta5
+                @meta6
+                function methodA()
+                    print "hello"
+                end function
+
+                @meta5
+                @meta6
+                public foo="bar"
+            end class
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            let cs = statements[0] as ClassStatement;
+            expect(cs.annotations?.length).to.equal(2);
+            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
+            let stat1 = cs.body[0];
+            let stat2 = cs.body[1];
+            let f1 = cs.body[2];
+            expect(stat1.annotations?.length).to.equal(2);
+            expect(stat1.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(stat2.annotations?.length).to.equal(2);
+            expect(stat2.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(f1.annotations?.length).to.equal(2);
+            expect(f1.annotations[0]).to.be.instanceof(AnnotationExpression);
+        });
+
+        it('ignores annotations on commented out lines', () => {
+            let { statements, diagnostics } = parse(`
+            '@meta1
+            '   @meta1
+            function new()
+                print "hello"
+            end function
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            let cs = statements[0] as ClassStatement;
+            expect(cs.annotations).to.be.undefined;
         });
 
         it('can convert argument of an annotation to JS types', () => {
