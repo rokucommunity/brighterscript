@@ -256,7 +256,6 @@ export class Parser {
                             this.consumeStatementSeparators(true);
                         }
 
-
                     } else {
                         //consume potential separators
                         this.consumeStatementSeparators(true);
