@@ -688,7 +688,7 @@ describe('Scope', () => {
             it('scopes types to correct scope', async () => {
                 program = new Program({ rootDir: rootDir });
 
-                await program.addOrReplaceFile('components/foo.xml', `
+                await program.addOrReplaceFile('components/foo.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="foo" extends="Scene">
                         <script uri="foo.bs"/>
@@ -702,7 +702,7 @@ describe('Scope', () => {
 
                 expect(program.getDiagnostics()[0]?.message).not.to.exist;
 
-                await program.addOrReplaceFile('components/bar.xml', `
+                await program.addOrReplaceFile('components/bar.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="bar" extends="Scene">
                         <script uri="bar.bs"/>
@@ -722,7 +722,7 @@ describe('Scope', () => {
             it('can reference types from parent component', async () => {
                 program = new Program({ rootDir: rootDir });
 
-                await program.addOrReplaceFile('components/parent.xml', `
+                await program.addOrReplaceFile('components/parent.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="parent" extends="Scene">
                         <script uri="parent.bs"/>
@@ -732,7 +732,7 @@ describe('Scope', () => {
                     class MyClass
                     end class
                 `);
-                await program.addOrReplaceFile('components/child.xml', `
+                await program.addOrReplaceFile('components/child.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="child" extends="parent">
                         <script uri="child.bs"/>

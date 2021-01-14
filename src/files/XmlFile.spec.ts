@@ -779,7 +779,7 @@ describe('XmlFile', () => {
 
     describe('typedef', () => {
         it('loads d.bs files from parent scope', async () => {
-            await program.addOrReplaceFile<XmlFile>('components/ParentComponent.xml', `
+            await program.addOrReplaceFile<XmlFile>('components/ParentComponent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentComponent" extends="Scene">
                     <script uri="ParentComponent.brs" />
@@ -809,7 +809,7 @@ describe('XmlFile', () => {
                 end sub
             `);
 
-            await program.addOrReplaceFile<XmlFile>('components/ChildComponent.xml', `
+            await program.addOrReplaceFile<XmlFile>('components/ChildComponent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildComponent" extends="ParentComponent">
                     <script uri="ChildComponent.bs" />
