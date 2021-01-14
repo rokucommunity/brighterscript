@@ -728,12 +728,12 @@ describe('parser', () => {
 
         it('attaches annotations to a class', () => {
             let { statements, diagnostics } = parse(`
-            @meta1
-            class MyClass
-                function main()
-                    print "hello"
-                end function
-            end class
+                @meta1
+                class MyClass
+                    function main()
+                        print "hello"
+                    end function
+                end class
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
@@ -743,18 +743,18 @@ describe('parser', () => {
 
         it('attaches annotations to multiple clases', () => {
             let { statements, diagnostics } = parse(`
-            @meta1
-            class MyClass
-                function main()
-                    print "hello"
-                end function
-            end class
-            @meta2
-            class MyClass2
-                function main()
-                    print "hello"
-                end function
-            end class
+                @meta1
+                class MyClass
+                    function main()
+                        print "hello"
+                    end function
+                end class
+                @meta2
+                class MyClass2
+                    function main()
+                        print "hello"
+                    end function
+                end class
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
@@ -890,11 +890,11 @@ describe('parser', () => {
 
         it('ignores annotations on commented out lines', () => {
             let { statements, diagnostics } = parse(`
-            '@meta1
-            '   @meta1
-            function new()
-                print "hello"
-            end function
+                '@meta1
+                '   @meta1
+                function new()
+                    print "hello"
+                end function
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
