@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -1063,8 +1063,21 @@ export class Util {
         return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
             if (typeof pathOrModule === 'string') {
                 try {
-                    let loaded = this.resolveRequire(cwd, pathOrModule);
-                    let plugin: CompilerPlugin = loaded.default ? loaded.default : loaded;
+                    const loaded = this.resolveRequire(cwd, pathOrModule);
+                    const theExport: CompilerPlugin | CompilerPluginFactory = loaded.default ? loaded.default : loaded;
+
+                    let plugin: CompilerPlugin;
+
+                    // legacy plugins returned a plugin object. If we find that, then add a warning
+                    if (typeof theExport === 'object') {
+                        console.warn(`Plugin ${pathOrModule} was loaded as a singleton. Please contact the plugin author to update to the factory pattern`);
+                        plugin = theExport;
+
+                        // the official plugin format is a factory function that returns a new instance of a plugin.
+                    } else if (typeof theExport === 'function') {
+                        plugin = theExport();
+                    }
+
                     if (!plugin.name) {
                         plugin.name = pathOrModule;
                     }
