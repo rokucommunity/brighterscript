@@ -245,15 +245,17 @@ export class SGInterface extends SGTag {
         range?: Range
     ) {
         super(tag, [], range);
-        content?.forEach(tag => {
-            if (isSGField(tag)) {
-                this.fields.push(tag);
-            } else if (isSGFunction(tag)) {
-                this.functions.push(tag);
-            } else {
-                throw new Error(`Unexpected tag ${tag.tag.text}`);
+        if (content) {
+            for (const tag of content) {
+                if (isSGField(tag)) {
+                    this.fields.push(tag);
+                } else if (isSGFunction(tag)) {
+                    this.functions.push(tag);
+                } else {
+                    throw new Error(`Unexpected tag ${tag.tag.text}`);
+                }
             }
-        });
+        }
     }
 
     getField(id: string) {
@@ -316,17 +318,19 @@ export class SGComponent extends SGTag {
         range?: Range
     ) {
         super(tag, attributes, range);
-        content?.forEach(tag => {
-            if (isSGInterface(tag)) {
-                this.api = tag;
-            } else if (isSGScript(tag)) {
-                this.scripts.push(tag);
-            } else if (isSGChildren(tag)) {
-                this.children = tag;
-            } else {
-                throw new Error(`Unexpected tag ${tag.tag.text}`);
+        if (content) {
+            for (const tag of content) {
+                if (isSGInterface(tag)) {
+                    this.api = tag;
+                } else if (isSGScript(tag)) {
+                    this.scripts.push(tag);
+                } else if (isSGChildren(tag)) {
+                    this.children = tag;
+                } else {
+                    throw new Error(`Unexpected tag ${tag.tag.text}`);
+                }
             }
-        });
+        }
     }
 
     get name() {

@@ -54,7 +54,7 @@ export class SGTranspileState {
 
     transpileAttributes(attributes: SGAttribute[]): (string | SourceNode)[] {
         const result = [];
-        attributes.forEach(attr => {
+        for (const attr of attributes) {
             const offset = this.rangeToSourceOffset(attr.range);
             result.push(
                 ' ',
@@ -69,7 +69,7 @@ export class SGTranspileState {
                         '"'
                     ])
             );
-        });
+        }
         return result;
     }
 }

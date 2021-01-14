@@ -63,7 +63,7 @@ export default class SGParser {
             this._references.extends = extendsAttr.value;
         }
 
-        component.scripts.forEach(script => {
+        for (const script of component.scripts) {
             const uriAttr = script.getAttribute('uri');
             if (uriAttr) {
                 const uri = uriAttr.value.text;
@@ -73,7 +73,7 @@ export default class SGParser {
                     pkgPath: util.getPkgPathFromTarget(this.pkgPath, uri)
                 });
             }
-        });
+        }
     }
 
     public parse(pkgPath: string, fileContents: string) {
@@ -83,7 +83,7 @@ export default class SGParser {
         const { cst, tokenVector, lexErrors, parseErrors } = parser.parse(fileContents);
 
         if (lexErrors.length) {
-            lexErrors.forEach(err => {
+            for (const err of lexErrors) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlGenericParseError(`Syntax error: ${err.message}`),
                     range: util.createRange(
@@ -93,7 +93,7 @@ export default class SGParser {
                         err.column + err.length
                     )
                 });
-            });
+            }
         }
         if (parseErrors.length) {
             const err = parseErrors[0];
@@ -104,7 +104,7 @@ export default class SGParser {
             });
         }
 
-        const { prolog, root } = buildAST(cst as DocumentCstNode, this.diagnostics);
+        const { prolog, root } = buildAST(cst as any, this.diagnostics);
         if (!root) {
             const token1 = tokenVector[0];
             const token2 = tokenVector[1];
@@ -247,18 +247,20 @@ function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diag
     }
     const { element } = content.children;
     const tags: SGTag[] = [];
-    element?.forEach(element => {
-        const name = element.children.Name?.[0];
-        if (name && allow.includes(name.image)) {
-            tags.push(mapElement(element, diagnostics));
-        } else {
-            //unexpected tag
-            diagnostics.push({
-                ...DiagnosticMessages.xmlUnexpectedTag(name.image),
-                range: rangeFromTokens(name)
-            });
+    if (element) {
+        for (const entry of element) {
+            const name = entry.children.Name?.[0];
+            if (name && allow.includes(name.image)) {
+                tags.push(mapElement(entry, diagnostics));
+            } else {
+                //unexpected tag
+                diagnostics.push({
+                    ...DiagnosticMessages.xmlUnexpectedTag(name.image),
+                    range: rangeFromTokens(name)
+                });
+            }
         }
-    });
+    }
     return tags;
 }
 
