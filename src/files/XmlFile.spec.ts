@@ -778,7 +778,7 @@ describe('XmlFile', () => {
     });
 
     describe('typedef', () => {
-        it.only('loads d.bs files from parent scope', async () => {
+        it('loads d.bs files from parent scope', async () => {
             await program.addOrReplaceFile<XmlFile>('components/ParentComponent.xml', `
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentComponent" extends="Scene">

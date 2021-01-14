@@ -83,7 +83,7 @@ export class XmlFile {
      *  - import statements from imported scripts or their descendents
      */
     public getOwnDependencies() {
-        return this.cache.getOrAdd(`allScriptImports`, () => {
+        return this.cache.getOrAdd(`ownScriptImports`, () => {
             const value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
             return value;
         });
