@@ -255,10 +255,6 @@ export class Parser {
                         } else {
                             this.consumeStatementSeparators(true);
                         }
-
-                    } else {
-                        //consume potential separators
-                        this.consumeStatementSeparators(true);
                     }
                 }
             } catch (parseError) {
