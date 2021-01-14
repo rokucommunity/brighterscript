@@ -16,4 +16,8 @@ export class InvalidType implements BscType {
     public toString() {
         return 'invalid';
     }
+
+    public toTypeString(): string {
+        return this.toString();
+    }
 }

@@ -6,7 +6,7 @@ import type { ClassMethodStatement, ClassStatement } from '../parser/Statement';
 import { CancellationTokenSource, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
-import { isCallExpression, isClassFieldStatement, isClassMethodStatement } from '../astUtils/reflection';
+import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCustomType } from '../astUtils/reflection';
 import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils';
 import type { BrsFile } from '../files/BrsFile';
@@ -27,6 +27,7 @@ export class BsClassValidator {
         this.validateMemberCollisions();
         this.verifyChildConstructor();
         this.verifyNewExpressions();
+        this.validateFieldTypes();
 
         this.cleanUp();
     }
@@ -43,6 +44,7 @@ export class BsClassValidator {
         }
         return cls;
     }
+
 
     /**
      * Find all "new" statements in the program,
@@ -228,6 +230,37 @@ export class BsClassValidator {
 
                     } else if (isClassFieldStatement(member)) {
                         fields[lowerMemberName] = member;
+                    }
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Check the types for fields, and validate they are valid types
+     */
+    private validateFieldTypes() {
+        for (let key in this.classes) {
+            let classStatement = this.classes[key];
+            for (let statement of classStatement.body) {
+                if (isClassFieldStatement(statement)) {
+                    let fieldType = statement.getType();
+
+                    if (isCustomType(fieldType)) {
+                        const fieldTypeName = fieldType.name;
+                        const lowerFieldTypeName = fieldTypeName?.toLowerCase();
+                        if (lowerFieldTypeName) {
+                            const currentNamespaceName = classStatement.namespaceName?.getName(ParseMode.BrighterScript);
+                            //check if this custom type is in our class map
+                            if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName)) {
+                                this.diagnostics.push({
+                                    ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
+                                    range: statement.type.range,
+                                    file: classStatement.file
+                                });
+                            }
+                        }
                     }
                 }
             }

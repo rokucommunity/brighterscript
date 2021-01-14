@@ -29,4 +29,8 @@ export class IntegerType implements BscType {
     public toString() {
         return 'integer';
     }
+
+    public toTypeString(): string {
+        return this.toString();
+    }
 }

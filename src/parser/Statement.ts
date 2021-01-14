@@ -1261,7 +1261,11 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                stmt = state.file.getClassByName(stmt.parentClassName.getName(ParseMode.BrighterScript));
+                const fqParentClassName = util.getFullyQualifiedClassName(
+                    stmt.parentClassName.getName(ParseMode.BrighterScript),
+                    stmt.namespaceName?.getName(ParseMode.BrighterScript)
+                );
+                stmt = state.file.getClassByName(fqParentClassName);
                 myIndex++;
             } else {
                 break;
@@ -1693,10 +1697,10 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
     }
 
     /**
-     * Derive a ValueKind from the type token, or the intial value.
+     * Derive a ValueKind from the type token, or the initial value.
      * Defaults to `ValueKind.Dynamic`
      */
-    private getType() {
+    getType() {
         if (this.type) {
             return util.tokenToBscType(this.type);
         } else if (isLiteralExpression(this.initialValue)) {
@@ -1725,7 +1729,7 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
                 ' ',
                 this.name?.text,
                 ' as ',
-                type.toString()
+                type.toTypeString()
             );
         }
         return result;

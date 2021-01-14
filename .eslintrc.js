@@ -12,7 +12,8 @@ module.exports = {
     },
     plugins: [
         '@typescript-eslint',
-        'no-only-tests'
+        'no-only-tests',
+        'github'
     ],
     extends: [
         'eslint:all',
@@ -93,6 +94,7 @@ module.exports = {
         'function-call-argument-newline': 'off',
         'function-paren-newline': 'off',
         'getter-return': 'off',
+        'github/array-foreach': 'error',
         'guard-for-in': 'off',
         'id-length': 'off',
         'indent': 'off',
@@ -124,6 +126,7 @@ module.exports = {
         'no-inline-comments': 'off',
         'no-invalid-this': 'off',
         'no-labels': 'off',
+        'no-lonely-if': 'off',
         'no-negated-condition': 'off',
         'no-param-reassign': 'off',
         'no-plusplus': 'off',
@@ -187,6 +190,7 @@ module.exports = {
             '@typescript-eslint/no-unused-vars': 'off',
             '@typescript-eslint/no-unused-vars-experimental': 'off',
             '@typescript-eslint/dot-notation': 'off',
+            'github/array-foreach': 'off',
             'new-cap': 'off',
             'no-shadow': 'off'
         }

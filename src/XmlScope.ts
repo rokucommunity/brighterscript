@@ -48,39 +48,40 @@ export class XmlScope extends Scope {
     }
 
     private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
-        const { api } = this.xmlFile.parser.ast?.component;
-        if (api) {
-            //validate functions
-            api.functions.forEach(fun => {
-                const name = fun.name;
-                if (!name) {
-                    this.diagnosticMissingAttribute(fun, 'name');
-                } else if (!callableContainerMap.has(name.toLowerCase())) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.xmlFunctionNotFound(name),
-                        range: fun.getAttribute('name').value.range,
-                        file: this.xmlFile
-                    });
+        if (!this.xmlFile.parser.ast?.component?.api) {
+            return;
+        }
+        const { api } = this.xmlFile.parser.ast.component;
+        //validate functions
+        for (const fun of api.functions) {
+            const name = fun.name;
+            if (!name) {
+                this.diagnosticMissingAttribute(fun, 'name');
+            } else if (!callableContainerMap.has(name.toLowerCase())) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.xmlFunctionNotFound(name),
+                    range: fun.getAttribute('name').value.range,
+                    file: this.xmlFile
+                });
+            }
+        }
+        //validate fields
+        for (const field of api.fields) {
+            const { id, type } = field;
+            if (!id) {
+                this.diagnosticMissingAttribute(field, 'id');
+            }
+            if (!type) {
+                if (!field.alias) {
+                    this.diagnosticMissingAttribute(field, 'type');
                 }
-            });
-            //validate fields
-            api.fields.forEach(field => {
-                const { id, type } = field;
-                if (!id) {
-                    this.diagnosticMissingAttribute(field, 'id');
-                }
-                if (!type) {
-                    if (!field.alias) {
-                        this.diagnosticMissingAttribute(field, 'type');
-                    }
-                } else if (!SGFieldTypes.includes(type.toLowerCase())) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.xmlInvalidFieldType(type),
-                        range: field.getAttribute('type').value.range,
-                        file: this.xmlFile
-                    });
-                }
-            });
+            } else if (!SGFieldTypes.includes(type.toLowerCase())) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.xmlInvalidFieldType(type),
+                    range: field.getAttribute('type').value.range,
+                    file: this.xmlFile
+                });
+            }
         }
     }
 
@@ -124,16 +125,24 @@ export class XmlScope extends Scope {
         }
     }
 
+    public getAllFiles() {
+        return this.cache.getOrAdd('getAllFiles-xmlScope', () => {
+            const allFiles = super.getAllFiles();
+            allFiles.push(this.xmlFile);
+            return allFiles;
+        });
+    }
+
     /**
      * Get the list of files referenced by this scope that are actually loaded in the program.
      * This does not account for parent scope.
      */
-    public getFiles() {
-        return this.cache.getOrAdd('files', () => {
+    public getOwnFiles() {
+        return this.cache.getOrAdd('getOwnFiles', () => {
             let result = [
                 this.xmlFile
             ] as BscFile[];
-            let scriptPkgPaths = this.xmlFile.getAllDependencies();
+            let scriptPkgPaths = this.xmlFile.getOwnDependencies();
             for (let scriptPkgPath of scriptPkgPaths) {
                 let file = this.program.getFileByPkgPath(scriptPkgPath);
                 if (file) {

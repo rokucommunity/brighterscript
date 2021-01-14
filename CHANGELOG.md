@@ -6,6 +6,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.25.0] - 2021-01-12
+### Added
+ - support for passing custom types as function parameters and return types ([#262](https://github.com/rokucommunity/brighterscript/issues/262))
+
+
+
+## [0.24.2] - 2021-01-11
+### Fixed
+ - bug with transpiled child classes causing on-device stack overflows ([#267](https://github.com/rokucommunity/brighterscript/issues/267))
+
+
+
+## [0.24.1] - 2021-01-09
+### Changed
+ - upgraded to [roku-deploy@3.2.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#324---2021-01-08)
+
+
+
+## [0.24.0] - 2021-01-08
+### Added
+ - `sourceMap` option to enable/disable generating sourcemaps
+### Changed
+ - sourcemaps are disabled by default (previously they were enabled by default)
+
+
+
+## [0.23.2] - 2020-01-06
+### Fixed
+ - `isLiteralInvalid` was causing infinite recursion.
+ - lock `vscode-languageserver-protocol` package version to prevent issues with vscode not following semantic versioning.
+
+
+
+## [0.23.1] - 2020-12-22
+### Changed
+ - renamed `Scope.getFiles()` to `Scope.getAllFiles()` and added a new function called `Scope.getOwnFiles()`
+### Fixed
+ - bug preventing `d.bs` loaded in parent files from showing up in child files. ([#252](https://github.com/rokucommunity/brighterscript/pull/252))
+
+
+
 ## [0.23.0] - 2020-12-18
 ### Changed
  - AST parser refactoring ([#244](https://github.com/rokucommunity/brighterscript/pull/244))
@@ -764,3 +805,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.22.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.22.0...v0.22.1
 [0.22.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.22.0...v0.22.1
 [0.23.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.22.1...v0.23.0
+[0.23.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.23.0...v0.23.1
+[0.23.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.23.1...v0.23.2
+[0.24.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.23.2...v0.24.0
+[0.24.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.24.0...v0.24.1
+[0.24.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.24.1...v0.24.2
+[0.25.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.24.2...v0.25.0

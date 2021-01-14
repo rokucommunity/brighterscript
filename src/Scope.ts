@@ -13,7 +13,7 @@ import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 
 /**
@@ -57,10 +57,26 @@ export class Scope {
     /**
      * Get the class with the specified name.
      * @param className - the all-lower-case namespace-included class name
+     * @param namespaceName - teh current namespace name
      */
-    public getClass(className: string) {
+    public getClass(className: string, namespaceName?: string): ClassStatement {
         const classMap = this.getClassMap();
-        return classMap.get(className);
+        let lowerCaseFullName = util.getFullyQualifiedClassName(className, namespaceName).toLowerCase();
+        let cls = classMap.get(lowerCaseFullName);
+        //if we couldn't find the class by its full namespaced name, look for a global class with that name
+        if (!cls) {
+            cls = classMap.get(lowerCaseFullName);
+        }
+        return cls;
+    }
+
+    /**
+    * Tests if a class exists with the specified name
+    * @param className - the all-lower-case namespace-included class name
+    * @param namespaceName - teh current namespace name
+    */
+    public hasClass(className: string, namespaceName?: string): boolean {
+        return !!this.getClass(className, namespaceName);
     }
 
     /**
@@ -143,7 +159,7 @@ export class Scope {
      */
     public getFile(pathAbsolute: string) {
         pathAbsolute = s`${pathAbsolute}`;
-        let files = this.getFiles();
+        let files = this.getAllFiles();
         for (let file of files) {
             if (file.pathAbsolute === pathAbsolute) {
                 return file;
@@ -151,27 +167,40 @@ export class Scope {
         }
     }
 
-    public getFiles() {
-        return this.cache.getOrAdd('files', () => {
+    /**
+     * Get the list of files referenced by this scope that are actually loaded in the program.
+     * Excludes files from ancestor scopes
+     */
+    public getOwnFiles() {
+        //source scope only inherits files from global, so just return all files. This function mostly exists to assist XmlScope
+        return this.getAllFiles();
+    }
+
+    /**
+     * Get the list of files referenced by this scope that are actually loaded in the program.
+     * Includes files from this scope and all ancestor scopes
+     */
+    public getAllFiles() {
+        return this.cache.getOrAdd('getAllFiles', () => {
             let result = [] as BscFile[];
             let dependencies = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
             for (let dependency of dependencies) {
-                //skip scopes and components
+                //load components by their name
                 if (dependency.startsWith('component:')) {
-                    continue;
-                }
-                let file = this.program.getFileByPkgPath(dependency);
-                if (file) {
-                    result.push(file);
+                    let comp = this.program.getComponent(dependency.replace(/$component:/, ''));
+                    if (comp) {
+                        result.push(comp.file);
+                    }
+                } else {
+                    let file = this.program.getFileByPkgPath(dependency);
+                    if (file) {
+                        result.push(file);
+                    }
                 }
             }
-            this.logDebug('getFiles', () => result.map(x => x.pkgPath));
+            this.logDebug('getAllFiles', () => result.map(x => x.pkgPath));
             return result;
         });
-    }
-
-    public get fileCount() {
-        return Object.keys(this.getFiles()).length;
     }
 
     /**
@@ -182,7 +211,7 @@ export class Scope {
         let diagnosticLists = [this.diagnostics] as BsDiagnostic[][];
 
         //add diagnostics from every referenced file
-        this.enumerateFiles((file) => {
+        this.enumerateOwnFiles((file) => {
             diagnosticLists.push(file.getDiagnostics());
         });
         let allDiagnostics = Array.prototype.concat.apply([], diagnosticLists) as BsDiagnostic[];
@@ -232,7 +261,7 @@ export class Scope {
      * Iterate over Brs files not shadowed by typedefs
      */
     public enumerateBrsFiles(callback: (file: BrsFile) => void) {
-        const files = this.getFiles();
+        const files = this.getAllFiles();
         for (const file of files) {
             //only brs files without a typedef
             if (isBrsFile(file) && !file.hasTypedef) {
@@ -242,10 +271,10 @@ export class Scope {
     }
 
     /**
-     * Iterates over XML and Brs files not shadowed by typedefs
+     * Call a function for each file directly included in this scope (excluding files found only in parent scopes).
      */
-    public enumerateFiles(callback: (file: BscFile) => void) {
-        const files = this.getFiles();
+    public enumerateOwnFiles(callback: (file: BscFile) => void) {
+        const files = this.getOwnFiles();
         for (const file of files) {
             //either XML components or files without a typedef
             if (isXmlFile(file) || !file.hasTypedef) {
@@ -260,10 +289,10 @@ export class Scope {
      */
     public getOwnCallables(): CallableContainer[] {
         let result = [] as CallableContainer[];
-        this.logDebug('getOwnCallables() files: ', () => this.getFiles().map(x => x.pkgPath));
+        this.logDebug('getOwnCallables() files: ', () => this.getOwnFiles().map(x => x.pkgPath));
 
         //get callables from own files
-        this.enumerateBrsFiles((file) => {
+        this.enumerateOwnFiles((file) => {
             for (let callable of file.callables) {
                 result.push({
                     callable: callable,
@@ -329,7 +358,7 @@ export class Scope {
         return namespaceLookup;
     }
 
-    public getNamespaceStatements() {
+    public getAllNamespaceStatements() {
         let result = [] as NamespaceStatement[];
         this.enumerateBrsFiles((file) => {
             result.push(...file.parser.references.namespaceStatements);
@@ -375,7 +404,8 @@ export class Scope {
 
             //get a list of all callables, indexed by their lower case names
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
-            let files = this.getFiles();
+            let files = this.getOwnFiles();
+
             this.program.plugins.emit('beforeScopeValidate', this, files, callableContainerMap);
 
             this._validate(callableContainerMap);
@@ -403,6 +433,7 @@ export class Scope {
             this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
+            this.diagnosticDetectInvalidFunctionExpressionTypes(file);
         });
     }
 
@@ -464,7 +495,6 @@ export class Scope {
      * Find various function collisions
      */
     private diagnosticDetectFunctionCollisions(file: BscFile) {
-        const classMap = this.getClassMap();
         for (let func of file.callables) {
             const funcName = func.getName(ParseMode.BrighterScript);
             const lowerFuncName = funcName?.toLowerCase();
@@ -480,12 +510,47 @@ export class Scope {
                 }
 
                 //find any functions that have the same name as a class
-                if (classMap.has(lowerFuncName)) {
+                if (this.hasClass(lowerFuncName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.functionCannotHaveSameNameAsClass(funcName),
                         range: func.nameRange,
                         file: file
                     });
+                }
+            }
+        }
+    }
+
+    /**
+    * Find function parameters and function return types that are neither built-in types or known Class references
+    */
+    private diagnosticDetectInvalidFunctionExpressionTypes(file: BrsFile) {
+        for (let func of file.parser.references.functionExpressions) {
+            if (isCustomType(func.returnType) && func.returnTypeToken) {
+                // check if this custom type is in our class map
+                const returnTypeName = func.returnType.name;
+                const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
+                if (!this.hasClass(returnTypeName, currentNamespaceName)) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
+                        range: func.returnTypeToken.range,
+                        file: file
+                    });
+                }
+            }
+
+            for (let param of func.parameters) {
+                if (isCustomType(param.type) && param.typeToken) {
+                    const paramTypeName = param.type.name;
+                    const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
+                    if (!this.hasClass(paramTypeName, currentNamespaceName)) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),
+                            range: param.typeToken.range,
+                            file: file
+                        });
+
+                    }
                 }
             }
         }
@@ -729,9 +794,9 @@ export class Scope {
     /**
      * Get the list of all script imports for this scope
      */
-    private getScriptImports() {
+    private getOwnScriptImports() {
         let result = [] as FileReference[];
-        this.enumerateFiles((file) => {
+        this.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
                 result.push(...file.ownScriptImports);
             } else if (isXmlFile(file)) {
@@ -745,7 +810,7 @@ export class Scope {
      * Verify that all of the scripts imported by each file in this scope actually exist
      */
     private diagnosticValidateScriptImportPaths() {
-        let scriptImports = this.getScriptImports();
+        let scriptImports = this.getOwnScriptImports();
         //verify every script import
         for (let scriptImport of scriptImports) {
             let referencedFile = this.getFileByRelativePath(scriptImport.pkgPath);
@@ -779,7 +844,7 @@ export class Scope {
      * @param relativePath
      */
     protected getFileByRelativePath(relativePath: string) {
-        let files = this.getFiles();
+        let files = this.getAllFiles();
         for (let file of files) {
             if (file.pkgPath.toLowerCase() === relativePath.toLowerCase()) {
                 return file;
@@ -788,11 +853,11 @@ export class Scope {
     }
 
     /**
-     * Determine if this scope is referenced and known by the file.
+     * Determine if this file is included in this scope (excluding parent scopes)
      * @param file
      */
     public hasFile(file: BscFile) {
-        let files = this.getFiles();
+        let files = this.getOwnFiles();
         let hasFile = files.includes(file);
         return hasFile;
     }

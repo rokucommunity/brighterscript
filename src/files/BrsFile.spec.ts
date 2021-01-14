@@ -30,7 +30,7 @@ describe('BrsFile', () => {
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
-        program = new Program({ rootDir: rootDir });
+        program = new Program({ rootDir: rootDir, sourceMap: true });
         file = new BrsFile(srcPath, destPath, program);
     });
     afterEach(() => {
@@ -1819,7 +1819,7 @@ describe('BrsFile', () => {
                 '    print 1\n' +
                 '\n' +
                 'end sub';
-
+            program.options.sourceMap = true;
             let result = await testTranspile(source, `sub main()\n    print 1\nend sub`, 'none', 'source/main.bs');
             //load the source map
             let location = await SourceMapConsumer.with(result.map.toJSON(), null, (consumer) => {
@@ -1840,6 +1840,7 @@ describe('BrsFile', () => {
                 //remove newlines and EOF
                 .filter(x => x.kind !== TokenKind.Eof && x.kind !== TokenKind.Newline);
 
+            program.options.sourceMap = true;
             let result = await testTranspile(source, source, 'none');
             //load the source map
             await SourceMapConsumer.with(result.map.toString(), null, (consumer) => {

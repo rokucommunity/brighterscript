@@ -1,3 +1,4 @@
+import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Hover, Range, Position } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
@@ -817,7 +818,7 @@ export class BrsFile {
 
             if (parseMode === ParseMode.BrighterScript) {
                 //include the first part of namespaces
-                let namespaces = scope.getNamespaceStatements();
+                let namespaces = scope.getAllNamespaceStatements();
                 for (let stmt of namespaces) {
                     let firstPart = stmt.nameExpression.getNameParts().shift();
                     //skip duplicate namespace names
@@ -1166,7 +1167,7 @@ export class BrsFile {
         const filesSearched = {};
         //look through all files in scope for matches
         for (const scope of this.program.getScopesForFile(this)) {
-            for (const file of scope.getFiles()) {
+            for (const file of scope.getAllFiles()) {
                 if (isXmlFile(file) || filesSearched[file.pathAbsolute]) {
                     continue;
                 }
@@ -1309,7 +1310,7 @@ export class BrsFile {
         const scopes = this.program.getScopesForFile(this);
 
         for (const scope of scopes) {
-            for (const file of scope.getFiles()) {
+            for (const file of scope.getAllFiles()) {
                 if (isXmlFile(file)) {
                     continue;
                 }
@@ -1331,33 +1332,48 @@ export class BrsFile {
     /**
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
-    public transpile() {
+    public transpile(): CodeWithSourceMap {
         const state = new TranspileState(this);
         if (this.needsTranspiled) {
             let programNode = new SourceNode(null, null, this.pathAbsolute, this.ast.transpile(state));
-            //sourcemap reference
-            let programWithMap = new SourceNode(null, null, null, [
-                programNode,
-                `'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`
-            ]);
-            let result = programWithMap.toStringWithSourceMap({
-                file: state.pathAbsolute
-            });
-            return result;
-        } else {
-            //create a source map from the original source code
-            let chunks = [] as (SourceNode | string)[];
-            let lines = util.splitIntoLines(this.fileContents);
-            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                let line = lines[lineIndex];
-                chunks.push(
-                    lineIndex > 0 ? '\n' : '',
-                    new SourceNode(lineIndex + 1, 0, state.pathAbsolute, line)
-                );
+            if (this.program.options.sourceMap) {
+                //sourcemap reference
+                let programWithMap = new SourceNode(null, null, null, [
+                    programNode,
+                    `'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`
+                ]);
+                return programWithMap.toStringWithSourceMap({
+                    file: state.pathAbsolute
+                });
+            } else {
+                //return the code without the source map
+                return {
+                    code: programNode.toString(),
+                    map: undefined
+                };
             }
-            //sourcemap reference
-            chunks.push(`'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`);
-            return new SourceNode(null, null, state.pathAbsolute, chunks).toStringWithSourceMap();
+        } else {
+            if (this.program.options.sourceMap) {
+                //create a source map from the original source code
+                let chunks = [] as (SourceNode | string)[];
+                let lines = util.splitIntoLines(this.fileContents);
+                for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+                    let line = lines[lineIndex];
+                    chunks.push(
+                        lineIndex > 0 ? '\n' : '',
+                        new SourceNode(lineIndex + 1, 0, state.pathAbsolute, line)
+                    );
+                }
+                //sourcemap reference
+                chunks.push(`'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`);
+                return new SourceNode(null, null, state.pathAbsolute, chunks).toStringWithSourceMap();
+            } else {
+                //return the original source code as-is
+                return {
+                    code: this.fileContents,
+                    map: undefined
+                };
+            }
         }
     }
 

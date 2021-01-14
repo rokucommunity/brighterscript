@@ -29,4 +29,8 @@ export class FloatType implements BscType {
     public toString() {
         return 'float';
     }
+
+    public toTypeString(): string {
+        return this.toString();
+    }
 }
