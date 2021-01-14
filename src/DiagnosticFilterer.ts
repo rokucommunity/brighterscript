@@ -7,7 +7,7 @@ import { standardizePath as s } from './util';
 export class DiagnosticFilterer {
     private byFile: Record<string, BsDiagnostic[]>;
     private filePaths: string[];
-    private filters: Array<{ src?: string; codes?: number[] }>;
+    private filters: Array<{ src?: string; codes?: (number|string)[] }>;
     private rootDir: string;
 
     /**
@@ -74,7 +74,7 @@ export class DiagnosticFilterer {
         }
     }
 
-    private filterAllFiles(filter: { src?: string; codes?: number[] }) {
+    private filterAllFiles(filter: { src?: string; codes?: (number|string)[] }) {
         let matchedFilePaths: string[];
 
         //if there's a src, match against all files
