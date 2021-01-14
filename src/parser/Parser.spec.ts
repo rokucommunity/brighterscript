@@ -741,6 +741,80 @@ describe('parser', () => {
             expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
         });
 
+        it('attaches annotations to multiple clases', () => {
+            let { statements, diagnostics } = parse(`
+            @meta1
+            class MyClass
+                function main()
+                    print "hello"
+                end function
+            end class
+            @meta2
+            class MyClass2
+                function main()
+                    print "hello"
+                end function
+            end class
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            let cs = statements[0] as ClassStatement;
+            expect(cs.annotations?.length).to.equal(1);
+            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(cs.annotations[0].name).to.equal('meta1');
+            let cs2 = statements[1] as ClassStatement;
+            expect(cs2.annotations?.length).to.equal(1);
+            expect(cs2.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(cs2.annotations[0].name).to.equal('meta2');
+        });
+
+        it('attaches annotations to a namespaced class', () => {
+            let { statements, diagnostics } = parse(`
+            namespace ns
+                @meta1
+                class MyClass
+                    function main()
+                        print "hello"
+                    end function
+                end class
+            end namespace
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            let ns = statements[0] as NamespaceStatement;
+            let cs = ns.body.statements[0] as ClassStatement;
+            expect(cs.annotations?.length).to.equal(1);
+            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
+        });
+
+        it('attaches annotations to a namespaced class - multiple', () => {
+            let { statements, diagnostics } = parse(`
+            namespace ns
+                @meta1
+                class MyClass
+                    function main()
+                        print "hello"
+                    end function
+                end class
+                @meta2
+                class MyClass2
+                    function main()
+                        print "hello"
+                    end function
+                end class
+            end namespace
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            let ns = statements[0] as NamespaceStatement;
+            let cs = ns.body.statements[0] as ClassStatement;
+            expect(cs.annotations?.length).to.equal(1);
+            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(cs.annotations[0].name).to.equal('meta1');
+            let cs2 = ns.body.statements[1] as ClassStatement;
+            expect(cs2.annotations?.length).to.equal(1);
+            expect(cs2.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(cs2.annotations[0].name).to.equal('meta2');
+
+        });
+
         it('attaches annotations to a class constructor', () => {
             let { statements, diagnostics } = parse(`
             class MyClass
