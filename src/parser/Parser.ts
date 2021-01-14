@@ -1807,10 +1807,13 @@ export class Parser {
         return new Block(statements, startingToken.range);
     }
 
-    consumePendingAnnotations(dec: Statement) {
-        //attach pending annotations to statements
+    /**
+     * Attach pending annotations to the provided statement,
+     * and then reset the annotations array
+     */
+    consumePendingAnnotations(statement: Statement) {
         if (this.pendingAnnotations.length) {
-            dec.annotations = this.pendingAnnotations;
+            statement.annotations = this.pendingAnnotations;
             this.pendingAnnotations = [];
         }
     }
