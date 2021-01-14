@@ -250,11 +250,9 @@ export class Parser {
                         if (!isAnnotationExpression(dec)) {
                             this.consumePendingAnnotations(dec);
                             body.statements.push(dec);
-                            //ensure statement separator
-                            this.consumeStatementSeparators();
-                        } else {
-                            this.consumeStatementSeparators(true);
                         }
+                        //ensure statement separator
+                        this.consumeStatementSeparators();
                     }
                 }
             } catch (parseError) {
