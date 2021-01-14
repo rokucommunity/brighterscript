@@ -1055,10 +1055,53 @@ export class Util {
             }
         }
     }
+
+    /**
+     * Load and return the list of plugins
+     */
+    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
+        return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
+            if (typeof pathOrModule === 'string') {
+                try {
+                    let loaded = this.resolveRequire(cwd, pathOrModule);
+                    let plugin: CompilerPlugin = loaded.default ? loaded.default : loaded;
+                    if (!plugin.name) {
+                        plugin.name = pathOrModule;
+                    }
+                    acc.push(plugin);
+                } catch (err) {
+                    if (onError) {
+                        onError(pathOrModule, err);
+                    } else {
+                        throw err;
+                    }
+                }
+            }
+            return acc;
+        }, []);
+    }
+
+    public resolveRequire(cwd: string, pathOrModule: string) {
+        let target = pathOrModule;
+        if (!path.isAbsolute(pathOrModule)) {
+            const localPath = path.resolve(cwd, pathOrModule);
+            if (fs.existsSync(localPath)) {
+                target = localPath;
+            } else {
+                const modulePath = path.resolve(cwd, 'node_modules', pathOrModule);
+                if (fs.existsSync(modulePath)) {
+                    target = modulePath;
+                }
+            }
+        }
+        // eslint-disable-next-line
+        return require(target);
+    }
 }
 
 /**
- * A tagged template literal function for standardizing the path.
+ * A tagged template literal function for standardizing the path. This has to be defined as standalone function since it's a tagged template literal function,
+ * we can't use `object.tag` syntax.
  */
 export function standardizePath(stringParts, ...expressions: any[]) {
     let result = [];
@@ -1072,44 +1115,6 @@ export function standardizePath(stringParts, ...expressions: any[]) {
     );
 }
 
-export function loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
-    return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
-        if (typeof pathOrModule === 'string') {
-            try {
-                let loaded = resolveRequire(cwd, pathOrModule);
-                let plugin: CompilerPlugin = loaded.default ? loaded.default : loaded;
-                if (!plugin.name) {
-                    plugin.name = pathOrModule;
-                }
-                acc.push(plugin);
-            } catch (err) {
-                if (onError) {
-                    onError(pathOrModule, err);
-                } else {
-                    throw err;
-                }
-            }
-        }
-        return acc;
-    }, []);
-}
-
-function resolveRequire(cwd: string, pathOrModule: string) {
-    let target = pathOrModule;
-    if (!path.isAbsolute(pathOrModule)) {
-        const localPath = path.resolve(cwd, pathOrModule);
-        if (fs.existsSync(localPath)) {
-            target = localPath;
-        } else {
-            const modulePath = path.resolve(cwd, 'node_modules', pathOrModule);
-            if (fs.existsSync(modulePath)) {
-                target = modulePath;
-            }
-        }
-    }
-    // eslint-disable-next-line
-    return require(target);
-}
 
 export let util = new Util();
 export default util;

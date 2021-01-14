@@ -14,7 +14,7 @@ import { SourceMapConsumer } from 'source-map';
 import { TokenKind, Lexer, Keywords } from '../lexer';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
-import util, { loadPlugins, standardizePath as s } from '../util';
+import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
 import { trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
@@ -2527,7 +2527,7 @@ describe('BrsFile', () => {
 
         it('can use a plugin object which transforms the AST', async () => {
             program.plugins = new PluginInterface(
-                loadPlugins('', [
+                util.loadPlugins('', [
                     require.resolve('../examples/plugins/removePrint')
                 ]),
                 undefined
@@ -2537,7 +2537,7 @@ describe('BrsFile', () => {
 
         it('can load an absolute plugin which transforms the AST', async () => {
             program.plugins = new PluginInterface(
-                loadPlugins('', [
+                util.loadPlugins('', [
                     path.resolve(process.cwd(), './dist/examples/plugins/removePrint.js')
                 ]),
                 undefined
@@ -2547,7 +2547,7 @@ describe('BrsFile', () => {
 
         it('can load a relative plugin which transforms the AST', async () => {
             program.plugins = new PluginInterface(
-                loadPlugins(process.cwd(), [
+                util.loadPlugins(process.cwd(), [
                     './dist/examples/plugins/removePrint.js'
                 ]),
                 undefined
