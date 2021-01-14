@@ -791,7 +791,7 @@ export class Program {
                 let myClass = file.getClassFromMReference(position, file.getTokenAt(position), functionScope);
                 if (myClass) {
                     for (let scope of this.getScopesForFile(myClass.file)) {
-                        let classes = scope.getClassHieararchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
+                        let classes = scope.getClassHierarchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
                         //and anything from any class in scope to a non m class
                         for (let statement of [...classes].filter((i) => isClassMethodStatement(i.item))) {
                             let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);

@@ -960,7 +960,7 @@ export class Scope {
      * @param callsiteNamespace - the name of the namespace where the call site resides (this is NOT the known namespace of the class).
      *                            This is used to help resolve non-namespaced class names that reside in the same namespac as the call site.
      */
-    public getClassHieararchy(className: string, callsiteNamespace?: string) {
+    public getClassHierarchy(className: string, callsiteNamespace?: string) {
         let items = [] as FileLink<ClassStatement>[];
         let link = this.getClassFileLink(className, callsiteNamespace);
         while (link) {
