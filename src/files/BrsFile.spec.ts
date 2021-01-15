@@ -275,7 +275,18 @@ describe('BrsFile', () => {
                 expect(program.getDiagnostics()[0]?.message).to.not.exist;
             });
 
-            it('adds diagnostics for unknown diagnostic codes', async () => {
+            it('ignores non-numeric codes', async () => {
+                let file = await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                    sub Main()
+                        'bs:disable-next-line: LINT9999
+                        name = "bob
+                    end sub
+                `);
+                expect(file.commentFlags[0]).to.not.exist;
+                expect(program.getDiagnostics()[0]?.message).to.exist;
+            });
+
+            it('adds diagnostics for unknown numeric diagnostic codes', async () => {
                 await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         print "hi" 'bs:disable-line: 123456 999999   aaaab
@@ -284,15 +295,12 @@ describe('BrsFile', () => {
 
                 await program.validate();
 
-                expect(program.getDiagnostics()).to.be.lengthOf(3);
+                expect(program.getDiagnostics()).to.be.lengthOf(2);
                 expect(program.getDiagnostics()[0]).to.deep.include({
                     range: Range.create(2, 53, 2, 59)
                 } as BsDiagnostic);
                 expect(program.getDiagnostics()[1]).to.deep.include({
                     range: Range.create(2, 60, 2, 66)
-                } as BsDiagnostic);
-                expect(program.getDiagnostics()[2]).to.deep.include({
-                    range: Range.create(2, 69, 2, 74)
                 } as BsDiagnostic);
             });
 

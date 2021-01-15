@@ -450,6 +450,10 @@ export class BrsFile {
                 let codes = [] as number[];
                 for (let codeToken of tokenized.codes) {
                     let codeInt = parseInt(codeToken.code);
+                    if (isNaN(codeInt)) {
+                        //don't validate non-numeric codes
+                        continue;
+                    }
                     //add a warning for unknown codes
                     if (diagnosticCodes.includes(codeInt)) {
                         codes.push(codeInt);

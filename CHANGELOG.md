@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
  - proper XML AST support
  - component interface validation
+ - basic support for string-based diagnostic codes (from plugins)
 
 
 
