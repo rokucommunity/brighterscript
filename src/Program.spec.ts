@@ -48,6 +48,17 @@ describe('Program', () => {
     });
 
     describe('addFile', () => {
+        it('adds various files to `pkgMap`', async () => {
+            await program.addOrReplaceFile('source/main.brs', '');
+            expect(program['pkgMap']).to.have.property(s`source/main.brs`);
+
+            await program.addOrReplaceFile('source/main.bs', '');
+            expect(program['pkgMap']).to.have.property(s`source/main.bs`);
+
+            await program.addOrReplaceFile('components/comp1.xml', '');
+            expect(program['pkgMap']).to.have.property(s`components/comp1.xml`);
+        });
+
         it('does not crash when given a totally bogus file', async () => {
             await program.addOrReplaceFile({
                 src: `${rootDir}/source/main.brs`,

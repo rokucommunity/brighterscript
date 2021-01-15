@@ -368,6 +368,7 @@ export class Program {
                 let xmlFile = new XmlFile(srcPath, pkgPath, this);
                 //add the file to the program
                 this.files[srcPath] = xmlFile;
+                this.pkgMap[xmlFile.pkgPath.toLowerCase()] = xmlFile;
                 let fileContents: SourceObj = {
                     pathAbsolute: srcPath,
                     source: await getFileContents()
