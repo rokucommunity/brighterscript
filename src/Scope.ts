@@ -15,6 +15,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils';
+import type { BrsFile } from './files/BrsFile';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -96,7 +97,7 @@ export class Scope {
     public getClassMap(): Map<string, FileLink<ClassStatement>> {
         return this.cache.getOrAdd('classMap', () => {
             const map = new Map<string, FileLink<ClassStatement>>();
-            this.enumerateAllFiles((file) => {
+            this.enumerateBrsFiles((file) => {
                 if (isBrsFile(file)) {
                     for (let cls of file.parser.references.classStatements) {
                         const lowerClassName = cls.getName(ParseMode.BrighterScript)?.toLowerCase();
@@ -136,8 +137,7 @@ export class Scope {
      */
     public isKnownNamespace(namespaceName: string) {
         let namespaceNameLower = namespaceName.toLowerCase();
-        //TODO refactor to use this.namespaceLookup
-        this.enumerateAllFiles((file) => {
+        this.enumerateBrsFiles((file) => {
             for (let namespace of file.parser.references.namespaceStatements) {
                 let loopNamespaceNameLower = namespace.name.toLowerCase();
                 if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
@@ -271,16 +271,15 @@ export class Scope {
     }
 
     /**
-     * Call a function for each file directly included in this scope (including files found only in parent scopes).
+     * Iterate over Brs files not shadowed by typedefs
      */
-    public enumerateAllFiles(callback: (file: BscFile) => void) {
+    public enumerateBrsFiles(callback: (file: BrsFile) => void) {
         const files = this.getAllFiles();
         for (const file of files) {
-            //skip files that have a typedef
-            if (file.hasTypedef) {
-                continue;
+            //only brs files without a typedef
+            if (isBrsFile(file) && !file.hasTypedef) {
+                callback(file);
             }
-            callback(file);
         }
     }
 
@@ -290,11 +289,10 @@ export class Scope {
     public enumerateOwnFiles(callback: (file: BscFile) => void) {
         const files = this.getOwnFiles();
         for (const file of files) {
-            //skip files that have a typedef
-            if (file.hasTypedef) {
-                continue;
+            //either XML components or files without a typedef
+            if (isXmlFile(file) || !file.hasTypedef) {
+                callback(file);
             }
-            callback(file);
         }
     }
 
@@ -323,7 +321,7 @@ export class Scope {
      */
     public buildNamespaceLookup() {
         let namespaceLookup = {} as Record<string, NamespaceContainer>;
-        this.enumerateAllFiles((file) => {
+        this.enumerateBrsFiles((file) => {
             for (let namespace of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
                 let name = namespace.nameExpression.getName(ParseMode.BrighterScript);
@@ -375,7 +373,7 @@ export class Scope {
 
     public getAllNamespaceStatements() {
         let result = [] as NamespaceStatement[];
-        this.enumerateAllFiles((file) => {
+        this.enumerateBrsFiles((file) => {
             result.push(...file.parser.references.namespaceStatements);
         });
         return result;
@@ -423,28 +421,32 @@ export class Scope {
 
             this.program.plugins.emit('beforeScopeValidate', this, files, callableContainerMap);
 
-            //find all duplicate function declarations
-            this.diagnosticFindDuplicateFunctionDeclarations(callableContainerMap);
-
-            //detect missing and incorrect-case script imports
-            this.diagnosticValidateScriptImportPaths();
-
-            //enforce a series of checks on the bodies of class methods
-            this.validateClasses();
-
-            //do many per-file checks
-            this.enumerateOwnFiles((file) => {
-                this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
-                this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
-                this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
-                this.diagnosticDetectFunctionCollisions(file);
-                this.detectVariableNamespaceCollisions(file);
-                this.diagnosticDetectInvalidFunctionExpressionTypes(file);
-            });
+            this._validate(callableContainerMap);
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
 
             (this as any).isValidated = true;
+        });
+    }
+
+    protected _validate(callableContainerMap: CallableContainerMap) {
+        //find all duplicate function declarations
+        this.diagnosticFindDuplicateFunctionDeclarations(callableContainerMap);
+
+        //detect missing and incorrect-case script imports
+        this.diagnosticValidateScriptImportPaths();
+
+        //enforce a series of checks on the bodies of class methods
+        this.validateClasses();
+
+        //do many per-file checks
+        this.enumerateBrsFiles((file) => {
+            this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
+            this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
+            this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
+            this.diagnosticDetectFunctionCollisions(file);
+            this.detectVariableNamespaceCollisions(file);
+            this.diagnosticDetectInvalidFunctionExpressionTypes(file);
         });
     }
 
@@ -457,7 +459,7 @@ export class Scope {
         this.cache.clear();
     }
 
-    private detectVariableNamespaceCollisions(file: BscFile) {
+    private detectVariableNamespaceCollisions(file: BrsFile) {
         //find all function parameters
         for (let func of file.parser.references.functionExpressions) {
             for (let param of func.parameters) {
@@ -535,7 +537,7 @@ export class Scope {
     /**
     * Find function parameters and function return types that are neither built-in types or known Class references
     */
-    private diagnosticDetectInvalidFunctionExpressionTypes(file: BscFile) {
+    private diagnosticDetectInvalidFunctionExpressionTypes(file: BrsFile) {
         for (let func of file.parser.references.functionExpressions) {
             if (isCustomType(func.returnType) && func.returnTypeToken) {
                 // check if this custom type is in our class map
@@ -569,7 +571,7 @@ export class Scope {
 
     public getNewExpressions() {
         let result = [] as AugmentedNewExpression[];
-        this.enumerateOwnFiles((file) => {
+        this.enumerateBrsFiles((file) => {
             let expressions = file.parser.references.newExpressions as AugmentedNewExpression[];
             for (let expression of expressions) {
                 expression.file = file;
@@ -913,7 +915,7 @@ export class Scope {
      */
     public getPropertyNameCompletions() {
         let results = [] as CompletionItem[];
-        this.enumerateAllFiles((file) => {
+        this.enumerateBrsFiles((file) => {
             results.push(...file.propertyNameCompletions);
         });
         return results;

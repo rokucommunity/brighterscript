@@ -10,7 +10,7 @@ describe('DiagnosticFilterer', () => {
         rootDir: rootDir,
         diagnosticFilters: [
             //ignore these codes globally
-            { codes: [1, 2, 3] },
+            { codes: [1, 2, 3, 'X4'] },
             //ignore all codes from lib
             { src: 'lib/**/*.brs' },
             //ignore all codes from `packages` with absolute path
@@ -38,7 +38,8 @@ describe('DiagnosticFilterer', () => {
                 filterer.filter(options, [
                     getDiagnostic(1, `${rootDir}/source/common.brs`),
                     getDiagnostic(2, `${rootDir}/source/common.brs`),
-                    getDiagnostic(4, `${rootDir}/source/common.brs`)
+                    getDiagnostic(4, `${rootDir}/source/common.brs`),
+                    getDiagnostic('X4', `${rootDir}/source/common.brs`)
                 ]).map(x => x.code)
             ).to.eql([4]);
         });
@@ -60,7 +61,8 @@ describe('DiagnosticFilterer', () => {
                     getDiagnostic(10, `${rootDir}/source/common.brs`), //keep
                     getDiagnostic(11, `${rootDir}/packages/a.brs`), //remove
                     getDiagnostic(12, `${rootDir}/packages/a/b/b.brs`), //remove
-                    getDiagnostic(13, `${rootDir}/packages/a/b/c/c.brs`) //remove
+                    getDiagnostic(13, `${rootDir}/packages/a/b/c/c.brs`), //remove
+                    getDiagnostic('X14', `${rootDir}/packages/a/b/c/c.brs`) //remove
                 ]).map(x => x.code)
             ).to.eql([10]);
         });
@@ -71,9 +73,10 @@ describe('DiagnosticFilterer', () => {
                     getDiagnostic(4, `${rootDir}/source/main.brs`), //remove
                     getDiagnostic(11, `${rootDir}/common/a.brs`), //keep
                     getDiagnostic(12, `${rootDir}/common/a/b/b.brs`), //keep
-                    getDiagnostic(13, `${rootDir}/common/a/b/c/c.brs`) //keep
+                    getDiagnostic(13, `${rootDir}/common/a/b/c/c.brs`), //keep
+                    getDiagnostic('X14', `${rootDir}/common/a/b/c/c.brs`) //keep
                 ]).map(x => x.code)
-            ).to.eql([11, 12, 13]);
+            ).to.eql([11, 12, 13, 'X14']);
         });
     });
     describe('standardizeDiagnosticFilters', () => {
@@ -105,9 +108,9 @@ describe('DiagnosticFilterer', () => {
         it('handles standard diagnostic filters', () => {
             expect(
                 filterer.getDiagnosticFilters({
-                    diagnosticFilters: [{ src: 'file.brs', codes: [1, 2, 3] }]
+                    diagnosticFilters: [{ src: 'file.brs', codes: [1, 2, 'X3'] }]
                 })
-            ).to.eql([{ src: 'file.brs', codes: [1, 2, 3] }]);
+            ).to.eql([{ src: 'file.brs', codes: [1, 2, 'X3'] }]);
         });
 
         it('handles string-only diagnostic filter object', () => {
@@ -120,9 +123,9 @@ describe('DiagnosticFilterer', () => {
 
         it('handles code-only diagnostic filter object', () => {
             expect(filterer.getDiagnosticFilters({
-                diagnosticFilters: [{ codes: [1, 2, 3] }]
+                diagnosticFilters: [{ codes: [1, 2, 'X3'] }]
             })).to.eql([
-                { codes: [1, 2, 3] }
+                { codes: [1, 2, 'X3'] }
             ]);
         });
 
@@ -136,16 +139,16 @@ describe('DiagnosticFilterer', () => {
 
         it('converts ignoreErrorCodes to diagnosticFilters', () => {
             expect(filterer.getDiagnosticFilters({
-                ignoreErrorCodes: [1, 2, 3]
+                ignoreErrorCodes: [1, 2, 'X3']
             })).to.eql([
-                { codes: [1, 2, 3] }
+                { codes: [1, 2, 'X3'] }
             ]);
         });
     });
 
 });
 
-function getDiagnostic(code: number, pathAbsolute: string) {
+function getDiagnostic(code: number|string, pathAbsolute: string) {
     return {
         file: {
             pathAbsolute: s`${pathAbsolute}`

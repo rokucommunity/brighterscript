@@ -338,8 +338,8 @@ export let DiagnosticMessages = {
         code: 1064,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1065: () => ({
-        message: ``,
+    xmlUnexpectedTag: (tagName: string) => ({
+        message: `Unexpected tag '${tagName}'`,
         code: 1065,
         severity: DiagnosticSeverity.Error
     }),
@@ -348,23 +348,23 @@ export let DiagnosticMessages = {
         code: 1066,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1067: () => ({
-        message: ``,
+    xmlFunctionNotFound: (name: string) => ({
+        message: `Cannot find function with name '${name}' in component scope`,
         code: 1067,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1068: () => ({
-        message: ``,
+    xmlInvalidFieldType: (name: string) => ({
+        message: `Invalid field type ${name}`,
         code: 1068,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1069: () => ({
-        message: ``,
+    xmlUnexpectedChildren: (tagName: string) => ({
+        message: `Tag '${tagName}' should not have children`,
         code: 1069,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1070: () => ({
-        message: ``,
+    xmlTagMissingAttribute: (tagName: string, attrName: string) => ({
+        message: `Tag '${tagName}' must have a '${attrName}' attribute`,
         code: 1070,
         severity: DiagnosticSeverity.Error
     }),

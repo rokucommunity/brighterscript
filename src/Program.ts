@@ -158,6 +158,8 @@ export class Program {
     public getComponent(componentName: string) {
         if (componentName) {
             return this.components[componentName.toLowerCase()];
+        } else {
+            return undefined;
         }
     }
 
@@ -166,7 +168,7 @@ export class Program {
      */
     private registerComponent(xmlFile: XmlFile, scope: XmlScope) {
         //store a reference to this component by its component name
-        this.components[(xmlFile.componentName ?? xmlFile.pkgPath).toLowerCase()] = {
+        this.components[(xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase()] = {
             file: xmlFile,
             scope: scope
         };
@@ -176,7 +178,7 @@ export class Program {
      * Remove the specified component from the components map
      */
     private unregisterComponent(xmlFile: XmlFile) {
-        delete this.components[(xmlFile.componentName ?? xmlFile.pkgPath).toLowerCase()];
+        delete this.components[(xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase()];
     }
 
     /**
@@ -387,12 +389,13 @@ export class Program {
                 let xmlFile = new XmlFile(srcPath, pkgPath, this);
                 //add the file to the program
                 this.files[srcPath] = xmlFile;
+                this.pkgMap[xmlFile.pkgPath.toLowerCase()] = xmlFile;
                 let fileContents: SourceObj = {
                     pathAbsolute: srcPath,
                     source: await getFileContents()
                 };
                 this.plugins.emit('beforeFileParse', fileContents);
-                await xmlFile.parse(fileContents.source);
+                xmlFile.parse(fileContents.source);
 
                 file = xmlFile;
 
@@ -562,8 +565,8 @@ export class Program {
         const componentsByName = Object.keys(this.files).reduce<Record<string, XmlFile[]>>((map, filePath) => {
             const file = this.files[filePath];
             //if this is an XmlFile, and it has a valid `componentName` property
-            if (isXmlFile(file) && file.componentName) {
-                let lowerName = file.componentName.toLowerCase();
+            if (isXmlFile(file) && file.componentName?.text) {
+                let lowerName = file.componentName.text.toLowerCase();
                 if (!map[lowerName]) {
                     map[lowerName] = [];
                 }
@@ -572,20 +575,21 @@ export class Program {
             return map;
         }, {});
 
-        for (let componentName in componentsByName) {
-            const xmlFiles = componentsByName[componentName];
+        for (let name in componentsByName) {
+            const xmlFiles = componentsByName[name];
             //add diagnostics for every duplicate component with this name
             if (xmlFiles.length > 1) {
                 for (let xmlFile of xmlFiles) {
+                    const { componentName } = xmlFile;
                     this.diagnostics.push({
-                        ...DiagnosticMessages.duplicateComponentName(xmlFile.componentName),
-                        range: xmlFile.componentNameRange,
+                        ...DiagnosticMessages.duplicateComponentName(componentName.text),
+                        range: xmlFile.componentName.range,
                         file: xmlFile,
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
                                 location: Location.create(
                                     URI.file(xmlFile.pathAbsolute).toString(),
-                                    x.componentNameRange
+                                    x.componentName.range
                                 ),
                                 message: 'Also defined here'
                             };
@@ -679,9 +683,6 @@ export class Program {
             return [];
         }
 
-        //wait for the file to finish loading
-        await file.isReady();
-
         //find the scopes for this file
         let scopes = this.getScopesForFile(file);
 
@@ -692,9 +693,7 @@ export class Program {
 
         //get the completions from all scopes for this file
         let allCompletions = util.flatMap(
-            await Promise.all(
-                scopes.map(async ctx => file.getCompletions(position, ctx))
-            ),
+            scopes.map(ctx => file.getCompletions(position, ctx)),
             c => c
         );
 
@@ -709,23 +708,21 @@ export class Program {
                 result.push(completion);
             }
         }
-        return result;
+        return Promise.resolve(result);
     }
 
     /**
      * Goes through each file and builds a list of workspace symbols for the program. Used by LanguageServer's onWorkspaceSymbol functionality
      */
-    public async getWorkspaceSymbols() {
-        const results = await Promise.all(
-            Object.keys(this.files).map(async key => {
-                const file = this.files[key];
-                if (isBrsFile(file)) {
-                    return file.getWorkspaceSymbols();
-                }
-                return [];
-            }));
-        const allSymbols = util.flatMap(results, c => c);
-        return allSymbols;
+    public getWorkspaceSymbols() {
+        const results = Object.keys(this.files).map(key => {
+            const file = this.files[key];
+            if (isBrsFile(file)) {
+                return file.getWorkspaceSymbols();
+            }
+            return [];
+        });
+        return util.flatMap(results, c => c);
     }
 
     /**
@@ -757,7 +754,7 @@ export class Program {
             return null;
         }
 
-        return file.getHover(position);
+        return Promise.resolve(file.getHover(position));
     }
 
     public async getSignatureHelp(filepath: string, position: Position): Promise<SignatureInfoObj[]> {
@@ -1047,10 +1044,8 @@ export class Program {
      * Transpile a single file and get the result as a string.
      * This does not write anything to the file system.
      */
-    public async getTranspiledFileContents(pathAbsolute: string) {
+    public getTranspiledFileContents(pathAbsolute: string) {
         let file = this.getFile(pathAbsolute);
-        //wait for the file to finish being parsed
-        await file.isReady();
         let result = file.transpile();
         return {
             ...result,

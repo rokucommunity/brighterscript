@@ -6,6 +6,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
+import { trim } from './testHelpers.spec';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -488,7 +489,7 @@ describe('Scope', () => {
             const validateStartScope = sinon.spy();
             const validateEndScope = sinon.spy();
             await program.addOrReplaceFile('source/file.brs', ``);
-            await program.addOrReplaceFile('components/comp.xml', `
+            await program.addOrReplaceFile('components/comp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="comp" extends="Scene">
                     <script uri="comp.brs"/>
@@ -687,7 +688,7 @@ describe('Scope', () => {
             it('scopes types to correct scope', async () => {
                 program = new Program({ rootDir: rootDir });
 
-                await program.addOrReplaceFile('components/foo.xml', `
+                await program.addOrReplaceFile('components/foo.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="foo" extends="Scene">
                         <script uri="foo.bs"/>
@@ -701,7 +702,7 @@ describe('Scope', () => {
 
                 expect(program.getDiagnostics()[0]?.message).not.to.exist;
 
-                await program.addOrReplaceFile('components/bar.xml', `
+                await program.addOrReplaceFile('components/bar.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="bar" extends="Scene">
                         <script uri="bar.bs"/>
@@ -721,7 +722,7 @@ describe('Scope', () => {
             it('can reference types from parent component', async () => {
                 program = new Program({ rootDir: rootDir });
 
-                await program.addOrReplaceFile('components/parent.xml', `
+                await program.addOrReplaceFile('components/parent.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="parent" extends="Scene">
                         <script uri="parent.bs"/>
@@ -731,7 +732,7 @@ describe('Scope', () => {
                     class MyClass
                     end class
                 `);
-                await program.addOrReplaceFile('components/child.xml', `
+                await program.addOrReplaceFile('components/child.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="child" extends="parent">
                         <script uri="child.bs"/>
@@ -754,7 +755,7 @@ describe('Scope', () => {
         it('inherits callables from parent', async () => {
             program = new Program({ rootDir: rootDir });
 
-            await program.addOrReplaceFile('components/child.xml', `
+            await program.addOrReplaceFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="child" extends="parent">
                     <script uri="child.brs"/>
@@ -765,7 +766,7 @@ describe('Scope', () => {
             let childScope = program.getComponentScope('child');
             expect(childScope.getAllCallables().map(x => x.callable.name)).not.to.include('parentSub');
 
-            await program.addOrReplaceFile('components/parent.xml', `
+            await program.addOrReplaceFile('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="parent" extends="Scene">
                     <script uri="parent.brs"/>
