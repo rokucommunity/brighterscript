@@ -3,11 +3,11 @@ import { SourceNode } from 'source-map';
 import type { CompletionItem, Hover, Range, Position } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
 import chalk from 'chalk';
+import * as path from 'path';
 import type { Scope } from '../Scope';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
-import { Deferred } from '../deferred';
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
@@ -56,7 +56,7 @@ export class BrsFile {
 
         //global file doesn't have a program, so only resolve typedef info if we have a program
         if (this.program) {
-            this.resolveTypdef();
+            this.resolveTypedef();
         }
     }
 
@@ -75,15 +75,6 @@ export class BrsFile {
      * The all-lowercase extension for this file (including the leading dot)
      */
     public extension: string;
-
-    private parseDeferred = new Deferred();
-
-    /**
-     * Indicates that the file is completely ready for interaction
-     */
-    public isReady() {
-        return this.parseDeferred.promise;
-    }
 
     private diagnostics = [] as BsDiagnostic[];
 
@@ -149,13 +140,11 @@ export class BrsFile {
             this.hasTypedef = false;
             this.typedefFile = undefined;
 
-            //reset the deferred
-            this.parseDeferred = new Deferred();
             //parse the file (it should parse fully since there's no linked typedef
             this.parse(this.fileContents);
 
             //re-link the typedef (if it exists...which it should)
-            this.resolveTypdef();
+            this.resolveTypedef();
         }
         return this._parser;
     }
@@ -192,7 +181,7 @@ export class BrsFile {
     /**
      * Find and set the typedef variables (if a matching typedef file exists)
      */
-    private resolveTypdef() {
+    private resolveTypedef() {
         this.typedefFile = this.program.getFileByPathAbsolute<BrsFile>(this.typedefKey);
         this.hasTypedef = !!this.typedefFile;
     }
@@ -208,7 +197,7 @@ export class BrsFile {
 
         //event that fires anytime a dependency changes
         this.unsubscribeFromDependencyGraph = this.program.dependencyGraph.onchange(this.dependencyGraphKey, () => {
-            this.resolveTypdef();
+            this.resolveTypedef();
         });
 
         const dependencies = this.ownScriptImports.filter(x => !!x.pkgPath).map(x => x.pkgPath.toLowerCase());
@@ -229,13 +218,10 @@ export class BrsFile {
     public parse(fileContents: string) {
         try {
             this.fileContents = fileContents;
-            if (this.parseDeferred.isCompleted) {
-                throw new Error(`File was already processed. Create a new instance of BrsFile instead. ${this.pathAbsolute}`);
-            }
+            this.diagnostics = [];
 
             //if we have a typedef file, skip parsing this file
             if (this.hasTypedef) {
-                this.parseDeferred.resolve();
                 return;
             }
 
@@ -304,7 +290,6 @@ export class BrsFile {
                 ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(serializeError(e)))
             });
         }
-        this.parseDeferred.resolve();
     }
 
     public findAndValidateImportAndImportStatements() {
@@ -771,12 +756,10 @@ export class BrsFile {
     /**
      * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
      */
-    public async getCompletions(position: Position, scope?: Scope): Promise<CompletionItem[]> {
+    public getCompletions(position: Position, scope?: Scope): CompletionItem[] {
         let result = [] as CompletionItem[];
         let parseMode = this.getParseMode();
 
-        //wait for the file to finish processing
-        await this.isReady();
         //a map of lower-case names of all added options
         let names = {} as Record<string, boolean>;
 
@@ -1029,13 +1012,12 @@ export class BrsFile {
     /**
      * Builds a list of document symbols for this file. Used by LanguageServer's onDocumentSymbol functionality
      */
-    public async getDocumentSymbols() {
+    public getDocumentSymbols() {
         if (this.documentSymbols) {
             return this.documentSymbols;
         }
 
         let symbols = [] as DocumentSymbol[];
-        await this.isReady();
 
         for (const statement of this.ast.statements) {
             const symbol = this.getDocumentSymbol(statement);
@@ -1050,13 +1032,12 @@ export class BrsFile {
     /**
      * Builds a list of workspace symbols for this file. Used by LanguageServer's onWorkspaceSymbol functionality
      */
-    public async getWorkspaceSymbols() {
+    public getWorkspaceSymbols() {
         if (this.workspaceSymbols) {
             return this.workspaceSymbols;
         }
 
         let symbols = [] as SymbolInformation[];
-        await this.isReady();
 
         for (const statement of this.ast.statements) {
             for (const symbol of this.generateWorkspaceSymbols(statement)) {
@@ -1144,9 +1125,7 @@ export class BrsFile {
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
      */
-    public async getDefinition(position: Position) {
-        await this.isReady();
-
+    public getDefinition(position: Position) {
         let results: Location[] = [];
 
         //get the token at the position
@@ -1216,8 +1195,7 @@ export class BrsFile {
         return results;
     }
 
-    public async getHover(position: Position): Promise<Hover> {
-        await this.isReady();
+    public getHover(position: Position): Hover {
         //get the token at the position
         let token = this.getTokenAt(position);
 
@@ -1326,9 +1304,7 @@ export class BrsFile {
         return signature;
     }
 
-    public async getReferences(position: Position) {
-        await this.isReady();
-
+    public getReferences(position: Position) {
         const callSiteToken = this.getTokenAt(position);
 
         let locations = [] as Location[];
@@ -1365,8 +1341,13 @@ export class BrsFile {
         if (this.needsTranspiled) {
             let programNode = new SourceNode(null, null, this.pathAbsolute, this.ast.transpile(state));
             if (this.program.options.sourceMap) {
-                return programNode.toStringWithSourceMap({
-                    file: this.pathAbsolute
+                //sourcemap reference
+                let programWithMap = new SourceNode(null, null, null, [
+                    programNode,
+                    `'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`
+                ]);
+                return programWithMap.toStringWithSourceMap({
+                    file: state.pathAbsolute
                 });
             } else {
                 //return the code without the source map
@@ -1387,6 +1368,8 @@ export class BrsFile {
                         new SourceNode(lineIndex + 1, 0, state.pathAbsolute, line)
                     );
                 }
+                //sourcemap reference
+                chunks.push(`'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`);
                 return new SourceNode(null, null, state.pathAbsolute, chunks).toStringWithSourceMap();
             } else {
                 //return the original source code as-is
