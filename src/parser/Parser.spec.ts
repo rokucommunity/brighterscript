@@ -7,6 +7,11 @@ import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement 
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils';
+import { VoidType } from '../types/VoidType';
+import { FunctionType } from '../types/FunctionType';
+import { StringType } from '../types/StringType';
+import { CustomType } from '../types/CustomType';
+import { expectZeroDiagnostics } from '../testHelpers.spec';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -791,6 +796,51 @@ describe('parser', () => {
             ]);
             let allArgs = fn.annotations[0].getArguments(false);
             expect(allArgs.pop()).to.be.instanceOf(FunctionExpression);
+        });
+    });
+
+    describe('getBscTypeFromAssignment', () => {
+        it('computes void type for sub with no return type', () => {
+            const parser = parse(`
+                sub main()
+                    getMessage = sub()
+                        print "hello"
+                    end sub
+                end sub
+            `);
+            const func = (parser.ast.statements[0] as FunctionStatement).func;
+            const type = parser['getBscTypeFromAssignment'](func.body.statements[0] as AssignmentStatement, func) as FunctionType;
+            expect(type.returnType).to.be.instanceof(VoidType);
+        });
+
+        it('computes return type for sub with explicit return type', () => {
+            const parser = parse(`
+                sub main()
+                    getMessage = sub() as string
+                        return "hello"
+                    end sub
+                end sub
+            `);
+            const func = (parser.ast.statements[0] as FunctionStatement).func;
+            const type = parser['getBscTypeFromAssignment'](func.body.statements[0] as AssignmentStatement, func) as FunctionType;
+            expect(type.returnType).to.be.instanceof(StringType);
+        });
+
+        it('supports sub with custom return type', () => {
+            const parser = parse(`
+                sub main()
+                    getPerson = sub() as Person
+                        return new Person()
+                    end sub
+                end sub
+
+                class Person
+                end class
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const func = (parser.ast.statements[0] as FunctionStatement).func;
+            const type = parser['getBscTypeFromAssignment'](func.body.statements[0] as AssignmentStatement, func) as FunctionType;
+            expect(type.returnType).to.be.instanceof(CustomType);
         });
     });
 });

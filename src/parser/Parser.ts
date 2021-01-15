@@ -645,7 +645,7 @@ export class Parser {
                 leftParen,
                 rightParen,
                 asToken,
-                typeToken,
+                typeToken, //return type
                 this.currentFunctionExpression,
                 this.currentNamespaceName
             );
@@ -2472,9 +2472,6 @@ export class Parser {
             if (isFunctionExpression(assignment.value)) {
                 let functionType = new FunctionType(assignment.value.returnType);
                 functionType.isSub = assignment.value.functionType.text === 'sub';
-                if (functionType.isSub) {
-                    functionType.returnType = new VoidType();
-                }
 
                 functionType.setName(assignment.name.text);
                 for (let param of assignment.value.parameters) {
