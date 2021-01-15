@@ -35,6 +35,9 @@ function trimLeading(text: string) {
     return lines.join('\n');
 }
 
+/**
+ * Remove leading white space and remove excess indentation
+ */
 export function trim(strings: TemplateStringsArray, ...args) {
     let text = '';
     for (let i = 0; i < strings.length; i++) {
@@ -58,4 +61,11 @@ export function expectZeroDiagnostics(obj: { getDiagnostics(): BsDiagnostic[] })
         }
         assert.fail(message);
     }
+}
+
+/**
+ * Remove sourcemap information at the end of the source
+ */
+export function trimMap(source: string) {
+    return source.replace(/('|<!--)\/\/# sourceMappingURL=.*$/m, '');
 }

@@ -7,6 +7,7 @@ import { standardizePath as s } from '../../util';
 import type { XmlFile } from '../XmlFile';
 import type { BrsFile } from '../BrsFile';
 import { getTestTranspile } from '../BrsFile.spec';
+import { trim, trimMap } from '../../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -33,7 +34,7 @@ describe('import statements', () => {
     });
 
     it('still transpiles import statements if found at bottom of file', async () => {
-        await program.addOrReplaceFile('components/ChildScene.xml', `
+        await program.addOrReplaceFile('components/ChildScene.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="Scene">
                 <script type="text/brighterscript" uri="pkg:/source/lib.bs" />
@@ -61,8 +62,8 @@ describe('import statements', () => {
         });
         await program.transpile(files, stagingFolderPath);
         expect(
-            fsExtra.readFileSync(`${stagingFolderPath}/components/ChildScene.xml`).toString()
-        ).to.equal(`
+            trimMap(fsExtra.readFileSync(`${stagingFolderPath}/components/ChildScene.xml`).toString())
+        ).to.equal(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="Scene">
                 <script type="text/brightscript" uri="pkg:/source/lib.brs" />
@@ -74,7 +75,7 @@ describe('import statements', () => {
 
     it('finds function loaded in by import multiple levels deep', async () => {
         //create child component
-        let component = await program.addOrReplaceFile('components/ChildScene.xml', `
+        let component = await program.addOrReplaceFile('components/ChildScene.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brighterscript" uri="pkg:/source/lib.bs" />
@@ -110,7 +111,7 @@ describe('import statements', () => {
 
     it('supports importing brs files', async () => {
         //create child component
-        let component = await program.addOrReplaceFile('components/ChildScene.xml', `
+        let component = await program.addOrReplaceFile('components/ChildScene.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brighterscript" uri="pkg:/source/lib.bs" />
@@ -139,7 +140,7 @@ describe('import statements', () => {
 
     it('detects when dependency contents have changed', async () => {
         //create child component
-        await program.addOrReplaceFile('components/ChildScene.xml', `
+        await program.addOrReplaceFile('components/ChildScene.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brighterscript" uri="lib.bs" />
@@ -178,7 +179,7 @@ describe('import statements', () => {
 
     it('adds brs imports to xml file during transpile', async () => {
         //create child component
-        let component = await program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, `
+        let component = await program.addOrReplaceFile({ src: s`${rootDir}/components/ChildScene.xml`, dest: 'components/ChildScene.xml' }, trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.bs" />
@@ -196,7 +197,7 @@ describe('import statements', () => {
             end function
         `);
         await program.validate();
-        expect(component.transpile().code).to.equal(`
+        expect(trimMap(component.transpile().code)).to.equal(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brightscript" uri="pkg:/source/lib.brs" />
@@ -208,7 +209,7 @@ describe('import statements', () => {
 
     it('shows diagnostic for missing file in import', async () => {
         //create child component
-        await program.addOrReplaceFile('components/ChildScene.xml', `
+        await program.addOrReplaceFile('components/ChildScene.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brighterscript" uri="ChildScene.bs" />
@@ -235,12 +236,12 @@ describe('import statements', () => {
         await program.addOrReplaceFile('components/AuthManager.bs', `
             import "pkg:/source/BaseClass.bs"
         `);
-        await testTranspile(`
+        await testTranspile(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brighterscript" uri="AuthManager.bs" />
             </component>
-        `, `
+        `, trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brightscript" uri="AuthManager.brs" />

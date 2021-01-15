@@ -2,10 +2,12 @@ import type { Location, Position } from 'vscode-languageserver';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
-import type { BscFile, FileReference } from './interfaces';
+import type { BscFile, CallableContainerMap, FileReference } from './interfaces';
 import type { Program } from './Program';
 import util from './util';
 import { isXmlFile } from './astUtils/reflection';
+import { SGFieldTypes } from './parser/SGTypes';
+import type { SGTag } from './parser/SGTypes';
 
 export class XmlScope extends Scope {
     constructor(
@@ -22,7 +24,7 @@ export class XmlScope extends Scope {
     public getParentScope() {
         return this.cache.getOrAdd('parentScope', () => {
             let scope: Scope;
-            let parentComponentName = this.xmlFile.parentComponentName;
+            let parentComponentName = this.xmlFile.parentComponentName?.text;
             if (parentComponentName) {
                 scope = this.program.getComponentScope(parentComponentName);
             }
@@ -34,16 +36,62 @@ export class XmlScope extends Scope {
         });
     }
 
-    public validate() {
-        if (this.isValidated === false) {
-            super.validate();
-            (this as any).isValidated = false;
+    protected _validate(callableContainerMap: CallableContainerMap) {
+        //validate brs files
+        super._validate(callableContainerMap);
 
-            //detect when the child imports a script that its ancestor also imports
-            this.diagnosticDetectDuplicateAncestorScriptImports();
+        //detect when the child imports a script that its ancestor also imports
+        this.diagnosticDetectDuplicateAncestorScriptImports();
 
-            (this as any).isValidated = true;
+        //validate component interface
+        this.diagnosticValidateInterface(callableContainerMap);
+    }
+
+    private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
+        if (!this.xmlFile.parser.ast?.component?.api) {
+            return;
         }
+        const { api } = this.xmlFile.parser.ast.component;
+        //validate functions
+        for (const fun of api.functions) {
+            const name = fun.name;
+            if (!name) {
+                this.diagnosticMissingAttribute(fun, 'name');
+            } else if (!callableContainerMap.has(name.toLowerCase())) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.xmlFunctionNotFound(name),
+                    range: fun.getAttribute('name').value.range,
+                    file: this.xmlFile
+                });
+            }
+        }
+        //validate fields
+        for (const field of api.fields) {
+            const { id, type } = field;
+            if (!id) {
+                this.diagnosticMissingAttribute(field, 'id');
+            }
+            if (!type) {
+                if (!field.alias) {
+                    this.diagnosticMissingAttribute(field, 'type');
+                }
+            } else if (!SGFieldTypes.includes(type.toLowerCase())) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.xmlInvalidFieldType(type),
+                    range: field.getAttribute('type').value.range,
+                    file: this.xmlFile
+                });
+            }
+        }
+    }
+
+    private diagnosticMissingAttribute(tag: SGTag, name: string) {
+        const { text, range } = tag.tag;
+        this.diagnostics.push({
+            ...DiagnosticMessages.xmlTagMissingAttribute(text, name),
+            range: range,
+            file: this.xmlFile
+        });
     }
 
     /**
@@ -65,7 +113,8 @@ export class XmlScope extends Scope {
             for (let scriptImport of this.xmlFile.scriptTagImports) {
                 let ancestorScriptImport = lookup[scriptImport.pkgPath];
                 if (ancestorScriptImport) {
-                    let ancestorComponentName = (ancestorScriptImport.sourceFile as XmlFile).componentName;
+                    let ancestorComponent = ancestorScriptImport.sourceFile as XmlFile;
+                    let ancestorComponentName = ancestorComponent.componentName?.text ?? ancestorComponent.pkgPath;
                     this.diagnostics.push({
                         file: this.xmlFile,
                         range: scriptImport.filePathRange,
@@ -113,8 +162,8 @@ export class XmlScope extends Scope {
         if (
             isXmlFile(file) &&
             file.parentComponent &&
-            file.parentNameRange &&
-            util.rangeContains(file.parentNameRange, position)
+            file.parentComponentName &&
+            util.rangeContains(file.parentComponentName.range, position)
         ) {
             results.push({
                 range: util.createRange(0, 0, 0, 0),
