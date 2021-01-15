@@ -20,7 +20,7 @@ import type { ManifestValue } from './preprocessor/Manifest';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isClassMethodStatement } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser';
@@ -651,21 +651,48 @@ export class Program {
                 }
                 filesSearched.add(file);
 
-                const statementHandler = (statement: FunctionStatement) => {
+                for (const statement of [...file.parser.references.functionStatements, ...file.parser.references.classStatements.flatMap((cs) => cs.methods)]) {
                     let parentNamespaceName = statement.namespaceName?.getName(parseMode)?.toLowerCase();
                     if (statement.name.text.toLowerCase() === lowerName && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                         if (!results.has(statement)) {
                             results.set(statement, { item: statement, file: file });
                         }
                     }
-                };
+                }
+            }
+        }
+        return [...results.values()];
+    }
 
-                file.parser.ast.walk(createVisitor({
-                    FunctionStatement: statementHandler,
-                    ClassMethodStatement: statementHandler
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });
+    public getStatementsForXmlFile(scope: XmlScope, filterName?: string): FileLink<FunctionStatement>[] {
+        let results = new Map<Statement, FileLink<FunctionStatement>>();
+        const filesSearched = new Set<BrsFile>();
+
+        //get all function names for the xml file and parents
+        let funcNames = new Set<string>();
+        let currentScope = scope;
+        while (isXmlScope(currentScope)) {
+            for (let name of currentScope.xmlFile.ast.component.api.functions.map((f) => f.name)) {
+                if (filterName && name === filterName) {
+                    funcNames.add(name);
+                }
+            }
+            currentScope = currentScope.getParentScope() as XmlScope;
+        }
+
+        //look through all files in scope for matches
+        for (const file of scope.getAllFiles()) {
+            if (isXmlFile(file) || filesSearched.has(file)) {
+                continue;
+            }
+            filesSearched.add(file);
+
+            for (const statement of file.parser.references.functionStatements) {
+                if (funcNames.has(statement.name.text)) {
+                    if (!results.has(statement)) {
+                        results.set(statement, { item: statement, file: file });
+                    }
+                }
             }
         }
         return [...results.values()];
@@ -757,13 +784,11 @@ export class Program {
         return Promise.resolve(file.getHover(position));
     }
 
-    public async getSignatureHelp(filepath: string, position: Position): Promise<SignatureInfoObj[]> {
+    public getSignatureHelp(filepath: string, position: Position): SignatureInfoObj[] {
         let file: BrsFile = this.getFile(filepath);
         if (!file || !isBrsFile(file)) {
             return [];
         }
-
-        await file.isReady();
 
         const results = new Map<string, SignatureInfoObj>();
 
@@ -822,11 +847,11 @@ export class Program {
 
 
         } else if (identifierInfo.statementType === '@.') {
-            for (const scope of this.getScopes()) {
-                //to only get functions defined in interface methods
-                const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === identifierInfo.name);
-                if (callable) {
-                    let sigHelp = (callable.callable.file as BrsFile).getSignatureHelpForStatement(callable.callable.functionStatement);
+            for (const scope of this.getScopes().filter((s) => isXmlScope(s))) {
+                let fileLinks = this.getStatementsForXmlFile(scope as XmlScope, identifierInfo.name);
+                for (let fileLink of fileLinks) {
+
+                    let sigHelp = fileLink.file.getSignatureHelpForStatement(fileLink.item);
                     if (sigHelp && !results.has[sigHelp.key]) {
                         sigHelp.index = identifierInfo.commaCount;
                         results.set(sigHelp.key, sigHelp);
@@ -847,7 +872,7 @@ export class Program {
 
     private getPartialStatementInfo(file: BrsFile, position: Position): PartialStatementInfo {
         let lines = util.splitIntoLines(file.fileContents);
-        let line = lines[position.line].toLowerCase();
+        let line = lines[position.line];
         let index = position.character;
         let itemCounts = this.getPartialItemCounts(line, index);
         if (!itemCounts.isArgStartFound && line.charAt(index) === ')') {
@@ -871,7 +896,7 @@ export class Program {
                 currentToken = file.getPreviousToken(currentToken);
                 name = file.getPartialVariableName(currentToken, [TokenKind.New]);
             }
-            if (name.indexOf('.')) {
+            if (name?.indexOf('.')) {
                 let parts = name.split('.');
                 name = parts[parts.length - 1];
             }

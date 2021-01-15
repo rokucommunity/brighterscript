@@ -20,7 +20,7 @@ let tmpPath = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tmpPath}/rootDir`;
 let stagingFolderPath = s`${tmpPath}/staging`;
 
-describe('Program', () => {
+describe.only('Program', () => {
     let program: Program;
     beforeEach(() => {
         fsExtra.ensureDirSync(tmpPath);
@@ -1695,60 +1695,29 @@ describe('Program', () => {
     describe('getSignatureHelp', () => {
         it('gets signature help for constructor with no args', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                p = new Person()
-            end function
-
-            class Person
-                function new()
+                function main()
+                    p = new Person()
                 end function
 
-                function sayHello()
-                end function
-            end class
+                class Person
+                    function new()
+                    end function
+
+                    function sayHello()
+                    end function
+                end class
             `);
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 31)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 31)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('Person()');
         });
 
         it('gets signature help for class function on dotted get with params', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                p.sayHello("there")
-            end function
-
-            class Person
-                function new()
+                function main()
+                    p.sayHello("there")
                 end function
 
-                function sayHello(text)
-                end function
-            end class
-            `);
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 32)));
-            expect(program.getDiagnostics()).to.be.empty;
-            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
-
-            signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
-            expect(program.getDiagnostics()).to.be.empty;
-            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
-
-            signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 27)));
-            expect(program.getDiagnostics()).to.be.empty;
-            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
-
-            signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 23)));
-            expect(program.getDiagnostics()).to.be.empty;
-            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
-        });
-
-        it('gets signature help for namespaced class function', async () => {
-            await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                person.sayHello("there")
-            end function
-            namespace player
                 class Person
                     function new()
                     end function
@@ -1756,101 +1725,131 @@ describe('Program', () => {
                     function sayHello(text)
                     end function
                 end class
-            end namespace
             `);
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 32)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
 
-            signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 26)));
+            signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
+            expect(program.getDiagnostics()).to.be.empty;
+            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
+
+            signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 27)));
+            expect(program.getDiagnostics()).to.be.empty;
+            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
+
+            signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 23)));
+            expect(program.getDiagnostics()).to.be.empty;
+            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
+        });
+
+        it('gets signature help for namespaced class function', async () => {
+            await program.addOrReplaceFile('source/main.bs', `
+                function main()
+                    person.sayHello("there")
+                end function
+                namespace player
+                    class Person
+                        function new()
+                        end function
+
+                        function sayHello(text)
+                        end function
+                    end class
+                end namespace
+            `);
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 40)));
+            expect(program.getDiagnostics()).to.be.empty;
+            expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
+
+            signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 30)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text)');
         });
 
         it('gets signature help for namespace function', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                person.sayHello("hey", "you")
-            end function
-
-            namespace person
-                function sayHello(text, text2)
+                function main()
+                    person.sayHello("hey", "you")
                 end function
-            end namespace
+
+                namespace person
+                    function sayHello(text, text2)
+                    end function
+                end namespace
             `);
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
 
         it('gets signature help for nested namespace function', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                person.roger.sayHello("hi", "there")
-            end function
-
-            namespace person.roger
-            ' comment 1
-            ' comment 2
-
-            'comment 3
-            'comment 4
-                function sayHello(text, text2)
+                function main()
+                    person.roger.sayHello("hi", "there")
                 end function
-            end namespace
+
+                namespace person.roger
+                ' comment 1
+                ' comment 2
+
+                'comment 3
+                'comment 4
+                    function sayHello(text, text2)
+                    end function
+                end namespace
             `);
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 41)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 41)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
 
         it('gets signature help for callfunc method', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                myNode@.sayHello(arg1)
-            end function
+                function main()
+                    myNode@.sayHello(arg1)
+                end function
             `);
             await program.addOrReplaceFile('components/MyNode.bs', `
                 function sayHello(text, text2)
                 end function
             `);
-            await program.addOrReplaceFile('components/MyNode.xml', `
-                <?xml version="1.0" encoding="utf-8" ?>
+            await program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+                trim`<?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
-                    <script type="text/brighterscript" uri="pkg:/components/MyNode.bs" />
+                    <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
                     <interface>
                         <function name="sayHello"/>
                     </interface>
                 </component>`);
             await program.validate();
 
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
             expect(program.getDiagnostics()).to.be.empty;
-            //note - callfunc completions and signatures are not yet correctly identifying methods that are exposed in an interace - waiting on the new xml branch for that
             expect(signatureHelp[0].signature.label).to.equal('function sayHello(text, text2)');
         });
 
         it('does not get signature help for callfunc method, referenced by dot', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                myNode.sayHello(arg1)
-            end function
+                function main()
+                    myNode.sayHello(arg1)
+                end function
             `);
             await program.addOrReplaceFile('components/MyNode.bs', `
                 function sayHello(text, text2)
                 end function
             `);
-            await program.addOrReplaceFile('components/MyNode.xml', `
-                <?xml version="1.0" encoding="utf-8" ?>
+            await program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+                trim`<?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
-                    <script type="text/brighterscript" uri="pkg:/components/MyNode.bs" />
+                    <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
                     <interface>
                         <function name="sayHello"/>
                     </interface>
                 </component>`);
             await program.validate();
 
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
             expect(program.getDiagnostics()).to.be.empty;
             //note - callfunc completions and signatures are not yet correctly identifying methods that are exposed in an interace - waiting on the new xml branch for that
             expect(signatureHelp).to.be.empty;
@@ -1858,71 +1857,71 @@ describe('Program', () => {
 
         it('gets signature help for constructor with args', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                p = new Person(arg1, arg2)
-            end function
-
-            class Person
-                function new(arg1, arg2)
+                function main()
+                    p = new Person(arg1, arg2)
                 end function
-            end class
+
+                class Person
+                    function new(arg1, arg2)
+                    end function
+                end class
             `);
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('Person(arg1, arg2)');
         });
 
         it('gets signature help for constructor with args, defined in super class', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                p = new Roger(arg1, arg2)
-            end function
-
-            class Person
-                function new(arg1, arg2)
+                function main()
+                    p = new Roger(arg1, arg2)
                 end function
-            end class
-            class Roger extends Person
-            end class
+
+                class Person
+                    function new(arg1, arg2)
+                    end function
+                end class
+                class Roger extends Person
+                end class
             `);
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('Roger(arg1, arg2)');
         });
 
         it('identifies arg index', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                p = new Person(arg1, arg2)
-            end function
-
-            class Person
-                function new(arg1, arg2)
+                function main()
+                    p = new Person(arg1, arg2)
                 end function
-            end class
+
+                class Person
+                    function new(arg1, arg2)
+                    end function
+                end class
             `);
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 34)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].index).to.equal(0);
 
-            signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 40)));
+            signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 40)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].index).to.equal(1);
         });
 
         it('gets signature help for namespaced constructor with args', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                p = new people.coders.Person(arg1, arg2)
-            end function
-            namespace people.coders
-                class Person
-                    function new(arg1, arg2)
-                    end function
-                end class
-            end namespace
+                function main()
+                    p = new people.coders.Person(arg1, arg2)
+                end function
+                namespace people.coders
+                    class Person
+                        function new(arg1, arg2)
+                        end function
+                    end class
+                end namespace
                     `);
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 47)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 47)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('people.coders.Person(arg1, arg2)');
             expect(signatureHelp[0].index).to.equal(0);
@@ -1930,17 +1929,17 @@ describe('Program', () => {
 
         it('gets signature help for regular method call', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                test(arg1, a2)
-            end function
-            function test(arg1, arg2)
-            end function
+                function main()
+                    test(arg1, a2)
+                end function
+                function test(arg1, arg2)
+                end function
             `);
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 23)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 27)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function test(arg1, arg2)');
             expect(signatureHelp[0].index).to.equal(0);
-            signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 28)));
+            signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 32)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function test(arg1, arg2)');
             expect(signatureHelp[0].index).to.equal(1);
@@ -1948,96 +1947,109 @@ describe('Program', () => {
 
         it('gets signature help for dotted method call, with method in in-scope class', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                p.test(arg1)
-            end function
-            class Person
-                function new(arg1, arg2)
+                function main()
+                    p.test(arg1)
                 end function
-                function test(arg)
-                end function
-            end class
+                class Person
+                    function new(arg1, arg2)
+                    end function
+                    function test(arg)
+                    end function
+                end class
             `);
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 25)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 25)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
         });
 
         it('gets signature help for namespaced method call', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                Person.test(arg1)
-            end function
-            namespace Person
-                function test(arg)
+                function main()
+                    Person.test(arg1)
                 end function
-            end namespace
+                namespace Person
+                    function test(arg)
+                    end function
+                end namespace
             `);
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 31)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 31)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
         });
 
         it('gets signature help for namespaced method call', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                Person.roger.test(arg1)
-            end function
-            namespace Person.roger
-                function test(arg)
+                function main()
+                    Person.roger.test(arg1)
                 end function
-            end namespace
+                namespace Person.roger
+                    function test(arg)
+                    end function
+                end namespace
             `);
-            let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 38)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 38)));
             expect(program.getDiagnostics()).to.be.empty;
             expect(signatureHelp[0].signature.label).to.equal('function test(arg)');
         });
 
         it('gets signature help for regular method call on various index points', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                test(a1, a2, a3)
-            end function
-            function test(arg1, arg2, arg3)
-            end function
+                function main()
+                    test(a1, a2, a3)
+                end function
+                function test(arg1, arg2, arg3)
+                end function
             `);
-            for (let col = 16; col < 23; col++) {
-                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+            for (let col = 21; col < 27; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
             }
-            for (let col = 23; col < 27; col++) {
-                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+            for (let col = 27; col < 31; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
             }
-            for (let col = 27; col < 31; col++) {
-                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+            for (let col = 31; col < 35; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
             }
         });
 
         it('gets signature help for callfunc method call on various index points', async () => {
-            await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                thing@.test(a1, a2, a3)
-            end function
-            function test(arg1, arg2, arg3)
-            end function
+            await program.addOrReplaceFile('components/MyNode.bs', `
+                function test(arg1, arg2, arg3)
+                end function
             `);
-            for (let col = 25; col < 30; col++) {
-                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+            await program.addOrReplaceFile('source/main.bs', `
+                function main()
+                    thing@.test(a1, a2, a3)
+                end function
+            `);
+
+            await program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+                trim`<?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
+                    <interface>
+                        <function name="test"/>
+                    </interface>
+                </component>`);
+            await program.validate();
+
+            for (let col = 29; col < 34; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
             }
-            for (let col = 30; col < 34; col++) {
-                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+            for (let col = 34; col < 38; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
             }
-            for (let col = 34; col < 37; col++) {
-                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+            for (let col = 38; col < 41; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
             }
@@ -2045,26 +2057,26 @@ describe('Program', () => {
 
         it('gets signature help for constructor method call on various index points', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                a = new Person(a1, a2, a3)
-            end function
-            class Person
-                function new(arg1, arg2, arg3)
+                function main()
+                    a = new Person(a1, a2, a3)
                 end function
-            end class
+                class Person
+                    function new(arg1, arg2, arg3)
+                    end function
+                end class
             `);
-            for (let col = 25; col < 33; col++) {
-                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+            for (let col = 29; col < 37; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
             }
-            for (let col = 33; col < 37; col++) {
-                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+            for (let col = 37; col < 41; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
             }
-            for (let col = 38; col < 41; col++) {
-                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+            for (let col = 41; col < 45; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
             }
@@ -2072,24 +2084,38 @@ describe('Program', () => {
 
         it('gets signature help for partially typed line', async () => {
             await program.addOrReplaceFile('source/main.bs', `
-            function main()
-                thing@.test(a1, a2,
-            end function
-            function test(arg1, arg2, arg3)
-            end function
-            `);
-            for (let col = 25; col < 29; col++) {
-                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                function main()
+                    thing@.test(a1, a2,
+                end function
+                function test(arg1, arg2, arg3)
+                end function
+                `);
+            await program.addOrReplaceFile('components/MyNode.bs', `
+                function test(arg1, arg2, arg3)
+                end function
+                `);
+            await program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+                trim`<?xml version="1.0" encoding="utf-8" ?>
+            <component name="Component1" extends="Scene">
+                <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
+                <interface>
+                    <function name="test"/>
+                </interface>
+            </component>`);
+            await program.validate();
+
+            for (let col = 28; col < 34; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
             }
-            for (let col = 31; col < 34; col++) {
-                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+            for (let col = 35; col < 38; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(1);
             }
-            for (let col = 34; col < 38; col++) {
-                let signatureHelp = (await program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+            for (let col = 38; col < 42; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
             }

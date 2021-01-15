@@ -1420,8 +1420,7 @@ export class BrsFile {
         return results;
     }
 
-    public async getHover(position: Position): Promise<Hover> {
-        await this.isReady();
+    public getHover(position: Position): Hover {
         //get the token at the position
         let token = this.getTokenAt(position);
 
@@ -1605,8 +1604,7 @@ export class BrsFile {
         return sigHelp;
     }
 
-    public async getReferences(position: Position) {
-        await this.isReady();
+    public getReferences(position: Position) {
 
         const callSiteToken = this.getTokenAt(position);
 
