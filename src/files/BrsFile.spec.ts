@@ -16,7 +16,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { loadPlugins, standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { trim } from '../testHelpers.spec';
+import { trim, trimMap } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { LazyType } from '../types/LazyType';
 
@@ -31,7 +31,7 @@ describe('BrsFile', () => {
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
-        program = new Program({ rootDir: rootDir });
+        program = new Program({ rootDir: rootDir, sourceMap: true });
         file = new BrsFile(srcPath, destPath, program);
     });
     afterEach(() => {
@@ -94,7 +94,7 @@ describe('BrsFile', () => {
     describe('getCompletions', () => {
         it('waits for the file to be processed before collecting completions', async () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile('source/main.brs', `
+            await program.addOrReplaceFile('source/main.brs', `
                 sub Main()
                     print "hello"
                     Say
@@ -112,7 +112,7 @@ describe('BrsFile', () => {
 
         it('always includes `m`', async () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -125,7 +125,7 @@ describe('BrsFile', () => {
 
         it('includes all keywordsm`', async () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -150,7 +150,7 @@ describe('BrsFile', () => {
 
         it('does not provide completions within a comment', async () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     'some comment
                 end sub
@@ -163,7 +163,7 @@ describe('BrsFile', () => {
 
         it('does not provide duplicate entries for variables', async () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     name = "bob"
                     age = 12
@@ -181,7 +181,7 @@ describe('BrsFile', () => {
 
         it('does not include `as` and `string` text options when used in function params', async () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
 
                 end sub
@@ -194,7 +194,7 @@ describe('BrsFile', () => {
 
         it('does not provide intellisense results when inside a comment', async () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                     'this is a comment
                 end sub
@@ -276,7 +276,18 @@ describe('BrsFile', () => {
                 expect(program.getDiagnostics()[0]?.message).to.not.exist;
             });
 
-            it('adds diagnostics for unknown diagnostic codes', async () => {
+            it('ignores non-numeric codes', async () => {
+                let file = await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                    sub Main()
+                        'bs:disable-next-line: LINT9999
+                        name = "bob
+                    end sub
+                `);
+                expect(file.commentFlags[0]).to.not.exist;
+                expect(program.getDiagnostics()[0]?.message).to.exist;
+            });
+
+            it('adds diagnostics for unknown numeric diagnostic codes', async () => {
                 await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         print "hi" 'bs:disable-line: 123456 999999   aaaab
@@ -285,15 +296,12 @@ describe('BrsFile', () => {
 
                 await program.validate();
 
-                expect(program.getDiagnostics()).to.be.lengthOf(3);
+                expect(program.getDiagnostics()).to.be.lengthOf(2);
                 expect(program.getDiagnostics()[0]).to.deep.include({
                     range: Range.create(2, 53, 2, 59)
                 } as BsDiagnostic);
                 expect(program.getDiagnostics()[1]).to.deep.include({
                     range: Range.create(2, 60, 2, 66)
-                } as BsDiagnostic);
-                expect(program.getDiagnostics()[2]).to.deep.include({
-                    range: Range.create(2, 69, 2, 74)
                 } as BsDiagnostic);
             });
 
@@ -1380,12 +1388,12 @@ describe('BrsFile', () => {
             `);
 
             //hover over the `name = 1` line
-            let hover = await file.getHover(Position.create(2, 24));
+            let hover = file.getHover(Position.create(2, 24));
             expect(hover).to.exist;
             expect(hover.range).to.eql(Range.create(2, 20, 2, 24));
 
             //hover over the `name` parameter declaration
-            hover = await file.getHover(Position.create(1, 34));
+            hover = file.getHover(Position.create(1, 34));
             expect(hover).to.exist;
             expect(hover.range).to.eql(Range.create(1, 32, 1, 36));
         });
@@ -1399,9 +1407,9 @@ describe('BrsFile', () => {
                 end sub
             `);
             //hover over the `as`
-            expect(await file.getHover(Position.create(1, 31))).not.to.exist;
+            expect(file.getHover(Position.create(1, 31))).not.to.exist;
             //hover over the `string`
-            expect(await file.getHover(Position.create(1, 36))).not.to.exist;
+            expect(file.getHover(Position.create(1, 36))).not.to.exist;
         });
 
         it('finds declared function', async () => {
@@ -1413,7 +1421,7 @@ describe('BrsFile', () => {
                 end function
             `);
 
-            let hover = await file.getHover(Position.create(1, 28));
+            let hover = file.getHover(Position.create(1, 28));
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(1, 25, 1, 29));
@@ -1430,7 +1438,7 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            let hover = await file.getHover(Position.create(5, 24));
+            let hover = file.getHover(Position.create(5, 24));
 
             expect(hover.range).to.eql(Range.create(5, 20, 5, 29));
             expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
@@ -1447,7 +1455,7 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            let hover = await file.getHover(Position.create(2, 25));
+            let hover = file.getHover(Position.create(2, 25));
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
             expect(hover.contents).to.equal('sub sayMyName() as void');
@@ -1471,7 +1479,7 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            let hover = await mainFile.getHover(Position.create(2, 25));
+            let hover = mainFile.getHover(Position.create(2, 25));
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
@@ -2043,6 +2051,25 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('simple mapped files include a reference to the source map', async () => {
+            let file = await program.addOrReplaceFile('source/logger.brs', trim`
+                sub logInfo()
+                end sub
+            `);
+            file.needsTranspiled = false;
+            const { code } = file.transpile();
+            expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
+        });
+
+        it('AST generated files include a reference to the source map', async () => {
+            let file = await program.addOrReplaceFile('source/logger.brs', trim`
+                sub logInfo()
+                end sub
+            `);
+            file.needsTranspiled = true;
+            const { code } = file.transpile();
+            expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
+        });
     });
 
     describe('callfunc operator', () => {
@@ -2580,7 +2607,7 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
 
             }
         }
-        expect(sources[0]).to.equal(sources[1]);
+        expect(trimMap(sources[0])).to.equal(sources[1]);
         return transpiled;
     };
 }

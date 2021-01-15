@@ -963,8 +963,7 @@ export class LanguageServer {
         for (const workspace of this.getWorkspaces()) {
             const file = workspace.builder.program.getFileByPathAbsolute(pathAbsolute);
             if (isBrsFile(file)) {
-                const symbols = await file.getDocumentSymbols();
-                return symbols;
+                return file.getDocumentSymbols();
             }
         }
     }

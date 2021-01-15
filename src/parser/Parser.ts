@@ -115,7 +115,7 @@ export class Parser {
      * References for significant statements/expressions in the parser.
      * These are initially extracted during parse-time to improve performance, but will also be dynamically regenerated if need be.
      *
-     * If a plugin modifies the AST, then the plugin should call Parser#invalidateReferences() to force this list to refresh
+     * If a plugin modifies the AST, then the plugin should call Parser#invalidateReferences() to force this object to refresh
      */
     public get references() {
         //build the references object if it's missing.
@@ -2378,16 +2378,16 @@ export class Parser {
         return this.previous();
     }
 
-    private checkEndOfStatement() {
+    private checkEndOfStatement(): boolean {
         const nextKind = this.peek().kind;
         return [TokenKind.Colon, TokenKind.Newline, TokenKind.Comment, TokenKind.Eof].includes(nextKind);
     }
 
-    private checkPrevious(tokenKind: TokenKind) {
-        return this.previous().kind === tokenKind;
+    private checkPrevious(tokenKind: TokenKind): boolean {
+        return this.previous()?.kind === tokenKind;
     }
 
-    private check(tokenKind: TokenKind) {
+    private check(tokenKind: TokenKind): boolean {
         const nextKind = this.peek().kind;
         if (nextKind === TokenKind.Eof) {
             return false;
@@ -2395,7 +2395,7 @@ export class Parser {
         return nextKind === tokenKind;
     }
 
-    private checkAny(...tokenKinds: TokenKind[]) {
+    private checkAny(...tokenKinds: TokenKind[]): boolean {
         const nextKind = this.peek().kind;
         if (nextKind === TokenKind.Eof) {
             return false;
@@ -2403,14 +2403,14 @@ export class Parser {
         return tokenKinds.includes(nextKind);
     }
 
-    private checkNext(tokenKind: TokenKind) {
+    private checkNext(tokenKind: TokenKind): boolean {
         if (this.isAtEnd()) {
             return false;
         }
         return this.peekNext().kind === tokenKind;
     }
 
-    private checkAnyNext(...tokenKinds: TokenKind[]) {
+    private checkAnyNext(...tokenKinds: TokenKind[]): boolean {
         if (this.isAtEnd()) {
             return false;
         }
@@ -2418,22 +2418,22 @@ export class Parser {
         return tokenKinds.includes(nextKind);
     }
 
-    private isAtEnd() {
+    private isAtEnd(): boolean {
         return this.peek().kind === TokenKind.Eof;
     }
 
-    private peekNext() {
+    private peekNext(): Token {
         if (this.isAtEnd()) {
             return this.peek();
         }
         return this.tokens[this.current + 1];
     }
 
-    private peek() {
+    private peek(): Token {
         return this.tokens[this.current];
     }
 
-    private previous() {
+    private previous(): Token {
         return this.tokens[this.current - 1];
     }
 

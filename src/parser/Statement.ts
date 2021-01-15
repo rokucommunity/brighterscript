@@ -736,7 +736,8 @@ export class ForStatement extends Statement {
         public increment?: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.forToken.range.start, this.endForToken.range.end);
+        const lastRange = this.endForToken?.range ?? body.range;
+        this.range = util.createRangeFromPositions(this.forToken.range.start, lastRange.end);
     }
 
     public readonly range: Range;
@@ -867,7 +868,8 @@ export class WhileStatement extends Statement {
         readonly body: Block
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.while.range.start, this.tokens.endWhile.range.end);
+        const lastRange = this.tokens.endWhile?.range ?? body.range;
+        this.range = util.createRangeFromPositions(this.tokens.while.range.start, lastRange.end);
     }
 
     public readonly range: Range;
