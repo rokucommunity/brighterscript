@@ -88,7 +88,6 @@ import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { BscType } from '../types/BscType';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
-import { VoidType } from '../types/VoidType';
 import { LazyType } from '../types/LazyType';
 
 export class Parser {
@@ -2518,16 +2517,9 @@ export class Parser {
      */
     private findReferences() {
         this._references = createReferences();
-        let currentFunctionExpression: FunctionExpression;
+
+        //gather up all the top-level statements
         this.ast.walk(createVisitor({
-            AssignmentStatement: s => {
-                this._references.assignmentStatements.push(s);
-                this._references.localVars.get(currentFunctionExpression)?.push({
-                    nameToken: s.name,
-                    lowerName: s.name.text.toLowerCase(),
-                    type: this.getBscTypeFromAssignment(s, currentFunctionExpression)
-                });
-            },
             ClassStatement: s => {
                 this._references.classStatements.push(s);
             },
@@ -2536,26 +2528,33 @@ export class Parser {
             },
             FunctionStatement: s => {
                 this._references.functionStatements.push(s);
+                //add the initial set of function expressions for function statements
+                this._references.functionExpressions.push(s.func);
             },
             ImportStatement: s => {
                 this._references.importStatements.push(s);
             },
             LibraryStatement: s => {
                 this._references.libraryStatements.push(s);
+            }
+        }), {
+            walkMode: WalkMode.visitStatements
+        });
+
+        let func: FunctionExpression;
+        let visitor = createVisitor({
+            AssignmentStatement: s => {
+                this._references.assignmentStatements.push(s);
+                this._references.localVars.get(func)?.push({
+                    nameToken: s.name,
+                    lowerName: s.name.text.toLowerCase(),
+                    type: this.getBscTypeFromAssignment(s, func)
+                });
             },
             FunctionExpression: (expression, parent) => {
                 if (!isClassMethodStatement(parent)) {
                     this._references.functionExpressions.push(expression);
                 }
-                currentFunctionExpression = expression;
-                const parameterVars = expression.parameters.map(x => {
-                    return {
-                        nameToken: x.name,
-                        lowerName: x.name.text.toLowerCase(),
-                        type: x.type
-                    };
-                });
-                this._references.localVars.set(expression, parameterVars);
             },
             NewExpression: e => {
                 this._references.newExpressions.push(e);
@@ -2570,16 +2569,32 @@ export class Parser {
                 this.addPropertyHints(e.name);
             },
             ForEachStatement: s => {
-                this._references.localVars.get(currentFunctionExpression)?.push({
+                this._references.localVars.get(func)?.push({
                     nameToken: s.item,
                     lowerName: s.item.text.toLowerCase(),
                     //TODO infer type from `target`
                     type: new DynamicType()
                 });
             }
-        }), {
-            walkMode: WalkMode.visitAllRecursive
         });
+
+        //walk all function expressions (we'll add new ones as we move along too)
+        for (let i = 0; i < this._references.functionExpressions.length; i++) {
+            func = this._references.functionExpressions[i];
+
+            //create the local vars array for this function expression and initialize it with its defined parameters
+            this._references.localVars.set(func, func.parameters.map(x => {
+                return {
+                    nameToken: x.name,
+                    lowerName: x.name.text.toLowerCase(),
+                    type: x.type
+                };
+            }));
+            //walk this function expression
+            func.body.walk(visitor, {
+                walkMode: WalkMode.visitAll
+            });
+        }
     }
 
     public dispose() {

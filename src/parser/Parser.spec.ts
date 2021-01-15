@@ -8,7 +8,7 @@ import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils';
 import { VoidType } from '../types/VoidType';
-import { FunctionType } from '../types/FunctionType';
+import type { FunctionType } from '../types/FunctionType';
 import { StringType } from '../types/StringType';
 import { CustomType } from '../types/CustomType';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
@@ -52,6 +52,32 @@ describe('parser', () => {
                 'isAlive',
                 'j',
                 'zombie'
+            ]);
+        });
+
+        it('assigns localVars to correct function expression bucket', () => {
+            const parser = Parser.parse(`
+                sub main()
+                    outerName = "bob"
+                    speak = sub()
+                        innerName = "innerBob"
+                    end sub
+                    age = 12
+                end sub
+            `);
+            parser.invalidateReferences();
+            expect(
+                parser.references.localVars.get(parser.references.functionExpressions[0]).map(x => x.nameToken.text)
+            ).to.eql([
+                'outerName',
+                'speak',
+                'age'
+            ]);
+
+            expect(
+                parser.references.localVars.get(parser.references.functionExpressions[1]).map(x => x.nameToken.text)
+            ).to.eql([
+                'innerName'
             ]);
         });
 
