@@ -38,8 +38,6 @@ import { standardizePath as s, util } from './util';
 import { Logger } from './Logger';
 import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
-import type { Token } from './lexer';
-import { Lexer } from './lexer';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { isBrsFile } from './astUtils/reflection';
 
@@ -545,14 +543,6 @@ export class LanguageServer {
             completion.commitCharacters = ['.'];
         }
 
-        // completions = [{
-        //     label: 'bronley',
-        //     textEdit: {
-        //         newText: 'bronley2',
-        //         range: util.createRange(position, position)
-        //     }
-        // }] as CompletionItem[];
-
         return completions;
     }
 
@@ -985,104 +975,24 @@ export class LanguageServer {
     private async onSignatureHelp(params: SignatureHelpParams) {
         await this.waitAllProgramFirstRuns();
 
-        const info = this.getIdentifierInfo(params);
-        if (!info) {
-            return;
-        }
-
-        const { tokens } = Lexer.scan(info.line);
-        const character = info.position.character;
-        let matchingToken: Token;
-        for (const token of tokens) {
-            if (character >= token.range.start.character && character <= token.range.end.character) {
-                matchingToken = token;
-                break;
-            }
-        }
-        if (!matchingToken) {
-            return;
-        }
-
-        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+        const filepath = util.uriToPath(params.textDocument.uri);
+        await this.keyedThrottler.onIdleOnce(filepath, true);
 
         const signatures = util.flatMap(
-            await Promise.all(this.getWorkspaces().map(workspace => {
-                return workspace.builder.program.getSignatureHelp(util.uriToPath(params.textDocument.uri), matchingToken.text);
-            })),
+            await Promise.all(this.getWorkspaces().map(workspace => workspace.builder.program.getSignatureHelp(filepath, params.position)
+            )),
             c => c
         );
 
         const activeSignature = signatures.length > 0 ? 0 : null;
-        const activeParameter = activeSignature >= 0 ? info.commaCount : null;
+        const activeParameter = activeSignature >= 0 ? signatures[activeSignature].index : null;
         let results: SignatureHelp = {
-            signatures: signatures,
+            signatures: signatures.map((s) => s.signature),
             activeSignature: activeSignature,
             activeParameter: activeParameter
         };
 
         return results;
-    }
-
-    private getIdentifierInfo(params: SignatureHelpParams|ReferenceParams) {
-        // Courtesy of George Cook :) He might call it whack but it works ¯\_(ツ)_/¯
-        //get the position of a symbol to our left
-        //1. get first bracket to our left, - then get the symbol before that..
-        //really crude crappy parser..
-        //TODO this is whack - it's not even LTR ugh..
-        const position = params.position;
-        const line = this.documents.get(params.textDocument.uri).getText(util.createRange(position.line, 0, position.line, position.character));
-
-        const bracketCounts = { normal: 0, square: 0, curly: 0 };
-        let commaCount = 0;
-        let index = position.character;
-        let isArgStartFound = false;
-        while (index >= 0) {
-            if (isArgStartFound) {
-                if (line.charAt(index) !== ' ') {
-                    break;
-                }
-            } else {
-                if (line.charAt(index) === ')') {
-                    bracketCounts.normal++;
-                }
-
-                if (line.charAt(index) === ']') {
-                    bracketCounts.square++;
-                }
-
-                if (line.charAt(index) === '}') {
-                    bracketCounts.curly++;
-                }
-
-                if (line.charAt(index) === ',' && bracketCounts.normal <= 0 && bracketCounts.curly <= 0 && bracketCounts.square <= 0) {
-                    commaCount++;
-                }
-
-                if (line.charAt(index) === '(') {
-                    if (bracketCounts.normal === 0) {
-                        isArgStartFound = true;
-                    } else {
-                        bracketCounts.normal--;
-                    }
-                }
-
-                if (line.charAt(index) === '[') {
-                    bracketCounts.square--;
-                }
-
-                if (line.charAt(index) === '{') {
-                    bracketCounts.curly--;
-                }
-            }
-            index--;
-        }
-        if (index > 0) {
-            return {
-                commaCount: commaCount,
-                position: util.createPosition(position.line, index),
-                line: line
-            };
-        }
     }
 
     private async onReferences(params: ReferenceParams) {
@@ -1097,7 +1007,7 @@ export class LanguageServer {
             })),
             c => c
         );
-        return results;
+        return results.filter((r) => r);
     }
 
     private diagnosticCollection = new DiagnosticCollection();

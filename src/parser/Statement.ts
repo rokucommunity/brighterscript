@@ -1267,11 +1267,11 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 //look for a class within the statement's namespace first
                 stmt = state.file.getClassByName(
                     util.getFullyQualifiedClassName(parentClassName, containingNamespaceName)
-                );
+                )?.item;
 
                 //look for a global class with this name (IF we were in a namespace to begin with)
                 if (!stmt && containingNamespaceName) {
-                    stmt = state.file.getClassByName(parentClassName);
+                    stmt = state.file.getClassByName(parentClassName)?.item;
                 }
                 myIndex++;
             } else {
@@ -1298,7 +1298,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
                     this.namespaceName?.getName(ParseMode.BrighterScript)
                 );
-                stmt = state.file.getClassByName(fullyQualifiedClassName);
+                stmt = state.file.getClassByName(fullyQualifiedClassName)?.item;
                 ancestors.push(stmt);
             } else {
                 break;

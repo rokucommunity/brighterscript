@@ -1,22 +1,25 @@
 import { expect } from 'chai';
 import * as path from 'path';
 import util, { standardizePath as s } from './util';
-import { Range } from 'vscode-languageserver';
+import { Position, Range } from 'vscode-languageserver';
 import { Lexer } from './lexer';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
-
+import { createSandbox } from 'sinon';
+const sinon = createSandbox();
 let tempDir = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tempDir}/rootDir`;
 let cwd = process.cwd();
 
 describe('util', () => {
     beforeEach(() => {
+        sinon.restore();
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
     });
 
     afterEach(() => {
+        sinon.restore();
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
     });
@@ -522,6 +525,36 @@ describe('util', () => {
         });
     });
 
+    describe('compareRangeToPosition', () => {
+        it('correctly compares positions to ranges with one line range line', () => {
+            let range = Range.create(1, 10, 1, 15);
+            expect(util.comparePositionToRange(Position.create(0, 13), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 1), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 9), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 10), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 13), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 15), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 16), range)).to.equal(1);
+            expect(util.comparePositionToRange(Position.create(2, 10), range)).to.equal(1);
+        });
+        it('correctly compares positions to ranges with multiline range', () => {
+            let range = Range.create(1, 10, 3, 15);
+            expect(util.comparePositionToRange(Position.create(0, 13), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 1), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 9), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 10), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 13), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 15), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(2, 0), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(2, 10), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(2, 13), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(3, 0), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(3, 10), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(3, 13), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(3, 16), range)).to.equal(1);
+            expect(util.comparePositionToRange(Position.create(4, 10), range)).to.equal(1);
+        });
+    });
     describe('getExtension', () => {
         it('handles edge cases', () => {
             expect(util.getExtension('main.bs')).to.eql('.bs');
@@ -530,6 +563,71 @@ describe('util', () => {
             expect(util.getExtension('main.d.bs')).to.eql('.d.bs');
             expect(util.getExtension('main.xml')).to.eql('.xml');
             expect(util.getExtension('main.component.xml')).to.eql('.xml');
+        });
+    });
+
+    describe('loadPlugins', () => {
+
+        let pluginPath: string;
+        let id = 1;
+
+        beforeEach(() => {
+            // `require` caches plugins, so  generate a unique plugin name for every test
+            pluginPath = `${tempDir}/plugin${id++}.js`;
+        });
+
+        it('shows warning when loading plugin with old "object" format', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = {
+                    name: 'AwesomePlugin'
+                };
+            `);
+            const stub = sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect(plugins[0].name).to.eql('AwesomePlugin');
+            expect(stub.callCount).to.equal(1);
+        });
+
+        it('shows warning when loading plugin with old "object" format and exports.default', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports.default = {
+                    name: 'AwesomePlugin'
+                };
+            `);
+            const stub = sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect(plugins[0].name).to.eql('AwesomePlugin');
+            expect(stub.callCount).to.equal(1);
+        });
+
+        it('loads plugin with factory pattern', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return {
+                        name: 'AwesomePlugin'
+                    };
+                };
+            `);
+            const stub = sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect(plugins[0].name).to.eql('AwesomePlugin');
+            //does not warn about factory pattern
+            expect(stub.callCount).to.equal(0);
+        });
+
+        it('loads plugin with factory pattern and `default`', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports.default = function() {
+                    return {
+                        name: 'AwesomePlugin'
+                    };
+                };
+            `);
+            const stub = sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect(plugins[0].name).to.eql('AwesomePlugin');
+            //does not warn about factory pattern
+            expect(stub.callCount).to.equal(0);
         });
     });
 });
