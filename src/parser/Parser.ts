@@ -392,8 +392,9 @@ export class Parser {
 
                 //methods (function/sub keyword OR identifier followed by opening paren)
                 if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
-                    let memberAnnotations = this.pendingAnnotations;
                     //cache annotations to this point, for when we later create the class member, because statements inside blocks can otherwise inherit these annotations
+                    let memberAnnotations = this.pendingAnnotations;
+                    this.pendingAnnotations = [];
                     let funcDeclaration = this.functionDeclaration(false, false);
 
                     //remove this function from the lists because it's not a callable
@@ -414,7 +415,6 @@ export class Parser {
                     );
 
                     methodStatement.annotations = memberAnnotations;
-                    this.pendingAnnotations = [];
 
                     //refer to this statement as parent of the expression
                     functionStatement.func.functionStatement = methodStatement;
