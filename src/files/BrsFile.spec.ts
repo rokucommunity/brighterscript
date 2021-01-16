@@ -2622,7 +2622,7 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
                     }
                 }
                 //trim trailing newlines
-                while (lines[lines.length - 1].length === 0) {
+                while (lines[lines.length - 1]?.length === 0) {
                     lines.splice(lines.length - 1);
                 }
                 sources[i] = lines.join('\n');

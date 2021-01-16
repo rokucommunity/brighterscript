@@ -1261,11 +1261,18 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                const fqParentClassName = util.getFullyQualifiedClassName(
-                    stmt.parentClassName.getName(ParseMode.BrighterScript),
-                    stmt.namespaceName?.getName(ParseMode.BrighterScript)
+                const parentClassName = stmt.parentClassName.getName(ParseMode.BrighterScript);
+                const containingNamespaceName = stmt.namespaceName?.getName(ParseMode.BrighterScript);
+
+                //look for a class within the statement's namespace first
+                stmt = state.file.getClassByName(
+                    util.getFullyQualifiedClassName(parentClassName, containingNamespaceName)
                 );
-                stmt = state.file.getClassByName(fqParentClassName);
+
+                //look for a global class with this name (IF we were in a namespace to begin with)
+                if (!stmt && containingNamespaceName) {
+                    stmt = state.file.getClassByName(parentClassName);
+                }
                 myIndex++;
             } else {
                 break;

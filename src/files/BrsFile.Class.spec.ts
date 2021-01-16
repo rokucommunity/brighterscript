@@ -989,4 +989,32 @@ describe('BrsFile BrighterScript classes', () => {
             end function
         `, 'trim', 'source/App.ClassC.bs');
     });
+
+    it.only('computes correct super index for namespaced child class and global parent class', async () => {
+        await program.addOrReplaceFile('source/ClassA.bs', `
+            class ClassA
+            end class
+        `);
+
+        await testTranspile(`
+            namespace App
+                class ClassB extends ClassA
+                end class
+            end namespace
+        `, `
+            function __App_ClassB_builder()
+                instance = __ClassA_builder()
+                instance.super0_new = instance.new
+                instance.new = sub()
+                    m.super0_new()
+                end sub
+                return instance
+            end function
+            function App_ClassB()
+                instance = __App_ClassB_builder()
+                instance.new()
+                return instance
+            end function
+        `, 'trim', 'source/App.ClassB.bs');
+    });
 });
