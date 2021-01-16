@@ -953,7 +953,7 @@ export class NewExpression extends Expression {
         const cls = state.file.getClassByName(
             this.className.getName(ParseMode.BrighterScript),
             this.namespaceName?.getName(ParseMode.BrighterScript)
-        );
+        )?.item;
         //new statements within a namespace block can omit the leading namespace if the class resides in that same namespace.
         //So we need to figure out if this is a namespace-omitted class, or if this class exists without a namespace.
         return this.call.transpile(state, cls?.getName(ParseMode.BrightScript));

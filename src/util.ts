@@ -471,16 +471,17 @@ export class Util {
      * @param position
      */
     public rangeContains(range: Range, position: Position) {
-        if (position.line < range.start.line || position.line > range.end.line) {
-            return false;
+        return this.comparePositionToRange(position, range) === 0;
+    }
+
+    public comparePositionToRange(position: Position, range: Range) {
+        if (position.line < range.start.line || (position.line === range.start.line && position.character < range.start.character)) {
+            return -1;
         }
-        if (position.line === range.start.line && position.character < range.start.character) {
-            return false;
+        if (position.line > range.end.line || (position.line === range.end.line && position.character > range.end.character)) {
+            return 1;
         }
-        if (position.line === range.end.line && position.character > range.end.character) {
-            return false;
-        }
-        return true;
+        return 0;
     }
 
     /**
@@ -880,7 +881,7 @@ export class Util {
      * If no namespace is provided, return the `className` unchanged.
      */
     public getFullyQualifiedClassName(className: string, namespaceName?: string) {
-        if (className.includes('.') === false && namespaceName) {
+        if (className?.includes('.') === false && namespaceName) {
             return `${namespaceName}.${className}`;
         } else {
             return className;
