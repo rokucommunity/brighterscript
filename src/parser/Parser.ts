@@ -348,6 +348,7 @@ export class Parser {
     private classDeclaration(): ClassStatement {
         this.warnIfNotBrighterScriptMode('class declarations');
         let classAnnotations = this.pendingAnnotations;
+        //reset annotations here, so we don't carry them onto class members
         this.pendingAnnotations = [];
 
         let classKeyword = this.consume(
@@ -389,9 +390,12 @@ export class Parser {
                     overrideKeyword = this.advance();
                 }
 
-                let fieldAnnotations = this.pendingAnnotations;
+                //cache annotations to this point, for when we later create the class member, because statements inside blocks can otherwise inherit these annotations
+                let memberAnnotations = this.pendingAnnotations;
+
                 //methods (function/sub keyword OR identifier followed by opening paren)
                 if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
+                    //clear out pending annotations; only if we find a block
                     this.pendingAnnotations = [];
                     let funcDeclaration = this.functionDeclaration(false, false);
 
@@ -411,7 +415,7 @@ export class Parser {
                         funcDeclaration.func,
                         overrideKeyword
                     );
-                    methodStatement.annotations = fieldAnnotations;
+                    methodStatement.annotations = memberAnnotations;
                     //refer to this statement as parent of the expression
                     functionStatement.func.functionStatement = methodStatement;
 
@@ -421,7 +425,7 @@ export class Parser {
                 } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
 
                     const fieldStatement = this.classFieldDeclaration(accessModifier);
-                    fieldStatement.annotations = fieldAnnotations;
+                    fieldStatement.annotations = memberAnnotations;
                     body.push(fieldStatement);
 
                     //class fields cannot be overridden
