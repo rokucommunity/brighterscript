@@ -23,7 +23,7 @@ import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { DottedGetExpression, VariableExpression } from './parser/Expression';
-import { LogLevel } from './Logger';
+import { Logger, LogLevel } from './Logger';
 import type { Token } from './lexer';
 import { TokenKind } from './lexer';
 import type { CompilerPlugin } from '.';
@@ -1060,6 +1060,7 @@ export class Util {
      * Load and return the list of plugins
      */
     public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
+        const logger = new Logger();
         return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
             if (typeof pathOrModule === 'string') {
                 try {
@@ -1070,7 +1071,7 @@ export class Util {
 
                     // legacy plugins returned a plugin object. If we find that, then add a warning
                     if (typeof theExport === 'object') {
-                        console.warn(`Plugin ${pathOrModule} was loaded as a singleton. Please contact the plugin author to update to the factory pattern`);
+                        logger.warn(`Plugin "${pathOrModule}" was loaded as a singleton. Please contact the plugin author to update to the factory pattern.\n`);
                         plugin = theExport;
 
                         // the official plugin format is a factory function that returns a new instance of a plugin.
