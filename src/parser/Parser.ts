@@ -395,8 +395,6 @@ export class Parser {
 
                 //methods (function/sub keyword OR identifier followed by opening paren)
                 if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
-                    //clear out pending annotations; only if we find a block
-                    this.pendingAnnotations = [];
                     let funcDeclaration = this.functionDeclaration(false, false);
 
                     //remove this function from the lists because it's not a callable
@@ -415,7 +413,10 @@ export class Parser {
                         funcDeclaration.func,
                         overrideKeyword
                     );
+
                     methodStatement.annotations = memberAnnotations;
+                    this.pendingAnnotations = [];
+
                     //refer to this statement as parent of the expression
                     functionStatement.func.functionStatement = methodStatement;
 
