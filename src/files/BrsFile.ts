@@ -784,17 +784,6 @@ export class BrsFile {
             }
         }
 
-        if (this.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
-            // is next to a @. callfunc invocation
-            for (const scope of this.program.getScopes()) {
-                for (const callable of scope.getAllCallables()) {
-                    result.push(scope.createCompletionFromCallable(callable));
-                }
-            }
-            //no other result is possible in this case
-            return result;
-
-        }
         const classNameCompletions = this.getGlobalClassStatementCompletions(currentToken, parseMode);
         const newToken = this.getTokenBefore(currentToken, TokenKind.New);
         if (newToken) {
@@ -1069,11 +1058,13 @@ export class BrsFile {
         return this.pathAbsolute.toLowerCase().endsWith('.bs') ? ParseMode.BrighterScript : ParseMode.BrightScript;
     }
 
-    private isPositionNextToTokenKind(position: Position, tokenKind: TokenKind) {
+    public isPositionNextToTokenKind(position: Position, tokenKind: TokenKind) {
         let closestToken = this.getClosestToken(position);
         let previousToken = this.getPreviousToken(closestToken);
         //next to matched token
-        if (closestToken.kind === tokenKind) {
+        if (!closestToken || closestToken.kind === TokenKind.Eof) {
+            return false;
+        } else if (closestToken.kind === tokenKind) {
             return true;
         } else if (closestToken.kind === TokenKind.Newline || previousToken.kind === TokenKind.Newline) {
             return false;

@@ -6,15 +6,14 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
 import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement } from './parser';
+import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
 import { ParseMode } from './parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType } from './astUtils/reflection';
-import { createVisitor, WalkMode } from './astUtils';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 
 /**
@@ -902,6 +901,13 @@ export class Scope {
         };
     }
 
+    public createCompletionFromFunctionStatement(statement: FunctionStatement): CompletionItem {
+        return {
+            label: statement.getName(ParseMode.BrighterScript),
+            kind: CompletionItemKind.Function
+        };
+    }
+
     /**
      * Get the definition (where was this thing first defined) of the symbol under the position
      */
@@ -929,30 +935,16 @@ export class Scope {
                 continue;
             }
             filesSearched.add(file);
-
-            const statementHandler = (s: ClassMethodStatement) => {
-                if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
-                    results.set(s.name.text, {
-                        label: s.name.text,
-                        kind: CompletionItemKind.Method
-                    });
+            for (let cs of file.parser.references.classStatements) {
+                for (let s of [...cs.methods, ...cs.fields]) {
+                    if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
+                        results.set(s.name.text, {
+                            label: s.name.text,
+                            kind: isClassMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
+                        });
+                    }
                 }
-            };
-            const fieldStatementHandler = (s: ClassFieldStatement) => {
-                if (!results.has(s.name.text)) {
-                    results.set(s.name.text, {
-                        label: s.name.text,
-                        kind: CompletionItemKind.Field
-                    });
-                }
-            };
-            file.parser.ast.walk(createVisitor({
-                ClassMethodStatement: statementHandler,
-                ClassFieldStatement: fieldStatementHandler
-            }), {
-                walkMode: WalkMode.visitStatements
-            });
-
+            }
         }
         return results;
     }

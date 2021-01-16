@@ -21,7 +21,6 @@ import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope } from './astUtils/reflection';
-import { createVisitor, WalkMode } from './astUtils/visitors';
 import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
@@ -673,7 +672,7 @@ export class Program {
         let currentScope = scope;
         while (isXmlScope(currentScope)) {
             for (let name of currentScope.xmlFile.ast.component.api.functions.map((f) => f.name)) {
-                if (filterName && name === filterName) {
+                if (!filterName || name === filterName) {
                     funcNames.add(name);
                 }
             }
@@ -681,7 +680,7 @@ export class Program {
         }
 
         //look through all files in scope for matches
-        for (const file of scope.getAllFiles()) {
+        for (const file of scope.getOwnFiles()) {
             if (isXmlFile(file) || filesSearched.has(file)) {
                 continue;
             }
@@ -709,7 +708,21 @@ export class Program {
         if (!file) {
             return [];
         }
+        let result = [] as CompletionItem[];
 
+        if (isBrsFile(file) && file.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
+            // is next to a @. callfunc invocation - must be an interface method
+            for (const scope of this.getScopes().filter((s) => isXmlScope(s))) {
+                let fileLinks = this.getStatementsForXmlFile(scope as XmlScope);
+                for (let fileLink of fileLinks) {
+
+                    result.push(scope.createCompletionFromFunctionStatement(fileLink.item));
+                }
+            }
+            //no other result is possible in this case
+            return result;
+
+        }
         //find the scopes for this file
         let scopes = this.getScopesForFile(file);
 
@@ -724,7 +737,6 @@ export class Program {
             c => c
         );
 
-        let result = [] as CompletionItem[];
 
         //only keep completions common to every scope for this file
         let keyCounts = {} as Record<string, number>;

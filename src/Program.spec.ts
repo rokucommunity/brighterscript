@@ -20,7 +20,7 @@ let tmpPath = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tmpPath}/rootDir`;
 let stagingFolderPath = s`${tmpPath}/staging`;
 
-describe.only('Program', () => {
+describe('Program', () => {
     let program: Program;
     beforeEach(() => {
         fsExtra.ensureDirSync(tmpPath);
@@ -1173,6 +1173,119 @@ describe.only('Program', () => {
         expect(
             (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(8, 29))).map(x => x.label).sort()
         ).to.eql(['MyClassA', 'MyClassB', 'MyClassC']);
+    });
+
+    it('gets completions when using callfunc inovation', async () => {
+        await program.addOrReplaceFile('source/main.bs', `
+            function main()
+                myNode@.sayHello(arg1)
+            end function
+        `);
+        await program.addOrReplaceFile('components/MyNode.bs', `
+            function sayHello(text, text2)
+            end function
+        `);
+        await program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+            trim`<?xml version="1.0" encoding="utf-8" ?>
+            <component name="Component1" extends="Scene">
+                <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
+                <interface>
+                    <function name="sayHello"/>
+                </interface>
+            </component>`);
+        await program.validate();
+
+        expect(
+            (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
+        ).to.eql(['sayHello']);
+    });
+
+    it('gets completions for callfunc invocation with multiple nodes', async () => {
+        await program.addOrReplaceFile('source/main.bs', `
+            function main()
+                myNode@.sayHello(arg1)
+            end function
+        `);
+        await program.addOrReplaceFile('components/MyNode.bs', `
+            function sayHello(text, text2)
+            end function
+            function sayHello2(text, text2)
+            end function
+        `);
+        await program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+            trim`<?xml version="1.0" encoding="utf-8" ?>
+            <component name="Component1" extends="Scene">
+                <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
+                <interface>
+                    <function name="sayHello"/>
+                    <function name="sayHello2"/>
+                </interface>
+            </component>`);
+        await program.addOrReplaceFile('components/MyNode2.bs', `
+            function sayHello3(text, text2)
+            end function
+            function sayHello4(text, text2)
+            end function
+        `);
+        await program.addOrReplaceFile<XmlFile>('components/MyNode2.xml',
+            trim`<?xml version="1.0" encoding="utf-8" ?>
+            <component name="Component2" extends="Scene">
+                <script type="text/brightscript" uri="pkg:/components/MyNode2.bs" />
+                <interface>
+                    <function name="sayHello3"/>
+                    <function name="sayHello4"/>
+                </interface>
+            </component>`);
+        await program.validate();
+
+        expect(
+            (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
+        ).to.eql(['sayHello', 'sayHello2', 'sayHello3', 'sayHello4']);
+    });
+
+    it('gets completions for extended nodes with callfunc invocation - ensure overridden methods included', async () => {
+        await program.addOrReplaceFile('source/main.bs', `
+            function main()
+                myNode@.sayHello(arg1)
+            end function
+        `);
+        await program.addOrReplaceFile('components/MyNode.bs', `
+            function sayHello(text, text2)
+            end function
+            function sayHello2(text, text2)
+            end function
+        `);
+        await program.addOrReplaceFile<XmlFile>('components/MyNode.xml',
+            trim`<?xml version="1.0" encoding="utf-8" ?>
+            <component name="Component1" extends="Scene">
+                <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
+                <interface>
+                    <function name="sayHello"/>
+                    <function name="sayHello2"/>
+                </interface>
+            </component>`);
+        await program.addOrReplaceFile('components/MyNode2.bs', `
+            function sayHello3(text, text2)
+            end function
+            function sayHello2(text, text2)
+            end function
+            function sayHello4(text, text2)
+            end function
+        `);
+        await program.addOrReplaceFile<XmlFile>('components/MyNode2.xml',
+            trim`<?xml version="1.0" encoding="utf-8" ?>
+            <component name="Component2" extends="Component1">
+                <script type="text/brightscript" uri="pkg:/components/MyNode2.bs" />
+                <interface>
+                    <function name="sayHello3"/>
+                    <function name="sayHello4"/>
+                </interface>
+            </component>`);
+        await program.validate();
+
+        expect(
+            (await program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 30))).map(x => x.label).sort()
+        ).to.eql(['sayHello', 'sayHello2', 'sayHello2', 'sayHello3', 'sayHello4']);
     });
 
     describe('xml inheritance', () => {
