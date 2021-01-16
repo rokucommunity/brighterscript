@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
-import type { Program } from './Program';
+import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
 import { ParseMode } from './parser';
@@ -13,7 +13,7 @@ import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 
 /**
@@ -60,8 +60,18 @@ export class Scope {
      * @param namespaceName - teh current namespace name
      */
     public getClass(className: string, namespaceName?: string): ClassStatement {
+        return this.getClassFileLink(className, namespaceName)?.item;
+    }
+
+    /**
+     * Get a class and its containing file by the class name
+     * @param className - The name of the class (including namespace if possible)
+     * @param callsiteNamespace - the name of the namespace where the call site resides (this is NOT the known namespace of the class).
+     *                            This is used to help resolve non-namespaced class names that reside in the same namespac as the call site.
+     */
+    public getClassFileLink(className: string, callsiteNamespace?: string): FileLink<ClassStatement> {
         const classMap = this.getClassMap();
-        let lowerCaseFullName = util.getFullyQualifiedClassName(className, namespaceName).toLowerCase();
+        let lowerCaseFullName = util.getFullyQualifiedClassName(className, callsiteNamespace)?.toLowerCase();
         let cls = classMap.get(lowerCaseFullName);
         //if we couldn't find the class by its full namespaced name, look for a global class with that name
         if (!cls) {
@@ -83,15 +93,17 @@ export class Scope {
      * A dictionary of all classes in this scope. This includes namespaced classes always with their full name.
      * The key is stored in lower case
      */
-    private getClassMap() {
+    public getClassMap(): Map<string, FileLink<ClassStatement>> {
         return this.cache.getOrAdd('classMap', () => {
-            const map = new Map<string, ClassStatement>();
+            const map = new Map<string, FileLink<ClassStatement>>();
             this.enumerateBrsFiles((file) => {
-                for (let cls of file.parser.references.classStatements) {
-                    const lowerClassName = cls.getName(ParseMode.BrighterScript)?.toLowerCase();
-                    //only track classes with a defined name (i.e. exclude nameless malformed classes)
-                    if (lowerClassName) {
-                        map.set(lowerClassName, cls);
+                if (isBrsFile(file)) {
+                    for (let cls of file.parser.references.classStatements) {
+                        const lowerClassName = cls.getName(ParseMode.BrighterScript)?.toLowerCase();
+                        //only track classes with a defined name (i.e. exclude nameless malformed classes)
+                        if (lowerClassName) {
+                            map.set(lowerClassName, { item: cls, file: file });
+                        }
                     }
                 }
             });
@@ -669,7 +681,7 @@ export class Scope {
                         //has the same name as an in-scope class
                     } else if (classMap.has(lowerVarName)) {
                         this.diagnostics.push({
-                            ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(lowerVarName).getName(ParseMode.BrighterScript)),
+                            ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(lowerVarName)?.item.getName(ParseMode.BrighterScript)),
                             range: varDeclaration.nameRange,
                             file: file
                         });
@@ -875,14 +887,25 @@ export class Scope {
         }
 
         for (let callableContainer of callables) {
-            completions.push({
-                label: callableContainer.callable.getName(parseMode),
-                kind: CompletionItemKind.Function,
-                detail: callableContainer.callable.shortDescription,
-                documentation: callableContainer.callable.documentation ? { kind: 'markdown', value: callableContainer.callable.documentation } : undefined
-            });
+            completions.push(this.createCompletionFromCallable(callableContainer));
         }
         return completions;
+    }
+
+    public createCompletionFromCallable(callableContainer: CallableContainer): CompletionItem {
+        return {
+            label: callableContainer.callable.getName(ParseMode.BrighterScript),
+            kind: CompletionItemKind.Function,
+            detail: callableContainer.callable.shortDescription,
+            documentation: callableContainer.callable.documentation ? { kind: 'markdown', value: callableContainer.callable.documentation } : undefined
+        };
+    }
+
+    public createCompletionFromFunctionStatement(statement: FunctionStatement): CompletionItem {
+        return {
+            label: statement.getName(ParseMode.BrighterScript),
+            kind: CompletionItemKind.Function
+        };
     }
 
     /**
@@ -902,6 +925,43 @@ export class Scope {
             results.push(...file.propertyNameCompletions);
         });
         return results;
+    }
+
+    public getAllClassMemberCompletions() {
+        let results = new Map<string, CompletionItem>();
+        let filesSearched = new Set<BscFile>();
+        for (const file of this.getAllFiles()) {
+            if (isXmlFile(file) || filesSearched.has(file)) {
+                continue;
+            }
+            filesSearched.add(file);
+            for (let cs of file.parser.references.classStatements) {
+                for (let s of [...cs.methods, ...cs.fields]) {
+                    if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
+                        results.set(s.name.text, {
+                            label: s.name.text,
+                            kind: isClassMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
+                        });
+                    }
+                }
+            }
+        }
+        return results;
+    }
+
+    /**
+     * @param className - The name of the class (including namespace if possible)
+     * @param callsiteNamespace - the name of the namespace where the call site resides (this is NOT the known namespace of the class).
+     *                            This is used to help resolve non-namespaced class names that reside in the same namespac as the call site.
+     */
+    public getClassHierarchy(className: string, callsiteNamespace?: string) {
+        let items = [] as FileLink<ClassStatement>[];
+        let link = this.getClassFileLink(className, callsiteNamespace);
+        while (link) {
+            items.push(link);
+            link = this.getClassFileLink(link.item.parentClassName?.getName(ParseMode.BrighterScript)?.toLowerCase(), callsiteNamespace);
+        }
+        return items;
     }
 }
 

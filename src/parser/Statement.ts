@@ -1265,7 +1265,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
                     stmt.namespaceName?.getName(ParseMode.BrighterScript)
                 );
-                stmt = state.file.getClassByName(fqParentClassName);
+                stmt = state.file.getClassByName(fqParentClassName).item;
                 myIndex++;
             } else {
                 break;
@@ -1291,7 +1291,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
                     this.namespaceName?.getName(ParseMode.BrighterScript)
                 );
-                stmt = state.file.getClassByName(fullyQualifiedClassName);
+                stmt = state.file.getClassByName(fullyQualifiedClassName)?.item;
                 ancestors.push(stmt);
             } else {
                 break;
