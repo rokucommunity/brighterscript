@@ -5,7 +5,7 @@ import type { BsConfig } from './BsConfig';
 import type { BsDiagnostic, File, FileObj } from './interfaces';
 import type { FileResolver } from './Program';
 import { Program } from './Program';
-import { standardizePath as s, util, loadPlugins } from './util';
+import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { Logger, LogLevel } from './Logger';
@@ -114,11 +114,13 @@ export class ProgramBuilder {
     }
 
     protected loadPlugins() {
-        const plugins = loadPlugins(
-            this.options.cwd ?? process.cwd(),
+        const cwd = this.options.cwd ?? process.cwd();
+        const plugins = util.loadPlugins(
+            cwd,
             this.options.plugins,
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
         );
+        this.logger.log(`Loading ${this.options.plugins?.length ?? 0} plugins for cwd "${cwd}"`);
         for (let plugin of plugins) {
             this.plugins.add(plugin);
         }

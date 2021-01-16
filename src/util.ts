@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -23,7 +23,7 @@ import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { DottedGetExpression, VariableExpression } from './parser/Expression';
-import { LogLevel } from './Logger';
+import { Logger, LogLevel } from './Logger';
 import type { Token } from './lexer';
 import { TokenKind } from './lexer';
 import type { CompilerPlugin } from '.';
@@ -1055,10 +1055,67 @@ export class Util {
             }
         }
     }
+
+    /**
+     * Load and return the list of plugins
+     */
+    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
+        const logger = new Logger();
+        return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
+            if (typeof pathOrModule === 'string') {
+                try {
+                    const loaded = this.resolveRequire(cwd, pathOrModule);
+                    const theExport: CompilerPlugin | CompilerPluginFactory = loaded.default ? loaded.default : loaded;
+
+                    let plugin: CompilerPlugin;
+
+                    // legacy plugins returned a plugin object. If we find that, then add a warning
+                    if (typeof theExport === 'object') {
+                        logger.warn(`Plugin "${pathOrModule}" was loaded as a singleton. Please contact the plugin author to update to the factory pattern.\n`);
+                        plugin = theExport;
+
+                        // the official plugin format is a factory function that returns a new instance of a plugin.
+                    } else if (typeof theExport === 'function') {
+                        plugin = theExport();
+                    }
+
+                    if (!plugin.name) {
+                        plugin.name = pathOrModule;
+                    }
+                    acc.push(plugin);
+                } catch (err) {
+                    if (onError) {
+                        onError(pathOrModule, err);
+                    } else {
+                        throw err;
+                    }
+                }
+            }
+            return acc;
+        }, []);
+    }
+
+    public resolveRequire(cwd: string, pathOrModule: string) {
+        let target = pathOrModule;
+        if (!path.isAbsolute(pathOrModule)) {
+            const localPath = path.resolve(cwd, pathOrModule);
+            if (fs.existsSync(localPath)) {
+                target = localPath;
+            } else {
+                const modulePath = path.resolve(cwd, 'node_modules', pathOrModule);
+                if (fs.existsSync(modulePath)) {
+                    target = modulePath;
+                }
+            }
+        }
+        // eslint-disable-next-line
+        return require(target);
+    }
 }
 
 /**
- * A tagged template literal function for standardizing the path.
+ * A tagged template literal function for standardizing the path. This has to be defined as standalone function since it's a tagged template literal function,
+ * we can't use `object.tag` syntax.
  */
 export function standardizePath(stringParts, ...expressions: any[]) {
     let result = [];
@@ -1072,44 +1129,6 @@ export function standardizePath(stringParts, ...expressions: any[]) {
     );
 }
 
-export function loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
-    return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
-        if (typeof pathOrModule === 'string') {
-            try {
-                let loaded = resolveRequire(cwd, pathOrModule);
-                let plugin: CompilerPlugin = loaded.default ? loaded.default : loaded;
-                if (!plugin.name) {
-                    plugin.name = pathOrModule;
-                }
-                acc.push(plugin);
-            } catch (err) {
-                if (onError) {
-                    onError(pathOrModule, err);
-                } else {
-                    throw err;
-                }
-            }
-        }
-        return acc;
-    }, []);
-}
-
-function resolveRequire(cwd: string, pathOrModule: string) {
-    let target = pathOrModule;
-    if (!path.isAbsolute(pathOrModule)) {
-        const localPath = path.resolve(cwd, pathOrModule);
-        if (fs.existsSync(localPath)) {
-            target = localPath;
-        } else {
-            const modulePath = path.resolve(cwd, 'node_modules', pathOrModule);
-            if (fs.existsSync(modulePath)) {
-                target = modulePath;
-            }
-        }
-    }
-    // eslint-disable-next-line
-    return require(target);
-}
 
 export let util = new Util();
 export default util;

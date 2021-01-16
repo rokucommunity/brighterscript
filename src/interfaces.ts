@@ -161,6 +161,8 @@ export interface CommentFlag {
 
 type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
 
+export type CompilerPluginFactory = () => CompilerPlugin;
+
 export interface CompilerPlugin {
     name: string;
     beforeProgramCreate?: (builder: ProgramBuilder) => void;

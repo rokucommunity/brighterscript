@@ -111,6 +111,8 @@ The top level object is the `ProgramBuilder` which runs the overall process: pre
 ### API definition
 
 ```typescript
+export type CompilerPluginFactory = () => CompilierPlugin;
+
 export interface CompilerPlugin {
     name: string;
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
@@ -165,7 +167,7 @@ interface CallableContainer {
 
 ## Plugin API
 
-Plugins are JavaScript modules dynamically loaded by the compiler. Their entry point is a required default object following the `CompilerPlugin` interface and exposing event handlers.
+Plugins are JavaScript modules dynamically loaded by the compiler. Their entry point is a default function that returns an object that follows the `CompilerPlugin` interface.
 
 To walk/modify the AST, a number of helpers are provided in `brighterscript/dist/parser/ASTUtils`.
 
@@ -198,30 +200,29 @@ Note: in a language-server context, Scope validation happens every time a file c
 import { CompilerPlugin, BrsFile, XmlFile } from 'brighterscript';
 import { isBrsFile } from 'brighterscript/dist/parser/ASTUtils';
 
-// entry point
-const pluginInterface: CompilerPlugin = {
-    name: 'myDiagnosticPlugin',
-    afterFileValidate
-};
-export default pluginInterface;
-
-// post-parsing validation
-function afterFileValidate(file: BscFile) {
-    if (!isBrsFile(file)) {
-        return;
-    }
-    // visit function statements and validate their name
-    file.parser.functionStatements.forEach((fun) => {
-        if (fun.name.text.toLowerCase() === 'main') {
-            file.addDiagnostics([{
-                code: 9000,
-                message: 'Use RunUserInterface as entry point',
-                range: fun.name.range,
-                file
-            }]);
+// plugin factory
+export default function () {
+    return {
+        name: 'myDiagnosticPlugin',
+        // post-parsing validation
+        afterFileValidate: (file: BscFile) => {
+            if (!isBrsFile(file)) {
+                return;
+            }
+            // visit function statements and validate their name
+            file.parser.functionStatements.forEach((fun) => {
+                if (fun.name.text.toLowerCase() === 'main') {
+                    file.addDiagnostics([{
+                        code: 9000,
+                        message: 'Use RunUserInterface as entry point',
+                        range: fun.name.range,
+                        file
+                    }]);
+                }
+            });
         }
-    });
-}
+    } as CompilerPlugin;
+};
 ```
 
 ### Example AST modifier plugin
@@ -234,23 +235,22 @@ import { CompilerPlugin, Program, TranspileObj } from 'brighterscript';
 import { EmptyStatement } from 'brighterscript/dist/parser';
 import { isBrsFile, createStatementEditor, editStatements } from 'brighterscript/dist/parser/ASTUtils';
 
-// entry point
-const pluginInterface: CompilerPlugin = {
-    name: 'removePrint',
-    beforeFileTranspile
+// plugin factory
+export default function () {
+    return {
+        name: 'removePrint',
+        // transform AST before transpilation
+        beforeFileTranspile: (entry: TranspileObj) => {
+            if (isBrsFile(entry.file)) {
+                // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
+                entry.file.parser.functionExpressions.forEach((fun) => {
+                    const visitor = createStatementEditor({
+                        PrintStatement: (statement) => new EmptyStatement()
+                    });
+                    editStatements(fun.body, visitor);
+                });
+            }
+        }
+    } as CompilerPlugin;
 };
-export default pluginInterface;
-
-// transform AST before transpilation
-function beforeFileTranspile(entry: TranspileObj) {
-    if (isBrsFile(entry.file)) {
-        // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-        entry.file.parser.functionExpressions.forEach((fun) => {
-            const visitor = createStatementEditor({
-                PrintStatement: (statement) => new EmptyStatement()
-            });
-            editStatements(fun.body, visitor);
-        });
-    }
-}
 ```
