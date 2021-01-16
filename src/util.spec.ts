@@ -5,18 +5,21 @@ import { Position, Range } from 'vscode-languageserver';
 import { Lexer } from './lexer';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
-
+import { createSandbox } from 'sinon';
+const sinon = createSandbox();
 let tempDir = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tempDir}/rootDir`;
 let cwd = process.cwd();
 
 describe('util', () => {
     beforeEach(() => {
+        sinon.restore();
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
     });
 
     afterEach(() => {
+        sinon.restore();
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
     });
@@ -560,6 +563,71 @@ describe('util', () => {
             expect(util.getExtension('main.d.bs')).to.eql('.d.bs');
             expect(util.getExtension('main.xml')).to.eql('.xml');
             expect(util.getExtension('main.component.xml')).to.eql('.xml');
+        });
+    });
+
+    describe('loadPlugins', () => {
+
+        let pluginPath: string;
+        let id = 1;
+
+        beforeEach(() => {
+            // `require` caches plugins, so  generate a unique plugin name for every test
+            pluginPath = `${tempDir}/plugin${id++}.js`;
+        });
+
+        it('shows warning when loading plugin with old "object" format', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = {
+                    name: 'AwesomePlugin'
+                };
+            `);
+            const stub = sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect(plugins[0].name).to.eql('AwesomePlugin');
+            expect(stub.callCount).to.equal(1);
+        });
+
+        it('shows warning when loading plugin with old "object" format and exports.default', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports.default = {
+                    name: 'AwesomePlugin'
+                };
+            `);
+            const stub = sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect(plugins[0].name).to.eql('AwesomePlugin');
+            expect(stub.callCount).to.equal(1);
+        });
+
+        it('loads plugin with factory pattern', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return {
+                        name: 'AwesomePlugin'
+                    };
+                };
+            `);
+            const stub = sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect(plugins[0].name).to.eql('AwesomePlugin');
+            //does not warn about factory pattern
+            expect(stub.callCount).to.equal(0);
+        });
+
+        it('loads plugin with factory pattern and `default`', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports.default = function() {
+                    return {
+                        name: 'AwesomePlugin'
+                    };
+                };
+            `);
+            const stub = sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect(plugins[0].name).to.eql('AwesomePlugin');
+            //does not warn about factory pattern
+            expect(stub.callCount).to.equal(0);
         });
     });
 });
