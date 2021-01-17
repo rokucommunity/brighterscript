@@ -82,7 +82,7 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 
@@ -247,19 +247,14 @@ export class Parser {
                 ) {
                     let dec = this.declaration();
                     if (dec) {
-                        //attach annotations to statements
-                        if (this.pendingAnnotations.length > 0) {
-                            dec.annotations = this.pendingAnnotations;
-                            this.pendingAnnotations = [];
+                        if (!isAnnotationExpression(dec)) {
+                            this.consumePendingAnnotations(dec);
+                            body.statements.push(dec);
+                            //ensure statement separator
+                            this.consumeStatementSeparators(false);
+                        } else {
+                            this.consumeStatementSeparators(true);
                         }
-                        body.statements.push(dec);
-
-                        //ensure statement separator
-                        this.consumeStatementSeparators();
-
-                    } else {
-                        //consume potential separators
-                        this.consumeStatementSeparators(true);
                     }
                 }
             } catch (parseError) {
@@ -306,7 +301,7 @@ export class Parser {
         return error;
     }
 
-    private declaration(): Statement | undefined {
+    private declaration(): Statement | AnnotationExpression | undefined {
         try {
             if (this.check(TokenKind.Class)) {
                 return this.classDeclaration();
@@ -325,8 +320,7 @@ export class Parser {
             }
 
             if (this.check(TokenKind.At) && this.checkNext(TokenKind.Identifier)) {
-                this.annotationExpression();
-                return;
+                return this.annotationExpression();
             }
 
             if (this.check(TokenKind.Comment)) {
@@ -353,6 +347,10 @@ export class Parser {
      */
     private classDeclaration(): ClassStatement {
         this.warnIfNotBrighterScriptMode('class declarations');
+        let classAnnotations = this.pendingAnnotations;
+        //reset annotations here, so we don't carry them onto class members
+        this.pendingAnnotations = [];
+
         let classKeyword = this.consume(
             DiagnosticMessages.expectedClassKeyword(),
             TokenKind.Class
@@ -374,9 +372,14 @@ export class Parser {
 
         //gather up all class members (Fields, Methods)
         let body = [] as Statement[];
-        while (this.checkAny(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Comment, TokenKind.Identifier, ...AllowedProperties)) {
+        while (this.checkAny(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
             try {
                 let accessModifier: Token;
+
+                if (this.check(TokenKind.At) && this.checkNext(TokenKind.Identifier)) {
+                    this.annotationExpression();
+                }
+
                 if (this.checkAny(TokenKind.Public, TokenKind.Protected, TokenKind.Private)) {
                     //use actual access modifier
                     accessModifier = this.advance();
@@ -389,6 +392,9 @@ export class Parser {
 
                 //methods (function/sub keyword OR identifier followed by opening paren)
                 if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
+                    //cache annotations to this point, for when we later create the class member, because statements inside blocks can otherwise inherit these annotations
+                    let memberAnnotations = this.pendingAnnotations;
+                    this.pendingAnnotations = [];
                     let funcDeclaration = this.functionDeclaration(false, false);
 
                     //remove this function from the lists because it's not a callable
@@ -408,6 +414,8 @@ export class Parser {
                         overrideKeyword
                     );
 
+                    methodStatement.annotations = memberAnnotations;
+
                     //refer to this statement as parent of the expression
                     functionStatement.func.functionStatement = methodStatement;
 
@@ -415,9 +423,10 @@ export class Parser {
 
                     //fields
                 } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
-                    body.push(
-                        this.classFieldDeclaration(accessModifier)
-                    );
+
+                    const fieldStatement = this.classFieldDeclaration(accessModifier);
+                    this.consumePendingAnnotations(fieldStatement);
+                    body.push(fieldStatement);
 
                     //class fields cannot be overridden
                     if (overrideKeyword) {
@@ -460,6 +469,12 @@ export class Parser {
             parentClassName,
             this.currentNamespaceName
         );
+
+        //attach annotations to statements
+        if (classAnnotations?.length > 0) {
+            result.annotations = classAnnotations;
+        }
+
         this._references.classStatements.push(result);
         return result;
     }
@@ -1162,7 +1177,7 @@ export class Parser {
         return importStatement;
     }
 
-    private annotationExpression(): void {
+    private annotationExpression() {
         let annotation = new AnnotationExpression(
             this.advance(),
             this.advance()
@@ -1174,6 +1189,7 @@ export class Parser {
             let leftParen = this.advance();
             annotation.call = this.finishCall(leftParen, annotation, false);
         }
+        return annotation;
     }
 
     private templateString(isTagged: boolean): TemplateStringExpression | TaggedTemplateStringExpression {
@@ -1754,12 +1770,10 @@ export class Parser {
             let loopCurrent = this.current;
             let dec = this.declaration();
             if (dec) {
-                //attach annotations to statements
-                if (this.pendingAnnotations.length) {
-                    dec.annotations = this.pendingAnnotations;
-                    this.pendingAnnotations = [];
+                if (!isAnnotationExpression(dec)) {
+                    this.consumePendingAnnotations(dec);
+                    statements.push(dec);
                 }
-                statements.push(dec);
 
                 //ensure statement separator
                 this.consumeStatementSeparators();
@@ -1797,6 +1811,17 @@ export class Parser {
         }
 
         return new Block(statements, startingToken.range);
+    }
+
+    /**
+     * Attach pending annotations to the provided statement,
+     * and then reset the annotations array
+     */
+    consumePendingAnnotations(statement: Statement) {
+        if (this.pendingAnnotations.length) {
+            statement.annotations = this.pendingAnnotations;
+            this.pendingAnnotations = [];
+        }
     }
 
     private expression(): Expression {
