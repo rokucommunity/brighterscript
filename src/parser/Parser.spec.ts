@@ -638,14 +638,6 @@ describe('parser', () => {
     });
 
     describe('Annotations', () => {
-        it('parses without errors', () => {
-            let { statements, diagnostics } = parse(`
-                @meta1
-            `, ParseMode.BrighterScript);
-            expect(diagnostics[0]?.message).not.to.exist;
-            expect(statements.length).to.equal(0);
-        });
-
         it('parses with error if malformed', () => {
             let { diagnostics } = parse(`
                 @
@@ -653,6 +645,32 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrighterScript);
             expect(diagnostics[0]?.code).to.equal(1081); //unexpected token '@'
+        });
+
+        it('parses with error if annotation is not followed by a statement', () => {
+            let { diagnostics } = parse(`
+                sub main()
+                    @meta2
+                end sub
+                class MyClass
+                    @meta3
+                    @meta4
+                end class
+                @meta1
+            `, ParseMode.BrighterScript);
+            expect(diagnostics.length).to.equal(4);
+            expect(diagnostics[0]?.message).to.equal(
+                DiagnosticMessages.unusedAnnotation().message
+            );
+            expect(diagnostics[1]?.message).to.equal(
+                DiagnosticMessages.unusedAnnotation().message
+            );
+            expect(diagnostics[2]?.message).to.equal(
+                DiagnosticMessages.unusedAnnotation().message
+            );
+            expect(diagnostics[3]?.message).to.equal(
+                DiagnosticMessages.unusedAnnotation().message
+            );
         });
 
         it('attaches an annotation to next statement', () => {

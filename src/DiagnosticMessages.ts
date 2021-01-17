@@ -531,10 +531,10 @@ export let DiagnosticMessages = {
         code: 1102,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1103: () => ({
-        message: ``,
+    unusedAnnotation: () => ({
+        message: `This annotation is not attached to any statement`,
         code: 1103,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Error
     }),
     localVarShadowedByScopedFunction: () => ({
         message: `Declaring a local variable with same name as scoped function can result in unexpected behavior`,
