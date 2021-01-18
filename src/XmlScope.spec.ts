@@ -20,8 +20,8 @@ describe('XmlScope', () => {
     });
 
     describe('constructor', () => {
-        it('listens for attach/detach parent events', async () => {
-            let parentXmlFile = await program.addOrReplaceFile<XmlFile>('components/parent.xml', trim`
+        it('listens for attach/detach parent events', () => {
+            let parentXmlFile = program.addOrReplaceFile<XmlFile>('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Parent" extends="Scene">
                 </component>
@@ -31,14 +31,14 @@ describe('XmlScope', () => {
             //should default to global scope
             expect(scope.getParentScope()).to.equal(program.globalScope);
 
-            let childXmlFile = await program.addOrReplaceFile<XmlFile>('components/child.xml', trim`
+            let childXmlFile = program.addOrReplaceFile<XmlFile>('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Child" extends="Parent">
                 </component>
             `);
             let childScope = program.getComponentScope('Child');
 
-            await program.validate();
+            program.validate();
 
             // child should have found its parent
             expect(childXmlFile.parentComponent).to.equal(parentXmlFile);
@@ -47,7 +47,7 @@ describe('XmlScope', () => {
 
             //remove the parent component
             program.removeFile(`${rootDir}/components/parent.xml`);
-            await program.validate();
+            program.validate();
             //the child should know the parent no longer exists
             expect(childXmlFile.parentComponent).not.to.exist;
             //child's parent scope should be the global scope
@@ -56,13 +56,13 @@ describe('XmlScope', () => {
     });
 
     describe('getDefinition', () => {
-        it('finds parent file', async () => {
-            let parentXmlFile = await program.addOrReplaceFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
+        it('finds parent file', () => {
+            let parentXmlFile = program.addOrReplaceFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentComponent">
                 </component>
             `);
-            let childXmlFile = await program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
+            let childXmlFile = program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildComponent" extends="ParentComponent">
                 </component>
@@ -75,22 +75,22 @@ describe('XmlScope', () => {
     });
 
     describe('getFiles', () => {
-        it('includes the xml file', async () => {
-            let xmlFile = await program.addOrReplaceFile('components/child.xml', trim`
+        it('includes the xml file', () => {
+            let xmlFile = program.addOrReplaceFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Child">
                 </component>
             `);
-            await program.validate();
+            program.validate();
             expect(program.getComponentScope('Child').getOwnFiles()[0]).to.equal(xmlFile);
         });
     });
 
     describe('validate', () => {
-        it('adds an error when an interface function cannot be found', async () => {
+        it('adds an error when an interface function cannot be found', () => {
             program = new Program({ rootDir: rootDir });
 
-            await program.addOrReplaceFile('components/child.xml', trim`
+            program.addOrReplaceFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="child" extends="parent">
                     <interface>
@@ -103,11 +103,11 @@ describe('XmlScope', () => {
                     <script uri="child.brs"/>
                 </component>
             `);
-            await program.addOrReplaceFile(s`components/child.brs`, `
+            program.addOrReplaceFile(s`components/child.brs`, `
                 sub func1()
                 end sub
             `);
-            await program.validate();
+            program.validate();
             let childScope = program.getComponentScope('child');
             let diagnostics = childScope.getDiagnostics();
             expect(diagnostics.length).to.equal(5);
@@ -132,10 +132,10 @@ describe('XmlScope', () => {
             });
         });
 
-        it('adds an error when an interface field is invalid', async () => {
+        it('adds an error when an interface field is invalid', () => {
             program = new Program({ rootDir: rootDir });
 
-            await program.addOrReplaceFile('components/child.xml', trim`
+            program.addOrReplaceFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="child" extends="parent">
                     <interface>
@@ -150,11 +150,11 @@ describe('XmlScope', () => {
                     <script uri="child.brs"/>
                 </component>
             `);
-            await program.addOrReplaceFile(s`components/child.brs`, `
+            program.addOrReplaceFile(s`components/child.brs`, `
                 sub init()
                 end sub
             `);
-            await program.validate();
+            program.validate();
             let childScope = program.getComponentScope('child');
             let diagnostics = childScope.getDiagnostics();
             expect(diagnostics.length).to.equal(7);
