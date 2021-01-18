@@ -9,20 +9,30 @@ import type { Diagnostic } from 'vscode-languageserver';
 import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 import { ParseMode } from '../parser/Parser';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
+import { standardizePath as s } from '../util';
+import * as fsExtra from 'fs-extra';
+import { TranspileState } from '../parser/TranspileState';
+import { doesNotThrow } from 'assert';
 
 let sinon = sinonImport.createSandbox();
 
 describe('BrsFile BrighterScript classes', () => {
-    let rootDir = process.cwd();
+    let tmpPath = s`${process.cwd()}/.tmp`;
+    let rootDir = s`${tmpPath}/rootDir`;
+
     let program: Program;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
+        fsExtra.ensureDirSync(rootDir);
+        fsExtra.emptyDirSync(tmpPath);
         program = new Program({ rootDir: rootDir });
     });
     afterEach(() => {
         sinon.restore();
         program.dispose();
+        fsExtra.ensureDirSync(tmpPath);
+        fsExtra.emptyDirSync(tmpPath);
     });
 
     async function addFile(relativePath: string, text: string) {
@@ -1016,5 +1026,15 @@ describe('BrsFile BrighterScript classes', () => {
                 return instance
             end function
         `, 'trim', 'source/App.ClassB.bs');
+    });
+
+    it('does not crash when parent class is missing', async () => {
+        const file = await program.addOrReplaceFile<BrsFile>('source/ClassB.bs', `
+            class ClassB extends ClassA
+            end class
+        `);
+        doesNotThrow(() => {
+            file.parser.references.classStatements[0].getParentClassIndex(new TranspileState(file));
+        });
     });
 });
