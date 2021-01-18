@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -26,11 +26,22 @@ import type { DottedGetExpression, VariableExpression } from './parser/Expressio
 import { Logger, LogLevel } from './Logger';
 import type { Token } from './lexer';
 import { TokenKind } from './lexer';
-import type { CompilerPlugin } from '.';
 import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
 import { CustomType } from './types/CustomType';
+import type { FileResolver } from './Program';
 
 export class Util {
+
+    public fileResolver = {
+        readFile: (filePath) => {
+            return fsExtra.readFile(filePath).then((value) => {
+                return value.toString();
+            });
+        },
+        readFileSync: (filePath) => {
+            return fsExtra.readFileSync(filePath).toString();
+        }
+    } as FileResolver;
 
     public clearConsole() {
         // process.stdout.write('\x1Bc');
@@ -40,7 +51,7 @@ export class Util {
      * Determine if the file exists
      * @param filePath
      */
-    public async fileExists(filePath: string | undefined) {
+    public async pathExists(filePath: string | undefined) {
         if (!filePath) {
             return false;
         } else {
@@ -49,20 +60,22 @@ export class Util {
     }
 
     /**
+     * Determine if the file exists
+     * @param filePath
+     */
+    public pathExistsSync(filePath: string | undefined) {
+        if (!filePath) {
+            return false;
+        } else {
+            return fsExtra.pathExistsSync(filePath);
+        }
+    }
+
+    /**
      * Determine if this path is a directory
      */
     public isDirectorySync(dirPath: string | undefined) {
         return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
-    }
-
-    /**
-     * Load a file from disc into a string
-     * @param filePath
-     */
-    public async getFileContents(filePath: string) {
-        let file = await fsExtra.readFile(filePath);
-        let fileContents = file.toString();
-        return fileContents;
     }
 
     /**
@@ -95,7 +108,7 @@ export class Util {
         let configPath = path.join(cwd, 'bsconfig.json');
         //find the nearest config file path
         for (let i = 0; i < 100; i++) {
-            if (await this.fileExists(configPath)) {
+            if (await this.pathExists(configPath)) {
                 return configPath;
             } else {
                 let parentDirPath = path.dirname(path.dirname(configPath));
@@ -149,7 +162,7 @@ export class Util {
                 throw new Error('Circular dependency detected: "' + parentProjectPaths.join('" => ') + '"');
             }
             //load the project file
-            let projectFileContents = await this.getFileContents(configFilePath);
+            let projectFileContents = (await fsExtra.readFile(configFilePath)).toString();
             let parseErrors = [] as ParseError[];
             let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
             if (parseErrors.length > 0) {
@@ -752,9 +765,9 @@ export class Util {
 
             let bsPath = path.join(currentPath, 'bsconfig.json');
             let brsPath = path.join(currentPath, 'brsconfig.json');
-            if (await this.fileExists(bsPath)) {
+            if (await this.pathExists(bsPath)) {
                 return bsPath;
-            } else if (await this.fileExists(brsPath)) {
+            } else if (await this.pathExists(brsPath)) {
                 return brsPath;
             } else {
                 //walk upwards one directory
@@ -1129,7 +1142,6 @@ export function standardizePath(stringParts, ...expressions: any[]) {
         )
     );
 }
-
 
 export let util = new Util();
 export default util;

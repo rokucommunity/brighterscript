@@ -11,10 +11,16 @@ import { DiagnosticSeverity } from 'vscode-languageserver';
 import { Logger, LogLevel } from './Logger';
 import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
+
 /**
  * A runner class that handles
  */
 export class ProgramBuilder {
+
+    public constructor() {
+        //add the default file resolver (used to load source file contents).
+        this.addFileResolver(util.fileResolver);
+    }
     /**
      * Determines whether the console should be cleared after a run (true for cli, false for languageserver)
      */
@@ -30,9 +36,40 @@ export class ProgramBuilder {
 
     public addFileResolver(fileResolver: FileResolver) {
         this.fileResolvers.push(fileResolver);
-        if (this.program) {
-            this.program.fileResolvers.push(fileResolver);
+    }
+
+    /**
+     * Get the contents of the specified file as a string.
+     * This walks backwards through the file resolvers until we get a value.
+     * This allow the language server to provide file contents directly from memory.
+     */
+    public async getFileContents(pathAbsolute: string) {
+        pathAbsolute = s`${pathAbsolute}`;
+        let reversedResolvers = [...this.fileResolvers].reverse();
+        for (let fileResolver of reversedResolvers) {
+            let result = await fileResolver.readFile(pathAbsolute);
+            if (typeof result === 'string') {
+                return result;
+            }
         }
+        throw new Error(`Could not load file "${pathAbsolute}"`);
+    }
+
+    /**
+     * Get the contents of the specified file as a string.
+     * This walks backwards through the file resolvers until we get a value.
+     * This allow the language server to provide file contents directly from memory.
+     */
+    public getFileContentsSync(pathAbsolute: string) {
+        pathAbsolute = s`${pathAbsolute}`;
+        let reversedResolvers = [...this.fileResolvers].reverse();
+        for (let fileResolver of reversedResolvers) {
+            let result = fileResolver.readFileSync(pathAbsolute);
+            if (typeof result === 'string') {
+                return result;
+            }
+        }
+        throw new Error(`Could not load file "${pathAbsolute}"`);
     }
 
     /**
@@ -106,9 +143,6 @@ export class ProgramBuilder {
     protected createProgram() {
         const program = new Program(this.options, undefined, this.plugins);
 
-        //add the initial FileResolvers
-        program.fileResolvers.push(...this.fileResolvers);
-
         this.plugins.emit('afterProgramCreate', program);
         return program;
     }
@@ -163,10 +197,15 @@ export class ProgramBuilder {
         this.watcher.on('all', async (event: string, thePath: string) => { //eslint-disable-line @typescript-eslint/no-misused-promises
             thePath = s`${path.resolve(this.rootDir, thePath)}`;
             if (event === 'add' || event === 'change') {
-                await this.program.addOrReplaceFile({
+                const fileObj = {
                     src: thePath,
                     dest: rokuDeploy.getDestPath(thePath, this.program.options.files, this.rootDir)
-                });
+                };
+                this.program.addOrReplaceFile(
+                    fileObj,
+                    //load the file synchronously because that's faster than async for a small number of filies
+                    await this.getFileContents(fileObj.src)
+                );
             } else if (event === 'unlink') {
                 this.program.removeFile(thePath);
             }
@@ -273,7 +312,7 @@ export class ProgramBuilder {
             }
             this.logger.log('Validating project');
             //validate program
-            await this.validateProject();
+            this.validateProject();
 
             //maybe cancel?
             if (cancellationToken.isCanceled === true) {
@@ -408,9 +447,12 @@ export class ProgramBuilder {
 
         //preload every type definition file first, which eliminates duplicate file loading
         await Promise.all(
-            typedefFiles.map(async (file) => {
+            typedefFiles.map(async (fileObj) => {
                 try {
-                    await this.program.addOrReplaceFile(file);
+                    this.program.addOrReplaceFile(
+                        fileObj,
+                        await this.getFileContents(fileObj.src)
+                    );
                 } catch (e) {
                     //log the error, but don't fail this process because the file might be fixable later
                     this.logger.log(e);
@@ -418,15 +460,19 @@ export class ProgramBuilder {
             })
         );
 
+        const acceptableExtensions = ['.bs', '.brs', '.xml'];
         //parse every file other than the type definitions
         await Promise.all(
-            nonTypedefFiles.map(async (file) => {
+            nonTypedefFiles.map(async (fileObj) => {
                 try {
-                    let fileExtension = path.extname(file.src).toLowerCase();
+                    let fileExtension = path.extname(fileObj.src).toLowerCase();
 
                     //only process certain file types
-                    if (['.bs', '.brs', '.xml'].includes(fileExtension)) {
-                        await this.program.addOrReplaceFile(file);
+                    if (acceptableExtensions.includes(fileExtension)) {
+                        this.program.addOrReplaceFile(
+                            fileObj,
+                            await this.getFileContents(fileObj.src)
+                        );
                     }
                 } catch (e) {
                     //log the error, but don't fail this process because the file might be fixable later
@@ -454,8 +500,8 @@ export class ProgramBuilder {
      * Scan every file and resolve all variable references.
      * If no errors were encountered, return true. Otherwise return false.
      */
-    private async validateProject() {
-        await this.program.validate();
+    private validateProject() {
+        this.program.validate();
     }
 
     public dispose() {
