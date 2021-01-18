@@ -871,8 +871,8 @@ export class Program {
                 }
             }
         } else if (identifierInfo.statementType === 'new') {
-            let clazzItem = file.getClassByName(identifierInfo.dotPart ? `${identifierInfo.dotPart}.${identifierInfo.name}` : identifierInfo.name);
-            let sigHelp = clazzItem?.file?.getClassSignatureHelp(clazzItem?.item);
+            let classItem = file.getClassFileLink(identifierInfo.dotPart ? `${identifierInfo.dotPart}.${identifierInfo.name}` : identifierInfo.name);
+            let sigHelp = classItem?.file?.getClassSignatureHelp(classItem?.item);
             if (sigHelp && !results.has(sigHelp.key)) {
                 sigHelp.index = identifierInfo.commaCount;
                 results.set(sigHelp.key, sigHelp);

@@ -990,7 +990,7 @@ describe('BrsFile BrighterScript classes', () => {
         `, 'trim', 'source/App.ClassC.bs');
     });
 
-    it.only('computes correct super index for namespaced child class and global parent class', async () => {
+    it('computes correct super index for namespaced child class and global parent class', async () => {
         await program.addOrReplaceFile('source/ClassA.bs', `
             class ClassA
             end class
