@@ -1130,9 +1130,3 @@ export class Program {
         this.dependencyGraph.dispose();
     }
 }
-
-export interface FileResolver {
-    readFile(pathAbsolute: string): string | undefined | Thenable<string | undefined> | void;
-    readFileSync(pathAbsolute: string): string | undefined;
-}
-

@@ -371,10 +371,7 @@ export class LanguageServer {
         builder.allowConsoleClearing = false;
 
         //look for files in our in-memory cache before going to the file system
-        builder.addFileResolver({
-            readFile: (pathAbsolute) => this.documentFileResolver(pathAbsolute),
-            readFileSync: (pathAbsolute) => this.documentFileResolver(pathAbsolute)
-        });
+        builder.addFileResolver(this.documentFileResolver.bind(this));
 
         let configFilePath = await this.getConfigFilePath(workspacePath);
 
@@ -443,10 +440,7 @@ export class LanguageServer {
         builder.allowConsoleClearing = false;
 
         //look for files in our in-memory cache before going to the file system
-        builder.addFileResolver({
-            readFile: (pathAbsolute) => this.documentFileResolver(pathAbsolute),
-            readFileSync: (pathAbsolute) => this.documentFileResolver(pathAbsolute)
-        });
+        builder.addFileResolver(this.documentFileResolver.bind(this));
 
         //get the path to the directory where this file resides
         let cwd = path.dirname(filePathAbsolute);

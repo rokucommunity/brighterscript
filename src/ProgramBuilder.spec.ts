@@ -63,14 +63,9 @@ describe('ProgramBuilder', () => {
 
         it('loads all type definitions first', async () => {
             const requestedFiles = [] as string[];
-            builder['fileResolvers'].push({
-                readFile: (filePath) => {
-                    requestedFiles.push(s(filePath));
-                },
-                readFileSync: (filePath) => {
-                    requestedFiles.push(s(filePath));
-                }
-            } as any);
+            builder['fileResolvers'].push((filePath) => {
+                requestedFiles.push(s(filePath));
+            });
             fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
             fsExtra.outputFileSync(s`${rootDir}/source/main.d.bs`, '');
             fsExtra.outputFileSync(s`${rootDir}/source/lib.d.bs`, '');
@@ -88,15 +83,14 @@ describe('ProgramBuilder', () => {
 
         it('does not load non-existent type definition file', async () => {
             const requestedFiles = [] as string[];
-            builder['fileResolvers'].push({
-                readFile: (filePath) => {
-                    requestedFiles.push(s(filePath));
-                }
-            } as any);
+            builder['fileResolvers'].push((filePath) => {
+                requestedFiles.push(s(filePath));
+            });
             fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
             await builder['loadAllFilesAST']();
             //the d file should not be requested because `loadAllFilesAST` knows it doesn't exist
             expect(requestedFiles).not.to.include(s`${rootDir}/source/main.d.bs`);
+            expect(requestedFiles).to.include(s`${rootDir}/source/main.brs`);
         });
     });
 

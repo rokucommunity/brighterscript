@@ -2,8 +2,7 @@ import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
 import type { BsConfig } from './BsConfig';
-import type { BsDiagnostic, File, FileObj } from './interfaces';
-import type { FileResolver } from './Program';
+import type { BsDiagnostic, File, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
@@ -11,6 +10,7 @@ import { DiagnosticSeverity } from 'vscode-languageserver';
 import { Logger, LogLevel } from './Logger';
 import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
+import * as fsExtra from 'fs-extra';
 
 /**
  * A runner class that handles
@@ -19,7 +19,11 @@ export class ProgramBuilder {
 
     public constructor() {
         //add the default file resolver (used to load source file contents).
-        this.addFileResolver(util.fileResolver);
+        this.addFileResolver((filePath) => {
+            return fsExtra.readFile(filePath).then((value) => {
+                return value.toString();
+            });
+        });
     }
     /**
      * Determines whether the console should be cleared after a run (true for cli, false for languageserver)
@@ -47,24 +51,7 @@ export class ProgramBuilder {
         pathAbsolute = s`${pathAbsolute}`;
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
-            let result = await fileResolver.readFile(pathAbsolute);
-            if (typeof result === 'string') {
-                return result;
-            }
-        }
-        throw new Error(`Could not load file "${pathAbsolute}"`);
-    }
-
-    /**
-     * Get the contents of the specified file as a string.
-     * This walks backwards through the file resolvers until we get a value.
-     * This allow the language server to provide file contents directly from memory.
-     */
-    public getFileContentsSync(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
-        let reversedResolvers = [...this.fileResolvers].reverse();
-        for (let fileResolver of reversedResolvers) {
-            let result = fileResolver.readFileSync(pathAbsolute);
+            let result = await fileResolver(pathAbsolute);
             if (typeof result === 'string') {
                 return result;
             }

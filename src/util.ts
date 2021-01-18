@@ -28,21 +28,8 @@ import type { Token } from './lexer';
 import { TokenKind } from './lexer';
 import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
 import { CustomType } from './types/CustomType';
-import type { FileResolver } from './Program';
 
 export class Util {
-
-    public fileResolver = {
-        readFile: (filePath) => {
-            return fsExtra.readFile(filePath).then((value) => {
-                return value.toString();
-            });
-        },
-        readFileSync: (filePath) => {
-            return fsExtra.readFileSync(filePath).toString();
-        }
-    } as FileResolver;
-
     public clearConsole() {
         // process.stdout.write('\x1Bc');
     }
