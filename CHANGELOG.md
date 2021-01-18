@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.28.0] - 2021-01-16
+### Added
+ - annotation support for classes and class methods ([#270](https://github.com/rokucommunity/brighterscript/pull/270))
+### fixed
+ - bugs with go-to-definition and signature help for namespace functions, classes, and callfunc calls
+
+
+
 ## [0.27.0] - 2021-01-15
 ### Changed
  - plugin system changed to require a factory function instead of a singleton object ([#272](https://github.com/rokucommunity/brighterscript/pull/272))
@@ -827,3 +835,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.25.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.24.2...v0.25.0
 [0.26.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.25.0...v0.26.0
 [0.27.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.26.0...v0.27.0
+[0.28.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.27.0...v0.28.0
