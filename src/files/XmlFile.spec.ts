@@ -651,6 +651,21 @@ describe('XmlFile', () => {
             `, 'none', 'components/SimpleScene.xml');
         });
 
+        it('does not fail on msissing script type', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script uri="SimpleScene.brs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script uri="SimpleScene.brs" type="text/brightscript" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, null, 'components/comp.xml');
+        });
+
         it('returns the XML unmodified if needsTranspiled is false', () => {
             let file = program.addOrReplaceFile(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },

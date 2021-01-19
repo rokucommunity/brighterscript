@@ -24,7 +24,7 @@ export class SGTag {
         public tag: SGToken,
         public attributes: SGAttribute[] = [],
         public range?: Range
-    ) {}
+    ) { }
 
     get id() {
         return this.getAttributeValue('id');
@@ -160,6 +160,21 @@ export class SGScript extends SGTag {
         } else {
             return super.transpileBody(state);
         }
+    }
+
+    public clone() {
+        return new SGScript(
+            { ...this.tag },
+            this.attributes.map(a => {
+                return {
+                    key: { ...a.key },
+                    value: { ...a.value },
+                    range: { ...util.createRangeFromPositions(a.range.start, a.range.end) }
+                };
+            }),
+            this.cdata ? { ...this.cdata } : undefined,
+            util.createRangeFromPositions(this.range.start, this.range.end)
+        );
     }
 }
 
@@ -419,13 +434,21 @@ export class SGAst {
     }
 
     private updateScript(script: SGScript): SGScript {
+        let clone: SGScript;
+        //add the script type if missing
+        if (!script.type) {
+            clone = clone ?? script.clone();
+            clone.type = 'text/brightscript';
+            script = clone;
+        }
         //replace type and file extension of brighterscript references
         if (script.type.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')) {
-            const temp = new SGScript();
-            temp.uri = script.uri?.replace(/\.bs$/, '.brs');
-            temp.cdata = script.cdata;
-            return temp;
+            clone = clone ?? script.clone();
+            clone.type = 'text/brightscript';
+            clone.uri = script.uri?.replace(/\.bs$/, '.brs');
+            script = clone;
         }
+
         return script;
     }
 }
