@@ -445,14 +445,14 @@ describe('BrsFile BrighterScript classes', () => {
 
         it('properly transpiles new statement for missing class ', () => {
             testTranspile(`
-            sub main()
-                bob = new Human()
-            end sub
-        `, `
-            sub main()
-                bob = Human()
-            end sub
-        `, undefined, 'source/main.bs');
+                sub main()
+                    bob = new Human()
+                end sub
+            `, `
+                sub main()
+                    bob = Human()
+                end sub
+            `, undefined, 'source/main.bs');
         });
 
         it('new keyword transpiles correctly', () => {
@@ -1000,13 +1000,13 @@ describe('BrsFile BrighterScript classes', () => {
         `, 'trim', 'source/App.ClassC.bs');
     });
 
-    it('computes correct super index for namespaced child class and global parent class', async () => {
-        await program.addOrReplaceFile('source/ClassA.bs', `
+    it('computes correct super index for namespaced child class and global parent class', () => {
+        program.addOrReplaceFile('source/ClassA.bs', `
             class ClassA
             end class
         `);
 
-        await testTranspile(`
+        testTranspile(`
             namespace App
                 class ClassB extends ClassA
                 end class
@@ -1028,8 +1028,8 @@ describe('BrsFile BrighterScript classes', () => {
         `, 'trim', 'source/App.ClassB.bs');
     });
 
-    it('does not crash when parent class is missing', async () => {
-        const file = await program.addOrReplaceFile<BrsFile>('source/ClassB.bs', `
+    it('does not crash when parent class is missing', () => {
+        const file = program.addOrReplaceFile<BrsFile>('source/ClassB.bs', `
             class ClassB extends ClassA
             end class
         `);
