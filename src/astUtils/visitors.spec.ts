@@ -313,8 +313,8 @@ describe('astUtils visitors', () => {
     });
 
     describe('walk', () => {
-        async function testWalk(text: string, expectedConstructors: string[], walkMode = WalkMode.visitAllRecursive) {
-            const file = await program.addOrReplaceFile<BrsFile>('source/main.bs', text);
+        function testWalk(text: string, expectedConstructors: string[], walkMode = WalkMode.visitAllRecursive) {
+            const file = program.addOrReplaceFile<BrsFile>('source/main.bs', text);
             const items = [];
             let index = 1;
             file.ast.walk((element: any) => {
@@ -327,8 +327,8 @@ describe('astUtils visitors', () => {
             expect(items.map(x => `${x.constructor.name}:${x._testId}`)).to.eql(expectedConstructors.map(x => `${x}:${index++}`));
         }
 
-        it('Walks through all expressions until cancelled', async () => {
-            const file = await program.addOrReplaceFile<BrsFile>('source/main.bs', `
+        it('Walks through all expressions until cancelled', () => {
+            const file = program.addOrReplaceFile<BrsFile>('source/main.bs', `
                 sub logger(message = "nil" as string)
                     innerLog = sub(message = "nil" as string)
                         print message
@@ -354,8 +354,8 @@ describe('astUtils visitors', () => {
             expect(count).to.equal(stopIndex);
         });
 
-        it('walks if statement', async () => {
-            await testWalk(`
+        it('walks if statement', () => {
+            testWalk(`
                 sub main()
                     if true then
                         print "true"
@@ -388,8 +388,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks if statement without else', async () => {
-            await testWalk(`
+        it('walks if statement without else', () => {
+            testWalk(`
                 sub main()
                     if true then
                         print "true"
@@ -407,8 +407,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks increment statement', async () => {
-            await testWalk(`
+        it('walks increment statement', () => {
+            testWalk(`
                 sub main()
                     age = 12
                     age++
@@ -424,8 +424,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks ForStatement', async () => {
-            await testWalk(`
+        it('walks ForStatement', () => {
+            testWalk(`
                 sub main()
                     for i = 0 to 10 step 1
                         print i
@@ -446,8 +446,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks ForEachStatement', async () => {
-            await testWalk(`
+        it('walks ForEachStatement', () => {
+            testWalk(`
                 sub main()
                     for each item in [1,2,3]
                         print item
@@ -468,8 +468,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks dotted and indexed set statements', async () => {
-            await testWalk(`
+        it('walks dotted and indexed set statements', () => {
+            testWalk(`
                 sub main()
                     person = {}
                     person.name = "person"
@@ -491,8 +491,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks while loop', async () => {
-            await testWalk(`
+        it('walks while loop', () => {
+            testWalk(`
                 sub main()
                     while 1 + 1 = 2
                         print "infinite"
@@ -514,8 +514,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks namespace', async () => {
-            await testWalk(`
+        it('walks namespace', () => {
+            testWalk(`
                namespace NameA.NameB
                end namespace
             `, [
@@ -526,8 +526,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks nested functions', async () => {
-            await testWalk(`
+        it('walks nested functions', () => {
+            testWalk(`
                 sub main()
                     print "main"
                     inner1 = sub()
@@ -571,8 +571,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks CallExpression', async () => {
-            await testWalk(`
+        it('walks CallExpression', () => {
+            testWalk(`
                 sub main()
                     Sleep(123)
                 end sub
@@ -587,8 +587,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks function parameters', async () => {
-            await testWalk(`
+        it('walks function parameters', () => {
+            testWalk(`
                 sub main(arg1)
                     speak = sub(arg1, arg2)
                     end sub
@@ -606,8 +606,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks DottedGetExpression', async () => {
-            await testWalk(`
+        it('walks DottedGetExpression', () => {
+            testWalk(`
                 sub main()
                     print person.name
                 end sub
@@ -621,8 +621,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks XmlAttributeGetExpression', async () => {
-            await testWalk(`
+        it('walks XmlAttributeGetExpression', () => {
+            testWalk(`
                 sub main()
                     print person@name
                 end sub
@@ -636,8 +636,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks IndexedGetExpression', async () => {
-            await testWalk(`
+        it('walks IndexedGetExpression', () => {
+            testWalk(`
                 sub main()
                     print person["name"]
                 end sub
@@ -652,8 +652,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks GroupingExpression', async () => {
-            await testWalk(`
+        it('walks GroupingExpression', () => {
+            testWalk(`
                 sub main()
                     print 1 + ( 1 + 2 )
                 end sub
@@ -671,8 +671,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks AALiteralExpression', async () => {
-            await testWalk(`
+        it('walks AALiteralExpression', () => {
+            testWalk(`
                 sub main()
                     person = {
                         'comment
@@ -691,8 +691,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks UnaryExpression', async () => {
-            await testWalk(`
+        it('walks UnaryExpression', () => {
+            testWalk(`
                 sub main()
                    isAlive = not isDead
                 end sub
@@ -706,8 +706,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks TemplateStringExpression', async () => {
-            await testWalk(`
+        it('walks TemplateStringExpression', () => {
+            testWalk(`
                 sub main()
                    print \`Hello \${worldVar}\`
                 end sub
@@ -725,8 +725,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks ReturnStatement with or without value', async () => {
-            await testWalk(`
+        it('walks ReturnStatement with or without value', () => {
+            testWalk(`
                 sub main()
                     a = 0
                     if a = 0 then
@@ -765,8 +765,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks TaggedTemplateStringExpression', async () => {
-            await testWalk(`
+        it('walks TaggedTemplateStringExpression', () => {
+            testWalk(`
                 sub main()
                    print tag\`Hello \${worldVar}\`
                 end sub
@@ -784,8 +784,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks CharCodeLiteral expression within TemplateLiteralExpression', async () => {
-            await testWalk(`
+        it('walks CharCodeLiteral expression within TemplateLiteralExpression', () => {
+            testWalk(`
                 sub main()
                    print \`\\n\`
                 end sub
@@ -802,8 +802,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks NewExpression', async () => {
-            await testWalk(`
+        it('walks NewExpression', () => {
+            testWalk(`
                 sub main()
                   person = new Person()
                 end sub
@@ -819,8 +819,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks CallfuncExpression', async () => {
-            await testWalk(`
+        it('walks CallfuncExpression', () => {
+            testWalk(`
                 sub main()
                   person@.doSomething("arg1")
                 end sub
@@ -835,8 +835,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('walks ClassStatement', async () => {
-            await testWalk(`
+        it('walks ClassStatement', () => {
+            testWalk(`
                 class Person
                     name as string
                     age as integer = 1
@@ -858,8 +858,8 @@ describe('astUtils visitors', () => {
             ]);
         });
 
-        it('visits all statements and no expressions', async () => {
-            await testWalk(`
+        it('visits all statements and no expressions', () => {
+            testWalk(`
                 sub main()
                     log = sub(message)
                         print "hello " + message
@@ -876,8 +876,8 @@ describe('astUtils visitors', () => {
             ], WalkMode.visitStatementsRecursive);
         });
 
-        it('visits all expressions and no statement', async () => {
-            await testWalk(`
+        it('visits all expressions and no statement', () => {
+            testWalk(`
                 sub main()
                     log = sub(message)
                         print "hello " + message

@@ -103,7 +103,7 @@ describe('LanguageServer', () => {
         server.dispose();
     });
 
-    async function addXmlFile(name: string, additionalXmlContents = '') {
+    function addXmlFile(name: string, additionalXmlContents = '') {
         const filePath = `components/${name}.xml`;
 
         const contents = `<?xml version="1.0" encoding="utf-8"?>
@@ -111,12 +111,12 @@ describe('LanguageServer', () => {
             ${additionalXmlContents}
             <script type="text/brightscript" uri="${name}.brs" />
         </component>`;
-        await program.addOrReplaceFile(filePath, contents);
+        program.addOrReplaceFile(filePath, contents);
     }
 
-    async function addScriptFile(name: string, contents: string, extension = 'brs') {
+    function addScriptFile(name: string, contents: string, extension = 'brs') {
         const filePath = s`components/${name}.${extension}`;
-        await program.addOrReplaceFile(filePath, contents);
+        program.addOrReplaceFile(filePath, contents);
         for (const key in program.files) {
             if (key.includes(filePath)) {
                 const document = TextDocument.create(util.pathToUri(key), 'brightscript', 1, contents);
@@ -279,6 +279,7 @@ describe('LanguageServer', () => {
                             'source/**/*'
                         ]
                     },
+                    getFileContents: sinon.stub().callsFake(() => Promise.resolve('')) as any,
                     rootDir: rootDir,
                     program: {
                         addOrReplaceFile: <any>addOrReplaceFileStub
@@ -294,7 +295,7 @@ describe('LanguageServer', () => {
                 pathAbsolute: mainPath
             }]);
 
-            expect(addOrReplaceFileStub.getCalls()[0].args[0]).to.eql({
+            expect(addOrReplaceFileStub.getCalls()[0]?.args[0]).to.eql({
                 src: mainPath,
                 dest: s`source/main.brs`
             });
@@ -362,7 +363,7 @@ describe('LanguageServer', () => {
             program = svr.workspaces[0].builder.program;
 
             const name = `CallComponent`;
-            callDocument = await addScriptFile(name, `
+            callDocument = addScriptFile(name, `
                 sub init()
                     shouldBuildAwesome = true
                     if shouldBuildAwesome then
@@ -372,14 +373,14 @@ describe('LanguageServer', () => {
                     end if
                 end sub
             `);
-            await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
+            addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
         });
 
         it('should return the expected signature info when documentation is included', async () => {
             const funcDescriptionComment = '@description Builds awesome for you';
             const funcReturnComment = '@return {Integer} The key to everything';
 
-            await addScriptFile(functionFileBaseName, `
+            addScriptFile(functionFileBaseName, `
                 ' /**
                 ' * ${funcDescriptionComment}
                 ' * ${funcReturnComment}
@@ -403,7 +404,7 @@ describe('LanguageServer', () => {
         });
 
         it('should work if used on a property value', async () => {
-            await addScriptFile(functionFileBaseName, `
+            addScriptFile(functionFileBaseName, `
                 ${funcDefinitionLine}
                     return 42
                 end function
@@ -422,7 +423,7 @@ describe('LanguageServer', () => {
 
         it('should give the correct signature for a class method', async () => {
             const classMethodDefinitionLine = 'function buildAwesome(classVersion = true as Boolean)';
-            await addScriptFile(functionFileBaseName, `
+            addScriptFile(functionFileBaseName, `
                 class ${functionFileBaseName}
                     ${classMethodDefinitionLine}
                         return 42
@@ -453,7 +454,7 @@ describe('LanguageServer', () => {
             program = svr.workspaces[0].builder.program;
 
             const functionFileBaseName = 'buildAwesome';
-            functionDocument = await addScriptFile(functionFileBaseName, `
+            functionDocument = addScriptFile(functionFileBaseName, `
                 function buildAwesome()
                     return 42
                 end function
@@ -461,7 +462,7 @@ describe('LanguageServer', () => {
 
             for (let i = 0; i < 5; i++) {
                 let name = `CallComponent${i}`;
-                const document = await addScriptFile(name, `
+                const document = addScriptFile(name, `
                     sub init()
                         shouldBuildAwesome = true
                         if shouldBuildAwesome then
@@ -470,7 +471,7 @@ describe('LanguageServer', () => {
                     end sub
                 `);
 
-                await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
+                addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
                 referenceFileUris.push(document.uri);
             }
         });
@@ -521,7 +522,7 @@ describe('LanguageServer', () => {
             program = svr.workspaces[0].builder.program;
 
             const functionFileBaseName = 'buildAwesome';
-            functionDocument = await addScriptFile(functionFileBaseName, `
+            functionDocument = addScriptFile(functionFileBaseName, `
                 function pi()
                     return 3.141592653589793
                 end function
@@ -532,7 +533,7 @@ describe('LanguageServer', () => {
             `);
 
             const name = `CallComponent`;
-            referenceDocument = await addScriptFile(name, `
+            referenceDocument = addScriptFile(name, `
                 sub init()
                     shouldBuildAwesome = true
                     if shouldBuildAwesome then
@@ -543,7 +544,7 @@ describe('LanguageServer', () => {
                 end sub
             `);
 
-            await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
+            addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
         });
 
         it('should return the expected location if we entered on an identifier token', async () => {
@@ -605,7 +606,7 @@ describe('LanguageServer', () => {
 
         it('should work for bs class functions as well', async () => {
             const functionFileBaseName = 'Build';
-            functionDocument = await addScriptFile(functionFileBaseName, `
+            functionDocument = addScriptFile(functionFileBaseName, `
                 class ${functionFileBaseName}
                     function awesome()
                         return 42
@@ -614,14 +615,14 @@ describe('LanguageServer', () => {
             `, 'bs');
 
             const name = `CallComponent`;
-            referenceDocument = await addScriptFile(name, `
+            referenceDocument = addScriptFile(name, `
                 sub init()
                     build = new Build()
                     build.awesome()
                 end sub
             `);
 
-            await addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
+            addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
 
             const locations = await svr.onDefinition({
                 textDocument: {
@@ -647,7 +648,7 @@ describe('LanguageServer', () => {
         });
 
         it('should return the expected symbols even if pulled from cache', async () => {
-            const document = await addScriptFile('buildAwesome', `
+            const document = addScriptFile('buildAwesome', `
                 function pi()
                     return 3.141592653589793
                 end function
@@ -669,7 +670,7 @@ describe('LanguageServer', () => {
         });
 
         it('should work for brightscript classes as well', async () => {
-            const document = await addScriptFile('MyFirstClass', `
+            const document = addScriptFile('MyFirstClass', `
                 class MyFirstClass
                     function pi()
                         return 3.141592653589793
@@ -698,7 +699,7 @@ describe('LanguageServer', () => {
         });
 
         it('should work for brightscript namespaces as well', async () => {
-            const document = await addScriptFile('MyFirstNamespace', `
+            const document = addScriptFile('MyFirstNamespace', `
                 namespace MyFirstNamespace
                     function pi()
                         return 3.141592653589793
@@ -738,7 +739,7 @@ describe('LanguageServer', () => {
             const className = 'MyFirstClass';
             const namespaceName = 'MyFirstNamespace';
 
-            await addScriptFile('buildAwesome', `
+            addScriptFile('buildAwesome', `
                 function pi()
                     return 3.141592653589793
                 end function
@@ -748,7 +749,7 @@ describe('LanguageServer', () => {
                 end function
             `);
 
-            await addScriptFile(className, `
+            addScriptFile(className, `
                 class ${className}
                     function ${className}pi()
                         return 3.141592653589793
@@ -761,7 +762,7 @@ describe('LanguageServer', () => {
             `, 'bs');
 
 
-            await addScriptFile(namespaceName, `
+            addScriptFile(namespaceName, `
                 namespace ${namespaceName}
                     function pi()
                         return 3.141592653589793
@@ -810,7 +811,7 @@ describe('LanguageServer', () => {
             const nestedNamespace = 'containerNamespace';
             const nestedClassName = 'nestedClass';
 
-            await addScriptFile('nested', `
+            addScriptFile('nested', `
                 namespace ${nestedNamespace}
                     class ${nestedClassName}
                         function pi()

@@ -15,14 +15,18 @@ module.exports = async (suite, name, brighterscript, projectPath) => {
         throw new Error('No files found in program');
     }
 
-    suite.add(name, async (deferred) => {
+    suite.add(name, (deferred) => {
         const scopes = Object.values(builder.program.scopes);
         //mark all scopes as invalid so they'll re-validate
         for (let scope of scopes) {
             scope.invalidate();
         }
-        await builder.program.validate();
-        deferred.resolve();
+        let promise = builder.program.validate();
+        if (promise) {
+            promise.then(() => deferred.resolve());
+        } else {
+            deferred.resolve();
+        }
     }, {
         'defer': true
     });
