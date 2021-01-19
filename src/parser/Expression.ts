@@ -950,7 +950,7 @@ export class NewExpression extends Expression {
     public readonly range: Range;
 
     public transpile(state: TranspileState) {
-        const cls = state.file.getClassByName(
+        const cls = state.file.getClassFileLink(
             this.className.getName(ParseMode.BrighterScript),
             this.namespaceName?.getName(ParseMode.BrighterScript)
         )?.item;
