@@ -26,7 +26,7 @@ describe('util', () => {
 
     describe('fileExists', () => {
         it('returns false when no value is passed', async () => {
-            expect(await util.fileExists(undefined)).to.be.false;
+            expect(await util.pathExists(undefined)).to.be.false;
         });
     });
 

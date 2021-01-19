@@ -13,7 +13,7 @@
 //     });
 
 //     describe('manifest parser', () => {
-//         it.only('returns an empty map if manifest not found', async () => {
+//         it('returns an empty map if manifest not found', async () => {
 //             // sinon.stub(fsExtra, 'readFile').returns(<any>
 //             //     Promise.reject(
 //             //         new Error('File not found')

@@ -194,3 +194,5 @@ export interface TypedefProvider {
 }
 
 export type TranspileResult = Array<(string | SourceNode)>;
+
+export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined> | void;

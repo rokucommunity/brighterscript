@@ -38,13 +38,13 @@ describe('BrsFile', () => {
         program.dispose();
     });
 
-    it('supports the third parameter in CreateObject', async () => {
-        await program.addOrReplaceFile('source/main.brs', `
+    it('supports the third parameter in CreateObject', () => {
+        program.addOrReplaceFile('source/main.brs', `
             sub main()
                 regexp = CreateObject("roRegex", "[a-z]+", "i")
             end sub
         `);
-        await program.validate();
+        program.validate();
         expect(program.getDiagnostics()[0]?.message).to.not.exist;
     });
 
@@ -72,8 +72,8 @@ describe('BrsFile', () => {
             dest: `source/lib.brs`
         } as StandardizedFileEntry;
 
-        it('creates proper tokens', async () => {
-            file = await program.addOrReplaceFile<BrsFile>(entry, `call(ModuleA.ModuleB.ModuleC.`);
+        it('creates proper tokens', () => {
+            file = program.addOrReplaceFile<BrsFile>(entry, `call(ModuleA.ModuleB.ModuleC.`);
             expect(file['getPartialVariableName'](file.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
             expect(file['getPartialVariableName'](file.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
             expect(file['getPartialVariableName'](file.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
@@ -84,16 +84,16 @@ describe('BrsFile', () => {
     });
 
     describe('getScopesForFile', () => {
-        it('finds the scope for the file', async () => {
-            let file = await program.addOrReplaceFile('source/main.brs', ``);
+        it('finds the scope for the file', () => {
+            let file = program.addOrReplaceFile('source/main.brs', ``);
             expect(program.getScopesForFile(file)[0]?.name).to.equal('source');
         });
     });
 
     describe('getCompletions', () => {
-        it('waits for the file to be processed before collecting completions', async () => {
+        it('waits for the file to be processed before collecting completions', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            await program.addOrReplaceFile('source/main.brs', `
+            program.addOrReplaceFile('source/main.brs', `
                 sub Main()
                     print "hello"
                     Say
@@ -103,28 +103,28 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 23));
+            let result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 23));
             let names = result.map(x => x.label);
             expect(names).to.includes('Main');
             expect(names).to.includes('SayHello');
         });
 
-        it('always includes `m`', async () => {
+        it('always includes `m`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
             `);
 
-            let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 23));
+            let result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 23));
             let names = result.map(x => x.label);
             expect(names).to.contain('m');
         });
 
-        it('includes all keywordsm`', async () => {
+        it('includes all keywordsm`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
 
                 end sub
@@ -133,36 +133,36 @@ describe('BrsFile', () => {
             let keywords = Object.keys(Keywords).filter(x => !x.includes(' '));
 
             //inside the function
-            let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 23));
+            let result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 23));
             let names = result.map(x => x.label);
             for (let keyword of keywords) {
                 expect(names).to.include(keyword);
             }
 
             //outside the function
-            result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(4, 8));
+            result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(4, 8));
             names = result.map(x => x.label);
             for (let keyword of keywords) {
                 expect(names).to.include(keyword);
             }
         });
 
-        it('does not provide completions within a comment', async () => {
+        it('does not provide completions within a comment', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     'some comment
                 end sub
             `);
 
             //inside the function
-            let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 33));
+            let result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 33));
             expect(result).to.be.lengthOf(0);
         });
 
-        it('does not provide duplicate entries for variables', async () => {
+        it('does not provide duplicate entries for variables', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     name = "bob"
                     age = 12
@@ -170,7 +170,7 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 23));
+            let result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 23));
 
             let count = result.reduce((total, x) => {
                 return x.label === 'name' ? total + 1 : total;
@@ -178,28 +178,28 @@ describe('BrsFile', () => {
             expect(count).to.equal(1);
         });
 
-        it('does not include `as` and `string` text options when used in function params', async () => {
+        it('does not include `as` and `string` text options when used in function params', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
 
                 end sub
             `);
 
-            let result = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 23));
+            let result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 23));
             expect(result.filter(x => x.kind === CompletionItemKind.Text)).not.to.contain('as');
             expect(result.filter(x => x.kind === CompletionItemKind.Text)).not.to.contain('string');
         });
 
-        it('does not provide intellisense results when inside a comment', async () => {
+        it('does not provide intellisense results when inside a comment', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
-            await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                     'this is a comment
                 end sub
             `);
 
-            let results = await program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 30));
+            let results = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 30));
             expect(results).to.be.empty;
         });
 
@@ -207,41 +207,41 @@ describe('BrsFile', () => {
 
     describe('comment flags', () => {
         describe('bs:disable-next-line', () => {
-            it('disables critical diagnostic issues', async () => {
-                await program.addOrReplaceFile('source/main.brs', `
+            it('disables critical diagnostic issues', () => {
+                program.addOrReplaceFile('source/main.brs', `
                     sub main()
                         Dim requestData[requestList.count()]
                     end sub
                 `);
                 //should have an error
-                await program.validate();
+                program.validate();
                 expect(program.getDiagnostics()[0]?.message).to.exist;
 
-                await program.addOrReplaceFile('source/main.brs', `
+                program.addOrReplaceFile('source/main.brs', `
                     sub main()
                         'bs:disable-next-line
                         Dim requestData[requestList.count()]
                     end sub
                 `);
                 //should have an error
-                await program.validate();
+                program.validate();
                 expect(program.getDiagnostics()[0]?.message).not.to.exist;
             });
 
-            it('works with leading whitespace', async () => {
-                await program.addOrReplaceFile('source/main.brs', `
+            it('works with leading whitespace', () => {
+                program.addOrReplaceFile('source/main.brs', `
                     sub main()
                         ' bs:disable-next-line
                         =asdf=sadf=
                     end sub
                 `);
                 //should have an error
-                await program.validate();
+                program.validate();
                 expect(program.getDiagnostics()[0]?.message).not.to.exist;
             });
 
-            it('works for all', async () => {
-                let file = await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('works for all', () => {
+                let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line
                         name = "bob
@@ -253,13 +253,13 @@ describe('BrsFile', () => {
                     range: Range.create(2, 24, 2, 45),
                     affectedRange: util.createRange(3, 0, 3, Number.MAX_SAFE_INTEGER)
                 } as CommentFlag);
-                await program.validate();
+                program.validate();
                 //the "unterminated string" error should be filtered out
                 expect(program.getDiagnostics()[0]?.message).not.to.exist;
             });
 
-            it('works for specific codes', async () => {
-                let file = await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('works for specific codes', () => {
+                let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line: 1083, 1001
                         name = "bob
@@ -275,8 +275,8 @@ describe('BrsFile', () => {
                 expect(program.getDiagnostics()[0]?.message).to.not.exist;
             });
 
-            it('ignores non-numeric codes', async () => {
-                let file = await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('ignores non-numeric codes', () => {
+                let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         'bs:disable-next-line: LINT9999
                         name = "bob
@@ -286,14 +286,14 @@ describe('BrsFile', () => {
                 expect(program.getDiagnostics()[0]?.message).to.exist;
             });
 
-            it('adds diagnostics for unknown numeric diagnostic codes', async () => {
-                await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('adds diagnostics for unknown numeric diagnostic codes', () => {
+                program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         print "hi" 'bs:disable-line: 123456 999999   aaaab
                     end sub
                 `);
 
-                await program.validate();
+                program.validate();
 
                 expect(program.getDiagnostics()).to.be.lengthOf(2);
                 expect(program.getDiagnostics()[0]).to.deep.include({
@@ -307,8 +307,8 @@ describe('BrsFile', () => {
         });
 
         describe('bs:disable-line', () => {
-            it('works for all', async () => {
-                let file = await program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('works for all', () => {
+                let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub Main()
                         z::;;%%%%%% 'bs:disable-line
                     end sub
@@ -319,13 +319,13 @@ describe('BrsFile', () => {
                     range: Range.create(2, 36, 2, 52),
                     affectedRange: Range.create(2, 0, 2, 36)
                 } as CommentFlag);
-                await program.validate();
+                program.validate();
                 //the "unterminated string" error should be filtered out
                 expect(program.getDiagnostics()).to.be.lengthOf(0);
             });
 
-            it('works for specific codes', async () => {
-                await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('works for specific codes', () => {
+                program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         'should not have any errors
                         DoSomething(1) 'bs:disable-line:1002
@@ -336,7 +336,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
 
-                await program.validate();
+                program.validate();
 
                 expect(program.getDiagnostics()).to.be.lengthOf(1);
                 expect(program.getDiagnostics()[0]).to.deep.include({
@@ -344,40 +344,40 @@ describe('BrsFile', () => {
                 } as BsDiagnostic);
             });
 
-            it('handles the erraneous `stop` keyword', async () => {
+            it('handles the erraneous `stop` keyword', () => {
                 //the current version of BRS causes parse errors after the `parse` keyword, showing error in comments
                 //the program should ignore all diagnostics found in brs:* comment lines EXCEPT
                 //for the diagnostics about using unknown error codes
-                await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         stop 'bs:disable-line
                         print "need a valid line to fix stop error"
                     end sub
                 `);
-                await program.validate();
+                program.validate();
                 expect(program.getDiagnostics()).to.be.lengthOf(0);
             });
         });
     });
 
     describe('parse', () => {
-        it('uses the proper parse mode based on file extension', async () => {
-            async function testParseMode(destPath: string, expectedParseMode: ParseMode) {
-                const file = await program.addOrReplaceFile<BrsFile>(destPath, '');
+        it('uses the proper parse mode based on file extension', () => {
+            function testParseMode(destPath: string, expectedParseMode: ParseMode) {
+                const file = program.addOrReplaceFile<BrsFile>(destPath, '');
                 expect(file.parseMode).to.equal(expectedParseMode);
             }
 
-            await testParseMode('source/main.brs', ParseMode.BrightScript);
-            await testParseMode('source/main.spec.brs', ParseMode.BrightScript);
-            await testParseMode('source/main.d.brs', ParseMode.BrightScript);
+            testParseMode('source/main.brs', ParseMode.BrightScript);
+            testParseMode('source/main.spec.brs', ParseMode.BrightScript);
+            testParseMode('source/main.d.brs', ParseMode.BrightScript);
 
-            await testParseMode('source/main.bs', ParseMode.BrighterScript);
-            await testParseMode('source/main.d.bs', ParseMode.BrighterScript);
-            await testParseMode('source/main.spec.bs', ParseMode.BrighterScript);
+            testParseMode('source/main.bs', ParseMode.BrighterScript);
+            testParseMode('source/main.d.bs', ParseMode.BrighterScript);
+            testParseMode('source/main.spec.bs', ParseMode.BrighterScript);
         });
 
-        it('supports labels and goto statements', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        it('supports labels and goto statements', () => {
+            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     'multiple goto statements on one line
                     goto myLabel : goto myLabel
@@ -387,8 +387,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports empty print statements', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        it('supports empty print statements', () => {
+            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                    print
                 end sub
@@ -398,8 +398,8 @@ describe('BrsFile', () => {
 
         describe('conditional compile', () => {
 
-            it('works for upper case keywords', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('works for upper case keywords', () => {
+                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #CONST someFlag = true
                         #IF someFlag
@@ -414,8 +414,8 @@ describe('BrsFile', () => {
                 expect(file.getDiagnostics()).to.be.lengthOf(0);
             });
 
-            it('supports single-word #elseif and #endif', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('supports single-word #elseif and #endif', () => {
+                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #const someFlag = true
                         #if someFlag
@@ -428,8 +428,8 @@ describe('BrsFile', () => {
                 expect(file.getDiagnostics()).to.be.lengthOf(0);
             });
 
-            it('supports multi-word #else if and #end if', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('supports multi-word #else if and #end if', () => {
+                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #const someFlag = true
                         #if someFlag
@@ -442,8 +442,8 @@ describe('BrsFile', () => {
                 expect(file.getDiagnostics()).to.be.lengthOf(0);
             });
 
-            it('does not choke on invalid code inside a false conditional compile', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('does not choke on invalid code inside a false conditional compile', () => {
+                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #if false
                             non-commented code here should not cause parse errors
@@ -453,8 +453,8 @@ describe('BrsFile', () => {
                 expect(file.getDiagnostics()).to.be.lengthOf(0);
             });
 
-            it('detects syntax error in #if', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('detects syntax error in #if', () => {
+                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #if true1
                             print "true"
@@ -466,8 +466,8 @@ describe('BrsFile', () => {
                 });
             });
 
-            it('detects syntax error in #const', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('detects syntax error in #const', () => {
+                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #if %
                             print "true"
@@ -479,8 +479,8 @@ describe('BrsFile', () => {
                 });
             });
 
-            it('detects #const name using reserved word', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('detects #const name using reserved word', () => {
+                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #const function = true
                     end sub
@@ -490,8 +490,8 @@ describe('BrsFile', () => {
                 });
             });
 
-            it('detects syntax error in #const', async () => {
-                let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            it('detects syntax error in #const', () => {
+                let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                     sub main()
                         #const someConst = 123
                     end sub
@@ -502,8 +502,8 @@ describe('BrsFile', () => {
             });
         });
 
-        it('supports stop statement', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        it('supports stop statement', () => {
+            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                    stop
                 end sub
@@ -511,8 +511,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('supports single-line if statements', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        it('supports single-line if statements', () => {
+            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     if 1 < 2: return true: end if
                     if 1 < 2: return true
@@ -886,8 +886,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('adds error for library statements NOT at top of file', async () => {
-            let file = await program.addOrReplaceFile('source/main.bs', `
+        it('adds error for library statements NOT at top of file', () => {
+            let file = program.addOrReplaceFile('source/main.bs', `
                 sub main()
                 end sub
                 import "file.brs"
@@ -906,8 +906,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('adds error for library statements NOT at top of file', async () => {
-            let file = await program.addOrReplaceFile('source/main.brs', `
+        it('adds error for library statements NOT at top of file', () => {
+            let file = program.addOrReplaceFile('source/main.brs', `
                 sub main()
                 end sub
                 Library "v30/bslCore.brs"
@@ -919,8 +919,8 @@ describe('BrsFile', () => {
             ]);
         });
 
-        it('adds error for library statements inside of function body', async () => {
-            let file = await program.addOrReplaceFile('source/main.brs', `
+        it('adds error for library statements inside of function body', () => {
+            let file = program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     Library "v30/bslCore.brs"
                 end sub
@@ -941,8 +941,8 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('succeeds when finding variables with "sub" in them', async () => {
-            let file = await program.addOrReplaceFile('source/main.brs', `
+        it('succeeds when finding variables with "sub" in them', () => {
+            let file = program.addOrReplaceFile('source/main.brs', `
                 function DoSomething()
                     return value.subType()
                 end function
@@ -1196,15 +1196,15 @@ describe('BrsFile', () => {
             }]);
         });
 
-        it('finds function calls nested inside statements', async () => {
-            await program.addOrReplaceFile(`source/main.brs`, `
+        it('finds function calls nested inside statements', () => {
+            program.addOrReplaceFile(`source/main.brs`, `
                 sub main()
                     if true then
                         DoesNotExist(1, 2)
                     end if
                 end sub
             `);
-            await program.validate();
+            program.validate();
             expect(
                 program.getDiagnostics()[0]?.message
             ).to.equal(
@@ -1246,8 +1246,8 @@ describe('BrsFile', () => {
             expect(file.callables.length).to.equal(0);
         });
 
-        it('finds return type', async () => {
-            let file = await program.addOrReplaceFile('source/main.brs', `
+        it('finds return type', () => {
+            let file = program.addOrReplaceFile('source/main.brs', `
                 function DoSomething() as string
                 end function
             `);
@@ -1349,8 +1349,8 @@ describe('BrsFile', () => {
             expect(scope.variableDeclarations[0].name).to.equal('theLength');
         });
 
-        it('finds value from global return', async () => {
-            let file = await program.addOrReplaceFile('source/main.brs', `
+        it('finds value from global return', () => {
+            let file = program.addOrReplaceFile('source/main.brs', `
                 sub Main()
                    myName = GetName()
                 end sub
@@ -1400,8 +1400,8 @@ describe('BrsFile', () => {
     });
 
     describe('getHover', () => {
-        it('works for param types', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        it('works for param types', () => {
+            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub DoSomething(name as string)
                     name = 1
                     sayMyName = function(name as string)
@@ -1421,8 +1421,8 @@ describe('BrsFile', () => {
         });
 
         //ignore this for now...it's not a huge deal
-        it('does not match on keywords or data types', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        it('does not match on keywords or data types', () => {
+            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main(name as string)
                 end sub
                 sub as()
@@ -1434,8 +1434,8 @@ describe('BrsFile', () => {
             expect(file.getHover(Position.create(1, 36))).not.to.exist;
         });
 
-        it('finds declared function', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        it('finds declared function', () => {
+            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 function Main(count = 1)
                     firstName = "bob"
                     age = 21
@@ -1450,8 +1450,8 @@ describe('BrsFile', () => {
             expect(hover.contents).to.equal('function Main(count? as dynamic) as dynamic');
         });
 
-        it('finds variable function hover in same scope', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        it('finds variable function hover in same scope', () => {
+            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     sayMyName = sub(name as string)
                     end sub
@@ -1466,8 +1466,8 @@ describe('BrsFile', () => {
             expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
         });
 
-        it('finds function hover in file scope', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        it('finds function hover in file scope', () => {
+            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     sayMyName()
                 end sub
@@ -1483,19 +1483,19 @@ describe('BrsFile', () => {
             expect(hover.contents).to.equal('sub sayMyName() as void');
         });
 
-        it('finds function hover in scope', async () => {
+        it('finds function hover in scope', () => {
             let rootDir = process.cwd();
             program = new Program({
                 rootDir: rootDir
             });
 
-            let mainFile = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     sayMyName()
                 end sub
             `);
 
-            await program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
+            program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
                 sub sayMyName(name as string)
 
                 end sub
@@ -1508,8 +1508,8 @@ describe('BrsFile', () => {
             expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
         });
 
-        it('handles mixed case `then` partions of conditionals', async () => {
-            let mainFile = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        it('handles mixed case `then` partions of conditionals', () => {
+            let mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     if true then
                         print "works"
@@ -1518,7 +1518,7 @@ describe('BrsFile', () => {
             `);
 
             expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
-            mainFile = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     if true Then
                         print "works"
@@ -1527,7 +1527,7 @@ describe('BrsFile', () => {
             `);
             expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
 
-            mainFile = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
                     if true THEN
                         print "works"
@@ -1538,20 +1538,20 @@ describe('BrsFile', () => {
         });
     });
 
-    it('does not throw when encountering incomplete import statement', async () => {
-        await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+    it('does not throw when encountering incomplete import statement', () => {
+        program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
             import
             sub main()
             end sub
         `);
-        await program.validate();
+        program.validate();
         //this test will throw an exception if something went wrong
     });
 
     describe('transpile', () => {
         describe('throwStatement', () => {
-            it('transpiles properly', async () => {
-                await testTranspile(`
+            it('transpiles properly', () => {
+                testTranspile(`
                     sub main()
                         try
                             throw "some message"
@@ -1563,8 +1563,8 @@ describe('BrsFile', () => {
         });
 
         describe('try/catch', () => {
-            it('transpiles properly', async () => {
-                await testTranspile(`
+            it('transpiles properly', () => {
+                testTranspile(`
                     sub main()
                         try
                             print a.b.c
@@ -1577,8 +1577,8 @@ describe('BrsFile', () => {
         });
 
         describe('namespaces', () => {
-            it('properly transpiles namespace functions for assignments', async () => {
-                await testTranspile(`
+            it('properly transpiles namespace functions for assignments', () => {
+                testTranspile(`
                     namespace NameA.NameB
                         sub Speak()
                         end sub
@@ -1600,8 +1600,8 @@ describe('BrsFile', () => {
                 `);
             });
 
-            it('properly transpiles inferred namespace function for assignment', async () => {
-                await testTranspile(`
+            it('properly transpiles inferred namespace function for assignment', () => {
+                testTranspile(`
                     namespace NameA.NameB
                         sub Speak()
                         end sub
@@ -1621,8 +1621,8 @@ describe('BrsFile', () => {
                 `);
             });
         });
-        it('includes all text to end of line for a non-terminated string', async () => {
-            await testTranspile(
+        it('includes all text to end of line for a non-terminated string', () => {
+            testTranspile(
                 'sub main()\n    name = "john \nend sub',
                 'sub main()\n    name = "john "\nend sub',
                 null,
@@ -1630,22 +1630,22 @@ describe('BrsFile', () => {
                 false
             );
         });
-        it('escapes quotes in string literals', async () => {
-            await testTranspile(`
+        it('escapes quotes in string literals', () => {
+            testTranspile(`
                 sub main()
                     expected += chr(10) + " version=""2.0"""
                 end sub
             `);
         });
-        it('keeps function parameter types in proper order', async () => {
-            await testTranspile(`
+        it('keeps function parameter types in proper order', () => {
+            testTranspile(`
                 function CreateTestStatistic(name as string, result = "Success" as string, time = 0 as integer, errorCode = 0 as integer, errorMessage = "" as string) as object
                 end function
             `);
         });
 
-        it('transpiles local var assignment operators', async () => {
-            await testTranspile(`
+        it('transpiles local var assignment operators', () => {
+            testTranspile(`
                 sub main()
                     count = 0
                     count += 1
@@ -1659,8 +1659,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('transpiles AA property assignment operators', async () => {
-            await testTranspile(`
+        it('transpiles AA property assignment operators', () => {
+            testTranspile(`
                 sub main()
                     person = {
                         count: 0
@@ -1670,8 +1670,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('transpiles AA indexed assignment operators', async () => {
-            await testTranspile(`
+        it('transpiles AA indexed assignment operators', () => {
+            testTranspile(`
                 sub main()
                     person = {
                         count: 0
@@ -1681,8 +1681,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('relative-referenced namespaced functions get prefixed', async () => {
-            await testTranspile(`
+        it('relative-referenced namespaced functions get prefixed', () => {
+            testTranspile(`
                 namespace Vertibrates.Birds
                     function GetAllBirds()
                         return [
@@ -1713,8 +1713,8 @@ describe('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('transpiles namespaced functions', async () => {
-            await testTranspile(`
+        it('transpiles namespaced functions', () => {
+            testTranspile(`
                 namespace NameA
                     sub alert()
                     end sub
@@ -1731,8 +1731,8 @@ describe('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('transpiles calls to fully-qualified namespaced functions', async () => {
-            await testTranspile(`
+        it('transpiles calls to fully-qualified namespaced functions', () => {
+            testTranspile(`
                 namespace NameA
                     sub alert()
                     end sub
@@ -1758,16 +1758,16 @@ describe('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
-        it('keeps end-of-line comments with their line', async () => {
-            await testTranspile(`
+        it('keeps end-of-line comments with their line', () => {
+            testTranspile(`
                 function DoSomething() 'comment 1
                     name = "bob" 'comment 2
                 end function 'comment 3
             `);
         });
 
-        it('works for functions', async () => {
-            await testTranspile(`
+        it('works for functions', () => {
+            testTranspile(`
                 function DoSomething()
                     'lots of empty white space
                     'that will be removed during transpile
@@ -1783,8 +1783,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('keeps empty AAs and arrays on same line', async () => {
-            await testTranspile(`
+        it('keeps empty AAs and arrays on same line', () => {
+            testTranspile(`
                 sub a()
                     person = {}
                     stuff = []
@@ -1792,8 +1792,8 @@ describe('BrsFile', () => {
         `, null, 'trim');
         });
 
-        it('adds `then` when missing', async () => {
-            await testTranspile(`
+        it('adds `then` when missing', () => {
+            testTranspile(`
                 sub a()
                     if true
                         print "true"
@@ -1816,8 +1816,8 @@ describe('BrsFile', () => {
             `, 'trim');
         });
 
-        it('does not add leading or trailing newlines', async () => {
-            await testTranspile(`function log()\nend function`, undefined, 'none');
+        it('does not add leading or trailing newlines', () => {
+            testTranspile(`function log()\nend function`, undefined, 'none');
         });
 
         it('handles sourcemap edge case', async () => {
@@ -1828,7 +1828,7 @@ describe('BrsFile', () => {
                 '\n' +
                 'end sub';
             program.options.sourceMap = true;
-            let result = await testTranspile(source, `sub main()\n    print 1\nend sub`, 'none', 'source/main.bs');
+            let result = testTranspile(source, `sub main()\n    print 1\nend sub`, 'none', 'source/main.bs');
             //load the source map
             let location = await SourceMapConsumer.with(result.map.toJSON(), null, (consumer) => {
                 return consumer.generatedPositionFor({
@@ -1849,7 +1849,7 @@ describe('BrsFile', () => {
                 .filter(x => x.kind !== TokenKind.Eof && x.kind !== TokenKind.Newline);
 
             program.options.sourceMap = true;
-            let result = await testTranspile(source, source, 'none');
+            let result = testTranspile(source, source, 'none');
             //load the source map
             await SourceMapConsumer.with(result.map.toString(), null, (consumer) => {
                 let tokenResult = tokens.map(token => ({
@@ -1875,8 +1875,8 @@ describe('BrsFile', () => {
             });
         });
 
-        it('handles empty if block', async () => {
-            await testTranspile(`
+        it('handles empty if block', () => {
+            testTranspile(`
                 if true then
                 end if
                 if true then
@@ -1896,8 +1896,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('handles empty elseif block', async () => {
-            await testTranspile(`
+        it('handles empty elseif block', () => {
+            testTranspile(`
                 if true then
                     print "if"
                 else if true then
@@ -1910,8 +1910,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('handles empty else block', async () => {
-            await testTranspile(`
+        it('handles empty else block', () => {
+            testTranspile(`
                 if true then
                     print "if"
                 else
@@ -1925,8 +1925,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('works for function parameters', async () => {
-            await testTranspile(`
+        it('works for function parameters', () => {
+            testTranspile(`
                 function DoSomething(name, age as integer, text as string)
                 end function
             `, `
@@ -1935,8 +1935,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('adds newlines between top-level statements', async () => {
-            await testTranspile(`
+        it('adds newlines between top-level statements', () => {
+            testTranspile(`
                 function a()
                 end function
 
@@ -1945,8 +1945,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('properly indents nested AA literals', async () => {
-            await testTranspile(`
+        it('properly indents nested AA literals', () => {
+            testTranspile(`
                 sub doSomething()
                     grandparent = {
                         parent: {
@@ -1961,8 +1961,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('does not add comma after final object property even when comments are present', async () => {
-            await testTranspile(`
+        it('does not add comma after final object property even when comments are present', () => {
+            testTranspile(`
                 sub doSomething()
                     person = {
                         age: 12, 'comment
@@ -1986,8 +1986,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('works for a complex function with comments all over the place', async () => {
-            await testTranspile(`
+        it('works for a complex function with comments all over the place', () => {
+            testTranspile(`
                 'import some library
                 library "v30/bslCore.brs" 'comment
 
@@ -2073,8 +2073,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('simple mapped files include a reference to the source map', async () => {
-            let file = await program.addOrReplaceFile('source/logger.brs', trim`
+        it('simple mapped files include a reference to the source map', () => {
+            let file = program.addOrReplaceFile('source/logger.brs', trim`
                 sub logInfo()
                 end sub
             `);
@@ -2083,8 +2083,8 @@ describe('BrsFile', () => {
             expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
         });
 
-        it('AST generated files include a reference to the source map', async () => {
-            let file = await program.addOrReplaceFile('source/logger.brs', trim`
+        it('AST generated files include a reference to the source map', () => {
+            let file = program.addOrReplaceFile('source/logger.brs', trim`
                 sub logInfo()
                 end sub
             `);
@@ -2096,18 +2096,18 @@ describe('BrsFile', () => {
 
     describe('callfunc operator', () => {
         describe('transpile', () => {
-            it('does not produce diagnostics', async () => {
-                await program.addOrReplaceFile('source/main.bs', `
+            it('does not produce diagnostics', () => {
+                program.addOrReplaceFile('source/main.bs', `
                     sub main()
                         someObject@.someFunction(paramObject.value)
                     end sub
                 `);
-                await program.validate();
+                program.validate();
                 expect(program.getDiagnostics()[0]?.message).not.to.exist;
             });
 
-            it('sets invalid on empty callfunc', async () => {
-                await testTranspile(`
+            it('sets invalid on empty callfunc', () => {
+                testTranspile(`
                     sub main()
                         node@.doSomething()
                         m.top.node@.doSomething()
@@ -2122,8 +2122,8 @@ describe('BrsFile', () => {
                 `);
             });
 
-            it('includes original arguments', async () => {
-                await testTranspile(`
+            it('includes original arguments', () => {
+                testTranspile(`
                     sub main()
                         node@.doSomething(1, true, m.top.someVal)
                     end sub
@@ -2170,35 +2170,35 @@ describe('BrsFile', () => {
     });
 
     describe('typedefKey', () => {
-        it('works for .brs files', async () => {
+        it('works for .brs files', () => {
             expect(
-                s((await program.addOrReplaceFile<BrsFile>('source/main.brs', '')).typedefKey)
+                s((program.addOrReplaceFile<BrsFile>('source/main.brs', '')).typedefKey)
             ).to.equal(
                 s`${rootDir.toLowerCase()}/source/main.d.bs`
             );
         });
-        it('returns undefined for files that should not have a typedef', async () => {
-            expect((await program.addOrReplaceFile<BrsFile>('source/main.bs', '')).typedefKey).to.be.undefined;
+        it('returns undefined for files that should not have a typedef', () => {
+            expect((program.addOrReplaceFile<BrsFile>('source/main.bs', '')).typedefKey).to.be.undefined;
 
-            expect((await program.addOrReplaceFile<BrsFile>('source/main.d.bs', '')).typedefKey).to.be.undefined;
+            expect((program.addOrReplaceFile<BrsFile>('source/main.d.bs', '')).typedefKey).to.be.undefined;
 
-            const xmlFile = await program.addOrReplaceFile<BrsFile>('components/comp.xml', '');
+            const xmlFile = program.addOrReplaceFile<BrsFile>('components/comp.xml', '');
             expect(xmlFile.typedefKey).to.be.undefined;
         });
     });
 
 
     describe('type definitions', () => {
-        it('only exposes defined functions even if source has more', async () => {
+        it('only exposes defined functions even if source has more', () => {
             //parse the .brs file first so it doesn't know about the typedef
-            await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            program.addOrReplaceFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
                 sub speak()
                 end sub
             `);
 
-            await program.addOrReplaceFile('source/main.d.bs', `
+            program.addOrReplaceFile('source/main.d.bs', `
                 sub main()
                 end sub
             `);
@@ -2209,8 +2209,8 @@ describe('BrsFile', () => {
             expect(functionNames).not.to.include('speak');
         });
 
-        it('reacts to typedef file changes', async () => {
-            let file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+        it('reacts to typedef file changes', () => {
+            let file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
                 sub speak()
@@ -2219,7 +2219,7 @@ describe('BrsFile', () => {
             expect(file.hasTypedef).to.be.false;
             expect(file.typedefFile).not.to.exist;
 
-            await program.addOrReplaceFile('source/main.d.bs', `
+            program.addOrReplaceFile('source/main.d.bs', `
                 sub main()
                 end sub
             `);
@@ -2227,7 +2227,7 @@ describe('BrsFile', () => {
             expect(file.typedefFile).to.exist;
 
             //add replace file, does it still find the typedef
-            file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
                 sub speak()
@@ -2244,47 +2244,47 @@ describe('BrsFile', () => {
     });
 
     describe('typedef', () => {
-        it('sets typedef path properly', async () => {
-            expect((await program.addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefKey).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
-            expect((await program.addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefKey).to.equal(undefined);
-            expect((await program.addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefKey).to.equal(undefined);
+        it('sets typedef path properly', () => {
+            expect((program.addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefKey).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
+            expect((program.addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefKey).to.equal(undefined);
+            expect((program.addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefKey).to.equal(undefined);
             //works for dest with `.brs` extension
-            expect((await program.addOrReplaceFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefKey).to.equal(undefined);
+            expect((program.addOrReplaceFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefKey).to.equal(undefined);
         });
 
-        it('does not link when missing from program', async () => {
-            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+        it('does not link when missing from program', () => {
+            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
             expect(file.typedefFile).not.to.exist;
         });
 
-        it('links typedef when added BEFORE .brs file', async () => {
-            const typedef = await program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
-            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+        it('links typedef when added BEFORE .brs file', () => {
+            const typedef = program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
             expect(file.typedefFile).to.equal(typedef);
         });
 
-        it('links typedef when added AFTER .brs file', async () => {
-            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
-            const typedef = await program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+        it('links typedef when added AFTER .brs file', () => {
+            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+            const typedef = program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
             expect(file.typedefFile).to.eql(typedef);
         });
 
-        it('removes typedef link when typedef is removed', async () => {
-            const typedef = await program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
-            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
+        it('removes typedef link when typedef is removed', () => {
+            const typedef = program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
+            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
             program.removeFile(typedef.pathAbsolute);
             expect(file.typedefFile).to.be.undefined;
         });
     });
 
     describe('getTypedef', () => {
-        async function testTypedef(original: string, expected: string) {
-            let file = await program.addOrReplaceFile<BrsFile>('source/main.brs', original);
+        function testTypedef(original: string, expected: string) {
+            let file = program.addOrReplaceFile<BrsFile>('source/main.brs', original);
             expect(file.getTypedef()).to.eql(expected);
         }
 
-        it('strips function body', async () => {
-            await testTypedef(`
+        it('strips function body', () => {
+            testTypedef(`
                 sub main(param1 as string)
                     print "main"
                 end sub
@@ -2294,16 +2294,16 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('includes import statements', async () => {
-            await testTypedef(`
+        it('includes import statements', () => {
+            testTypedef(`
                import "pkg:/source/lib.brs"
             `, trim`
                 import "pkg:/source/lib.brs"
             `);
         });
 
-        it('includes namespace statements', async () => {
-            await testTypedef(`
+        it('includes namespace statements', () => {
+            testTypedef(`
                 namespace Name
                     sub logInfo()
                     end sub
@@ -2324,8 +2324,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('includes classes', async () => {
-            await testTypedef(`
+        it('includes classes', () => {
+            testTypedef(`
                 class Person
                     public name as string
                     public age = 12
@@ -2360,8 +2360,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('sets properties to dynamic when initialized to invalid', async () => {
-            await testTypedef(`
+        it('sets properties to dynamic when initialized to invalid', () => {
+            testTypedef(`
                 class Human
                     public firstName = invalid
                     public lastName as string = invalid
@@ -2374,8 +2374,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('includes class inheritance', async () => {
-            await testTypedef(`
+        it('includes class inheritance', () => {
+            testTypedef(`
                 class Human
                     sub new(name as string)
                         m.name = name
@@ -2398,8 +2398,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('includes access modifier keyword', async () => {
-            await testTypedef(`
+        it('includes access modifier keyword', () => {
+            testTypedef(`
                 class Human
                     public firstName as string
                     protected middleName as string
@@ -2429,8 +2429,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('includes overrides keyword if present in source', async () => {
-            await testTypedef(`
+        it('includes overrides keyword if present in source', () => {
+            testTypedef(`
                 class Animal
                     public sub speak()
                         print "Hello Animal"
@@ -2453,8 +2453,8 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('includes class inheritance cross-namespace', async () => {
-            await testTypedef(`
+        it('includes class inheritance cross-namespace', () => {
+            testTypedef(`
                 namespace NameA
                     class Human
                         sub new(name as string)
@@ -2487,8 +2487,8 @@ describe('BrsFile', () => {
     });
 
     describe('parser getter', () => {
-        it('recreates the parser when missing', async () => {
-            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+        it('recreates the parser when missing', () => {
+            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
             `);
@@ -2505,12 +2505,12 @@ describe('BrsFile', () => {
             expect(file.parser).to.equal(newParser);
         });
 
-        it('call parse when previously skipped', async () => {
-            await program.addOrReplaceFile<BrsFile>('source/main.d.bs', `
+        it('call parse when previously skipped', () => {
+            program.addOrReplaceFile<BrsFile>('source/main.d.bs', `
                 sub main()
                 end sub
             `);
-            const file = await program.addOrReplaceFile<BrsFile>('source/main.brs', `
+            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
                 sub main()
                 end sub
             `);
@@ -2527,8 +2527,8 @@ describe('BrsFile', () => {
     });
 
     describe('Plugins', () => {
-        async function testPluginTranspile() {
-            await testTranspile(`
+        function testPluginTranspile() {
+            testTranspile(`
                 sub main()
                     sayHello(sub()
                         print "sub hello"
@@ -2552,44 +2552,44 @@ describe('BrsFile', () => {
             `);
         }
 
-        it('can use a plugin object which transforms the AST', async () => {
+        it('can use a plugin object which transforms the AST', () => {
             program.plugins = new PluginInterface(
                 util.loadPlugins('', [
                     require.resolve('../examples/plugins/removePrint')
                 ]),
                 undefined
             );
-            await testPluginTranspile();
+            testPluginTranspile();
         });
 
-        it('can load an absolute plugin which transforms the AST', async () => {
+        it('can load an absolute plugin which transforms the AST', () => {
             program.plugins = new PluginInterface(
                 util.loadPlugins('', [
                     path.resolve(process.cwd(), './dist/examples/plugins/removePrint.js')
                 ]),
                 undefined
             );
-            await testPluginTranspile();
+            testPluginTranspile();
         });
 
-        it('can load a relative plugin which transforms the AST', async () => {
+        it('can load a relative plugin which transforms the AST', () => {
             program.plugins = new PluginInterface(
                 util.loadPlugins(process.cwd(), [
                     './dist/examples/plugins/removePrint.js'
                 ]),
                 undefined
             );
-            await testPluginTranspile();
+            testPluginTranspile();
         });
     });
 });
 
 export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return async (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) => {
+    return (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) => {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
-        let file = await program.addOrReplaceFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
-        await program.validate();
+        let file = program.addOrReplaceFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
+        program.validate();
         let diagnostics = file.getDiagnostics();
         if (diagnostics.length > 0 && failOnDiagnostic !== false) {
             throw new Error(

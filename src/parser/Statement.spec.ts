@@ -92,8 +92,8 @@ describe('Statement', () => {
 
     describe('ImportStatement', () => {
         describe('getTypedef', () => {
-            it('changes .bs file extensions to .brs', async () => {
-                const file = await program.addOrReplaceFile<BrsFile>('source/main.bs', `
+            it('changes .bs file extensions to .brs', () => {
+                const file = program.addOrReplaceFile<BrsFile>('source/main.bs', `
                     import "lib1.bs"
                     import "pkg:/source/lib2.bs"
                 `);

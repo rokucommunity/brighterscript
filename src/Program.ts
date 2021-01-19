@@ -73,12 +73,6 @@ export class Program {
         this.options.rootDir = util.getRootDir(this.options);
 
         this.createGlobalScope();
-
-        //add the default file resolver (used by this program to load source file contents).
-        this.fileResolvers.push(async (pathAbsolute) => {
-            let contents = await this.util.getFileContents(pathAbsolute);
-            return contents;
-        });
     }
 
     public logger: Logger;
@@ -105,16 +99,6 @@ export class Program {
     public dependencyGraph = new DependencyGraph();
 
     private diagnosticFilterer = new DiagnosticFilterer();
-
-    private util = util;
-
-    /**
-     * A list of functions that will be used to load file contents.
-     * In most cases, there will only be the "read from filesystem" resolver.
-     * However, when running inside the LanguageServer, a second resolver will be added
-     * to resolve the opened file contents from memory instead of going to disk.
-     */
-    public fileResolvers = [] as FileResolver[];
 
     /**
      * A scope that contains all built-in global functions.
@@ -181,23 +165,6 @@ export class Program {
     }
 
     /**
-     * Get the contents of the specified file as a string.
-     * This walks backwards through the file resolvers until we get a value.
-     * This allow the language server to provide file contents directly from memory.
-     */
-    public async getFileContents(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
-        let reversedResolvers = [...this.fileResolvers].reverse();
-        for (let fileResolver of reversedResolvers) {
-            let result = await fileResolver(pathAbsolute);
-            if (typeof result === 'string') {
-                return result;
-            }
-        }
-        throw new Error(`Could not load file "${pathAbsolute}"`);
-    }
-
-    /**
      * Get a list of all files that are included in the project but are not referenced
      * by any scope in the program.
      */
@@ -257,22 +224,6 @@ export class Program {
         return this.files[filePath] !== undefined;
     }
 
-    /**
-     * Add and parse all of the provided files.
-     * Files that are already loaded will be replaced by the latest
-     * contents from the file system.
-     * @param filePaths
-     */
-    public async addOrReplaceFiles<T extends BscFile[]>(fileObjects: Array<FileObj>) {
-        let promises = [];
-        for (let fileObject of fileObjects) {
-            promises.push(
-                this.addOrReplaceFile(fileObject)
-            );
-        }
-        return Promise.all(promises) as Promise<T>;
-    }
-
     public getPkgPath(...args: any[]): any { //eslint-disable-line
         throw new Error('Not implemented');
     }
@@ -310,17 +261,16 @@ export class Program {
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
      * @param relativePath the file path relative to the root dir
-     * @param fileContents the file contents. If not provided, the file will be loaded from disk
+     * @param fileContents the file contents
      */
-    public async addOrReplaceFile<T extends BscFile>(relativePath: string, fileContents?: string): Promise<T>;
+    public addOrReplaceFile<T extends BscFile>(relativePath: string, fileContents: string): T;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
-     * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
      * @param fileEntry an object that specifies src and dest for the file.
      * @param fileContents the file contents. If not provided, the file will be loaded from disk
      */
-    public async addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents?: string): Promise<T>;
-    public async addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents?: string): Promise<T> {
+    public addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
+    public addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
         assert.ok(fileParam, 'fileEntry is required');
         let srcPath: string;
         let pkgPath: string;
@@ -331,7 +281,7 @@ export class Program {
             srcPath = s`${fileParam.src}`;
             pkgPath = s`${fileParam.dest}`;
         }
-        let file = await this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], async () => {
+        let file = this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], () => {
 
             assert.ok(srcPath, 'fileEntry.src is required');
             assert.ok(pkgPath, 'fileEntry.dest is required');
@@ -342,15 +292,6 @@ export class Program {
             }
             let fileExtension = path.extname(srcPath).toLowerCase();
             let file: BscFile | undefined;
-
-            //load the file contents by file path if not provided
-            let getFileContents = async () => {
-                if (fileContents === undefined) {
-                    return this.getFileContents(srcPath);
-                } else {
-                    return fileContents;
-                }
-            };
 
             if (fileExtension === '.brs' || fileExtension === '.bs') {
                 let brsFile = new BrsFile(srcPath, pkgPath, this);
@@ -365,14 +306,14 @@ export class Program {
                 //add the file to the program
                 this.files[srcPath] = brsFile;
                 this.pkgMap[brsFile.pkgPath.toLowerCase()] = brsFile;
-                let fileContents: SourceObj = {
+                let sourceObj: SourceObj = {
                     pathAbsolute: srcPath,
-                    source: await getFileContents()
+                    source: fileContents
                 };
-                this.plugins.emit('beforeFileParse', fileContents);
+                this.plugins.emit('beforeFileParse', sourceObj);
 
                 this.logger.time(LogLevel.info, ['parse', chalk.green(srcPath)], () => {
-                    brsFile.parse(fileContents.source);
+                    brsFile.parse(sourceObj.source);
                 });
                 file = brsFile;
 
@@ -389,12 +330,12 @@ export class Program {
                 //add the file to the program
                 this.files[srcPath] = xmlFile;
                 this.pkgMap[xmlFile.pkgPath.toLowerCase()] = xmlFile;
-                let fileContents: SourceObj = {
+                let sourceObj: SourceObj = {
                     pathAbsolute: srcPath,
-                    source: await getFileContents()
+                    source: fileContents
                 };
-                this.plugins.emit('beforeFileParse', fileContents);
-                xmlFile.parse(fileContents.source);
+                this.plugins.emit('beforeFileParse', sourceObj);
+                xmlFile.parse(sourceObj.source);
 
                 file = xmlFile;
 
@@ -525,8 +466,8 @@ export class Program {
      * Traverse the entire project, and validate all scopes
      * @param force - if true, then all scopes are force to validate, even if they aren't marked as dirty
      */
-    public async validate() {
-        await this.logger.time(LogLevel.debug, ['Program.validate()'], async () => {
+    public validate() {
+        this.logger.time(LogLevel.debug, ['Program.validate()'], () => {
             this.diagnostics = [];
             this.plugins.emit('beforeProgramValidate', this);
 
@@ -553,7 +494,6 @@ export class Program {
             this.detectDuplicateComponentNames();
 
             this.plugins.emit('afterProgramValidate', this);
-            await Promise.resolve();
         });
     }
 
@@ -703,7 +643,7 @@ export class Program {
      * @param lineIndex
      * @param columnIndex
      */
-    public async getCompletions(pathAbsolute: string, position: Position) {
+    public getCompletions(pathAbsolute: string, position: Position) {
         let file = this.getFile(pathAbsolute);
         if (!file) {
             return [];
@@ -737,7 +677,6 @@ export class Program {
             c => c
         );
 
-
         //only keep completions common to every scope for this file
         let keyCounts = {} as Record<string, number>;
         for (let completion of allCompletions) {
@@ -747,7 +686,7 @@ export class Program {
                 result.push(completion);
             }
         }
-        return Promise.resolve(result);
+        return result;
     }
 
     /**
@@ -1191,5 +1130,3 @@ export class Program {
         this.dependencyGraph.dispose();
     }
 }
-
-export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined> | void;
