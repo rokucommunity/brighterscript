@@ -34,3 +34,14 @@ function bslib_iff(condition, consequent, alternate)
         return alternate
     end if
 end function
+
+'
+' Return consequent if value exists (not null and not unitialized), otherwise return alternate
+'
+function bslib_coalesce(consequent, alternate)
+    if consequent <> invalid then
+        return alternate
+    else
+        return consequent
+    end if
+end function

@@ -817,7 +817,7 @@ export class Parser {
             return this.throwStatement();
         }
 
-        if (this.checkAny(TokenKind.Print, TokenKind.QuestionMark)) {
+        if (this.checkAny(TokenKind.Print, TokenKind.Question)) {
             return this.printStatement();
         }
 
@@ -1216,6 +1216,13 @@ export class Parser {
             });
         }
         return new TernaryExpression(test, questionMarkToken, consequent, colonToken, alternate);
+    }
+
+    private nullCoalescingExpression(test: Expression): NullCoalescingExpression {
+        this.warnIfNotBrighterScriptMode('null coalescing operator');
+        const questionQuestionToken = this.advance();
+        const alternate = this.expression();
+        return new NullCoalescingExpression(test, questionQuestionToken, alternate);
     }
 
     private templateString(isTagged: boolean): TemplateStringExpression | TaggedTemplateStringExpression {
@@ -1890,8 +1897,10 @@ export class Parser {
         }
         let expr = this.boolean();
 
-        if (this.check(TokenKind.QuestionMark)) {
+        if (this.check(TokenKind.Question)) {
             return this.ternaryExpression(expr);
+        } else if (this.check(TokenKind.QuestionQuestion)) {
+            return this.nullCoalescingExpression(test);
         } else {
             return expr;
         }

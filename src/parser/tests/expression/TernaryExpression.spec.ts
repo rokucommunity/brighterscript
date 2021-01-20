@@ -27,7 +27,7 @@ describe('ternary expressions', () => {
     it('cannot be used as a statement', () => {
         let { diagnostics } = Parser.parse([
             token(TokenKind.True, 'true'),
-            token(TokenKind.QuestionMark, '?'),
+            token(TokenKind.Question, '?'),
             token(TokenKind.StringLiteral, 'Human'),
             token(TokenKind.Colon, ':'),
             token(TokenKind.StringLiteral, 'Zombie'),

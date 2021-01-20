@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { walk, InternalWalkMode } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCommentStatement, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -1373,6 +1373,56 @@ export class TernaryExpression extends Expression {
         }
     }
 }
+
+export class NullCoalescingExpression implements Expression {
+    constructor(
+        public consequent: Expression,
+        public questionQuestionToken: Token,
+        public alternate: Expression
+    ) {
+        this.range = util.createRangeFromPositions(
+            consequent.range.start,
+            (alternate ?? questionQuestionToken ?? consequent).range.end
+        );
+    }
+
+    public readonly range: Range;
+
+    transpile(state: TranspileState) {
+        let result = [];
+        let consequentInfo = util.getExpressionInfo(this.consequent);
+        let alternateInfo = util.getExpressionInfo(this.alternate);
+
+        //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
+        let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
+        let hasMutatingExpression = [
+            ...consequentInfo.expressions,
+            ...alternateInfo.expressions
+        ].find(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
+
+        if (hasMutatingExpression) {
+            //we need to do a scope-safe operation
+            let scope = '{';
+            for (let name of allUniqueVarNames) {
+                scope += `\n  "${name}": ${name}`;
+            }
+            scope += '\n}';
+
+            result.push(`bslib_nullCoalesce(`);
+            result.push(...this.consequent.transpile(state));
+            result.push(`, ${scope}, `);
+            result.push(...getScopedFunction(state, this.alternate, alternateInfo.uniqueVarNames));
+            result.push(')');
+        } else {
+            result.push(`bslib_nullCoalesce(`);
+            result.push(...this.consequent.transpile(state));
+            result.push(', ');
+            result.push(...this.alternate.transpile(state));
+            result.push(')');
+        }
+        return result;
+    }
+}	}
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue };
