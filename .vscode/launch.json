@@ -43,6 +43,26 @@
                 "!**/node_modules/typescript/**",
                 "!**/node_modules/vscode-languageserver/**"
             ]
+        },
+        {
+            "name": "Debug Doc Generator",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "node",
+            "runtimeArgs": [
+                "--nolazy",
+                "-r",
+                "ts-node/register/transpile-only"
+            ],
+            "args": [
+                "scripts/compile-doc-examples.ts"
+            ],
+            "cwd": "${workspaceRoot}",
+            "internalConsoleOptions": "openOnSessionStart",
+            "skipFiles": [
+                "<node_internals>/**",
+                "node_modules/**"
+            ]
         }
     ]
 }
