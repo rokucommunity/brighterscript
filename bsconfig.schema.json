@@ -10,7 +10,7 @@
     },
     "properties": {
         "extends": {
-            "description": "Relative or absolute path to another bsconfig.json file that this file should use as a base, and then override",
+            "description": "Relative or absolute path to another bsconfig.json file that this file should use as a base and then override. Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.",
             "type": "string"
         },
         "cwd": {
@@ -75,6 +75,11 @@
             "description": "Creates a zip package. Defaults to true. This setting is ignored when deploy is enabled.",
             "type": "boolean"
         },
+        "sourceMap": {
+            "description": "Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.",
+            "type": "boolean",
+            "default": false
+        },
         "copyToStaging": {
             "description": "If true, the files are copied to staging. This setting is ignored when deploy is enabled or if createPackage is enabled",
             "type": "boolean"
@@ -128,6 +133,11 @@
             "type": "boolean",
             "default": false
         },
+        "emitDefinitions": {
+            "description": "Emit type definition files (`d.bs`) during transpile",
+            "type": "boolean",
+            "default": false
+        },
         "diagnosticFilters": {
             "description": "A collection of filters used to hide diagnostics for certain files",
             "type": "array",
@@ -166,6 +176,18 @@
                 ]
             }
         },
+        "plugins": {
+            "description": "A list of node scripts or npm modules to add extra diagnostics or transform the AST.",
+            "type": "array",
+            "items": {
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "description": "a path to a node script or an npm module to load dynamically"
+                    }
+                ]
+            }
+        },
         "autoImportComponentScript": {
             "description": "When enabled, every xml component will search for a .bs or .brs file with the same name in the same folder, and add it as a script import if found. Disabled by default",
             "type": "boolean",
@@ -182,6 +204,21 @@
                 "info",
                 "debug",
                 "trace"
+            ]
+        },
+        "sourceRoot": {
+            "description": "Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.",
+            "type": "string"
+        },
+        "diagnosticLevel": {
+            "description": "Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to 'warn'",
+            "type": "string",
+            "default": "log",
+            "enum": [
+                "hint",
+                "info",
+                "warn",
+                "error"
             ]
         }
     }

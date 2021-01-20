@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsString } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
@@ -17,7 +16,6 @@ describe('parser print statements', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('supports empty print', () => {
@@ -25,39 +23,36 @@ describe('parser print statements', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses print lists with no separator', () => {
         let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Print),
-            token(TokenKind.StringLiteral, 'Foo', new BrsString('Foo')),
-            token(TokenKind.StringLiteral, 'bar', new BrsString('bar')),
-            token(TokenKind.StringLiteral, 'baz', new BrsString('baz')),
+            token(TokenKind.StringLiteral, 'Foo'),
+            token(TokenKind.StringLiteral, 'bar'),
+            token(TokenKind.StringLiteral, 'baz'),
             EOF
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('parses print lists with separators', () => {
         let { statements, diagnostics } = Parser.parse([
             token(TokenKind.Print),
-            token(TokenKind.StringLiteral, 'Foo', new BrsString('Foo')),
+            token(TokenKind.StringLiteral, 'Foo'),
             token(TokenKind.Semicolon),
-            token(TokenKind.StringLiteral, 'bar', new BrsString('bar')),
+            token(TokenKind.StringLiteral, 'bar'),
             token(TokenKind.Semicolon),
-            token(TokenKind.StringLiteral, 'baz', new BrsString('baz')),
+            token(TokenKind.StringLiteral, 'baz'),
             EOF
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.exist;
         expect(statements).not.to.be.null;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {
@@ -72,20 +67,22 @@ describe('parser print statements', () => {
                 kind: TokenKind.Print,
                 text: 'print',
                 isReserved: true,
-                range: Range.create(0, 0, 1, 5)
+                range: Range.create(0, 0, 1, 5),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
-                literal: new BrsString('foo'),
                 isReserved: false,
-                range: Range.create(0, 6, 0, 11)
+                range: Range.create(0, 6, 0, 11),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                range: Range.create(0, 11, 0, 12)
+                range: Range.create(0, 11, 0, 12),
+                leadingWhitespace: ''
             }
         ]);
 

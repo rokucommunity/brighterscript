@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind, Lexer } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
@@ -22,7 +21,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(1);
             expect(statements).to.length.greaterThan(0);
 
-            //expect({ errors, statements }).toMatchSnapshot();
         });
 
         it('parses minimal empty function declarations', () => {
@@ -39,7 +37,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses non-empty function declarations', () => {
@@ -50,7 +47,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'Lorem ipsum', new BrsString('Lorem ipsum')),
+                token(TokenKind.StringLiteral, 'Lorem ipsum'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndFunction, 'end function'),
                 EOF
@@ -59,7 +56,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with implicit-dynamic arguments', () => {
@@ -79,7 +75,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with typed arguments', () => {
@@ -103,7 +98,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with default argument expressions', () => {
@@ -114,19 +108,19 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Comma, ','),
 
                 identifier('b'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
+                token(TokenKind.IntegerLiteral, '4'),
                 token(TokenKind.Comma, ','),
 
                 identifier('c'),
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.RightParen, ')'),
 
                 token(TokenKind.Newline, '\\n'),
@@ -137,7 +131,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with typed arguments and default expressions', () => {
@@ -148,7 +141,7 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
@@ -157,7 +150,7 @@ describe('parser', () => {
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
@@ -170,7 +163,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses return types', () => {
@@ -189,7 +181,6 @@ describe('parser', () => {
             expect(diagnostics[0]?.message).to.not.exist;
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('does not allow type designators at end of name', () => {
@@ -214,7 +205,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(4);
             expect(statements).to.length.greaterThan(0);
 
-            //expect({ errors, statements }).toMatchSnapshot();
         });
     });
 
@@ -233,7 +223,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(1);
             expect(statements).to.length.greaterThan(0);
 
-            //expect({ errors, statements }).toMatchSnapshot();
         });
 
         it('parses minimal sub declarations', () => {
@@ -250,7 +239,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses non-empty sub declarations', () => {
@@ -261,7 +249,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'Lorem ipsum', new BrsString('Lorem ipsum')),
+                token(TokenKind.StringLiteral, 'Lorem ipsum'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndSub, 'end sub'),
                 EOF
@@ -270,7 +258,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with implicit-dynamic arguments', () => {
@@ -290,7 +277,6 @@ describe('parser', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with typed arguments', () => {
@@ -311,10 +297,9 @@ describe('parser', () => {
                 EOF
             ]);
 
-            expect(diagnostics).to.be.lengthOf(0);
+            expect(diagnostics[0]?.message).not.to.exist;
             expect(statements).to.length.greaterThan(0);
 
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with default argument expressions', () => {
@@ -325,19 +310,19 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Comma, ','),
 
                 identifier('b'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
+                token(TokenKind.IntegerLiteral, '4'),
                 token(TokenKind.Comma, ','),
 
                 identifier('c'),
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.RightParen, ')'),
 
                 token(TokenKind.Newline, '\\n'),
@@ -347,7 +332,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with typed arguments and default expressions', () => {
@@ -358,7 +342,7 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
@@ -367,7 +351,7 @@ describe('parser', () => {
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
@@ -379,7 +363,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('does not allow type designators at end of name', () => {
@@ -399,7 +382,6 @@ describe('parser', () => {
             const { statements, diagnostics } = Parser.parse(tokens);
             expect(diagnostics).to.be.lengthOf(4);
             expect(statements).to.length.greaterThan(0);
-            //expect({ errors, statements }).toMatchSnapshot();
         });
     });
 });

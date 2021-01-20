@@ -1,5 +1,5 @@
-import { VariableDeclaration } from './interfaces';
-import { FunctionExpression } from './parser/Expression';
+import type { VariableDeclaration } from './interfaces';
+import type { FunctionExpression } from './parser/Expression';
 
 //TODO I think this class can be eliminated in favor of moving some of these onto the FunctionExpression AST node
 export class FunctionScope {

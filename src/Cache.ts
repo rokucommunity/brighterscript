@@ -2,7 +2,7 @@
  * Synchronous cache
  */
 export class Cache {
-    private cache = {} as { [key: string]: any };
+    private cache = {} as Record<string, any>;
 
     /**
      * Get value from the cache if it exists,

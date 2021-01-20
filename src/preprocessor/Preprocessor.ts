@@ -1,9 +1,11 @@
-import { TokenKind, Token } from '../lexer';
-import * as CC from './Chunk';
-import { Diagnostic } from 'vscode-languageserver';
+import type { Token } from '../lexer';
+import { TokenKind } from '../lexer';
+import type * as CC from './Chunk';
+import type { Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { PreprocessorParser } from './PreprocessorParser';
-import { Manifest, getBsConst } from './Manifest';
+import type { Manifest } from './Manifest';
+import { getBsConst } from './Manifest';
 
 /**
  * A simple pre-processor that executes BrightScript's conditional compilation directives by

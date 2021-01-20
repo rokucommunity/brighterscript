@@ -7,22 +7,23 @@ import { EOF, identifier, token } from '../Parser.spec';
 describe('parser goto statements', () => {
     it('parses standalone statement properly', () => {
         let { diagnostics } = Parser.parse([
+            token(TokenKind.Newline, '\n'),
             token(TokenKind.Goto, 'goto'),
             identifier('SomeLabel'),
             EOF
         ]);
         expect(diagnostics).to.be.lengthOf(0);
-        //expect({ errors, statements }).toMatchSnapshot();
     });
 
     it('detects labels', () => {
         let { diagnostics } = Parser.parse([
+            token(TokenKind.Newline, '\n'),
             identifier('SomeLabel'),
             token(TokenKind.Colon, ':'),
+            token(TokenKind.Newline, '\n'),
             EOF
         ]);
         expect(diagnostics).to.be.lengthOf(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('allows multiple goto statements on one line', () => {
@@ -35,6 +36,17 @@ describe('parser goto statements', () => {
         `);
         let { diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(0);
-        //expect(statements).toMatchSnapshot();
+    });
+
+    it('ignores "labels" not alone on their line', () => {
+        let { tokens } = Lexer.scan(`
+            sub Main()
+                label1: 'some comment
+                notalabel1: print "ko"
+                print "ko": notalabel2:
+            end sub
+        `);
+        let { diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(2);
     });
 });

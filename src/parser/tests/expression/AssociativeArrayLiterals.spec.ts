@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
@@ -19,7 +18,6 @@ describe('parser associative array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines', () => {
@@ -39,7 +37,6 @@ describe('parser associative array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 
@@ -51,22 +48,21 @@ describe('parser associative array literals', () => {
                 token(TokenKind.LeftCurlyBrace, '{'),
                 identifier('foo'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Comma, ','),
                 identifier('bar'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Comma, ','),
                 identifier('baz'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.RightCurlyBrace, '}'),
                 EOF
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines with commas', () => {
@@ -77,17 +73,17 @@ describe('parser associative array literals', () => {
                 token(TokenKind.Newline, '\n'),
                 identifier('foo'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Comma, ','),
                 token(TokenKind.Newline, '\n'),
                 identifier('bar'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Comma, ','),
                 token(TokenKind.Newline, '\n'),
                 identifier('baz'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.RightCurlyBrace, '}'),
                 EOF
@@ -95,7 +91,6 @@ describe('parser associative array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('on multiple lines without commas', () => {
@@ -106,15 +101,15 @@ describe('parser associative array literals', () => {
                 token(TokenKind.Newline, '\n'),
                 identifier('foo'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+                token(TokenKind.IntegerLiteral, '1'),
                 token(TokenKind.Newline, '\n'),
                 identifier('bar'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Newline, '\n'),
                 identifier('baz'),
                 token(TokenKind.Colon, ':'),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Newline, '\n'),
                 token(TokenKind.RightCurlyBrace, '}'),
                 EOF
@@ -122,7 +117,6 @@ describe('parser associative array literals', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 
@@ -138,7 +132,7 @@ describe('parser associative array literals', () => {
             token(TokenKind.LeftCurlyBrace, '{'),
             identifier('name'),
             token(TokenKind.Colon, ':'),
-            token(TokenKind.StringLiteral, 'Bob', new BrsString('Bob')),
+            token(TokenKind.StringLiteral, 'Bob'),
             token(TokenKind.Colon, ':'),
             token(TokenKind.Colon, ':'),
             token(TokenKind.Colon, ':'),
@@ -146,7 +140,7 @@ describe('parser associative array literals', () => {
             token(TokenKind.Colon, ':'),
             identifier('age'),
             token(TokenKind.Colon, ':'),
-            token(TokenKind.IntegerLiteral, '50', new Int32(3)),
+            token(TokenKind.IntegerLiteral, '50'),
             token(TokenKind.RightCurlyBrace, '}'),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.EndSub, 'end sub'),
@@ -154,7 +148,6 @@ describe('parser associative array literals', () => {
         ]);
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('allows a mix of quoted and unquoted keys', () => {
@@ -163,19 +156,19 @@ describe('parser associative array literals', () => {
             token(TokenKind.Equal, '='),
             token(TokenKind.LeftCurlyBrace, '{'),
             token(TokenKind.Newline, '\n'),
-            token(TokenKind.StringLiteral, 'foo', new BrsString('foo')),
+            token(TokenKind.StringLiteral, 'foo'),
             token(TokenKind.Colon, ':'),
-            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+            token(TokenKind.IntegerLiteral, '1'),
             token(TokenKind.Comma, ','),
             token(TokenKind.Newline, '\n'),
             identifier('bar'),
             token(TokenKind.Colon, ':'),
-            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+            token(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.Comma, ','),
             token(TokenKind.Newline, '\n'),
-            token(TokenKind.StringLiteral, 'requires-hyphens', new BrsString('requires-hyphens')),
+            token(TokenKind.StringLiteral, 'requires-hyphens'),
             token(TokenKind.Colon, ':'),
-            token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+            token(TokenKind.IntegerLiteral, '3'),
             token(TokenKind.Newline, '\n'),
             token(TokenKind.RightCurlyBrace, '}'),
             EOF
@@ -183,7 +176,6 @@ describe('parser associative array literals', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {

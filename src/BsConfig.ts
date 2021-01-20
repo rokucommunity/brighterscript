@@ -1,4 +1,4 @@
-import { LogLevel } from './Logger';
+import type { LogLevel } from './Logger';
 
 export interface BsConfig {
     /**
@@ -7,12 +7,14 @@ export interface BsConfig {
     _ancestors?: string[];
 
     /**
-     * A path to a project file. This is really only passed in from the command line, and should not be present in bsconfig.json files
+     * A path to a project file. This is really only passed in from the command line, and should not be present in bsconfig.json files.
+     * Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.
      */
     project?: string;
 
     /**
-     * Relative or absolute path to another bsconfig.json file that this file should import and then override
+     * Relative or absolute path to another bsconfig.json file that this file should import and then override.
+     * Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.
      */
     extends?: string;
 
@@ -89,7 +91,7 @@ export interface BsConfig {
     /**
      * A list of error codes the compiler should NOT emit, even if encountered.
      */
-    ignoreErrorCodes?: number[];
+    ignoreErrorCodes?: (number|string)[];
 
     /**
      * Emit full paths to files when printing diagnostics to the console. Defaults to false
@@ -97,9 +99,25 @@ export interface BsConfig {
     emitFullPaths?: boolean;
 
     /**
+     * Emit type definition files (`d.bs`)
+     * @default true
+     */
+    emitDefinitions?: boolean;
+
+    /**
      * A list of filters used to exclude diagnostics from the output
      */
-    diagnosticFilters?: Array<number | string | { src: string; codes: number[] } | { src: string } | { codes: number[] }>;
+    diagnosticFilters?: Array<number | string | { src: string; codes: (number|string)[] } | { src: string } | { codes: (number|string)[] }>;
+
+    /**
+     * Specify what diagnostic types should be printed to the console. Defaults to 'warn'
+     */
+    diagnosticLevel?: 'info' | 'hint' | 'warn' | 'error';
+
+    /**
+     * A list of scripts or modules to add extra diagnostics or transform the AST
+     */
+    plugins?: Array<string>;
 
     /**
      * When enabled, every xml component will search for a .bs or .brs file with the same name
@@ -116,5 +134,17 @@ export interface BsConfig {
      * The log level.
      * @default LogLevel.log
      */
-    logLevel?: LogLevel;
+    logLevel?: LogLevel | 'error' | 'warn' | 'log' | 'info' | 'debug' | 'trace';
+    /**
+     * Override the path to source files in source maps. Use this if you have a preprocess step and want
+     * to ensure the source maps point to the original location.
+     * This will only alter source maps for files within rootDir. Any files found outside of rootDir will not
+     * have their source maps changed. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
+     */
+    sourceRoot?: string;
+    /**
+     * Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.
+     * @default true
+     */
+    sourceMap?: boolean;
 }

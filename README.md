@@ -1,6 +1,6 @@
 # BrighterScript
 
-A superset of Roku's BrightScript language. Compiles to standard BrightScript. 
+A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
 [![build](https://img.shields.io/github/workflow/status/rokucommunity/brighterscript/build.svg?logo=github)](https://github.com/rokucommunity/brighterscript/actions?query=workflow%3Abuild)
 [![Coverage Status](https://coveralls.io/repos/github/rokucommunity/brighterscript/badge.svg?branch=master)](https://coveralls.io/github/rokucommunity/brighterscript?branch=master)
@@ -10,6 +10,11 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 ## Overview
 
 The BrighterScript language provides new features and syntax enhancements to Roku's BrightScript language. Because the language is a superset of BrightScript, the parser and associated tools (VSCode integration, cli, etc...) work with standard BrightScript (.brs) files. This means you will get benefits (as described in the following section) from using the BrighterScript compiler, whether your project contains BrighterScript (.bs) files or not. The BrighterScript language transpiles to standard BrightScript, so your code is fully compatible with all roku devices.
+
+## Features
+BrighterScript adds several new features to the BrightScript language such as Namespaces, classes, import statements, and more. Take a look at the language specification docs for more information.
+
+[BrighterScript Language Specification](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md)
 
 ## Why use the BrighterScript compiler/CLI?
 
@@ -44,9 +49,11 @@ The BrighterScript language provides new features and syntax enhancements to Rok
       - null-coalescing operator: `user = m.user ?? getDefaultUser()`
       - null-conditional operator: `userSettings = m.user?.account?.profile?.settings`
     - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md)...
-    
+
 
   - Full BrighterScript support for syntax checking, validation, and intellisense is available within the [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) VSCode extension.
+
+  - And if it's not enough, the [plugin API](https://github.com/rokucommunity/brighterscript/blob/master/docs/plugins.md) allows extending the compiler to provide extra diagnostics or transformations.
 
 ## Who uses Brighterscript?
 
@@ -62,13 +69,7 @@ The name BrighterScript is a compliment to everything that is great about Roku's
  - It looks so similar to BrightScript, which is fitting because this language is 95% BrightScript, 5% extra stuff (the `er` bits).
  - The config file and extension look very similar between BrightScript and BrighterScript. Take `bsconfig.json` for example. While `brsconfig.json` might be more fitting for a pure BrightScript project, `bsconfig.json` is so very close that you probably wouldn't think twice about it. Same with the fact that `.bs` (BrighterScript) and `.brs` are very similar.
 
-We want to honor BrightScript, the language that BrighterScript is based off of, and could think of no better way than to use _most_ of its name in our name. 
-
-## Features
-BrighterScript adds several new features to the BrightScript language such as Namespaces, classes, import statements, and more. Take a look at the language specification docs for more information. 
-
-[BrighterScript Language Specification](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md)
-
+We want to honor BrightScript, the language that BrighterScript is based off of, and could think of no better way than to use _most_ of its name in our name.
 
 ## Installation
 
@@ -82,26 +83,26 @@ npm install brighterscript -g
 
 ### Basic Usage
 
-If your project structure exactly matches Roku's, and you run the command from the root of your project, then you can do the following: 
+If your project structure exactly matches Roku's, and you run the command from the root of your project, then you can do the following:
 
 ```bash
-bsc 
+bsc
 ```
 
 That's it! It will find all files in your BrightScript project, check for syntax and static analysis errors, and if there were no errors, it will produce a zip at `./out/project.zip`
 
 ### Advanced Usage
 
-If you need to configure `bsc`, you can do so in two ways: 
+If you need to configure `bsc`, you can do so in two ways:
 
-1. Using command line arguments. 
+1. Using command line arguments.
     This tool can be fully configured using command line arguments. To see a full list, run `bsc --help` in your terminal.
-2. Using a `bsconfig.json` file. See [the available options](#bsconfigjson-options) below. 
-    By default, `bsc` looks for a `bsconfig.json` file at the same directory that `bsc` is executed. If you want to store your `bsconfig.json` file somewhere else, then you should provide the `--project` argument and specify the path to your `bsconfig.json` file. 
+2. Using a `bsconfig.json` file. See [the available options](#bsconfigjson-options) below.
+    By default, `bsc` looks for a `bsconfig.json` file at the same directory that `bsc` is executed. If you want to store your `bsconfig.json` file somewhere else, then you should provide the `--project` argument and specify the path to your `bsconfig.json` file.
 
 ### Examples
 
-1. Your project resides in a subdirectory of your workspace folder. 
+1. Your project resides in a subdirectory of your workspace folder.
 
     ```bash
     bsc --root-dir ./rokuSourceFiles
@@ -120,6 +121,12 @@ If you need to configure `bsc`, you can do so in two ways:
     ```bash
     bsc --project ./some_folder/bsconfig.json
     ```
+
+5. Run the compiler as a **linter** only (watch mode supported)
+    ```bash
+    bsc --create-package false --copy-to-staging false
+    ```
+
 ## bsconfig.json
 
 ### Overview
@@ -137,23 +144,53 @@ The `files` property from the inheriting config file overwrite those from the ba
 
 All relative paths found in the configuration file will be resolved relative to the configuration file they originated in.
 
+### Optional `extends` and `project`
+There are situations where you want to store some compiler settings in a config file, but not fail if that config file doesn't exist. To do this, you can denote that your `extends` or `project` path is optional by prefixing it with a question mark (`?`). For example:
+
+ - **bsconfig.json** `extends`
+    ```json
+    {
+      "extends": "?path/to/optional/bsconfig.json"
+    }
+    ```
+ - CLI "extends"
+    ```
+    bsc --extends "?path/to/optional/bsconfig.json"
+    ```
+
+ - CLI `project` argument
+    ```
+    bsc --project "?path/to/optional/bsconfig.json"
+    ```
+ - Node.js API `extends`
+    ```
+    var programBuilder = new ProgramBuilder({
+        "extends": "?path/to/optional/bsconfig.json"
+    });
+    ```
+ - Node.js API `project`
+    ```
+    var programBuilder = new ProgramBuilder({
+        "project": "?path/to/optional/bsconfig.json"
+    });
+    ```
 
 ### bsconfig.json options
 
-These are the options available in the `bsconfig.json` file. 
+These are the options available in the `bsconfig.json` file.
 
- - **project**: `string` - A path to a project file. This is really only passed in from the command line, and should not be present in `bsconfig.json` files
+ - **project**: `string` - A path to a project file. This is really only passed in from the command line or the NodeJS API, and should not be present in `bsconfig.json` files. Prefix with a question mark (?) to prevent throwing an exception when the file does not exist.
 
- - **extends**: `string` - Relative or absolute path to another `bsconfig.json` file that this `bsconfig.json` file should import and then override
+ - **extends**: `string` - Relative or absolute path to another `bsconfig.json` file that this `bsconfig.json` file should import and then override. Prefix with a question mark (?) to prevent throwing an exception when the file does not exist.
 
  - **cwd**: `string` - Override the current working directory
 
  - **rootDir**: `string` - The root directory of your roku project. Defaults to current directory
 
- - **files**: ` (string | string[] | { src: string | string[]; dest?: string })[]` - The list file globs used to find all files for the project. If using the {src;dest;} format, you can specify a different destination directory for the matched files in src. 
+ - **files**: ` (string | string[] | { src: string | string[]; dest?: string })[]` - The list file globs used to find all files for the project. If using the {src;dest;} format, you can specify a different destination directory for the matched files in src.
 
  - **outFile**: `string` -  The path (including filename) where the output file should be placed (defaults to `"./out/[WORKSPACE_FOLDER_NAME].zip"`).
- 
+
  - **createPackage**: `boolean` - Creates a zip package. Defaults to true. This setting is ignored when `deploy` is enabled.
 
  - **watch**: `boolean` -  If true, the server will keep running and will watch and recompile on every file change.
@@ -168,18 +205,23 @@ These are the options available in the `bsconfig.json` file.
 
  - **emitFullPaths**: `boolean` -  Emit full paths to files when printing diagnostics to the console. Defaults to false
 
- - **diagnosticFilters**: `Array<string | number | {src: string; codes: number[]}` - A list of filters used to hide diagnostics. 
+ - **diagnosticFilters**: `Array<string | number | {src: string; codes: number[]}` - A list of filters used to hide diagnostics.
    - A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed.
    - A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
-   - An object can also be provided to filter specific diagnostic codes for a file pattern. For example, 
+   - An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
         ```jsonc
         "diagnosticFilters": [{
             "src": "vendor/**/*",
-            "codes": [1000, 1011] //ignore these specific codes from vendor libraries 
+            "codes": [1000, 1011] //ignore these specific codes from vendor libraries
         }]
         ```
+ - **diagnosticLevel**: `'hint' | 'info' | 'warn' | 'error'` - Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to 'warn'
+
  - **autoImportComponentScript**: `bool` - BrighterScript only: will automatically import a script at transpile-time for a component with the same name if it exists.
 
+ - **sourceRoot**: `string` - Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
+
+ - **plugins**: `Array<string>` - List of node scripts or npm modules to load as plugins to the BrighterScript compiler.
 
 ## Ignore errors and warnings on a per-line basis
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
@@ -197,7 +239,7 @@ sub Main()
     DoSomething(
 
     DoSomething( 'bs:disable-line
-    
+
     'disable errors about wrong parameter count
     DoSomething(1,2,3) 'bs:disable-next-line
 
@@ -218,4 +260,4 @@ This project also contributes a class that aligns with Microsoft's [Language Ser
 [Click here](CHANGELOG.md) to view the changelog.
 
 ## Special Thanks
-Special thanks to the [brs](https://github.com/sjbarag/brs) project for its fantastic work on its blazing fast BrightScript parser. It was used as the foundation for the BrighterScript parser. 
+Special thanks to the [brs](https://github.com/sjbarag/brs) project for its fantastic work on its blazing fast BrightScript parser which was used as the foundation for the BrighterScript parser.

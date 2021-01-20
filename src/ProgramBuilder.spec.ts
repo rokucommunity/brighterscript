@@ -1,19 +1,25 @@
 import { expect } from 'chai';
 import * as fsExtra from 'fs-extra';
-import * as sinonImport from 'sinon';
+import { createSandbox } from 'sinon';
+const sinon = createSandbox();
 import { Program } from './Program';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { Logger, LogLevel } from './Logger';
-
-let sinon = sinonImport.createSandbox();
-let tmpPath = s`${process.cwd()}/.tmp`;
-let rootDir = s`${tmpPath}/rootDir}`;
-let stagingFolderPath = s`${tmpPath}/staging`;
+import * as diagnosticUtils from './diagnosticUtils';
+import type { BscFile, BsDiagnostic } from '.';
+import { Range } from '.';
+import { DiagnosticSeverity } from './astUtils';
+import { BrsFile } from './files/BrsFile';
 
 describe('ProgramBuilder', () => {
+
+    let tmpPath = s`${process.cwd()}/.tmp`;
+    let rootDir = s`${tmpPath}/rootDir`;
+    let stagingFolderPath = s`${tmpPath}/staging`;
+
     beforeEach(() => {
-        fsExtra.ensureDirSync(tmpPath);
+        fsExtra.ensureDirSync(rootDir);
         fsExtra.emptyDirSync(tmpPath);
     });
     afterEach(() => {
@@ -23,27 +29,14 @@ describe('ProgramBuilder', () => {
     });
 
     let builder: ProgramBuilder;
-    let b: any;
-    let setVfsFile: (filePath: string, contents: string) => void;
     beforeEach(async () => {
         builder = new ProgramBuilder();
-        b = builder;
-        b.options = await util.normalizeAndResolveConfig(undefined);
-        b.program = new Program(b.options);
-        b.logger = new Logger();
-        let vfs = {};
-        setVfsFile = (filePath, contents) => {
-            vfs[filePath] = contents;
-        };
-        sinon.stub(b.program.util, 'getFileContents').callsFake((filePath) => {
-            if (vfs[filePath]) {
-                return vfs[filePath];
-            } else {
-                throw new Error(`Cannot find file "${filePath}"`);
-            }
+        builder.options = await util.normalizeAndResolveConfig({
+            rootDir: rootDir
         });
+        builder.program = new Program(builder.options);
+        builder.logger = new Logger();
     });
-
 
     afterEach(() => {
         builder.dispose();
@@ -52,22 +45,52 @@ describe('ProgramBuilder', () => {
     describe('loadAllFilesAST', () => {
         it('loads .bs, .brs, .xml files', async () => {
             sinon.stub(util, 'getFilePaths').returns(Promise.resolve([{
-                src: 'file.brs',
-                dest: 'file.brs'
+                src: 'file1.brs',
+                dest: 'file1.brs'
             }, {
-                src: 'file.bs',
-                dest: 'file.bs'
+                src: 'file2.bs',
+                dest: 'file2.bs'
             }, {
-                src: 'file.xml',
-                dest: 'file.xml'
+                src: 'file3.xml',
+                dest: 'file4.xml'
             }]));
 
-            b.program = {
-                addOrReplaceFile: () => { }
-            };
-            let stub = sinon.stub(b.program, 'addOrReplaceFile');
-            await b.loadAllFilesAST();
+            let stub = sinon.stub(builder.program, 'addOrReplaceFile');
+            sinon.stub(builder, 'getFileContents').returns(Promise.resolve(''));
+            await builder['loadAllFilesAST']();
             expect(stub.getCalls()).to.be.lengthOf(3);
+        });
+
+        it('loads all type definitions first', async () => {
+            const requestedFiles = [] as string[];
+            builder['fileResolvers'].push((filePath) => {
+                requestedFiles.push(s(filePath));
+            });
+            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/main.d.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.d.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
+            const stub = sinon.stub(builder.program, 'addOrReplaceFile');
+            await builder['loadAllFilesAST']();
+            const srcPaths = stub.getCalls().map(x => x.args[0].src);
+            //the d files should be first
+            expect(srcPaths.indexOf(s`${rootDir}/source/main.d.bs`)).within(0, 1);
+            expect(srcPaths.indexOf(s`${rootDir}/source/lib.d.bs`)).within(0, 1);
+            //the non-d files should be last
+            expect(srcPaths.indexOf(s`${rootDir}/source/main.brs`)).within(2, 3);
+            expect(srcPaths.indexOf(s`${rootDir}/source/lib.brs`)).within(2, 3);
+        });
+
+        it('does not load non-existent type definition file', async () => {
+            const requestedFiles = [] as string[];
+            builder['fileResolvers'].push((filePath) => {
+                requestedFiles.push(s(filePath));
+            });
+            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
+            await builder['loadAllFilesAST']();
+            //the d file should not be requested because `loadAllFilesAST` knows it doesn't exist
+            expect(requestedFiles).not.to.include(s`${rootDir}/source/main.d.bs`);
+            expect(requestedFiles).to.include(s`${rootDir}/source/main.brs`);
         });
     });
 
@@ -76,7 +99,7 @@ describe('ProgramBuilder', () => {
             //supress the console log statements for the bsconfig parse errors
             sinon.stub(console, 'log').returns(undefined);
             //totally bogus config file
-            setVfsFile(s`${rootDir}/bsconfig.json`, '{');
+            fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '{');
             await builder.run({
                 project: s`${rootDir}/bsconfig.json`,
                 username: 'john'
@@ -158,4 +181,134 @@ describe('ProgramBuilder', () => {
         expect(builder1.logger.logLevel).to.equal(LogLevel.info);
         expect(builder2.logger.logLevel).to.equal(LogLevel.error);
     });
+
+    it('does not error when loading stagingFolderPath from bsconfig.json', async () => {
+        fsExtra.ensureDirSync(rootDir);
+        fsExtra.writeFileSync(`${rootDir}/bsconfig.json`, `{
+            "stagingFolderPath": "./out"
+        }`);
+        let builder = new ProgramBuilder();
+        await builder.run({
+            cwd: rootDir,
+            createPackage: false
+        });
+    });
+
+    it('forwards program events', async () => {
+        const beforeProgramValidate = sinon.spy();
+        const afterProgramValidate = sinon.spy();
+        builder.plugins.add({
+            name: 'forwards program events',
+            beforeProgramValidate: beforeProgramValidate,
+            afterProgramValidate: afterProgramValidate
+        });
+        await builder.run({
+            createPackage: false
+        });
+        expect(beforeProgramValidate.callCount).to.equal(1);
+        expect(afterProgramValidate.callCount).to.equal(1);
+    });
+
+
+    describe('printDiagnostics', () => {
+
+        it('prints no diagnostics when showDiagnosticsInConsole is false', () => {
+            builder.options.showDiagnosticsInConsole = false;
+
+            let stub = sinon.stub(builder, 'getDiagnostics').returns([]);
+            expect(stub.called).to.be.false;
+            builder['printDiagnostics']();
+        });
+
+        it('prints nothing when there are no diagnostics', () => {
+            builder.options.showDiagnosticsInConsole = true;
+
+            sinon.stub(builder, 'getDiagnostics').returns([]);
+            let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
+
+            builder['printDiagnostics']();
+
+            expect(printStub.called).to.be.false;
+        });
+
+        it('prints diagnostic, when file is present in project', () => {
+            builder.options.showDiagnosticsInConsole = true;
+
+            let diagnostics = createBsDiagnostic('p1', ['m1']);
+            let f1 = diagnostics[0].file as BrsFile;
+            f1.fileContents = `l1\nl2\nl3`;
+            sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
+
+            sinon.stub(builder.program, 'getFileByPathAbsolute').returns(f1);
+
+            let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
+
+            builder['printDiagnostics']();
+
+            expect(printStub.called).to.be.true;
+        });
+    });
+
+    it('prints diagnostic, when file has no lines', () => {
+        builder.options.showDiagnosticsInConsole = true;
+
+        let diagnostics = createBsDiagnostic('p1', ['m1']);
+        let f1 = diagnostics[0].file as BrsFile;
+        f1.fileContents = null;
+        sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
+
+        sinon.stub(builder.program, 'getFileByPathAbsolute').returns(f1);
+
+        let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
+
+        builder['printDiagnostics']();
+
+        expect(printStub.called).to.be.true;
+    });
+
+    it('prints diagnostic, when no file present', () => {
+        builder.options.showDiagnosticsInConsole = true;
+
+        let diagnostics = createBsDiagnostic('p1', ['m1']);
+        sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
+
+        sinon.stub(builder.program, 'getFileByPathAbsolute').returns(null);
+
+        let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
+
+        builder['printDiagnostics']();
+
+        expect(printStub.called).to.be.true;
+    });
 });
+
+function createBsDiagnostic(filePath: string, messages: string[]): BsDiagnostic[] {
+    let file = new BrsFile(filePath, filePath, null);
+    let diagnostics = [];
+    for (let message of messages) {
+        let d = createDiagnostic(file, 1, message);
+        d.file = file;
+        diagnostics.push(d);
+    }
+    return diagnostics;
+}
+function createDiagnostic(
+    bscFile: BscFile,
+    code: number,
+    message: string,
+    startLine = 0,
+    startCol = 99999,
+    endLine = 0,
+    endCol = 99999,
+    severity: DiagnosticSeverity = DiagnosticSeverity.Error
+) {
+    const diagnostic = {
+        code: code,
+        message: message,
+        range: Range.create(startLine, startCol, endLine, endCol),
+        file: bscFile,
+        severity: severity
+    };
+    return diagnostic;
+}
+

@@ -1,19 +1,25 @@
-import { Range, Diagnostic } from 'vscode-languageserver';
-
-import { Scope } from './Scope';
-import { BrsFile } from './files/BrsFile';
-import { XmlFile } from './files/XmlFile';
-import { FunctionScope } from './FunctionScope';
-import { BrsType } from './types/BrsType';
-import { FunctionType } from './types/FunctionType';
-import { ParseMode } from './parser/Parser';
+import type { Range, Diagnostic } from 'vscode-languageserver';
+import type { Scope } from './Scope';
+import type { BrsFile } from './files/BrsFile';
+import type { XmlFile } from './files/XmlFile';
+import type { FunctionScope } from './FunctionScope';
+import type { FunctionType } from './types/FunctionType';
+import type { ParseMode } from './parser/Parser';
+import type { Program, SourceObj, TranspileObj } from './Program';
+import type { ProgramBuilder } from './ProgramBuilder';
+import type { Expression, FunctionStatement } from './parser';
+import type { TranspileState } from './parser/TranspileState';
+import type { SourceNode } from 'source-map';
+import type { BscType } from './types/BscType';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
 }
 
+export type BscFile = BrsFile | XmlFile;
+
 export interface Callable {
-    file: BrsFile | XmlFile;
+    file: BscFile;
     name: string;
     /**
      * Is the callable declared as "sub". If falsey, assumed declared as "function"
@@ -37,12 +43,16 @@ export interface Callable {
      * The range of the name of this callable
      */
     nameRange?: Range;
-    isDepricated?: boolean;
+    isDeprecated?: boolean;
     getName: (parseMode: ParseMode) => string;
     /**
      * Indicates whether or not this callable has an associated namespace
      */
     hasNamespace: boolean;
+    /**
+     * Gives access to the whole statement if you need more data than provided by the interface
+     */
+    functionStatement: FunctionStatement;
 }
 
 export interface FunctionCall {
@@ -62,13 +72,13 @@ export interface FunctionCall {
  */
 export interface CallableArg {
     text: string;
-    type: BrsType;
+    type: BscType;
     range: Range;
 }
 
 export interface CallableParam {
     name: string;
-    type: BrsType;
+    type: BscType;
     isOptional?: boolean;
     /**
      * Indicates that an unlimited number of arguments can be passed in
@@ -86,8 +96,7 @@ export interface FileObj {
  */
 export interface FileReference {
     /**
-     * The relative path to the referenced file. This is relative to the root, and should
-     * be used to look up the file in the program
+     * The pkgPath to the referenced file.
      */
     pkgPath: string;
     text: string;
@@ -115,7 +124,7 @@ export interface File {
 
 export interface VariableDeclaration {
     name: string;
-    type: BrsType;
+    type: BscType;
     /**
      * The range for the variable name
      */
@@ -127,22 +136,6 @@ export interface VariableDeclaration {
     lineIndex: number;
 }
 
-//copied from brs (since it's not exported from there)
-export enum ValueKind {
-    Invalid = 0,
-    Boolean = 1,
-    String = 2,
-    Int32 = 3,
-    Int64 = 4,
-    Float = 5,
-    Double = 6,
-    Callable = 7,
-    Uninitialized = 8,
-    Dynamic = 9,
-    Void = 10,
-    Object = 11
-}
-
 /**
  * A wrapper around a callable to provide more information about where it came from
  */
@@ -150,6 +143,8 @@ export interface CallableContainer {
     callable: Callable;
     scope: Scope;
 }
+
+export type CallableContainerMap = Map<string, CallableContainer[]>;
 
 export interface CommentFlag {
     file: BrsFile;
@@ -162,4 +157,48 @@ export interface CommentFlag {
      */
     affectedRange: Range;
     codes: number[] | null;
+}
+
+type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
+
+export type CompilerPluginFactory = () => CompilerPlugin;
+
+export interface CompilerPlugin {
+    name: string;
+    beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterProgramCreate?: (program: Program) => void;
+    beforeProgramValidate?: (program: Program) => void;
+    afterProgramValidate?: (program: Program) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    afterScopeCreate?: (scope: Scope) => void;
+    beforeScopeDispose?: (scope: Scope) => void;
+    afterScopeDispose?: (scope: Scope) => void;
+    beforeScopeValidate?: ValidateHandler;
+    afterScopeValidate?: ValidateHandler;
+    beforeFileParse?: (source: SourceObj) => void;
+    afterFileParse?: (file: BscFile) => void;
+    afterFileValidate?: (file: BscFile) => void;
+    beforeFileTranspile?: (entry: TranspileObj) => void;
+    afterFileTranspile?: (entry: TranspileObj) => void;
+    beforeFileDispose?: (file: BscFile) => void;
+    afterFileDispose?: (file: BscFile) => void;
+}
+
+export interface TypedefProvider {
+    getTypedef(state: TranspileState): Array<SourceNode | string>;
+}
+
+export type TranspileResult = Array<(string | SourceNode)>;
+
+export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined> | void;
+
+export interface ExpressionInfo {
+    expressions: Expression[];
+    varExpressions: Expression[];
+    uniqueVarNames: string[];
 }

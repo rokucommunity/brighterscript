@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 
@@ -11,32 +10,30 @@ describe('parser', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Caret, '^'),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 EOF
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses repeated exponential operators as left-associative', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+                token(TokenKind.IntegerLiteral, '2'),
                 token(TokenKind.Caret, '^'),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Caret, '^'),
-                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
+                token(TokenKind.IntegerLiteral, '4'),
                 EOF
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 });

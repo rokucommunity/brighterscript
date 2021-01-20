@@ -1,6 +1,6 @@
 import * as chokidar from 'chokidar';
 
-import { BsConfig } from './BsConfig';
+import type { BsConfig } from './BsConfig';
 
 /**
  * There are some bugs with chokidar, so this attempts to mitigate them

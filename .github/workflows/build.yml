@@ -26,7 +26,6 @@ jobs:
     needs: ci
     runs-on: ubuntu-18.04
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@master
@@ -36,18 +35,15 @@ jobs:
       - run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ./.npmrc
       - run: npm ci
       - run: npm run build
-      
       #create npm package
       - run: npm pack
-
-       #compute release version
-      - name: Compute release version
-        run: echo ::set-env name=RELEASE_VERSION::${GITHUB_REF##*/v}
 
       #create GitHub release
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
           release_name: ${{ github.ref }}
@@ -55,12 +51,12 @@ jobs:
           prerelease: false #contains(github.ref, '-beta.') == true
 
       #upload package to GitHub release
-      - name: Upload vsix to GitHub release
-        uses: AButler/upload-release-assets@v2.0
+      - name: Upload GitHub Release Assets
+        uses: alexellis/upload-assets@0.2.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: '*.tgz'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          release-tag: v${{ env.RELEASE_VERSION }}
-      
+          asset_paths: '["./*.tgz"]'
+
       #upload to npm
       - run: npm publish

@@ -1,58 +1,60 @@
-import {
-    AllowedLocalIdentifiers,
-    AllowedProperties,
-    AssignmentOperators,
-    BlockTerminator,
-    DisallowedLocalIdentifiersText,
-    Identifier,
-    Lexer,
+import type {
     Token,
-    TokenKind
+    Identifier,
+    BlockTerminator
 } from '../lexer';
-
 import {
-    Argument,
-    BrsBoolean,
-    BrsInvalid,
-    BrsString,
-    FunctionParameter,
-    Int32,
-    StdlibArgument,
-    ValueKind,
-    valueKindFromString
-} from '../brsTypes';
-import {
-    AssignmentStatement,
-    Block,
-    Body,
-    CommentStatement,
-    DottedSetStatement,
-    ElseIf,
-    EndStatement,
-    ExitForStatement,
-    ExitWhileStatement,
-    ExpressionStatement,
-    ForEachStatement,
-    ForStatement,
-    FunctionStatement,
-    GotoStatement,
-    IfStatement,
-    ImportStatement,
-    IncrementStatement,
-    IndexedSetStatement,
-    LabelStatement,
-    LibraryStatement,
-    NamespaceStatement,
-    PrintSeparatorSpace,
-    PrintSeparatorTab,
-    PrintStatement,
-    ReturnStatement,
+    TokenKind,
+    AllowedLocalIdentifiers,
+    AssignmentOperators,
+    DisallowedLocalIdentifiersText,
+    DisallowedFunctionIdentifiersText,
+    AllowedProperties,
+    Lexer,
+    BrighterScriptSourceLiterals,
+    isToken,
+    DeclarableTypes
+} from '../lexer';
+import type {
     Statement,
-    StopStatement,
-    WhileStatement
+    PrintSeparatorTab,
+    PrintSeparatorSpace
 } from './Statement';
-import { DiagnosticInfo, DiagnosticMessages } from '../DiagnosticMessages';
+import {
+    FunctionStatement,
+    CommentStatement,
+    AssignmentStatement,
+    WhileStatement,
+    ExitWhileStatement,
+    ForStatement,
+    ForEachStatement,
+    ExitForStatement,
+    LibraryStatement,
+    Block,
+    IfStatement,
+    DottedSetStatement,
+    IndexedSetStatement,
+    ExpressionStatement,
+    IncrementStatement,
+    ReturnStatement,
+    EndStatement,
+    PrintStatement,
+    LabelStatement,
+    GotoStatement,
+    StopStatement,
+    NamespaceStatement,
+    Body,
+    ImportStatement,
+    ClassFieldStatement,
+    ClassMethodStatement,
+    ClassStatement,
+    TryCatchStatement,
+    ThrowStatement
+} from './Statement';
+import type { DiagnosticInfo } from '../DiagnosticMessages';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 import { util } from '../util';
+import type { Expression } from './Expression';
 import {
     AALiteralExpression,
     AAMemberExpression,
@@ -60,9 +62,7 @@ import {
     BinaryExpression,
     CallExpression,
     CallfuncExpression,
-    ConditionalExpression,
     DottedGetExpression,
-    Expression,
     FunctionExpression,
     GroupingExpression,
     IndexedGetExpression,
@@ -72,16 +72,26 @@ import {
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression,
-    InvalidCoalescingExpression
+    TemplateStringExpression,
+    EscapedCharCodeLiteralExpression,
+    TemplateStringQuasiExpression,
+    TaggedTemplateStringExpression,
+    SourceLiteralExpression,
+    AnnotationExpression,
+    FunctionParameterExpression,
+    TernaryExpression
 } from './Expression';
-import { Diagnostic, Range } from 'vscode-languageserver';
-import { ClassFieldStatement, ClassMethodStatement, ClassStatement } from './ClassStatement';
+import type { Diagnostic, Range } from 'vscode-languageserver';
+import { Logger } from '../Logger';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
+import { createStringLiteral, createToken } from '../astUtils/creators';
 
 export class Parser {
     /**
      * The array of tokens passed to `parse()`
      */
-    public tokens: Token[];
+    public tokens = [] as Token[];
 
     /**
      * The current token index
@@ -91,10 +101,50 @@ export class Parser {
     /**
      * The list of statements for the parsed file
      */
-    public ast: Body;
+    public ast = new Body([]);
 
-    //TODO remove this once we have verified all of the tests.
-    public statements: Statement[];
+    public get statements() {
+        return this.ast.statements;
+    }
+
+    /**
+     * References for significant statements/expressions in the parser.
+     * These are initially extracted during parse-time to improve performance, but will also be dynamically regenerated if need be.
+     *
+     * If a plugin modifies the AST, then the plugin should call Parser#invalidateReferences() to force this object to refresh
+     */
+    public get references() {
+        //build the references object if it's missing.
+        if (!this._references) {
+            this.findReferences();
+        }
+        return this._references;
+    }
+
+    private _references: References = createReferences();
+
+    /**
+     * Invalidates (clears) the references collection. This should be called anytime the AST has been manipulated.
+     */
+    invalidateReferences() {
+        this._references = undefined;
+    }
+
+    private addPropertyHints(item: Token | AALiteralExpression) {
+        if (isToken(item)) {
+            const name = item.text;
+            this._references.propertyHints[name.toLowerCase()] = name;
+        } else {
+            for (const member of item.elements) {
+                if (!isCommentStatement(member)) {
+                    const name = member.keyToken.text;
+                    if (!name.startsWith('"')) {
+                        this._references.propertyHints[name.toLowerCase()] = name;
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * The list of diagnostics found during the parse process
@@ -114,46 +164,6 @@ export class Parser {
     private globalTerminators = [] as TokenKind[][];
 
     /**
-     * All class statements defined in this file
-     */
-    public classStatements = [] as ClassStatement[];
-
-    /**
-     * All namespace statements defined in this file
-     */
-    public namespaceStatements = [] as NamespaceStatement[];
-
-    /**
-     * All function statements defined in this file
-     */
-    public functionStatements = [] as FunctionStatement[];
-
-    /**
-     * All function expressions defined in this file
-     */
-    public functionExpressions = [] as FunctionExpression[];
-
-    /**
-     * All `new <ClassName>` expressions defined in this file
-     */
-    public newExpressions = [] as NewExpression[];
-
-    /**
-     * All assignment statements in this file
-     */
-    public assignmentStatements = [] as AssignmentStatement[];
-
-    /**
-     * All import statements in this file
-     */
-    public importStatements = [] as ImportStatement[];
-
-    /**
-     * All library statements in this file
-     */
-    public libraryStatements = [] as LibraryStatement[];
-
-    /**
      * When a namespace has been started, this gets set. When it's done, this gets unset.
      * It is useful for passing the namespace into certain statements that need it
      */
@@ -165,6 +175,17 @@ export class Parser {
      * by function later on.
      */
     private currentFunctionExpression: FunctionExpression;
+
+    /**
+     * A list of identifiers that are permitted to be used as local variables. We store this in a property because we augment the list in the constructor
+     * based on the parse mode
+     */
+    private allowedLocalIdentifiers: TokenKind[];
+
+    /**
+     * Annotations collected which should be attached to the next statement
+     */
+    private pendingAnnotations: AnnotationExpression[];
 
     /**
      * Get the currently active global terminators
@@ -194,31 +215,50 @@ export class Parser {
      * @returns the same instance of the parser which contains the diagnostics and statements
      */
     public parse(tokens: Token[], options?: ParseOptions) {
+        this.logger = options?.logger ?? new Logger();
         this.tokens = tokens;
         this.options = this.sanitizeParseOptions(options);
+        this.allowedLocalIdentifiers = [
+            ...AllowedLocalIdentifiers,
+            //when in plain brightscript mode, the BrighterScript source literals can be used as regular variables
+            ...(this.options.mode === ParseMode.BrightScript ? BrighterScriptSourceLiterals : [])
+        ];
         this.current = 0;
         this.diagnostics = [];
         this.namespaceAndFunctionDepth = 0;
+        this.pendingAnnotations = [];
 
         this.ast = this.body();
-        this.statements = this.ast.statements;
 
         return this;
     }
 
+    private logger: Logger;
+
     private body() {
+        const parentAnnotations = this.enterAnnotationBlock();
+
         let body = new Body([]);
         if (this.tokens.length > 0) {
+            this.consumeStatementSeparators(true);
+
             try {
                 while (
                     //not at end of tokens
                     !this.isAtEnd() &&
                     //the next token is not one of the end terminators
-                    !this.check(...this.peekGlobalTerminators())
+                    !this.checkAny(...this.peekGlobalTerminators())
                 ) {
                     let dec = this.declaration();
                     if (dec) {
-                        body.statements.push(dec);
+                        if (!isAnnotationExpression(dec)) {
+                            this.consumePendingAnnotations(dec);
+                            body.statements.push(dec);
+                            //ensure statement separator
+                            this.consumeStatementSeparators(false);
+                        } else {
+                            this.consumeStatementSeparators(true);
+                        }
                     }
                 }
             } catch (parseError) {
@@ -226,6 +266,8 @@ export class Parser {
                 console.error(parseError);
             }
         }
+
+        this.exitAnnotationBlock(parentAnnotations);
         return body;
     }
 
@@ -260,19 +302,18 @@ export class Parser {
      * Throws an exception using the last diagnostic message
      */
     private lastDiagnosticAsError() {
-        return new Error(this.diagnostics[this.diagnostics.length - 1]?.message);
+        let error = new Error(this.diagnostics[this.diagnostics.length - 1]?.message ?? 'Unknown error');
+        (error as any).isDiagnostic = true;
+        return error;
     }
 
-    private declaration(...additionalTerminators: BlockTerminator[]): Statement | undefined {
+    private declaration(): Statement | AnnotationExpression | undefined {
         try {
-            // consume any leading newlines
-            while (this.match(TokenKind.Newline)) { }
-
             if (this.check(TokenKind.Class)) {
                 return this.classDeclaration();
             }
 
-            if (this.check(TokenKind.Sub, TokenKind.Function)) {
+            if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
                 return this.functionDeclaration(false);
             }
 
@@ -284,32 +325,25 @@ export class Parser {
                 return this.namespaceStatement();
             }
 
-            // BrightScript is like python, in that variables can be declared without a `var`,
-            // `let`, (...) keyword. As such, we must check the token *after* an identifier to figure
-            // out what to do with it.
-            if (
-                this.check(TokenKind.Identifier, ...AllowedLocalIdentifiers) &&
-                this.checkNext(...AssignmentOperators)
-            ) {
-                return this.assignment(...additionalTerminators);
+            if (this.check(TokenKind.At) && this.checkNext(TokenKind.Identifier)) {
+                return this.annotationExpression();
             }
 
             if (this.check(TokenKind.Comment)) {
-                let stmt = this.commentStatement();
-                //scrap consecutive newlines
-                while (this.match(TokenKind.Newline)) {
-
-                }
-                return stmt;
+                return this.commentStatement();
             }
 
             //catch certain global terminators to prevent unnecessary lookahead (i.e. like `end namespace`, no need to continue)
-            if (this.check(...this.peekGlobalTerminators())) {
+            if (this.checkAny(...this.peekGlobalTerminators())) {
                 return;
             }
 
-            return this.statement(...additionalTerminators);
+            return this.statement();
         } catch (error) {
+            //if the error is not a diagnostic, then log the error for debugging purposes
+            if (!error.isDiagnostic) {
+                this.logger.error(error);
+            }
             this.synchronize();
         }
     }
@@ -319,6 +353,9 @@ export class Parser {
      */
     private classDeclaration(): ClassStatement {
         this.warnIfNotBrighterScriptMode('class declarations');
+
+        const parentAnnotations = this.enterAnnotationBlock();
+
         let classKeyword = this.consume(
             DiagnosticMessages.expectedClassKeyword(),
             TokenKind.Class
@@ -327,32 +364,29 @@ export class Parser {
         let parentClassName: NamespacedVariableNameExpression;
 
         //get the class name
-        let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier, ...AllowedLocalIdentifiers) as Identifier;
+        let className = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('class'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
 
         //see if the class inherits from parent
         if (this.peek().text.toLowerCase() === 'extends') {
             extendsKeyword = this.advance();
-
             parentClassName = this.getNamespacedVariableNameExpression();
-            //the only thing allowed after a class declaration is a comment or a newline
-            this.flagUntil(TokenKind.Comment, TokenKind.Newline);
-        }
-        let body = [] as Statement[];
-
-        //consume any trailing comments on the class declaration line
-        if (this.check(TokenKind.Comment)) {
-            body.push(this.commentStatement());
         }
 
-        //consume newlines (at least one)
-        while (this.match(TokenKind.Newline)) {
-        }
+        //ensure statement separator
+        this.consumeStatementSeparators();
 
         //gather up all class members (Fields, Methods)
-        while (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Comment, TokenKind.Identifier, ...AllowedProperties)) {
+        let body = [] as Statement[];
+        while (this.checkAny(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
             try {
+                let decl: Statement;
                 let accessModifier: Token;
-                if (this.check(TokenKind.Public, TokenKind.Protected, TokenKind.Private)) {
+
+                if (this.check(TokenKind.At) && this.checkNext(TokenKind.Identifier)) {
+                    this.annotationExpression();
+                }
+
+                if (this.checkAny(TokenKind.Public, TokenKind.Protected, TokenKind.Private)) {
                     //use actual access modifier
                     accessModifier = this.advance();
                 }
@@ -363,12 +397,11 @@ export class Parser {
                 }
 
                 //methods (function/sub keyword OR identifier followed by opening paren)
-                if (this.check(TokenKind.Function, TokenKind.Sub) || (this.check(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
-                    let funcDeclaration = this.functionDeclaration(false);
+                if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
+                    const funcDeclaration = this.functionDeclaration(false, false);
 
-                    //remove this function from the lists because it's a class method
-                    this.functionExpressions.pop();
-                    this.functionStatements.pop();
+                    //remove this function from the lists because it's not a callable
+                    const functionStatement = this._references.functionStatements.pop();
 
                     //if we have an overrides keyword AND this method is called 'new', that's not allowed
                     if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
@@ -377,20 +410,21 @@ export class Parser {
                             range: overrideKeyword.range
                         });
                     }
-                    body.push(
-                        new ClassMethodStatement(
-                            accessModifier,
-                            funcDeclaration.name,
-                            funcDeclaration.func,
-                            overrideKeyword
-                        )
+
+                    decl = new ClassMethodStatement(
+                        accessModifier,
+                        funcDeclaration.name,
+                        funcDeclaration.func,
+                        overrideKeyword
                     );
 
+                    //refer to this statement as parent of the expression
+                    functionStatement.func.functionStatement = decl as ClassMethodStatement;
+
                     //fields
-                } else if (this.check(TokenKind.Identifier, ...AllowedProperties)) {
-                    body.push(
-                        this.classFieldDeclaration(accessModifier)
-                    );
+                } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
+
+                    decl = this.classFieldDeclaration(accessModifier);
 
                     //class fields cannot be overridden
                     if (overrideKeyword) {
@@ -402,33 +436,21 @@ export class Parser {
 
                     //comments
                 } else if (this.check(TokenKind.Comment)) {
-                    body.push(
-                        this.commentStatement()
-                    );
+                    decl = this.commentStatement();
+                }
+
+                if (decl) {
+                    this.consumePendingAnnotations(decl);
+                    body.push(decl);
                 }
             } catch (e) {
                 //throw out any failed members and move on to the next line
-                this.flagUntil(TokenKind.Newline, TokenKind.Eof);
+                this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
             }
 
-            if (this.check(TokenKind.Comment)) {
-                body.push(
-                    this.commentStatement()
-                );
-            }
-
-            //if the previous token was NOT a newline, then
-            //there shouldn't be anything else after the method / field declaration, so flag extra stuff
-            if (!this.checkPrevious(TokenKind.Newline)) {
-                this.flagUntil(TokenKind.Newline, TokenKind.Eof);
-            }
-
-            //consume trailing newlines
-            while (this.match(TokenKind.Newline)) { }
+            //ensure statement separator
+            this.consumeStatementSeparators();
         }
-
-        //consume trailing newlines
-        while (this.match(TokenKind.Newline)) { }
 
         let endingKeyword = this.advance();
         if (endingKeyword.kind !== TokenKind.EndClass) {
@@ -436,10 +458,6 @@ export class Parser {
                 ...DiagnosticMessages.couldNotFindMatchingEndKeyword('class'),
                 range: endingKeyword.range
             });
-        }
-        //consume any trailing newlines
-        while (this.match(TokenKind.Newline)) {
-
         }
 
         const result = new ClassStatement(
@@ -451,7 +469,9 @@ export class Parser {
             parentClassName,
             this.currentNamespaceName
         );
-        this.classStatements.push(result);
+
+        this._references.classStatements.push(result);
+        this.exitAnnotationBlock(parentAnnotations);
         return result;
     }
 
@@ -466,10 +486,10 @@ export class Parser {
         //look for `as SOME_TYPE`
         if (this.check(TokenKind.As)) {
             asToken = this.advance();
-            fieldType = this.advance();
+            fieldType = this.typeToken();
 
             //no field type specified
-            if (!valueKindFromString(`${fieldType.text}`) && !this.check(TokenKind.Identifier)) {
+            if (!util.tokenToBscType(fieldType) && !this.check(TokenKind.Identifier)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
                     range: this.peek().range
@@ -500,16 +520,16 @@ export class Parser {
      */
     private callExpressions = [];
 
-    private functionDeclaration(isAnonymous: true): FunctionExpression;
-    private functionDeclaration(isAnonymous: false): FunctionStatement;
-    private functionDeclaration(isAnonymous: boolean) {
+    private functionDeclaration(isAnonymous: true, checkIdentifier?: boolean): FunctionExpression;
+    private functionDeclaration(isAnonymous: false, checkIdentifier?: boolean): FunctionStatement;
+    private functionDeclaration(isAnonymous: boolean, checkIdentifier = true) {
         let previousCallExpressions = this.callExpressions;
         this.callExpressions = [];
         try {
             //track depth to help certain statements need to know if they are contained within a function body
             this.namespaceAndFunctionDepth++;
             let functionType: Token;
-            if (this.check(TokenKind.Sub, TokenKind.Function)) {
+            if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
                 functionType = this.advance();
             } else {
                 this.diagnostics.push({
@@ -524,20 +544,14 @@ export class Parser {
                     range: {
                         start: this.peek().range.start,
                         end: this.peek().range.start
-                    }
+                    },
+                    leadingWhitespace: ''
                 };
             }
-            let isSub = functionType && functionType.kind === TokenKind.Sub;
+            let isSub = functionType?.kind === TokenKind.Sub;
             let functionTypeText = isSub ? 'sub' : 'function';
             let name: Identifier;
-            let returnType: ValueKind;
             let leftParen: Token;
-
-            if (isSub) {
-                returnType = ValueKind.Void;
-            } else {
-                returnType = ValueKind.Dynamic;
-            }
 
             if (isAnonymous) {
                 leftParen = this.consume(
@@ -564,9 +578,17 @@ export class Parser {
                         range: name.range
                     });
                 }
+
+                //flag functions with keywords for names (only for standard functions)
+                if (checkIdentifier && DisallowedFunctionIdentifiersText.has(name.text.toLowerCase())) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(name.text),
+                        range: name.range
+                    });
+                }
             }
 
-            let params: FunctionParameter[] = [];
+            let params = [] as FunctionParameterExpression[];
             let asToken: Token;
             let typeToken: Token;
             if (!this.check(TokenKind.RightParen)) {
@@ -586,45 +608,31 @@ export class Parser {
             if (this.check(TokenKind.As)) {
                 asToken = this.advance();
 
-                typeToken = this.advance();
-                let typeString = typeToken.text || '';
-                let maybeReturnType = valueKindFromString(typeString);
+                typeToken = this.typeToken();
 
-                if (!maybeReturnType) {
+                if (!util.tokenToBscType(typeToken, this.options.mode === ParseMode.BrighterScript)) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.invalidFunctionReturnType(typeString),
+                        ...DiagnosticMessages.invalidFunctionReturnType(typeToken.text ?? ''),
                         range: typeToken.range
                     });
                 }
-
-                returnType = maybeReturnType;
             }
 
-            params.reduce((haveFoundOptional: boolean, arg: Argument) => {
-                if (haveFoundOptional && !arg.defaultValue) {
+            params.reduce((haveFoundOptional: boolean, param: FunctionParameterExpression) => {
+                if (haveFoundOptional && !param.defaultValue) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(arg.name.text),
-                        range: arg.range
+                        ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(param.name.text),
+                        range: param.range
                     });
                 }
 
-                return haveFoundOptional || !!arg.defaultValue;
+                return haveFoundOptional || !!param.defaultValue;
             }, false);
-            let comment: CommentStatement;
-            //get a comment if available
-            if (this.check(TokenKind.Comment)) {
-                comment = this.commentStatement();
-            }
 
-            this.consume(
-                DiagnosticMessages.expectedNewlineOrColonAfterCallableSignature(functionTypeText),
-                TokenKind.Newline,
-                TokenKind.Colon
-            );
-            while (this.match(TokenKind.Newline)) { }
+            this.consumeStatementSeparators(true);
+
             let func = new FunctionExpression(
                 params,
-                returnType,
                 undefined, //body
                 functionType,
                 undefined, //ending keyword
@@ -632,10 +640,15 @@ export class Parser {
                 rightParen,
                 asToken,
                 typeToken,
-                this.currentFunctionExpression
+                this.currentFunctionExpression,
+                this.currentNamespaceName
             );
+            //if there is a parent function, register this function with the parent
+            if (this.currentFunctionExpression) {
+                this.currentFunctionExpression.childFunctionExpressions.push(func);
+            }
 
-            this.functionExpressions.push(func);
+            this._references.functionExpressions.push(func);
 
             let previousFunctionExpression = this.currentFunctionExpression;
             this.currentFunctionExpression = func;
@@ -643,7 +656,7 @@ export class Parser {
             //make sure to restore the currentFunctionExpression even if the body block fails to parse
             try {
                 //support ending the function with `end sub` OR `end function`
-                func.body = this.block(TokenKind.EndSub, TokenKind.EndFunction);
+                func.body = this.block();
             } finally {
                 this.currentFunctionExpression = previousFunctionExpression;
             }
@@ -655,10 +668,7 @@ export class Parser {
                 });
                 throw this.lastDiagnosticAsError();
             }
-            //prepend comment to body
-            if (comment) {
-                func.body.statements.unshift(comment);
-            }
+
             // consume 'end sub' or 'end function'
             func.end = this.advance();
             let expectedEndKind = isSub ? TokenKind.EndSub : TokenKind.EndFunction;
@@ -676,12 +686,9 @@ export class Parser {
             if (isAnonymous) {
                 return func;
             } else {
-                // only consume trailing newlines in the statement context; expressions
-                // expect to handle their own trailing whitespace
-                while (this.match(TokenKind.Newline)) {
-                }
                 let result = new FunctionStatement(name, func, this.currentNamespaceName);
-                this.functionStatements.push(result);
+                func.functionStatement = result;
+                this._references.functionStatements.push(result);
                 return result;
             }
         } finally {
@@ -691,8 +698,8 @@ export class Parser {
         }
     }
 
-    private functionParameter(): FunctionParameter {
-        if (!this.check(TokenKind.Identifier, ...AllowedLocalIdentifiers)) {
+    private functionParameter(): FunctionParameterExpression {
+        if (!this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedParameterNameButFound(this.peek().text),
                 range: this.peek().range
@@ -704,7 +711,6 @@ export class Parser {
         // force the name into an identifier so the AST makes some sense
         name.kind = TokenKind.Identifier;
 
-        let type: ValueKind = ValueKind.Dynamic;
         let typeToken: Token | undefined;
         let defaultValue;
 
@@ -718,33 +724,26 @@ export class Parser {
         if (this.check(TokenKind.As)) {
             asToken = this.advance();
 
-            typeToken = this.advance();
-            let typeValueKind = valueKindFromString(typeToken.text);
+            typeToken = this.typeToken();
 
-            if (!typeValueKind) {
+            if (!util.tokenToBscType(typeToken, this.options.mode === ParseMode.BrighterScript)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.functionParameterTypeIsInvalid(name.text, typeToken.text),
                     range: typeToken.range
                 });
                 throw this.lastDiagnosticAsError();
             }
-
-            type = typeValueKind;
         }
-
-        return new FunctionParameter(
+        return new FunctionParameterExpression(
             name,
-            {
-                kind: type,
-                range: typeToken ? typeToken.range : StdlibArgument.InternalRange
-            },
             typeToken,
             defaultValue,
-            asToken
+            asToken,
+            this.currentNamespaceName
         );
     }
 
-    private assignment(...additionalterminators: TokenKind[]): AssignmentStatement {
+    private assignment(): AssignmentStatement {
         let name = this.advance() as Identifier;
         //add diagnostic if name is a reserved word that cannot be used as an identifier
         if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
@@ -757,18 +756,7 @@ export class Parser {
             DiagnosticMessages.expectedOperatorAfterIdentifier(AssignmentOperators, name.text),
             ...AssignmentOperators
         );
-
         let value = this.expression();
-        if (!this.check(...additionalterminators, TokenKind.Comment)) {
-            this.consume(
-                DiagnosticMessages.expectedNewlineOrColonAfterAssignment(),
-                TokenKind.Newline,
-                TokenKind.Colon,
-                TokenKind.Eof,
-                ...additionalterminators
-            );
-        }
-        while (this.match(TokenKind.Newline)) { }
 
         let result: AssignmentStatement;
         if (operator.kind === TokenKind.Equal) {
@@ -781,7 +769,7 @@ export class Parser {
                 this.currentFunctionExpression
             );
         }
-        this.assignmentStatements.push(result);
+        this._references.assignmentStatements.push(result);
         return result;
     }
 
@@ -803,7 +791,7 @@ export class Parser {
         }
     }
 
-    private statement(...additionalterminators: BlockTerminator[]): Statement | undefined {
+    private statement(): Statement | undefined {
         if (this.checkLibrary()) {
             return this.libraryStatement();
         }
@@ -820,8 +808,17 @@ export class Parser {
             return this.ifStatement();
         }
 
-        if (this.check(TokenKind.Print) || this.check(TokenKind.QuestionMark)) {
-            return this.printStatement(...additionalterminators);
+        //`try` must be followed by a block, otherwise it could be a local variable
+        if (this.check(TokenKind.Try) && this.checkAnyNext(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
+            return this.tryCatchStatement();
+        }
+
+        if (this.check(TokenKind.Throw)) {
+            return this.throwStatement();
+        }
+
+        if (this.checkAny(TokenKind.Print, TokenKind.QuestionMark)) {
+            return this.printStatement();
         }
 
         if (this.check(TokenKind.While)) {
@@ -857,43 +854,49 @@ export class Parser {
         }
 
         //does this line look like a label? (i.e.  `someIdentifier:` )
-        if (this.check(TokenKind.Identifier) && this.checkNext(TokenKind.Colon)) {
-            return this.labelStatement();
+        if (this.check(TokenKind.Identifier) && this.checkNext(TokenKind.Colon) && this.checkPrevious(TokenKind.Newline)) {
+            try {
+                return this.labelStatement();
+            } catch (err) {
+                if (!(err instanceof CancelStatementError)) {
+                    throw err;
+                }
+                //not a label, try something else
+            }
         }
+
+        // BrightScript is like python, in that variables can be declared without a `var`,
+        // `let`, (...) keyword. As such, we must check the token *after* an identifier to figure
+        // out what to do with it.
+        if (
+            this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers) &&
+            this.checkAnyNext(...AssignmentOperators)
+        ) {
+            return this.assignment();
+        }
+
         // TODO: support multi-statements
-        return this.setStatement(...additionalterminators);
+        return this.setStatement();
     }
 
     private whileStatement(): WhileStatement {
         const whileKeyword = this.advance();
         const condition = this.expression();
 
-        let comment: CommentStatement;
-        if (this.check(TokenKind.Comment)) {
-            comment = this.commentStatement();
-        }
+        this.consumeStatementSeparators();
 
-        this.consume(
-            DiagnosticMessages.expectedNewlineAfterWhileCondition(),
-            TokenKind.Newline
-        );
-        while (this.match(TokenKind.Newline)) { }
         const whileBlock = this.block(TokenKind.EndWhile);
-        if (!whileBlock) {
+        let endWhile: Token;
+        if (!whileBlock || this.peek().kind !== TokenKind.EndWhile) {
             this.diagnostics.push({
                 ...DiagnosticMessages.couldNotFindMatchingEndKeyword('while'),
                 range: this.peek().range
             });
-            throw this.lastDiagnosticAsError();
-        }
-
-        //set comment as first statement in block
-        if (comment) {
-            whileBlock.statements.unshift(comment);
-        }
-
-        const endWhile = this.advance();
-        while (this.match(TokenKind.Newline)) {
+            if (!whileBlock) {
+                throw this.lastDiagnosticAsError();
+            }
+        } else {
+            endWhile = this.advance();
         }
 
         return new WhileStatement(
@@ -906,59 +909,54 @@ export class Parser {
     private exitWhile(): ExitWhileStatement {
         let keyword = this.advance();
 
-        if (this.check(TokenKind.Newline, TokenKind.Comment) === false) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.expectedNewlineAfterExitWhile(),
-                range: this.peek().range
-            });
-        }
-        while (this.match(TokenKind.Newline)) { }
         return new ExitWhileStatement({ exitWhile: keyword });
     }
 
     private forStatement(): ForStatement {
-        const forKeyword = this.advance();
-        const initializer = this.assignment(TokenKind.To);
-        const to = this.advance();
+        const forToken = this.advance();
+        const initializer = this.assignment();
+
+        //TODO: newline allowed?
+
+        const toToken = this.advance();
         const finalValue = this.expression();
-        let increment: Expression | undefined;
-        let step: Token | undefined;
+        let incrementExpression: Expression | undefined;
+        let stepToken: Token | undefined;
 
         if (this.check(TokenKind.Step)) {
-            step = this.advance();
-            increment = this.expression();
+            stepToken = this.advance();
+            incrementExpression = this.expression();
         } else {
             // BrightScript for/to/step loops default to a step of 1 if no `step` is provided
-            increment = new LiteralExpression(new Int32(1), this.peek().range);
         }
-        while (this.match(TokenKind.Newline)) {
 
-        }
+        this.consumeStatementSeparators();
 
         let body = this.block(TokenKind.EndFor, TokenKind.Next);
-        if (!body) {
+        let endForToken: Token;
+        if (!body || !this.checkAny(TokenKind.EndFor, TokenKind.Next)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedEndForOrNextToTerminateForLoop(),
                 range: this.peek().range
             });
-            throw this.lastDiagnosticAsError();
+            if (!body) {
+                throw this.lastDiagnosticAsError();
+            }
+        } else {
+            endForToken = this.advance();
         }
-        let endFor = this.advance();
-        while (this.match(TokenKind.Newline)) { }
 
         // WARNING: BrightScript doesn't delete the loop initial value after a for/to loop! It just
         // stays around in scope with whatever value it was when the loop exited.
         return new ForStatement(
-            {
-                for: forKeyword,
-                to: to,
-                step: step,
-                endFor: endFor
-            },
+            forToken,
             initializer,
+            toToken,
             finalValue,
-            increment,
-            body
+            body,
+            endForToken,
+            stepToken,
+            incrementExpression
         );
     }
 
@@ -985,14 +983,8 @@ export class Parser {
             });
             throw this.lastDiagnosticAsError();
         }
-        let comment: CommentStatement;
-        if (this.check(TokenKind.Comment)) {
-            comment = this.commentStatement();
-        }
-        this.advance();
-        while (this.match(TokenKind.Newline)) {
 
-        }
+        this.consumeStatementSeparators();
 
         let body = this.block(TokenKind.EndFor, TokenKind.Next);
         if (!body) {
@@ -1003,12 +995,7 @@ export class Parser {
             throw this.lastDiagnosticAsError();
         }
 
-        //add comment to beginning of block of avaiable
-        if (comment) {
-            body.statements.unshift(comment);
-        }
         let endFor = this.advance();
-        while (this.match(TokenKind.Newline)) { }
 
         return new ForEachStatement(
             {
@@ -1024,13 +1011,7 @@ export class Parser {
 
     private exitFor(): ExitForStatement {
         let keyword = this.advance();
-        if (!this.check(TokenKind.Comment)) {
-            this.consume(
-                DiagnosticMessages.expectedNewlineAfterExitFor(),
-                TokenKind.Newline
-            );
-            while (this.match(TokenKind.Newline)) { }
-        }
+
         return new ExitForStatement({ exitFor: keyword });
     }
 
@@ -1038,20 +1019,13 @@ export class Parser {
         //if this comment is on the same line as the previous statement,
         //then this comment should be treated as a single-line comment
         let prev = this.previous();
-        if (prev && prev.range.end.line === this.peek().range.start.line) {
+        if (prev?.range.end.line === this.peek().range.start.line) {
             return new CommentStatement([this.advance()]);
         } else {
             let comments = [this.advance()];
-            while (this.check(TokenKind.Newline)) {
-                //absorb newlines
-                while (this.match(TokenKind.Newline)) { }
-
-                //if this is a comment, and it's the next line down from the previous comment
-                if (this.check(TokenKind.Comment) && comments[comments.length - 1].range.end.line === this.peek().range.start.line - 1) {
-                    comments.push(this.advance());
-                } else {
-                    break;
-                }
+            while (this.check(TokenKind.Newline) && this.checkNext(TokenKind.Comment)) {
+                this.advance();
+                comments.push(this.advance());
             }
             return new CommentStatement(comments);
         }
@@ -1070,8 +1044,6 @@ export class Parser {
         this.namespaceAndFunctionDepth++;
 
         let name = this.getNamespacedVariableNameExpression();
-        //the only thing allowed after a namespace declaration is a comment or a newline
-        this.flagUntil(TokenKind.Comment, TokenKind.Newline);
 
         //set the current namespace name
         this.currentNamespaceName = name;
@@ -1094,12 +1066,9 @@ export class Parser {
             });
         }
 
-        //scrap newlines
-        while (this.match(TokenKind.Newline)) { }
-
         this.namespaceAndFunctionDepth--;
         let result = new NamespaceStatement(keyword, name, body, endKeyword);
-        this.namespaceStatements.push(result);
+        this._references.namespaceStatements.push(result);
 
         return result;
     }
@@ -1111,7 +1080,7 @@ export class Parser {
         let firstIdentifier = this.consume(
             DiagnosticMessages.expectedIdentifierAfterKeyword(this.previous().text),
             TokenKind.Identifier,
-            ...AllowedLocalIdentifiers
+            ...this.allowedLocalIdentifiers
         ) as Identifier;
 
         let expr: DottedGetExpression | VariableExpression;
@@ -1133,15 +1102,15 @@ export class Parser {
                 let identifier = this.tryConsume(
                     DiagnosticMessages.expectedIdentifier(),
                     TokenKind.Identifier,
-                    ...AllowedLocalIdentifiers,
+                    ...this.allowedLocalIdentifiers,
                     ...AllowedProperties
                 ) as Identifier;
-                // force it into an identifier so the AST makes some sense
-                identifier.kind = TokenKind.Identifier;
 
                 if (!identifier) {
                     break;
                 }
+                // force it into an identifier so the AST makes some sense
+                identifier.kind = TokenKind.Identifier;
                 expr = new DottedGetExpression(expr, identifier, dot);
             }
         }
@@ -1152,7 +1121,7 @@ export class Parser {
      * Add an 'unexpected token' diagnostic for any token found between current and the first stopToken found.
      */
     private flagUntil(...stopTokens: TokenKind[]) {
-        while (!this.check(...stopTokens) && !this.isAtEnd()) {
+        while (!this.checkAny(...stopTokens) && !this.isAtEnd()) {
             let token = this.advance();
             this.diagnostics.push({
                 ...DiagnosticMessages.foundUnexpectedToken(token.text),
@@ -1185,12 +1154,7 @@ export class Parser {
             )
         });
 
-        //consume all tokens until the end of the line
-        this.flagUntil(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon, TokenKind.Comment);
-
-        //consume to the next newline, eof, or colon
-        while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
-        this.libraryStatements.push(libStatement);
+        this._references.libraryStatements.push(libStatement);
         return libStatement;
     }
 
@@ -1205,251 +1169,336 @@ export class Parser {
             )
         );
 
-        //consume all tokens until the end of the line
-        this.flagUntil(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon, TokenKind.Comment);
-
-        //consume to the next newline, eof, or colon
-        while (this.match(TokenKind.Newline, TokenKind.Eof, TokenKind.Colon)) { }
-        this.importStatements.push(importStatement);
+        this._references.importStatements.push(importStatement);
         return importStatement;
     }
 
-    private conditionalOrCoalescingExpression(test?: Expression): ConditionalExpression | InvalidCoalescingExpression {
+    private annotationExpression() {
+        let annotation = new AnnotationExpression(
+            this.advance(),
+            this.advance()
+        );
+        this.pendingAnnotations.push(annotation);
+
+        //optional arguments
+        if (this.check(TokenKind.LeftParen)) {
+            let leftParen = this.advance();
+            annotation.call = this.finishCall(leftParen, annotation, false);
+        }
+        return annotation;
+    }
+
+    private ternaryExpression(test?: Expression): TernaryExpression {
         this.warnIfNotBrighterScriptMode('ternary operator');
         if (!test) {
             test = this.expression();
         }
-        if (!this.check(TokenKind.QuestionMark)) {
+        const questionMarkToken = this.advance();
+
+
+        //we are a ternary
+        const consequent = this.expression();
+        if (!this.check(TokenKind.Colon)) {
             //got here in error
+            this.diagnostics.push({
+                ...DiagnosticMessages.malformedTernaryExpression(),
+                range: test.range
+            });
         }
+
+        const colonToken = this.tryConsume(DiagnosticMessages.malformedTernaryExpression(), TokenKind.Colon);
+        const alternate = this.expression();
+
+        if (!consequent || !alternate) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.malformedTernaryExpression(),
+                range: test.range
+            });
+        }
+        return new TernaryExpression(test, questionMarkToken, consequent, colonToken, alternate);
+    }
+
+    private templateString(isTagged: boolean): TemplateStringExpression | TaggedTemplateStringExpression {
+        this.warnIfNotBrighterScriptMode('template string');
+
+        //get the tag name
+        let tagName: Identifier;
+        if (isTagged) {
+            tagName = this.consume(DiagnosticMessages.expectedIdentifier(), TokenKind.Identifier, ...AllowedProperties) as Identifier;
+            // force it into an identifier so the AST makes some sense
+            tagName.kind = TokenKind.Identifier;
+        }
+
+        let quasis = [] as TemplateStringQuasiExpression[];
+        let expressions = [];
+        let openingBacktick = this.peek();
         this.advance();
+        let currentQuasiExpressionParts = [];
+        while (!this.isAtEnd() && !this.check(TokenKind.BackTick)) {
+            let next = this.peek();
+            if (next.kind === TokenKind.TemplateStringQuasi) {
+                //a quasi can actually be made up of multiple quasis when it includes char literals
+                currentQuasiExpressionParts.push(
+                    new LiteralExpression(next)
+                );
+                this.advance();
+            } else if (next.kind === TokenKind.EscapedCharCodeLiteral) {
+                currentQuasiExpressionParts.push(
+                    new EscapedCharCodeLiteralExpression(<any>next)
+                );
+                this.advance();
+            } else {
+                //finish up the current quasi
+                quasis.push(
+                    new TemplateStringQuasiExpression(currentQuasiExpressionParts)
+                );
+                currentQuasiExpressionParts = [];
 
-        if (this.check(TokenKind.QuestionMark)) {
-            //we are a null coalescene
-            this.advance();
-            const alternate = this.expression();
-            return new InvalidCoalescingExpression(test, alternate);
+                if (next.kind === TokenKind.TemplateStringExpressionBegin) {
+                    this.advance();
+                }
+                //now keep this expression
+                expressions.push(this.expression());
+                if (!this.isAtEnd() && this.check(TokenKind.TemplateStringExpressionEnd)) {
+                    //TODO is it an error if this is not present?
+                    this.advance();
+                } else {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.unterminatedTemplateExpression(),
+                        range: util.getRange(openingBacktick, this.peek())
+                    });
+                    throw this.lastDiagnosticAsError();
+                }
+            }
+        }
+
+        //store the final set of quasis
+        quasis.push(
+            new TemplateStringQuasiExpression(currentQuasiExpressionParts)
+        );
+
+        if (this.isAtEnd()) {
+            //error - missing backtick
+            this.diagnostics.push({
+                ...DiagnosticMessages.unterminatedTemplateStringAtEndOfFile(),
+                range: util.getRange(openingBacktick, this.peek())
+            });
+            throw this.lastDiagnosticAsError();
+
         } else {
-            //we are a ternary
-            const consequent = this.expression();
-            if (!this.check(TokenKind.Colon)) {
-                //got here in error
+            let closingBacktick = this.advance();
+            if (isTagged) {
+                return new TaggedTemplateStringExpression(tagName, openingBacktick, quasis, expressions, closingBacktick);
+            } else {
+                return new TemplateStringExpression(openingBacktick, quasis, expressions, closingBacktick);
             }
-
-            this.advance();
-            const alternate = this.expression();
-
-            if (!consequent || !alternate) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.malformedTernaryOperator(),
-                    range: test.range
-                });
-            }
-            return new ConditionalExpression(test, consequent, alternate);
         }
     }
 
+    private tryCatchStatement(): TryCatchStatement {
+        const tryToken = this.advance();
+        const statement = new TryCatchStatement(
+            tryToken
+        );
+
+        //ensure statement separator
+        this.consumeStatementSeparators();
+
+        statement.tryBranch = this.block(TokenKind.Catch, TokenKind.EndTry);
+
+        const peek = this.peek();
+        if (peek.kind !== TokenKind.Catch) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedCatchBlockInTryCatch(),
+                range: this.peek().range
+            });
+            //gracefully handle end-try
+            if (peek.kind === TokenKind.EndTry) {
+                statement.endTryToken = this.advance();
+            }
+            return statement;
+        } else {
+            statement.catchToken = this.advance();
+        }
+
+        const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
+        if (exceptionVarToken) {
+            // force it into an identifier so the AST makes some sense
+            exceptionVarToken.kind = TokenKind.Identifier;
+            statement.exceptionVariable = exceptionVarToken as Identifier;
+        }
+
+        //ensure statement sepatator
+        this.consumeStatementSeparators();
+
+        statement.catchBranch = this.block(TokenKind.EndTry);
+
+        if (this.peek().kind !== TokenKind.EndTry) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedEndTryToTerminateTryCatch(),
+                range: this.peek().range
+            });
+        } else {
+            statement.endTryToken = this.advance();
+        }
+        return statement;
+    }
+
+    private throwStatement() {
+        const throwToken = this.advance();
+        let expression: Expression;
+        if (this.checkAny(TokenKind.Newline, TokenKind.Colon)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.missingExceptionExpressionAfterThrowKeyword(),
+                range: throwToken.range
+            });
+        } else {
+            expression = this.expression();
+        }
+        return new ThrowStatement(throwToken, expression);
+    }
+
     private ifStatement(): IfStatement {
+        // colon before `if` is usually not allowed, unless it's after `then`
+        if (this.current > 0) {
+            const prev = this.previous();
+            if (prev.kind === TokenKind.Colon) {
+                if (this.current > 1 && this.tokens[this.current - 2].kind !== TokenKind.Then) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.unexpectedColonBeforeIfStatement(),
+                        range: prev.range
+                    });
+                }
+            }
+        }
+
         const ifToken = this.advance();
         const startingRange = ifToken.range;
 
         const condition = this.expression();
         let thenBranch: Block;
-        let elseIfBranches: ElseIf[] = [];
-        let elseBranch: Block | undefined;
+        let elseBranch: IfStatement | Block | undefined;
 
         let thenToken: Token | undefined;
         let endIfToken: Token | undefined;
         let elseToken: Token | undefined;
 
+        //optional `then`
         if (this.check(TokenKind.Then)) {
-            // `then` is optional after `if ...condition...`, so only advance to the next token if `then` is present
             thenToken = this.advance();
         }
 
-        let comment: CommentStatement;
-        if (this.check(TokenKind.Comment)) {
-            comment = this.commentStatement();
-        }
+        //is it inline or multi-line if?
+        const isInlineIfThen = !this.checkAny(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment);
 
-        if (this.match(TokenKind.Newline) || this.match(TokenKind.Colon)) {
-            //consume until no more colons
-            while (this.check(TokenKind.Colon)) {
-                this.advance();
-            }
+        if (isInlineIfThen) {
+            /*** PARSE INLINE IF STATEMENT ***/
 
-            //consume exactly 1 newline, if found
-            if (this.check(TokenKind.Newline)) {
-                this.advance();
-            }
+            thenBranch = this.inlineConditionalBranch(TokenKind.Else, TokenKind.EndIf);
 
-            //keep track of the current error count, because if the then branch fails,
-            //we will trash them in favor of a single error on if
-            let diagnosticsLengthBeforeBlock = this.diagnostics.length;
-
-            // we're parsing a multi-line ("block") form of the BrightScript if/then/else and must find
-            // a trailing "end if"
-
-            let maybeThenBranch = this.block(TokenKind.EndIf, TokenKind.Else, TokenKind.ElseIf);
-            if (!maybeThenBranch) {
-                //throw out any new diagnostics created as a result of a `then` block parse failure.
-                //the block() function will discard the current line, so any discarded diagnostics will
-                //resurface if they are legitimate, and not a result of a malformed if statement
-                this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
-
-                //this whole if statement is bogus...add error to the if token and hard-fail
-                this.diagnostics.push({
-                    ...DiagnosticMessages.expectedEndIfElseIfOrElseToTerminateThenBlock(),
-                    range: ifToken.range
-                });
-                throw this.lastDiagnosticAsError();
-            }
-            //add any comment from the same line as the if statement
-            if (comment) {
-                maybeThenBranch.statements.unshift(comment);
-            }
-            let blockEnd = this.previous();
-            if (blockEnd.kind === TokenKind.EndIf) {
-                endIfToken = blockEnd;
-            }
-
-            thenBranch = maybeThenBranch;
-            this.match(TokenKind.Newline);
-
-            // attempt to read a bunch of "else if" clauses
-            while (this.check(TokenKind.ElseIf)) {
-                let elseIfToken = this.advance();
-                let elseIfCondition = this.expression();
-                let thenToken: Token;
-                if (this.check(TokenKind.Then)) {
-                    // `then` is optional after `else if ...condition...`, so only advance to the next token if `then` is present
-                    thenToken = this.advance();
-                }
-
-                //consume any trailing colons
-                while (this.check(TokenKind.Colon)) {
-                    this.advance();
-                }
-
-                while (this.match(TokenKind.Newline)) { }
-
-                let elseIfThen = this.block(TokenKind.EndIf, TokenKind.Else, TokenKind.ElseIf);
-                if (!elseIfThen) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.expectedEndIfElseIfOrElseToTerminateThenBlock(),
-                        range: this.peek().range
-                    });
-                }
-
-                let blockEnd = this.previous();
-                if (blockEnd.kind === TokenKind.EndIf) {
-                    endIfToken = blockEnd;
-                }
-
-                elseIfBranches.push({
-                    condition: elseIfCondition,
-                    thenBranch: elseIfThen,
-                    thenToken: thenToken,
-                    elseIfToken: elseIfToken
-                });
-            }
-
-            if (this.match(TokenKind.Else)) {
-                elseToken = this.previous();
-                //consume any trailing colons
-                while (this.check(TokenKind.Colon)) {
-                    this.advance();
-                }
-
-                while (this.match(TokenKind.Newline)) { }
-
-                elseBranch = this.block(TokenKind.EndIf);
-                endIfToken = this.advance(); // skip past "end if"
-
-                //ensure that single-line `if` statements have a colon right before 'end if'
-                if (util.sameStartLine(ifToken, endIfToken)) {
-                    let index = this.tokens.indexOf(endIfToken);
-                    let previousToken = this.tokens[index - 1];
-                    if (previousToken.kind !== TokenKind.Colon) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.expectedColonToPreceedEndIf(),
-                            range: ifToken.range
-                        });
-                    }
-                }
-                this.match(TokenKind.Newline);
-            } else {
-                this.match(TokenKind.Newline);
-                endIfToken = this.consume(
-                    DiagnosticMessages.expectedEndIfToCloseIfStatement(startingRange.start),
-                    TokenKind.EndIf
-                );
-
-                //ensure that single-line `if` statements have a colon right before 'end if'
-                if (util.sameStartLine(ifToken, endIfToken)) {
-                    let index = this.tokens.indexOf(endIfToken);
-                    let previousToken = this.tokens[index - 1];
-                    if (previousToken.kind !== TokenKind.Colon) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.expectedColonToPreceedEndIf(),
-                            range: endIfToken.range
-                        });
-                    }
-                }
-                this.match(TokenKind.Newline);
-            }
-        } else {
-            let thenStatement = this.declaration(TokenKind.ElseIf, TokenKind.Else);
-            if (!thenStatement) {
+            if (!thenBranch) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedStatementToFollowConditionalCondition(ifToken.text),
                     range: this.peek().range
                 });
                 throw this.lastDiagnosticAsError();
-            }
-            thenBranch = new Block([thenStatement], this.peek().range);
-
-            //add any comment from the same line as the if statement
-            if (comment) {
-                thenBranch.statements.unshift(comment);
+            } else {
+                this.ensureInline(thenBranch.statements);
             }
 
-            while (this.previous().kind !== TokenKind.Newline && this.match(TokenKind.ElseIf)) {
-                let elseIf = this.previous();
-                let elseIfCondition = this.expression();
-                let thenToken: Token;
-                if (this.check(TokenKind.Then)) {
-                    // `then` is optional after `else if ...condition...`, so only advance to the next token if `then` is present
-                    thenToken = this.advance();
-                }
+            //else branch
+            if (this.check(TokenKind.Else)) {
+                elseToken = this.advance();
 
-                let elseIfThen = this.declaration(TokenKind.ElseIf, TokenKind.Else);
-                if (!elseIfThen) {
+                if (this.check(TokenKind.If)) {
+                    // recurse-read `else if`
+                    elseBranch = this.ifStatement();
+
+                    //no multi-line if chained with an inline if
+                    if (!elseBranch.isInline) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.expectedInlineIfStatement(),
+                            range: elseBranch.range
+                        });
+                    }
+
+                } else if (this.checkAny(TokenKind.Newline, TokenKind.Colon)) {
+                    //expecting inline else branch
                     this.diagnostics.push({
-                        ...DiagnosticMessages.expectedStatementToFollowConditionalCondition(elseIf.text),
+                        ...DiagnosticMessages.expectedInlineIfStatement(),
                         range: this.peek().range
                     });
                     throw this.lastDiagnosticAsError();
+                } else {
+                    elseBranch = this.inlineConditionalBranch(TokenKind.Else, TokenKind.EndIf);
+
+                    if (elseBranch) {
+                        this.ensureInline(elseBranch.statements);
+                    }
                 }
 
-                elseIfBranches.push({
-                    condition: elseIfCondition,
-                    thenBranch: new Block([elseIfThen], this.peek().range),
-                    thenToken: thenToken,
-                    elseIfToken: elseIf
-                });
-            }
-            if (this.previous().kind !== TokenKind.Newline && this.match(TokenKind.Else)) {
-                elseToken = this.previous();
-                let elseStatement = this.declaration();
-                if (!elseStatement) {
+                if (!elseBranch) {
+                    //missing `else` branch
                     this.diagnostics.push({
                         ...DiagnosticMessages.expectedStatementToFollowElse(),
                         range: this.peek().range
                     });
                     throw this.lastDiagnosticAsError();
                 }
-                elseBranch = new Block([elseStatement], this.peek().range);
+            }
+
+            if (!elseBranch || !isIfStatement(elseBranch)) {
+                //enforce newline at the end of the inline if statement
+                const peek = this.peek();
+                if (peek.kind !== TokenKind.Newline && peek.kind !== TokenKind.Comment && !this.isAtEnd()) {
+                    //ignore last error if it was about a colon
+                    if (this.previous().kind === TokenKind.Colon) {
+                        this.diagnostics.pop();
+                        this.current--;
+                    }
+                    //newline is required
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.expectedFinalNewline(),
+                        range: this.peek().range
+                    });
+                }
+            }
+
+        } else {
+            /*** PARSE MULTI-LINE IF STATEMENT ***/
+
+            thenBranch = this.blockConditionalBranch(ifToken);
+
+            //ensure newline/colon before next keyword
+            this.ensureNewLineOrColon();
+
+            //else branch
+            if (this.check(TokenKind.Else)) {
+                elseToken = this.advance();
+
+                if (this.check(TokenKind.If)) {
+                    // recurse-read `else if`
+                    elseBranch = this.ifStatement();
+
+                } else {
+                    elseBranch = this.blockConditionalBranch(ifToken);
+
+                    //ensure newline/colon before next keyword
+                    this.ensureNewLineOrColon();
+                }
+            }
+
+            if (!isIfStatement(elseBranch)) {
+                if (this.check(TokenKind.EndIf)) {
+                    endIfToken = this.advance();
+
+                } else {
+                    //missing endif
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.expectedEndIfToCloseIfStatement(startingRange.start),
+                        range: ifToken.range
+                    });
+                }
             }
         }
 
@@ -1462,23 +1511,114 @@ export class Parser {
             },
             condition,
             thenBranch,
-            elseIfBranches,
-            elseBranch
+            elseBranch,
+            isInlineIfThen
         );
     }
-    private expressionStatement(expr: Expression, additionalTerminators: BlockTerminator[]): ExpressionStatement | IncrementStatement {
+
+    //consume a `then` or `else` branch block of an `if` statement
+    private blockConditionalBranch(ifToken: Token) {
+        //keep track of the current error count, because if the then branch fails,
+        //we will trash them in favor of a single error on if
+        let diagnosticsLengthBeforeBlock = this.diagnostics.length;
+
+        // we're parsing a multi-line ("block") form of the BrightScript if/then and must find
+        // a trailing "end if" or "else if"
+        let branch = this.block(TokenKind.EndIf, TokenKind.Else);
+
+        if (!branch) {
+            //throw out any new diagnostics created as a result of a `then` block parse failure.
+            //the block() function will discard the current line, so any discarded diagnostics will
+            //resurface if they are legitimate, and not a result of a malformed if statement
+            this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
+
+            //this whole if statement is bogus...add error to the if token and hard-fail
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedEndIfElseIfOrElseToTerminateThenBlock(),
+                range: ifToken.range
+            });
+            throw this.lastDiagnosticAsError();
+        }
+        return branch;
+    }
+
+    private ensureNewLineOrColon(silent = false) {
+        const prev = this.previous().kind;
+        if (prev !== TokenKind.Newline && prev !== TokenKind.Colon) {
+            if (!silent) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedNewlineOrColon(),
+                    range: this.peek().range
+                });
+            }
+            return false;
+        }
+        return true;
+    }
+
+    //ensure each statement of an inline block is single-line
+    private ensureInline(statements: Statement[]) {
+        for (const stat of statements) {
+            if (isIfStatement(stat) && !stat.isInline) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedInlineIfStatement(),
+                    range: stat.range
+                });
+            }
+        }
+    }
+
+    //consume inline branch of an `if` statement
+    private inlineConditionalBranch(...additionalTerminators: BlockTerminator[]): Block | undefined {
+        let statements = [];
+        //attempt to get the next statement without using `this.declaration`
+        //which seems a bit hackish to get to work properly
+        let statement = this.statement();
+        if (!statement) {
+            return undefined;
+        }
+        statements.push(statement);
+
+        //look for colon statement separator
+        let foundColon = false;
+        while (this.match(TokenKind.Colon)) {
+            foundColon = true;
+        }
+
+        //if a colon was found, add the next statement or err if unexpected
+        if (foundColon) {
+            if (!this.checkAny(TokenKind.Newline, ...additionalTerminators)) {
+                //if not an ending keyword, add next statement
+                let extra = this.inlineConditionalBranch(...additionalTerminators);
+                if (!extra) {
+                    return undefined;
+                }
+                statements.push(...extra.statements);
+            } else {
+                //error: colon before next keyword
+                const colon = this.previous();
+                this.diagnostics.push({
+                    ...DiagnosticMessages.foundUnexpectedToken(colon.text),
+                    range: colon.range
+                });
+            }
+        }
+        return new Block(statements, this.peek().range);
+    }
+
+    private expressionStatement(expr: Expression): ExpressionStatement | IncrementStatement {
         let expressionStart = this.peek();
 
-        if (this.check(TokenKind.PlusPlus, TokenKind.MinusMinus)) {
+        if (this.checkAny(TokenKind.PlusPlus, TokenKind.MinusMinus)) {
             let operator = this.advance();
 
-            if (this.check(TokenKind.PlusPlus, TokenKind.MinusMinus)) {
+            if (this.checkAny(TokenKind.PlusPlus, TokenKind.MinusMinus)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.consecutiveIncrementDecrementOperatorsAreNotAllowed(),
                     range: this.peek().range
                 });
                 throw this.lastDiagnosticAsError();
-            } else if (expr instanceof CallExpression) {
+            } else if (isCallExpression(expr)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.incrementDecrementOperatorsAreNotAllowedAsResultOfFunctionCall(),
                     range: expressionStart.range
@@ -1486,22 +1626,10 @@ export class Parser {
                 throw this.lastDiagnosticAsError();
             }
 
-            while (this.match(TokenKind.Newline, TokenKind.Colon)) {
-            }
-
             return new IncrementStatement(expr, operator);
         }
 
-        if (!this.check(...additionalTerminators, TokenKind.Comment)) {
-            this.consume(
-                DiagnosticMessages.expectedNewlineOrColonAfterExpressionStatement(),
-                TokenKind.Newline,
-                TokenKind.Colon,
-                TokenKind.Eof
-            );
-        }
-
-        if (expr instanceof CallExpression || expr instanceof CallfuncExpression) {
+        if (isCallExpression(expr) || isCallfuncExpression(expr)) {
             return new ExpressionStatement(expr);
         }
 
@@ -1512,39 +1640,22 @@ export class Parser {
         });
         throw this.lastDiagnosticAsError();
     }
-    private setStatement(
-        ...additionalTerminators: BlockTerminator[]
-    ): DottedSetStatement | IndexedSetStatement | ExpressionStatement | IncrementStatement {
+
+    private setStatement(): DottedSetStatement | IndexedSetStatement | ExpressionStatement | IncrementStatement | AssignmentStatement {
         /**
-         * Attempts to find an expression-statement, conditional-expressoin or an increment statement.
+         * Attempts to find an expression-statement or an increment statement.
          * While calls are valid expressions _and_ statements, increment (e.g. `foo++`)
          * statements aren't valid expressions. They _do_ however fall under the same parsing
          * priority as standalone function calls though, so we can parse them in the same way.
          */
-
-
         let expr = this.call();
-        if (this.check(...AssignmentOperators) && !(expr instanceof CallExpression)) {
+        if (this.checkAny(...AssignmentOperators) && !(isCallExpression(expr))) {
             let left = expr;
             let operator = this.advance();
             let right = this.expression();
 
             // Create a dotted or indexed "set" based on the left-hand side's type
-            if (left instanceof IndexedGetExpression) {
-                this.consume(
-                    DiagnosticMessages.expectedNewlineOrColonAfterIndexedSetStatement(),
-                    TokenKind.Newline,
-                    TokenKind.Else,
-                    TokenKind.ElseIf,
-                    TokenKind.Colon,
-                    TokenKind.Eof,
-                    TokenKind.Comment
-                );
-                //if we just consumed a comment, backtrack 1 token so it can be collected later
-                if (this.checkPrevious(TokenKind.Comment)) {
-                    this.current--;
-                }
-
+            if (isIndexedGetExpression(left)) {
                 return new IndexedSetStatement(
                     left.obj,
                     left.index,
@@ -1554,21 +1665,7 @@ export class Parser {
                     left.openingSquare,
                     left.closingSquare
                 );
-            } else if (left instanceof DottedGetExpression) {
-                this.consume(
-                    DiagnosticMessages.expectedNewlineOrColonAfterDottedSetStatement(),
-                    TokenKind.Newline,
-                    TokenKind.Else,
-                    TokenKind.ElseIf,
-                    TokenKind.Colon,
-                    TokenKind.Eof,
-                    TokenKind.Comment
-                );
-                //if we just consumed a comment, backtrack 1 token so it can be collected later
-                if (this.checkPrevious(TokenKind.Comment)) {
-                    this.current--;
-                }
-
+            } else if (isDottedGetExpression(left)) {
                 return new DottedSetStatement(
                     left.obj,
                     left.name,
@@ -1576,15 +1673,12 @@ export class Parser {
                         ? right
                         : new BinaryExpression(left, operator, right)
                 );
-            } else {
-                return this.expressionStatement(expr, additionalTerminators);
             }
-        } else {
-            return this.expressionStatement(expr, additionalTerminators);
         }
+        return this.expressionStatement(expr);
     }
 
-    private printStatement(...additionalterminators: BlockTerminator[]): PrintStatement {
+    private printStatement(): PrintStatement {
         let printKeyword = this.advance();
 
         let values: (
@@ -1592,39 +1686,26 @@ export class Parser {
             | PrintSeparatorTab
             | PrintSeparatorSpace)[] = [];
 
-        //print statements can be empty, so look for empty print conditions
-        if (this.isAtEnd() || this.check(TokenKind.Newline, TokenKind.Colon)) {
-            let emptyStringLiteral = new LiteralExpression(new BrsString(''), printKeyword.range);
-            values.push(emptyStringLiteral);
-        } else {
-            values.push(this.expression());
-        }
-
-        while (!this.check(TokenKind.Newline, TokenKind.Colon, ...additionalterminators, TokenKind.Comment) && !this.isAtEnd()) {
+        while (!this.checkEndOfStatement()) {
             if (this.check(TokenKind.Semicolon)) {
                 values.push(this.advance() as PrintSeparatorSpace);
-            }
-
-            if (this.check(TokenKind.Comma)) {
+            } else if (this.check(TokenKind.Comma)) {
                 values.push(this.advance() as PrintSeparatorTab);
-            }
-
-            if (!this.check(TokenKind.Newline, TokenKind.Colon) && !this.isAtEnd()) {
+            } else {
                 values.push(this.expression());
             }
         }
 
-        if (!this.check(...additionalterminators, TokenKind.Comment)) {
-            this.consume(
-                DiagnosticMessages.expectedNewlineOrColonAfterPrintedValues(),
-                TokenKind.Newline,
-                TokenKind.Colon,
-                TokenKind.Eof
-            );
+        //print statements can be empty, so look for empty print conditions
+        if (!values.length) {
+            let emptyStringLiteral = createStringLiteral('');
+            values.push(emptyStringLiteral);
         }
 
-        //consume excess newlines
-        while (this.match(TokenKind.Newline)) { }
+        let last = values[values.length - 1];
+        if (isToken(last)) {
+            // TODO: error, expected value
+        }
 
         return new PrintStatement({ print: printKeyword }, values);
     }
@@ -1636,15 +1717,11 @@ export class Parser {
     private returnStatement(): ReturnStatement {
         let tokens = { return: this.previous() };
 
-        if (this.check(TokenKind.Colon, TokenKind.Newline, TokenKind.Eof)) {
-            while (this.match(TokenKind.Colon, TokenKind.Newline, TokenKind.Eof)) { }
+        if (this.checkEndOfStatement()) {
             return new ReturnStatement(tokens);
         }
 
         let toReturn = this.expression();
-        while (this.match(TokenKind.Newline, TokenKind.Colon)) {
-        }
-
         return new ReturnStatement(tokens, toReturn);
     }
 
@@ -1658,12 +1735,11 @@ export class Parser {
             colon: this.advance()
         };
 
-        if (!this.check(TokenKind.Comment)) {
-            this.consume(
-                DiagnosticMessages.labelsMustBeDeclaredOnTheirOwnLine(),
-                TokenKind.Newline,
-                TokenKind.Eof
-            );
+        //label must be alone on its line, this is probably not a label
+        if (!this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+            //rewind and cancel
+            this.current -= 2;
+            throw new CancelStatementError();
         }
 
         return new LabelStatement(tokens);
@@ -1682,8 +1758,6 @@ export class Parser {
             )
         };
 
-        while (this.match(TokenKind.Newline, TokenKind.Colon)) { }
-
         return new GotoStatement(tokens);
     }
 
@@ -1694,8 +1768,6 @@ export class Parser {
     private endStatement() {
         let endTokens = { end: this.advance() };
 
-        while (this.match(TokenKind.Newline)) { }
-
         return new EndStatement(endTokens);
     }
     /**
@@ -1705,50 +1777,99 @@ export class Parser {
     private stopStatement() {
         let tokens = { stop: this.advance() };
 
-        while (this.match(TokenKind.Newline, TokenKind.Colon)) {
-
-        }
-
         return new StopStatement(tokens);
     }
 
     /**
      * Parses a block, looking for a specific terminating TokenKind to denote completion.
+     * Always looks for `end sub`/`end function` to handle unterminated blocks.
      * @param terminators the token(s) that signifies the end of this block; all other terminators are
      *                    ignored.
      */
     private block(...terminators: BlockTerminator[]): Block | undefined {
+        const parentAnnotations = this.enterAnnotationBlock();
+
+        this.consumeStatementSeparators(true);
         let startingToken = this.peek();
 
         const statements: Statement[] = [];
-        while (!this.check(...terminators) && !this.isAtEnd()) {
+        while (!this.isAtEnd() && !this.checkAny(TokenKind.EndSub, TokenKind.EndFunction, ...terminators)) {
             //grab the location of the current token
             let loopCurrent = this.current;
             let dec = this.declaration();
-
             if (dec) {
-                statements.push(dec);
+                if (!isAnnotationExpression(dec)) {
+                    this.consumePendingAnnotations(dec);
+                    statements.push(dec);
+                }
+
+                //ensure statement separator
+                this.consumeStatementSeparators();
+
             } else {
                 //something went wrong. reset to the top of the loop
                 this.current = loopCurrent;
 
                 //scrap the entire line (hopefully whatever failed has added a diagnostic)
-                this.consumeUntil(TokenKind.Colon, TokenKind.Newline, TokenKind.Eof);
+                this.consumeUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
 
                 //trash the next token. this prevents an infinite loop. not exactly sure why we need this,
                 //but there's already an error in the file being parsed, so just leave this line here
                 this.advance();
+
+                //consume potential separators
+                this.consumeStatementSeparators(true);
             }
-            //trash any newline characters
-            while (this.match(TokenKind.Newline)) { }
         }
 
         if (this.isAtEnd()) {
             return undefined;
             // TODO: Figure out how to handle unterminated blocks well
+        } else if (terminators.length > 0) {
+            //did we hit end-sub / end-function while looking for some other terminator?
+            //if so, we need to restore the statement separator
+            let prev = this.previous().kind;
+            let peek = this.peek().kind;
+            if (
+                (peek === TokenKind.EndSub || peek === TokenKind.EndFunction) &&
+                (prev === TokenKind.Newline || prev === TokenKind.Colon)
+            ) {
+                this.current--;
+            }
         }
 
+        this.exitAnnotationBlock(parentAnnotations);
         return new Block(statements, startingToken.range);
+    }
+
+    /**
+     * Attach pending annotations to the provided statement,
+     * and then reset the annotations array
+     */
+    consumePendingAnnotations(statement: Statement) {
+        if (this.pendingAnnotations.length) {
+            statement.annotations = this.pendingAnnotations;
+            this.pendingAnnotations = [];
+        }
+    }
+
+    enterAnnotationBlock() {
+        const pending = this.pendingAnnotations;
+        this.pendingAnnotations = [];
+        return pending;
+    }
+
+    exitAnnotationBlock(parentAnnotations: AnnotationExpression[]) {
+        // non consumed annotations are an error
+        if (this.pendingAnnotations.length) {
+            for (const annotation of this.pendingAnnotations) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unusedAnnotation(),
+                    range: annotation.range
+                });
+            }
+        }
+        this.pendingAnnotations = parentAnnotations;
     }
 
     private expression(): Expression {
@@ -1756,23 +1877,30 @@ export class Parser {
     }
 
     private anonymousFunction(): Expression {
-        let expr;
-        if (this.check(TokenKind.Sub, TokenKind.Function)) {
-            expr = this.functionDeclaration(true);
-        } else {
-            expr = this.boolean();
+        if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
+            return this.functionDeclaration(true);
         }
 
-        if (this.check(TokenKind.QuestionMark)) {
-            expr = this.conditionalOrCoalescingExpression(expr);
+        //template string
+        if (this.check(TokenKind.BackTick)) {
+            return this.templateString(false);
+            //tagged template string (currently we do not support spaces between the identifier and the backtick
+        } else if (this.checkAny(TokenKind.Identifier, ...AllowedLocalIdentifiers) && this.checkNext(TokenKind.BackTick)) {
+            return this.templateString(true);
         }
-        return expr;
+        let expr = this.boolean();
+
+        if (this.check(TokenKind.QuestionMark)) {
+            return this.ternaryExpression(expr);
+        } else {
+            return expr;
+        }
     }
 
     private boolean(): Expression {
         let expr = this.relational();
 
-        while (this.match(TokenKind.And, TokenKind.Or)) {
+        while (this.matchAny(TokenKind.And, TokenKind.Or)) {
             let operator = this.previous();
             let right = this.relational();
             expr = new BinaryExpression(expr, operator, right);
@@ -1785,7 +1913,7 @@ export class Parser {
         let expr = this.additive();
 
         while (
-            this.match(
+            this.matchAny(
                 TokenKind.Equal,
                 TokenKind.LessGreater,
                 TokenKind.Greater,
@@ -1807,7 +1935,7 @@ export class Parser {
     private additive(): Expression {
         let expr = this.multiplicative();
 
-        while (this.match(TokenKind.Plus, TokenKind.Minus)) {
+        while (this.matchAny(TokenKind.Plus, TokenKind.Minus)) {
             let operator = this.previous();
             let right = this.multiplicative();
             expr = new BinaryExpression(expr, operator, right);
@@ -1819,7 +1947,7 @@ export class Parser {
     private multiplicative(): Expression {
         let expr = this.exponential();
 
-        while (this.match(
+        while (this.matchAny(
             TokenKind.Forwardslash,
             TokenKind.Backslash,
             TokenKind.Star,
@@ -1848,12 +1976,13 @@ export class Parser {
     }
 
     private prefixUnary(): Expression {
-        if (this.match(TokenKind.Not, TokenKind.Minus)) {
+        const nextKind = this.peek().kind;
+        if (nextKind === TokenKind.Not || nextKind === TokenKind.Minus) {
+            this.current++; //advance
             let operator = this.previous();
             let right = this.prefixUnary();
             return new UnaryExpression(operator, right);
         }
-
         return this.call();
     }
 
@@ -1885,7 +2014,7 @@ export class Parser {
         //pop the call from the  callExpressions list because this is technically something else
         this.callExpressions.pop();
         let result = new NewExpression(newToken, call);
-        this.newExpressions.push(result);
+        this._references.newExpressions.push(result);
         return result;
     }
 
@@ -1899,13 +2028,13 @@ export class Parser {
         // force it into an identifier so the AST makes some sense
         methodName.kind = TokenKind.Identifier;
         let openParen = this.consume(DiagnosticMessages.expectedOpenParenToFollowCallfuncIdentifier(), TokenKind.LeftParen);
-        let call = this.finishCall(openParen, callee);
+        let call = this.finishCall(openParen, callee, false);
 
         return new CallfuncExpression(callee, operator, methodName as Identifier, openParen, call.args, call.closingParen);
     }
 
     private call(): Expression {
-        if (this.check(TokenKind.New) && this.checkNext(TokenKind.Identifier, ...AllowedLocalIdentifiers)) {
+        if (this.check(TokenKind.New) && this.checkAnyNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
             return this.newExpression();
         }
         let expr = this.primary();
@@ -1932,6 +2061,7 @@ export class Parser {
                     name.kind = TokenKind.Identifier;
 
                     expr = new DottedGetExpression(expr, name as Identifier, dot);
+                    this.addPropertyHints(name);
                 }
             } else if (this.check(TokenKind.At)) {
                 let dot = this.advance();
@@ -1954,7 +2084,7 @@ export class Parser {
         return expr;
     }
 
-    private finishCall(openingParen: Token, callee: Expression) {
+    private finishCall(openingParen: Token, callee: Expression, addToCallExpressionList = true) {
         let args = [] as Expression[];
         while (this.match(TokenKind.Newline)) {
         }
@@ -1981,28 +2111,61 @@ export class Parser {
             TokenKind.RightParen
         );
 
+        if (isVariableExpression(callee)) {
+            callee.isCalled = true;
+        }
+
         let expression = new CallExpression(callee, openingParen, closingParen, args, this.currentNamespaceName);
-        this.callExpressions.push(expression);
+        if (addToCallExpressionList) {
+            this.callExpressions.push(expression);
+        }
         return expression;
+    }
+
+    /**
+     * Tries to get the next token as a type
+     * Allows for built-in types (double, string, etc.) or namespaced custom types in Brighterscript mode
+     * Will always return a token of whatever is next to be parsed
+     */
+    private typeToken(): Token {
+        let typeToken: Token;
+
+        if (this.checkAny(...DeclarableTypes)) {
+            // Token is a built in type
+            typeToken = this.advance();
+        } else if (this.options.mode === ParseMode.BrighterScript) {
+            try {
+                // see if we can get a namespaced identifer
+                const qualifiedType = this.getNamespacedVariableNameExpression();
+                typeToken = createToken(TokenKind.Identifier, qualifiedType.getName(this.options.mode), qualifiedType.range);
+            } catch {
+                //could not get an identifier - just get whatever's next
+                typeToken = this.advance();
+            }
+        } else {
+            // just get whatever's next
+            typeToken = this.advance();
+        }
+        return typeToken;
     }
 
     private primary(): Expression {
         switch (true) {
-            case this.match(TokenKind.False):
-                return new LiteralExpression(BrsBoolean.False, this.previous().range);
-            case this.match(TokenKind.True):
-                return new LiteralExpression(BrsBoolean.True, this.previous().range);
-            case this.match(TokenKind.Invalid):
-                return new LiteralExpression(BrsInvalid.Instance, this.previous().range);
-            case this.match(
+            case this.matchAny(
+                TokenKind.False,
+                TokenKind.True,
+                TokenKind.Invalid,
                 TokenKind.IntegerLiteral,
                 TokenKind.LongIntegerLiteral,
                 TokenKind.FloatLiteral,
                 TokenKind.DoubleLiteral,
                 TokenKind.StringLiteral
             ):
-                return new LiteralExpression(this.previous().literal, this.previous().range);
-            case this.match(TokenKind.Identifier, ...AllowedLocalIdentifiers):
+                return new LiteralExpression(this.previous());
+            //capture source literals (LINE_NUM if brightscript, or a bunch of them if brighterscript)
+            case this.matchAny(TokenKind.LineNumLiteral, ...(this.options.mode === ParseMode.BrightScript ? [] : BrighterScriptSourceLiterals)):
+                return new SourceLiteralExpression(this.previous());
+            case this.matchAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
                 return new VariableExpression(this.previous() as Identifier, this.currentNamespaceName);
             case this.match(TokenKind.LeftParen):
                 let left = this.previous();
@@ -2027,7 +2190,7 @@ export class Parser {
                 if (!this.match(TokenKind.RightSquareBracket)) {
                     elements.push(this.expression());
 
-                    while (this.match(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
+                    while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
                         if (this.checkPrevious(TokenKind.Comment) || this.check(TokenKind.Comment)) {
                             let comment = this.check(TokenKind.Comment) ? this.advance() : this.previous();
                             elements.push(new CommentStatement([comment]));
@@ -2061,15 +2224,12 @@ export class Parser {
                     let result = {
                         colonToken: null as Token,
                         keyToken: null as Token,
-                        key: null as BrsString,
                         range: null as Range
                     };
-                    if (this.check(TokenKind.Identifier, ...AllowedProperties)) {
+                    if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
                         result.keyToken = this.advance();
-                        result.key = new BrsString(result.keyToken.text);
                     } else if (this.check(TokenKind.StringLiteral)) {
                         result.keyToken = this.advance();
-                        result.key = result.keyToken.literal as BrsString;
                     } else {
                         this.diagnostics.push({
                             ...DiagnosticMessages.unexpectedAAKey(),
@@ -2095,22 +2255,20 @@ export class Parser {
                     } else {
                         let k = key();
                         let expr = this.expression();
-                        members.push({
-                            key: k.key,
-                            keyToken: k.keyToken,
-                            colonToken: k.colonToken,
-                            value: expr,
-                            range: util.getRange(k, expr)
-                        });
+                        members.push(new AAMemberExpression(
+                            k.keyToken,
+                            k.colonToken,
+                            expr
+                        ));
                     }
 
-                    while (this.match(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
+                    while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
                         //check for comment at the end of the current line
                         if (this.check(TokenKind.Comment) || this.checkPrevious(TokenKind.Comment)) {
                             let token = this.checkPrevious(TokenKind.Comment) ? this.previous() : this.advance();
                             members.push(new CommentStatement([token]));
                         } else {
-                            while (this.match(TokenKind.Newline, TokenKind.Colon)) {
+                            while (this.matchAny(TokenKind.Newline, TokenKind.Colon)) {
 
                             }
                             //check for a comment on its own line
@@ -2125,13 +2283,11 @@ export class Parser {
                             }
                             let k = key();
                             let expr = this.expression();
-                            members.push({
-                                key: k.key,
-                                keyToken: k.keyToken,
-                                colonToken: k.colonToken,
-                                value: expr,
-                                range: util.getRange(k, expr)
-                            });
+                            members.push(new AAMemberExpression(
+                                k.keyToken,
+                                k.colonToken,
+                                expr
+                            ));
                         }
                     }
 
@@ -2143,19 +2299,21 @@ export class Parser {
 
                 let closingBrace = this.previous();
 
-                return new AALiteralExpression(members, openingBrace, closingBrace);
-            case this.match(TokenKind.Pos, TokenKind.Tab):
+                const aaExpr = new AALiteralExpression(members, openingBrace, closingBrace);
+                this.addPropertyHints(aaExpr);
+                return aaExpr;
+            case this.matchAny(TokenKind.Pos, TokenKind.Tab):
                 let token = Object.assign(this.previous(), {
                     kind: TokenKind.Identifier
                 }) as Identifier;
                 return new VariableExpression(token, this.currentNamespaceName);
-            case this.check(TokenKind.Function, TokenKind.Sub):
+            case this.checkAny(TokenKind.Function, TokenKind.Sub):
                 return this.anonymousFunction();
             case this.check(TokenKind.Comment):
                 return new CommentStatement([this.advance()]);
             default:
                 //if we found an expected terminator, don't throw a diagnostic...just return undefined
-                if (this.check(...this.peekGlobalTerminators())) {
+                if (this.checkAny(...this.peekGlobalTerminators())) {
                     //don't throw a diagnostic, just return undefined
 
                     //something went wrong...throw an error so the upstream processor can scrap this line and move on
@@ -2170,38 +2328,50 @@ export class Parser {
     }
 
     /**
-     * Pop tokens until we encounter a token not in the specified list
-     * @param tokenKinds
+     * Pop token if we encounter specified token
      */
-    private match(...tokenKinds: TokenKind[]) {
-        for (let tokenKind of tokenKinds) {
-            if (this.check(tokenKind)) {
-                this.advance();
-                return true;
-            }
+    private match(tokenKind: TokenKind) {
+        if (this.check(tokenKind)) {
+            this.current++; //advance
+            return true;
         }
-
         return false;
     }
 
+    /**
+     * Pop token if we encounter a token in the specified list
+     * @param tokenKinds
+     */
+    private matchAny(...tokenKinds: TokenKind[]) {
+        for (let tokenKind of tokenKinds) {
+            if (this.check(tokenKind)) {
+                this.current++; //advance
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get next token matching a specified list, or fail with an error
+     */
     private consume(diagnosticInfo: DiagnosticInfo, ...tokenKinds: TokenKind[]): Token {
         let token = this.tryConsume(diagnosticInfo, ...tokenKinds);
         if (token) {
             return token;
         } else {
-            throw new Error(diagnosticInfo.message);
+            let error = new Error(diagnosticInfo.message);
+            (error as any).isDiagnostic = true;
+            throw error;
         }
     }
 
     /**
      * Consume, or add a message if not found. But then continue and return undefined
-     * @param message
-     * @param tokenKinds
      */
     private tryConsume(diagnostic: DiagnosticInfo, ...tokenKinds: TokenKind[]): Token | undefined {
-        let foundTokenKind = tokenKinds
-            .map(tokenKind => this.peek().kind === tokenKind)
-            .reduce((foundAny, foundCurrent) => foundAny || foundCurrent, false);
+        const nextKind = this.peek().kind;
+        let foundTokenKind = tokenKinds.some(tokenKind => nextKind === tokenKind);
 
         if (foundTokenKind) {
             return this.advance();
@@ -2212,6 +2382,25 @@ export class Parser {
         });
     }
 
+    private consumeStatementSeparators(optional = false) {
+        //a comment or EOF mark the end of the statement
+        if (this.isAtEnd() || this.check(TokenKind.Comment)) {
+            return true;
+        }
+        let consumed = false;
+        //consume any newlines and colons
+        while (this.matchAny(TokenKind.Newline, TokenKind.Colon)) {
+            consumed = true;
+        }
+        if (!optional && !consumed) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedNewlineOrColon(),
+                range: this.peek().range
+            });
+        }
+        return consumed;
+    }
+
     private advance(): Token {
         if (!this.isAtEnd()) {
             this.current++;
@@ -2219,46 +2408,62 @@ export class Parser {
         return this.previous();
     }
 
-    private checkPrevious(...tokenKinds: TokenKind[]) {
+    private checkEndOfStatement(): boolean {
+        const nextKind = this.peek().kind;
+        return [TokenKind.Colon, TokenKind.Newline, TokenKind.Comment, TokenKind.Eof].includes(nextKind);
+    }
+
+    private checkPrevious(tokenKind: TokenKind): boolean {
+        return this.previous()?.kind === tokenKind;
+    }
+
+    private check(tokenKind: TokenKind): boolean {
+        const nextKind = this.peek().kind;
+        if (nextKind === TokenKind.Eof) {
+            return false;
+        }
+        return nextKind === tokenKind;
+    }
+
+    private checkAny(...tokenKinds: TokenKind[]): boolean {
+        const nextKind = this.peek().kind;
+        if (nextKind === TokenKind.Eof) {
+            return false;
+        }
+        return tokenKinds.includes(nextKind);
+    }
+
+    private checkNext(tokenKind: TokenKind): boolean {
         if (this.isAtEnd()) {
             return false;
         }
-
-        return tokenKinds.some(tokenKind => this.previous().kind === tokenKind);
+        return this.peekNext().kind === tokenKind;
     }
 
-    private check(...tokenKinds: TokenKind[]) {
+    private checkAnyNext(...tokenKinds: TokenKind[]): boolean {
         if (this.isAtEnd()) {
             return false;
         }
-
-        return tokenKinds.some(tokenKind => this.peek().kind === tokenKind);
+        const nextKind = this.peekNext().kind;
+        return tokenKinds.includes(nextKind);
     }
 
-    private checkNext(...tokenKinds: TokenKind[]) {
-        if (this.isAtEnd()) {
-            return false;
-        }
-
-        return tokenKinds.some(tokenKind => this.peekNext().kind === tokenKind);
-    }
-
-    private isAtEnd() {
+    private isAtEnd(): boolean {
         return this.peek().kind === TokenKind.Eof;
     }
 
-    private peekNext() {
+    private peekNext(): Token {
         if (this.isAtEnd()) {
             return this.peek();
         }
         return this.tokens[this.current + 1];
     }
 
-    private peek() {
+    private peek(): Token {
         return this.tokens[this.current];
     }
 
-    private previous() {
+    private previous(): Token {
         return this.tokens[this.current - 1];
     }
 
@@ -2266,8 +2471,8 @@ export class Parser {
         this.advance(); // skip the erroneous token
 
         while (!this.isAtEnd()) {
-            if (this.previous().kind === TokenKind.Newline || this.previous().kind === TokenKind.Colon) {
-                // newlines and ':' characters separate statements
+            if (this.ensureNewLineOrColon(true)) {
+                // end of statement reached
                 return;
             }
 
@@ -2291,6 +2496,55 @@ export class Parser {
         }
     }
 
+    /**
+     * References are found during the initial parse.
+     * However, sometimes plugins can modify the AST, requiring a full walk to re-compute all references.
+     * This does that walk.
+     */
+    private findReferences() {
+        this._references = createReferences();
+
+        this.ast.walk(createVisitor({
+            AssignmentStatement: s => {
+                this._references.assignmentStatements.push(s);
+            },
+            ClassStatement: s => {
+                this._references.classStatements.push(s);
+            },
+            NamespaceStatement: s => {
+                this._references.namespaceStatements.push(s);
+            },
+            FunctionStatement: s => {
+                this._references.functionStatements.push(s);
+            },
+            ImportStatement: s => {
+                this._references.importStatements.push(s);
+            },
+            LibraryStatement: s => {
+                this._references.libraryStatements.push(s);
+            },
+            FunctionExpression: (expression, parent) => {
+                if (!isClassMethodStatement(parent)) {
+                    this._references.functionExpressions.push(expression);
+                }
+            },
+            NewExpression: e => {
+                this._references.newExpressions.push(e);
+            },
+            AALiteralExpression: e => {
+                this.addPropertyHints(e);
+            },
+            DottedGetExpression: e => {
+                this.addPropertyHints(e.name);
+            },
+            DottedSetStatement: e => {
+                this.addPropertyHints(e.name);
+            }
+        }), {
+            walkMode: WalkMode.visitAllRecursive
+        });
+    }
+
     public dispose() {
     }
 }
@@ -2305,4 +2559,40 @@ export interface ParseOptions {
      * The parse mode. When in 'BrightScript' mode, no BrighterScript syntax is allowed, and will emit diagnostics.
      */
     mode: ParseMode;
+    /**
+     * A logger that should be used for logging. If omitted, a default logger is used
+     */
+    logger?: Logger;
+}
+
+function createReferences(): References {
+    return {
+        assignmentStatements: [],
+        classStatements: [],
+        functionExpressions: [],
+        functionStatements: [],
+        importStatements: [],
+        libraryStatements: [],
+        namespaceStatements: [],
+        newExpressions: [],
+        propertyHints: {}
+    };
+}
+
+export interface References {
+    assignmentStatements: AssignmentStatement[];
+    classStatements: ClassStatement[];
+    functionExpressions: FunctionExpression[];
+    functionStatements: FunctionStatement[];
+    importStatements: ImportStatement[];
+    libraryStatements: LibraryStatement[];
+    namespaceStatements: NamespaceStatement[];
+    newExpressions: NewExpression[];
+    propertyHints: Record<string, string>;
+}
+
+class CancelStatementError extends Error {
+    constructor() {
+        super('CancelStatement');
+    }
 }

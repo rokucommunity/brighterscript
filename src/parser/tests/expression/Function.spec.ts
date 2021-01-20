@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
@@ -23,7 +22,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses colon-separated function declarations', () => {
@@ -35,7 +33,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Colon, ':'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'Lorem ipsum', new BrsString('Lorem ipsum')),
+                token(TokenKind.StringLiteral, 'Lorem ipsum'),
                 token(TokenKind.Colon, ':'),
                 token(TokenKind.EndFunction, 'end function'),
                 EOF
@@ -43,7 +41,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses non-empty function expressions', () => {
@@ -55,7 +52,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'Lorem ipsum', new BrsString('Lorem ipsum')),
+                token(TokenKind.StringLiteral, 'Lorem ipsum'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndFunction, 'end function'),
                 EOF
@@ -63,7 +60,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with implicit-dynamic arguments', () => {
@@ -83,7 +79,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with typed arguments', () => {
@@ -111,7 +106,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with default argument expressions', () => {
@@ -123,19 +117,19 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Comma, ','),
 
                 identifier('b'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
+                token(TokenKind.IntegerLiteral, '4'),
                 token(TokenKind.Comma, ','),
 
                 identifier('c'),
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.RightParen, ')'),
 
                 token(TokenKind.Newline, '\\n'),
@@ -145,7 +139,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses functions with typed arguments and default expressions', () => {
@@ -157,7 +150,7 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
@@ -166,7 +159,7 @@ describe('parser', () => {
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
@@ -178,7 +171,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses return types', () => {
@@ -197,7 +189,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 
@@ -216,7 +207,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses non-empty sub expressions', () => {
@@ -228,7 +218,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'Lorem ipsum', new BrsString('Lorem ipsum')),
+                token(TokenKind.StringLiteral, 'Lorem ipsum'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndSub, 'end sub'),
                 EOF
@@ -236,7 +226,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with implicit-dynamic arguments', () => {
@@ -256,7 +245,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with typed arguments', () => {
@@ -284,7 +272,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with default argument expressions', () => {
@@ -296,19 +283,19 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.Comma, ','),
 
                 identifier('b'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '4', new Int32(4)),
+                token(TokenKind.IntegerLiteral, '4'),
                 token(TokenKind.Comma, ','),
 
                 identifier('c'),
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.RightParen, ')'),
 
                 token(TokenKind.Newline, '\\n'),
@@ -318,7 +305,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('parses subs with typed arguments and default expressions', () => {
@@ -330,7 +316,7 @@ describe('parser', () => {
 
                 identifier('a'),
                 token(TokenKind.Equal, '='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.Comma, ','),
@@ -339,7 +325,7 @@ describe('parser', () => {
                 token(TokenKind.Equal, '='),
                 identifier('a'),
                 token(TokenKind.Plus, '+'),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.As, 'as'),
                 identifier('integer'),
                 token(TokenKind.RightParen, ')'),
@@ -351,7 +337,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 
@@ -367,7 +352,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'I\'m a callback', new BrsString('I\'m a callback')),
+                token(TokenKind.StringLiteral, 'I\'m a callback'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndFunction, 'end function'),
                 token(TokenKind.Newline, '\\n'),
@@ -378,7 +363,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
 
         it('allows function expressions in assignment RHS', () => {
@@ -391,7 +375,7 @@ describe('parser', () => {
                 token(TokenKind.RightParen, ')'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.Print, 'print'),
-                token(TokenKind.StringLiteral, 'I\'m anonymous', new BrsString('I\'m anonymous')),
+                token(TokenKind.StringLiteral, 'I\'m anonymous'),
                 token(TokenKind.Newline, '\\n'),
                 token(TokenKind.EndFunction, 'end function'),
 
@@ -400,7 +384,6 @@ describe('parser', () => {
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
-            //expect(statements).toMatchSnapshot();
         });
     });
 

@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind, Lexer } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
@@ -17,7 +16,6 @@ describe('parser call expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('does not invalidate the rest of the file on incomplete statement', () => {
@@ -37,7 +35,6 @@ describe('parser call expressions', () => {
         for (let lineNumber of lineNumbers) {
             expect(lineNumber).to.equal(2);
         }
-        //expect(statements).toMatchSnapshot();
     });
 
     it('does not invalidate the next statement on a multi-statement line', () => {
@@ -55,7 +52,6 @@ describe('parser call expressions', () => {
         expect(statements).to.be.length.greaterThan(0);
         //the error should be BEFORE the `name = "bob"` statement
         expect(diagnostics[0].range.end.character).to.be.lessThan(25);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('allows closing parentheses on separate line', () => {
@@ -70,16 +66,15 @@ describe('parser call expressions', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
-        //expect(statements).toMatchSnapshot();
     });
 
     it('accepts arguments', () => {
         const { statements, diagnostics } = Parser.parse([
             identifier('add'),
             { kind: TokenKind.LeftParen, text: '(', line: 1 },
-            token(TokenKind.IntegerLiteral, '1', new Int32(1)),
+            token(TokenKind.IntegerLiteral, '1'),
             { kind: TokenKind.Comma, text: ',', line: 1 },
-            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+            token(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.RightParen, ')'),
             EOF
         ]) as any;
@@ -87,7 +82,6 @@ describe('parser call expressions', () => {
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
         expect(statements[0].expression.args).to.be.ok;
-        //expect(statements).toMatchSnapshot();
     });
 
     it('location tracking', () => {
@@ -113,7 +107,6 @@ describe('parser call expressions', () => {
             {
                 kind: TokenKind.StringLiteral,
                 text: `"bar"`,
-                literal: new BrsString('bar'),
                 isReserved: false,
                 range: Range.create(0, 4, 0, 9)
             },
@@ -126,7 +119,6 @@ describe('parser call expressions', () => {
             {
                 kind: TokenKind.StringLiteral,
                 text: `"baz"`,
-                literal: new BrsString('baz'),
                 isReserved: false,
                 range: Range.create(0, 11, 0, 16)
             },

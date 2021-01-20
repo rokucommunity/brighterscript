@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import * as moment from 'moment';
 import { EventEmitter } from 'eventemitter3';
+import { Stopwatch } from './Stopwatch';
 
 export class Logger {
 
@@ -20,12 +21,16 @@ export class Logger {
         return this._logLevel;
     }
     public set logLevel(value: LogLevel) {
+        //cast the string version to the numberic version
+        if (typeof (value) === 'string') {
+            value = LogLevel[value] as any;
+        }
         this._logLevel = value ?? LogLevel.log;
     }
     private _logLevel = LogLevel.log;
 
     private getTimestamp() {
-        let milliseconds: string;
+        let milliseconds = '';
         //show milliseconds when in the more chatty log levels
         if (this._logLevel === LogLevel.info || this._logLevel === LogLevel.debug || this._logLevel === LogLevel.trace) {
             milliseconds = ':SSSS';
@@ -105,26 +110,41 @@ export class Logger {
         }
     }
 
-    time(logLevel: LogLevel, ...messages) {
+    /**
+     * Writes to the log (if logLevel matches), and also times how long the action took to occur.
+     * `action` is called regardless of logLevel, so this function can be used to nicely wrap
+     * pieces of functionality.
+     * The action function also includes two parameters, `pause` and `resume`, which can be used to improve timings by focusing only on
+     * the actual logic of that action.
+     */
+    time<T>(logLevel: LogLevel, messages: any[], action: (pause: () => void, resume: () => void) => T): T {
+        //call the log if loglevel is in range
         if (this._logLevel >= logLevel) {
-            let start = Date.now();
+            let stopwatch = new Stopwatch();
             let logLevelString = LogLevel[logLevel];
-            this[logLevelString](...messages);
+
             //return a function to call when the timer is complete
-            return () => {
-                let diffDate = new Date(Date.now() - start);
-                let timeString = '';
-                if (diffDate.getMinutes() > 0) {
-                    timeString = `${diffDate.getMinutes()}m${diffDate.getSeconds()}s${diffDate.getMilliseconds()}ms`;
-                } else if (diffDate.getSeconds() > 0) {
-                    timeString += `${diffDate.getSeconds()}s${diffDate.getMilliseconds()}ms`;
-                } else {
-                    timeString = `${diffDate.getMilliseconds()}ms`;
-                }
-                this[logLevelString](...messages, ` finished. (${chalk.blue(timeString)})`);
+            let done = () => {
+                this[logLevelString](...messages, `finished. (${chalk.blue(stopwatch.getDurationText())})`);
             };
+
+            stopwatch.start();
+            //execute the action
+            let result = action(stopwatch.stop.bind(stopwatch), stopwatch.start.bind(stopwatch)) as any;
+            stopwatch.stop();
+
+            //if this is a promise, wait for it to resolve and then return the original result
+            if (typeof result?.then === 'function') {
+                return Promise.resolve(result).then(done).then(() => {
+                    return result;
+                }) as any;
+            } else {
+                //this was not a promise. finish the timer now
+                done();
+                return result;
+            }
         } else {
-            return noop;
+            return action(noop, noop);
         }
     }
 }

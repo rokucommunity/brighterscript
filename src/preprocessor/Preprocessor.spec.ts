@@ -3,7 +3,6 @@ import { TokenKind } from '../lexer/TokenKind';
 import { Preprocessor } from './Preprocessor';
 import { BrightScriptChunk, DeclarationChunk, ErrorChunk, HashIfStatement } from './Chunk';
 import { expect } from 'chai';
-import { BrsBoolean, BrsString } from '../brsTypes';
 import { createSandbox } from 'sinon';
 let sinon = createSandbox();
 
@@ -29,7 +28,7 @@ describe('preprocessor', () => {
             let { processedTokens } = new Preprocessor().filter([
                 new DeclarationChunk(
                     identifier('lorem'),
-                    token(TokenKind.False, 'false', BrsBoolean.False)
+                    token(TokenKind.False, 'false')
                 )
             ]);
             expect(processedTokens).to.eql([]);
@@ -41,7 +40,7 @@ describe('preprocessor', () => {
                     () => new Preprocessor().filter([
                         new DeclarationChunk(
                             identifier('lorem'),
-                            token(TokenKind.True, 'true', BrsBoolean.True)
+                            token(TokenKind.True, 'true')
                         )
                     ])
                 ).not.to.throw;
@@ -51,7 +50,7 @@ describe('preprocessor', () => {
                 expect(() => new Preprocessor().filter([
                     new DeclarationChunk(
                         identifier('ipsum'),
-                        token(TokenKind.False, 'false', BrsBoolean.False)
+                        token(TokenKind.False, 'false')
                     )
                 ])
                 ).not.to.throw;
@@ -62,11 +61,11 @@ describe('preprocessor', () => {
                     // 'ipsum' must be defined before it's referenced
                     new DeclarationChunk(
                         identifier('ipsum'),
-                        token(TokenKind.False, 'false', BrsBoolean.False)
+                        token(TokenKind.False, 'false')
                     ),
                     new DeclarationChunk(
                         identifier('dolor'),
-                        token(TokenKind.True, 'true', BrsBoolean.True)
+                        token(TokenKind.True, 'true')
                     )
                 ])
                 ).not.to.throw;
@@ -76,7 +75,7 @@ describe('preprocessor', () => {
                 expect(() => new Preprocessor().filter([
                     new DeclarationChunk(
                         identifier('sit'),
-                        token(TokenKind.String, 'good boy!', new BrsString('good boy!'))
+                        token(TokenKind.String, 'good boy!')
                     )
                 ])
                 ).to.throw;//('#const declarations can only have');
@@ -86,11 +85,11 @@ describe('preprocessor', () => {
                 expect(() => new Preprocessor().filter([
                     new DeclarationChunk(
                         identifier('lorem'),
-                        token(TokenKind.False, 'false', BrsBoolean.False)
+                        token(TokenKind.False, 'false')
                     ),
                     new DeclarationChunk(
                         identifier('lorem'),
-                        token(TokenKind.True, 'true', BrsBoolean.True)
+                        token(TokenKind.True, 'true')
                     )
                 ])
                 ).to.throw;
@@ -109,7 +108,7 @@ describe('preprocessor', () => {
         it('doesn\'t throw when branched around', () => {
             expect(() => new Preprocessor().filter([
                 new HashIfStatement(
-                    token(TokenKind.False, 'false', BrsBoolean.False),
+                    token(TokenKind.False, 'false'),
                     [
                         new ErrorChunk(
                             token(TokenKind.HashError, '#error'),
@@ -141,11 +140,11 @@ describe('preprocessor', () => {
         it('enters #if branch', () => {
             new Preprocessor().filter([
                 new HashIfStatement(
-                    token(TokenKind.True, 'true', BrsBoolean.True),
+                    token(TokenKind.True, 'true'),
                     [ifChunk],
                     [
                         {
-                            condition: token(TokenKind.True, 'true', BrsBoolean.True),
+                            condition: token(TokenKind.True, 'true'),
                             thenChunks: [elseIfChunk]
                         }
                     ],
@@ -161,11 +160,11 @@ describe('preprocessor', () => {
         it('enters #else if branch', () => {
             new Preprocessor().filter([
                 new HashIfStatement(
-                    token(TokenKind.False, 'false', BrsBoolean.False),
+                    token(TokenKind.False, 'false'),
                     [ifChunk],
                     [
                         {
-                            condition: token(TokenKind.True, 'true', BrsBoolean.True),
+                            condition: token(TokenKind.True, 'true'),
                             thenChunks: [elseIfChunk]
                         }
                     ],
@@ -181,11 +180,11 @@ describe('preprocessor', () => {
         it('enters #else branch', () => {
             new Preprocessor().filter([
                 new HashIfStatement(
-                    token(TokenKind.False, 'false', BrsBoolean.False),
+                    token(TokenKind.False, 'false'),
                     [ifChunk],
                     [
                         {
-                            condition: token(TokenKind.False, 'false', BrsBoolean.False),
+                            condition: token(TokenKind.False, 'false'),
                             thenChunks: [elseIfChunk]
                         }
                     ],
@@ -201,7 +200,7 @@ describe('preprocessor', () => {
         it('enters no branches if none pass', () => {
             new Preprocessor().filter([
                 new HashIfStatement(
-                    token(TokenKind.False, 'false', BrsBoolean.False),
+                    token(TokenKind.False, 'false'),
                     [ifChunk],
                     [] // no else-if chunks
                     // NOTE: no 'else" chunk!
@@ -217,7 +216,7 @@ describe('preprocessor', () => {
             new Preprocessor().filter([
                 new DeclarationChunk(
                     identifier('lorem'),
-                    token(TokenKind.True, 'true', BrsBoolean.True)
+                    token(TokenKind.True, 'true')
                 ),
                 new HashIfStatement(
                     identifier('lorem'),

@@ -1,5 +1,6 @@
-import { Token } from '../lexer';
-import { Range } from 'vscode-languageserver';
+import type { Token } from '../lexer';
+import type { Range } from 'vscode-languageserver';
+import util from '../util';
 
 /**
  * A set of operations that must be implemented to properly handle conditional compilation chunks.
@@ -92,7 +93,7 @@ export class ErrorChunk implements Chunk {
         readonly hashError: Token,
         readonly message: Token
     ) {
-        this.range = Range.create(
+        this.range = util.createRangeFromPositions(
             this.hashError.range.start,
             (this.message ?? this.hashError).range.end
         );
