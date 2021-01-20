@@ -817,7 +817,7 @@ export class Parser {
             return this.throwStatement();
         }
 
-        if (this.checkAny(TokenKind.Print, TokenKind.QuestionMark)) {
+        if (this.checkAny(TokenKind.Print, TokenKind.Question)) {
             return this.printStatement();
         }
 
@@ -1890,7 +1890,7 @@ export class Parser {
         }
         let expr = this.boolean();
 
-        if (this.check(TokenKind.QuestionMark)) {
+        if (this.check(TokenKind.Question)) {
             return this.ternaryExpression(expr);
         } else {
             return expr;

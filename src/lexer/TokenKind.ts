@@ -73,7 +73,7 @@ export enum TokenKind {
     Semicolon = 'Semicolon', // ;
     At = 'At', // @
     Callfunc = 'Callfunc', // @.
-    QuestionMark = 'QuestionMark', // ?
+    Question = 'Question', // ?
     BackTick = 'BackTick', // `
 
 
