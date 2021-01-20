@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.28.1] - 2021-01-19
+### Changed
+ - (For plugin authors) refactored many async methods into sync methods to simplify file creation/management. ([#278](https://github.com/rokucommunity/brighterscript/pull/278))
+### Fixed
+ - bug with transpiling classes that would not always get the correct superclass index. ([#279](https://github.com/rokucommunity/brighterscript/pull/279))
+ - annotations are now block-restricted ([#274](https://github.com/rokucommunity/brighterscript/pull/274))
+
+
+
 ## [0.28.0] - 2021-01-16
 ### Added
  - annotation support for classes and class methods ([#270](https://github.com/rokucommunity/brighterscript/pull/270))
@@ -836,3 +845,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.26.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.25.0...v0.26.0
 [0.27.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.26.0...v0.27.0
 [0.28.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.27.0...v0.28.0
+[0.28.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.0...v0.28.1
