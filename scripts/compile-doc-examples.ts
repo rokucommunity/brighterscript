@@ -1,106 +1,178 @@
 import * as fsExtra from 'fs-extra';
 import * as glob from 'glob';
 import * as path from 'path';
-import { util } from '../src/util';
 import { Program } from '../src/Program';
+import type { BsConfig } from '../src';
+import type { ParseError } from 'jsonc-parser';
+import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
+
+const enableDebugLogging = false;
 
 class DocCompiler {
-    private docsFolder = path.resolve(path.join(__dirname, '..', 'docs'));
-    public async run() {
 
-        let docs = glob.sync('**/*.md', {
-            cwd: this.docsFolder,
-            absolute: true
-        });
+    public constructor(
+        readonly docPath: string,
+        readonly enableDebugLogging: boolean
+    ) {
 
-        for (let docPath of docs) {
-            console.log('\n', docPath);
-            this.processDoc(docPath);
+    }
+    private lines: string[];
+    private index: number;
+    private bsconfig: BsConfig;
+
+    //move to the next line, and return that next line
+    private advance() {
+        this.index++;
+        this.printLine(this.index);
+        this.checkForBsConfigChanges();
+        return this.currentLine;
+    }
+
+    /**
+     * Look for special bsconfig "comments" in the markdown, and update the current bsconfig.json accordingly.
+     * These bsconfig comments change the compile options for the rest of the file, unless another comment is found
+     */
+    private checkForBsConfigChanges() {
+        const match = /<!--\s*bsconfig\.json\s*:\s*(.*)\s*-->/.exec(this.currentLine);
+        if (match) {
+            let text = match[1];
+
+            let parseErrors = [] as ParseError[];
+            this.bsconfig = parseJsonc(text, parseErrors) as BsConfig;
+            if (parseErrors.length > 0) {
+                throw new Error(
+                    'bsconfig.json parse error ' +
+                    printParseErrorCode(parseErrors[0].error) +
+                    ' at json offset ' + parseErrors[0].offset +
+                    ` at location ${this.docPath}:${this.index + 1}`
+                );
+            }
         }
     }
 
-    private lines: string[];
-    private index: number;
+    private get currentLine() {
+        return this.lines[this.index];
+    }
 
-    public processDoc(docPath: string) {
-        let contents = fsExtra.readFileSync(docPath).toString();
-        this.lines = util.splitIntoLines(contents);
-        this.index = 0;
-        while (this.index < this.lines.length) {
-            let line = this.lines[this.index];
-            if (line.includes('```')) {
+    private get nextLine() {
+        return this.lines[this.index + 1];
+    }
+
+    public run() {
+        //get the docs file contents
+        let contents = fsExtra.readFileSync(this.docPath).toString();
+        //split the doc by newline
+        this.lines = contents.split(/\r?\n/g);
+        this.index = -1;
+
+        while (this.nextLine !== undefined) {
+            this.advance();
+            if (this.currentLine.includes('```')) {
                 this.processCodeBlock();
             }
-            this.index++;
         }
 
-        let result = this.lines.join('\n');
-        fsExtra.writeFileSync(docPath, result);
+        const result = this.lines.join('\n');
+        fsExtra.writeFileSync(this.docPath, result);
         delete this.lines;
         this.index = -1;
     }
 
-    public processCodeBlock() {
-        let sourceLines = [] as string[];
-        let sourceStartIndex = this.index + 1;
-        let sourceStopIndex: number;
+    private consumeCodeBlock() {
+        if (this.currentLine.includes('```') === false) {
+            return null;
+        }
+        const result = {
+            language: '',
+            startIndex: this.index,
+            endIndex: -1,
+            code: ''
+        };
+
+        //step past the opening ```
+        let openingLine = this.currentLine;
+
+        const lines = [] as string[];
+
+        //get the language from this code block
+        result.language = openingLine.trimLeft().replace('```', '').trim().toLowerCase();
 
         //find the rest of the source code block
-        //+1 to step past the opening ```
-        for (let i = this.index + 1; i < this.lines.length; i++) {
-            let line = this.lines[i];
-            if (line.includes('```')) {
-                sourceStopIndex = i - 1;
-                break;
-            } else {
-                sourceLines.push(line);
-            }
+        while (this.nextLine !== undefined && this.advance().includes('```') === false) {
+            lines.push(this.currentLine);
         }
 
-        let sourceCode = sourceLines.join('\n');
+        result.endIndex = this.index;
 
-        let transpiledStartIndex: number;
-        let transpiledStopIndex: number;
-        //find the transpiled code block (there must be one after every
-        //+2 to step past the last line of code, and the final ```
-        outer: for (let i = sourceStopIndex + 2; i < this.lines.length; i++) {
-            let line = this.lines[i];
-            //the next code block MUST be a brightscript block. hard-fail if it isn't
-            if (line.includes('```')) {
-                if (line.toLowerCase().includes('```brightscript')) {
-                    //+1 to step past the opening ```brighterscript
-                    transpiledStartIndex = i + 1;
+        //step past the closing ```
+        this.advance();
 
-                    //consume until the trailing ```
-                    for (let j = transpiledStartIndex; j < this.lines.length; j++) {
-                        let innerLine = this.lines[j];
-                        if (innerLine.includes('```')) {
-                            transpiledStopIndex = j;
-                            break outer;
-                        }
-                    }
-                } else {
-                    throw new Error(`Could not find a transpiled code block for source code at line ${sourceStartIndex}`);
-                }
-            }
+        result.code = lines.join('\n');
+        this.logDebug(`Found "${result.language}" code block at lines ${result.startIndex + 1}-${result.endIndex + 1}`);
+        return result;
+    }
+
+    private logDebug(...messages) {
+        if (this.enableDebugLogging) {
+            console.debug(...messages);
+        }
+    }
+
+    public processCodeBlock() {
+        //get the source code block
+        const sourceCodeBlock = this.consumeCodeBlock();
+
+        //if the code block is not brighterscript, then exit here...no transpile necessary
+        if (sourceCodeBlock.language !== 'brighterscript') {
+            return;
+        }
+
+        //walk forward until we find the next code block
+        while (this.advance().includes('```') === false) { }
+
+        //get the nex code block, which _should_ be the target transpile block
+        const transpiledCodeBlock = this.consumeCodeBlock();
+        if (!transpiledCodeBlock || transpiledCodeBlock.language !== 'brightscript') {
+            throw new Error(`Could not find a transpiled code block for source code: ${this.docPath}:${sourceCodeBlock.startIndex}`);
         }
 
         //now that we have the range for the transpiled code, we need to transpile the source code
-        if (transpiledStartIndex && transpiledStopIndex && sourceCode) {
-            console.log(`Transpiling code block at lines ${sourceStartIndex}-${sourceStopIndex}`);
-            const transpiledCode = this.transpile(sourceCode);
-            let transpiledLines = transpiledCode.split('\n');
-            let originalTranspiledLineCount = transpiledStopIndex - transpiledStartIndex;
+        console.log(`Transpiling ${sourceCodeBlock.language} block at lines ${sourceCodeBlock.startIndex}-${sourceCodeBlock.endIndex}`);
+        const transpiledCode = this.transpile(sourceCodeBlock.code);
+        let transpiledLines = transpiledCode.split(/\r?\n/g);
 
-            //replace the old transpiled lines with the new ones
-            this.lines.splice(
-                transpiledStartIndex,
-                originalTranspiledLineCount,
-                ...transpiledLines
-            );
-            //set the index to the location past the trailing ```
-            this.index = transpiledStopIndex - originalTranspiledLineCount + transpiledLines.length + 2;
-        }
+        //replace the old transpiled lines with the new ones
+        const lineDiff = this.replaceLines(transpiledCodeBlock.startIndex + 1, transpiledCodeBlock.endIndex - 1, transpiledLines);
+
+        //set the index to the location past the trailing ```
+        this.index += lineDiff;
+    }
+
+    /**
+     * Replace lines.
+     * @param startLineIndex - the index of the first line to begin replacing at. this line gets replaced.
+     * @param endLineIndex - the index of the final line to be replaced. this line gets replaced
+     * @returns the difference in line count from old to new
+     */
+    private replaceLines(startLineIndex: number, endLineIndex: number, newLines: string[]) {
+        const deletedItems = this.lines.splice(
+            startLineIndex,
+            (endLineIndex - startLineIndex) + 1,
+            ...newLines
+        );
+        return deletedItems.length - newLines.length;
+    }
+
+    /**
+     * Print the line at the specified index to the console,
+     * but show the line number instead of index.
+     * This is a debugging function
+     */
+    private printLine(index = this.index) {
+        this.logDebug(
+            (index + 1).toString().padStart(3, '0') + ':',
+            this.lines[index]
+        );
     }
 
     public transpile(code: string) {
@@ -108,7 +180,9 @@ class DocCompiler {
             rootDir: `${__dirname}/rootDir`,
             files: [
                 'source/main.brs'
-            ]
+            ],
+            //use the current bsconfig
+            ...(this.bsconfig ?? {})
         });
         const file = program.addOrReplaceFile({ src: `${__dirname}/rootDir/source/main.bs`, dest: 'source/main.bs' }, code);
         program.validate();
@@ -117,9 +191,18 @@ class DocCompiler {
     }
 }
 
-new DocCompiler().run()
-    .then(
-        console.log.bind(console)
-    ).catch(
-        console.error.bind(console)
+(function main() {
+    const docsFolder = path.resolve(
+        path.join(__dirname, '..', 'docs')
     );
+    const docs = glob.sync('**/*.md', {
+        cwd: docsFolder,
+        absolute: true
+    });
+
+    for (let docPath of docs) {
+        console.log('\n', docPath);
+        const compiler = new DocCompiler(docPath, enableDebugLogging);
+        compiler.run();
+    }
+}());
