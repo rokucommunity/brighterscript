@@ -1,7 +1,7 @@
 import { SourceNode } from 'source-map';
-import { ClassStatement } from './ClassStatement';
-import { Range } from 'vscode-languageserver';
-import { BrsFile } from '../files/BrsFile';
+import type { Range } from 'vscode-languageserver';
+import type { BrsFile } from '../files/BrsFile';
+import type { ClassStatement } from './Statement';
 
 /**
  * Holds the state of a transpile operation as it works its way through the transpile process
@@ -13,10 +13,10 @@ export class TranspileState {
         this.file = file;
 
         //if a sourceRoot is specified, use that instead of the rootDir
-        if (this.options.sourceRoot) {
+        if (this.file.program.options.sourceRoot) {
             this.pathAbsolute = this.file.pathAbsolute.replace(
-                this.options.rootDir,
-                this.options.sourceRoot
+                this.file.program.options.rootDir,
+                this.file.program.options.sourceRoot
             );
         } else {
             this.pathAbsolute = this.file.pathAbsolute;
@@ -54,12 +54,10 @@ export class TranspileState {
 
     /**
      * Append whitespace until we reach the current blockDepth amount
-     * @param blockDepthAddend - if provided, this will add (or subtract if negative) the value to the block depth BEFORE getting the next indent amount.
+     * @param blockDepthChange - if provided, change the block depth before indenting
      */
-    public indent(blockDepthAddend?: number) {
-        if (blockDepthAddend !== undefined) {
-            this.blockDepth += blockDepthAddend;
-        }
+    public indent(blockDepthChange = 0) {
+        this.blockDepth += blockDepthChange;
         let totalSpaceCount = this.blockDepth * 4;
         totalSpaceCount = totalSpaceCount > -1 ? totalSpaceCount : 0;
         return ' '.repeat(totalSpaceCount);
@@ -67,13 +65,6 @@ export class TranspileState {
 
     public newline() {
         return '\n';
-    }
-
-    /**
-     * shortcut access to the program's options
-     */
-    public get options() {
-        return this.file.program.options;
     }
 
     /**

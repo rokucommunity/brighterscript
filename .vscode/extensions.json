@@ -1,6 +1,5 @@
 {
     "recommendations": [
-        "dbaeumer.vscode-eslint",
-        "maty.vscode-mocha-sidebar"
+        "dbaeumer.vscode-eslint"
     ]
 }

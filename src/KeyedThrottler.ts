@@ -7,7 +7,7 @@ export class KeyedThrottler {
 
     }
 
-    private throttlers = {} as { [key: string]: Throttler };
+    private throttlers = {} as Record<string, Throttler>;
 
     /**
      * Run the job for the specified key
@@ -26,7 +26,7 @@ export class KeyedThrottler {
     public async onIdleOnce(key: string, resolveImmediatelyIfIdle = true) {
         const throttler = this.throttlers[key];
         if (throttler) {
-            return throttler.onIdleOnce(true);
+            return throttler.onIdleOnce(resolveImmediatelyIfIdle);
         } else {
             return Promise.resolve();
         }

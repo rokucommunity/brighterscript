@@ -1,16 +1,17 @@
 import * as path from 'path';
-import { CodeWithSourceMap, SourceNode } from 'source-map';
-import { CompletionItem, Hover, Position, Range } from 'vscode-languageserver';
-import { Deferred } from '../deferred';
+import type { CodeWithSourceMap } from 'source-map';
+import { SourceNode } from 'source-map';
+import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { FunctionScope } from '../FunctionScope';
-import { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
-import { Program } from '../Program';
+import type { FunctionScope } from '../FunctionScope';
+import type { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
+import type { Program } from '../Program';
 import util from '../util';
-import { Parser } from '../parser/Parser';
+import SGParser from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
-import { DependencyGraph } from '../DependencyGraph';
+import type { DependencyGraph } from '../DependencyGraph';
+import type { SGAst, SGToken } from '../parser/SGTypes';
 
 export class XmlFile {
     constructor(
@@ -41,8 +42,6 @@ export class XmlFile {
      */
     private unsubscribeFromDependencyGraph: () => void;
 
-    public parentNameRange: Range;
-
     /**
      * The extension for this file
      */
@@ -52,7 +51,28 @@ export class XmlFile {
      * The list of script imports delcared in the XML of this file.
      * This excludes parent imports and auto codebehind imports
      */
-    public scriptTagImports = [] as FileReference[];
+    public get scriptTagImports(): FileReference[] {
+        return this.parser.references.scriptTagImports
+            .map(tag => ({
+                ...tag,
+                sourceFile: this
+            }));
+    }
+
+    /**
+     * List of all pkgPaths to scripts that this XmlFile depends, regardless of whether they are loaded in the program or not.
+     * This includes own dependencies and all parent compoent dependencies
+     * coming from:
+     *  - script tags
+     *  - implied codebehind file
+     *  - import statements from imported scripts or their descendents
+     */
+    public getAllDependencies() {
+        return this.cache.getOrAdd(`allScriptImports`, () => {
+            const value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
+            return value;
+        });
+    }
 
     /**
      * List of all pkgPaths to scripts that this XmlFile depends on directly, regardless of whether they are loaded in the program or not.
@@ -62,9 +82,9 @@ export class XmlFile {
      *  - implied codebehind file
      *  - import statements from imported scripts or their descendents
      */
-    public getAllScriptImports() {
-        return this.cache.getOrAdd('allScriptImports', () => {
-            let value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
+    public getOwnDependencies() {
+        return this.cache.getOrAdd(`ownScriptImports`, () => {
+            const value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
             return value;
         });
     }
@@ -75,11 +95,15 @@ export class XmlFile {
      * coming from:
      *  - script tags
      *  - inferred codebehind file
-     *  - import statements from imported scripts or their descendents
+     *  - import statements from imported scripts or their descendants
      */
     public getAvailableScriptImports() {
         return this.cache.getOrAdd('allAvailableScriptImports', () => {
-            let allDependencies = this.getAllScriptImports();
+
+            let allDependencies = this.getOwnDependencies()
+                //skip typedef files
+                .filter(x => util.getExtension(x) !== '.d.bs');
+
             let result = [] as string[];
             let filesInProgram = this.program.getFilesByPkgPaths(allDependencies);
             for (let file of filesInProgram) {
@@ -91,7 +115,11 @@ export class XmlFile {
     }
 
     public getDiagnostics() {
-        return this.diagnostics;
+        return [...this.diagnostics];
+    }
+
+    public addDiagnostics(diagnostics: BsDiagnostic[]) {
+        this.diagnostics.push(...diagnostics);
     }
 
     /**
@@ -101,8 +129,7 @@ export class XmlFile {
 
     public diagnostics = [] as BsDiagnostic[];
 
-    //TODO implement parsing
-    public parser = new Parser();
+    public parser = new SGParser();
 
     //TODO implement the xml CDATA parsing, which would populate this list
     public callables = [] as Callable[];
@@ -116,21 +143,29 @@ export class XmlFile {
      * The name of the component that this component extends.
      * Available after `parse()`
      */
-    public parentComponentName: string;
+    public get parentComponentName(): SGToken {
+        return this.parser?.references.extends;
+    }
 
     /**
      * The name of the component declared in this xml file
      * Available after `parse()`
      */
-    public componentName: string;
+    public get componentName(): SGToken {
+        return this.parser?.references.name;
+    }
 
     /**
      * Does this file need to be transpiled?
      */
     public needsTranspiled = false;
 
-    //the lines of the xml file
-    public lines: string[];
+    /**
+     * The AST for this file
+     */
+    public get ast() {
+        return this.parser.ast;
+    }
 
     /**
      * The full file contents
@@ -138,183 +173,67 @@ export class XmlFile {
     public fileContents: string;
 
     /**
-     * TODO: do we need this for xml files?
+     * Calculate the AST for this file
+     * @param fileContents
      */
-    public propertyNameCompletions = [] as CompletionItem[];
-
-    private uriRangeRegex = /(.*?\s+uri\s*=\s*")(.*?)"/g;
-    private scriptTypeRegex = /type\s*=\s*"(.*?)"/gi;
-
-    public async parse(fileContents: string) {
+    public parse(fileContents: string) {
         this.fileContents = fileContents;
-        if (this.parseDeferred.isCompleted) {
-            throw new Error(`File was already processed. Create a new file instead. ${this.pathAbsolute}`);
-        }
-        //split the text into lines
-        this.lines = util.getLines(fileContents);
 
-        this.parentNameRange = this.findExtendsPosition(fileContents);
+        this.parser.parse(this.pkgPath, fileContents);
+        this.diagnostics = this.parser.diagnostics.map(diagnostic => ({
+            ...diagnostic,
+            file: this
+        }));
 
-        //create a range of the entire file
-        this.fileRange = Range.create(0, 0, this.lines.length, this.lines[this.lines.length - 1].length - 1);
-
-        let parsedXml;
-        try {
-            parsedXml = await util.parseXml(fileContents);
-            if (parsedXml?.component) {
-                if (parsedXml.component.$) {
-                    this.componentName = parsedXml.component.$.name;
-                    this.parentComponentName = parsedXml.component.$.extends;
-                }
-                let componentRange: Range;
-
-                //find the range for the component element's opening tag
-                for (let lineIndex = 0; lineIndex < this.lines.length; lineIndex++) {
-                    let idx = this.lines[lineIndex].indexOf('<component');
-                    if (idx > -1) {
-                        componentRange = Range.create(
-                            Position.create(lineIndex, idx),
-                            Position.create(lineIndex, idx + 10)
-                        );
-                        break;
-                    }
-                }
-                //component name not defined
-                if (!this.componentName) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
-                        range: Range.create(
-                            componentRange.start.line,
-                            componentRange.start.character,
-                            componentRange.start.line,
-                            componentRange.end.character
-                        ),
-                        file: this
-                    });
-                }
-                //parent component name not defined
-                if (!this.parentComponentName) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
-                        range: Range.create(
-                            componentRange.start.line,
-                            componentRange.start.character,
-                            componentRange.start.line,
-                            componentRange.end.character
-                        ),
-                        file: this
-                    });
-                }
-            } else {
-                //the component xml element was not found in the file
-                this.diagnostics.push({
-                    ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
-                    range: Range.create(
-                        0,
-                        0,
-                        0,
-                        Number.MAX_VALUE
-                    ),
-                    file: this
-                });
-            }
-        } catch (e) {
-            let match = /(.*)\r?\nLine:\s*(\d+)\r?\nColumn:\s*(\d+)\r?\nChar:\s*(\d*)/gi.exec(e.message);
-            if (match) {
-
-                let lineIndex = parseInt(match[2]);
-                let columnIndex = parseInt(match[3]) - 1;
-                //add basic xml parse diagnostic errors
-                this.diagnostics.push({
-                    ...DiagnosticMessages.xmlGenericParseError(match[1]),
-                    range: Range.create(
-                        lineIndex,
-                        columnIndex,
-                        lineIndex,
-                        columnIndex
-                    ),
-                    file: this
-                });
-            }
+        if (!this.parser.ast.root) {
+            //skip empty XML
+            return;
         }
 
-        //find script imports
-        if (parsedXml?.component) {
+        //notify AST ready
+        this.program.plugins.emit('afterFileParse', this);
 
-            let scripts = parsedXml.component.script ? parsedXml.component.script : [];
-            let scriptImports = [] as FileReference[];
-            //get a list of all scripts
-            for (let script of scripts) {
-                let uri = script.$.uri;
-                if (typeof uri === 'string') {
-                    scriptImports.push({
-                        filePathRange: null,
-                        sourceFile: this,
-                        text: uri,
-                        pkgPath: util.getPkgPathFromTarget(this.pkgPath, uri)
-                    });
-                }
-            }
+        //initial validation
+        this.validateComponent(this.parser.ast);
+    }
 
-            //make a lookup of every uri range
-            let uriRanges = {} as { [uri: string]: Range[] };
-            for (let lineIndex = 0; lineIndex < this.lines.length; lineIndex++) {
-                let line = this.lines[lineIndex];
-                //reset the regexes
-                this.uriRangeRegex.lastIndex = 0;
-                this.scriptTypeRegex.lastIndex = 0;
-
-                let lineIndexOffset = 0;
-                let match: RegExpExecArray;
-                while (match = this.uriRangeRegex.exec(line)) { //eslint-disable-line no-cond-assign
-                    let preUriContent = match[1];
-                    let uri = match[2];
-                    if (!uriRanges[uri]) {
-                        uriRanges[uri] = [];
-                    }
-                    let startColumnIndex = lineIndexOffset + preUriContent.length;
-                    let endColumnIndex = startColumnIndex + uri.length;
-
-                    uriRanges[uri].push(
-                        Range.create(
-                            lineIndex,
-                            startColumnIndex,
-                            lineIndex,
-                            endColumnIndex
-                        )
-                    );
-
-                    //if this is a brighterscript file, validate that the `type` attribute is correct
-                    let scriptType = this.scriptTypeRegex.exec(line);
-                    let lowerScriptType = scriptType?.[1]?.toLowerCase();
-                    let lowerUri = uri.toLowerCase();
-                    //brighterscript script type with brightscript file extension
-                    if (lowerUri.endsWith('.bs') && (!scriptType || lowerScriptType !== 'text/brighterscript')) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.brighterscriptScriptTagMissingTypeAttribute(),
-                            file: this,
-                            //just flag the whole line; we'll get better location tracking when we have a formal xml parser
-                            range: Range.create(lineIndex, 0, lineIndex, line.length - 1)
-                        });
-                    }
-                    lineIndexOffset += match[0].length;
-                }
-            }
-
-            //try to compute the locations of each script import
-            for (let scriptImport of scriptImports) {
-                //take and remove the first item from the list
-                let range = uriRanges[scriptImport.text].shift();
-                scriptImport.filePathRange = range;
-            }
-
-            //add all of these script imports
-            this.scriptTagImports = scriptImports;
+    private validateComponent(ast: SGAst) {
+        const { root, component } = ast;
+        if (!component) {
+            //not a SG component
+            this.diagnostics.push({
+                ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
+                range: root.range,
+                file: this
+            });
+            return;
         }
+
+        //component name/extends
+        if (!component.name) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
+                range: component.tag.range,
+                file: this
+            });
+        }
+        if (!component.extends) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
+                range: component.tag.range,
+                file: this
+            });
+        }
+
+        //needsTranspiled should be true if an import is brighterscript
+        this.needsTranspiled = component.scripts.some(
+            script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
+        );
 
         //catch script imports with same path as the auto-imported codebehind file
+        const scriptTagImports = this.parser.references.scriptTagImports;
         let explicitCodebehindScriptTag = this.program.options.autoImportComponentScript === true
-            ? this.scriptTagImports.find(x => this.possibleCodebehindPkgPaths.includes(x.pkgPath))
+            ? scriptTagImports.find(x => this.possibleCodebehindPkgPaths.includes(x.pkgPath))
             : undefined;
         if (explicitCodebehindScriptTag) {
             this.diagnostics.push({
@@ -323,8 +242,6 @@ export class XmlFile {
                 range: explicitCodebehindScriptTag.filePathRange
             });
         }
-
-        this.parseDeferred.resolve();
     }
 
     /**
@@ -342,7 +259,6 @@ export class XmlFile {
             this.cache.clear();
         });
 
-
         let dependencies = [
             ...this.scriptTagImports.map(x => x.pkgPath.toLowerCase())
         ];
@@ -355,6 +271,16 @@ export class XmlFile {
                 this.pkgPath.replace(/\.xml$/i, '.brs').toLowerCase()
             );
         }
+        const len = dependencies.length;
+        for (let i = 0; i < len; i++) {
+            const dep = dependencies[i];
+
+            //add a dependency on `d.bs` file for every `.brs` file
+            if (dep.slice(-4).toLowerCase() === '.brs') {
+                dependencies.push(util.getTypedefPath(dep));
+            }
+        }
+
         if (this.parentComponentName) {
             dependencies.push(this.parentComponentDependencyGraphKey);
         }
@@ -368,7 +294,7 @@ export class XmlFile {
      */
     public get dependencyGraphKey() {
         if (this.componentName) {
-            return `component:${this.componentName}`.toLowerCase();
+            return `component:${this.componentName.text}`.toLowerCase();
         } else {
             return this.pkgPath.toLowerCase();
         }
@@ -380,19 +306,10 @@ export class XmlFile {
      */
     public get parentComponentDependencyGraphKey() {
         if (this.parentComponentName) {
-            return `component:${this.parentComponentName}`.toLowerCase();
+            return `component:${this.parentComponentName.text}`.toLowerCase();
         } else {
             return undefined;
         }
-    }
-
-    private parseDeferred = new Deferred();
-
-    /**
-     * Indicates that the file is completely ready for interaction
-     */
-    public isReady() {
-        return this.parseDeferred.promise;
     }
 
     /**
@@ -404,8 +321,8 @@ export class XmlFile {
             if (file === this) {
                 return true;
             }
-            let allScriptImports = this.getAllScriptImports();
-            for (let importPkgPath of allScriptImports) {
+            let allDependencies = this.getOwnDependencies();
+            for (let importPkgPath of allDependencies) {
                 if (importPkgPath.toLowerCase() === file.pkgPath.toLowerCase()) {
                     return true;
                 }
@@ -426,36 +343,12 @@ export class XmlFile {
      * @param lineIndex
      * @param columnIndex
      */
-    public async getCompletions(position: Position): Promise<CompletionItem[]> {
+    public getCompletions(position: Position): CompletionItem[] {
         let scriptImport = util.getScriptImportAtPosition(this.scriptTagImports, position);
         if (scriptImport) {
             return this.program.getScriptImportCompletions(this.pkgPath, scriptImport);
         } else {
-            return Promise.resolve([]);
-        }
-    }
-
-    /**
-     * Scan the xml and find the range of the parent component's name in the `extends="ParentComponentName"` attribute of the component
-     */
-    public findExtendsPosition(fullText: string) {
-        let regexp = /.*<component[^>]*((extends\s*=\s*")(\w*)")/gms;
-        let match = regexp.exec(fullText);
-        if (match) {
-            let extendsText = match[1]; // `extends="something"`
-            let extendsToFirstQuote = match[2]; // `extends="`
-            let componentName = match[3]; // `something`
-            let lines = util.getLines(match[0]);
-            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                let line = lines[lineIndex];
-                let extendsIdx = line.indexOf(extendsText);
-                //we found the line index
-                if (extendsIdx > -1) {
-                    let colStartIndex = extendsIdx + extendsToFirstQuote.length;
-                    let colEndIndex = colStartIndex + componentName.length;
-                    return Range.create(lineIndex, colStartIndex, lineIndex, colEndIndex);
-                }
-            }
+            return [];
         }
     }
 
@@ -464,14 +357,18 @@ export class XmlFile {
      */
     public get parentComponent() {
         return this.cache.getOrAdd('parent', () => {
-            return this.program.getComponent(this.parentComponentName)?.file ?? null;
+            return this.program.getComponent(this.parentComponentName?.text)?.file ?? null;
         });
     }
 
-
-    public getHover(position: Position): Promise<Hover> { //eslint-disable-line
+    public getHover(position: Position): Hover { //eslint-disable-line
         //TODO implement
         // let result = {} as Hover;
+        return null;
+    }
+
+    public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
+        //TODO implement
         return null;
     }
 
@@ -534,6 +431,8 @@ export class XmlFile {
                 result.push(ownImport);
             }
         }
+
+        result.push('source/bslib.brs');
         return result;
     }
 
@@ -545,51 +444,15 @@ export class XmlFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        this.logDebug('transpile');
-        //eventually we want to support sourcemaps and a full xml parser. However, for now just do some string transformations
-        let chunks = [] as Array<SourceNode | string>;
-        for (let i = 0; i < this.lines.length; i++) {
-            let line = this.lines[i];
-            let lowerLine = line.toLowerCase();
-
-            let componentLocationIndex = lowerLine.indexOf('</component>');
-            //include any bs import statements
-            if (componentLocationIndex > -1) {
-                let missingImports = this.getMissingImportsForTranspile()
-                    //change the file extension to .brs since they will be transpiled
-                    .map(x => x.replace('.bs', '.brs'));
-                //always include the bslib file
-                missingImports.push('source/bslib.brs');
-
-                for (let missingImport of missingImports) {
-                    let scriptTag = `<script type="text/brightscript" uri="${util.getRokuPkgPath(missingImport)}" />`;
-                    //indent the script tag
-                    let indent = ''.padStart(componentLocationIndex + 4, ' ');
-                    chunks.push(
-                        '\n',
-                        new SourceNode(1, 0, this.pathAbsolute, indent + scriptTag)
-                    );
-                }
-            } else {
-                //we couldn't find the closing component tag....so maybe there's something wrong? or this isn't actually a component?
-            }
-
-            //convert .bs extensions to .brs
-            let idx = line.indexOf('.bs"');
-            if (idx > -1) {
-                line = line.substring(0, idx) + '.brs' + line.substring(idx + 3);
-            }
-
-            //convert "text/brighterscript" to "text/brightscript"
-            line = line.replace(`"text/brighterscript"`, `"text/brightscript"`);
-
-            chunks.push(
-                chunks.length > 0 ? '\n' : '',
-                line
-            );
+        const source = this.pathAbsolute;
+        const extraImports = this.getMissingImportsForTranspile();
+        if (this.needsTranspiled || extraImports.length > 0) {
+            //emit an XML document with sourcemaps from the AST
+            return this.parser.ast.transpile(source, extraImports);
+        } else {
+            //emit the XML as-is with a simple map to the original XML location
+            return simpleMap(source, this.fileContents);
         }
-
-        return new SourceNode(null, null, this.pathAbsolute, chunks).toStringWithSourceMap();
     }
 
     public dispose() {
@@ -597,4 +460,22 @@ export class XmlFile {
             this.unsubscribeFromDependencyGraph();
         }
     }
+}
+
+function simpleMap(source: string, src: string) {
+    //create a source map from the original source code
+    let chunks = [] as (SourceNode | string)[];
+    let lines = src.split(/\r?\n/g);
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        let line = lines[lineIndex];
+        chunks.push(
+            lineIndex > 0 ? '\n' : '',
+            new SourceNode(lineIndex + 1, 0, source, line)
+        );
+    }
+
+    //sourcemap reference
+    chunks.push(`<!--//# sourceMappingURL=./${path.basename(source)}.map -->`);
+
+    return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
 }

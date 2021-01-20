@@ -19,45 +19,45 @@ describe('globalCallables', () => {
     });
 
     describe('val', () => {
-        it('allows single parameter', async () => {
-            await program.addOrReplaceFile('source/main.brs', `
+        it('allows single parameter', () => {
+            program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     print val("1001")
                 end sub
             `);
-            await program.validate();
+            program.validate();
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
 
-        it('allows both parameters', async () => {
-            await program.addOrReplaceFile('source/main.brs', `
+        it('allows both parameters', () => {
+            program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     print val("1001", 10)
                 end sub
             `);
-            await program.validate();
+            program.validate();
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
     });
 
     describe('StrI', () => {
-        it('allows single parameter', async () => {
-            await program.addOrReplaceFile('source/main.brs', `
+        it('allows single parameter', () => {
+            program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     print StrI(2)
                 end sub
             `);
-            await program.validate();
+            program.validate();
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
 
-        it('allows both parameters', async () => {
-            await program.addOrReplaceFile('source/main.brs', `
+        it('allows both parameters', () => {
+            program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     print StrI(2, 10)
                 end sub
             `);
-            await program.validate();
+            program.validate();
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
     });

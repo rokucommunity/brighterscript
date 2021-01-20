@@ -1,5 +1,5 @@
-# Conditional (Ternary) Operator: ?
-The conditional (ternary) operator is the only BrighterScript operator that takes three operands: a condition followed by a question mark (?), then an expression to execute (consequent) if the condition is true followed by a colon (:), and finally the expression to execute (alternate) if the condition is false. This operator is frequently used as a shortcut for the if statement. It can be used in assignments, and in any other place where an expression is valid. Due to ambiguity in the brightscript syntax, ternary operators cannot be used as standalone statements. See the [No standalone statements](#no-standalone-statements) for more information.
+# Ternary (Conditional) Operator: ?
+The ternary (conditional) operator is the only BrighterScript operator that takes three operands: a condition followed by a question mark (?), then an expression to execute (consequent) if the condition is true followed by a colon (:), and finally the expression to execute (alternate) if the condition is false. This operator is frequently used as a shortcut for the if statement. It can be used in assignments, and in any other place where an expression is valid. Due to ambiguity in the brightscript syntax, ternary operators cannot be used as standalone statements. See the [No standalone statements](#no-standalone-statements) for more information.
 
 ## Basic usage
 
@@ -10,7 +10,7 @@ a = user = invalid ? "no user" : "logged in"
 transpiles to:
 
 ```BrightScript
-a = bslib_ternarySimple(user = invalid, "no user", "logged in")
+a = bslib_iff(user = invalid, "no user", "logged in")
 ```
 
 The `bslib_ternarySimple` function checks the condition, and returns either the consequent or alternate.
@@ -54,7 +54,7 @@ a = user = invalid ? "not logged in" : "logged in"
 transpiles to:
 
 ```BrightScript
-a = bslib_ternarySimple(user = invalid, "not logged in", "logged in")
+a = bslib_iff(user = invalid, "not logged in", "logged in")
 ```
 
 ```BrighterScript
@@ -64,7 +64,7 @@ a = user = invalid ? defaultUser : user
 transpiles to:
 
 ```BrightScript
-a = bslib_ternarySimple(user = invalid, defaultUser, user)
+a = bslib_iff(user = invalid, defaultUser, user)
 ```
 
 ### Scope capturing
@@ -148,15 +148,6 @@ function bslib_ternarySimple(isTrue, trueValue, falseValue)
         return falseValue
     end if
 end function
-
-function bslib_scopeSafeTernary(isTrue, scope, trueFunc, falseFunc)
-    if isTrue then
-        return trueFunc(scope)
-    else
-        return falseFunc(scope)
-    end if
-end function
-
 ```
 
 ## No standalone statements

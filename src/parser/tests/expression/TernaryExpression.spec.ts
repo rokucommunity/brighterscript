@@ -4,8 +4,10 @@ import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { TokenKind } from '../../../lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { token, EOF } from '../Parser.spec';
-import { BrsString, BrsBoolean } from '../../../brsTypes';
 import { AssignmentStatement, ExpressionStatement, ForEachStatement } from '../../Statement';
+import type {
+    AAMemberExpression
+} from '../../Expression';
 import {
     AALiteralExpression,
     ArrayLiteralExpression,
@@ -24,11 +26,11 @@ describe('ternary expressions', () => {
 
     it('cannot be used as a statement', () => {
         let { diagnostics } = Parser.parse([
-            token(TokenKind.True, 'true', BrsBoolean.True),
+            token(TokenKind.True, 'true'),
             token(TokenKind.QuestionMark, '?'),
-            token(TokenKind.StringLiteral, 'Human', new BrsString('Human')),
+            token(TokenKind.StringLiteral, 'Human'),
             token(TokenKind.Colon, ':'),
-            token(TokenKind.StringLiteral, 'Zombie', new BrsString('Zombie')),
+            token(TokenKind.StringLiteral, 'Zombie'),
             EOF
         ], { mode: ParseMode.BrighterScript });
 
@@ -200,9 +202,9 @@ describe('ternary expressions', () => {
             expect(statements[0]).instanceof(AssignmentStatement);
             expect((statements[0] as AssignmentStatement).value).instanceof(AALiteralExpression);
             let literalExpression = (statements[0] as AssignmentStatement).value as AALiteralExpression;
-            expect((literalExpression.elements[0] as any).key.value).is.equal('v1');
+            expect((literalExpression.elements[0] as AAMemberExpression).keyToken.text).is.equal('"v1"');
             expect((literalExpression.elements[0] as any).value).instanceOf(TernaryExpression);
-            expect((literalExpression.elements[1] as any).key.value).is.equal('v2');
+            expect((literalExpression.elements[1] as AAMemberExpression).keyToken.text).is.equal('"v2"');
             expect((literalExpression.elements[1] as any).value).instanceOf(LiteralExpression);
         });
 
@@ -231,79 +233,79 @@ describe('ternary expressions', () => {
             program.dispose();
         });
 
-        it('simple consequents', async () => {
-            await testTranspile(
+        it('simple consequents', () => {
+            testTranspile(
                 `a = user = invalid ? "no user" : "logged in"`,
-                `a = bslib_ternarySimple(user = invalid, "no user", "logged in")`
+                `a = bslib_iff(user = invalid, "no user", "logged in")`
             );
 
-            await testTranspile(
+            testTranspile(
                 `a = user = invalid ? 1 : "logged in"`,
-                `a = bslib_ternarySimple(user = invalid, 1, "logged in")`
+                `a = bslib_iff(user = invalid, 1, "logged in")`
             );
 
-            await testTranspile(
+            testTranspile(
                 `a = user = invalid ? 1.2 : "logged in"`,
-                `a = bslib_ternarySimple(user = invalid, 1.2, "logged in")`
+                `a = bslib_iff(user = invalid, 1.2, "logged in")`
             );
 
-            await testTranspile(
+            testTranspile(
                 `a = user = invalid ? [] : "logged in"`,
-                `a = bslib_ternarySimple(user = invalid, [], "logged in")`
+                `a = bslib_iff(user = invalid, [], "logged in")`
             );
 
-            await testTranspile(
+            testTranspile(
                 `a = user = invalid ? {} : "logged in"`,
-                `a = bslib_ternarySimple(user = invalid, {}, "logged in")`
+                `a = bslib_iff(user = invalid, {}, "logged in")`
             );
         });
 
-        it('simple alternates', async () => {
-            await testTranspile(
+        it('simple alternates', () => {
+            testTranspile(
                 `a = user = invalid ? "logged in" : "no user" `,
-                `a = bslib_ternarySimple(user = invalid, "logged in", "no user")`
+                `a = bslib_iff(user = invalid, "logged in", "no user")`
             );
 
-            await testTranspile(
+            testTranspile(
                 `a = user = invalid ? "logged in" : 1 `,
-                `a = bslib_ternarySimple(user = invalid, "logged in", 1)`
+                `a = bslib_iff(user = invalid, "logged in", 1)`
             );
 
-            await testTranspile(
+            testTranspile(
                 `a = user = invalid ? "logged in" : 1.2 `,
-                `a = bslib_ternarySimple(user = invalid, "logged in", 1.2)`
+                `a = bslib_iff(user = invalid, "logged in", 1.2)`
             );
 
-            await testTranspile(
+            testTranspile(
                 `a = user = invalid ? "logged in" :  [] `,
-                `a = bslib_ternarySimple(user = invalid, "logged in", [])`
+                `a = bslib_iff(user = invalid, "logged in", [])`
             );
 
-            await testTranspile(
+            testTranspile(
                 `a = user = invalid ? "logged in" :  {} `,
-                `a = bslib_ternarySimple(user = invalid, "logged in", {})`
+                `a = bslib_iff(user = invalid, "logged in", {})`
             );
         });
 
-        it('complex conditions do not cause scope capture', async () => {
-            await testTranspile(
+        it('complex conditions do not cause scope capture', () => {
+            testTranspile(
                 `a = IsTrue() = true ? true : false `,
-                `a = bslib_ternarySimple(IsTrue() = true, true, false)`
+                `a = bslib_iff(IsTrue() = true, true, false)`
             );
 
-            await testTranspile(
+            testTranspile(
                 `a = m.top.service.IsTrue() ? true : false `,
-                `a = bslib_ternarySimple(m.top.service.IsTrue(), true, false)`
+                `a = bslib_iff(m.top.service.IsTrue(), true, false)`
             );
 
-            await testTranspile(
+            testTranspile(
                 `a = First(second(third(fourth(m.fifth()[123].truthy(1))))) ? true : false `,
-                `a = bslib_ternarySimple(First(second(third(fourth(m.fifth()[123].truthy(1))))), true, false)`
+                `a = bslib_iff(First(second(third(fourth(m.fifth()[123].truthy(1))))), true, false)`
             );
         });
 
-        it('captures scope for function call conseqent', async () => {
-            await testTranspile(
+        it('captures scope for function call conseqent', () => {
+            testTranspile(
                 `name = zombie.getName() <> invalid ? zombie.GetName() : "zombie"`,
                 `
                     name = (function(condition, zombie)
@@ -317,8 +319,8 @@ describe('ternary expressions', () => {
             );
         });
 
-        it('captures scope for function call alternate', async () => {
-            await testTranspile(
+        it('captures scope for function call alternate', () => {
+            testTranspile(
                 `name = zombie.getName() = invalid ? "zombie" :  zombie.GetName()`,
                 `
                     name = (function(condition, zombie)
@@ -332,8 +334,8 @@ describe('ternary expressions', () => {
             );
         });
 
-        it('captures scope for complex consequent', async () => {
-            await testTranspile(
+        it('captures scope for complex consequent', () => {
+            testTranspile(
                 `name = isLoggedIn ? m.defaults.getAccount(settings.name) : "no"`,
                 `
                     name = (function(condition, m, settings)
@@ -347,13 +349,13 @@ describe('ternary expressions', () => {
             );
         });
 
-        it('supports scope-captured outer, and simple inner', async () => {
-            await testTranspile(
+        it('supports scope-captured outer, and simple inner', () => {
+            testTranspile(
                 `name = zombie <> invalid ? zombie.Attack(human <> invalid ? human: zombie) : "zombie"`,
                 `
                     name = (function(condition, human, zombie)
                             if condition then
-                                return zombie.Attack(bslib_ternarySimple(human <> invalid, human, zombie))
+                                return zombie.Attack(bslib_iff(human <> invalid, human, zombie))
                             else
                                 return "zombie"
                             end if
@@ -362,8 +364,8 @@ describe('ternary expressions', () => {
             );
         });
 
-        it('uses scope capture for property access', async () => {
-            await testTranspile(
+        it('uses scope capture for property access', () => {
+            testTranspile(
                 `name = person <> invalid ? person.name : "John Doe"`,
                 `
                     name = (function(condition, person)

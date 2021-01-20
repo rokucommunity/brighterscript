@@ -1,10 +1,9 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { BrsString, Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
-import { FunctionStatement } from '../../Statement';
+import type { FunctionStatement } from '../../Statement';
 import { Range } from 'vscode-languageserver';
 
 describe('parser return statements', () => {
@@ -33,7 +32,7 @@ describe('parser return statements', () => {
             token(TokenKind.RightParen, ')'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.Return, 'return'),
-            { kind: TokenKind.StringLiteral, literal: new BrsString('test'), text: '"test"', line: 2 },
+            token(TokenKind.StringLiteral, '"test"'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.EndFunction, 'end function'),
             EOF
@@ -87,7 +86,6 @@ describe('parser return statements', () => {
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
-                literal: new Int32(5),
                 isReserved: false,
                 range: Range.create(1, 9, 1, 10)
             },

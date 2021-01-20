@@ -1,18 +1,16 @@
 import * as fs from 'fs';
 import * as fsExtra from 'fs-extra';
-import { parse as parseJsonc, ParseError, printParseErrorCode } from 'jsonc-parser';
+import type { ParseError } from 'jsonc-parser';
+import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import { Position, Range } from 'vscode-languageserver';
+import type { Position, Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
-
-import { BsConfig } from './BsConfig';
+import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { BrsFile } from './files/BrsFile';
-import { CallableContainer, ValueKind, BsDiagnostic, FileReference } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
 import { BooleanType } from './types/BooleanType';
-import { BrsType } from './types/BrsType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
@@ -22,15 +20,16 @@ import { InvalidType } from './types/InvalidType';
 import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
-import { UninitializedType } from './types/UninitializedType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import { DottedGetExpression, VariableExpression } from './parser/Expression';
-import { LogLevel } from './Logger';
-import { TokenKind, Token } from './lexer';
+import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
+import { Logger, LogLevel } from './Logger';
+import type { Token } from './lexer';
+import { TokenKind } from './lexer';
+import { isBrsFile, isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
+import { CustomType } from './types/CustomType';
 
 export class Util {
-
     public clearConsole() {
         // process.stdout.write('\x1Bc');
     }
@@ -39,7 +38,7 @@ export class Util {
      * Determine if the file exists
      * @param filePath
      */
-    public async fileExists(filePath: string | undefined) {
+    public async pathExists(filePath: string | undefined) {
         if (!filePath) {
             return false;
         } else {
@@ -48,20 +47,22 @@ export class Util {
     }
 
     /**
+     * Determine if the file exists
+     * @param filePath
+     */
+    public pathExistsSync(filePath: string | undefined) {
+        if (!filePath) {
+            return false;
+        } else {
+            return fsExtra.pathExistsSync(filePath);
+        }
+    }
+
+    /**
      * Determine if this path is a directory
      */
     public isDirectorySync(dirPath: string | undefined) {
         return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
-    }
-
-    /**
-     * Load a file from disc into a string
-     * @param filePath
-     */
-    public async getFileContents(filePath: string) {
-        let file = await fsExtra.readFile(filePath);
-        let fileContents = file.toString();
-        return fileContents;
     }
 
     /**
@@ -90,11 +91,11 @@ export class Util {
      * @param configFilePath
      */
     public async getConfigFilePath(cwd?: string) {
-        cwd = cwd ? cwd : process.cwd();
+        cwd = cwd ?? process.cwd();
         let configPath = path.join(cwd, 'bsconfig.json');
         //find the nearest config file path
         for (let i = 0; i < 100; i++) {
-            if (await this.fileExists(configPath)) {
+            if (await this.pathExists(configPath)) {
                 return configPath;
             } else {
                 let parentDirPath = path.dirname(path.dirname(configPath));
@@ -120,7 +121,7 @@ export class Util {
                 colIndex++;
             }
         }
-        return Range.create(lineIndex, colIndex, lineIndex, colIndex + length);
+        return util.createRange(lineIndex, colIndex, lineIndex, colIndex + length);
     }
 
     /**
@@ -129,29 +130,26 @@ export class Util {
      * @param configFilePath
      * @param parentProjectPaths
      */
-    public async loadConfigFile(configFilePath: string, parentProjectPaths?: string[]) {
-        let cwd = process.cwd();
-
+    public async loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
         if (configFilePath) {
-
             //if the config file path starts with question mark, then it's optional. return undefined if it doesn't exist
             if (configFilePath.startsWith('?')) {
                 //remove leading question mark
                 configFilePath = configFilePath.substring(1);
-                if (await fsExtra.pathExists(configFilePath) === false) {
+                if (await fsExtra.pathExists(path.resolve(cwd, configFilePath)) === false) {
                     return undefined;
                 }
             }
             //keep track of the inheritance chain
             parentProjectPaths = parentProjectPaths ? parentProjectPaths : [];
-            configFilePath = path.resolve(configFilePath);
+            configFilePath = path.resolve(cwd, configFilePath);
             if (parentProjectPaths?.includes(configFilePath)) {
                 parentProjectPaths.push(configFilePath);
                 parentProjectPaths.reverse();
                 throw new Error('Circular dependency detected: "' + parentProjectPaths.join('" => ') + '"');
             }
             //load the project file
-            let projectFileContents = await this.getFileContents(configFilePath);
+            let projectFileContents = (await fsExtra.readFile(configFilePath)).toString();
             let parseErrors = [] as ParseError[];
             let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
             if (parseErrors.length > 0) {
@@ -165,14 +163,14 @@ export class Util {
                 } as BsDiagnostic;
                 throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
+            this.resolvePluginPaths(projectConfig, configFilePath);
 
-            //set working directory to the location of the project file
-            process.chdir(path.dirname(configFilePath));
+            let projectFileCwd = path.dirname(configFilePath);
 
             let result: BsConfig;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
-                let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath]);
+                let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
                 //extend the base config with the current project settings
                 result = { ...baseProjectConfig, ...projectConfig };
             } else {
@@ -184,18 +182,38 @@ export class Util {
 
             //make any paths in the config absolute (relative to the CURRENT config file)
             if (result.outFile) {
-                result.outFile = path.resolve(result.outFile);
+                result.outFile = path.resolve(projectFileCwd, result.outFile);
             }
             if (result.rootDir) {
-                result.rootDir = path.resolve(result.rootDir);
+                result.rootDir = path.resolve(projectFileCwd, result.rootDir);
             }
             if (result.cwd) {
-                result.cwd = path.resolve(result.cwd);
+                result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
 
-            //restore working directory
-            process.chdir(cwd);
             return result;
+        }
+    }
+
+    /**
+     * Relative paths to scripts in plugins should be resolved relatively to the bsconfig file
+     * and de-duplicated
+     * @param config Parsed configuration
+     * @param configFilePath Path of the configuration file
+     */
+    public resolvePluginPaths(config: BsConfig, configFilePath: string) {
+        if (config.plugins?.length > 0) {
+            const relPath = path.dirname(configFilePath);
+            const exists: Record<string, boolean> = {};
+            config.plugins = config.plugins.map(p => {
+                return p?.startsWith('.') ? path.resolve(relPath, p) : p;
+            }).filter(p => {
+                if (!p || exists[p]) {
+                    return false;
+                }
+                exists[p] = true;
+                return true;
+            });
         }
     }
 
@@ -240,13 +258,13 @@ export class Util {
 
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = await this.getConfigFilePath();
+            result.project = await this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
             result.project = config.project;
         }
         if (result.project) {
-            let configFile = await this.loadConfigFile(result.project);
+            let configFile = await this.loadConfigFile(result.project, null, config?.cwd);
             result = Object.assign(result, configFile);
         }
 
@@ -268,6 +286,7 @@ export class Util {
         config.createPackage = config.createPackage === false ? false : true;
         let rootFolderName = path.basename(process.cwd());
         config.outFile = config.outFile ?? `./out/${rootFolderName}.zip`;
+        config.sourceMap = config.sourceMap === true;
         config.username = config.username ?? 'rokudev';
         config.watch = config.watch === true ? true : false;
         config.emitFullPaths = config.emitFullPaths === true ? true : false;
@@ -275,10 +294,12 @@ export class Util {
         config.copyToStaging = config.copyToStaging === false ? false : true;
         config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
         config.diagnosticFilters = config.diagnosticFilters ?? [];
+        config.plugins = config.plugins ?? [];
         config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
         config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
         config.cwd = config.cwd ?? process.cwd();
+        config.emitDefinitions = config.emitDefinitions === true ? true : false;
         if (typeof config.logLevel === 'string') {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
         }
@@ -316,54 +337,24 @@ export class Util {
         });
     }
 
-    public valueKindToBrsType(kind: ValueKind): BrsType {
-        switch (kind) {
-            case ValueKind.Boolean:
-                return new BooleanType();
-            //TODO refine the function type on the outside (I don't think this ValueKind is actually returned)
-            case ValueKind.Callable:
-                return new FunctionType(new VoidType());
-            case ValueKind.Double:
-                return new DoubleType();
-            case ValueKind.Dynamic:
-                return new DynamicType();
-            case ValueKind.Float:
-                return new FloatType();
-            case ValueKind.Int32:
-                return new IntegerType();
-            case ValueKind.Int64:
-                return new LongIntegerType();
-            case ValueKind.Invalid:
-                return new InvalidType();
-            case ValueKind.Object:
-                return new ObjectType();
-            case ValueKind.String:
-                return new StringType();
-            case ValueKind.Uninitialized:
-                return new UninitializedType();
-            case ValueKind.Void:
-                return new VoidType();
-            default:
-                return undefined;
-        }
-    }
-
     /**
      * Given a list of callables as a dictionary indexed by their full name (namespace included, transpiled to underscore-separated.
      * @param callables
      */
-    public getCallableContainersByLowerName(callables: CallableContainer[]) {
+    public getCallableContainersByLowerName(callables: CallableContainer[]): CallableContainerMap {
         //find duplicate functions
-        let result = {} as { [name: string]: CallableContainer[] };
+        const result = new Map<string, CallableContainer[]>();
 
         for (let callableContainer of callables) {
             let lowerName = callableContainer.callable.getName(ParseMode.BrightScript).toLowerCase();
 
             //create a new array for this name
-            if (result[lowerName] === undefined) {
-                result[lowerName] = [];
+            const list = result.get(lowerName);
+            if (list) {
+                list.push(callableContainer);
+            } else {
+                result.set(lowerName, [callableContainer]);
             }
-            result[lowerName].push(callableContainer);
         }
         return result;
     }
@@ -463,60 +454,14 @@ export class Util {
     public findBeginningVariableExpression(dottedGet: DottedGetExpression): VariableExpression | undefined {
         let left: any = dottedGet;
         while (left) {
-            if (left instanceof VariableExpression) {
+            if (isVariableExpression(left)) {
                 return left;
-            } else if (left instanceof DottedGetExpression) {
+            } else if (isDottedGetExpression(left)) {
                 left = left.obj;
             } else {
                 break;
             }
         }
-    }
-
-    /**
-     * Find all properties in an object that match the predicate.
-     * @param seenMap - used to prevent circular dependency infinite loops
-     */
-    public findAllDeep<T>(obj: any, predicate: (value: any) => boolean | undefined, parentKey?: string, ancestors?: any[], seenMap?: Map<any, boolean>) {
-        seenMap = seenMap ?? new Map<any, boolean>();
-        let result = [] as Array<{ key: string; value: T; ancestors: any[] }>;
-
-        //skip this object if we've already seen it
-        if (seenMap.has(obj)) {
-            return result;
-        }
-
-        //base case. If this object maches, keep it as a result
-        if (predicate(obj) === true) {
-            result.push({
-                key: parentKey,
-                ancestors: ancestors,
-                value: obj
-            });
-        }
-
-        seenMap.set(obj, true);
-
-        //look through all children
-        if (obj instanceof Object) {
-            for (let key in obj) {
-                let value = obj[key];
-                let fullKey = parentKey ? parentKey + '.' + key : key;
-                if (typeof value === 'object') {
-                    result = [...result, ...this.findAllDeep<T>(
-                        value,
-                        predicate,
-                        fullKey,
-                        [
-                            ...(ancestors ?? []),
-                            obj
-                        ],
-                        seenMap
-                    )];
-                }
-            }
-        }
-        return result;
     }
 
     /**
@@ -526,16 +471,17 @@ export class Util {
      * @param position
      */
     public rangeContains(range: Range, position: Position) {
-        if (position.line < range.start.line || position.line > range.end.line) {
-            return false;
+        return this.comparePositionToRange(position, range) === 0;
+    }
+
+    public comparePositionToRange(position: Position, range: Range) {
+        if (position.line < range.start.line || (position.line === range.start.line && position.character < range.start.character)) {
+            return -1;
         }
-        if (position.line === range.start.line && position.character < range.start.character) {
-            return false;
+        if (position.line > range.end.line || (position.line === range.end.line && position.character > range.end.character)) {
+            return 1;
         }
-        if (position.line === range.end.line && position.character > range.end.character) {
-            return false;
-        }
-        return true;
+        return 0;
     }
 
     /**
@@ -554,7 +500,7 @@ export class Util {
         });
     }
 
-    public propertyCount(object: object) {
+    public propertyCount(object: Record<string, unknown>) {
         let count = 0;
         for (let key in object) {
             if (object.hasOwnProperty(key)) {
@@ -656,12 +602,28 @@ export class Util {
     }
 
     /**
+     * Given a path to a brs file, compute the path to a theoretical d.bs file.
+     * Only `.brs` files can have typedef path, so return undefined for everything else
+     */
+    public getTypedefPath(brsSrcPath: string) {
+        const typedefPath = brsSrcPath
+            .replace(/\.brs$/i, '.d.bs')
+            .toLowerCase();
+
+        if (typedefPath.endsWith('.d.bs')) {
+            return typedefPath;
+        } else {
+            return undefined;
+        }
+    }
+
+    /**
      * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
      * @param diagnostic
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
         //for now, we only support suppressing brs file diagnostics
-        if (diagnostic.file instanceof BrsFile) {
+        if (isBrsFile(diagnostic.file)) {
             for (let flag of diagnostic.file.commentFlags) {
                 //this diagnostic is affected by this flag
                 if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
@@ -722,7 +684,7 @@ export class Util {
         for (let item of items) {
             codes.push({
                 code: item.text,
-                range: Range.create(
+                range: util.createRange(
                     token.range.start.line,
                     token.range.start.character + offset + item.startIndex,
                     token.range.start.line,
@@ -790,9 +752,9 @@ export class Util {
 
             let bsPath = path.join(currentPath, 'bsconfig.json');
             let brsPath = path.join(currentPath, 'brsconfig.json');
-            if (await this.fileExists(bsPath)) {
+            if (await this.pathExists(bsPath)) {
                 return bsPath;
-            } else if (await this.fileExists(brsPath)) {
+            } else if (await this.pathExists(brsPath)) {
                 return brsPath;
             } else {
                 //walk upwards one directory
@@ -854,7 +816,7 @@ export class Util {
      * Get a location object back by extracting location information from other objects that contain location
      */
     public getRange(startObj: { range: Range }, endObj: { range: Range }): Range {
-        return Range.create(startObj.range.start, endObj.range.end);
+        return util.createRangeFromPositions(startObj.range.start, endObj.range.end);
     }
 
     /**
@@ -915,20 +877,272 @@ export class Util {
     /**
      * Given the class name text, return a namespace-prefixed name.
      * If the name already has a period in it, or the namespaceName was not provided, return the class name as is.
-     * If the name does not have a period, and a namespaceName was provided, return the class name prepended
-     * by the namespace name
+     * If the name does not have a period, and a namespaceName was provided, return the class name prepended by the namespace name.
+     * If no namespace is provided, return the `className` unchanged.
      */
-    public getFulllyQualifiedClassName(className: string, namespaceName?: string) {
-        if (className.includes('.') === false && namespaceName) {
+    public getFullyQualifiedClassName(className: string, namespaceName?: string) {
+        if (className?.includes('.') === false && namespaceName) {
             return `${namespaceName}.${className}`;
         } else {
             return className;
         }
     }
+
+    public splitIntoLines(string: string) {
+        return string.split(/\r?\n/g);
+    }
+
+    public getTextForRange(string: string | string[], range: Range) {
+        let lines: string[];
+        if (Array.isArray(string)) {
+            lines = string;
+        } else {
+            lines = this.splitIntoLines(string);
+        }
+
+        const start = range.start;
+        const end = range.end;
+
+        let endCharacter = end.character;
+        // If lines are the same we need to subtract out our new starting position to make it work correctly
+        if (start.line === end.line) {
+            endCharacter -= start.character;
+        }
+
+        let rangeLines = [lines[start.line].substring(start.character)];
+        for (let i = start.line + 1; i <= end.line; i++) {
+            rangeLines.push(lines[i]);
+        }
+        const lastLine = rangeLines.pop();
+        rangeLines.push(lastLine.substring(0, endCharacter));
+        return rangeLines.join('\n');
+    }
+
+    /**
+     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `util.createRange()` is significantly slower
+     */
+    public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
+        return {
+            start: {
+                line: startLine,
+                character: startCharacter
+            },
+            end: {
+                line: endLine,
+                character: endCharacter
+            }
+        };
+    }
+
+    /**
+     * Create a `Range` from two `Position`s
+     */
+    public createRangeFromPositions(startPosition: Position, endPosition: Position): Range {
+        return {
+            start: {
+                line: startPosition.line,
+                character: startPosition.character
+            },
+            end: {
+                line: endPosition.line,
+                character: endPosition.character
+            }
+        };
+    }
+
+    /**
+     * Create a `Position` object. Prefer this over `Position.create` for performance reasons
+     */
+    public createPosition(line: number, character: number) {
+        return {
+            line: line,
+            character: character
+        };
+    }
+
+    /**
+     * Convert a list of tokens into a string, including their leading whitespace
+     */
+    public tokensToString(tokens: Token[]) {
+        let result = '';
+        //skip iterating the final token
+        for (let i = 0; i < tokens.length; i++) {
+            let token = tokens[i];
+            result += token.leadingWhitespace + token.text;
+        }
+        return result;
+    }
+
+    /**
+     * Convert a token into a BscType
+     */
+    public tokenToBscType(token: Token, allowCustomType = true) {
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        switch (token.kind) {
+            case TokenKind.Boolean:
+            case TokenKind.True:
+            case TokenKind.False:
+                return new BooleanType();
+            case TokenKind.Double:
+            case TokenKind.DoubleLiteral:
+                return new DoubleType();
+            case TokenKind.Dynamic:
+                return new DynamicType();
+            case TokenKind.Float:
+            case TokenKind.FloatLiteral:
+                return new FloatType();
+            case TokenKind.Function:
+                //TODO should there be a more generic function type without a signature that's assignable to all other function types?
+                return new FunctionType(new DynamicType());
+            case TokenKind.Integer:
+            case TokenKind.IntegerLiteral:
+                return new IntegerType();
+            case TokenKind.Invalid:
+                return new InvalidType();
+            case TokenKind.LongInteger:
+            case TokenKind.LongIntegerLiteral:
+                return new LongIntegerType();
+            case TokenKind.Object:
+                return new ObjectType();
+            case TokenKind.String:
+            case TokenKind.StringLiteral:
+            case TokenKind.TemplateStringExpressionBegin:
+            case TokenKind.TemplateStringExpressionEnd:
+            case TokenKind.TemplateStringQuasi:
+                return new StringType();
+            case TokenKind.Void:
+                return new VoidType();
+            case TokenKind.Identifier:
+                switch (token.text.toLowerCase()) {
+                    case 'boolean':
+                        return new BooleanType();
+                    case 'double':
+                        return new DoubleType();
+                    case 'float':
+                        return new FloatType();
+                    case 'function':
+                        return new FunctionType(new DynamicType());
+                    case 'integer':
+                        return new IntegerType();
+                    case 'invalid':
+                        return new InvalidType();
+                    case 'longinteger':
+                        return new LongIntegerType();
+                    case 'object':
+                        return new ObjectType();
+                    case 'string':
+                        return new StringType();
+                    case 'void':
+                        return new VoidType();
+                }
+                if (allowCustomType) {
+                    return new CustomType(token.text);
+                }
+        }
+    }
+
+    /**
+     * Get the extension for the given file path. Basically the part after the final dot, except for
+     * `d.bs` which is treated as single extension
+     */
+    public getExtension(filePath: string) {
+        filePath = filePath.toLowerCase();
+        if (filePath.endsWith('.d.bs')) {
+            return '.d.bs';
+        } else {
+            const idx = filePath.lastIndexOf('.');
+            if (idx > -1) {
+                return filePath.substring(idx);
+            }
+        }
+    }
+
+    /**
+     * Load and return the list of plugins
+     */
+    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
+        const logger = new Logger();
+        return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
+            if (typeof pathOrModule === 'string') {
+                try {
+                    const loaded = this.resolveRequire(cwd, pathOrModule);
+                    const theExport: CompilerPlugin | CompilerPluginFactory = loaded.default ? loaded.default : loaded;
+
+                    let plugin: CompilerPlugin;
+
+                    // legacy plugins returned a plugin object. If we find that, then add a warning
+                    if (typeof theExport === 'object') {
+                        logger.warn(`Plugin "${pathOrModule}" was loaded as a singleton. Please contact the plugin author to update to the factory pattern.\n`);
+                        plugin = theExport;
+
+                        // the official plugin format is a factory function that returns a new instance of a plugin.
+                    } else if (typeof theExport === 'function') {
+                        plugin = theExport();
+                    }
+
+                    if (!plugin.name) {
+                        plugin.name = pathOrModule;
+                    }
+                    acc.push(plugin);
+                } catch (err) {
+                    if (onError) {
+                        onError(pathOrModule, err);
+                    } else {
+                        throw err;
+                    }
+                }
+            }
+            return acc;
+        }, []);
+    }
+
+    public resolveRequire(cwd: string, pathOrModule: string) {
+        let target = pathOrModule;
+        if (!path.isAbsolute(pathOrModule)) {
+            const localPath = path.resolve(cwd, pathOrModule);
+            if (fs.existsSync(localPath)) {
+                target = localPath;
+            } else {
+                const modulePath = path.resolve(cwd, 'node_modules', pathOrModule);
+                if (fs.existsSync(modulePath)) {
+                    target = modulePath;
+                }
+            }
+        }
+        // eslint-disable-next-line
+        return require(target);
+    }
+
+    /**
+     * Gathers expressions, variables, and unique names from an expression.
+     * This is mostly used for the ternary expression
+     */
+    public getExpressionInfo(expression: Expression): ExpressionInfo {
+        const expressions = [expression];
+        const variableExpressions = [] as VariableExpression[];
+        const uniqueVarNames = new Set<string>();
+
+        // Collect all expressions. Most of these expressions are fairly small so this should be quick!
+        // This should only be called during transpile time and only when we actually need it.
+        expression.walk((expression) => {
+            if (isExpression(expression)) {
+                expressions.push(expression);
+            }
+            if (isVariableExpression(expression)) {
+                variableExpressions.push(expression);
+                uniqueVarNames.add(expression.name.text);
+            }
+        }, {
+            walkMode: WalkMode.visitExpressions
+        });
+        return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: [...uniqueVarNames] };
+    }
 }
 
+
 /**
- * A tagged template literal function for standardizing the path.
+ * A tagged template literal function for standardizing the path. This has to be defined as standalone function since it's a tagged template literal function,
+ * we can't use `object.tag` syntax.
  */
 export function standardizePath(stringParts, ...expressions: any[]) {
     let result = [];

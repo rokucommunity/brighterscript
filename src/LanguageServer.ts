@@ -2,38 +2,44 @@ import 'array-flat-polyfill';
 import * as glob from 'glob';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import {
+import type {
     CompletionItem,
     Connection,
-    createConnection,
-    Diagnostic,
-    DidChangeConfigurationNotification,
     DidChangeWatchedFilesParams,
-    FileChangeType,
     Hover,
     InitializeParams,
-    Location,
-    ProposedFeatures,
-    Range,
     ServerCapabilities,
     TextDocumentPositionParams,
-    TextDocuments,
     Position,
-    TextDocumentSyncKind,
-    ExecuteCommandParams
+    ExecuteCommandParams,
+    WorkspaceSymbolParams,
+    SymbolInformation,
+    DocumentSymbolParams,
+    ReferenceParams,
+    SignatureHelp,
+    SignatureHelpParams
+} from 'vscode-languageserver';
+import {
+    createConnection,
+    DidChangeConfigurationNotification,
+    FileChangeType,
+    ProposedFeatures,
+    TextDocuments,
+    TextDocumentSyncKind
 } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 
-import { BsConfig } from './BsConfig';
+import type { BsConfig } from './BsConfig';
 import { Deferred } from './deferred';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
-import { BsDiagnostic } from './interfaces';
 import { Logger } from './Logger';
 import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
+import { DiagnosticCollection } from './DiagnosticCollection';
+import { isBrsFile } from './astUtils/reflection';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
@@ -44,7 +50,7 @@ export class LanguageServer {
     /**
      * The number of milliseconds that should be used for language server typing debouncing
      */
-    private debounceTimeout = 350;
+    private debounceTimeout = 150;
 
     /**
      * These workspaces are created on the fly whenever a file is opened that is not included
@@ -52,7 +58,7 @@ export class LanguageServer {
      * Basically these are single-file workspaces to at least get parsing for standalone files.
      * Also, they should only be created when the file is opened, and destroyed when the file is closed.
      */
-    public standaloneFileWorkspaces = {} as { [filePathAbsolute: string]: Workspace };
+    public standaloneFileWorkspaces = {} as Record<string, Workspace>;
 
     private hasConfigurationCapability = false;
 
@@ -123,11 +129,19 @@ export class LanguageServer {
         // the completion list.
         this.connection.onCompletionResolve(this.onCompletionResolve.bind(this));
 
-        this.connection.onDefinition(this.onDefinition.bind(this));
-
         this.connection.onHover(this.onHover.bind(this));
 
         this.connection.onExecuteCommand(this.onExecuteCommand.bind(this));
+
+        this.connection.onDefinition(this.onDefinition.bind(this));
+
+        this.connection.onDocumentSymbol(this.onDocumentSymbol.bind(this));
+
+        this.connection.onWorkspaceSymbol(this.onWorkspaceSymbol.bind(this));
+
+        this.connection.onSignatureHelp(this.onSignatureHelp.bind(this));
+
+        this.connection.onReferences(this.onReferences.bind(this));
 
         /*
         this.connection.onDidOpenTextDocument((params) => {
@@ -178,6 +192,12 @@ export class LanguageServer {
                     //anytime the user types a period, auto-show the completion results
                     triggerCharacters: ['.'],
                     allCommitCharacters: ['.', '@']
+                },
+                documentSymbolProvider: true,
+                workspaceSymbolProvider: true,
+                referencesProvider: true,
+                signatureHelpProvider: {
+                    triggerCharacters: ['(', ',']
                 },
                 definitionProvider: true,
                 hoverProvider: true,
@@ -315,7 +335,7 @@ export class LanguageServer {
         //if there's a setting, we need to find the file or show error if it can't be found
         if (config?.configFile) {
             configFilePath = path.resolve(workspacePath, config.configFile);
-            if (await util.fileExists(configFilePath)) {
+            if (await util.pathExists(configFilePath)) {
                 return configFilePath;
             } else {
                 this.sendCriticalFailure(`Cannot find config file specified in user/workspace settings at '${configFilePath}'`);
@@ -324,13 +344,13 @@ export class LanguageServer {
 
         //default to config file path found in the root of the workspace
         configFilePath = path.resolve(workspacePath, 'bsconfig.json');
-        if (await util.fileExists(configFilePath)) {
+        if (await util.pathExists(configFilePath)) {
             return configFilePath;
         }
 
         //look for the deprecated `brsconfig.json` file
         configFilePath = path.resolve(workspacePath, 'brsconfig.json');
-        if (await util.fileExists(configFilePath)) {
+        if (await util.pathExists(configFilePath)) {
             return configFilePath;
         }
 
@@ -351,16 +371,14 @@ export class LanguageServer {
         builder.allowConsoleClearing = false;
 
         //look for files in our in-memory cache before going to the file system
-        builder.addFileResolver((pathAbsolute) => {
-            return this.documentFileResolver(pathAbsolute);
-        });
+        builder.addFileResolver(this.documentFileResolver.bind(this));
 
         let configFilePath = await this.getConfigFilePath(workspacePath);
 
         let cwd = workspacePath;
 
         //if the config file exists, use it and its folder as cwd
-        if (configFilePath && await util.fileExists(configFilePath)) {
+        if (configFilePath && await util.pathExists(configFilePath)) {
             cwd = path.dirname(configFilePath);
         } else {
             //config file doesn't exist...let `brighterscript` resolve the default way
@@ -403,7 +421,7 @@ export class LanguageServer {
             if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
                 builder.addDiagnostic(configFilePath, {
                     ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
-                    range: Range.create(0, 0, 0, 0)
+                    range: util.createRange(0, 0, 0, 0)
                 });
                 return this.sendDiagnostics();
             }
@@ -422,9 +440,7 @@ export class LanguageServer {
         builder.allowConsoleClearing = false;
 
         //look for files in our in-memory cache before going to the file system
-        builder.addFileResolver((pathAbsolute) => {
-            return this.documentFileResolver(pathAbsolute);
-        });
+        builder.addFileResolver(this.documentFileResolver.bind(this));
 
         //get the path to the directory where this file resides
         let cwd = path.dirname(filePathAbsolute);
@@ -498,38 +514,16 @@ export class LanguageServer {
 
         let filePath = util.uriToPath(uri);
 
-        //wait until the fle has settled
+        //wait until the file has settled
         await this.keyedThrottler.onIdleOnce(filePath, true);
 
-        let workspaceCompletionPromises = [] as Array<Promise<CompletionItem[]>>;
-        let workspaces = this.getWorkspaces();
-        //get completions from every workspace
-        for (let workspace of workspaces) {
-            //if this workspace has the file in question, get its completions
-            if (workspace.builder.program.hasFile(filePath)) {
-                workspaceCompletionPromises.push(
-                    workspace.builder.program.getCompletions(filePath, position)
-                );
-            }
-        }
-
-        let completions = ([] as CompletionItem[])
-            //wait for all promises to resolve, and then flatten them into a single array
-            .concat(...await Promise.all(workspaceCompletionPromises))
-            //throw out falsey values
-            .filter(x => !!x);
+        let completions = this
+            .getWorkspaces()
+            .flatMap(workspace => workspace.builder.program.getCompletions(filePath, position));
 
         for (let completion of completions) {
             completion.commitCharacters = ['.'];
         }
-
-        // completions = [{
-        //     label: 'bronley',
-        //     textEdit: {
-        //         newText: 'bronley2',
-        //         range: Range.create(position, position)
-        //     }
-        // }] as CompletionItem[];
 
         return completions;
     }
@@ -743,7 +737,7 @@ export class LanguageServer {
                 workspaces.map((workspace) => this.handleFileChanges(workspace, changes))
             );
 
-            //valdiate all workspaces
+            //validate all workspaces
             await this.validateAllThrottled();
         }
         this.connection.sendNotification('build-status', 'success');
@@ -792,10 +786,13 @@ export class LanguageServer {
 
             //if we got a dest path, then the program wants this file
             if (destPath) {
-                await program.addOrReplaceFile({
-                    src: change.pathAbsolute,
-                    dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
-                });
+                program.addOrReplaceFile(
+                    {
+                        src: change.pathAbsolute,
+                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
+                    },
+                    await workspace.builder.getFileContents(change.pathAbsolute)
+                );
             } else {
                 //no dest path means the program doesn't want this file
             }
@@ -804,11 +801,14 @@ export class LanguageServer {
         } else if (program.hasFile(change.pathAbsolute)) {
             //sometimes "changed" events are emitted on files that were actually deleted,
             //so determine file existance and act accordingly
-            if (await util.fileExists(change.pathAbsolute)) {
-                await program.addOrReplaceFile({
-                    src: change.pathAbsolute,
-                    dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
-                });
+            if (await util.pathExists(change.pathAbsolute)) {
+                program.addOrReplaceFile(
+                    {
+                        src: change.pathAbsolute,
+                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
+                    },
+                    await workspace.builder.getFileContents(change.pathAbsolute)
+                );
             } else {
                 program.removeFile(change.pathAbsolute);
             }
@@ -855,7 +855,6 @@ export class LanguageServer {
     }
 
     private async validateTextDocument(textDocument: TextDocument): Promise<void> {
-
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
 
@@ -864,40 +863,35 @@ export class LanguageServer {
         try {
 
             //throttle file processing. first call is run immediately, and then the last call is processed.
-            await this.keyedThrottler.run(filePath, async () => {
+            await this.keyedThrottler.run(filePath, () => {
 
                 this.connection.sendNotification('build-status', 'building');
 
                 let documentText = textDocument.getText();
-                let workspaces = this.getWorkspaces();
-                await Promise.all(
-                    workspaces.map(async (x) => {
-                        //only add or replace existing files. All of the files in the project should
-                        //have already been loaded by other means
-                        if (x.builder.program.hasFile(filePath)) {
-                            let rootDir = x.builder.program.options.rootDir ?? x.builder.program.options.cwd;
-                            let dest = rokuDeploy.getDestPath(filePath, x.builder.program.options.files, rootDir);
-                            await x.builder.program.addOrReplaceFile({
-                                src: filePath,
-                                dest: dest
-                            }, documentText);
-                        }
-                    })
-                );
+                for (const workspace of this.getWorkspaces()) {
+                    //only add or replace existing files. All of the files in the project should
+                    //have already been loaded by other means
+                    if (workspace.builder.program.hasFile(filePath)) {
+                        let rootDir = workspace.builder.program.options.rootDir ?? workspace.builder.program.options.cwd;
+                        let dest = rokuDeploy.getDestPath(filePath, workspace.builder.program.options.files, rootDir);
+                        workspace.builder.program.addOrReplaceFile({
+                            src: filePath,
+                            dest: dest
+                        }, documentText);
+                    }
+                }
             });
-            // valdiate all workspaces
+            // validate all workspaces
             await this.validateAllThrottled();
         } catch (e) {
             this.connection.tracer.log(e);
             this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
         }
-        console.log('Validate done');
     }
 
     private async validateAll() {
         try {
-
-            //synchronze parsing for open files that were included/excluded from projects
+            //synchronize parsing for open files that were included/excluded from projects
             await this.synchronizeStandaloneWorkspaces();
 
             let workspaces = this.getWorkspaces();
@@ -916,107 +910,114 @@ export class LanguageServer {
         this.connection.sendNotification('build-status', 'success');
     }
 
-    private async onDefinition(params: TextDocumentPositionParams): Promise<Location[]> {
-        //WARNING: This only works for a few small xml cases because the vscode-brightscript-language extension
-        //already implemented this feature, and I haven't had time to port all of that functionality over to
-        //this codebase
-        //TODO implement for brs/bs also
+    public async onWorkspaceSymbol(params: WorkspaceSymbolParams) {
         await this.waitAllProgramFirstRuns();
-        let results = [] as Location[];
 
-        let pathAbsolute = util.uriToPath(params.textDocument.uri);
-        let workspaces = this.getWorkspaces();
-        for (let workspace of workspaces) {
-            results = results.concat(
-                ...workspace.builder.program.getDefinition(pathAbsolute, params.position)
-            );
+        const results = util.flatMap(
+            await Promise.all(this.getWorkspaces().map(workspace => {
+                return workspace.builder.program.getWorkspaceSymbols();
+            })),
+            c => c
+        );
+
+        // Remove duplicates
+        const allSymbols = Object.values(results.reduce((map, symbol) => {
+            const key = symbol.location.uri + symbol.name;
+            map[key] = symbol;
+            return map;
+        }, {}));
+        return allSymbols as SymbolInformation[];
+    }
+
+    public async onDocumentSymbol(params: DocumentSymbolParams) {
+        await this.waitAllProgramFirstRuns();
+
+        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+
+        const pathAbsolute = util.uriToPath(params.textDocument.uri);
+        for (const workspace of this.getWorkspaces()) {
+            const file = workspace.builder.program.getFileByPathAbsolute(pathAbsolute);
+            if (isBrsFile(file)) {
+                return file.getDocumentSymbols();
+            }
         }
+    }
+
+    private async onDefinition(params: TextDocumentPositionParams) {
+        await this.waitAllProgramFirstRuns();
+
+        const pathAbsolute = util.uriToPath(params.textDocument.uri);
+
+        const results = util.flatMap(
+            await Promise.all(this.getWorkspaces().map(workspace => {
+                return workspace.builder.program.getDefinition(pathAbsolute, params.position);
+            })),
+            c => c
+        );
         return results;
     }
 
-    /**
-     * The list of all issues, indexed by file. This allows us to keep track of which buckets of
-     * diagnostics to send and which to skip because nothing has changed
-     */
-    private latestDiagnosticsByFile = {} as { [key: string]: Diagnostic[] };
+    private async onSignatureHelp(params: SignatureHelpParams) {
+        await this.waitAllProgramFirstRuns();
+
+        const filepath = util.uriToPath(params.textDocument.uri);
+        await this.keyedThrottler.onIdleOnce(filepath, true);
+
+        const signatures = util.flatMap(
+            await Promise.all(this.getWorkspaces().map(workspace => workspace.builder.program.getSignatureHelp(filepath, params.position)
+            )),
+            c => c
+        );
+
+        const activeSignature = signatures.length > 0 ? 0 : null;
+        const activeParameter = activeSignature >= 0 ? signatures[activeSignature].index : null;
+        let results: SignatureHelp = {
+            signatures: signatures.map((s) => s.signature),
+            activeSignature: activeSignature,
+            activeParameter: activeParameter
+        };
+
+        return results;
+    }
+
+    private async onReferences(params: ReferenceParams) {
+        await this.waitAllProgramFirstRuns();
+
+        const position = params.position;
+        const pathAbsolute = util.uriToPath(params.textDocument.uri);
+
+        const results = util.flatMap(
+            await Promise.all(this.getWorkspaces().map(workspace => {
+                return workspace.builder.program.getReferences(pathAbsolute, position);
+            })),
+            c => c
+        );
+        return results.filter((r) => r);
+    }
+
+    private diagnosticCollection = new DiagnosticCollection();
+
     private async sendDiagnostics() {
-        //compute the new list of diagnostics for whole project
-        let diagnosticsByFile = {} as { [key: string]: Diagnostic[] };
-        let workspaces = this.getWorkspaces();
+        //Get only the changes to diagnostics since the last time we sent them to the client
+        const patch = await this.diagnosticCollection.getPatch(this.workspaces);
 
-        //make a bucket for every file in every project
-        for (let workspace of workspaces) {
-            //Ensure the program was constructued. This prevents race conditions where certain diagnostics are being sent before the program was created.
-            await workspace.firstRunPromise;
-            //if there is no program, skip this workspace (hopefully diagnostics were added to the builder itself
-            if (workspace.builder && workspace.builder.program) {
-                for (let filePath in workspace.builder.program.files) {
-                    diagnosticsByFile[filePath] = [];
-                }
-            }
-        }
-
-        let diagnostics = Array.prototype.concat.apply([] as BsDiagnostic[],
-            workspaces.map((x) => x.builder.getDiagnostics())
-        ) as BsDiagnostic[];
-
-        /**
-         * A map that tracks which diagnostics have been added for each file.
-         * This allows us to remove duplicate diagnostics
-         */
-        let uniqueMap = {} as { [diagnosticKey: string]: boolean };
-
-        for (let diagnostic of diagnostics) {
-            //certain diagnostics are attached to non-tracked files, so create those buckets dynamically
-            if (!diagnosticsByFile[diagnostic.file.pathAbsolute]) {
-                diagnosticsByFile[diagnostic.file.pathAbsolute] = [];
-            }
-            let key =
-                diagnostic.file.pathAbsolute + '-' +
-                diagnostic.code + '-' +
-                diagnostic.range.start.line + '-' +
-                diagnostic.range.start.character + '-' +
-                diagnostic.range.end.line + '-' +
-                diagnostic.range.end.character;
-
-            //filter exact duplicate diagnostics from multiple projects for same file and location
-            if (!uniqueMap[key]) {
-                uniqueMap[key] = true;
-                let d = {
-                    severity: diagnostic.severity,
-                    range: diagnostic.range,
-                    message: diagnostic.message,
-                    relatedInformation: diagnostic.relatedInformation,
-                    code: diagnostic.code,
+        for (let filePath in patch) {
+            const diagnostics = patch[filePath].map(d => {
+                return {
+                    severity: d.severity,
+                    range: d.range,
+                    message: d.message,
+                    relatedInformation: d.relatedInformation,
+                    code: d.code,
                     source: 'brs'
                 };
+            });
 
-                diagnosticsByFile[diagnostic.file.pathAbsolute].push(d);
-            }
-        }
-
-        //send all diagnostics
-        for (let filePath in diagnosticsByFile) {
-            //TODO filter by only the files that have changed
             this.connection.sendDiagnostics({
                 uri: URI.file(filePath).toString(),
-                diagnostics: diagnosticsByFile[filePath]
+                diagnostics: diagnostics
             });
         }
-
-        //clear any diagnostics for files that are no longer present
-        let currentFilePaths = Object.keys(diagnosticsByFile);
-        for (let filePath in this.latestDiagnosticsByFile) {
-            if (!currentFilePaths.includes(filePath)) {
-                this.connection.sendDiagnostics({
-                    uri: URI.file(filePath).toString(),
-                    diagnostics: []
-                });
-            }
-        }
-
-        //save the new list of diagnostics
-        this.latestDiagnosticsByFile = diagnosticsByFile;
     }
 
     public async onExecuteCommand(params: ExecuteCommandParams) {

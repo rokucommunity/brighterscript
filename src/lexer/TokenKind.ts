@@ -74,8 +74,6 @@ export enum TokenKind {
     At = 'At', // @
     Callfunc = 'Callfunc', // @.
     QuestionMark = 'QuestionMark', // ?
-
-
     BackTick = 'BackTick', // `
 
 
@@ -97,7 +95,6 @@ export enum TokenKind {
     Each = 'Each',
     Else = 'Else',
     Then = 'Then',
-    ElseIf = 'ElseIf',
     End = 'End',
     EndFunction = 'EndFunction',
     EndFor = 'EndFor',
@@ -134,6 +131,10 @@ export enum TokenKind {
     True = 'True',
     Type = 'Type',
     While = 'While',
+    Try = 'Try',
+    Catch = 'Catch',
+    EndTry = 'EndTry',
+    Throw = 'Throw',
 
     //misc
     Library = 'Library',
@@ -183,7 +184,6 @@ export const ReservedWords = new Set([
     'dim',
     'each',
     'else',
-    'elseif',
     'endsub',
     'endwhile',
     'eval',
@@ -213,6 +213,7 @@ export const ReservedWords = new Set([
     'sub',
     'tab',
     'then',
+    'throw',
     'to',
     'true',
     'type',
@@ -225,14 +226,13 @@ export const ReservedWords = new Set([
  *
  * Unfortunately there's no canonical source for this!
  */
-export const Keywords: { [key: string]: TokenKind } = {
+export const Keywords: Record<string, TokenKind> = {
     as: TokenKind.As,
     and: TokenKind.And,
     dim: TokenKind.Dim,
     end: TokenKind.End,
     then: TokenKind.Then,
     else: TokenKind.Else,
-    elseif: TokenKind.ElseIf,
     void: TokenKind.Void,
     boolean: TokenKind.Boolean,
     integer: TokenKind.Integer,
@@ -243,7 +243,6 @@ export const Keywords: { [key: string]: TokenKind } = {
     object: TokenKind.Object,
     interface: TokenKind.Interface,
     dynamic: TokenKind.Dynamic,
-    'else if': TokenKind.ElseIf,
     endfor: TokenKind.EndFor,
     'end for': TokenKind.EndFor,
     endfunction: TokenKind.EndFunction,
@@ -299,14 +298,18 @@ export const Keywords: { [key: string]: TokenKind } = {
     'source_function_name': TokenKind.SourceFunctionNameLiteral,
     'source_location': TokenKind.SourceLocationLiteral,
     'pkg_path': TokenKind.PkgPathLiteral,
-    'pkg_location': TokenKind.PkgLocationLiteral
+    'pkg_location': TokenKind.PkgLocationLiteral,
+    try: TokenKind.Try,
+    catch: TokenKind.Catch,
+    endtry: TokenKind.EndTry,
+    'end try': TokenKind.EndTry,
+    throw: TokenKind.Throw
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
 
 /** Set of all keywords that end blocks. */
 export type BlockTerminator =
-    | TokenKind.ElseIf
     | TokenKind.Else
     | TokenKind.EndFor
     | TokenKind.Next
@@ -314,7 +317,9 @@ export type BlockTerminator =
     | TokenKind.EndWhile
     | TokenKind.EndSub
     | TokenKind.EndFunction
-    | TokenKind.EndNamespace;
+    | TokenKind.EndNamespace
+    | TokenKind.Catch
+    | TokenKind.EndTry;
 
 /** The set of operators valid for use in assignment statements. */
 export const AssignmentOperators = [
@@ -347,7 +352,6 @@ export const AllowedProperties = [
     TokenKind.Dim,
     TokenKind.Then,
     TokenKind.Else,
-    TokenKind.ElseIf,
     TokenKind.End,
     TokenKind.EndFunction,
     TokenKind.EndFor,
@@ -414,7 +418,11 @@ export const AllowedProperties = [
     TokenKind.SourceFunctionNameLiteral,
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
-    TokenKind.PkgLocationLiteral
+    TokenKind.PkgLocationLiteral,
+    TokenKind.Try,
+    TokenKind.Catch,
+    TokenKind.EndTry,
+    TokenKind.Throw
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -443,7 +451,10 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Override,
     TokenKind.Namespace,
     TokenKind.EndNamespace,
-    TokenKind.Import
+    TokenKind.Import,
+    TokenKind.Try,
+    TokenKind.Catch,
+    TokenKind.EndTry
 ];
 
 export const BrighterScriptSourceLiterals = [
@@ -467,7 +478,6 @@ export const DisallowedLocalIdentifiers = [
     TokenKind.Dim,
     TokenKind.Each,
     TokenKind.Else,
-    TokenKind.ElseIf,
     TokenKind.End,
     TokenKind.EndFunction,
     TokenKind.EndIf,
@@ -510,10 +520,74 @@ export const DisallowedLocalIdentifiers = [
     TokenKind.SourceFunctionNameLiteral,
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
-    TokenKind.PkgLocationLiteral
+    TokenKind.PkgLocationLiteral,
+    TokenKind.Throw
 ];
 
 export const DisallowedLocalIdentifiersText = new Set([
     'run',
     ...DisallowedLocalIdentifiers.map(x => x.toLowerCase())
 ]);
+
+/**
+ * List of string versions of TokenKind and various globals that are NOT allowed as scope function names.
+ * Used to throw more helpful "you can't use a reserved word as a function name" errors.
+ */
+export const DisallowedFunctionIdentifiers = [
+    TokenKind.And,
+    TokenKind.CreateObject,
+    TokenKind.Dim,
+    TokenKind.Each,
+    TokenKind.Else,
+    TokenKind.End,
+    TokenKind.EndFunction,
+    TokenKind.EndIf,
+    TokenKind.EndSub,
+    TokenKind.EndWhile,
+    TokenKind.Exit,
+    TokenKind.ExitWhile,
+    TokenKind.False,
+    TokenKind.For,
+    TokenKind.Function,
+    TokenKind.Goto,
+    TokenKind.If,
+    TokenKind.Invalid,
+    TokenKind.Let,
+    TokenKind.Next,
+    TokenKind.Not,
+    TokenKind.ObjFun,
+    TokenKind.Or,
+    TokenKind.Print,
+    TokenKind.Rem,
+    TokenKind.Return,
+    TokenKind.Step,
+    TokenKind.Sub,
+    TokenKind.Tab,
+    TokenKind.Then,
+    TokenKind.To,
+    TokenKind.True,
+    TokenKind.Type,
+    TokenKind.While,
+    TokenKind.Throw
+];
+
+export const DisallowedFunctionIdentifiersText = new Set([
+    'run',
+    ...DisallowedFunctionIdentifiers.map(x => x.toLowerCase())
+]);
+
+
+/** List of TokenKind that are used as declared types on parameters/functions in Brightscript*/
+export const DeclarableTypes = [
+    TokenKind.Boolean,
+    TokenKind.Integer,
+    TokenKind.LongInteger,
+    TokenKind.Float,
+    TokenKind.Double,
+    TokenKind.String,
+    TokenKind.Object,
+    TokenKind.Interface,
+    TokenKind.Dynamic,
+    TokenKind.Void,
+    TokenKind.Function
+];
