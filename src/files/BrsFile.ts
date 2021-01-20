@@ -345,41 +345,23 @@ export class BrsFile {
     }
 
     /**
-     * Find a class by its full namespace-prefixed name.
+     * Find a class. This scans all scopes for this file, and returns the first matching class that is found.
      * Returns undefined if not found.
-     * @param namespaceName - the namespace to resolve relative classes from.
+     * @param className - The class name, including the namespace of the class if possible
+     * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
+     * @returns the first class in the first scope found, or undefined if not found
      */
-    public getClassByName(className: string, namespaceName?: string): FileLink<ClassStatement> {
-        let scopes = this.program.getScopesForFile(this);
-        let lowerClassName = className.toLowerCase();
-        //if the class is namespace-prefixed, look only for this exact name
-        if (className.includes('.')) {
-            for (let scope of scopes) {
-                const cls = scope.getClassFileLink(lowerClassName, namespaceName);
-                if (cls) {
-                    return cls;
-                }
-            }
-            //we have a class name without a namespace prefix.
-        } else {
-            let globalClass: FileLink<ClassStatement>;
-            let namespacedClass: FileLink<ClassStatement>;
-            for (let scope of scopes) {
-                //get the global class if it exists
-                let possibleGlobalClass = scope.getClassFileLink(lowerClassName);
-                if (possibleGlobalClass && !globalClass) {
-                    globalClass = possibleGlobalClass;
-                }
-                if (namespaceName) {
-                    let possibleNamespacedClass = scope.getClassFileLink(namespaceName.toLowerCase() + '.' + lowerClassName);
-                    if (possibleNamespacedClass) {
-                        namespacedClass = possibleNamespacedClass;
-                        break;
-                    }
-                }
+    public getClassFileLink(className: string, containingNamespace?: string): FileLink<ClassStatement> {
+        const lowerClassName = className.toLowerCase();
+        const lowerContainingNamespace = containingNamespace?.toLowerCase();
 
+        const scopes = this.program.getScopesForFile(this);
+        //find the first class in the first scope that has it
+        for (let scope of scopes) {
+            const cls = scope.getClassFileLink(lowerClassName, lowerContainingNamespace);
+            if (cls) {
+                return cls;
             }
-            return namespacedClass ? namespacedClass : globalClass;
         }
     }
 
@@ -1323,7 +1305,7 @@ export class BrsFile {
             let cs = this.parser.references.classStatements.find((cs) => cs.classKeyword.range === classToken.range);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
-                let extendedClass = this.getClassByName(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
+                let extendedClass = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
                 if (extendedClass) {
                     results.push(Location.create(util.pathToUri(extendedClass.file.pathAbsolute), extendedClass.item.range));
                 }
@@ -1576,7 +1558,7 @@ export class BrsFile {
             }
             if (walkParents && classStatement.parentClassName) {
                 const nameParts = classStatement.parentClassName.getNameParts();
-                classStatement = this.getClassByName(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'))?.item;
+                classStatement = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'))?.item;
             } else {
                 break;
             }

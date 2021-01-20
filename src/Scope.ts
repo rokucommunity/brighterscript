@@ -56,26 +56,28 @@ export class Scope {
 
     /**
      * Get the class with the specified name.
-     * @param className - the all-lower-case namespace-included class name
-     * @param namespaceName - teh current namespace name
+     * @param className - The class name, including the namespace of the class if possible
+     * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
      */
-    public getClass(className: string, namespaceName?: string): ClassStatement {
-        return this.getClassFileLink(className, namespaceName)?.item;
+    public getClass(className: string, containingNamespace?: string): ClassStatement {
+        return this.getClassFileLink(className, containingNamespace)?.item;
     }
 
     /**
      * Get a class and its containing file by the class name
-     * @param className - The name of the class (including namespace if possible)
-     * @param callsiteNamespace - the name of the namespace where the call site resides (this is NOT the known namespace of the class).
-     *                            This is used to help resolve non-namespaced class names that reside in the same namespac as the call site.
+     * @param className - The class name, including the namespace of the class if possible
+     * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
      */
-    public getClassFileLink(className: string, callsiteNamespace?: string): FileLink<ClassStatement> {
+    public getClassFileLink(className: string, containingNamespace?: string): FileLink<ClassStatement> {
+        const lowerClassName = className?.toLowerCase();
         const classMap = this.getClassMap();
-        let lowerCaseFullName = util.getFullyQualifiedClassName(className, callsiteNamespace)?.toLowerCase();
-        let cls = classMap.get(lowerCaseFullName);
+
+        let cls = classMap.get(
+            util.getFullyQualifiedClassName(lowerClassName, containingNamespace?.toLowerCase())
+        );
         //if we couldn't find the class by its full namespaced name, look for a global class with that name
         if (!cls) {
-            cls = classMap.get(lowerCaseFullName);
+            cls = classMap.get(lowerClassName);
         }
         return cls;
     }
