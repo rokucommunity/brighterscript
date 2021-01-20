@@ -37,7 +37,7 @@ describe('lexer', () => {
 
     it('recognizes the question mark operator', () => {
         let { tokens } = Lexer.scan('?');
-        expect(tokens[0].kind).to.equal(TokenKind.QuestionMark);
+        expect(tokens[0].kind).to.equal(TokenKind.Question);
     });
 
     it('produces an at symbol token', () => {
@@ -165,9 +165,9 @@ describe('lexer', () => {
         expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.Stop, TokenKind.Eof]);
     });
 
-    it('does not aliases \'?\' to \'print\' - the parser will do that', () => {
+    it('does not alias \'?\' to \'print\' - the parser will do that', () => {
         let { tokens } = Lexer.scan('?2');
-        expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.QuestionMark, TokenKind.IntegerLiteral, TokenKind.Eof]);
+        expect(tokens.map(t => t.kind)).to.deep.equal([TokenKind.Question, TokenKind.IntegerLiteral, TokenKind.Eof]);
     });
 
     describe('comments', () => {
