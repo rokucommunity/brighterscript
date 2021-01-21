@@ -1374,18 +1374,18 @@ export class TernaryExpression extends Expression {
     }
 }
 
-export class NullCoalescingExpression implements Expression {
+export class NullCoalescingExpression extends Expression {
     constructor(
         public consequent: Expression,
         public questionQuestionToken: Token,
         public alternate: Expression
     ) {
+        super();
         this.range = util.createRangeFromPositions(
             consequent.range.start,
             (alternate ?? questionQuestionToken ?? consequent).range.end
         );
     }
-
     public readonly range: Range;
 
     transpile(state: TranspileState) {
@@ -1401,28 +1401,60 @@ export class NullCoalescingExpression implements Expression {
         ].find(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
 
         if (hasMutatingExpression) {
-            //we need to do a scope-safe operation
-            let scope = '{';
-            for (let name of allUniqueVarNames) {
-                scope += `\n  "${name}": ${name}`;
-            }
-            scope += '\n}';
-
-            result.push(`bslib_nullCoalesce(`);
-            result.push(...this.consequent.transpile(state));
-            result.push(`, ${scope}, `);
-            result.push(...getScopedFunction(state, this.alternate, alternateInfo.uniqueVarNames));
-            result.push(')');
+            result.push(
+                `(function(`,
+                //write all the scope variables as parameters.
+                //TODO handle when there are more than 31 parameters
+                allUniqueVarNames.join(', '),
+                ')',
+                state.newline(),
+                //double indent so our `end function` line is still indented one at the end
+                state.indent(2),
+                //evaluate the consequent exactly once, and then use it in the following condition
+                `__bsConsequent = `,
+                ...this.consequent.transpile(state),
+                state.newline(),
+                state.indent(),
+                `if __bsConsequent <> invalid then`,
+                state.newline(),
+                state.indent(1),
+                'return __bsConsequent',
+                state.newline(),
+                state.indent(-1),
+                'else',
+                state.newline(),
+                state.indent(1),
+                'return ',
+                ...this.alternate.transpile(state),
+                state.newline(),
+                state.indent(-1),
+                'end if',
+                state.newline(),
+                state.indent(-1),
+                'end function)(',
+                allUniqueVarNames.join(', '),
+                ')'
+            );
+            state.blockDepth--;
         } else {
-            result.push(`bslib_nullCoalesce(`);
-            result.push(...this.consequent.transpile(state));
-            result.push(', ');
-            result.push(...this.alternate.transpile(state));
-            result.push(')');
+            result.push(
+                `bslib_coalesce(`,
+                ...this.consequent.transpile(state),
+                ', ',
+                ...this.alternate.transpile(state),
+                ')'
+            );
         }
         return result;
     }
-}	}
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'consequent', visitor, options);
+            walk(this, 'alternate', visitor, options);
+        }
+    }
+}
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue };
