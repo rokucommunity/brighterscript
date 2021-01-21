@@ -17,6 +17,7 @@ import {
 } from '../../Expression';
 import { Program } from '../../../Program';
 import { getTestTranspile } from '../../../files/BrsFile.spec';
+import { expectZeroDiagnostics } from '../../../testHelpers.spec';
 
 describe('ternary expressions', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -48,47 +49,59 @@ describe('ternary expressions', () => {
         let { statements, diagnostics } = parseBs(`being = isZombie = false ? "human" : "zombie"`);
         expect(statements[0]).to.be.instanceof(AssignmentStatement);
         expect((statements[0] as AssignmentStatement).value).to.be.instanceof(TernaryExpression);
-        expect(diagnostics).to.be.empty;
+        expectZeroDiagnostics(diagnostics);
     });
 
     it(`supports function condition`, () => {
         let { statements, diagnostics } = parseBs(`a = user.getAccount() ? "logged in" : "not logged in"`);
         expect(statements[0]).to.be.instanceof(AssignmentStatement);
         expect((statements[0] as AssignmentStatement).value).to.be.instanceof(TernaryExpression);
-        expect(diagnostics).to.be.empty;
+        expectZeroDiagnostics(diagnostics);
     });
 
     it(`supports various tests with primitive values:`, () => {
-        expect(parseBs(`result = true ? "human" : "zombie"`).diagnostics).to.be.empty;
-        expect(parseBs(`result = false ? "human" : "zombie"`).diagnostics).to.be.empty;
-        expect(parseBs(`result = len("person") = 10 ? "human" : "zombie"`).diagnostics).to.be.empty;
-        expect(parseBs(`result = m.getResponse() ? "human" : "zombie"`).diagnostics).to.be.empty;
-        expect(parseBs(`result = m.myZombies[3].hasEaten = true ? "human" : "zombie"`).diagnostics).to.be.empty;
+        expectZeroDiagnostics(parseBs(`result = true ? "human" : "zombie"`));
+        expectZeroDiagnostics(parseBs(`result = false ? "human" : "zombie"`));
+        expectZeroDiagnostics(parseBs(`result = len("person") = 10 ? "human" : "zombie"`));
+        expectZeroDiagnostics(parseBs(`result = m.getResponse() ? "human" : "zombie"`));
+        expectZeroDiagnostics(parseBs(`result = m.myZombies[3].hasEaten = true ? "human" : "zombie"`));
     });
 
     it(`supports simple consequents`, () => {
-        expect(parseBs(`result = true ? true : "zombie"`).diagnostics).to.be.empty;
-        expect(parseBs(`result = true ? false : "zombie"`).diagnostics).to.be.empty;
-        expect(parseBs(`result = true ? len("person") = 10 : "zombie"`).diagnostics).to.be.empty;
-        expect(parseBs(`result = true ? m.getResponse() : "zombie"`).diagnostics).to.be.empty;
-        expect(parseBs(`result = true ? m.myZombies[3].hasEaten = true : "zombie"`).diagnostics).to.be.empty;
-        expect(parseBs(`result = true ? getZombieName : "zombie"`).diagnostics).to.be.empty;
+        expectZeroDiagnostics(parseBs(`result = true ? true : "zombie"`));
+        expectZeroDiagnostics(parseBs(`result = true ? false : "zombie"`));
+        expectZeroDiagnostics(parseBs(`result = true ? len("person") = 10 : "zombie"`));
+        expectZeroDiagnostics(parseBs(`result = true ? m.getResponse() : "zombie"`));
+        expectZeroDiagnostics(parseBs(`result = true ? m.myZombies[3].hasEaten = true : "zombie"`));
+        expectZeroDiagnostics(parseBs(`result = true ? getZombieName : "zombie"`));
     });
 
     it(`supports simple alternates`, () => {
-        expect(parseBs(`result = true ? "zombie": true`).diagnostics).to.be.empty;
-        expect(parseBs(`result = true ? "zombie": false`).diagnostics).to.be.empty;
-        expect(parseBs(`result = true ? "zombie": len("person") = 10`).diagnostics).to.be.empty;
-        expect(parseBs(`result = true ? "zombie": m.getResponse()`).diagnostics).to.be.empty;
-        expect(parseBs(`result = true ? "zombie": m.myZombies[3].hasEaten = true`).diagnostics).to.be.empty;
-        expect(parseBs(`result = true ? "zombie": getZombieName`).diagnostics).to.be.empty;
-        expect(parseBs(`result = true ? "zombie": true`).diagnostics).to.be.empty;
+        expectZeroDiagnostics(parseBs(`result = true ? "zombie": true`));
+        expectZeroDiagnostics(parseBs(`result = true ? "zombie": false`));
+        expectZeroDiagnostics(parseBs(`result = true ? "zombie": len("person") = 10`));
+        expectZeroDiagnostics(parseBs(`result = true ? "zombie": m.getResponse()`));
+        expectZeroDiagnostics(parseBs(`result = true ? "zombie": m.myZombies[3].hasEaten = true`));
+        expectZeroDiagnostics(parseBs(`result = true ? "zombie": getZombieName`));
+        expectZeroDiagnostics(parseBs(`result = true ? "zombie": true`));
+    });
+
+    it('supports multi-line and comments', () => {
+        expectZeroDiagnostics(parseBs(`result = true ? \n"zombie"\n: \ntrue`));
+        expectZeroDiagnostics(parseBs(`result = true ? "zombie"\n: \ntrue`));
+        expectZeroDiagnostics(parseBs(`result = true ? \n"zombie": \ntrue`));
+        expectZeroDiagnostics(parseBs(`result = true ? \n"zombie"\n: true`));
+        expectZeroDiagnostics(parseBs(`result = true ? "zombie"\n: \ntrue`));
+        expectZeroDiagnostics(parseBs(`result = true ? "zombie": \ntrue`));
+        expectZeroDiagnostics(parseBs(`result = true ? \n\n\n"zombie": \n\n\n\ntrue`));
+        //with comments
+        expectZeroDiagnostics(parseBs(`result = true ?'comment\n"zombie"'comment\n:'comment\nntrue`));
     });
 
     describe('in assignment', () => {
         it(`simple case`, () => {
             let { statements, diagnostics } = parseBs(`a = true ? "human" : "zombie"`);
-            expect(diagnostics).to.be.lengthOf(0);
+            expectZeroDiagnostics(diagnostics);
             expect(statements[0]).instanceof(AssignmentStatement);
         });
 
@@ -104,13 +117,13 @@ describe('ternary expressions', () => {
                         "three"
                     ]
             `);
-            expect(diagnostics).to.be.lengthOf(0);
+            expectZeroDiagnostics(diagnostics);
             expect(statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`single line assoc array`, () => {
             let { statements, diagnostics } = parseBs(`a = true ? {"a":"a"} : {}`);
-            expect(diagnostics).to.be.empty;
+            expectZeroDiagnostics(diagnostics);
             expect(statements[0]).instanceof(AssignmentStatement);
         });
 
@@ -120,7 +133,7 @@ describe('ternary expressions', () => {
                     "b": "test"
                 }`
             );
-            expect(diagnostics).to.be.empty;
+            expectZeroDiagnostics(diagnostics);
             expect(statements[0]).instanceof(AssignmentStatement);
         });
 
@@ -133,13 +146,13 @@ describe('ternary expressions', () => {
                         "b": "test"
                     }
             `);
-            expect(diagnostics).to.be.lengthOf(0);
+            expectZeroDiagnostics(diagnostics);
             expect(statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`in func call with array args`, () => {
             let { statements, diagnostics } = parseBs(`m.eatBrains(a.count() > 10 ? ["a","B"] : ["c", "d"])`);
-            expect(diagnostics).to.be.empty;
+            expectZeroDiagnostics(diagnostics);
             expect(statements[0]).instanceof(ExpressionStatement);
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
@@ -149,7 +162,7 @@ describe('ternary expressions', () => {
 
         it(`in func call with aa args`, () => {
             let { statements, diagnostics } = parseBs(`m.eatBrains(a.count() > 10 ? {"a":1} : {"b": ["c", "d"]})`);
-            expect(diagnostics).to.be.empty;
+            expectZeroDiagnostics(diagnostics);
             expect(statements[0]).instanceof(ExpressionStatement);
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
@@ -159,7 +172,7 @@ describe('ternary expressions', () => {
 
         it(`in simple func call`, () => {
             let { statements, diagnostics } = parseBs(`m.eatBrains(a = true ? "a" : "b")`);
-            expect(diagnostics).to.be.empty;
+            expectZeroDiagnostics(diagnostics);
             expect(statements[0]).instanceof(ExpressionStatement);
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
@@ -169,7 +182,7 @@ describe('ternary expressions', () => {
 
         it(`in func call with more args`, () => {
             let { statements, diagnostics } = parseBs(`m.eatBrains(a = true ? "a" : "b", true, 12)`);
-            expect(diagnostics).to.be.empty;
+            expectZeroDiagnostics(diagnostics);
             expect(statements[0]).instanceof(ExpressionStatement);
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
@@ -179,7 +192,7 @@ describe('ternary expressions', () => {
 
         it(`in func call with more args, and comparing value`, () => {
             let { statements, diagnostics } = parseBs(`m.eatBrains((a = true ? "a" : "b").count() = 3, true, 12)`);
-            expect(diagnostics).to.be.empty;
+            expectZeroDiagnostics(diagnostics);
             expect(statements[0]).instanceof(ExpressionStatement);
             expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
             let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
@@ -188,7 +201,7 @@ describe('ternary expressions', () => {
 
         it(`in array`, () => {
             let { statements, diagnostics } = parseBs(`a = [a = true ? {"a":"a"} : {"b":"b"}, "c"]`);
-            expect(diagnostics).to.be.empty;
+            expectZeroDiagnostics(diagnostics);
             expect(statements[0]).instanceof(AssignmentStatement);
             expect((statements[0] as AssignmentStatement).value).instanceof(ArrayLiteralExpression);
             let literalExpression = (statements[0] as AssignmentStatement).value as ArrayLiteralExpression;
@@ -198,7 +211,7 @@ describe('ternary expressions', () => {
 
         it(`in aa`, () => {
             let { statements, diagnostics } = parseBs(`a = {"v1": a = true ? {"a":"a"} : {"b":"b"}, "v2": "c"}`);
-            expect(diagnostics).to.be.empty;
+            expectZeroDiagnostics(diagnostics);
             expect(statements[0]).instanceof(AssignmentStatement);
             expect((statements[0] as AssignmentStatement).value).instanceof(AALiteralExpression);
             let literalExpression = (statements[0] as AssignmentStatement).value as AALiteralExpression;
@@ -214,7 +227,7 @@ describe('ternary expressions', () => {
                     ? "person is " ; person
                 end for
             `);
-            expect(diagnostics).to.be.empty;
+            expectZeroDiagnostics(diagnostics);
             expect(statements[0]).instanceof(ForEachStatement);
             expect((statements[0] as ForEachStatement).target).instanceof(TernaryExpression);
         });
@@ -308,8 +321,8 @@ describe('ternary expressions', () => {
             testTranspile(
                 `name = zombie.getName() <> invalid ? zombie.GetName() : "zombie"`,
                 `
-                    name = (function(condition, zombie)
-                            if condition then
+                    name = (function(__bsCondition, zombie)
+                            if __bsCondition then
                                 return zombie.GetName()
                             else
                                 return "zombie"
@@ -323,8 +336,8 @@ describe('ternary expressions', () => {
             testTranspile(
                 `name = zombie.getName() = invalid ? "zombie" :  zombie.GetName()`,
                 `
-                    name = (function(condition, zombie)
-                            if condition then
+                    name = (function(__bsCondition, zombie)
+                            if __bsCondition then
                                 return "zombie"
                             else
                                 return zombie.GetName()
@@ -338,8 +351,8 @@ describe('ternary expressions', () => {
             testTranspile(
                 `name = isLoggedIn ? m.defaults.getAccount(settings.name) : "no"`,
                 `
-                    name = (function(condition, m, settings)
-                            if condition then
+                    name = (function(__bsCondition, m, settings)
+                            if __bsCondition then
                                 return m.defaults.getAccount(settings.name)
                             else
                                 return "no"
@@ -353,8 +366,8 @@ describe('ternary expressions', () => {
             testTranspile(
                 `name = zombie <> invalid ? zombie.Attack(human <> invalid ? human: zombie) : "zombie"`,
                 `
-                    name = (function(condition, human, zombie)
-                            if condition then
+                    name = (function(__bsCondition, human, zombie)
+                            if __bsCondition then
                                 return zombie.Attack(bslib_iff(human <> invalid, human, zombie))
                             else
                                 return "zombie"
@@ -368,8 +381,8 @@ describe('ternary expressions', () => {
             testTranspile(
                 `name = person <> invalid ? person.name : "John Doe"`,
                 `
-                    name = (function(condition, person)
-                            if condition then
+                    name = (function(__bsCondition, person)
+                            if __bsCondition then
                                 return person.name
                             else
                                 return "John Doe"
