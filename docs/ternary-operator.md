@@ -25,8 +25,8 @@ Consider:
 
 transpiles to:
 ```BrightScript
-a = (function(condition, user)
-        if condition then
+a = (function(__bsCondition, user)
+        if __bsCondition then
             return "no name"
         else
             return user.name
@@ -77,8 +77,8 @@ In this situation, BrighterScript has detected that your ternary operation will 
 transpiles to:
 
 ```BrightScript
-a = (function(condition, user)
-        if condition then
+a = (function(__bsCondition, user)
+        if __bsCondition then
             return "no name"
         else
             return user.name
@@ -93,8 +93,8 @@ a = user = invalid ? getNoNameMessage(m.config) : user.name + m.accountType
 transpiles to:
 
 ```BrightScript
-a = (function(condition, getNoNameMessage, m, user)
-        if condition then
+a = (function(__bsCondition, getNoNameMessage, m, user)
+        if __bsCondition then
             return getNoNameMessage(m.config)
         else
             return user.name + m.accountType
@@ -120,14 +120,14 @@ m.increment = function()
     m.count++
     return m.count
 end function
-result = (function(condition, m)
-        if condition then
+result = (function(__bsCondition, m)
+        if __bsCondition then
             return m.increment()
         else
             return - 1
         end if
-    end function)(((function(condition, m)
-            if condition then
+    end function)(((function(__bsCondition, m)
+            if __bsCondition then
                 return m.increment()
             else
                 return - 1
