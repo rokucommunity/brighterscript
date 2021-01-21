@@ -1321,7 +1321,7 @@ export class TernaryExpression extends Expression {
 
         if (mutatingExpressions.length > 0) {
             result.push(
-                `(function(condition, `,
+                `(function(__bsCondition, `,
                 //write all the scope variables as parameters.
                 //TODO handle when there are more than 31 parameters
                 ...allUniqueVarNames.join(', '),
@@ -1329,7 +1329,7 @@ export class TernaryExpression extends Expression {
                 state.newline(),
                 //double indent so our `end function` line is still indented one at the end
                 state.indent(2),
-                `if condition then`,
+                `if __bsCondition then`,
                 state.newline(),
                 state.indent(1),
                 'return ',

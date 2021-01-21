@@ -308,8 +308,8 @@ describe('ternary expressions', () => {
             testTranspile(
                 `name = zombie.getName() <> invalid ? zombie.GetName() : "zombie"`,
                 `
-                    name = (function(condition, zombie)
-                            if condition then
+                    name = (function(__bsCondition, zombie)
+                            if __bsCondition then
                                 return zombie.GetName()
                             else
                                 return "zombie"
@@ -323,8 +323,8 @@ describe('ternary expressions', () => {
             testTranspile(
                 `name = zombie.getName() = invalid ? "zombie" :  zombie.GetName()`,
                 `
-                    name = (function(condition, zombie)
-                            if condition then
+                    name = (function(__bsCondition, zombie)
+                            if __bsCondition then
                                 return "zombie"
                             else
                                 return zombie.GetName()
@@ -338,8 +338,8 @@ describe('ternary expressions', () => {
             testTranspile(
                 `name = isLoggedIn ? m.defaults.getAccount(settings.name) : "no"`,
                 `
-                    name = (function(condition, m, settings)
-                            if condition then
+                    name = (function(__bsCondition, m, settings)
+                            if __bsCondition then
                                 return m.defaults.getAccount(settings.name)
                             else
                                 return "no"
@@ -353,8 +353,8 @@ describe('ternary expressions', () => {
             testTranspile(
                 `name = zombie <> invalid ? zombie.Attack(human <> invalid ? human: zombie) : "zombie"`,
                 `
-                    name = (function(condition, human, zombie)
-                            if condition then
+                    name = (function(__bsCondition, human, zombie)
+                            if __bsCondition then
                                 return zombie.Attack(bslib_iff(human <> invalid, human, zombie))
                             else
                                 return "zombie"
@@ -368,8 +368,8 @@ describe('ternary expressions', () => {
             testTranspile(
                 `name = person <> invalid ? person.name : "John Doe"`,
                 `
-                    name = (function(condition, person)
-                            if condition then
+                    name = (function(__bsCondition, person)
+                            if __bsCondition then
                                 return person.name
                             else
                                 return "John Doe"
