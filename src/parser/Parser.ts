@@ -1200,37 +1200,27 @@ export class Parser {
             this.advance();
         }
 
-        //we are a ternary
-        const consequent = this.expression();
+        let consequent: Expression;
+        try {
+            consequent = this.expression();
+        } catch { }
 
         //consume newlines or comments
         while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
             this.advance();
         }
 
-        if (!this.check(TokenKind.Colon)) {
-            //got here in error
-            this.diagnostics.push({
-                ...DiagnosticMessages.malformedTernaryExpression(),
-                range: test.range
-            });
-        }
-
-        const colonToken = this.tryConsume(DiagnosticMessages.malformedTernaryExpression(), TokenKind.Colon);
+        const colonToken = this.tryConsume(DiagnosticMessages.expectedTokenAButFoundTokenB(TokenKind.Colon, this.peek().text), TokenKind.Colon);
 
         //consume newlines
         while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
             this.advance();
         }
+        let alternate: Expression;
+        try {
+            alternate = this.expression();
+        } catch { }
 
-        const alternate = this.expression();
-
-        if (!consequent || !alternate) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.malformedTernaryExpression(),
-                range: test.range
-            });
-        }
         return new TernaryExpression(test, questionMarkToken, consequent, colonToken, alternate);
     }
 
