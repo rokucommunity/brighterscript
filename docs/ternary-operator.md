@@ -10,10 +10,10 @@ a = user = invalid ? "no user" : "logged in"
 transpiles to:
 
 ```BrightScript
-a = bslib_iff(user = invalid, "no user", "logged in")
+a = bslib_ternary(user = invalid, "no user", "logged in")
 ```
 
-The `bslib_ternarySimple` function checks the condition, and returns either the consequent or alternate.
+The `bslib_ternarySimple` function checks the condition, and returns either the consequent or alternate. The name `iff` is a reference to Visual Basic's `iff
 
 There are some important implications to consider for code execution order and side effects. Since both the consequent and alternate must be passed into the `bslib_ternarySimple` function, this means that both the consequent and alternate will be executed, which is certainly not what most developers intend.
 
@@ -54,7 +54,7 @@ a = user = invalid ? "not logged in" : "logged in"
 transpiles to:
 
 ```BrightScript
-a = bslib_iff(user = invalid, "not logged in", "logged in")
+a = bslib_ternary(user = invalid, "not logged in", "logged in")
 ```
 
 ```BrighterScript
@@ -64,7 +64,7 @@ a = user = invalid ? defaultUser : user
 transpiles to:
 
 ```BrightScript
-a = bslib_iff(user = invalid, defaultUser, user)
+a = bslib_ternary(user = invalid, defaultUser, user)
 ```
 
 ### Scope capturing

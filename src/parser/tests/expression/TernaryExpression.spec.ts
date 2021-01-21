@@ -249,71 +249,71 @@ describe('ternary expressions', () => {
         it('simple consequents', () => {
             testTranspile(
                 `a = user = invalid ? "no user" : "logged in"`,
-                `a = bslib_iff(user = invalid, "no user", "logged in")`
+                `a = bslib_ternary(user = invalid, "no user", "logged in")`
             );
 
             testTranspile(
                 `a = user = invalid ? 1 : "logged in"`,
-                `a = bslib_iff(user = invalid, 1, "logged in")`
+                `a = bslib_ternary(user = invalid, 1, "logged in")`
             );
 
             testTranspile(
                 `a = user = invalid ? 1.2 : "logged in"`,
-                `a = bslib_iff(user = invalid, 1.2, "logged in")`
+                `a = bslib_ternary(user = invalid, 1.2, "logged in")`
             );
 
             testTranspile(
                 `a = user = invalid ? [] : "logged in"`,
-                `a = bslib_iff(user = invalid, [], "logged in")`
+                `a = bslib_ternary(user = invalid, [], "logged in")`
             );
 
             testTranspile(
                 `a = user = invalid ? {} : "logged in"`,
-                `a = bslib_iff(user = invalid, {}, "logged in")`
+                `a = bslib_ternary(user = invalid, {}, "logged in")`
             );
         });
 
         it('simple alternates', () => {
             testTranspile(
                 `a = user = invalid ? "logged in" : "no user" `,
-                `a = bslib_iff(user = invalid, "logged in", "no user")`
+                `a = bslib_ternary(user = invalid, "logged in", "no user")`
             );
 
             testTranspile(
                 `a = user = invalid ? "logged in" : 1 `,
-                `a = bslib_iff(user = invalid, "logged in", 1)`
+                `a = bslib_ternary(user = invalid, "logged in", 1)`
             );
 
             testTranspile(
                 `a = user = invalid ? "logged in" : 1.2 `,
-                `a = bslib_iff(user = invalid, "logged in", 1.2)`
+                `a = bslib_ternary(user = invalid, "logged in", 1.2)`
             );
 
             testTranspile(
                 `a = user = invalid ? "logged in" :  [] `,
-                `a = bslib_iff(user = invalid, "logged in", [])`
+                `a = bslib_ternary(user = invalid, "logged in", [])`
             );
 
             testTranspile(
                 `a = user = invalid ? "logged in" :  {} `,
-                `a = bslib_iff(user = invalid, "logged in", {})`
+                `a = bslib_ternary(user = invalid, "logged in", {})`
             );
         });
 
         it('complex conditions do not cause scope capture', () => {
             testTranspile(
                 `a = IsTrue() = true ? true : false `,
-                `a = bslib_iff(IsTrue() = true, true, false)`
+                `a = bslib_ternary(IsTrue() = true, true, false)`
             );
 
             testTranspile(
                 `a = m.top.service.IsTrue() ? true : false `,
-                `a = bslib_iff(m.top.service.IsTrue(), true, false)`
+                `a = bslib_ternary(m.top.service.IsTrue(), true, false)`
             );
 
             testTranspile(
                 `a = First(second(third(fourth(m.fifth()[123].truthy(1))))) ? true : false `,
-                `a = bslib_iff(First(second(third(fourth(m.fifth()[123].truthy(1))))), true, false)`
+                `a = bslib_ternary(First(second(third(fourth(m.fifth()[123].truthy(1))))), true, false)`
             );
         });
 
@@ -368,7 +368,7 @@ describe('ternary expressions', () => {
                 `
                     name = (function(__bsCondition, human, zombie)
                             if __bsCondition then
-                                return zombie.Attack(bslib_iff(human <> invalid, human, zombie))
+                                return zombie.Attack(bslib_ternary(human <> invalid, human, zombie))
                             else
                                 return "zombie"
                             end if
