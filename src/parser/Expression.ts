@@ -1354,7 +1354,7 @@ export class TernaryExpression extends Expression {
             );
             state.blockDepth--;
         } else {
-            result.push(`bslib_iff(`);
+            result.push(`bslib_ternary(`);
             result.push(...this.test.transpile(state));
             result.push(`, `);
             result.push(...this.consequent.transpile(state));

@@ -27,7 +27,7 @@ end function
 ' Simple ternary function. Given a condition, return the
 ' consequent if true, and the alternate if false
 '
-function bslib_iff(condition, consequent, alternate)
+function bslib_ternary(condition, consequent, alternate)
     if condition then
         return consequent
     else
