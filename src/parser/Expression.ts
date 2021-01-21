@@ -1321,46 +1321,47 @@ export class TernaryExpression extends Expression {
 
         if (mutatingExpressions.length > 0) {
             result.push(
-                `(function(__bsCondition, `,
-                //write all the scope variables as parameters.
-                //TODO handle when there are more than 31 parameters
-                ...allUniqueVarNames.join(', '),
-                ')',
+                state.sourceNode(
+                    this.questionMarkToken,
+                    //write all the scope variables as parameters.
+                    //TODO handle when there are more than 31 parameters
+                    `(function(__bsCondition, ${allUniqueVarNames.join(', ')})`
+                ),
                 state.newline(),
                 //double indent so our `end function` line is still indented one at the end
                 state.indent(2),
-                `if __bsCondition then`,
+                state.sourceNode(this.test, `if __bsCondition then`),
                 state.newline(),
                 state.indent(1),
-                'return ',
-                ...this.consequent?.transpile(state) ?? ['invalid'],
+                state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
+                ...this.consequent?.transpile(state) ?? [state.sourceNode(this.questionMarkToken, 'invalid')],
                 state.newline(),
                 state.indent(-1),
-                'else',
+                state.sourceNode(this.consequent ?? this.questionMarkToken, 'else'),
                 state.newline(),
                 state.indent(1),
-                'return ',
-                ...this.alternate?.transpile(state) ?? ['invalid'],
+                state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
+                ...this.alternate?.transpile(state) ?? [state.sourceNode(this.consequent ?? this.questionMarkToken, 'invalid')],
                 state.newline(),
                 state.indent(-1),
-                'end if',
+                state.sourceNode(this.questionMarkToken, 'end if'),
                 state.newline(),
                 state.indent(-1),
-                'end function)(',
+                state.sourceNode(this.questionMarkToken, 'end function)('),
                 ...this.test.transpile(state),
-                ', ',
-                allUniqueVarNames.join(', '),
-                ')'
+                state.sourceNode(this.questionMarkToken, `, ${allUniqueVarNames.join(', ')})`)
             );
             state.blockDepth--;
         } else {
-            result.push(`bslib_ternary(`);
-            result.push(...this.test.transpile(state));
-            result.push(`, `);
-            result.push(...this.consequent?.transpile(state) ?? ['invalid']);
-            result.push(`, `);
-            result.push(...this.alternate?.transpile(state) ?? ['invalid']);
-            result.push(`)`);
+            result.push(
+                state.sourceNode(this.test, `bslib_ternary(`),
+                ...this.test.transpile(state),
+                state.sourceNode(this.test, `, `),
+                ...this.consequent?.transpile(state) ?? ['invalid'],
+                `, `,
+                ...this.alternate?.transpile(state) ?? ['invalid'],
+                `)`
+            );
         }
         return result;
     }
