@@ -560,9 +560,9 @@ export let DiagnosticMessages = {
         message: `Expected '(' to follow callfunc identifier`,
         code: 1108,
         severity: DiagnosticSeverity.Error
-    }),
-    __unused1109: () => ({
-        message: ``,
+    }),,
+    malformedTernaryExpression: () => ({
+        message: `Ternary expression must be of form: test ? trueValue : falseValue`,
         code: 1109,
         severity: DiagnosticSeverity.Error
     }),
@@ -604,11 +604,6 @@ export let DiagnosticMessages = {
     missingExceptionExpressionAfterThrowKeyword: () => ({
         message: `Missing exception expression after 'throw' keyword`,
         code: 1118,
-        severity: DiagnosticSeverity.Error
-    }),
-    malformedTernaryExpression: () => ({
-        message: `Ternary expression must be of form: test ? trueValue : falseValue`,
-        code: 1119,
         severity: DiagnosticSeverity.Error
     })
 };

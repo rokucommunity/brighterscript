@@ -1195,9 +1195,19 @@ export class Parser {
         }
         const questionMarkToken = this.advance();
 
+        //consume newlines or comments
+        while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+            this.advance();
+        }
 
         //we are a ternary
         const consequent = this.expression();
+
+        //consume newlines or comments
+        while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+            this.advance();
+        }
+
         if (!this.check(TokenKind.Colon)) {
             //got here in error
             this.diagnostics.push({
@@ -1207,6 +1217,12 @@ export class Parser {
         }
 
         const colonToken = this.tryConsume(DiagnosticMessages.malformedTernaryExpression(), TokenKind.Colon);
+
+        //consume newlines
+        while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+            this.advance();
+        }
+
         const alternate = this.expression();
 
         if (!consequent || !alternate) {
