@@ -14,7 +14,7 @@ import {
     LiteralExpression,
     NullCoalescingExpression
 } from '../../Expression';
-import { Program, BrsFile } from '../../..';
+import { Program } from '../../..';
 import { getTestTranspile } from '../../../files/BrsFile.spec';
 import { expectZeroDiagnostics } from '../../../testHelpers.spec';
 
@@ -181,12 +181,10 @@ describe('NullCoalescingExpression', () => {
     describe('transpile', () => {
         let rootDir = process.cwd();
         let program: Program;
-        let file: BrsFile;
         let testTranspile = getTestTranspile(() => [program, rootDir]);
 
         beforeEach(() => {
             program = new Program({ rootDir: rootDir });
-            file = new BrsFile('abs', 'rel', program);
         });
         afterEach(() => {
             program.dispose();
