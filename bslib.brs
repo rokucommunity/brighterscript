@@ -36,12 +36,12 @@ function bslib_ternary(condition, consequent, alternate)
 end function
 
 '
-' Return consequent if value exists (not null and not unitialized), otherwise return alternate
+' Return consequent if consequent is not invalid, otherwise return alternate
 '
 function bslib_coalesce(consequent, alternate)
     if consequent <> invalid then
-        return alternate
-    else
         return consequent
+    else
+        return alternate
     end if
 end function
