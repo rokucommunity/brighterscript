@@ -560,7 +560,7 @@ export let DiagnosticMessages = {
         message: `Expected '(' to follow callfunc identifier`,
         code: 1108,
         severity: DiagnosticSeverity.Error
-    }),,
+    }),
     malformedTernaryExpression: () => ({
         message: `Ternary expression must be of form: test ? trueValue : falseValue`,
         code: 1109,
