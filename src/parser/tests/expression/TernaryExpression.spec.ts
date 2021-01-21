@@ -4,7 +4,8 @@ import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { TokenKind } from '../../../lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { token, EOF } from '../Parser.spec';
-import { AssignmentStatement, ExpressionStatement, ForEachStatement, PrintStatement } from '../../Statement';
+import type { PrintStatement } from '../../Statement';
+import { AssignmentStatement, ExpressionStatement, ForEachStatement } from '../../Statement';
 import type {
     AAMemberExpression
 } from '../../Expression';
