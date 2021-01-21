@@ -1,6 +1,6 @@
 import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
-import { Diagnostic } from 'vscode-languageserver';
+import type { Diagnostic } from 'vscode-languageserver';
 
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
