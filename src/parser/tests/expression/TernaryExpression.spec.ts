@@ -4,7 +4,7 @@ import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { TokenKind } from '../../../lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { token, EOF } from '../Parser.spec';
-import { AssignmentStatement, ExpressionStatement, ForEachStatement } from '../../Statement';
+import { AssignmentStatement, ExpressionStatement, ForEachStatement, PrintStatement } from '../../Statement';
 import type {
     AAMemberExpression
 } from '../../Expression';
@@ -232,6 +232,25 @@ describe('ternary expressions', () => {
             expect((statements[0] as ForEachStatement).target).instanceof(TernaryExpression);
         });
 
+        it('creates TernaryExpression with missing alternate', () => {
+            const { statements } = parseBs(`
+                print name = "bob" ? "human":
+            `);
+            const expr = (statements[0] as PrintStatement).expressions[0];
+            expect(expr).to.be.instanceof(TernaryExpression);
+            expect(expr).property('alternate').to.be.undefined;
+            expect(expr).property('consequent').not.to.be.undefined;
+        });
+
+        it('creates TernaryExpression with missing consequent', () => {
+            const { statements } = parseBs(`
+                print name = "bob" ? : "human"
+            `);
+            const expr = (statements[0] as PrintStatement).expressions[0];
+            expect(expr).to.be.instanceof(TernaryExpression);
+            expect(expr).property('consequent').to.be.undefined;
+            expect(expr).property('alternate').not.to.be.undefined;
+        });
     });
 
     describe('transpilation', () => {
@@ -390,6 +409,27 @@ describe('ternary expressions', () => {
                         end function)(person <> invalid, person)
                 `
             );
+        });
+
+        it('uses `invalid` in place of missing consequent ', () => {
+            testTranspile(
+                `print name = "bob" ? :"zombie"`,
+                `print bslib_ternary(name = "bob", invalid, "zombie")`
+                , 'none', undefined, false);
+        });
+
+        it('uses `invalid` in place of missing alternate ', () => {
+            testTranspile(
+                `print name = "bob" ? "human"`,
+                `print bslib_ternary(name = "bob", "human", invalid)`
+                , 'none', undefined, false);
+        });
+
+        it('uses `invalid` in place of missing alternate and consequent ', () => {
+            testTranspile(
+                `print name = "bob" ?:`,
+                `print bslib_ternary(name = "bob", invalid, invalid)`
+                , 'none', undefined, false);
         });
 
     });

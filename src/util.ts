@@ -1124,7 +1124,7 @@ export class Util {
 
         // Collect all expressions. Most of these expressions are fairly small so this should be quick!
         // This should only be called during transpile time and only when we actually need it.
-        expression.walk((expression) => {
+        expression?.walk((expression) => {
             if (isExpression(expression)) {
                 expressions.push(expression);
             }

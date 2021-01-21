@@ -1294,9 +1294,9 @@ export class TernaryExpression extends Expression {
     constructor(
         readonly test: Expression,
         readonly questionMarkToken: Token,
-        readonly consequent: Expression,
-        readonly colonToken: Token,
-        readonly alternate: Expression
+        readonly consequent?: Expression,
+        readonly colonToken?: Token,
+        readonly alternate?: Expression
     ) {
         super();
         this.range = util.createRangeFromPositions(
@@ -1333,14 +1333,14 @@ export class TernaryExpression extends Expression {
                 state.newline(),
                 state.indent(1),
                 'return ',
-                ...this.consequent.transpile(state),
+                ...this.consequent?.transpile(state) ?? ['invalid'],
                 state.newline(),
                 state.indent(-1),
                 'else',
                 state.newline(),
                 state.indent(1),
                 'return ',
-                ...this.alternate.transpile(state),
+                ...this.alternate?.transpile(state) ?? ['invalid'],
                 state.newline(),
                 state.indent(-1),
                 'end if',
@@ -1357,9 +1357,9 @@ export class TernaryExpression extends Expression {
             result.push(`bslib_ternary(`);
             result.push(...this.test.transpile(state));
             result.push(`, `);
-            result.push(...this.consequent.transpile(state));
+            result.push(...this.consequent?.transpile(state) ?? ['invalid']);
             result.push(`, `);
-            result.push(...this.alternate.transpile(state));
+            result.push(...this.alternate?.transpile(state) ?? ['invalid']);
             result.push(`)`);
         }
         return result;
