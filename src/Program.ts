@@ -669,8 +669,6 @@ export class Program {
         //if there are no scopes, include the global scope so we at least get the built-in functions
         scopes = scopes.length > 0 ? scopes : [this.globalScope];
 
-        //get the completions for this file for every scope
-
         //get the completions from all scopes for this file
         let allCompletions = util.flatMap(
             scopes.map(ctx => file.getCompletions(position, ctx)),
