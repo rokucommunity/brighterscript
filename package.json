@@ -15,7 +15,8 @@
         "publish-coverage": "nyc report --reporter=text-lcov | coveralls",
         "dep-graph": "madge --image graph.svg --extensions ts ./src/parser",
         "docs": "ts-node scripts/compile-doc-examples.ts",
-        "benchmark": "node ./benchmarks/index.js"
+        "benchmark": "node ./benchmarks/index.js",
+        "build-component-list": "ts-node scripts/build-component-list.ts"
     },
     "mocha": {
         "spec": "src/**/*.spec.ts",
@@ -110,6 +111,7 @@
     },
     "dependencies": {
         "@rokucommunity/bslib": "^0.1.1",
+        "@types/jsdom": "^16.2.6",
         "@xml-tools/parser": "^1.0.7",
         "array-flat-polyfill": "^1.0.1",
         "chalk": "^2.4.2",
