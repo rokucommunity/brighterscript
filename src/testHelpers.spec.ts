@@ -1,5 +1,6 @@
 import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
+import type { Diagnostic } from 'vscode-languageserver';
 
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
@@ -52,12 +53,23 @@ export function trim(strings: TemplateStringsArray, ...args) {
 /**
  * Test that the given object has zero diagnostics. If diagnostics are found, they are printed to the console in a pretty fashion.
  */
-export function expectZeroDiagnostics(obj: { getDiagnostics(): BsDiagnostic[] }) {
-    const diagnostics = obj.getDiagnostics();
+export function expectZeroDiagnostics(arg: { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[]) {
+    let diagnostics: BsDiagnostic[];
+    if (Array.isArray(arg)) {
+        diagnostics = arg as BsDiagnostic[];
+    } else if ((arg as any).diagnostics) {
+        diagnostics = (arg as any).diagnostics;
+    } else if ((arg as any).getDiagnostics) {
+        diagnostics = (arg as any).getDiagnostics();
+    } else {
+        throw new Error('Cannot derive a list of diagnostics from ' + JSON.stringify(arg));
+    }
     if (diagnostics.length > 0) {
         let message = `Expected 0 diagnostics, but instead found ${diagnostics.length}:`;
         for (const diagnostic of diagnostics) {
-            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file.pathAbsolute}#${diagnostic.range.start.line}:${diagnostic.range.start.character}-${diagnostic.range.end.line}:${diagnostic.range.end.character}`;
+            //escape any newlines
+            diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.pathAbsolute ?? ''}#(${diagnostic.range.start.line}:${diagnostic.range.start.character})-(${diagnostic.range.end.line}:${diagnostic.range.end.character})`;
         }
         assert.fail(message);
     }

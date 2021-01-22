@@ -54,7 +54,7 @@ export class TranspileState {
 
     /**
      * Append whitespace until we reach the current blockDepth amount
-     * @param blockDepthChange - if provided, change the block depth before indenting
+     * @param blockDepthChange - if provided, this will add (or subtract if negative) the value to the block depth BEFORE getting the next indent amount.
      */
     public indent(blockDepthChange = 0) {
         this.blockDepth += blockDepthChange;

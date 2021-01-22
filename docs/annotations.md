@@ -46,6 +46,27 @@ end function
 function main()
 end
 ```
+transpiles to
+
+```brightscript
+print "hello"
+function __MyComp_builder()
+    instance = {}
+    instance.new = sub()
+    end sub
+    return instance
+end function
+function MyComp()
+    instance = __MyComp_builder()
+    instance.new()
+    return instance
+end function
+
+function init()
+end function
+```
+
+Notice the annotations were completely removed (because annotations are not available at runtime).
 
 ## Plugin usage
 
