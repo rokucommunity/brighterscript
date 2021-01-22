@@ -963,21 +963,25 @@ export class LanguageServer {
         const filepath = util.uriToPath(params.textDocument.uri);
         await this.keyedThrottler.onIdleOnce(filepath, true);
 
-        const signatures = util.flatMap(
-            await Promise.all(this.getWorkspaces().map(workspace => workspace.builder.program.getSignatureHelp(filepath, params.position)
-            )),
-            c => c
-        );
+        try {
+            let signatures = util.flatMap(
+                await Promise.all(this.getWorkspaces().map(workspace => workspace.builder.program.getSignatureHelp(filepath, params.position)
+                )),
+                c => c
+            );
 
-        const activeSignature = signatures.length > 0 ? 0 : null;
-        const activeParameter = activeSignature >= 0 ? signatures[activeSignature].index : null;
-        let results: SignatureHelp = {
-            signatures: signatures.map((s) => s.signature),
-            activeSignature: activeSignature,
-            activeParameter: activeParameter
-        };
+            const activeSignature = signatures.length > 0 ? 0 : null;
+            const activeParameter = activeSignature >= 0 ? signatures[activeSignature].index : null;
+            let results: SignatureHelp = {
+                signatures: signatures.map((s) => s.signature),
+                activeSignature: activeSignature,
+                activeParameter: activeParameter
+            };
 
-        return results;
+            return results;
+        } catch (e) {
+            return undefined;
+        }
     }
 
     private async onReferences(params: ReferenceParams) {
