@@ -29,9 +29,9 @@ describe('ProgramBuilder', () => {
     });
 
     let builder: ProgramBuilder;
-    beforeEach(async () => {
+    beforeEach(() => {
         builder = new ProgramBuilder();
-        builder.options = await util.normalizeAndResolveConfig({
+        builder.options = util.normalizeAndResolveConfig({
             rootDir: rootDir
         });
         builder.program = new Program(builder.options);
