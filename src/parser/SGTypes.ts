@@ -63,13 +63,34 @@ export class SGTag {
             state.indent,
             '<',
             state.transpileToken(this.tag),
-            ...state.transpileAttributes(this.attributes),
+            ...this.transpileAttributes(state),
             ...this.transpileBody(state)
         ]);
     }
 
     protected transpileBody(state: SGTranspileState): (string | SourceNode)[] {
         return [' />\n'];
+    }
+
+    protected transpileAttributes(state: SGTranspileState): (string | SourceNode)[] {
+        const result = [];
+        for (const attr of this.attributes) {
+            const offset = state.rangeToSourceOffset(attr.range);
+            result.push(
+                ' ',
+                new SourceNode(
+                    offset.line,
+                    offset.column,
+                    state.source,
+                    [
+                        attr.key.text,
+                        '="',
+                        attr.value.text,
+                        '"'
+                    ])
+            );
+        }
+        return result;
     }
 }
 
@@ -78,7 +99,7 @@ export class SGProlog extends SGTag {
     transpile(state: SGTranspileState) {
         return new SourceNode(null, null, state.source, [
             '<?xml',
-            ...state.transpileAttributes(this.attributes),
+            ...this.transpileAttributes(state),
             ' ?>\n'
         ]);
     }
@@ -162,19 +183,41 @@ export class SGScript extends SGTag {
         }
     }
 
-    public clone() {
-        return new SGScript(
-            { ...this.tag },
-            this.attributes.map(a => {
-                return {
-                    key: { ...a.key },
-                    value: { ...a.value },
-                    range: { ...util.createRangeFromPositions(a.range.start, a.range.end) }
-                };
-            }),
-            this.cdata ? { ...this.cdata } : undefined,
-            util.createRangeFromPositions(this.range.start, this.range.end)
-        );
+    protected transpileAttributes(state: SGTranspileState): (string | SourceNode)[] {
+        const result = [];
+        const foundType = false;
+        for (const attr of this.attributes) {
+            const key = attr.key.text;
+            const lowerKey = key.toLowerCase();
+            let value = attr.value.text;
+
+            if (lowerKey === 'uri' && value.match(/\.bs$/i)) {
+                value = value.replace(/\.bs$/, '.brs');
+            } else if (lowerKey === 'type' && ) {
+                foundType = true;
+            }
+
+
+            const offset = state.rangeToSourceOffset(attr.range);
+            result.push(
+                ' ',
+                new SourceNode(
+                    offset.line,
+                    offset.column,
+                    state.source,
+                    [
+                        attr.key.text,
+                        '="',
+                        attr.value.text,
+                        '"'
+                    ])
+            );
+        }
+        //add the "type" attribute if missing
+        if (!foundType) {
+            result.push(' type="text/brightscript"');
+        }
+        return result;
     }
 }
 
@@ -431,24 +474,5 @@ export class SGAst {
         chunks.push(`<!--//# sourceMappingURL=./${path.basename(source)}.map -->`);
 
         return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
-    }
-
-    private updateScript(script: SGScript): SGScript {
-        let clone: SGScript;
-        //add the script type if missing
-        if (!script.type) {
-            clone = clone ?? script.clone();
-            clone.type = 'text/brightscript';
-            script = clone;
-        }
-        //replace type and file extension of brighterscript references
-        if (script.type.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')) {
-            clone = clone ?? script.clone();
-            clone.type = 'text/brightscript';
-            clone.uri = script.uri?.replace(/\.bs$/, '.brs');
-            script = clone;
-        }
-
-        return script;
     }
 }

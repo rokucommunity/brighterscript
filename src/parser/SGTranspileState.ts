@@ -1,6 +1,6 @@
 import type { Range } from 'vscode-languageserver';
 import { SourceNode } from 'source-map';
-import type { SGAttribute, SGToken } from './SGTypes';
+import type { SGToken } from './SGTypes';
 
 export class SGTranspileState {
 
@@ -15,9 +15,9 @@ export class SGTranspileState {
         this.indent = value === 0 ? '' : '    '.repeat(value);
     }
 
-    constructor(public source: string) {}
+    constructor(public source: string) { }
 
-    private rangeToSourceOffset(range: Range) {
+    public rangeToSourceOffset(range: Range) {
         if (!range) {
             return {
                 line: null,
@@ -50,26 +50,5 @@ export class SGTranspileState {
         } else {
             return new SourceNode(offset.line, offset.column, this.source, text);
         }
-    }
-
-    transpileAttributes(attributes: SGAttribute[]): (string | SourceNode)[] {
-        const result = [];
-        for (const attr of attributes) {
-            const offset = this.rangeToSourceOffset(attr.range);
-            result.push(
-                ' ',
-                new SourceNode(
-                    offset.line,
-                    offset.column,
-                    this.source,
-                    [
-                        attr.key.text,
-                        '="',
-                        attr.value.text,
-                        '"'
-                    ])
-            );
-        }
-        return result;
     }
 }
