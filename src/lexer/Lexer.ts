@@ -288,7 +288,7 @@ export class Lexer {
         '^': TokenKind.Caret,
         ':': TokenKind.Colon,
         ';': TokenKind.Semicolon,
-        '?': TokenKind.Print
+        '?': TokenKind.Question
     };
 
     /**
