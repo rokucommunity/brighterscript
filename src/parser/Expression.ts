@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { walk, InternalWalkMode } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCommentStatement, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -1464,17 +1464,17 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     if (!expr) {
         return null;
     }
+    if (isUnaryExpression(expr) && isLiteralNumber(expr.right)) {
+        return numberExpressionToValue(expr.right, expr.operator.text);
+    }
     if (isLiteralString(expr)) {
         //remove leading and trailing quotes
         return expr.token.text.replace(/^"/, '').replace(/"$/, '');
     }
     if (isLiteralNumber(expr)) {
-        if (isIntegerType(expr.type) || isLongIntegerType(expr.type)) {
-            return parseInt(expr.token.text);
-        } else {
-            return parseFloat(expr.token.text);
-        }
+        return numberExpressionToValue(expr);
     }
+
     if (isLiteralBoolean(expr)) {
         return expr.token.text.toLowerCase() === 'true';
     }
@@ -1492,4 +1492,12 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
         }, {});
     }
     return strict ? null : expr;
+}
+
+function numberExpressionToValue(expr: LiteralExpression, operator = '') {
+    if (isIntegerType(expr.type) || isLongIntegerType(expr.type)) {
+        return parseInt(operator + expr.token.text);
+    } else {
+        return parseFloat(operator + expr.token.text);
+    }
 }
