@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.28.2] -2021-01-22
+### Changed
+ - config loading functions from `util.ts` are now run synchronously
+### Fixed
+ - missing variable from `for each` statement in completions for language server
+ - bug when running the CLI that wouldn't properly read the `sourceMap` property from bsconfig.json
+
+
+
 ## [0.28.1] - 2021-01-19
 ### Changed
  - (For plugin authors) refactored many async methods into sync methods to simplify file creation/management. ([#278](https://github.com/rokucommunity/brighterscript/pull/278))
@@ -846,3 +855,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.27.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.26.0...v0.27.0
 [0.28.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.27.0...v0.28.0
 [0.28.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.0...v0.28.1
+[0.28.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.1...v0.28.2
