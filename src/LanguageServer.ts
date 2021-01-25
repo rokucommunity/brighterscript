@@ -449,7 +449,7 @@ export class LanguageServer {
         let configFilePath = await util.findClosestConfigFile(filePathAbsolute);
         let project: BsConfig = {};
         if (configFilePath) {
-            project = await util.normalizeAndResolveConfig({ project: configFilePath });
+            project = util.normalizeAndResolveConfig({ project: configFilePath });
         }
         //override the rootDir and files array
         project.rootDir = cwd;

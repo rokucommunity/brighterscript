@@ -90,12 +90,12 @@ export class Util {
      * If the config file path doesn't exist
      * @param configFilePath
      */
-    public async getConfigFilePath(cwd?: string) {
+    public getConfigFilePath(cwd?: string) {
         cwd = cwd ?? process.cwd();
         let configPath = path.join(cwd, 'bsconfig.json');
         //find the nearest config file path
         for (let i = 0; i < 100; i++) {
-            if (await this.pathExists(configPath)) {
+            if (this.pathExistsSync(configPath)) {
                 return configPath;
             } else {
                 let parentDirPath = path.dirname(path.dirname(configPath));
@@ -130,13 +130,13 @@ export class Util {
      * @param configFilePath
      * @param parentProjectPaths
      */
-    public async loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
+    public loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
         if (configFilePath) {
             //if the config file path starts with question mark, then it's optional. return undefined if it doesn't exist
             if (configFilePath.startsWith('?')) {
                 //remove leading question mark
                 configFilePath = configFilePath.substring(1);
-                if (await fsExtra.pathExists(path.resolve(cwd, configFilePath)) === false) {
+                if (fsExtra.pathExistsSync(path.resolve(cwd, configFilePath)) === false) {
                     return undefined;
                 }
             }
@@ -149,7 +149,7 @@ export class Util {
                 throw new Error('Circular dependency detected: "' + parentProjectPaths.join('" => ') + '"');
             }
             //load the project file
-            let projectFileContents = (await fsExtra.readFile(configFilePath)).toString();
+            let projectFileContents = fsExtra.readFileSync(configFilePath).toString();
             let parseErrors = [] as ParseError[];
             let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
             if (parseErrors.length > 0) {
@@ -170,7 +170,7 @@ export class Util {
             let result: BsConfig;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
-                let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
+                let baseProjectConfig = this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
                 //extend the base config with the current project settings
                 result = { ...baseProjectConfig, ...projectConfig };
             } else {
@@ -253,18 +253,18 @@ export class Util {
      * merge with bsconfig.json and the provided options.
      * @param config
      */
-    public async normalizeAndResolveConfig(config: BsConfig) {
+    public normalizeAndResolveConfig(config: BsConfig) {
         let result = this.normalizeConfig({});
 
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = await this.getConfigFilePath(config?.cwd);
+            result.project = this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
             result.project = config.project;
         }
         if (result.project) {
-            let configFile = await this.loadConfigFile(result.project, null, config?.cwd);
+            let configFile = this.loadConfigFile(result.project, null, config?.cwd);
             result = Object.assign(result, configFile);
         }
 
