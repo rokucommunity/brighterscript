@@ -4,7 +4,7 @@ The ternary (conditional) operator is the only BrighterScript operator that take
 ## Basic usage
 
 ```BrighterScript
-a = user = invalid ? "no user" : "logged in"
+authStatus = user <> invalid ? "logged in" : "not logged in"
 ```
 
 transpiles to:
@@ -13,7 +13,7 @@ transpiles to:
 a = bslib_ternary(user = invalid, "no user", "logged in")
 ```
 
-The `bslib_ternary` function checks the condition, and returns either the consequent or alternate. The name `iff` is a reference to Visual Basic's `iff
+The `bslib_ternary` function checks the condition, and returns either the consequent or alternate.
 
 There are some important implications to consider for code execution order and side effects. Since both the consequent and alternate must be passed into the `bslib_ternary` function, this means that both the consequent and alternate will be executed, which is certainly not what most developers intend.
 
@@ -151,15 +151,26 @@ end function
 ```
 
 ## No standalone statements
-The BrighterScript ternary operator differs from languages like C# and JavaScript in that you cannot use ternary expressions as standalone expressions. This is due to the fact that BrightScript uses `=` for both assignment and equality. As such, ternary expressions must always be part of an assignment or method call. Take a look at the following expression:
+The ternary operator may only be used in expressions and may not be used in standalone statements because the BrightScript grammer uses `=` for both assignments (`a = b`) and conditions (`if a = b`)
+
+```brightscript
+' this is generally not valid
+condition ? doSomething() : orElse()
 ```
+
+
+For example:
+```brightscript
 a = myValue ? "a" : "b"
 ```
+
 This expression can be interpreted in two completely separate ways:
-```
+
+```brightscript
 'assignment
 a = (myValue ? "a" : "b'")
 'ternary
 (a = myValue) ? "a" : "b"
 ```
-This ambiguity is why BrighterScript does not allow for standalone ternary expressions.
+
+This ambiguity is why BrighterScript does not allow for standalone ternary statements.
