@@ -952,6 +952,22 @@ describe('parser', () => {
             let allArgs = fn.annotations[0].getArguments(false);
             expect(allArgs.pop()).to.be.instanceOf(FunctionExpression);
         });
+
+        it('can handle negative numbers', () => {
+            let { statements, diagnostics } = parse(`
+                @meta(-100)
+                function main()
+                end function
+
+                sub init()
+                end sub
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).not.to.exist;
+            expect(statements[0]).to.be.instanceof(FunctionStatement);
+            let fn = statements[0] as FunctionStatement;
+            expect(fn.annotations).to.exist;
+            expect(fn.annotations[0].getArguments()).to.deep.equal([-100]);
+        });
     });
 });
 
