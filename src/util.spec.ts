@@ -44,21 +44,21 @@ describe('util', () => {
     });
 
     describe('loadConfigFile', () => {
-        it('returns undefined when no path is provided', async () => {
-            expect(await util.loadConfigFile(undefined)).to.be.undefined;
+        it('returns undefined when no path is provided', () => {
+            expect(util.loadConfigFile(undefined)).to.be.undefined;
         });
 
-        it('returns undefined when the path does not exist', async () => {
-            expect(await util.loadConfigFile(`?${rootDir}/donotexist.json`)).to.be.undefined;
+        it('returns undefined when the path does not exist', () => {
+            expect(util.loadConfigFile(`?${rootDir}/donotexist.json`)).to.be.undefined;
         });
 
-        it('returns proper list of ancestor project paths', async () => {
+        it('returns proper list of ancestor project paths', () => {
             fsExtra.outputFileSync(s`${rootDir}/child.json`, `{"extends": "parent.json"}`);
             fsExtra.outputFileSync(s`${rootDir}/parent.json`, `{"extends": "grandparent.json"}`);
             fsExtra.outputFileSync(s`${rootDir}/grandparent.json`, `{"extends": "greatgrandparent.json"}`);
             fsExtra.outputFileSync(s`${rootDir}/greatgrandparent.json`, `{}`);
             expect(
-                (await util.loadConfigFile(s`${rootDir}/child.json`))._ancestors.map(x => s(x))
+                util.loadConfigFile(s`${rootDir}/child.json`)._ancestors.map(x => s(x))
             ).to.eql([
                 s`${rootDir}/child.json`,
                 s`${rootDir}/parent.json`,
@@ -67,9 +67,9 @@ describe('util', () => {
             ]);
         });
 
-        it('returns empty ancestors list for non-extends files', async () => {
+        it('returns empty ancestors list for non-extends files', () => {
             fsExtra.outputFileSync(s`${rootDir}/child.json`, `{}`);
-            let config = await util.loadConfigFile(s`${rootDir}/child.json`);
+            let config = util.loadConfigFile(s`${rootDir}/child.json`);
             expect(
                 config._ancestors.map(x => s(x))
             ).to.eql([
@@ -114,34 +114,34 @@ describe('util', () => {
     });
 
     describe('getConfigFilePath', () => {
-        it('returns undefined when it does not find the file', async () => {
-            let configFilePath = await util.getConfigFilePath(s`${process.cwd()}/testProject/project1`);
+        it('returns undefined when it does not find the file', () => {
+            let configFilePath = util.getConfigFilePath(s`${process.cwd()}/testProject/project1`);
             expect(configFilePath).not.to.exist;
         });
 
-        it('returns path to file when found', async () => {
+        it('returns path to file when found', () => {
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, '');
             expect(
-                await util.getConfigFilePath(s`${tempDir}/rootDir`)
+                util.getConfigFilePath(s`${tempDir}/rootDir`)
             ).to.equal(
                 s`${tempDir}/rootDir/bsconfig.json`
             );
         });
 
-        it('finds config file in parent directory', async () => {
+        it('finds config file in parent directory', () => {
             const bsconfigPath = s`${tempDir}/rootDir/bsconfig.json`;
             fsExtra.outputFileSync(bsconfigPath, '');
             fsExtra.ensureDirSync(`${tempDir}/rootDir/source`);
             expect(
-                await util.getConfigFilePath(s`${tempDir}/rootDir/source`)
+                util.getConfigFilePath(s`${tempDir}/rootDir/source`)
             ).to.equal(
                 s`${tempDir}/rootDir/bsconfig.json`
             );
         });
 
-        it('uses cwd when not provided', async () => {
+        it('uses cwd when not provided', () => {
             //sanity check
-            expect(await util.getConfigFilePath()).not.to.exist;
+            expect(util.getConfigFilePath()).not.to.exist;
 
             const rootDir = s`${tempDir}/rootDir`;
 
@@ -151,7 +151,7 @@ describe('util', () => {
             process.chdir(rootDir);
             try {
                 expect(
-                    await util.getConfigFilePath()
+                    util.getConfigFilePath()
                 ).to.equal(
                     s`${rootDir}/bsconfig.json`
                 );
@@ -205,39 +205,39 @@ describe('util', () => {
     });
 
     describe('normalizeAndResolveConfig', () => {
-        it('throws for missing project file', async () => {
-            await expectThrowAsync(async () => {
-                await util.normalizeAndResolveConfig({ project: 'path/does/not/exist/bsconfig.json' });
-            });
+        it('throws for missing project file', () => {
+            expect(() => {
+                util.normalizeAndResolveConfig({ project: 'path/does/not/exist/bsconfig.json' });
+            }).to.throw;
         });
 
-        it('does not throw for optional missing', async () => {
-            await expectNotThrowAsync(async () => {
-                await util.normalizeAndResolveConfig({ project: '?path/does/not/exist/bsconfig.json' });
+        it('does not throw for optional missing', () => {
+            expect(() => {
+                util.normalizeAndResolveConfig({ project: '?path/does/not/exist/bsconfig.json' });
 
-            });
+            }).not.to.throw;
         });
 
-        it('throws for missing extends file', async () => {
+        it('throws for missing extends file', () => {
             try {
                 fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, `{ "extends": "path/does/not/exist/bsconfig.json" }`);
-                await expectThrowAsync(async () => {
-                    await util.normalizeAndResolveConfig({
+                expect(() => {
+                    util.normalizeAndResolveConfig({
                         project: s`${rootDir}/bsconfig.json`
                     });
-                });
+                }).to.throw;
             } finally {
                 process.chdir(cwd);
             }
         });
 
-        it('throws for missing extends file', async () => {
+        it('throws for missing extends file', () => {
             fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, `{ "extends": "?path/does/not/exist/bsconfig.json" }`);
-            await expectNotThrowAsync(async () => {
-                await util.normalizeAndResolveConfig({
+            expect(() => {
+                util.normalizeAndResolveConfig({
                     project: s`${rootDir}/bsconfig.json`
                 });
-            });
+            }).not.to.throw;
         });
     });
 
@@ -250,9 +250,9 @@ describe('util', () => {
             expect(util.normalizeConfig(<any>{ emitDefinitions: 'true' }).emitDefinitions).to.be.false;
         });
 
-        it('loads project from disc', async () => {
+        it('loads project from disc', () => {
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
-            let config = await util.normalizeAndResolveConfig({
+            let config = util.normalizeAndResolveConfig({
                 project: s`${tempDir}/rootDir/bsconfig.json`
             });
             expect(
@@ -262,7 +262,7 @@ describe('util', () => {
             );
         });
 
-        it('loads project from disc and extends it', async () => {
+        it('loads project from disc and extends it', () => {
             //the extends file
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.base.json`, `{
                 "outFile": "customOutDir/pkg1.zip",
@@ -275,14 +275,14 @@ describe('util', () => {
                 "watch": true
             }`);
 
-            let config = await util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
+            let config = util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
 
             expect(config.outFile).to.equal(s`${tempDir}/rootDir/customOutDir/pkg1.zip`);
             expect(config.rootDir).to.equal(s`${tempDir}/rootDir/core`);
             expect(config.watch).to.equal(true);
         });
 
-        it('overrides parent files array with child files array', async () => {
+        it('overrides parent files array with child files array', () => {
             //the parent file
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.parent.json`, `{
                 "files": ["base.brs"]
@@ -294,12 +294,12 @@ describe('util', () => {
                 "files": ["child.brs"]
             }`);
 
-            let config = await util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
+            let config = util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
 
             expect(config.files).to.eql(['child.brs']);
         });
 
-        it('catches circular dependencies', async () => {
+        it('catches circular dependencies', () => {
             fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, `{
                 "extends": "bsconfig2.json"
             }`);
@@ -309,7 +309,7 @@ describe('util', () => {
 
             let threw = false;
             try {
-                await util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
             } catch (e) {
                 threw = true;
             }
@@ -318,8 +318,8 @@ describe('util', () => {
             //the test passed
         });
 
-        it('properly handles default for watch', async () => {
-            let config = await util.normalizeAndResolveConfig({ watch: true });
+        it('properly handles default for watch', () => {
+            let config = util.normalizeAndResolveConfig({ watch: true });
             expect(config.watch).to.be.true;
         });
     });
@@ -631,23 +631,3 @@ describe('util', () => {
         });
     });
 });
-
-async function expectThrowAsync(callback) {
-    let ex;
-    try {
-        await Promise.resolve(callback());
-    } catch (e) {
-        ex = e;
-    }
-    expect(ex, 'Expected to throw error').to.exist;
-}
-
-async function expectNotThrowAsync(callback) {
-    let ex;
-    try {
-        await Promise.resolve(callback());
-    } catch (e) {
-        ex = e;
-    }
-    expect(ex, 'Expected not to throw error').not.to.exist;
-}

@@ -94,7 +94,7 @@ export class ProgramBuilder {
         }
         this.isRunning = true;
         try {
-            this.options = await util.normalizeAndResolveConfig(options);
+            this.options = util.normalizeAndResolveConfig(options);
             this.loadPlugins();
         } catch (e) {
             if (e?.file && e.message && e.code) {
