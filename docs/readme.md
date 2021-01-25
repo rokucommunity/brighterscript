@@ -11,3 +11,4 @@ See the following pages for more information
  - [Plugins](plugins.md)
  - [Source Literals](source-literals.md)
  - [Template Strings (Template Literals)](template-strings.md)
+ - [Ternary (Conditional) Operator](ternary-operator.md)

@@ -1290,6 +1290,91 @@ export class AnnotationExpression extends Expression {
     }
 }
 
+export class TernaryExpression extends Expression {
+    constructor(
+        readonly test: Expression,
+        readonly questionMarkToken: Token,
+        readonly consequent?: Expression,
+        readonly colonToken?: Token,
+        readonly alternate?: Expression
+    ) {
+        super();
+        this.range = util.createRangeFromPositions(
+            test.range.start,
+            (alternate ?? colonToken ?? consequent ?? questionMarkToken ?? test).range.end
+        );
+    }
+
+    public range: Range;
+
+    transpile(state: TranspileState) {
+        let result = [];
+        let consequentInfo = util.getExpressionInfo(this.consequent);
+        let alternateInfo = util.getExpressionInfo(this.alternate);
+
+        //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
+        let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
+        let mutatingExpressions = [
+            ...consequentInfo.expressions,
+            ...alternateInfo.expressions
+        ].filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression);
+
+        if (mutatingExpressions.length > 0) {
+            result.push(
+                state.sourceNode(
+                    this.questionMarkToken,
+                    //write all the scope variables as parameters.
+                    //TODO handle when there are more than 31 parameters
+                    `(function(__bsCondition, ${allUniqueVarNames.join(', ')})`
+                ),
+                state.newline(),
+                //double indent so our `end function` line is still indented one at the end
+                state.indent(2),
+                state.sourceNode(this.test, `if __bsCondition then`),
+                state.newline(),
+                state.indent(1),
+                state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
+                ...this.consequent?.transpile(state) ?? [state.sourceNode(this.questionMarkToken, 'invalid')],
+                state.newline(),
+                state.indent(-1),
+                state.sourceNode(this.consequent ?? this.questionMarkToken, 'else'),
+                state.newline(),
+                state.indent(1),
+                state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
+                ...this.alternate?.transpile(state) ?? [state.sourceNode(this.consequent ?? this.questionMarkToken, 'invalid')],
+                state.newline(),
+                state.indent(-1),
+                state.sourceNode(this.questionMarkToken, 'end if'),
+                state.newline(),
+                state.indent(-1),
+                state.sourceNode(this.questionMarkToken, 'end function)('),
+                ...this.test.transpile(state),
+                state.sourceNode(this.questionMarkToken, `, ${allUniqueVarNames.join(', ')})`)
+            );
+            state.blockDepth--;
+        } else {
+            result.push(
+                state.sourceNode(this.test, `bslib_ternary(`),
+                ...this.test.transpile(state),
+                state.sourceNode(this.test, `, `),
+                ...this.consequent?.transpile(state) ?? ['invalid'],
+                `, `,
+                ...this.alternate?.transpile(state) ?? ['invalid'],
+                `)`
+            );
+        }
+        return result;
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'test', visitor, options);
+            walk(this, 'consequent', visitor, options);
+            walk(this, 'alternate', visitor, options);
+        }
+    }
+}
+
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue };
 

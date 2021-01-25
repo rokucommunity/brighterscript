@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -22,11 +22,11 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { DottedGetExpression, VariableExpression } from './parser/Expression';
+import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
 import type { Token } from './lexer';
 import { TokenKind } from './lexer';
-import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
+import { isBrsFile, isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
 import { CustomType } from './types/CustomType';
 
 export class Util {
@@ -1112,7 +1112,33 @@ export class Util {
         // eslint-disable-next-line
         return require(target);
     }
+
+    /**
+     * Gathers expressions, variables, and unique names from an expression.
+     * This is mostly used for the ternary expression
+     */
+    public getExpressionInfo(expression: Expression): ExpressionInfo {
+        const expressions = [expression];
+        const variableExpressions = [] as VariableExpression[];
+        const uniqueVarNames = new Set<string>();
+
+        // Collect all expressions. Most of these expressions are fairly small so this should be quick!
+        // This should only be called during transpile time and only when we actually need it.
+        expression?.walk((expression) => {
+            if (isExpression(expression)) {
+                expressions.push(expression);
+            }
+            if (isVariableExpression(expression)) {
+                variableExpressions.push(expression);
+                uniqueVarNames.add(expression.name.text);
+            }
+        }, {
+            walkMode: WalkMode.visitExpressions
+        });
+        return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: [...uniqueVarNames] };
+    }
 }
+
 
 /**
  * A tagged template literal function for standardizing the path. This has to be defined as standalone function since it's a tagged template literal function,
