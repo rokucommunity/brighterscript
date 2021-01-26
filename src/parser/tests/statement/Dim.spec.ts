@@ -1,9 +1,7 @@
 import { expect } from 'chai';
 import type { DimStatement } from '../..';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { LiteralExpression } from '../../Expression';
 import { Parser } from '../../Parser';
-import { identifier } from '../Parser.spec';
 
 describe.only('parser DimStatement', () => {
     it('parses properly', () => {
