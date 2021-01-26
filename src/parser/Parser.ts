@@ -1389,9 +1389,9 @@ export class Parser {
             identifier.kind = TokenKind.Identifier;
         }
 
-        let leftSquareBracket = this.tryConsume(DiagnosticMessages.missingLeftBracketAfterDimIdentifier(), TokenKind.LeftSquareBracket)
+        let leftSquareBracket = this.tryConsume(DiagnosticMessages.missingLeftBracketAfterDimIdentifier(), TokenKind.LeftSquareBracket);
 
-        let expressions: Expression[] = []
+        let expressions: Expression[] = [];
 
         while (!this.checkAny(TokenKind.Newline, TokenKind.Eof, TokenKind.RightSquareBracket)) {
             expressions.push(this.expression());
