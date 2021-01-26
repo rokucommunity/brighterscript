@@ -5,21 +5,21 @@ import { Parser } from '../../Parser';
 
 describe('parser DimStatement', () => {
     it('parses properly', () => {
-        validatePass(`Dim c[5]`, 0, 'c',  1)
-        validatePass(`Dim c[5, 4]`, 0, 'c',  2)
-        validatePass(`Dim c[5, 4, 6]`, 0, 'c',  3)
-        validatePass(`Dim requestData[requestList.count()]`, 0, 'requestData',  1)
-        validatePass(`Dim requestData[1, requestList.count()]`, 0, 'requestData',  2)
-        validatePass(`Dim requestData[1, requestList.count(), 2]`, 0, 'requestData',  3)
-        validatePass(`Dim requestData[requestList[2]]`, 0, 'requestData',  1)
-        validatePass(`Dim requestData[1, requestList[2]]`, 0, 'requestData',  2)
-        validatePass(`Dim requestData[1, requestList[2], 2]`, 0, 'requestData',  3)
-        validatePass(`Dim requestData[requestList["2"]]`, 0, 'requestData',  1)
-        validatePass(`Dim requestData[1, requestList["2"]]`, 0, 'requestData',  2)
-        validatePass(`Dim requestData[1, requestList["2"], 2]`, 0, 'requestData',  3)
+        validatePass(`Dim c[5]`, 0, 'c', 1);
+        validatePass(`Dim c[5, 4]`, 0, 'c', 2);
+        validatePass(`Dim c[5, 4, 6]`, 0, 'c', 3);
+        validatePass(`Dim requestData[requestList.count()]`, 0, 'requestData', 1);
+        validatePass(`Dim requestData[1, requestList.count()]`, 0, 'requestData', 2);
+        validatePass(`Dim requestData[1, requestList.count(), 2]`, 0, 'requestData', 3);
+        validatePass(`Dim requestData[requestList[2]]`, 0, 'requestData', 1);
+        validatePass(`Dim requestData[1, requestList[2]]`, 0, 'requestData', 2);
+        validatePass(`Dim requestData[1, requestList[2], 2]`, 0, 'requestData', 3);
+        validatePass(`Dim requestData[requestList["2"]]`, 0, 'requestData', 1);
+        validatePass(`Dim requestData[1, requestList["2"]]`, 0, 'requestData', 2);
+        validatePass(`Dim requestData[1, requestList["2"], 2]`, 0, 'requestData', 3);
         validatePass(`Dim requestData[1, getValue({
             key: "value"
-        }), 2]`, 0, 'requestData',  3)
+        }), 2]`, 0, 'requestData', 3);
     });
 
     it('flags missing expression after dim', () => {
