@@ -591,6 +591,37 @@ export class PrintStatement extends Statement {
     }
 }
 
+export class DimStatement extends Statement {
+    constructor(
+        public dimToken: Token,
+        public identifier?: Identifier,
+        public openingSquare?: Token,
+        public dimensions?: Expression[],
+        public closingSquare?: Token
+    ) {
+        super();
+        this.range = util.createRangeFromPositions(
+            this.dimToken.range.start,
+            (this.closingSquare ?? this.dimensions[this.dimensions.length - 1] ?? this.openingSquare ?? this.identifier ?? this.dimToken).range.end
+        );
+    }
+    public range: Range;
+
+    public transpile(state: TranspileState) {
+        const result = [
+            state.sourceNode(this.dimToken, 'dim'),
+            ' '
+        ];
+        return result;
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        // if (this.expression && options.walkMode & InternalWalkMode.walkExpressions) {
+        //     walk(this, 'expression', visitor, options);
+        // }
+    }
+}
+
 export class GotoStatement extends Statement {
     constructor(
         readonly tokens: {

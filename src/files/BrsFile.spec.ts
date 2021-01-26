@@ -210,7 +210,7 @@ describe('BrsFile', () => {
             it('disables critical diagnostic issues', () => {
                 program.addOrReplaceFile('source/main.brs', `
                     sub main()
-                        Dim requestData[requestList.count()]
+                        Dim requestData
                     end sub
                 `);
                 //should have an error
@@ -220,7 +220,7 @@ describe('BrsFile', () => {
                 program.addOrReplaceFile('source/main.brs', `
                     sub main()
                         'bs:disable-next-line
-                        Dim requestData[requestList.count()]
+                        Dim requestData
                     end sub
                 `);
                 //should have an error
