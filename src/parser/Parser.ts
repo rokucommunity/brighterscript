@@ -384,7 +384,7 @@ export class Parser {
                 let decl: Statement;
                 let accessModifier: Token;
 
-                if (this.check(TokenKind.At) && this.checkNext(TokenKind.Identifier)) {
+                if (this.check(TokenKind.At)) {
                     this.annotationExpression();
                 }
 
@@ -1176,10 +1176,12 @@ export class Parser {
     }
 
     private annotationExpression() {
-        let annotation = new AnnotationExpression(
-            this.advance(),
-            this.advance()
-        );
+        const atToken = this.advance();
+        const identifier = this.tryConsume(DiagnosticMessages.expectedIdentifier(), TokenKind.Identifier, ...AllowedProperties);
+        if (identifier) {
+            identifier.kind = TokenKind.Identifier;
+        }
+        let annotation = new AnnotationExpression(atToken, identifier);
         this.pendingAnnotations.push(annotation);
 
         //optional arguments
