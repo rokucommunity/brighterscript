@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.30.0] - 2021-01-26
+### Added
+ - null coalescing operator (see [the docs](https://github.com/rokucommunity/brighterscript/blob/master/docs/null-coalescing-operator.md) for more information)
+### Fixed
+ - infinite loop when encountering annotations without an identifier above a class method ([#291](https://github.com/rokucommunity/brighterscript/pull/291))
+
+
+
 ## [0.29.0] - 2021-01-25
 ### Added
  - ternary operator (see [the docs](https://github.com/rokucommunity/brighterscript/blob/master/docs/ternary-operator.md) for more information)
@@ -862,4 +870,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.28.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.27.0...v0.28.0
 [0.28.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.0...v0.28.1
 [0.28.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.1...v0.28.2
-[0.29.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.2...v0.29.1
+[0.29.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.2...v0.29.0
+[0.30.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.29.0...v0.30.0
