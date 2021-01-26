@@ -74,6 +74,7 @@ export enum TokenKind {
     At = 'At', // @
     Callfunc = 'Callfunc', // @.
     Question = 'Question', // ?
+    QuestionQuestion = 'QuestionQuestion', // ??
     BackTick = 'BackTick', // `
 
 
