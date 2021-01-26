@@ -54,6 +54,7 @@ import {
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { util } from '../util';
+
 import type { Expression } from './Expression';
 import {
     AALiteralExpression,
@@ -79,7 +80,8 @@ import {
     SourceLiteralExpression,
     AnnotationExpression,
     FunctionParameterExpression,
-    TernaryExpression
+    TernaryExpression,
+    NullCoalescingExpression
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
@@ -1226,6 +1228,13 @@ export class Parser {
         return new TernaryExpression(test, questionMarkToken, consequent, colonToken, alternate);
     }
 
+    private nullCoalescingExpression(test: Expression): NullCoalescingExpression {
+        this.warnIfNotBrighterScriptMode('null coalescing operator');
+        const questionQuestionToken = this.advance();
+        const alternate = this.expression();
+        return new NullCoalescingExpression(test, questionQuestionToken, alternate);
+    }
+
     private templateString(isTagged: boolean): TemplateStringExpression | TaggedTemplateStringExpression {
         this.warnIfNotBrighterScriptMode('template string');
 
@@ -1900,6 +1909,8 @@ export class Parser {
 
         if (this.check(TokenKind.Question)) {
             return this.ternaryExpression(expr);
+        } else if (this.check(TokenKind.QuestionQuestion)) {
+            return this.nullCoalescingExpression(expr);
         } else {
             return expr;
         }
