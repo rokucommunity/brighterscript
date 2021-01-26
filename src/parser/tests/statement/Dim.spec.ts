@@ -3,7 +3,7 @@ import type { DimStatement } from '../..';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Parser } from '../../Parser';
 
-describe.only('parser DimStatement', () => {
+describe('parser DimStatement', () => {
     it('parses properly', () => {
         validatePass(`Dim c[5]`, 0, 'c',  1)
         validatePass(`Dim c[5, 4]`, 0, 'c',  2)
