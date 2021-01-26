@@ -561,8 +561,8 @@ export let DiagnosticMessages = {
         code: 1108,
         severity: DiagnosticSeverity.Error
     }),
-    __unused1109: () => ({
-        message: ``,
+    expectedTokenAButFoundTokenB: (tokenA: string, tokenB: string) => ({
+        message: `Expected '${tokenA}' but instead found ${tokenB}`,
         code: 1109,
         severity: DiagnosticSeverity.Error
     }),

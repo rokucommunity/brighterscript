@@ -54,6 +54,7 @@ import {
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { util } from '../util';
+
 import type { Expression } from './Expression';
 import {
     AALiteralExpression,
@@ -78,7 +79,9 @@ import {
     TaggedTemplateStringExpression,
     SourceLiteralExpression,
     AnnotationExpression,
-    FunctionParameterExpression
+    FunctionParameterExpression,
+    TernaryExpression,
+    NullCoalescingExpression
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
@@ -816,7 +819,7 @@ export class Parser {
             return this.throwStatement();
         }
 
-        if (this.check(TokenKind.Print)) {
+        if (this.checkAny(TokenKind.Print, TokenKind.Question)) {
             return this.printStatement();
         }
 
@@ -1185,6 +1188,49 @@ export class Parser {
             annotation.call = this.finishCall(leftParen, annotation, false);
         }
         return annotation;
+    }
+
+    private ternaryExpression(test?: Expression): TernaryExpression {
+        this.warnIfNotBrighterScriptMode('ternary operator');
+        if (!test) {
+            test = this.expression();
+        }
+        const questionMarkToken = this.advance();
+
+        //consume newlines or comments
+        while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+            this.advance();
+        }
+
+        let consequent: Expression;
+        try {
+            consequent = this.expression();
+        } catch { }
+
+        //consume newlines or comments
+        while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+            this.advance();
+        }
+
+        const colonToken = this.tryConsume(DiagnosticMessages.expectedTokenAButFoundTokenB(TokenKind.Colon, this.peek().text), TokenKind.Colon);
+
+        //consume newlines
+        while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+            this.advance();
+        }
+        let alternate: Expression;
+        try {
+            alternate = this.expression();
+        } catch { }
+
+        return new TernaryExpression(test, questionMarkToken, consequent, colonToken, alternate);
+    }
+
+    private nullCoalescingExpression(test: Expression): NullCoalescingExpression {
+        this.warnIfNotBrighterScriptMode('null coalescing operator');
+        const questionQuestionToken = this.advance();
+        const alternate = this.expression();
+        return new NullCoalescingExpression(test, questionQuestionToken, alternate);
     }
 
     private templateString(isTagged: boolean): TemplateStringExpression | TaggedTemplateStringExpression {
@@ -1857,8 +1903,15 @@ export class Parser {
         } else if (this.checkAny(TokenKind.Identifier, ...AllowedLocalIdentifiers) && this.checkNext(TokenKind.BackTick)) {
             return this.templateString(true);
         }
+        let expr = this.boolean();
 
-        return this.boolean();
+        if (this.check(TokenKind.Question)) {
+            return this.ternaryExpression(expr);
+        } else if (this.check(TokenKind.QuestionQuestion)) {
+            return this.nullCoalescingExpression(expr);
+        } else {
+            return expr;
+        }
     }
 
     private boolean(): Expression {
