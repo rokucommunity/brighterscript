@@ -1382,9 +1382,8 @@ export class Parser {
     private dimStatement() {
         const dim = this.advance();
 
-        //get the class name
         let identifier = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('dim'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
-        // force the name into an identifier so the AST makes some sense
+        // force to an identifier so the AST makes some sense
         if (identifier) {
             identifier.kind = TokenKind.Identifier;
         }
