@@ -22,14 +22,6 @@ describe('parser DimStatement', () => {
         }), 2]`, 0, 'requestData', 3);
     });
 
-    it('flags missing expression after dim', () => {
-        const parser = Parser.parse(`Dim `);
-        const dimStatement = (parser.ast.statements[0] as DimStatement);
-        //the statement should still exist and have null identifier
-        expect(dimStatement).to.exist;
-        expect(dimStatement.dimensions).to.not.exist;
-        expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.missingExpressionAfterDimKeyword().message);
-    });
 
     it('flags missing identifier after dim', () => {
         const parser = Parser.parse(`Dim [5]`);
@@ -37,7 +29,7 @@ describe('parser DimStatement', () => {
         //the statement should still exist and have null identifier
         expect(dimStatement).to.exist;
         expect(dimStatement.identifier).to.not.exist;
-        expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.expectedIdentifierAfterKeyword('dim').message);
+        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.expectedIdentifierAfterKeyword('dim').message);
     });
 
     it('flags missing left bracket', () => {
@@ -46,7 +38,7 @@ describe('parser DimStatement', () => {
         //the statement should still exist and have null dimensions
         expect(dimStatement).to.exist;
         expect(dimStatement.openingSquare).to.not.exist;
-        expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.missingLeftBracketAfterDimIdentifier().message);
+        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.missingLeftBracketAfterDimIdentifier().message);
     });
 
     it('flags missing right bracket', () => {
@@ -55,25 +47,16 @@ describe('parser DimStatement', () => {
         //the statement should still exist and have null dimensions
         expect(dimStatement).to.exist;
         expect(dimStatement.closingSquare).to.not.exist;
-        expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.missingRightBracketAfterDimIdentifier().message);
+        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.missingRightBracketAfterDimIdentifier().message);
     });
 
-    it('flags missing expressions', () => {
+    it('flags missing expression(s)', () => {
         const parser = Parser.parse(`Dim c[]`);
         const dimStatement = (parser.ast.statements[0] as DimStatement);
         //the statement should still exist and have null dimensions
         expect(dimStatement).to.exist;
-        expect(dimStatement.dimensions).to.not.exist;
-        expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.missingExpressionsInDimStatement().message);
-    });
-
-    it('flags missing commas in expression', () => {
-        const parser = Parser.parse(`Dim c[5 6 7]`);
-        const dimStatement = (parser.ast.statements[0] as DimStatement);
-        //the statement should still exist and have null dimensions
-        expect(dimStatement).to.exist;
-        expect(dimStatement.dimensions).to.not.exist;
-        expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.missingExpressionsInDimStatement().message);
+        expect(dimStatement.dimensions).to.be.empty;
+        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.missingExpressionsInDimStatement().message);
     });
 });
 

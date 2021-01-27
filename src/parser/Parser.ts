@@ -1392,13 +1392,20 @@ export class Parser {
         let leftSquareBracket = this.tryConsume(DiagnosticMessages.missingLeftBracketAfterDimIdentifier(), TokenKind.LeftSquareBracket);
 
         let expressions: Expression[] = [];
-
-        while (!this.checkAny(TokenKind.Newline, TokenKind.Eof, TokenKind.RightSquareBracket)) {
-            expressions.push(this.expression());
-            if (this.checkAny(TokenKind.Comma)) {
-                this.tryConsume(DiagnosticMessages.missingCommaInDimStatement(), TokenKind.Comma);
+        let expression: Expression;
+        do {
+            try {
+                expression = this.expression();
+                expressions.push(expression);
+                if (this.check(TokenKind.Comma)) {
+                    this.advance();
+                } else {
+                    // will also exit for right square braces
+                    break;
+                }
+            } catch (error) {
             }
-        }
+        } while (expression);
 
         if (!expressions.length) {
             this.diagnostics.push({
