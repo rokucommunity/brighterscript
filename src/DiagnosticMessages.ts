@@ -606,13 +606,13 @@ export let DiagnosticMessages = {
         code: 1118,
         severity: DiagnosticSeverity.Error
     }),
-    missingLeftBracketAfterDimIdentifier: () => ({
-        message: `Missing left bracket after 'dim' identifier`,
+    missingLeftSquareBracketAfterDimIdentifier: () => ({
+        message: `Missing left square bracket after 'dim' identifier`,
         code: 1119,
         severity: DiagnosticSeverity.Error
     }),
-    missingRightBracketAfterDimIdentifier: () => ({
-        message: `Missing right bracket after 'dim' identifier`,
+    missingRightSquareBracketAfterDimIdentifier: () => ({
+        message: `Missing right square bracket after 'dim' identifier`,
         code: 1120,
         severity: DiagnosticSeverity.Error
     }),

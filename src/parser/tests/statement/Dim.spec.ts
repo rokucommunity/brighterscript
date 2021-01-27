@@ -38,7 +38,7 @@ describe('parser DimStatement', () => {
         //the statement should still exist and have null dimensions
         expect(dimStatement).to.exist;
         expect(dimStatement.openingSquare).to.not.exist;
-        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.missingLeftBracketAfterDimIdentifier().message);
+        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.missingLeftSquareBracketAfterDimIdentifier().message);
     });
 
     it('flags missing right bracket', () => {
@@ -47,7 +47,7 @@ describe('parser DimStatement', () => {
         //the statement should still exist and have null dimensions
         expect(dimStatement).to.exist;
         expect(dimStatement.closingSquare).to.not.exist;
-        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.missingRightBracketAfterDimIdentifier().message);
+        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier().message);
     });
 
     it('flags missing expression(s)', () => {

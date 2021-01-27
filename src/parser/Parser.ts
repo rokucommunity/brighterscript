@@ -1388,7 +1388,7 @@ export class Parser {
             identifier.kind = TokenKind.Identifier;
         }
 
-        let leftSquareBracket = this.tryConsume(DiagnosticMessages.missingLeftBracketAfterDimIdentifier(), TokenKind.LeftSquareBracket);
+        let leftSquareBracket = this.tryConsume(DiagnosticMessages.missingLeftSquareBracketAfterDimIdentifier(), TokenKind.LeftSquareBracket);
 
         let expressions: Expression[] = [];
         let expression: Expression;
@@ -1412,7 +1412,7 @@ export class Parser {
                 range: this.peek().range
             });
         }
-        let rightSquareBracket = this.tryConsume(DiagnosticMessages.missingRightBracketAfterDimIdentifier(), TokenKind.RightSquareBracket);
+        let rightSquareBracket = this.tryConsume(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier(), TokenKind.RightSquareBracket);
 
         return new DimStatement(dim, identifier, leftSquareBracket, expressions, rightSquareBracket);
     }
