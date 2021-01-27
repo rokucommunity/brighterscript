@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { walk, InternalWalkMode } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCommentStatement, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -1290,6 +1290,173 @@ export class AnnotationExpression extends Expression {
     }
 }
 
+export class TernaryExpression extends Expression {
+    constructor(
+        readonly test: Expression,
+        readonly questionMarkToken: Token,
+        readonly consequent?: Expression,
+        readonly colonToken?: Token,
+        readonly alternate?: Expression
+    ) {
+        super();
+        this.range = util.createRangeFromPositions(
+            test.range.start,
+            (alternate ?? colonToken ?? consequent ?? questionMarkToken ?? test).range.end
+        );
+    }
+
+    public range: Range;
+
+    transpile(state: TranspileState) {
+        let result = [];
+        let consequentInfo = util.getExpressionInfo(this.consequent);
+        let alternateInfo = util.getExpressionInfo(this.alternate);
+
+        //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
+        let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
+        let mutatingExpressions = [
+            ...consequentInfo.expressions,
+            ...alternateInfo.expressions
+        ].filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression);
+
+        if (mutatingExpressions.length > 0) {
+            result.push(
+                state.sourceNode(
+                    this.questionMarkToken,
+                    //write all the scope variables as parameters.
+                    //TODO handle when there are more than 31 parameters
+                    `(function(__bsCondition, ${allUniqueVarNames.join(', ')})`
+                ),
+                state.newline(),
+                //double indent so our `end function` line is still indented one at the end
+                state.indent(2),
+                state.sourceNode(this.test, `if __bsCondition then`),
+                state.newline(),
+                state.indent(1),
+                state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
+                ...this.consequent?.transpile(state) ?? [state.sourceNode(this.questionMarkToken, 'invalid')],
+                state.newline(),
+                state.indent(-1),
+                state.sourceNode(this.consequent ?? this.questionMarkToken, 'else'),
+                state.newline(),
+                state.indent(1),
+                state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
+                ...this.alternate?.transpile(state) ?? [state.sourceNode(this.consequent ?? this.questionMarkToken, 'invalid')],
+                state.newline(),
+                state.indent(-1),
+                state.sourceNode(this.questionMarkToken, 'end if'),
+                state.newline(),
+                state.indent(-1),
+                state.sourceNode(this.questionMarkToken, 'end function)('),
+                ...this.test.transpile(state),
+                state.sourceNode(this.questionMarkToken, `, ${allUniqueVarNames.join(', ')})`)
+            );
+            state.blockDepth--;
+        } else {
+            result.push(
+                state.sourceNode(this.test, `bslib_ternary(`),
+                ...this.test.transpile(state),
+                state.sourceNode(this.test, `, `),
+                ...this.consequent?.transpile(state) ?? ['invalid'],
+                `, `,
+                ...this.alternate?.transpile(state) ?? ['invalid'],
+                `)`
+            );
+        }
+        return result;
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'test', visitor, options);
+            walk(this, 'consequent', visitor, options);
+            walk(this, 'alternate', visitor, options);
+        }
+    }
+}
+
+export class NullCoalescingExpression extends Expression {
+    constructor(
+        public consequent: Expression,
+        public questionQuestionToken: Token,
+        public alternate: Expression
+    ) {
+        super();
+        this.range = util.createRangeFromPositions(
+            consequent.range.start,
+            (alternate ?? questionQuestionToken ?? consequent).range.end
+        );
+    }
+    public readonly range: Range;
+
+    transpile(state: TranspileState) {
+        let result = [];
+        let consequentInfo = util.getExpressionInfo(this.consequent);
+        let alternateInfo = util.getExpressionInfo(this.alternate);
+
+        //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
+        let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
+        let hasMutatingExpression = [
+            ...consequentInfo.expressions,
+            ...alternateInfo.expressions
+        ].find(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
+
+        if (hasMutatingExpression) {
+            result.push(
+                `(function(`,
+                //write all the scope variables as parameters.
+                //TODO handle when there are more than 31 parameters
+                allUniqueVarNames.join(', '),
+                ')',
+                state.newline(),
+                //double indent so our `end function` line is still indented one at the end
+                state.indent(2),
+                //evaluate the consequent exactly once, and then use it in the following condition
+                `__bsConsequent = `,
+                ...this.consequent.transpile(state),
+                state.newline(),
+                state.indent(),
+                `if __bsConsequent <> invalid then`,
+                state.newline(),
+                state.indent(1),
+                'return __bsConsequent',
+                state.newline(),
+                state.indent(-1),
+                'else',
+                state.newline(),
+                state.indent(1),
+                'return ',
+                ...this.alternate.transpile(state),
+                state.newline(),
+                state.indent(-1),
+                'end if',
+                state.newline(),
+                state.indent(-1),
+                'end function)(',
+                allUniqueVarNames.join(', '),
+                ')'
+            );
+            state.blockDepth--;
+        } else {
+            result.push(
+                `bslib_coalesce(`,
+                ...this.consequent.transpile(state),
+                ', ',
+                ...this.alternate.transpile(state),
+                ')'
+            );
+        }
+        return result;
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'consequent', visitor, options);
+            walk(this, 'alternate', visitor, options);
+        }
+    }
+}
+
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue };
 
@@ -1297,17 +1464,17 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     if (!expr) {
         return null;
     }
+    if (isUnaryExpression(expr) && isLiteralNumber(expr.right)) {
+        return numberExpressionToValue(expr.right, expr.operator.text);
+    }
     if (isLiteralString(expr)) {
         //remove leading and trailing quotes
         return expr.token.text.replace(/^"/, '').replace(/"$/, '');
     }
     if (isLiteralNumber(expr)) {
-        if (isIntegerType(expr.type) || isLongIntegerType(expr.type)) {
-            return parseInt(expr.token.text);
-        } else {
-            return parseFloat(expr.token.text);
-        }
+        return numberExpressionToValue(expr);
     }
+
     if (isLiteralBoolean(expr)) {
         return expr.token.text.toLowerCase() === 'true';
     }
@@ -1325,4 +1492,12 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
         }, {});
     }
     return strict ? null : expr;
+}
+
+function numberExpressionToValue(expr: LiteralExpression, operator = '') {
+    if (isIntegerType(expr.type) || isLongIntegerType(expr.type)) {
+        return parseInt(operator + expr.token.text);
+    } else {
+        return parseFloat(operator + expr.token.text);
+    }
 }

@@ -7,7 +7,7 @@ import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program, SourceObj, TranspileObj } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { FunctionStatement } from './parser';
+import type { Expression, FunctionStatement } from './parser';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
@@ -196,3 +196,9 @@ export interface TypedefProvider {
 export type TranspileResult = Array<(string | SourceNode)>;
 
 export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined> | void;
+
+export interface ExpressionInfo {
+    expressions: Expression[];
+    varExpressions: Expression[];
+    uniqueVarNames: string[];
+}

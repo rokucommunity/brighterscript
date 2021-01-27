@@ -269,6 +269,14 @@ export class Lexer {
                     this.addToken(TokenKind.Greater);
                     break;
             }
+        },
+        '?': function (this: Lexer) {
+            if (this.peek() === '?') {
+                this.advance();
+                this.addToken(TokenKind.QuestionQuestion);
+            } else {
+                this.addToken(TokenKind.Question);
+            }
         }
     };
 
@@ -287,8 +295,7 @@ export class Lexer {
         ']': TokenKind.RightSquareBracket,
         '^': TokenKind.Caret,
         ':': TokenKind.Colon,
-        ';': TokenKind.Semicolon,
-        '?': TokenKind.Print
+        ';': TokenKind.Semicolon
     };
 
     /**

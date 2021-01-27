@@ -8,6 +8,8 @@ See the following pages for more information
  - [Classes](classes.md)
  - [Imports](imports.md)
  - [Namespaces](namespaces.md)
+ - [Null-coalescing operator](null-coalescing-operator.md)
  - [Plugins](plugins.md)
  - [Source Literals](source-literals.md)
  - [Template Strings (Template Literals)](template-strings.md)
+ - [Ternary (Conditional) Operator](ternary-operator.md)

@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -22,11 +22,11 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { DottedGetExpression, VariableExpression } from './parser/Expression';
+import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
 import type { Token } from './lexer';
 import { TokenKind } from './lexer';
-import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
+import { isBrsFile, isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
 import { CustomType } from './types/CustomType';
 
 export class Util {
@@ -90,12 +90,12 @@ export class Util {
      * If the config file path doesn't exist
      * @param configFilePath
      */
-    public async getConfigFilePath(cwd?: string) {
+    public getConfigFilePath(cwd?: string) {
         cwd = cwd ?? process.cwd();
         let configPath = path.join(cwd, 'bsconfig.json');
         //find the nearest config file path
         for (let i = 0; i < 100; i++) {
-            if (await this.pathExists(configPath)) {
+            if (this.pathExistsSync(configPath)) {
                 return configPath;
             } else {
                 let parentDirPath = path.dirname(path.dirname(configPath));
@@ -130,13 +130,13 @@ export class Util {
      * @param configFilePath
      * @param parentProjectPaths
      */
-    public async loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
+    public loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
         if (configFilePath) {
             //if the config file path starts with question mark, then it's optional. return undefined if it doesn't exist
             if (configFilePath.startsWith('?')) {
                 //remove leading question mark
                 configFilePath = configFilePath.substring(1);
-                if (await fsExtra.pathExists(path.resolve(cwd, configFilePath)) === false) {
+                if (fsExtra.pathExistsSync(path.resolve(cwd, configFilePath)) === false) {
                     return undefined;
                 }
             }
@@ -149,7 +149,7 @@ export class Util {
                 throw new Error('Circular dependency detected: "' + parentProjectPaths.join('" => ') + '"');
             }
             //load the project file
-            let projectFileContents = (await fsExtra.readFile(configFilePath)).toString();
+            let projectFileContents = fsExtra.readFileSync(configFilePath).toString();
             let parseErrors = [] as ParseError[];
             let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
             if (parseErrors.length > 0) {
@@ -170,7 +170,7 @@ export class Util {
             let result: BsConfig;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
-                let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
+                let baseProjectConfig = this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
                 //extend the base config with the current project settings
                 result = { ...baseProjectConfig, ...projectConfig };
             } else {
@@ -253,18 +253,18 @@ export class Util {
      * merge with bsconfig.json and the provided options.
      * @param config
      */
-    public async normalizeAndResolveConfig(config: BsConfig) {
+    public normalizeAndResolveConfig(config: BsConfig) {
         let result = this.normalizeConfig({});
 
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = await this.getConfigFilePath(config?.cwd);
+            result.project = this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
             result.project = config.project;
         }
         if (result.project) {
-            let configFile = await this.loadConfigFile(result.project, null, config?.cwd);
+            let configFile = this.loadConfigFile(result.project, null, config?.cwd);
             result = Object.assign(result, configFile);
         }
 
@@ -1112,7 +1112,33 @@ export class Util {
         // eslint-disable-next-line
         return require(target);
     }
+
+    /**
+     * Gathers expressions, variables, and unique names from an expression.
+     * This is mostly used for the ternary expression
+     */
+    public getExpressionInfo(expression: Expression): ExpressionInfo {
+        const expressions = [expression];
+        const variableExpressions = [] as VariableExpression[];
+        const uniqueVarNames = new Set<string>();
+
+        // Collect all expressions. Most of these expressions are fairly small so this should be quick!
+        // This should only be called during transpile time and only when we actually need it.
+        expression?.walk((expression) => {
+            if (isExpression(expression)) {
+                expressions.push(expression);
+            }
+            if (isVariableExpression(expression)) {
+                variableExpressions.push(expression);
+                uniqueVarNames.add(expression.name.text);
+            }
+        }, {
+            walkMode: WalkMode.visitExpressions
+        });
+        return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: [...uniqueVarNames] };
+    }
 }
+
 
 /**
  * A tagged template literal function for standardizing the path. This has to be defined as standalone function since it's a tagged template literal function,
