@@ -725,7 +725,8 @@ describe('XmlFile', () => {
             expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
         });
 
-        it.skip('AST-based source mapping includes sourcemap reference', () => {
+        it('AST-based source mapping includes sourcemap reference', () => {
+            program.options.sourceMap = true;
             let file = program.addOrReplaceFile(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
                 trim`
