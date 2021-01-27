@@ -630,7 +630,7 @@ describe('XmlFile', () => {
             `, 'none', 'components/SimpleScene.xml');
         });
 
-        it('changes file extensions to brs from bs', () => {
+        it('changes file extensions from bs to brs', () => {
             program.addOrReplaceFile(`components/SimpleScene.bs`, `
                 import "pkg:/source/lib.bs"
             `);
@@ -711,6 +711,7 @@ describe('XmlFile', () => {
         });
 
         it('simple source mapping includes sourcemap reference', () => {
+            program.options.sourceMap = true;
             let file = program.addOrReplaceFile(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
                 trim`
@@ -724,7 +725,7 @@ describe('XmlFile', () => {
             expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
         });
 
-        it('AST-based source mapping includes sourcemap reference', () => {
+        it.skip('AST-based source mapping includes sourcemap reference', () => {
             let file = program.addOrReplaceFile(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
                 trim`

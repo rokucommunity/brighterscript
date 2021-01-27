@@ -1,16 +1,32 @@
 import { expect } from 'chai';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { trim } from '../testHelpers.spec';
+import { expectZeroDiagnostics, trim } from '../testHelpers.spec';
 import SGParser from './SGParser';
-import { SGTranspileState } from './SGTranspileState';
+import { standardizePath as s } from '../util';
+import { createSandbox } from 'sinon';
+import { Program } from '../Program';
+import { getTestTranspile } from '../files/BrsFile.spec';
+import type { XmlFile } from '../files/XmlFile';
 
+let sinon = createSandbox();
 describe('SGParser', () => {
+
+    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
+    let program: Program;
+    let testTranspile = getTestTranspile(() => [program, rootDir]);
+
+    beforeEach(() => {
+        program = new Program({ rootDir: rootDir, sourceMap: false });
+    });
+    afterEach(() => {
+        sinon.restore();
+        program.dispose();
+    });
+
     it('Parses well formed SG component', () => {
-        const parser = new SGParser();
-        parser.parse(
-            'pkg:/components/ParentScene.xml',
-            `<?xml version="1.0" encoding="utf-8" ?>
+        const file = program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>
                     <field id="content" type="string" alwaysNotify="true" />
@@ -33,13 +49,15 @@ describe('SGParser', () => {
                 </children>
             </component>`
         );
-        const { ast, diagnostics } = parser;
+        const { ast } = file.parser;
         expect(ast.prolog).to.exist;
         expect(ast.component).to.exist;
         expect(ast.root).to.equal(ast.component);
-        expect(diagnostics.length).to.equal(0);
-        const output = ast.component.transpile(new SGTranspileState('pkg:/components/ParentScene.xml')).toStringWithSourceMap();
+        expectZeroDiagnostics(file);
+
+        const output = file.transpile();
         expect(output.code).to.equal(trim`
+            <?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>
                     <field id="content" type="string" alwaysNotify="true" />
@@ -47,10 +65,11 @@ describe('SGParser', () => {
                 </interface>
                 <script type="text/brightscript" uri="./Component1.brs" />
                 <script type="text/brightscript"><![CDATA[
-                                    function init()
-                                        print "hello"
-                                    end function
-                                ]]></script>
+                        function init()
+                            print "hello"
+                        end function
+                    ]]></script>
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 <children>
                     <Label id="loadingIndicator" text="Loading..." font="font:MediumBoldSystemFont" />
                 </children>

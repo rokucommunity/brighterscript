@@ -28,6 +28,7 @@ import type { Token } from './lexer';
 import { TokenKind } from './lexer';
 import { isBrsFile, isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
 import { CustomType } from './types/CustomType';
+import { SourceNode } from 'source-map';
 
 export class Util {
     public clearConsole() {
@@ -1137,8 +1138,26 @@ export class Util {
         });
         return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: [...uniqueVarNames] };
     }
-}
 
+
+    /**
+     * Create a SourceNode that maps every line to itself. Useful for creating maps for files
+     * that haven't changed at all, but we still need the map
+     */
+    public simpleMap(source: string, src: string) {
+        //create a source map from the original source code
+        let chunks = [] as (SourceNode | string)[];
+        let lines = src.split(/\r?\n/g);
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            let line = lines[lineIndex];
+            chunks.push(
+                lineIndex > 0 ? '\n' : '',
+                new SourceNode(lineIndex + 1, 0, source, line)
+            );
+        }
+        return new SourceNode(null, null, source, chunks);
+    }
+}
 
 /**
  * A tagged template literal function for standardizing the path. This has to be defined as standalone function since it's a tagged template literal function,

@@ -8,7 +8,10 @@ import type { ClassStatement } from './Statement';
  */
 export class TranspileState {
     constructor(
-        file: BrsFile
+        /**
+         * The BrsFile that is currently being transpiled
+         */
+        public file: BrsFile
     ) {
         this.file = file;
 
@@ -22,11 +25,6 @@ export class TranspileState {
             this.pathAbsolute = this.file.pathAbsolute;
         }
     }
-
-    /**
-     * The BrsFile that is currently being transpiled
-     */
-    public file: BrsFile;
 
     /**
      * The absolute path to the source location of this file. If sourceRoot is specified,

@@ -1,11 +1,8 @@
-import * as path from 'path';
-import util from '../util';
 import { SourceNode } from 'source-map';
-import type { CodeWithSourceMap } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import { isSGChildren, isSGField, isSGFunction, isSGInterface, isSGScript } from '../astUtils/xml';
-import type { FileReference } from '../interfaces';
-import { SGTranspileState } from './SGTranspileState';
+import type { FileReference, TranspileResult } from '../interfaces';
+import type { SGTranspileState } from './SGTranspileState';
 
 export interface SGToken {
     text: string;
@@ -185,18 +182,22 @@ export class SGScript extends SGTag {
 
     protected transpileAttributes(state: SGTranspileState): (string | SourceNode)[] {
         const result = [];
-        const foundType = false;
+        let foundType = false;
+        const bsExtensionRegexp = /\.bs$/i;
+
         for (const attr of this.attributes) {
             const key = attr.key.text;
             const lowerKey = key.toLowerCase();
             let value = attr.value.text;
 
-            if (lowerKey === 'uri' && value.match(/\.bs$/i)) {
-                value = value.replace(/\.bs$/, '.brs');
-            } else if (lowerKey === 'type' && ) {
+            if (lowerKey === 'uri' && bsExtensionRegexp.exec(value)) {
+                value = value.replace(bsExtensionRegexp, '.brs');
+            } else if (lowerKey === 'type') {
                 foundType = true;
+                if (value.endsWith('brighterscript')) {
+                    value = 'text/brightscript';
+                }
             }
-
 
             const offset = state.rangeToSourceOffset(attr.range);
             result.push(
@@ -205,17 +206,15 @@ export class SGScript extends SGTag {
                     offset.line,
                     offset.column,
                     state.source,
-                    [
-                        attr.key.text,
-                        '="',
-                        attr.value.text,
-                        '"'
-                    ])
+                    [key, '="', value, '"'])
             );
         }
         //add the "type" attribute if missing
         if (!foundType) {
-            result.push(' type="text/brightscript"');
+            result.push(
+                //add a space if this is not the only attribute
+                this.attributes.length > 0 ? ' ' : '',
+                'type="text/brightscript"');
         }
         return result;
     }
@@ -438,41 +437,16 @@ export class SGAst {
     ) {
     }
 
-    transpile(source: string, extraImports: string[]): CodeWithSourceMap {
-        const { prolog, component } = this;
-        if (!component) {
-            return new SourceNode(null, null, null, '').toStringWithSourceMap();
-        }
-
-        //create a clone to make our changes
-        const temp = new SGComponent(component.tag, component.attributes);
-        temp.api = component.api;
-        temp.scripts = component.scripts.map(this.updateScript);
-        temp.children = component.children;
-
-        //insert extra imports
-        const extraScripts = extraImports
-            .map(uri => {
-                const script = new SGScript();
-                script.uri = util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'));
-                return script;
-            });
-        if (extraScripts.length > 0) {
-            temp.scripts.push(...extraScripts);
-        }
-
-        const state = new SGTranspileState(source);
-        const chunks = [] as Array<SourceNode | string>;
+    transpile(state: SGTranspileState) {
+        const chunks = [] as TranspileResult;
         //write XML prolog
-        if (prolog) {
-            chunks.push(prolog.transpile(state));
+        if (this.prolog) {
+            chunks.push(this.prolog.transpile(state));
         }
-        //write content
-        chunks.push(temp.transpile(state));
-
-        //sourcemap reference
-        chunks.push(`<!--//# sourceMappingURL=./${path.basename(source)}.map -->`);
-
-        return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
+        if (this.component) {
+            //write content
+            chunks.push(this.component.transpile(state));
+        }
+        return chunks;
     }
 }
