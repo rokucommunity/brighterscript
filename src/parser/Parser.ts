@@ -1406,7 +1406,7 @@ export class Parser {
             }
         } while (expression);
 
-        if (!expressions.length) {
+        if (expressions.length === 0) {
             this.diagnostics.push({
                 ...DiagnosticMessages.missingExpressionsInDimStatement(),
                 range: this.peek().range
