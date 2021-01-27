@@ -964,14 +964,14 @@ export class LanguageServer {
         await this.keyedThrottler.onIdleOnce(filepath, true);
 
         try {
-            let signatures = util.flatMap(
+            const signatures = util.flatMap(
                 await Promise.all(this.getWorkspaces().map(workspace => workspace.builder.program.getSignatureHelp(filepath, params.position)
                 )),
                 c => c
             );
 
             const activeSignature = signatures.length > 0 ? 0 : null;
-            const activeParameter = activeSignature >= 0 ? signatures[activeSignature].index : null;
+            const activeParameter = (activeSignature >= 0 && signatures[activeSignature]) ? signatures[activeSignature].index : null;
             let results: SignatureHelp = {
                 signatures: signatures.map((s) => s.signature),
                 activeSignature: activeSignature,
@@ -980,7 +980,12 @@ export class LanguageServer {
 
             return results;
         } catch (e) {
-            return undefined;
+            console.error('error in onSigHelp', e);
+            return {
+                signatures: [],
+                activeSignature: 0,
+                activeParameter: 0
+            };
         }
     }
 
