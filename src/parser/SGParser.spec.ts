@@ -6,7 +6,6 @@ import SGParser from './SGParser';
 import { standardizePath as s } from '../util';
 import { createSandbox } from 'sinon';
 import { Program } from '../Program';
-import { getTestTranspile } from '../files/BrsFile.spec';
 import type { XmlFile } from '../files/XmlFile';
 
 let sinon = createSandbox();
@@ -14,7 +13,6 @@ describe('SGParser', () => {
 
     let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
-    let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
         program = new Program({ rootDir: rootDir, sourceMap: false });
