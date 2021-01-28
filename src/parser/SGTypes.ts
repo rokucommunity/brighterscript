@@ -358,11 +358,6 @@ export class SGInterface extends SGTag {
 }
 
 export class SGComponent extends SGTag {
-
-    api: SGInterface;
-    scripts: SGScript[] = [];
-    children: SGChildren;
-
     constructor(
         tag: SGToken = { text: 'component' },
         attributes?: SGAttribute[],
@@ -384,6 +379,12 @@ export class SGComponent extends SGTag {
             }
         }
     }
+
+    public api: SGInterface;
+
+    public scripts: SGScript[] = [];
+
+    public children: SGChildren;
 
     get name() {
         return this.getAttributeValue('name');
