@@ -1,8 +1,10 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
+import { createSGAttribute } from '../astUtils/creators';
 import { isSGChildren, isSGField, isSGFunction, isSGInterface, isSGScript } from '../astUtils/xml';
 import type { FileReference, TranspileResult } from '../interfaces';
 import type { SGTranspileState } from './SGTranspileState';
+import util from '../util';
 
 export interface SGToken {
     text: string;
@@ -60,7 +62,7 @@ export class SGTag {
             state.indent,
             '<',
             state.transpileToken(this.tag),
-            ...this.transpileAttributes(state),
+            ...this.transpileAttributes(state, this.attributes),
             ...this.transpileBody(state)
         ]);
     }
@@ -69,9 +71,9 @@ export class SGTag {
         return [' />\n'];
     }
 
-    protected transpileAttributes(state: SGTranspileState): (string | SourceNode)[] {
+    protected transpileAttributes(state: SGTranspileState, attributes: SGAttribute[]): (string | SourceNode)[] {
         const result = [];
-        for (const attr of this.attributes) {
+        for (const attr of attributes) {
             const offset = state.rangeToSourceOffset(attr.range);
             result.push(
                 ' ',
@@ -96,7 +98,7 @@ export class SGProlog extends SGTag {
     transpile(state: SGTranspileState) {
         return new SourceNode(null, null, state.source, [
             '<?xml',
-            ...this.transpileAttributes(state),
+            ...this.transpileAttributes(state, this.attributes),
             ' ?>\n'
         ]);
     }
@@ -180,43 +182,36 @@ export class SGScript extends SGTag {
         }
     }
 
-    protected transpileAttributes(state: SGTranspileState): (string | SourceNode)[] {
-        const result = [];
+    protected transpileAttributes(state: SGTranspileState, attributes: SGAttribute[]): (string | SourceNode)[] {
+        const modifiedAttributes = [] as SGAttribute[];
         let foundType = false;
         const bsExtensionRegexp = /\.bs$/i;
 
-        for (const attr of this.attributes) {
-            const key = attr.key.text;
-            const lowerKey = key.toLowerCase();
-            let value = attr.value.text;
-
-            if (lowerKey === 'uri' && bsExtensionRegexp.exec(value)) {
-                value = value.replace(bsExtensionRegexp, '.brs');
+        for (const attr of attributes) {
+            const lowerKey = attr.key.text.toLowerCase();
+            if (lowerKey === 'uri' && bsExtensionRegexp.exec(attr.value.text)) {
+                modifiedAttributes.push(
+                    util.cloneSGAttribute(attr, attr.value.text.replace(bsExtensionRegexp, '.brs'))
+                );
             } else if (lowerKey === 'type') {
                 foundType = true;
-                if (value.endsWith('brighterscript')) {
-                    value = 'text/brightscript';
+                if (attr.value.text.toLowerCase().endsWith('brighterscript')) {
+                    modifiedAttributes.push(
+                        util.cloneSGAttribute(attr, 'text/brightscript')
+                    );
+                } else {
+                    modifiedAttributes.push(attr);
                 }
+            } else {
+                modifiedAttributes.push(attr);
             }
-
-            const offset = state.rangeToSourceOffset(attr.range);
-            result.push(
-                ' ',
-                new SourceNode(
-                    offset.line,
-                    offset.column,
-                    state.source,
-                    [key, '="', value, '"'])
+        }
+        if (!foundType) {
+            modifiedAttributes.push(
+                createSGAttribute('type', 'text/brightscript')
             );
         }
-        //add the "type" attribute if missing
-        if (!foundType) {
-            result.push(
-                //add a space if this is not the only attribute
-                this.attributes.length > 0 ? ' ' : '',
-                'type="text/brightscript"');
-        }
-        return result;
+        return super.transpileAttributes(state, modifiedAttributes);
     }
 }
 

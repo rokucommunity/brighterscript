@@ -3,6 +3,7 @@ import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Expression, NamespacedVariableNameExpression } from '../parser/Expression';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression } from '../parser/Expression';
+import type { SGAttribute } from '../parser/SGTypes';
 
 /**
  * A range that points to nowhere. Used to give non-null ranges to programmatically-added source code.
@@ -62,4 +63,18 @@ export function createCall(callee: Expression, args?: Expression[], namespaceNam
         args || [],
         namespaceName
     );
+}
+
+/**
+ * Create an SGAttribute without any ranges
+ */
+export function createSGAttribute(keyName: string, value: string) {
+    return {
+        key: {
+            text: keyName
+        },
+        value: {
+            text: value
+        }
+    } as SGAttribute;
 }
