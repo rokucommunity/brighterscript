@@ -630,7 +630,7 @@ describe('XmlFile', () => {
             `, 'none', 'components/SimpleScene.xml');
         });
 
-        it('changes file extensions to brs from bs', () => {
+        it('changes file extensions from bs to brs', () => {
             program.addOrReplaceFile(`components/SimpleScene.bs`, `
                 import "pkg:/source/lib.bs"
             `);
@@ -649,6 +649,21 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 </component>
             `, 'none', 'components/SimpleScene.xml');
+        });
+
+        it('does not fail on msissing script type', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script uri="SimpleScene.brs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script uri="SimpleScene.brs" type="text/brightscript" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, null, 'components/comp.xml');
         });
 
         it('returns the XML unmodified if needsTranspiled is false', () => {
@@ -696,6 +711,7 @@ describe('XmlFile', () => {
         });
 
         it('simple source mapping includes sourcemap reference', () => {
+            program.options.sourceMap = true;
             let file = program.addOrReplaceFile(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
                 trim`
@@ -710,6 +726,7 @@ describe('XmlFile', () => {
         });
 
         it('AST-based source mapping includes sourcemap reference', () => {
+            program.options.sourceMap = true;
             let file = program.addOrReplaceFile(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
                 trim`
