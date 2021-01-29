@@ -17,9 +17,7 @@ import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
 import { trim, trimMap } from '../testHelpers.spec';
-import { ParseMode, Parser } from '../parser/Parser';
-import { createStringLiteral, createToken } from '../astUtils/creators';
-import { ClassFieldStatement } from '../parser/Statement';
+import { ParseMode } from '../parser/Parser';
 
 let sinon = sinonImport.createSandbox();
 
