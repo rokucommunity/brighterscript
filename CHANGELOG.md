@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.30.1] - 2021-01-29
+### Fixed
+ - bug that would crash while transpiling if a script tag didn't have a `type` attribute
+ - XML transpile now honors the `sourceMap` option
+
+
+
 ## [0.30.0] - 2021-01-26
 ### Added
  - null coalescing operator (see [the docs](https://github.com/rokucommunity/brighterscript/blob/master/docs/null-coalescing-operator.md) for more information)
@@ -872,3 +879,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.28.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.1...v0.28.2
 [0.29.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.2...v0.29.0
 [0.30.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.29.0...v0.30.0
+[0.30.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.0...v0.30.1

@@ -1489,46 +1489,29 @@ export class BrsFile {
      */
     public transpile(): CodeWithSourceMap {
         const state = new TranspileState(this);
+        let transpileResult: SourceNode | undefined;
+
         if (this.needsTranspiled) {
-            let programNode = new SourceNode(null, null, this.pathAbsolute, this.ast.transpile(state));
-            if (this.program.options.sourceMap) {
-                //sourcemap reference
-                let programWithMap = new SourceNode(null, null, null, [
-                    programNode,
-                    `'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`
-                ]);
-                return programWithMap.toStringWithSourceMap({
-                    file: state.pathAbsolute
-                });
-            } else {
-                //return the code without the source map
-                return {
-                    code: programNode.toString(),
-                    map: undefined
-                };
-            }
+            transpileResult = new SourceNode(null, null, state.pathAbsolute, this.ast.transpile(state));
+        } else if (this.program.options.sourceMap) {
+            //emit code as-is with a simple map to the original file location
+            transpileResult = util.simpleMap(state.pathAbsolute, this.fileContents);
         } else {
-            if (this.program.options.sourceMap) {
-                //create a source map from the original source code
-                let chunks = [] as (SourceNode | string)[];
-                let lines = util.splitIntoLines(this.fileContents);
-                for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                    let line = lines[lineIndex];
-                    chunks.push(
-                        lineIndex > 0 ? '\n' : '',
-                        new SourceNode(lineIndex + 1, 0, state.pathAbsolute, line)
-                    );
-                }
-                //sourcemap reference
-                chunks.push(`'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`);
-                return new SourceNode(null, null, state.pathAbsolute, chunks).toStringWithSourceMap();
-            } else {
-                //return the original source code as-is
-                return {
-                    code: this.fileContents,
-                    map: undefined
-                };
-            }
+            //simple SourceNode wrapping the entire file to simplify the logic below
+            transpileResult = new SourceNode(null, null, state.pathAbsolute, this.fileContents);
+        }
+
+        if (this.program.options.sourceMap) {
+            return new SourceNode(null, null, null, [
+                transpileResult,
+                //add the sourcemap reference comment
+                `'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`
+            ]).toStringWithSourceMap();
+        } else {
+            return {
+                code: transpileResult.toString(),
+                map: undefined
+            };
         }
     }
 

@@ -11,6 +11,8 @@ import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyGraph } from '../DependencyGraph';
 import type { SGAst, SGToken } from '../parser/SGTypes';
+import { SGScript } from '../parser/SGTypes';
+import { SGTranspileState } from '../parser/SGTranspileState';
 import type { FunctionExpression } from '../parser/Expression';
 
 export class XmlFile {
@@ -447,14 +449,45 @@ export class XmlFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const source = this.pathAbsolute;
-        const extraImports = this.getMissingImportsForTranspile();
-        if (this.needsTranspiled || extraImports.length > 0) {
-            //emit an XML document with sourcemaps from the AST
-            return this.parser.ast.transpile(source, extraImports);
+        const state = new SGTranspileState(this);
+
+        const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
+            const script = new SGScript();
+            script.uri = util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'));
+            return script;
+        });
+
+        const extraImportIdx = this.ast.component.scripts.length - 1;
+        //temporarily add the missing imports as script tags
+        this.ast.component.scripts.push(...extraImportScripts);
+        let transpileResult: SourceNode | undefined;
+
+        if (this.needsTranspiled || extraImportScripts.length > 0) {
+            transpileResult = new SourceNode(null, null, state.source, this.parser.ast.transpile(state));
+
+            //remove the extra import scripts added pre-transpile
+            this.ast.component.scripts.splice(extraImportIdx, extraImportScripts.length);
+
+        } else if (this.program.options.sourceMap) {
+            //emit code as-is with a simple map to the original file location
+            transpileResult = util.simpleMap(state.source, this.fileContents);
         } else {
-            //emit the XML as-is with a simple map to the original XML location
-            return simpleMap(source, this.fileContents);
+            //simple SourceNode wrapping the entire file to simplify the logic below
+            transpileResult = new SourceNode(null, null, state.source, this.fileContents);
+        }
+
+        //add the source map comment if configured to emit sourcemaps
+        if (this.program.options.sourceMap) {
+            return new SourceNode(null, null, state.source, [
+                transpileResult,
+                //add the sourcemap reference comment
+                `<!--//# sourceMappingURL=./${path.basename(state.source)}.map -->`
+            ]).toStringWithSourceMap();
+        } else {
+            return {
+                code: transpileResult.toString(),
+                map: undefined
+            };
         }
     }
 
@@ -463,22 +496,4 @@ export class XmlFile {
             this.unsubscribeFromDependencyGraph();
         }
     }
-}
-
-function simpleMap(source: string, src: string) {
-    //create a source map from the original source code
-    let chunks = [] as (SourceNode | string)[];
-    let lines = src.split(/\r?\n/g);
-    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-        let line = lines[lineIndex];
-        chunks.push(
-            lineIndex > 0 ? '\n' : '',
-            new SourceNode(lineIndex + 1, 0, source, line)
-        );
-    }
-
-    //sourcemap reference
-    chunks.push(`<!--//# sourceMappingURL=./${path.basename(source)}.map -->`);
-
-    return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
 }
