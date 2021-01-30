@@ -46,7 +46,7 @@ export function createDottedIdentifier(path: string[], range?: Range, namespaceN
  */
 export function createStringLiteral(value: string, range?: Range) {
     //wrap the value in double quotes
-    if (value.startsWith('"') === false && value.endsWith('"') === false) {
+    if (!value.startsWith('"') && !value.endsWith('"')) {
         value = '"' + value + '"';
     }
     return new LiteralExpression(createToken(TokenKind.StringLiteral, value, range));
