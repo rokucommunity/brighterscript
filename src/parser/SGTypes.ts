@@ -1,11 +1,10 @@
-import * as path from 'path';
-import util from '../util';
 import { SourceNode } from 'source-map';
-import type { CodeWithSourceMap } from 'source-map';
 import type { Range } from 'vscode-languageserver';
+import { createSGAttribute } from '../astUtils/creators';
 import { isSGChildren, isSGField, isSGFunction, isSGInterface, isSGScript } from '../astUtils/xml';
-import type { FileReference } from '../interfaces';
-import { SGTranspileState } from './SGTranspileState';
+import type { FileReference, TranspileResult } from '../interfaces';
+import type { SGTranspileState } from './SGTranspileState';
+import util from '../util';
 
 export interface SGToken {
     text: string;
@@ -24,7 +23,7 @@ export class SGTag {
         public tag: SGToken,
         public attributes: SGAttribute[] = [],
         public range?: Range
-    ) {}
+    ) { }
 
     get id() {
         return this.getAttributeValue('id');
@@ -63,13 +62,34 @@ export class SGTag {
             state.indent,
             '<',
             state.transpileToken(this.tag),
-            ...state.transpileAttributes(this.attributes),
+            ...this.transpileAttributes(state, this.attributes),
             ...this.transpileBody(state)
         ]);
     }
 
     protected transpileBody(state: SGTranspileState): (string | SourceNode)[] {
         return [' />\n'];
+    }
+
+    protected transpileAttributes(state: SGTranspileState, attributes: SGAttribute[]): (string | SourceNode)[] {
+        const result = [];
+        for (const attr of attributes) {
+            const offset = state.rangeToSourceOffset(attr.range);
+            result.push(
+                ' ',
+                new SourceNode(
+                    offset.line,
+                    offset.column,
+                    state.source,
+                    [
+                        attr.key.text,
+                        '="',
+                        attr.value.text,
+                        '"'
+                    ])
+            );
+        }
+        return result;
     }
 }
 
@@ -78,7 +98,7 @@ export class SGProlog extends SGTag {
     transpile(state: SGTranspileState) {
         return new SourceNode(null, null, state.source, [
             '<?xml',
-            ...state.transpileAttributes(this.attributes),
+            ...this.transpileAttributes(state, this.attributes),
             ' ?>\n'
         ]);
     }
@@ -160,6 +180,38 @@ export class SGScript extends SGTag {
         } else {
             return super.transpileBody(state);
         }
+    }
+
+    protected transpileAttributes(state: SGTranspileState, attributes: SGAttribute[]): (string | SourceNode)[] {
+        const modifiedAttributes = [] as SGAttribute[];
+        let foundType = false;
+        const bsExtensionRegexp = /\.bs$/i;
+
+        for (const attr of attributes) {
+            const lowerKey = attr.key.text.toLowerCase();
+            if (lowerKey === 'uri' && bsExtensionRegexp.exec(attr.value.text)) {
+                modifiedAttributes.push(
+                    util.cloneSGAttribute(attr, attr.value.text.replace(bsExtensionRegexp, '.brs'))
+                );
+            } else if (lowerKey === 'type') {
+                foundType = true;
+                if (attr.value.text.toLowerCase().endsWith('brighterscript')) {
+                    modifiedAttributes.push(
+                        util.cloneSGAttribute(attr, 'text/brightscript')
+                    );
+                } else {
+                    modifiedAttributes.push(attr);
+                }
+            } else {
+                modifiedAttributes.push(attr);
+            }
+        }
+        if (!foundType) {
+            modifiedAttributes.push(
+                createSGAttribute('type', 'text/brightscript')
+            );
+        }
+        return super.transpileAttributes(state, modifiedAttributes);
     }
 }
 
@@ -306,11 +358,6 @@ export class SGInterface extends SGTag {
 }
 
 export class SGComponent extends SGTag {
-
-    api: SGInterface;
-    scripts: SGScript[] = [];
-    children: SGChildren;
-
     constructor(
         tag: SGToken = { text: 'component' },
         attributes?: SGAttribute[],
@@ -332,6 +379,12 @@ export class SGComponent extends SGTag {
             }
         }
     }
+
+    public api: SGInterface;
+
+    public scripts: SGScript[] = [];
+
+    public children: SGChildren;
 
     get name() {
         return this.getAttributeValue('name');
@@ -380,52 +433,16 @@ export class SGAst {
     ) {
     }
 
-    transpile(source: string, extraImports: string[]): CodeWithSourceMap {
-        const { prolog, component } = this;
-        if (!component) {
-            return new SourceNode(null, null, null, '').toStringWithSourceMap();
-        }
-
-        //create a clone to make our changes
-        const temp = new SGComponent(component.tag, component.attributes);
-        temp.api = component.api;
-        temp.scripts = component.scripts.map(this.updateScript);
-        temp.children = component.children;
-
-        //insert extra imports
-        const extraScripts = extraImports
-            .map(uri => {
-                const script = new SGScript();
-                script.uri = util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'));
-                return script;
-            });
-        if (extraScripts.length > 0) {
-            temp.scripts.push(...extraScripts);
-        }
-
-        const state = new SGTranspileState(source);
-        const chunks = [] as Array<SourceNode | string>;
+    transpile(state: SGTranspileState) {
+        const chunks = [] as TranspileResult;
         //write XML prolog
-        if (prolog) {
-            chunks.push(prolog.transpile(state));
+        if (this.prolog) {
+            chunks.push(this.prolog.transpile(state));
         }
-        //write content
-        chunks.push(temp.transpile(state));
-
-        //sourcemap reference
-        chunks.push(`<!--//# sourceMappingURL=./${path.basename(source)}.map -->`);
-
-        return new SourceNode(null, null, source, chunks).toStringWithSourceMap();
-    }
-
-    private updateScript(script: SGScript): SGScript {
-        //replace type and file extension of brighterscript references
-        if (script.type.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')) {
-            const temp = new SGScript();
-            temp.uri = script.uri?.replace(/\.bs$/, '.brs');
-            temp.cdata = script.cdata;
-            return temp;
+        if (this.component) {
+            //write content
+            chunks.push(this.component.transpile(state));
         }
-        return script;
+        return chunks;
     }
 }

@@ -1,9 +1,32 @@
 import type { Range } from 'vscode-languageserver';
 import { SourceNode } from 'source-map';
-import type { SGAttribute, SGToken } from './SGTypes';
+import type { SGToken } from './SGTypes';
+import type { XmlFile } from '../files/XmlFile';
 
 export class SGTranspileState {
 
+    constructor(
+        public file: XmlFile
+    ) {
+        this.file = file;
+
+        //if a sourceRoot is specified, use that instead of the rootDir
+        if (this.file.program.options.sourceRoot) {
+            this.source = this.file.pathAbsolute.replace(
+                this.file.program.options.rootDir,
+                this.file.program.options.sourceRoot
+            );
+        } else {
+            this.source = this.file.pathAbsolute;
+        }
+    }
+
+    /**
+     * The absolute path to the source location of this file. If sourceRoot is specified,
+     * this path will be full path to the file in sourceRoot instead of rootDir.
+     * If the file resides outside of rootDir, then no changes will be made to this path.
+     */
+    public source: string;
     indent = '';
 
     private _depth = 0;
@@ -15,9 +38,7 @@ export class SGTranspileState {
         this.indent = value === 0 ? '' : '    '.repeat(value);
     }
 
-    constructor(public source: string) {}
-
-    private rangeToSourceOffset(range: Range) {
+    public rangeToSourceOffset(range: Range) {
         if (!range) {
             return {
                 line: null,
@@ -30,7 +51,7 @@ export class SGTranspileState {
         };
     }
 
-    transpileToken(token: SGToken) {
+    public transpileToken(token: SGToken) {
         const { range, text } = token;
         if (!range) {
             return text;
@@ -50,26 +71,5 @@ export class SGTranspileState {
         } else {
             return new SourceNode(offset.line, offset.column, this.source, text);
         }
-    }
-
-    transpileAttributes(attributes: SGAttribute[]): (string | SourceNode)[] {
-        const result = [];
-        for (const attr of attributes) {
-            const offset = this.rangeToSourceOffset(attr.range);
-            result.push(
-                ' ',
-                new SourceNode(
-                    offset.line,
-                    offset.column,
-                    this.source,
-                    [
-                        attr.key.text,
-                        '="',
-                        attr.value.text,
-                        '"'
-                    ])
-            );
-        }
-        return result;
     }
 }

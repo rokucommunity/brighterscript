@@ -644,7 +644,19 @@ describe('parser', () => {
                 sub main()
                 end sub
             `, ParseMode.BrighterScript);
-            expect(diagnostics[0]?.code).to.equal(1081); //unexpected token '@'
+            expect(diagnostics[0]?.message).to.equal(DiagnosticMessages.foundUnexpectedToken('@').message);
+        });
+
+        it('properly handles empty annotation above class method', () => {
+            //this code used to cause an infinite loop, so the fact that the test passes/fails on its own is a success!
+            let { diagnostics } = parse(`
+                class Person
+                    @
+                    sub new()
+                    end sub
+                end class
+            `, ParseMode.BrighterScript);
+            expect(diagnostics[0]?.message).to.equal(DiagnosticMessages.expectedIdentifier().message);
         });
 
         it('parses with error if annotation is not followed by a statement', () => {
