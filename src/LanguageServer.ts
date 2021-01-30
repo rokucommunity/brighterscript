@@ -38,8 +38,6 @@ import { standardizePath as s, util } from './util';
 import { Logger } from './Logger';
 import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
-import type { Token } from './lexer';
-import { Lexer } from './lexer';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { isBrsFile } from './astUtils/reflection';
 
@@ -337,7 +335,7 @@ export class LanguageServer {
         //if there's a setting, we need to find the file or show error if it can't be found
         if (config?.configFile) {
             configFilePath = path.resolve(workspacePath, config.configFile);
-            if (await util.fileExists(configFilePath)) {
+            if (await util.pathExists(configFilePath)) {
                 return configFilePath;
             } else {
                 this.sendCriticalFailure(`Cannot find config file specified in user/workspace settings at '${configFilePath}'`);
@@ -346,13 +344,13 @@ export class LanguageServer {
 
         //default to config file path found in the root of the workspace
         configFilePath = path.resolve(workspacePath, 'bsconfig.json');
-        if (await util.fileExists(configFilePath)) {
+        if (await util.pathExists(configFilePath)) {
             return configFilePath;
         }
 
         //look for the deprecated `brsconfig.json` file
         configFilePath = path.resolve(workspacePath, 'brsconfig.json');
-        if (await util.fileExists(configFilePath)) {
+        if (await util.pathExists(configFilePath)) {
             return configFilePath;
         }
 
@@ -373,16 +371,14 @@ export class LanguageServer {
         builder.allowConsoleClearing = false;
 
         //look for files in our in-memory cache before going to the file system
-        builder.addFileResolver((pathAbsolute) => {
-            return this.documentFileResolver(pathAbsolute);
-        });
+        builder.addFileResolver(this.documentFileResolver.bind(this));
 
         let configFilePath = await this.getConfigFilePath(workspacePath);
 
         let cwd = workspacePath;
 
         //if the config file exists, use it and its folder as cwd
-        if (configFilePath && await util.fileExists(configFilePath)) {
+        if (configFilePath && await util.pathExists(configFilePath)) {
             cwd = path.dirname(configFilePath);
         } else {
             //config file doesn't exist...let `brighterscript` resolve the default way
@@ -444,9 +440,7 @@ export class LanguageServer {
         builder.allowConsoleClearing = false;
 
         //look for files in our in-memory cache before going to the file system
-        builder.addFileResolver((pathAbsolute) => {
-            return this.documentFileResolver(pathAbsolute);
-        });
+        builder.addFileResolver(this.documentFileResolver.bind(this));
 
         //get the path to the directory where this file resides
         let cwd = path.dirname(filePathAbsolute);
@@ -455,7 +449,7 @@ export class LanguageServer {
         let configFilePath = await util.findClosestConfigFile(filePathAbsolute);
         let project: BsConfig = {};
         if (configFilePath) {
-            project = await util.normalizeAndResolveConfig({ project: configFilePath });
+            project = util.normalizeAndResolveConfig({ project: configFilePath });
         }
         //override the rootDir and files array
         project.rootDir = cwd;
@@ -523,35 +517,13 @@ export class LanguageServer {
         //wait until the file has settled
         await this.keyedThrottler.onIdleOnce(filePath, true);
 
-        let workspaceCompletionPromises = [] as Array<Promise<CompletionItem[]>>;
-        let workspaces = this.getWorkspaces();
-        //get completions from every workspace
-        for (let workspace of workspaces) {
-            //if this workspace has the file in question, get its completions
-            if (workspace.builder.program.hasFile(filePath)) {
-                workspaceCompletionPromises.push(
-                    workspace.builder.program.getCompletions(filePath, position)
-                );
-            }
-        }
-
-        let completions = ([] as CompletionItem[])
-            //wait for all promises to resolve, and then flatten them into a single array
-            .concat(...await Promise.all(workspaceCompletionPromises))
-            //throw out falsey values
-            .filter(x => !!x);
+        let completions = this
+            .getWorkspaces()
+            .flatMap(workspace => workspace.builder.program.getCompletions(filePath, position));
 
         for (let completion of completions) {
             completion.commitCharacters = ['.'];
         }
-
-        // completions = [{
-        //     label: 'bronley',
-        //     textEdit: {
-        //         newText: 'bronley2',
-        //         range: util.createRange(position, position)
-        //     }
-        // }] as CompletionItem[];
 
         return completions;
     }
@@ -814,10 +786,13 @@ export class LanguageServer {
 
             //if we got a dest path, then the program wants this file
             if (destPath) {
-                await program.addOrReplaceFile({
-                    src: change.pathAbsolute,
-                    dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
-                });
+                program.addOrReplaceFile(
+                    {
+                        src: change.pathAbsolute,
+                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
+                    },
+                    await workspace.builder.getFileContents(change.pathAbsolute)
+                );
             } else {
                 //no dest path means the program doesn't want this file
             }
@@ -826,11 +801,14 @@ export class LanguageServer {
         } else if (program.hasFile(change.pathAbsolute)) {
             //sometimes "changed" events are emitted on files that were actually deleted,
             //so determine file existance and act accordingly
-            if (await util.fileExists(change.pathAbsolute)) {
-                await program.addOrReplaceFile({
-                    src: change.pathAbsolute,
-                    dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
-                });
+            if (await util.pathExists(change.pathAbsolute)) {
+                program.addOrReplaceFile(
+                    {
+                        src: change.pathAbsolute,
+                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
+                    },
+                    await workspace.builder.getFileContents(change.pathAbsolute)
+                );
             } else {
                 program.removeFile(change.pathAbsolute);
             }
@@ -885,26 +863,23 @@ export class LanguageServer {
         try {
 
             //throttle file processing. first call is run immediately, and then the last call is processed.
-            await this.keyedThrottler.run(filePath, async () => {
+            await this.keyedThrottler.run(filePath, () => {
 
                 this.connection.sendNotification('build-status', 'building');
 
                 let documentText = textDocument.getText();
-                let workspaces = this.getWorkspaces();
-                await Promise.all(
-                    workspaces.map(async (x) => {
-                        //only add or replace existing files. All of the files in the project should
-                        //have already been loaded by other means
-                        if (x.builder.program.hasFile(filePath)) {
-                            let rootDir = x.builder.program.options.rootDir ?? x.builder.program.options.cwd;
-                            let dest = rokuDeploy.getDestPath(filePath, x.builder.program.options.files, rootDir);
-                            await x.builder.program.addOrReplaceFile({
-                                src: filePath,
-                                dest: dest
-                            }, documentText);
-                        }
-                    })
-                );
+                for (const workspace of this.getWorkspaces()) {
+                    //only add or replace existing files. All of the files in the project should
+                    //have already been loaded by other means
+                    if (workspace.builder.program.hasFile(filePath)) {
+                        let rootDir = workspace.builder.program.options.rootDir ?? workspace.builder.program.options.cwd;
+                        let dest = rokuDeploy.getDestPath(filePath, workspace.builder.program.options.files, rootDir);
+                        workspace.builder.program.addOrReplaceFile({
+                            src: filePath,
+                            dest: dest
+                        }, documentText);
+                    }
+                }
             });
             // validate all workspaces
             await this.validateAllThrottled();
@@ -985,104 +960,24 @@ export class LanguageServer {
     private async onSignatureHelp(params: SignatureHelpParams) {
         await this.waitAllProgramFirstRuns();
 
-        const info = this.getIdentifierInfo(params);
-        if (!info) {
-            return;
-        }
-
-        const { tokens } = Lexer.scan(info.line);
-        const character = info.position.character;
-        let matchingToken: Token;
-        for (const token of tokens) {
-            if (character >= token.range.start.character && character <= token.range.end.character) {
-                matchingToken = token;
-                break;
-            }
-        }
-        if (!matchingToken) {
-            return;
-        }
-
-        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+        const filepath = util.uriToPath(params.textDocument.uri);
+        await this.keyedThrottler.onIdleOnce(filepath, true);
 
         const signatures = util.flatMap(
-            await Promise.all(this.getWorkspaces().map(workspace => {
-                return workspace.builder.program.getSignatureHelp(util.uriToPath(params.textDocument.uri), matchingToken.text);
-            })),
+            await Promise.all(this.getWorkspaces().map(workspace => workspace.builder.program.getSignatureHelp(filepath, params.position)
+            )),
             c => c
         );
 
         const activeSignature = signatures.length > 0 ? 0 : null;
-        const activeParameter = activeSignature >= 0 ? info.commaCount : null;
+        const activeParameter = activeSignature >= 0 ? signatures[activeSignature].index : null;
         let results: SignatureHelp = {
-            signatures: signatures,
+            signatures: signatures.map((s) => s.signature),
             activeSignature: activeSignature,
             activeParameter: activeParameter
         };
 
         return results;
-    }
-
-    private getIdentifierInfo(params: SignatureHelpParams|ReferenceParams) {
-        // Courtesy of George Cook :) He might call it whack but it works ¯\_(ツ)_/¯
-        //get the position of a symbol to our left
-        //1. get first bracket to our left, - then get the symbol before that..
-        //really crude crappy parser..
-        //TODO this is whack - it's not even LTR ugh..
-        const position = params.position;
-        const line = this.documents.get(params.textDocument.uri).getText(util.createRange(position.line, 0, position.line, position.character));
-
-        const bracketCounts = { normal: 0, square: 0, curly: 0 };
-        let commaCount = 0;
-        let index = position.character;
-        let isArgStartFound = false;
-        while (index >= 0) {
-            if (isArgStartFound) {
-                if (line.charAt(index) !== ' ') {
-                    break;
-                }
-            } else {
-                if (line.charAt(index) === ')') {
-                    bracketCounts.normal++;
-                }
-
-                if (line.charAt(index) === ']') {
-                    bracketCounts.square++;
-                }
-
-                if (line.charAt(index) === '}') {
-                    bracketCounts.curly++;
-                }
-
-                if (line.charAt(index) === ',' && bracketCounts.normal <= 0 && bracketCounts.curly <= 0 && bracketCounts.square <= 0) {
-                    commaCount++;
-                }
-
-                if (line.charAt(index) === '(') {
-                    if (bracketCounts.normal === 0) {
-                        isArgStartFound = true;
-                    } else {
-                        bracketCounts.normal--;
-                    }
-                }
-
-                if (line.charAt(index) === '[') {
-                    bracketCounts.square--;
-                }
-
-                if (line.charAt(index) === '{') {
-                    bracketCounts.curly--;
-                }
-            }
-            index--;
-        }
-        if (index > 0) {
-            return {
-                commaCount: commaCount,
-                position: util.createPosition(position.line, index),
-                line: line
-            };
-        }
     }
 
     private async onReferences(params: ReferenceParams) {
@@ -1097,7 +992,7 @@ export class LanguageServer {
             })),
             c => c
         );
-        return results;
+        return results.filter((r) => r);
     }
 
     private diagnosticCollection = new DiagnosticCollection();

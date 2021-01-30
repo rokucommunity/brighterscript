@@ -14,6 +14,8 @@ import { LongIntegerType } from '../types/LongIntegerType';
 import { FloatType } from '../types/FloatType';
 import { DoubleType } from '../types/DoubleType';
 import { CustomType } from '../types/CustomType';
+import type { Scope } from '../Scope';
+import type { XmlScope } from '../XmlScope';
 
 // File reflection
 
@@ -24,6 +26,11 @@ export function isBrsFile(file: (BscFile | File)): file is BrsFile {
 export function isXmlFile(file: (BscFile)): file is XmlFile {
     return file?.constructor.name === 'XmlFile';
 }
+
+export function isXmlScope(scope: (Scope)): scope is XmlScope {
+    return scope?.constructor.name === 'XmlScope';
+}
+
 
 // Statements reflection
 

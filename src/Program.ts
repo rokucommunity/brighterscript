@@ -20,9 +20,10 @@ import type { ManifestValue } from './preprocessor/Manifest';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile } from './astUtils/reflection';
-import { createVisitor, WalkMode } from './astUtils/visitors';
-import type { ClassMethodStatement, FunctionStatement } from './parser/Statement';
+import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope } from './astUtils/reflection';
+import type { FunctionStatement, Statement } from './parser/Statement';
+import { ParseMode } from './parser';
+import { TokenKind } from './lexer';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {
@@ -34,6 +35,25 @@ export interface SourceObj {
 export interface TranspileObj {
     file: BscFile;
     outputPath: string;
+}
+
+export interface SignatureInfoObj {
+    index: number;
+    key: string;
+    signature: SignatureInformation;
+}
+
+export interface FileLink<T> {
+    item: T;
+    file: BrsFile;
+}
+
+
+interface PartialStatementInfo {
+    commaCount: number;
+    statementType: string;
+    name: string;
+    dotPart: string;
 }
 
 export class Program {
@@ -53,12 +73,6 @@ export class Program {
         this.options.rootDir = util.getRootDir(this.options);
 
         this.createGlobalScope();
-
-        //add the default file resolver (used by this program to load source file contents).
-        this.fileResolvers.push(async (pathAbsolute) => {
-            let contents = await this.util.getFileContents(pathAbsolute);
-            return contents;
-        });
     }
 
     public logger: Logger;
@@ -85,16 +99,6 @@ export class Program {
     public dependencyGraph = new DependencyGraph();
 
     private diagnosticFilterer = new DiagnosticFilterer();
-
-    private util = util;
-
-    /**
-     * A list of functions that will be used to load file contents.
-     * In most cases, there will only be the "read from filesystem" resolver.
-     * However, when running inside the LanguageServer, a second resolver will be added
-     * to resolve the opened file contents from memory instead of going to disk.
-     */
-    public fileResolvers = [] as FileResolver[];
 
     /**
      * A scope that contains all built-in global functions.
@@ -161,23 +165,6 @@ export class Program {
     }
 
     /**
-     * Get the contents of the specified file as a string.
-     * This walks backwards through the file resolvers until we get a value.
-     * This allow the language server to provide file contents directly from memory.
-     */
-    public async getFileContents(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
-        let reversedResolvers = [...this.fileResolvers].reverse();
-        for (let fileResolver of reversedResolvers) {
-            let result = await fileResolver(pathAbsolute);
-            if (typeof result === 'string') {
-                return result;
-            }
-        }
-        throw new Error(`Could not load file "${pathAbsolute}"`);
-    }
-
-    /**
      * Get a list of all files that are included in the project but are not referenced
      * by any scope in the program.
      */
@@ -237,22 +224,6 @@ export class Program {
         return this.files[filePath] !== undefined;
     }
 
-    /**
-     * Add and parse all of the provided files.
-     * Files that are already loaded will be replaced by the latest
-     * contents from the file system.
-     * @param filePaths
-     */
-    public async addOrReplaceFiles<T extends BscFile[]>(fileObjects: Array<FileObj>) {
-        let promises = [];
-        for (let fileObject of fileObjects) {
-            promises.push(
-                this.addOrReplaceFile(fileObject)
-            );
-        }
-        return Promise.all(promises) as Promise<T>;
-    }
-
     public getPkgPath(...args: any[]): any { //eslint-disable-line
         throw new Error('Not implemented');
     }
@@ -290,17 +261,16 @@ export class Program {
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
      * @param relativePath the file path relative to the root dir
-     * @param fileContents the file contents. If not provided, the file will be loaded from disk
+     * @param fileContents the file contents
      */
-    public async addOrReplaceFile<T extends BscFile>(relativePath: string, fileContents?: string): Promise<T>;
+    public addOrReplaceFile<T extends BscFile>(relativePath: string, fileContents: string): T;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
-     * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
      * @param fileEntry an object that specifies src and dest for the file.
      * @param fileContents the file contents. If not provided, the file will be loaded from disk
      */
-    public async addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents?: string): Promise<T>;
-    public async addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents?: string): Promise<T> {
+    public addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
+    public addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
         assert.ok(fileParam, 'fileEntry is required');
         let srcPath: string;
         let pkgPath: string;
@@ -311,7 +281,7 @@ export class Program {
             srcPath = s`${fileParam.src}`;
             pkgPath = s`${fileParam.dest}`;
         }
-        let file = await this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], async () => {
+        let file = this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], () => {
 
             assert.ok(srcPath, 'fileEntry.src is required');
             assert.ok(pkgPath, 'fileEntry.dest is required');
@@ -322,15 +292,6 @@ export class Program {
             }
             let fileExtension = path.extname(srcPath).toLowerCase();
             let file: BscFile | undefined;
-
-            //load the file contents by file path if not provided
-            let getFileContents = async () => {
-                if (fileContents === undefined) {
-                    return this.getFileContents(srcPath);
-                } else {
-                    return fileContents;
-                }
-            };
 
             if (fileExtension === '.brs' || fileExtension === '.bs') {
                 let brsFile = new BrsFile(srcPath, pkgPath, this);
@@ -345,14 +306,14 @@ export class Program {
                 //add the file to the program
                 this.files[srcPath] = brsFile;
                 this.pkgMap[brsFile.pkgPath.toLowerCase()] = brsFile;
-                let fileContents: SourceObj = {
+                let sourceObj: SourceObj = {
                     pathAbsolute: srcPath,
-                    source: await getFileContents()
+                    source: fileContents
                 };
-                this.plugins.emit('beforeFileParse', fileContents);
+                this.plugins.emit('beforeFileParse', sourceObj);
 
                 this.logger.time(LogLevel.info, ['parse', chalk.green(srcPath)], () => {
-                    brsFile.parse(fileContents.source);
+                    brsFile.parse(sourceObj.source);
                 });
                 file = brsFile;
 
@@ -369,12 +330,12 @@ export class Program {
                 //add the file to the program
                 this.files[srcPath] = xmlFile;
                 this.pkgMap[xmlFile.pkgPath.toLowerCase()] = xmlFile;
-                let fileContents: SourceObj = {
+                let sourceObj: SourceObj = {
                     pathAbsolute: srcPath,
-                    source: await getFileContents()
+                    source: fileContents
                 };
-                this.plugins.emit('beforeFileParse', fileContents);
-                xmlFile.parse(fileContents.source);
+                this.plugins.emit('beforeFileParse', sourceObj);
+                xmlFile.parse(sourceObj.source);
 
                 file = xmlFile;
 
@@ -505,8 +466,8 @@ export class Program {
      * Traverse the entire project, and validate all scopes
      * @param force - if true, then all scopes are force to validate, even if they aren't marked as dirty
      */
-    public async validate() {
-        await this.logger.time(LogLevel.debug, ['Program.validate()'], async () => {
+    public validate() {
+        this.logger.time(LogLevel.debug, ['Program.validate()'], () => {
             this.diagnostics = [];
             this.plugins.emit('beforeProgramValidate', this);
 
@@ -533,7 +494,6 @@ export class Program {
             this.detectDuplicateComponentNames();
 
             this.plugins.emit('afterProgramValidate', this);
-            await Promise.resolve();
         });
     }
 
@@ -616,33 +576,104 @@ export class Program {
         return result;
     }
 
+    public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {
+        let results = new Map<Statement, FileLink<Statement>>();
+        const filesSearched = new Set<BrsFile>();
+        let parseMode = originFile.getParseMode();
+        let lowerNamespaceName = namespaceName?.toLowerCase();
+        let lowerName = name?.toLowerCase();
+        //look through all files in scope for matches
+        for (const scope of this.getScopesForFile(originFile)) {
+            for (const file of scope.getAllFiles()) {
+                if (isXmlFile(file) || filesSearched.has(file)) {
+                    continue;
+                }
+                filesSearched.add(file);
+
+                for (const statement of [...file.parser.references.functionStatements, ...file.parser.references.classStatements.flatMap((cs) => cs.methods)]) {
+                    let parentNamespaceName = statement.namespaceName?.getName(parseMode)?.toLowerCase();
+                    if (statement.name.text.toLowerCase() === lowerName && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
+                        if (!results.has(statement)) {
+                            results.set(statement, { item: statement, file: file });
+                        }
+                    }
+                }
+            }
+        }
+        return [...results.values()];
+    }
+
+    public getStatementsForXmlFile(scope: XmlScope, filterName?: string): FileLink<FunctionStatement>[] {
+        let results = new Map<Statement, FileLink<FunctionStatement>>();
+        const filesSearched = new Set<BrsFile>();
+
+        //get all function names for the xml file and parents
+        let funcNames = new Set<string>();
+        let currentScope = scope;
+        while (isXmlScope(currentScope)) {
+            for (let name of currentScope.xmlFile.ast.component.api.functions.map((f) => f.name)) {
+                if (!filterName || name === filterName) {
+                    funcNames.add(name);
+                }
+            }
+            currentScope = currentScope.getParentScope() as XmlScope;
+        }
+
+        //look through all files in scope for matches
+        for (const file of scope.getOwnFiles()) {
+            if (isXmlFile(file) || filesSearched.has(file)) {
+                continue;
+            }
+            filesSearched.add(file);
+
+            for (const statement of file.parser.references.functionStatements) {
+                if (funcNames.has(statement.name.text)) {
+                    if (!results.has(statement)) {
+                        results.set(statement, { item: statement, file: file });
+                    }
+                }
+            }
+        }
+        return [...results.values()];
+    }
+
     /**
      * Find all available completion items at the given position
      * @param pathAbsolute
      * @param lineIndex
      * @param columnIndex
      */
-    public async getCompletions(pathAbsolute: string, position: Position) {
+    public getCompletions(pathAbsolute: string, position: Position) {
         let file = this.getFile(pathAbsolute);
         if (!file) {
             return [];
         }
+        let result = [] as CompletionItem[];
 
+        if (isBrsFile(file) && file.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
+            // is next to a @. callfunc invocation - must be an interface method
+            for (const scope of this.getScopes().filter((s) => isXmlScope(s))) {
+                let fileLinks = this.getStatementsForXmlFile(scope as XmlScope);
+                for (let fileLink of fileLinks) {
+
+                    result.push(scope.createCompletionFromFunctionStatement(fileLink.item));
+                }
+            }
+            //no other result is possible in this case
+            return result;
+
+        }
         //find the scopes for this file
         let scopes = this.getScopesForFile(file);
 
         //if there are no scopes, include the global scope so we at least get the built-in functions
         scopes = scopes.length > 0 ? scopes : [this.globalScope];
 
-        //get the completions for this file for every scope
-
         //get the completions from all scopes for this file
         let allCompletions = util.flatMap(
             scopes.map(ctx => file.getCompletions(position, ctx)),
             c => c
         );
-
-        let result = [] as CompletionItem[];
 
         //only keep completions common to every scope for this file
         let keyCounts = {} as Record<string, number>;
@@ -653,7 +684,7 @@ export class Program {
                 result.push(completion);
             }
         }
-        return Promise.resolve(result);
+        return result;
     }
 
     /**
@@ -702,39 +733,218 @@ export class Program {
         return Promise.resolve(file.getHover(position));
     }
 
-    public getSignatureHelp(callSitePathAbsolute: string, callableName: string) {
-        const results = [] as SignatureInformation[];
-
-        callableName = callableName.toLowerCase();
-
-        //find the file
-        let file = this.getFile(callSitePathAbsolute);
-        if (!file) {
-            return results;
+    public getSignatureHelp(filepath: string, position: Position): SignatureInfoObj[] {
+        let file: BrsFile = this.getFile(filepath);
+        if (!file || !isBrsFile(file)) {
+            return [];
         }
 
-        const scopes = this.getScopesForFile(file);
-        for (const scope of scopes) {
-            const files = scope.getOwnFiles();
-            for (const file of files) {
-                if (isXmlFile(file)) {
-                    continue;
+        const results = new Map<string, SignatureInfoObj>();
+
+        let functionExpression = file.getFunctionExpressionAtPosition(position);
+        let identifierInfo = this.getPartialStatementInfo(file, position);
+        if (identifierInfo.statementType === '') {
+            // just general functoin calls
+            let statements = file.program.getStatementsByName(identifierInfo.name, file);
+            for (let statement of statements) {
+                //TODO better handling of collisions - if it's a namespace, then don't show any other overrides
+                //if we're on m - then limit scope to the current class, if present
+                let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
+                if (sigHelp && !results.has[sigHelp.key]) {
+                    sigHelp.index = identifierInfo.commaCount;
+                    results.set(sigHelp.key, sigHelp);
                 }
-                const statementHandler = (statement: FunctionStatement | ClassMethodStatement) => {
-                    if (statement.getName(file.getParseMode()).toLowerCase() === callableName) {
-                        results.push(file.getSignatureHelp(statement));
+            }
+        } else if (identifierInfo.statementType === '.') {
+            //if m class reference.. then
+            //only get statements from the class I am in..
+            if (functionExpression) {
+                let myClass = file.getClassFromMReference(position, file.getTokenAt(position), functionExpression);
+                if (myClass) {
+                    for (let scope of this.getScopesForFile(myClass.file)) {
+                        let classes = scope.getClassHierarchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
+                        //and anything from any class in scope to a non m class
+                        for (let statement of [...classes].filter((i) => isClassMethodStatement(i.item))) {
+                            let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
+                            if (sigHelp && !results.has[sigHelp.key]) {
+
+                                results.set(sigHelp.key, sigHelp);
+                                return;
+                            }
+                        }
                     }
-                };
-                file.parser.ast.walk(createVisitor({
-                    FunctionStatement: statementHandler,
-                    ClassMethodStatement: statementHandler
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });
+                }
+            }
+
+            if (identifierInfo.dotPart) {
+                //potential namespaces
+                let statements = file.program.getStatementsByName(identifierInfo.name, file, identifierInfo.dotPart);
+                if (statements.length === 0) {
+                    //was not a namespaced function, it could be any method on any class now
+                    statements = file.program.getStatementsByName(identifierInfo.name, file);
+                }
+                for (let statement of statements) {
+                    //TODO better handling of collisions - if it's a namespace, then don't show any other overrides
+                    //if we're on m - then limit scope to the current class, if present
+                    let sigHelp = statement.file.getSignatureHelpForStatement(statement.item);
+                    if (sigHelp && !results.has[sigHelp.key]) {
+                        sigHelp.index = identifierInfo.commaCount;
+                        results.set(sigHelp.key, sigHelp);
+                    }
+                }
+            }
+
+
+        } else if (identifierInfo.statementType === '@.') {
+            for (const scope of this.getScopes().filter((s) => isXmlScope(s))) {
+                let fileLinks = this.getStatementsForXmlFile(scope as XmlScope, identifierInfo.name);
+                for (let fileLink of fileLinks) {
+
+                    let sigHelp = fileLink.file.getSignatureHelpForStatement(fileLink.item);
+                    if (sigHelp && !results.has[sigHelp.key]) {
+                        sigHelp.index = identifierInfo.commaCount;
+                        results.set(sigHelp.key, sigHelp);
+                    }
+                }
+            }
+        } else if (identifierInfo.statementType === 'new') {
+            let classItem = file.getClassFileLink(identifierInfo.dotPart ? `${identifierInfo.dotPart}.${identifierInfo.name}` : identifierInfo.name);
+            let sigHelp = classItem?.file?.getClassSignatureHelp(classItem?.item);
+            if (sigHelp && !results.has(sigHelp.key)) {
+                sigHelp.index = identifierInfo.commaCount;
+                results.set(sigHelp.key, sigHelp);
             }
         }
 
-        return results;
+        return [...results.values()];
+    }
+
+    private getPartialStatementInfo(file: BrsFile, position: Position): PartialStatementInfo {
+        let lines = util.splitIntoLines(file.fileContents);
+        let line = lines[position.line];
+        let index = position.character;
+        let itemCounts = this.getPartialItemCounts(line, index);
+        if (!itemCounts.isArgStartFound && line.charAt(index) === ')') {
+            //try previous char, in case we were on a close bracket..
+            index--;
+            itemCounts = this.getPartialItemCounts(line, index);
+        }
+        let argStartIndex = itemCounts.argStartIndex;
+        index = itemCounts.argStartIndex - 1;
+        let statementType = '';
+        let name;
+        let dotPart;
+
+        if (!itemCounts.isArgStartFound) {
+            //try to get sig help based on the name
+            index = position.character;
+            let currentToken = file.getTokenAt(position);
+            name = file.getPartialVariableName(currentToken, [TokenKind.New]);
+            if (!name) {
+                //try the previous token, incase we're on a bracket
+                currentToken = file.getPreviousToken(currentToken);
+                name = file.getPartialVariableName(currentToken, [TokenKind.New]);
+            }
+            if (name?.indexOf('.')) {
+                let parts = name.split('.');
+                name = parts[parts.length - 1];
+            }
+
+            index = currentToken.range.start.character;
+            argStartIndex = index;
+        }
+        while (index > 0) {
+            if (!(/[a-z0-9_\.\@]/i).test(line.charAt(index))) {
+                if (!name) {
+                    name = line.substring(index + 1, argStartIndex);
+                } else {
+                    dotPart = line.substring(index + 1, argStartIndex);
+                    if (dotPart.endsWith('.')) {
+                        dotPart = dotPart.substr(0, dotPart.length - 1);
+                    }
+                }
+                break;
+            }
+            if (line.substr(index - 2, 2) === '@.') {
+                statementType = '@.';
+                name = name || line.substring(index, argStartIndex);
+                break;
+            } else if (line.charAt(index - 1) === '.' && statementType === '') {
+                statementType = '.';
+                name = name || line.substring(index, argStartIndex);
+                argStartIndex = index;
+            }
+            index--;
+        }
+
+        if (line.substring(0, index).trim().endsWith('new')) {
+            statementType = 'new';
+        }
+
+        return {
+            commaCount: itemCounts.comma,
+            statementType: statementType,
+            name: name,
+            dotPart: dotPart
+        };
+    }
+
+    private getPartialItemCounts(line: string, index: number) {
+        let isArgStartFound = false;
+        let itemCounts = {
+            normal: 0,
+            square: 0,
+            curly: 0,
+            comma: 0,
+            endIndex: 0,
+            argStartIndex: index,
+            isArgStartFound: false
+        };
+        while (index >= 0) {
+            const currentChar = line.charAt(index);
+
+            if (isArgStartFound) {
+                if (currentChar !== ' ') {
+                    break;
+                }
+            } else {
+                if (currentChar === ')') {
+                    itemCounts.normal++;
+                }
+
+                if (currentChar === ']') {
+                    itemCounts.square++;
+                }
+
+                if (currentChar === '}') {
+                    itemCounts.curly++;
+                }
+
+                if (currentChar === ',' && itemCounts.normal <= 0 && itemCounts.curly <= 0 && itemCounts.square <= 0) {
+                    itemCounts.comma++;
+                }
+
+                if (currentChar === '(') {
+                    if (itemCounts.normal === 0) {
+                        itemCounts.isArgStartFound = true;
+                        itemCounts.argStartIndex = index;
+                    } else {
+                        itemCounts.normal--;
+                    }
+                }
+
+                if (currentChar === '[') {
+                    itemCounts.square--;
+                }
+
+                if (currentChar === '{') {
+                    itemCounts.curly--;
+                }
+            }
+            index--;
+        }
+        return itemCounts;
+
     }
 
     public getReferences(pathAbsolute: string, position: Position) {
@@ -751,6 +961,7 @@ export class Program {
      * Get a list of all script imports, relative to the specified pkgPath
      * @param sourcePkgPath - the pkgPath of the source that wants to resolve script imports.
      */
+
     public getScriptImportCompletions(sourcePkgPath: string, scriptImport: FileReference) {
         let lowerSourcePkgPath = sourcePkgPath.toLowerCase();
 
@@ -917,5 +1128,3 @@ export class Program {
         this.dependencyGraph.dispose();
     }
 }
-
-export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined> | void;

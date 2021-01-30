@@ -6,6 +6,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.30.0] - 2021-01-26
+### Added
+ - null coalescing operator (see [the docs](https://github.com/rokucommunity/brighterscript/blob/master/docs/null-coalescing-operator.md) for more information)
+### Fixed
+ - infinite loop when encountering annotations without an identifier above a class method ([#291](https://github.com/rokucommunity/brighterscript/pull/291))
+
+
+
+## [0.29.0] - 2021-01-25
+### Added
+ - ternary operator (see [the docs](https://github.com/rokucommunity/brighterscript/blob/master/docs/ternary-operator.md) for more information)
+
+
+
+## [0.28.2] - 2021-01-22
+### Changed
+ - config loading functions from `util.ts` are now run synchronously
+### Fixed
+ - missing variable from `for each` statement in completions for language server
+ - bug when running the CLI that wouldn't properly read the `sourceMap` property from bsconfig.json
+
+
+
+## [0.28.1] - 2021-01-19
+### Changed
+ - (For plugin authors) refactored many async methods into sync methods to simplify file creation/management. ([#278](https://github.com/rokucommunity/brighterscript/pull/278))
+### Fixed
+ - bug with transpiling classes that would not always get the correct superclass index. ([#279](https://github.com/rokucommunity/brighterscript/pull/279))
+ - annotations are now block-restricted ([#274](https://github.com/rokucommunity/brighterscript/pull/274))
+
+
+
+## [0.28.0] - 2021-01-16
+### Added
+ - annotation support for classes and class methods ([#270](https://github.com/rokucommunity/brighterscript/pull/270))
+### fixed
+ - bugs with go-to-definition and signature help for namespace functions, classes, and callfunc calls
+
+
+
+## [0.27.0] - 2021-01-15
+### Changed
+ - plugin system changed to require a factory function instead of a singleton object ([#272](https://github.com/rokucommunity/brighterscript/pull/272))
+
+
+
 ## [0.26.0] - 2021-01-14
 ### Added
  - proper XML AST support
@@ -820,3 +866,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.24.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.24.1...v0.24.2
 [0.25.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.24.2...v0.25.0
 [0.26.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.25.0...v0.26.0
+[0.27.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.26.0...v0.27.0
+[0.28.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.27.0...v0.28.0
+[0.28.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.0...v0.28.1
+[0.28.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.1...v0.28.2
+[0.29.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.2...v0.29.0
+[0.30.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.29.0...v0.30.0

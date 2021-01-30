@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPlugin } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -22,15 +22,14 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { DottedGetExpression, VariableExpression } from './parser/Expression';
-import { LogLevel } from './Logger';
+import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
+import { Logger, LogLevel } from './Logger';
 import type { Token } from './lexer';
 import { TokenKind } from './lexer';
-import { isBrsFile, isDottedGetExpression, isVariableExpression } from './astUtils';
+import { isBrsFile, isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
 import { CustomType } from './types/CustomType';
 
 export class Util {
-
     public clearConsole() {
         // process.stdout.write('\x1Bc');
     }
@@ -39,7 +38,7 @@ export class Util {
      * Determine if the file exists
      * @param filePath
      */
-    public async fileExists(filePath: string | undefined) {
+    public async pathExists(filePath: string | undefined) {
         if (!filePath) {
             return false;
         } else {
@@ -48,20 +47,22 @@ export class Util {
     }
 
     /**
+     * Determine if the file exists
+     * @param filePath
+     */
+    public pathExistsSync(filePath: string | undefined) {
+        if (!filePath) {
+            return false;
+        } else {
+            return fsExtra.pathExistsSync(filePath);
+        }
+    }
+
+    /**
      * Determine if this path is a directory
      */
     public isDirectorySync(dirPath: string | undefined) {
         return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
-    }
-
-    /**
-     * Load a file from disc into a string
-     * @param filePath
-     */
-    public async getFileContents(filePath: string) {
-        let file = await fsExtra.readFile(filePath);
-        let fileContents = file.toString();
-        return fileContents;
     }
 
     /**
@@ -89,12 +90,12 @@ export class Util {
      * If the config file path doesn't exist
      * @param configFilePath
      */
-    public async getConfigFilePath(cwd?: string) {
+    public getConfigFilePath(cwd?: string) {
         cwd = cwd ?? process.cwd();
         let configPath = path.join(cwd, 'bsconfig.json');
         //find the nearest config file path
         for (let i = 0; i < 100; i++) {
-            if (await this.fileExists(configPath)) {
+            if (this.pathExistsSync(configPath)) {
                 return configPath;
             } else {
                 let parentDirPath = path.dirname(path.dirname(configPath));
@@ -129,13 +130,13 @@ export class Util {
      * @param configFilePath
      * @param parentProjectPaths
      */
-    public async loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
+    public loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
         if (configFilePath) {
             //if the config file path starts with question mark, then it's optional. return undefined if it doesn't exist
             if (configFilePath.startsWith('?')) {
                 //remove leading question mark
                 configFilePath = configFilePath.substring(1);
-                if (await fsExtra.pathExists(path.resolve(cwd, configFilePath)) === false) {
+                if (fsExtra.pathExistsSync(path.resolve(cwd, configFilePath)) === false) {
                     return undefined;
                 }
             }
@@ -148,7 +149,7 @@ export class Util {
                 throw new Error('Circular dependency detected: "' + parentProjectPaths.join('" => ') + '"');
             }
             //load the project file
-            let projectFileContents = await this.getFileContents(configFilePath);
+            let projectFileContents = fsExtra.readFileSync(configFilePath).toString();
             let parseErrors = [] as ParseError[];
             let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
             if (parseErrors.length > 0) {
@@ -169,7 +170,7 @@ export class Util {
             let result: BsConfig;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
-                let baseProjectConfig = await this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
+                let baseProjectConfig = this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
                 //extend the base config with the current project settings
                 result = { ...baseProjectConfig, ...projectConfig };
             } else {
@@ -252,18 +253,18 @@ export class Util {
      * merge with bsconfig.json and the provided options.
      * @param config
      */
-    public async normalizeAndResolveConfig(config: BsConfig) {
+    public normalizeAndResolveConfig(config: BsConfig) {
         let result = this.normalizeConfig({});
 
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = await this.getConfigFilePath(config?.cwd);
+            result.project = this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
             result.project = config.project;
         }
         if (result.project) {
-            let configFile = await this.loadConfigFile(result.project, null, config?.cwd);
+            let configFile = this.loadConfigFile(result.project, null, config?.cwd);
             result = Object.assign(result, configFile);
         }
 
@@ -470,16 +471,17 @@ export class Util {
      * @param position
      */
     public rangeContains(range: Range, position: Position) {
-        if (position.line < range.start.line || position.line > range.end.line) {
-            return false;
+        return this.comparePositionToRange(position, range) === 0;
+    }
+
+    public comparePositionToRange(position: Position, range: Range) {
+        if (position.line < range.start.line || (position.line === range.start.line && position.character < range.start.character)) {
+            return -1;
         }
-        if (position.line === range.start.line && position.character < range.start.character) {
-            return false;
+        if (position.line > range.end.line || (position.line === range.end.line && position.character > range.end.character)) {
+            return 1;
         }
-        if (position.line === range.end.line && position.character > range.end.character) {
-            return false;
-        }
-        return true;
+        return 0;
     }
 
     /**
@@ -750,9 +752,9 @@ export class Util {
 
             let bsPath = path.join(currentPath, 'bsconfig.json');
             let brsPath = path.join(currentPath, 'brsconfig.json');
-            if (await this.fileExists(bsPath)) {
+            if (await this.pathExists(bsPath)) {
                 return bsPath;
-            } else if (await this.fileExists(brsPath)) {
+            } else if (await this.pathExists(brsPath)) {
                 return brsPath;
             } else {
                 //walk upwards one directory
@@ -879,7 +881,7 @@ export class Util {
      * If no namespace is provided, return the `className` unchanged.
      */
     public getFullyQualifiedClassName(className: string, namespaceName?: string) {
-        if (className.includes('.') === false && namespaceName) {
+        if (className?.includes('.') === false && namespaceName) {
             return `${namespaceName}.${className}`;
         } else {
             return className;
@@ -1057,10 +1059,93 @@ export class Util {
             }
         }
     }
+
+    /**
+     * Load and return the list of plugins
+     */
+    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
+        const logger = new Logger();
+        return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
+            if (typeof pathOrModule === 'string') {
+                try {
+                    const loaded = this.resolveRequire(cwd, pathOrModule);
+                    const theExport: CompilerPlugin | CompilerPluginFactory = loaded.default ? loaded.default : loaded;
+
+                    let plugin: CompilerPlugin;
+
+                    // legacy plugins returned a plugin object. If we find that, then add a warning
+                    if (typeof theExport === 'object') {
+                        logger.warn(`Plugin "${pathOrModule}" was loaded as a singleton. Please contact the plugin author to update to the factory pattern.\n`);
+                        plugin = theExport;
+
+                        // the official plugin format is a factory function that returns a new instance of a plugin.
+                    } else if (typeof theExport === 'function') {
+                        plugin = theExport();
+                    }
+
+                    if (!plugin.name) {
+                        plugin.name = pathOrModule;
+                    }
+                    acc.push(plugin);
+                } catch (err) {
+                    if (onError) {
+                        onError(pathOrModule, err);
+                    } else {
+                        throw err;
+                    }
+                }
+            }
+            return acc;
+        }, []);
+    }
+
+    public resolveRequire(cwd: string, pathOrModule: string) {
+        let target = pathOrModule;
+        if (!path.isAbsolute(pathOrModule)) {
+            const localPath = path.resolve(cwd, pathOrModule);
+            if (fs.existsSync(localPath)) {
+                target = localPath;
+            } else {
+                const modulePath = path.resolve(cwd, 'node_modules', pathOrModule);
+                if (fs.existsSync(modulePath)) {
+                    target = modulePath;
+                }
+            }
+        }
+        // eslint-disable-next-line
+        return require(target);
+    }
+
+    /**
+     * Gathers expressions, variables, and unique names from an expression.
+     * This is mostly used for the ternary expression
+     */
+    public getExpressionInfo(expression: Expression): ExpressionInfo {
+        const expressions = [expression];
+        const variableExpressions = [] as VariableExpression[];
+        const uniqueVarNames = new Set<string>();
+
+        // Collect all expressions. Most of these expressions are fairly small so this should be quick!
+        // This should only be called during transpile time and only when we actually need it.
+        expression?.walk((expression) => {
+            if (isExpression(expression)) {
+                expressions.push(expression);
+            }
+            if (isVariableExpression(expression)) {
+                variableExpressions.push(expression);
+                uniqueVarNames.add(expression.name.text);
+            }
+        }, {
+            walkMode: WalkMode.visitExpressions
+        });
+        return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: [...uniqueVarNames] };
+    }
 }
 
+
 /**
- * A tagged template literal function for standardizing the path.
+ * A tagged template literal function for standardizing the path. This has to be defined as standalone function since it's a tagged template literal function,
+ * we can't use `object.tag` syntax.
  */
 export function standardizePath(stringParts, ...expressions: any[]) {
     let result = [];
@@ -1072,45 +1157,6 @@ export function standardizePath(stringParts, ...expressions: any[]) {
             result.join('')
         )
     );
-}
-
-export function loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
-    return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
-        if (typeof pathOrModule === 'string') {
-            try {
-                let loaded = resolveRequire(cwd, pathOrModule);
-                let plugin: CompilerPlugin = loaded.default ? loaded.default : loaded;
-                if (!plugin.name) {
-                    plugin.name = pathOrModule;
-                }
-                acc.push(plugin);
-            } catch (err) {
-                if (onError) {
-                    onError(pathOrModule, err);
-                } else {
-                    throw err;
-                }
-            }
-        }
-        return acc;
-    }, []);
-}
-
-function resolveRequire(cwd: string, pathOrModule: string) {
-    let target = pathOrModule;
-    if (!path.isAbsolute(pathOrModule)) {
-        const localPath = path.resolve(cwd, pathOrModule);
-        if (fs.existsSync(localPath)) {
-            target = localPath;
-        } else {
-            const modulePath = path.resolve(cwd, 'node_modules', pathOrModule);
-            if (fs.existsSync(modulePath)) {
-                target = modulePath;
-            }
-        }
-    }
-    // eslint-disable-next-line
-    return require(target);
 }
 
 export let util = new Util();

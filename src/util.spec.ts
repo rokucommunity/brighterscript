@@ -1,29 +1,32 @@
 import { expect } from 'chai';
 import * as path from 'path';
 import util, { standardizePath as s } from './util';
-import { Range } from 'vscode-languageserver';
+import { Position, Range } from 'vscode-languageserver';
 import { Lexer } from './lexer';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
-
+import { createSandbox } from 'sinon';
+const sinon = createSandbox();
 let tempDir = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tempDir}/rootDir`;
 let cwd = process.cwd();
 
 describe('util', () => {
     beforeEach(() => {
+        sinon.restore();
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
     });
 
     afterEach(() => {
+        sinon.restore();
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
     });
 
     describe('fileExists', () => {
         it('returns false when no value is passed', async () => {
-            expect(await util.fileExists(undefined)).to.be.false;
+            expect(await util.pathExists(undefined)).to.be.false;
         });
     });
 
@@ -41,21 +44,21 @@ describe('util', () => {
     });
 
     describe('loadConfigFile', () => {
-        it('returns undefined when no path is provided', async () => {
-            expect(await util.loadConfigFile(undefined)).to.be.undefined;
+        it('returns undefined when no path is provided', () => {
+            expect(util.loadConfigFile(undefined)).to.be.undefined;
         });
 
-        it('returns undefined when the path does not exist', async () => {
-            expect(await util.loadConfigFile(`?${rootDir}/donotexist.json`)).to.be.undefined;
+        it('returns undefined when the path does not exist', () => {
+            expect(util.loadConfigFile(`?${rootDir}/donotexist.json`)).to.be.undefined;
         });
 
-        it('returns proper list of ancestor project paths', async () => {
+        it('returns proper list of ancestor project paths', () => {
             fsExtra.outputFileSync(s`${rootDir}/child.json`, `{"extends": "parent.json"}`);
             fsExtra.outputFileSync(s`${rootDir}/parent.json`, `{"extends": "grandparent.json"}`);
             fsExtra.outputFileSync(s`${rootDir}/grandparent.json`, `{"extends": "greatgrandparent.json"}`);
             fsExtra.outputFileSync(s`${rootDir}/greatgrandparent.json`, `{}`);
             expect(
-                (await util.loadConfigFile(s`${rootDir}/child.json`))._ancestors.map(x => s(x))
+                util.loadConfigFile(s`${rootDir}/child.json`)._ancestors.map(x => s(x))
             ).to.eql([
                 s`${rootDir}/child.json`,
                 s`${rootDir}/parent.json`,
@@ -64,9 +67,9 @@ describe('util', () => {
             ]);
         });
 
-        it('returns empty ancestors list for non-extends files', async () => {
+        it('returns empty ancestors list for non-extends files', () => {
             fsExtra.outputFileSync(s`${rootDir}/child.json`, `{}`);
-            let config = await util.loadConfigFile(s`${rootDir}/child.json`);
+            let config = util.loadConfigFile(s`${rootDir}/child.json`);
             expect(
                 config._ancestors.map(x => s(x))
             ).to.eql([
@@ -111,34 +114,34 @@ describe('util', () => {
     });
 
     describe('getConfigFilePath', () => {
-        it('returns undefined when it does not find the file', async () => {
-            let configFilePath = await util.getConfigFilePath(s`${process.cwd()}/testProject/project1`);
+        it('returns undefined when it does not find the file', () => {
+            let configFilePath = util.getConfigFilePath(s`${process.cwd()}/testProject/project1`);
             expect(configFilePath).not.to.exist;
         });
 
-        it('returns path to file when found', async () => {
+        it('returns path to file when found', () => {
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, '');
             expect(
-                await util.getConfigFilePath(s`${tempDir}/rootDir`)
+                util.getConfigFilePath(s`${tempDir}/rootDir`)
             ).to.equal(
                 s`${tempDir}/rootDir/bsconfig.json`
             );
         });
 
-        it('finds config file in parent directory', async () => {
+        it('finds config file in parent directory', () => {
             const bsconfigPath = s`${tempDir}/rootDir/bsconfig.json`;
             fsExtra.outputFileSync(bsconfigPath, '');
             fsExtra.ensureDirSync(`${tempDir}/rootDir/source`);
             expect(
-                await util.getConfigFilePath(s`${tempDir}/rootDir/source`)
+                util.getConfigFilePath(s`${tempDir}/rootDir/source`)
             ).to.equal(
                 s`${tempDir}/rootDir/bsconfig.json`
             );
         });
 
-        it('uses cwd when not provided', async () => {
+        it('uses cwd when not provided', () => {
             //sanity check
-            expect(await util.getConfigFilePath()).not.to.exist;
+            expect(util.getConfigFilePath()).not.to.exist;
 
             const rootDir = s`${tempDir}/rootDir`;
 
@@ -148,7 +151,7 @@ describe('util', () => {
             process.chdir(rootDir);
             try {
                 expect(
-                    await util.getConfigFilePath()
+                    util.getConfigFilePath()
                 ).to.equal(
                     s`${rootDir}/bsconfig.json`
                 );
@@ -202,39 +205,39 @@ describe('util', () => {
     });
 
     describe('normalizeAndResolveConfig', () => {
-        it('throws for missing project file', async () => {
-            await expectThrowAsync(async () => {
-                await util.normalizeAndResolveConfig({ project: 'path/does/not/exist/bsconfig.json' });
-            });
+        it('throws for missing project file', () => {
+            expect(() => {
+                util.normalizeAndResolveConfig({ project: 'path/does/not/exist/bsconfig.json' });
+            }).to.throw;
         });
 
-        it('does not throw for optional missing', async () => {
-            await expectNotThrowAsync(async () => {
-                await util.normalizeAndResolveConfig({ project: '?path/does/not/exist/bsconfig.json' });
+        it('does not throw for optional missing', () => {
+            expect(() => {
+                util.normalizeAndResolveConfig({ project: '?path/does/not/exist/bsconfig.json' });
 
-            });
+            }).not.to.throw;
         });
 
-        it('throws for missing extends file', async () => {
+        it('throws for missing extends file', () => {
             try {
                 fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, `{ "extends": "path/does/not/exist/bsconfig.json" }`);
-                await expectThrowAsync(async () => {
-                    await util.normalizeAndResolveConfig({
+                expect(() => {
+                    util.normalizeAndResolveConfig({
                         project: s`${rootDir}/bsconfig.json`
                     });
-                });
+                }).to.throw;
             } finally {
                 process.chdir(cwd);
             }
         });
 
-        it('throws for missing extends file', async () => {
+        it('throws for missing extends file', () => {
             fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, `{ "extends": "?path/does/not/exist/bsconfig.json" }`);
-            await expectNotThrowAsync(async () => {
-                await util.normalizeAndResolveConfig({
+            expect(() => {
+                util.normalizeAndResolveConfig({
                     project: s`${rootDir}/bsconfig.json`
                 });
-            });
+            }).not.to.throw;
         });
     });
 
@@ -247,9 +250,9 @@ describe('util', () => {
             expect(util.normalizeConfig(<any>{ emitDefinitions: 'true' }).emitDefinitions).to.be.false;
         });
 
-        it('loads project from disc', async () => {
+        it('loads project from disc', () => {
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
-            let config = await util.normalizeAndResolveConfig({
+            let config = util.normalizeAndResolveConfig({
                 project: s`${tempDir}/rootDir/bsconfig.json`
             });
             expect(
@@ -259,7 +262,7 @@ describe('util', () => {
             );
         });
 
-        it('loads project from disc and extends it', async () => {
+        it('loads project from disc and extends it', () => {
             //the extends file
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.base.json`, `{
                 "outFile": "customOutDir/pkg1.zip",
@@ -272,14 +275,14 @@ describe('util', () => {
                 "watch": true
             }`);
 
-            let config = await util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
+            let config = util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
 
             expect(config.outFile).to.equal(s`${tempDir}/rootDir/customOutDir/pkg1.zip`);
             expect(config.rootDir).to.equal(s`${tempDir}/rootDir/core`);
             expect(config.watch).to.equal(true);
         });
 
-        it('overrides parent files array with child files array', async () => {
+        it('overrides parent files array with child files array', () => {
             //the parent file
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.parent.json`, `{
                 "files": ["base.brs"]
@@ -291,12 +294,12 @@ describe('util', () => {
                 "files": ["child.brs"]
             }`);
 
-            let config = await util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
+            let config = util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
 
             expect(config.files).to.eql(['child.brs']);
         });
 
-        it('catches circular dependencies', async () => {
+        it('catches circular dependencies', () => {
             fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, `{
                 "extends": "bsconfig2.json"
             }`);
@@ -306,7 +309,7 @@ describe('util', () => {
 
             let threw = false;
             try {
-                await util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
             } catch (e) {
                 threw = true;
             }
@@ -315,8 +318,8 @@ describe('util', () => {
             //the test passed
         });
 
-        it('properly handles default for watch', async () => {
-            let config = await util.normalizeAndResolveConfig({ watch: true });
+        it('properly handles default for watch', () => {
+            let config = util.normalizeAndResolveConfig({ watch: true });
             expect(config.watch).to.be.true;
         });
     });
@@ -522,6 +525,36 @@ describe('util', () => {
         });
     });
 
+    describe('compareRangeToPosition', () => {
+        it('correctly compares positions to ranges with one line range line', () => {
+            let range = Range.create(1, 10, 1, 15);
+            expect(util.comparePositionToRange(Position.create(0, 13), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 1), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 9), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 10), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 13), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 15), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 16), range)).to.equal(1);
+            expect(util.comparePositionToRange(Position.create(2, 10), range)).to.equal(1);
+        });
+        it('correctly compares positions to ranges with multiline range', () => {
+            let range = Range.create(1, 10, 3, 15);
+            expect(util.comparePositionToRange(Position.create(0, 13), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 1), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 9), range)).to.equal(-1);
+            expect(util.comparePositionToRange(Position.create(1, 10), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 13), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(1, 15), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(2, 0), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(2, 10), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(2, 13), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(3, 0), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(3, 10), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(3, 13), range)).to.equal(0);
+            expect(util.comparePositionToRange(Position.create(3, 16), range)).to.equal(1);
+            expect(util.comparePositionToRange(Position.create(4, 10), range)).to.equal(1);
+        });
+    });
     describe('getExtension', () => {
         it('handles edge cases', () => {
             expect(util.getExtension('main.bs')).to.eql('.bs');
@@ -532,24 +565,69 @@ describe('util', () => {
             expect(util.getExtension('main.component.xml')).to.eql('.xml');
         });
     });
+
+    describe('loadPlugins', () => {
+
+        let pluginPath: string;
+        let id = 1;
+
+        beforeEach(() => {
+            // `require` caches plugins, so  generate a unique plugin name for every test
+            pluginPath = `${tempDir}/plugin${id++}.js`;
+        });
+
+        it('shows warning when loading plugin with old "object" format', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = {
+                    name: 'AwesomePlugin'
+                };
+            `);
+            const stub = sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect(plugins[0].name).to.eql('AwesomePlugin');
+            expect(stub.callCount).to.equal(1);
+        });
+
+        it('shows warning when loading plugin with old "object" format and exports.default', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports.default = {
+                    name: 'AwesomePlugin'
+                };
+            `);
+            const stub = sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect(plugins[0].name).to.eql('AwesomePlugin');
+            expect(stub.callCount).to.equal(1);
+        });
+
+        it('loads plugin with factory pattern', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return {
+                        name: 'AwesomePlugin'
+                    };
+                };
+            `);
+            const stub = sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect(plugins[0].name).to.eql('AwesomePlugin');
+            //does not warn about factory pattern
+            expect(stub.callCount).to.equal(0);
+        });
+
+        it('loads plugin with factory pattern and `default`', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports.default = function() {
+                    return {
+                        name: 'AwesomePlugin'
+                    };
+                };
+            `);
+            const stub = sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect(plugins[0].name).to.eql('AwesomePlugin');
+            //does not warn about factory pattern
+            expect(stub.callCount).to.equal(0);
+        });
+    });
 });
-
-async function expectThrowAsync(callback) {
-    let ex;
-    try {
-        await Promise.resolve(callback());
-    } catch (e) {
-        ex = e;
-    }
-    expect(ex, 'Expected to throw error').to.exist;
-}
-
-async function expectNotThrowAsync(callback) {
-    let ex;
-    try {
-        await Promise.resolve(callback());
-    } catch (e) {
-        ex = e;
-    }
-    expect(ex, 'Expected not to throw error').not.to.exist;
-}

@@ -29,9 +29,9 @@ describe('ProgramBuilder', () => {
     });
 
     let builder: ProgramBuilder;
-    beforeEach(async () => {
+    beforeEach(() => {
         builder = new ProgramBuilder();
-        builder.options = await util.normalizeAndResolveConfig({
+        builder.options = util.normalizeAndResolveConfig({
             rootDir: rootDir
         });
         builder.program = new Program(builder.options);
@@ -45,24 +45,25 @@ describe('ProgramBuilder', () => {
     describe('loadAllFilesAST', () => {
         it('loads .bs, .brs, .xml files', async () => {
             sinon.stub(util, 'getFilePaths').returns(Promise.resolve([{
-                src: 'file.brs',
-                dest: 'file.brs'
+                src: 'file1.brs',
+                dest: 'file1.brs'
             }, {
-                src: 'file.bs',
-                dest: 'file.bs'
+                src: 'file2.bs',
+                dest: 'file2.bs'
             }, {
-                src: 'file.xml',
-                dest: 'file.xml'
+                src: 'file3.xml',
+                dest: 'file4.xml'
             }]));
 
             let stub = sinon.stub(builder.program, 'addOrReplaceFile');
+            sinon.stub(builder, 'getFileContents').returns(Promise.resolve(''));
             await builder['loadAllFilesAST']();
             expect(stub.getCalls()).to.be.lengthOf(3);
         });
 
         it('loads all type definitions first', async () => {
             const requestedFiles = [] as string[];
-            builder.program.fileResolvers.push((filePath) => {
+            builder['fileResolvers'].push((filePath) => {
                 requestedFiles.push(s(filePath));
             });
             fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
@@ -78,21 +79,18 @@ describe('ProgramBuilder', () => {
             //the non-d files should be last
             expect(srcPaths.indexOf(s`${rootDir}/source/main.brs`)).within(2, 3);
             expect(srcPaths.indexOf(s`${rootDir}/source/lib.brs`)).within(2, 3);
-
-            //the d files should NOT be requested from the FS
-            expect(requestedFiles).not.to.include(s`${rootDir}/source/lib.d.bs`);
-            expect(requestedFiles).not.to.include(s`${rootDir}/source/main.d.bs`);
         });
 
         it('does not load non-existent type definition file', async () => {
             const requestedFiles = [] as string[];
-            builder.program.fileResolvers.push((filePath) => {
+            builder['fileResolvers'].push((filePath) => {
                 requestedFiles.push(s(filePath));
             });
             fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
             await builder['loadAllFilesAST']();
             //the d file should not be requested because `loadAllFilesAST` knows it doesn't exist
             expect(requestedFiles).not.to.include(s`${rootDir}/source/main.d.bs`);
+            expect(requestedFiles).to.include(s`${rootDir}/source/main.brs`);
         });
     });
 

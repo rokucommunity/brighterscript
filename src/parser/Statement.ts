@@ -1257,11 +1257,11 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                const fqParentClassName = util.getFullyQualifiedClassName(
+                //find the parent class
+                stmt = state.file.getClassFileLink(
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
                     stmt.namespaceName?.getName(ParseMode.BrighterScript)
-                );
-                stmt = state.file.getClassByName(fqParentClassName);
+                )?.item;
                 myIndex++;
             } else {
                 break;
@@ -1279,15 +1279,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * This will return an empty array if no ancestors were found
      */
     public getAncestors(state: TranspileState) {
-        let ancestors = [];
+        let ancestors = [] as ClassStatement[];
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                let fullyQualifiedClassName = util.getFullyQualifiedClassName(
+                stmt = state.file.getClassFileLink(
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
                     this.namespaceName?.getName(ParseMode.BrighterScript)
-                );
-                stmt = state.file.getClassByName(fullyQualifiedClassName);
+                )?.item;
                 ancestors.push(stmt);
             } else {
                 break;
@@ -1358,8 +1357,8 @@ export class ClassStatement extends Statement implements TypedefProvider {
         //construct parent class or empty object
         if (ancestors[0]) {
             let fullyQualifiedClassName = util.getFullyQualifiedClassName(
-                this.parentClassName.getName(ParseMode.BrighterScript),
-                this.namespaceName?.getName(ParseMode.BrighterScript)
+                ancestors[0].getName(ParseMode.BrighterScript),
+                ancestors[0].namespaceName?.getName(ParseMode.BrighterScript)
             );
             result.push(
                 'instance = ',
