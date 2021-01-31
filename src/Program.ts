@@ -1030,10 +1030,10 @@ export class Program {
 
     public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
         // map fileEntries using their path as key, to avoid excessive "find()" operations
-        const mappedFileEntries = fileEntries.reduce((collection, entry) => {
+        const mappedFileEntries = fileEntries.reduce<Record<string, FileObj>>((collection, entry) => {
             collection[s`${entry.src}`] = entry;
             return collection;
-        }, {} as Record<string, FileObj>);
+        }, {});
 
         const entries = Object.values(this.files).map(file => {
             let filePathObj = mappedFileEntries[s`${file.pathAbsolute}`];
