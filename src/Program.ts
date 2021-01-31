@@ -1029,8 +1029,14 @@ export class Program {
     }
 
     public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
+        // map fileEntries using their path as key, to avoid excessive "find()" operations
+        const mappedFileEntries = fileEntries.reduce((collection, entry) => {
+            collection[s`${entry.src}`] = entry;
+            return collection;
+        }, {} as Record<string, FileObj>);
+
         const entries = Object.values(this.files).map(file => {
-            let filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
+            let filePathObj = mappedFileEntries[s`${file.pathAbsolute}`];
             if (!filePathObj) {
                 //this file has been added in-memory, from a plugin, for example
                 filePathObj = {
