@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.30.2] - 2021-01-31
+### Fixed
+ - xml parse error crashing validation ((#294)[https://github.com/rokucommunity/brighterscript/pull/294])
+ - better handling for `createStringLiteral` ((#292)[https://github.com/rokucommunity/brighterscript/pull/292])
+
+
+
 ## [0.30.1] - 2021-01-29
 ### Fixed
  - bug that would crash while transpiling if a script tag didn't have a `type` attribute
@@ -880,3 +887,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.29.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.28.2...v0.29.0
 [0.30.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.29.0...v0.30.0
 [0.30.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.0...v0.30.1
+[0.30.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.1...v0.30.2
