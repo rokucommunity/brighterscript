@@ -1,0 +1,21 @@
+import { expect } from 'chai';
+import { createStringLiteral } from './creators';
+
+describe('creators', () => {
+
+    describe('createStringLiteral', () => {
+        it('wraps the value in quotes', () => {
+            expect(createStringLiteral('hello world').token.text).to.equal('"hello world"');
+        });
+        it('does not wrap already-quoted value in extra quotes', () => {
+            expect(createStringLiteral('"hello world"').token.text).to.equal('"hello world"');
+        });
+
+        it('does not wrap badly quoted value in additional quotes', () => {
+            //leading
+            expect(createStringLiteral('"hello world').token.text).to.equal('"hello world');
+            //trailing
+            expect(createStringLiteral('hello world"').token.text).to.equal('hello world"');
+        });
+    });
+});
