@@ -617,7 +617,7 @@ export class DimStatement extends Statement {
 
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (this.dimensions?.length > 0 && options.walkMode & InternalWalkMode.walkExpressions) {
-            for(let i = 0; i < this.dimensions.length; i++) {
+            for (let i = 0; i < this.dimensions.length; i++) {
                 walk(this.dimensions, i, visitor, options, this);
             }
         }
