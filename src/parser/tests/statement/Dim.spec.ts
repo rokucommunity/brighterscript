@@ -17,11 +17,13 @@ describe('parser DimStatement', () => {
         validatePass(`Dim requestData[requestList["2"]]`, 0, 'requestData', 1);
         validatePass(`Dim requestData[1, requestList["2"]]`, 0, 'requestData', 2);
         validatePass(`Dim requestData[1, requestList["2"], 2]`, 0, 'requestData', 3);
+        validatePass(`Dim requestData[getValue()]`, 0, 'requestData', 1);
+        validatePass(`Dim requestData[getValue(), 2]`, 0, 'requestData', 2);
+        validatePass(`Dim requestData[1, getValue(), 2]`, 0, 'requestData', 3);
         validatePass(`Dim requestData[1, getValue({
             key: "value"
         }), 2]`, 0, 'requestData', 3);
     });
-
 
     it('flags missing identifier after dim', () => {
         const parser = Parser.parse(`Dim [5]`);

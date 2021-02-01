@@ -608,10 +608,21 @@ export class DimStatement extends Statement {
     public range: Range;
 
     public transpile(state: TranspileState) {
-        const result = [
+        let result = [
             state.sourceNode(this.dimToken, 'dim'),
-            ' '
+            ' ',
+            state.sourceNode(this.identifier, this.identifier.text),
+            state.sourceNode(this.openingSquare, '[')
         ];
+        for (var i = 0; i < this.dimensions.length; i++) {
+            if (i > 0) {
+                result.push(', ');
+            }
+            result.push(
+                ...this.dimensions[i].transpile(state)
+            );
+        }
+        result.push(state.sourceNode(this.closingSquare, ']'));
         return result;
     }
 
