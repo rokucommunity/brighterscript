@@ -614,7 +614,7 @@ export class DimStatement extends Statement {
             state.sourceNode(this.identifier, this.identifier.text),
             state.sourceNode(this.openingSquare, '[')
         ];
-        for (var i = 0; i < this.dimensions.length; i++) {
+        for (let i = 0; i < this.dimensions.length; i++) {
             if (i > 0) {
                 result.push(', ');
             }
