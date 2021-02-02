@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CompletionItem, Position, SignatureInformation } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation } from 'vscode-languageserver';
 import { Location, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -731,6 +731,26 @@ export class Program {
         }
 
         return Promise.resolve(file.getHover(position));
+    }
+
+    /**
+     * Compute code actions for the given file and range
+     */
+    public getCodeActions(pathAbsolute: string, range: Range) {
+        const codeActions = [] as CodeAction[];
+        const file = this.getFile(pathAbsolute);
+
+        this.plugins.emit('beforeGetCodeActions', file, range, codeActions);
+
+        //get code actions from the file
+        codeActions.push(
+            ...file.getCodeActions(range)
+        );
+
+        //TODO get code actions from each scope
+
+        this.plugins.emit('beforeGetCodeActions', file, range, codeActions);
+        return codeActions;
     }
 
     public getSignatureHelp(filepath: string, position: Position): SignatureInfoObj[] {

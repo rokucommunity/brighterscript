@@ -17,7 +17,8 @@ import type {
     DocumentSymbolParams,
     ReferenceParams,
     SignatureHelp,
-    SignatureHelpParams
+    SignatureHelpParams,
+    CodeActionParams
 } from 'vscode-languageserver';
 import {
     createConnection,
@@ -25,7 +26,8 @@ import {
     FileChangeType,
     ProposedFeatures,
     TextDocuments,
-    TextDocumentSyncKind
+    TextDocumentSyncKind,
+    CodeActionKind
 } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -143,6 +145,8 @@ export class LanguageServer {
 
         this.connection.onReferences(this.onReferences.bind(this));
 
+        this.connection.onCodeAction(this.onCodeAction.bind(this));
+
         /*
         this.connection.onDidOpenTextDocument((params) => {
              // A text document got opened in VSCode.
@@ -196,6 +200,9 @@ export class LanguageServer {
                 documentSymbolProvider: true,
                 workspaceSymbolProvider: true,
                 referencesProvider: true,
+                codeActionProvider: {
+                    codeActionKinds: [CodeActionKind.Refactor]
+                },
                 signatureHelpProvider: {
                     triggerCharacters: ['(', ',']
                 },
@@ -541,6 +548,41 @@ export class LanguageServer {
             item.documentation = 'JavaScript documentation';
         }
         return item;
+    }
+
+    private async onCodeAction(params: CodeActionParams) {
+        //ensure programs are initialized
+        await this.waitAllProgramFirstRuns();
+
+        let filePath = util.uriToPath(params.textDocument.uri);
+
+        //wait until the file has settled
+        await this.keyedThrottler.onIdleOnce(filePath, true);
+
+        let codeActions = this
+            .getWorkspaces()
+            .flatMap(workspace => workspace.builder.program.getCodeActions(filePath, params.range));
+
+        // return [
+        //     util.createCodeAction({
+        //         title: 'Add extends attribute',
+        //         changes: [{
+        //             type: 'insert',
+        //             filePath: URI.parse(params.textDocument.uri).fsPath,
+        //             newText: ' extends="Group"',
+        //             position: util.createPosition(1, 32)
+        //         }]
+        //     })
+        // ];
+        // return [CodeAction.create('Add extends attribute', {
+        //     changes: {
+        //         [params.textDocument.uri]: [
+        //             TextEdit.insert(util.createPosition(1, 32), ' extends="Group"')
+        //         ]
+        //     }
+        // })
+        // ];
+        return codeActions;
     }
 
     /**

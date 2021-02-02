@@ -4,12 +4,12 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import type { Position, Range } from 'vscode-languageserver';
+import { CodeAction, Position, Range, TextEdit, WorkspaceEdit } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, CodeActionShorthand } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -1174,6 +1174,28 @@ export class Util {
             },
             range: attr.range
         } as SGAttribute;
+    }
+
+    public createCodeAction(obj: CodeActionShorthand) {
+        const edit = {
+            changes: {}
+        } as WorkspaceEdit;
+        for (const change of obj.changes) {
+            const uri = URI.file(change.filePath).toString();
+
+            //create the edit changes array for this uri
+            if (!edit.changes[uri]) {
+                edit.changes[uri] = [];
+            }
+            if (change.type === 'insert') {
+                edit.changes[uri].push(
+                    TextEdit.insert(change.position, change.newText)
+                );
+            } else if (change.type === 'replace') {
+                TextEdit.replace(change.range, change.newText);
+            }
+        }
+        return CodeAction.create(obj.title, edit);
     }
 }
 

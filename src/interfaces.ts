@@ -1,4 +1,4 @@
-import type { Range, Diagnostic } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, Position, CodeActionKind } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -187,6 +187,8 @@ export interface CompilerPlugin {
     afterFileTranspile?: (entry: TranspileObj) => void;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
+    beforeGetCodeActions?: (file: BscFile, range: Range, codeActions: CodeAction[]) => void;
+    afterGetCodeActions?: (file: BscFile, range: Range, codeActions: CodeAction[]) => void;
 }
 
 export interface TypedefProvider {
@@ -201,4 +203,26 @@ export interface ExpressionInfo {
     expressions: Expression[];
     varExpressions: Expression[];
     uniqueVarNames: string[];
+}
+
+export interface CodeActionShorthand {
+    title: string;
+    diagnostics?: Diagnostic[];
+    kind?: CodeActionKind;
+    isPreferred?: boolean;
+    changes: Array<InsertChange | ReplaceChange>;
+}
+
+export interface InsertChange {
+    filePath: string;
+    newText: string;
+    type: 'insert';
+    position: Position;
+}
+
+export interface ReplaceChange {
+    filePath: string;
+    newText: string;
+    type: 'replace';
+    range: Range;
 }

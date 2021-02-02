@@ -1,7 +1,8 @@
 import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
+import { CodeActionKind } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
@@ -367,6 +368,38 @@ export class XmlFile {
         //TODO implement
         // let result = {} as Hover;
         return null;
+    }
+
+    public getCodeActions(range: Range) {
+        const result = [] as CodeAction[];
+
+        for (const diagnostic of this.diagnostics) {
+            //skip diagnostics that don't occur on this line
+            if (diagnostic.range?.start.line !== range.start.line) {
+                continue;
+            }
+            if (diagnostic.code === DiagnosticMessages.xmlComponentMissingExtendsAttribute().code) {
+                //add the attribute at the end of the first attribute, or after the `<component` if no attributes
+                const pos = (this.parser.ast.component.attributes[0] ?? this.parser.ast.component.tag).range.end;
+                //add this extends attribute right after the closing `>` token
+                range.end.character -= 1;
+                result.push(
+                    util.createCodeAction({
+                        title: `Add 'extends="Group"' attribute`,
+                        // diagnostics: [diagnostic],
+                        isPreferred: true,
+                        kind: CodeActionKind.QuickFix,
+                        changes: [{
+                            type: 'insert',
+                            filePath: this.pathAbsolute,
+                            position: util.createPosition(pos.line, pos.character),
+                            newText: ' extends="Group"'
+                        }]
+                    })
+                );
+            }
+        }
+        return result;
     }
 
     public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
