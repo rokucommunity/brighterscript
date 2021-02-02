@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.30.3] - 2021-02-01
+### Fixed
+ - performance issue when transpiling larger projects, even when no brighterscript code was used
+
+
+
 ## [0.30.2] - 2021-01-31
 ### Fixed
  - xml parse error crashing validation ((#294)[https://github.com/rokucommunity/brighterscript/pull/294])
@@ -888,3 +894,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.30.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.29.0...v0.30.0
 [0.30.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.0...v0.30.1
 [0.30.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.1...v0.30.2
+[0.30.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.2...v0.30.3
