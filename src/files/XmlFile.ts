@@ -385,7 +385,7 @@ export class XmlFile {
                 range.end.character -= 1;
                 result.push(
                     util.createCodeAction({
-                        title: `Add 'extends="Group"' attribute`,
+                        title: `Add default extends attribute`,
                         // diagnostics: [diagnostic],
                         isPreferred: true,
                         kind: CodeActionKind.QuickFix,
