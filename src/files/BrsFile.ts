@@ -502,7 +502,7 @@ export class BrsFile {
             }
 
             //add all of ForEachStatement loop varibales
-            func.body.walk(createVisitor({
+            func.body?.walk(createVisitor({
                 ForEachStatement: (stmt) => {
                     scope.variableDeclarations.push({
                         nameRange: stmt.item.range,
