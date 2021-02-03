@@ -759,7 +759,7 @@ export class Program {
             }
         }
 
-        this.plugins.emit('beforeGetCodeActions', file, range, codeActions);
+        this.plugins.emit('afterGetCodeActions', file, range, codeActions);
         return codeActions;
     }
 
