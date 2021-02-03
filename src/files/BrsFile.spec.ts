@@ -203,6 +203,19 @@ describe('BrsFile', () => {
             expect(results).to.be.empty;
         });
 
+        it('does provide intellisence for labels only after a goto keyword', () => {
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main(name as string)
+                    something:
+                    goto \nend sub
+            `);
+
+            let results = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 25));
+            expect(results.length).to.equal(1);
+            expect(results[0]?.label).to.equal('something');
+        });
+
     });
 
     describe('comment flags', () => {

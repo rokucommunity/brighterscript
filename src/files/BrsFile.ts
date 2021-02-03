@@ -502,13 +502,21 @@ export class BrsFile {
             }
 
             //add all of ForEachStatement loop varibales
-            func.body.walk(createVisitor({
+            func.body?.walk(createVisitor({
                 ForEachStatement: (stmt) => {
                     scope.variableDeclarations.push({
                         nameRange: stmt.item.range,
                         lineIndex: stmt.item.range.start.line,
                         name: stmt.item.text,
                         type: new DynamicType()
+                    });
+                },
+                LabelStatement: (stmt) => {
+                    const { identifier } = stmt.tokens;
+                    scope.labelStatements.push({
+                        nameRange: identifier.range,
+                        lineIndex: identifier.range.start.line,
+                        name: identifier.text
                     });
                 }
             }), {
@@ -789,6 +797,10 @@ export class BrsFile {
             return result;
         }
 
+        if (this.tokenFollows(currentToken, TokenKind.Goto)) {
+            return this.getLabelCompletion(functionScope);
+        }
+
         if (this.isPositionNextToTokenKind(position, TokenKind.Dot)) {
             if (namespaceCompletions.length > 0) {
                 //if we matched a namespace, after a dot, it can't be anything else but something from our namespace completions
@@ -830,7 +842,6 @@ export class BrsFile {
 
             //include local variables
             let variables = functionScope.variableDeclarations;
-
             for (let variable of variables) {
                 //skip duplicate variable names
                 if (names[variable.name.toLowerCase()]) {
@@ -861,6 +872,13 @@ export class BrsFile {
             }
         }
         return result;
+    }
+
+    private getLabelCompletion(functionScope: FunctionScope) {
+        return functionScope.labelStatements.map(label => ({
+            label: label.name,
+            kind: CompletionItemKind.Reference
+        }));
     }
 
     private getClassMemberCompletions(position: Position, currentToken: Token, functionScope: FunctionScope, scope: Scope) {
@@ -1072,8 +1090,9 @@ export class BrsFile {
         }
     }
 
-    private getTokenBefore(currentToken: Token, tokenKind: TokenKind) {
-        for (let i = this.parser.tokens.indexOf(currentToken); i >= 0; i--) {
+    private getTokenBefore(currentToken: Token, tokenKind: TokenKind): Token {
+        const index = this.parser.tokens.indexOf(currentToken);
+        for (let i = index - 1; i >= 0; i--) {
             currentToken = this.parser.tokens[i];
             if (currentToken.kind === TokenKind.Newline) {
                 break;
@@ -1082,6 +1101,14 @@ export class BrsFile {
             }
         }
         return undefined;
+    }
+
+    private tokenFollows(currentToken: Token, tokenKind: TokenKind): boolean {
+        const index = this.parser.tokens.indexOf(currentToken);
+        if (index > 0) {
+            return this.parser.tokens[index - 1].kind === tokenKind;
+        }
+        return false;
     }
 
     public getTokensUntil(currentToken: Token, tokenKind: TokenKind, direction: -1 | 1 = -1) {
@@ -1341,12 +1368,20 @@ export class BrsFile {
         //look through local variables first, get the function scope for this position (if it exists)
         const functionScope = this.getFunctionScopeAtPosition(position);
         if (functionScope) {
-            //find any variable with this name
+            //find any variable or label with this name
             for (const varDeclaration of functionScope.variableDeclarations) {
                 //we found a variable declaration with this token text!
                 if (varDeclaration.name.toLowerCase() === textToSearchFor) {
                     const uri = util.pathToUri(this.pathAbsolute);
                     results.push(Location.create(uri, varDeclaration.nameRange));
+                }
+            }
+            if (this.tokenFollows(token, TokenKind.Goto)) {
+                for (const label of functionScope.labelStatements) {
+                    if (label.name.toLocaleLowerCase() === textToSearchFor) {
+                        const uri = util.pathToUri(this.pathAbsolute);
+                        results.push(Location.create(uri, label.nameRange));
+                    }
                 }
             }
         }
@@ -1432,7 +1467,7 @@ export class BrsFile {
             let functionScope = this.getFunctionScopeAtPosition(position);
             if (functionScope) {
                 //find any variable with this name
-                for (let varDeclaration of functionScope.variableDeclarations) {
+                for (const varDeclaration of functionScope.variableDeclarations) {
                     //we found a variable declaration with this token text!
                     if (varDeclaration.name.toLowerCase() === lowerTokenText) {
                         let typeText: string;
@@ -1445,6 +1480,14 @@ export class BrsFile {
                             range: token.range,
                             //append the variable name to the front for scope
                             contents: typeText
+                        };
+                    }
+                }
+                for (const labelStatement of functionScope.labelStatements) {
+                    if (labelStatement.name.toLocaleLowerCase() === lowerTokenText) {
+                        return {
+                            range: token.range,
+                            contents: `${labelStatement.name}: label`
                         };
                     }
                 }
