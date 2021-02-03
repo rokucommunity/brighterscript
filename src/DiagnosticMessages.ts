@@ -605,7 +605,13 @@ export let DiagnosticMessages = {
         message: `Missing exception expression after 'throw' keyword`,
         code: 1118,
         severity: DiagnosticSeverity.Error
+    }),
+    unknownType: (name: string, scopeName: string) => ({
+        message: `Cannot find namespaced function or class with name '${name}' when this file is included in scope '${scopeName}'`,
+        code: 1119,
+        severity: DiagnosticSeverity.Error
     })
+
 };
 
 let allCodes = [] as number[];

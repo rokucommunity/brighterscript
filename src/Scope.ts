@@ -6,14 +6,14 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
 import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
+import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement, DottedGetExpression } from './parser';
 import { ParseMode } from './parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isDottedGetExpression, isVariableExpression } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 
 /**
@@ -448,7 +448,60 @@ export class Scope {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
+            this.validateNamespaces(file);
         });
+    }
+
+    public validateEnums(file: BrsFile) {
+        let nsLookup = this.namespaceLookup;
+        for (let dg of file.parser.references.dottedGets) {
+            let nameParts = this.getAllDottedGetParts(dg);
+            if (nsLookup[nameParts[0].toLowerCase()]) {
+                //TODO - look up against enum cache
+                //if root match;
+                // if tail doesn't then error
+                //  else add Enum to the dottedGet expression so that it can be tranpsiled
+            }
+        }
+
+    }
+    public validateNamespaces(file: BrsFile) {
+        let nsLookup = this.namespaceLookup;
+        for (let ce of file.parser.references.callExpressions) {
+            let dg = ce.callee as DottedGetExpression;
+            let nameParts = this.getAllDottedGetParts(dg);
+            if (nsLookup[nameParts[0].toLowerCase()]) {
+                //then it must reference something we know
+                let name = nameParts.pop();
+                let fullPathName = nameParts.join('.').toLowerCase();
+                let ns = nsLookup[fullPathName];
+                if (!ns) {
+                    //look it up minus the tail
+
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.unknownType(`${fullPathName}.${name}`, this.name),
+                        range: ce.range,
+                        file: file
+                    });
+                } else if (!ns.functionStatements[name.toLowerCase()] && !ns.classStatements[name.toLowerCase()]) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.unknownType(`${fullPathName}.${name}`, this.name),
+                        range: ce.range,
+                        file: file
+                    });
+                }
+            }
+        }
+    }
+
+    getAllDottedGetParts(dg: DottedGetExpression) {
+        let parts = [dg.name.text];
+        let nextPart = dg.obj;
+        while (isDottedGetExpression(nextPart) || isVariableExpression(nextPart)) {
+            parts.push(nextPart.name.text);
+            nextPart = isDottedGetExpression(nextPart) ? nextPart.obj : undefined;
+        }
+        return parts.reverse();
     }
 
     /**

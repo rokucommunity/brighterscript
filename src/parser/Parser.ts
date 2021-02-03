@@ -148,6 +148,27 @@ export class Parser {
         }
     }
 
+    private addDottedGetLookup(item: DottedGetExpression) {
+        //used when we have enum support
+        // if (isVariableExpression(item.obj) && ((item.obj as any).name && (item.obj as any).name.text !== 'm')) {
+        //     this._references.dottedGets.push(item);
+        // }
+    }
+
+    private addCallExpressionLookup(item: CallExpression) {
+        if (isDottedGetExpression(item.callee) && ((item.callee.obj as any).name && (item.callee.obj as any).name.text !== 'm')) {
+            this._references.callExpressions.push(item);
+        }
+        for (let a of item.args) {
+            if (isDottedGetExpression(a)) {
+                this.addDottedGetLookup(a);
+            } else if (isCallExpression(a)) {
+                this.addCallExpressionLookup(a);
+            }
+        }
+    }
+
+
     /**
      * The list of diagnostics found during the parse process
      */
@@ -1071,6 +1092,7 @@ export class Parser {
         this.namespaceAndFunctionDepth--;
         let result = new NamespaceStatement(keyword, name, body, endKeyword);
         this._references.namespaceStatements.push(result);
+        this._references.knownTypes[result.nameExpression.getName(ParseMode.BrighterScript)] = result;
 
         return result;
     }
@@ -1647,6 +1669,12 @@ export class Parser {
         }
 
         if (isCallExpression(expr) || isCallfuncExpression(expr)) {
+            for (let a of expr.args) {
+                if (isDottedGetExpression(a)) {
+                    this.addDottedGetLookup(a);
+                }
+            }
+
             return new ExpressionStatement(expr);
         }
 
@@ -1690,6 +1718,9 @@ export class Parser {
                         ? right
                         : new BinaryExpression(left, operator, right)
                 );
+            }
+            if (isDottedGetExpression(right)) {
+                this.addDottedGetLookup(right);
             }
         }
         return this.expressionStatement(expr);
@@ -2057,7 +2088,6 @@ export class Parser {
             return this.newExpression();
         }
         let expr = this.primary();
-
         while (true) {
             if (this.match(TokenKind.LeftParen)) {
                 expr = this.finishCall(this.previous(), expr);
@@ -2135,6 +2165,8 @@ export class Parser {
         }
 
         let expression = new CallExpression(callee, openingParen, closingParen, args, this.currentNamespaceName);
+        this.addCallExpressionLookup(expression);
+
         if (addToCallExpressionList) {
             this.callExpressions.push(expression);
         }
@@ -2221,8 +2253,11 @@ export class Parser {
                         if (this.check(TokenKind.RightSquareBracket)) {
                             break;
                         }
-
-                        elements.push(this.expression());
+                        let getExpr = this.expression();
+                        if (isDottedGetExpression(getExpr)) {
+                            this.addDottedGetLookup(getExpr);
+                        }
+                        elements.push(getExpr);
                     }
 
                     this.consume(
@@ -2532,6 +2567,7 @@ export class Parser {
             },
             NamespaceStatement: s => {
                 this._references.namespaceStatements.push(s);
+                this._references.knownTypes[s.getName(ParseMode.BrighterScript)] = s;
             },
             FunctionStatement: s => {
                 this._references.functionStatements.push(s);
@@ -2594,9 +2630,15 @@ function createReferences(): References {
         libraryStatements: [],
         namespaceStatements: [],
         newExpressions: [],
-        propertyHints: {}
+        propertyHints: {},
+        knownTypes: {}, //store namespaces and enums here
+        dottedGets: [], //used when we have enums
+        callExpressions: [] //used to verify namespaces
     };
 }
+
+//Simple type lookup - stores enum values, namespaces, and functions inside of namespaces
+export type KnownType = NamespaceStatement | FunctionExpression; // | EnumValue;
 
 export interface References {
     assignmentStatements: AssignmentStatement[];
@@ -2608,7 +2650,13 @@ export interface References {
     namespaceStatements: NamespaceStatement[];
     newExpressions: NewExpression[];
     propertyHints: Record<string, string>;
+    // known types for rapid type look up:
+    // stored as path.path2.path3 for for speed - case must match
+    knownTypes: Record<string, KnownType>;
+    dottedGets: DottedGetExpression[];
+    callExpressions: CallExpression[];
 }
+
 
 class CancelStatementError extends Error {
     constructor() {
