@@ -15,7 +15,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isDottedGetExpression, isVariableExpression } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
-import { getDefaultMembersMap as getSGMembersLookup } from './SGApi';
+import { getSGMembersLookup } from './SGApi';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
