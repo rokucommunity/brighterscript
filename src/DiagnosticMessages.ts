@@ -618,7 +618,7 @@ export let DiagnosticMessages = {
     }),
     unknownClassField: (name: string, scopeName: string) => ({
         message: `Cannot find class field with name '${name}' when this file is included in scope '${scopeName}'`,
-        code: 1120,
+        code: 1121,
         severity: DiagnosticSeverity.Error
     })
 
