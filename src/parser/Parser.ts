@@ -21,35 +21,36 @@ import type {
     PrintSeparatorSpace
 } from './Statement';
 import {
-    FunctionStatement,
-    CommentStatement,
     AssignmentStatement,
-    WhileStatement,
-    ExitWhileStatement,
-    ForStatement,
-    ForEachStatement,
-    ExitForStatement,
-    LibraryStatement,
     Block,
-    IfStatement,
-    DottedSetStatement,
-    IndexedSetStatement,
-    ExpressionStatement,
-    IncrementStatement,
-    ReturnStatement,
-    EndStatement,
-    PrintStatement,
-    LabelStatement,
-    GotoStatement,
-    StopStatement,
-    NamespaceStatement,
     Body,
-    ImportStatement,
     ClassFieldStatement,
     ClassMethodStatement,
     ClassStatement,
+    CommentStatement,
+    DimStatement,
+    DottedSetStatement,
+    EndStatement,
+    ExitForStatement,
+    ExitWhileStatement,
+    ExpressionStatement,
+    ForEachStatement,
+    ForStatement,
+    FunctionStatement,
+    GotoStatement,
+    IfStatement,
+    ImportStatement,
+    IncrementStatement,
+    IndexedSetStatement,
+    LabelStatement,
+    LibraryStatement,
+    NamespaceStatement,
+    PrintStatement,
+    ReturnStatement,
+    StopStatement,
+    ThrowStatement,
     TryCatchStatement,
-    ThrowStatement
+    WhileStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -822,6 +823,9 @@ export class Parser {
         if (this.checkAny(TokenKind.Print, TokenKind.Question)) {
             return this.printStatement();
         }
+        if (this.check(TokenKind.Dim)) {
+            return this.dimStatement();
+        }
 
         if (this.check(TokenKind.While)) {
             return this.whileStatement();
@@ -1373,6 +1377,44 @@ export class Parser {
             expression = this.expression();
         }
         return new ThrowStatement(throwToken, expression);
+    }
+
+    private dimStatement() {
+        const dim = this.advance();
+
+        let identifier = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('dim'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
+        // force to an identifier so the AST makes some sense
+        if (identifier) {
+            identifier.kind = TokenKind.Identifier;
+        }
+
+        let leftSquareBracket = this.tryConsume(DiagnosticMessages.missingLeftSquareBracketAfterDimIdentifier(), TokenKind.LeftSquareBracket);
+
+        let expressions: Expression[] = [];
+        let expression: Expression;
+        do {
+            try {
+                expression = this.expression();
+                expressions.push(expression);
+                if (this.check(TokenKind.Comma)) {
+                    this.advance();
+                } else {
+                    // will also exit for right square braces
+                    break;
+                }
+            } catch (error) {
+            }
+        } while (expression);
+
+        if (expressions.length === 0) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.missingExpressionsInDimStatement(),
+                range: this.peek().range
+            });
+        }
+        let rightSquareBracket = this.tryConsume(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier(), TokenKind.RightSquareBracket);
+
+        return new DimStatement(dim, identifier, leftSquareBracket, expressions, rightSquareBracket);
     }
 
     private ifStatement(): IfStatement {
