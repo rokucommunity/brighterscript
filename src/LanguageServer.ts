@@ -945,8 +945,8 @@ export class LanguageServer {
 
             await this.sendDiagnostics();
         } catch (e) {
-            this.connection.tracer.log(e);
-            this.sendCriticalFailure(`Critical error validating workspace: ${e.message}`);
+            this.connection.console.error(e);
+            this.sendCriticalFailure(`Critical error validating workspace: ${e.message}${e.stack ?? ''}`);
         }
 
         this.connection.sendNotification('build-status', 'success');
