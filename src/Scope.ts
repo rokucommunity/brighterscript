@@ -1,4 +1,4 @@
-import type { CompletionItem, Position, Range } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range } from 'vscode-languageserver';
 import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
@@ -241,6 +241,11 @@ export class Scope {
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
         this.diagnostics.push(...diagnostics);
+    }
+
+    public getCodeActions(file: BscFile, range: Range) {
+        const result = [] as CodeAction[];
+        return result;
     }
 
     /**

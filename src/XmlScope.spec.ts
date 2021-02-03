@@ -6,6 +6,8 @@ import { Program } from './Program';
 import { trim } from './testHelpers.spec';
 import { standardizePath as s, util } from './util';
 let rootDir = s`${process.cwd()}/rootDir`;
+import { createSandbox } from 'sinon';
+const sinon = createSandbox();
 
 describe('XmlScope', () => {
     let program: Program;
@@ -13,10 +15,12 @@ describe('XmlScope', () => {
         program = new Program({
             rootDir: rootDir
         });
+        sinon.restore();
     });
 
     afterEach(() => {
         program.dispose();
+        sinon.restore();
     });
 
     describe('constructor', () => {
@@ -184,6 +188,44 @@ describe('XmlScope', () => {
             });
             expect(diagnostics[6]).to.deep.include({ // syntax error expecting '=' but found '/>'
                 code: DiagnosticMessages.xmlGenericParseError('').code
+            });
+        });
+    });
+
+    describe('getCodeActions', () => {
+        it('sugests import script tag for function from not-imported file', () => {
+            program.addOrReplaceFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="child">
+                    <script uri="comp1.brs" />
+                </component>
+            `);
+            const codebehind = program.addOrReplaceFile('components/comp1.brs', `
+                sub init()
+                    doSomething()
+                end sub
+            `);
+            program.addOrReplaceFile('source/common.brs', `
+                sub doSomething()
+                end sub
+            `);
+            program.validate();
+            const stub = sinon.stub(util, 'createCodeAction');
+            const actions = program.getComponentScope('child').getCodeActions(
+                codebehind,
+                // doSo|mething()
+                util.createRange(2, 24, 2, 24)
+            );
+            expect(actions).to.be.lengthOf(1);
+
+            expect(stub.getCalls()[0].args[0]).to.eql({
+                title: `Import "pkg:/source/common.brs" into component "child"`,
+                changes: [{
+                    filePath: s`${rootDir}/components/comp1.xml`,
+                    newText: '  <script type="text/brightscript" uri="pkg:/source/common.brs" />\n',
+                    type: 'insert',
+                    position: util.createPosition(3, 0)
+                }]
             });
         });
     });

@@ -747,7 +747,17 @@ export class Program {
             ...file.getCodeActions(range)
         );
 
-        //TODO get code actions from each scope
+        //get code actions from every scope this file is a member of
+        for (let key in this.scopes) {
+            let scope = this.scopes[key];
+
+            if (scope.hasFile(file)) {
+                //get code actions from each scope
+                codeActions.push(
+                    ...scope.getCodeActions(file, range)
+                );
+            }
+        }
 
         this.plugins.emit('beforeGetCodeActions', file, range, codeActions);
         return codeActions;
