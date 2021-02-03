@@ -1467,7 +1467,7 @@ export class BrsFile {
             let functionScope = this.getFunctionScopeAtPosition(position);
             if (functionScope) {
                 //find any variable with this name
-                for (let varDeclaration of functionScope.variableDeclarations) {
+                for (const varDeclaration of functionScope.variableDeclarations) {
                     //we found a variable declaration with this token text!
                     if (varDeclaration.name.toLowerCase() === lowerTokenText) {
                         let typeText: string;
@@ -1483,11 +1483,11 @@ export class BrsFile {
                         };
                     }
                 }
-                for (let labelStatement of functionScope.labelStatements) {
+                for (const labelStatement of functionScope.labelStatements) {
                     if (labelStatement.name.toLocaleLowerCase() === lowerTokenText) {
                         return {
                             range: token.range,
-                            contents: 'Label'
+                            contents: `${labelStatement.name}: label`
                         };
                     }
                 }
