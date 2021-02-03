@@ -136,6 +136,18 @@ export interface VariableDeclaration {
     lineIndex: number;
 }
 
+export interface LabelDeclaration {
+    name: string;
+    /**
+     * The range for the label name
+     */
+    nameRange: Range;
+    /**
+     * The line of the label
+     */
+    lineIndex: number;
+}
+
 /**
  * A wrapper around a callable to provide more information about where it came from
  */
