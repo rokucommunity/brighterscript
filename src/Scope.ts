@@ -15,6 +15,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isDottedGetExpression, isVariableExpression } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
+import { getDefaultMembersMap as getSGMembersLookup } from './SGApi';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -52,6 +53,13 @@ export class Scope {
      */
     public get namespaceLookup() {
         return this.cache.getOrAdd('namespaceLookup', () => this.buildNamespaceLookup());
+    }
+
+    /**
+     * Dictionary of all class members
+     */
+    public get classMemberLookup() {
+        return this.cache.getOrAdd('classMemberLookup', () => this.buildClassMemberLookup());
     }
 
     /**
@@ -317,6 +325,23 @@ export class Scope {
         return result;
     }
 
+    public buildClassMemberLookup() {
+        let lookup = getSGMembersLookup();
+        let filesSearched = new Set<BscFile>();
+        //TODO -needs ALL known SG functions!
+        for (const file of this.getAllFiles()) {
+            if (isXmlFile(file) || filesSearched.has(file)) {
+                continue;
+            }
+            filesSearched.add(file);
+            for (let cs of file.parser.references.classStatements) {
+                for (let s of [...cs.methods, ...cs.fields]) {
+                    lookup[s.name.text.toLowerCase()] = true;
+                }
+            }
+        }
+        return lookup;
+    }
     /**
      * Builds a tree of namespace objects
      */
@@ -448,31 +473,50 @@ export class Scope {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
-            this.validateNamespaces(file);
+            this.validateFunctionCalls(file);
+            // this.validateFields(file);
         });
     }
 
-    public validateEnums(file: BrsFile) {
-        let nsLookup = this.namespaceLookup;
+    public validateFields(file: BrsFile) {
+        let memberLookup = this.classMemberLookup;
+        // some thoughts around this..
+        // we could limit the scope of this to just m on a class
+        // but really we need to have types before enabling this
+        // let nsLookup = this.namespaceLookup;
         for (let dg of file.parser.references.dottedGets) {
             let nameParts = this.getAllDottedGetParts(dg);
-            if (nsLookup[nameParts[0].toLowerCase()]) {
-                //TODO - look up against enum cache
-                //if root match;
-                // if tail doesn't then error
-                //  else add Enum to the dottedGet expression so that it can be tranpsiled
+            let name = nameParts.pop();
+            if (!memberLookup[name]) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unknownClassField(`${name}`, this.name),
+                    range: dg.range,
+                    file: file
+                });
             }
+
+            // we could support enums now though..
+
+            // if (nsLookup[nameParts[0].toLowerCase()]) {
+            //     //TODO - look up against enum cache
+            //     //if root match;
+            //     // if tail doesn't then error
+            //     //  else add Enum to the dottedGet expression so that it can be tranpsiled
+            // }
         }
 
     }
-    public validateNamespaces(file: BrsFile) {
+    public validateFunctionCalls(file: BrsFile) {
         let nsLookup = this.namespaceLookup;
+        let memberLookup = this.classMemberLookup;
         for (let ce of file.parser.references.callExpressions) {
             let dg = ce.callee as DottedGetExpression;
             let nameParts = this.getAllDottedGetParts(dg);
+            let name = nameParts.pop();
+
+            //is a namespace?
             if (nsLookup[nameParts[0].toLowerCase()]) {
                 //then it must reference something we know
-                let name = nameParts.pop();
                 let fullPathName = nameParts.join('.').toLowerCase();
                 let ns = nsLookup[fullPathName];
                 if (!ns) {
@@ -490,7 +534,18 @@ export class Scope {
                         file: file
                     });
                 }
+            } else {
+                //is a class method?
+                if (!memberLookup[name.toLowerCase()]) {
+                    // console.log('>> ' + name.toLowerCase());
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.unknownClassMethod(`${name}`, this.name),
+                        range: ce.range,
+                        file: file
+                    });
+                }
             }
+
         }
     }
 
