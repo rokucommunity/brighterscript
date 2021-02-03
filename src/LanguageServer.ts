@@ -563,25 +563,6 @@ export class LanguageServer {
             .getWorkspaces()
             .flatMap(workspace => workspace.builder.program.getCodeActions(filePath, params.range));
 
-        // return [
-        //     util.createCodeAction({
-        //         title: 'Add extends attribute',
-        //         changes: [{
-        //             type: 'insert',
-        //             filePath: URI.parse(params.textDocument.uri).fsPath,
-        //             newText: ' extends="Group"',
-        //             position: util.createPosition(1, 32)
-        //         }]
-        //     })
-        // ];
-        // return [CodeAction.create('Add extends attribute', {
-        //     changes: {
-        //         [params.textDocument.uri]: [
-        //             TextEdit.insert(util.createPosition(1, 32), ' extends="Group"')
-        //         ]
-        //     }
-        // })
-        // ];
         return codeActions;
     }
 
