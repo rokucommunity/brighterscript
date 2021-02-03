@@ -1943,6 +1943,13 @@ export class Parser {
         } else if (this.check(TokenKind.QuestionQuestion)) {
             return this.nullCoalescingExpression(expr);
         } else {
+            //no enums of field yet
+            // if (isDottedGetExpression(getExpr)) {
+            //     this.addDottedGetLookup(getExpr);
+            // }
+            if (isCallExpression(expr)) {
+                this.addCallExpressionLookup(expr);
+            }
             return expr;
         }
     }
@@ -1954,9 +1961,18 @@ export class Parser {
             let operator = this.previous();
             let right = this.relational();
             expr = new BinaryExpression(expr, operator, right);
+            this.registerRefsFromBinary(expr as BinaryExpression);
         }
 
         return expr;
+    }
+    private registerRefsFromBinary(be: BinaryExpression) {
+        if (isCallExpression(be.left) || isCallfuncExpression(be.left)) {
+            this.addCallExpressionLookup(be.left);
+        }
+        if (isCallExpression(be.right) || isCallfuncExpression(be.right)) {
+            this.addCallExpressionLookup(be.right);
+        }
     }
 
     private relational(): Expression {
@@ -1975,6 +1991,7 @@ export class Parser {
             let operator = this.previous();
             let right = this.additive();
             expr = new BinaryExpression(expr, operator, right);
+            this.registerRefsFromBinary(expr as BinaryExpression);
         }
 
         return expr;
@@ -1989,6 +2006,7 @@ export class Parser {
             let operator = this.previous();
             let right = this.multiplicative();
             expr = new BinaryExpression(expr, operator, right);
+            this.registerRefsFromBinary(expr as BinaryExpression);
         }
 
         return expr;
@@ -2008,6 +2026,7 @@ export class Parser {
             let operator = this.previous();
             let right = this.exponential();
             expr = new BinaryExpression(expr, operator, right);
+            this.registerRefsFromBinary(expr as BinaryExpression);
         }
 
         return expr;
@@ -2020,6 +2039,7 @@ export class Parser {
             let operator = this.previous();
             let right = this.prefixUnary();
             expr = new BinaryExpression(expr, operator, right);
+            this.registerRefsFromBinary(expr as BinaryExpression);
         }
 
         return expr;
@@ -2253,10 +2273,6 @@ export class Parser {
                             break;
                         }
                         let getExpr = this.expression();
-                        //no enums of field yet
-                        // if (isDottedGetExpression(getExpr)) {
-                        //     this.addDottedGetLookup(getExpr);
-                        // }
                         elements.push(getExpr);
                     }
 
