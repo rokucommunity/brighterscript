@@ -1780,6 +1780,19 @@ describe('Program', () => {
     });
 
     describe('getSignatureHelp', () => {
+        it('ignores comments and invalid ranges', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                function main()
+                    ' new func(((
+                end function
+            `);
+            for (let col = 0; col < 40; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(program.getDiagnostics()).to.be.empty;
+                expect(signatureHelp[0]?.signature).to.not.exist;
+            }
+        });
+
         it('gets signature help for constructor with no args', () => {
             program.addOrReplaceFile('source/main.bs', `
                 function main()
