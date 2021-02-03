@@ -148,23 +148,26 @@ export class Parser {
         }
     }
 
-    private addDottedGetLookup(item: DottedGetExpression) {
-        //used when we have enum support
-        // if (isVariableExpression(item.obj) && ((item.obj as any).name && (item.obj as any).name.text !== 'm')) {
-        //     this._references.dottedGets.push(item);
-        // }
-    }
+    // private addDottedGetLookup(item: DottedGetExpression) {
+    //     //used when we have enum support
+    //     if (isVariableExpression(item.obj) && ((item.obj as any).name && (item.obj as any).name.text !== 'm')) {
+    //         this._references.dottedGets.push(item);
+    //     }
+    // }
 
-    private addCallExpressionLookup(item: CallExpression) {
-        if (isDottedGetExpression(item.callee) && ((item.callee.obj as any).name && (item.callee.obj as any).name.text !== 'm')) {
+    private addCallExpressionLookup(item: CallExpression | CallfuncExpression) {
+        if (isCallExpression(item) && isDottedGetExpression(item.callee) && ((item.callee.obj as any).name && (item.callee.obj as any).name.text !== 'm')) {
             this._references.callExpressions.push(item);
+            //we handle callfunc differently TBD
         }
         for (let a of item.args) {
-            if (isDottedGetExpression(a)) {
-                this.addDottedGetLookup(a);
-            } else if (isCallExpression(a)) {
+            if (isCallExpression(a)) {
                 this.addCallExpressionLookup(a);
             }
+            // No enums or field validation yet - not worth doing.
+            // else if (isDottedGetExpression(a)) {
+            //     this.addDottedGetLookup(a);
+            // }
         }
     }
 
@@ -1669,11 +1672,7 @@ export class Parser {
         }
 
         if (isCallExpression(expr) || isCallfuncExpression(expr)) {
-            for (let a of expr.args) {
-                if (isDottedGetExpression(a)) {
-                    this.addDottedGetLookup(a);
-                }
-            }
+            this.addCallExpressionLookup(expr);
 
             return new ExpressionStatement(expr);
         }
@@ -1719,9 +1718,10 @@ export class Parser {
                         : new BinaryExpression(left, operator, right)
                 );
             }
-            if (isDottedGetExpression(right)) {
-                this.addDottedGetLookup(right);
-            }
+            //no enums or field vaidations yet
+            // if (isDottedGetExpression(right)) {
+            //     this.addDottedGetLookup(right);
+            // }
         }
         return this.expressionStatement(expr);
     }
@@ -2165,7 +2165,6 @@ export class Parser {
         }
 
         let expression = new CallExpression(callee, openingParen, closingParen, args, this.currentNamespaceName);
-        this.addCallExpressionLookup(expression);
 
         if (addToCallExpressionList) {
             this.callExpressions.push(expression);
@@ -2254,9 +2253,10 @@ export class Parser {
                             break;
                         }
                         let getExpr = this.expression();
-                        if (isDottedGetExpression(getExpr)) {
-                            this.addDottedGetLookup(getExpr);
-                        }
+                        //no enums of field yet
+                        // if (isDottedGetExpression(getExpr)) {
+                        //     this.addDottedGetLookup(getExpr);
+                        // }
                         elements.push(getExpr);
                     }
 

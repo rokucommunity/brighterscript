@@ -139,7 +139,9 @@ export function getDefaultMembersMap(): Record<string, boolean> {
         'findnode': true,
         'setfield': true,
         'getsectionlist': true,
-        'getmilliseconds': true
+        'getmilliseconds': true,
+        'boundingrect': true,
+        'totalseconds': true
 
     };
 }
