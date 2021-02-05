@@ -48,6 +48,38 @@ describe('XmlFile', () => {
             expect(file.componentName.text).to.equal(expected);
         });
 
+        it('only removes specified attribute when calling setAttribute', () => {
+            const expected = 'OtherName';
+            file = new XmlFile('abs', 'rel', program);
+            program.plugins.add({
+                name: 'allows modifying the parsed XML model',
+                afterFileParse: () => {
+                    let child = file.parser.ast.component.children.children[0];
+                    expect(child.attributes).to.have.lengthOf(4);
+                    child.setAttribute('text', undefined);
+                    expect(child.getAttribute('id').value.text).to.equal('one');
+                    expect(child.attributes).to.have.lengthOf(3);
+                    child.setAttribute('text3', undefined);
+                    expect(child.getAttribute('id').value.text).to.equal('one');
+                    expect(child.attributes).to.have.lengthOf(2);
+                }
+            });
+            file.parse(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="Scene">
+                    <script type="text/brightscript" uri="ChildScene1.brs" /> <script type="text/brightscript" uri="ChildScene2.brs" /> <script type="text/brightscript" uri="ChildScene3.brs" />
+                    <children>
+                    <Label id="one"
+                    text="two"
+                    text2="three"
+                    text3="four"
+                    />
+                    </children>
+                </component>
+            `);
+            expect(file.componentName.text).to.equal(expected);
+        });
+
         it('supports importing BrighterScript files', () => {
             file = program.addOrReplaceFile({ src: `${rootDir}/components/custom.xml`, dest: 'components/custom.xml' }, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
