@@ -417,7 +417,7 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('transpiles super when not the first statement', () => {
+        it('transpiles super in nested blocks', () => {
             testTranspile(`
                 class Creature
                     sub new(name as string)
