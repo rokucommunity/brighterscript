@@ -1560,7 +1560,7 @@ export class ClassMethodStatement extends FunctionStatement {
                 }
             }
         });
-        const walkOptions: WalkOptions = { walkMode: WalkMode.visitExpressions };
+        const walkOptions: WalkOptions = { walkMode: WalkMode.visitAll };
         for (const statement of this.func.body.statements) {
             visitor(statement, undefined);
             statement.walk(visitor, walkOptions);
