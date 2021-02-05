@@ -178,9 +178,9 @@ export enum WalkMode {
      */
     walkExpressions = InternalWalkMode.walkExpressions,
     /**
-     * Walk and visit statements, but does NOT step into child functions
+     * Walk and visit expressions, but does NOT step into child functions
      */
-    visitExpressions = InternalWalkMode.walkExpressions | InternalWalkMode.visitExpressions,
+    visitExpressions = InternalWalkMode.walkStatements | InternalWalkMode.walkExpressions | InternalWalkMode.visitExpressions,
     /**
      * Visit all descendent statements and expressions, but does NOT step into child functions
      */
