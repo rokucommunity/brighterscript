@@ -251,14 +251,14 @@ describe('astUtils visitors', () => {
             const statementVisitor = createStackedVisitor((statement: Statement, stack: Statement[]) => {
                 curr = { statement: statement, depth: stack.length };
             });
-            function expressionVisitor(expression: Expression, parent) {
+            function expressionVisitor(expression: Expression, _: Statement | Expression) {
                 const { statement, depth } = curr;
                 actual.push(`${statement.constructor.name}:${depth}:${expression.constructor.name}`);
             }
             const walker = functionsWalker((statement, parentStatement) => {
                 statementVisitor(statement, parentStatement);
                 statement.walk(expressionVisitor, {
-                    walkMode: WalkMode.visitExpressions
+                    walkMode: WalkMode.visitLocalExpressions
                 });
             });
             program.plugins.add({
