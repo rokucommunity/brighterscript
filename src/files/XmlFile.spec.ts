@@ -49,7 +49,6 @@ describe('XmlFile', () => {
         });
 
         it('only removes specified attribute when calling setAttribute', () => {
-            const expected = 'OtherName';
             file = new XmlFile('abs', 'rel', program);
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
@@ -70,14 +69,13 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="ChildScene1.brs" /> <script type="text/brightscript" uri="ChildScene2.brs" /> <script type="text/brightscript" uri="ChildScene3.brs" />
                     <children>
                     <Label id="one"
-                    text="two"
-                    text2="three"
-                    text3="four"
+                        text="two"
+                        text2="three"
+                        text3="four"
                     />
                     </children>
                 </component>
             `);
-            expect(file.componentName.text).to.equal(expected);
         });
 
         it('supports importing BrighterScript files', () => {
