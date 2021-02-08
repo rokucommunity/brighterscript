@@ -342,6 +342,7 @@ export class Scope {
         }
         return lookup;
     }
+
     /**
      * Builds a tree of namespace objects
      */
@@ -533,6 +534,20 @@ export class Scope {
                         range: ce.range,
                         file: file
                     });
+                } else {
+                    let member = ns.functionStatements[name.toLowerCase()];
+                    if (member) {
+                        let numArgs = ce.args.length;
+                        let expectedArgs = member.func.parameters.filter((p) => p.defaultValue).length;
+                        if (numArgs < expectedArgs) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.wrongMethodArgs(`${name}`, numArgs, expectedArgs),
+                                range: ce.range,
+                                file: file
+                            });
+                        }
+
+                    }
                 }
             } else {
                 //is a class method?
