@@ -319,6 +319,31 @@ describe('Scope', () => {
                     range: Range.create(4, 29, 4, 32)
                 });
             });
+
+            it.only('reports when wrong number of vars are used', () => {
+                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    sub main()
+                        person.say("hello")
+                        person.say("hello", "world")
+                        person.say("hello", "world", "valid")
+                    end sub
+                    class Person
+                        function say(word1, word2 = "world", word3 = "valid")
+                        end function
+                    end class
+                `);
+                program.validate();
+                let diagnostics = program.getDiagnostics().map(x => {
+                    return {
+                        message: x.message,
+                        range: x.range
+                    };
+                });
+                expect(diagnostics[0]).to.exist.and.to.eql({
+                    message: DiagnosticMessages.wrongMethodArgs('say', 1, 2).message,
+                    range: Range.create(2, 24, 2, 43)
+                });
+            });
         });
 
         it('detects duplicate callables', () => {

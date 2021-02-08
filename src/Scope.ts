@@ -336,7 +336,7 @@ export class Scope {
             filesSearched.add(file);
             for (let cs of file.parser.references.classStatements) {
                 for (let s of [...cs.methods, ...cs.fields]) {
-                    lookup[s.name.text.toLowerCase()] = true;
+                    lookup[s.name.text.toLowerCase()] = s;
                 }
             }
         }
@@ -543,6 +543,20 @@ export class Scope {
                         range: ce.range,
                         file: file
                     });
+                } else {
+                    let member = memberLookup[name.toLowerCase()];
+                    if (isClassMethodStatement(member)) {
+                        let numArgs = ce.args.length;
+                        let expectedArgs = member.func.parameters.filter((p) => p.defaultValue).length;
+                        if (numArgs < expectedArgs) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.wrongMethodArgs(`${name}`, numArgs, expectedArgs),
+                                range: ce.range,
+                                file: file
+                            });
+                        }
+
+                    }
                 }
             }
 

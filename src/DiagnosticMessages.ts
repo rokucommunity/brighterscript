@@ -620,6 +620,11 @@ export let DiagnosticMessages = {
         message: `Cannot find class field with name '${name}' when this file is included in scope '${scopeName}'`,
         code: 1121,
         severity: DiagnosticSeverity.Error
+    }),
+    wrongMethodArgs: (name: string, numArgs: number, expectedArgs: number) => ({
+        message: `Invoking '${name}' with wrong number of args. Received ${numArgs} instead of expected ${expectedArgs}'`,
+        code: 1122,
+        severity: DiagnosticSeverity.Error
     })
 
 };
