@@ -323,12 +323,16 @@ describe('Scope', () => {
             it('reports when wrong number of params are used on class method call', () => {
                 program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     sub main()
-                        person.say("hello")
-                        person.say("hello", "world")
-                        person.say("hello", "world", "valid")
+                        person.sayThis()
+                        person.sayThis("hello")
+                        person.sayThis("hello", "world")
+                        person.sayThis("hello", "world", "valid")
+                        person.sayNothing("hello", "world", "valid")
                     end sub
                     class Person
-                        function say(word1, word2 = "world", word3 = "valid")
+                        function sayThis(word1, word2, word3 = "valid")
+                        end function
+                        function sayNothing()
                         end function
                     end class
                 `);
@@ -340,19 +344,31 @@ describe('Scope', () => {
                     };
                 });
                 expect(diagnostics[0]).to.exist.and.to.eql({
-                    message: DiagnosticMessages.wrongMethodArgs('say', 1, 2).message,
-                    range: Range.create(2, 24, 2, 43)
+                    message: DiagnosticMessages.wrongMethodArgs('sayThis', 0, 2, 3).message,
+                    range: Range.create(2, 24, 2, 40)
+                });
+                expect(diagnostics[1]).to.exist.and.to.eql({
+                    message: DiagnosticMessages.wrongMethodArgs('sayThis', 1, 2, 3).message,
+                    range: Range.create(3, 24, 3, 47)
+                });
+                expect(diagnostics[2]).to.exist.and.to.eql({
+                    message: DiagnosticMessages.wrongMethodArgs('sayNothing', 3, 0).message,
+                    range: Range.create(6, 24, 6, 68)
                 });
             });
             it('reports when wrong number of params are used on namespace function', () => {
                 program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     sub main()
-                        person.say("hello")
-                        person.say("hello", "world")
-                        person.say("hello", "world", "valid")
+                        person.sayThis()
+                        person.sayThis("hello")
+                        person.sayThis("hello", "world")
+                        person.sayThis("hello", "world", "valid")
+                        person.sayNothing("hello", "world", "valid")
                     end sub
                     namespace person
-                        function say(word1, word2 = "world", word3 = "valid")
+                        function sayThis(word1, word2, word3 = "valid")
+                        end function
+                        function sayNothing()
                         end function
                     end namespace
                 `);
@@ -364,8 +380,16 @@ describe('Scope', () => {
                     };
                 });
                 expect(diagnostics[0]).to.exist.and.to.eql({
-                    message: DiagnosticMessages.wrongMethodArgs('say', 1, 2).message,
-                    range: Range.create(2, 24, 2, 43)
+                    message: DiagnosticMessages.wrongMethodArgs('sayThis', 0, 2, 3).message,
+                    range: Range.create(2, 24, 2, 40)
+                });
+                expect(diagnostics[1]).to.exist.and.to.eql({
+                    message: DiagnosticMessages.wrongMethodArgs('sayThis', 1, 2, 3).message,
+                    range: Range.create(3, 24, 3, 47)
+                });
+                expect(diagnostics[2]).to.exist.and.to.eql({
+                    message: DiagnosticMessages.wrongMethodArgs('sayNothing', 3, 0).message,
+                    range: Range.create(6, 24, 6, 68)
                 });
             });
         });

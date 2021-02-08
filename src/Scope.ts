@@ -17,6 +17,11 @@ import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXml
 import type { BrsFile } from './files/BrsFile';
 import { getSGMembersLookup } from './SGApi';
 
+interface FunctionInfo {
+    minArgs: number;
+    maxArgs: number;
+}
+
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
  */
@@ -325,7 +330,7 @@ export class Scope {
         return result;
     }
 
-    public buildClassMemberLookup() {
+    public buildClassMemberLookup(): Record<string, FunctionInfo | boolean> {
         let lookup = getSGMembersLookup();
         let filesSearched = new Set<BscFile>();
         //TODO -needs ALL known SG functions!
@@ -335,8 +340,24 @@ export class Scope {
             }
             filesSearched.add(file);
             for (let cs of file.parser.references.classStatements) {
-                for (let s of [...cs.methods, ...cs.fields]) {
-                    lookup[s.name.text.toLowerCase()] = s;
+                for (let s of [...cs.fields]) {
+                    let lowerName = s.name.text.toLowerCase();
+                    lookup[lowerName] = s;
+                }
+                for (let s of [...cs.methods]) {
+                    let lowerName = s.name.text.toLowerCase();
+                    let currentInfo = lookup[lowerName];
+                    if (!currentInfo) {
+                        lookup[lowerName] = {
+                            minArgs: s.func.parameters.filter((p) => !p.defaultValue).length,
+                            maxArgs: s.func.parameters.length
+                        };
+                    } else {
+                        let minArgs = s.func.parameters.filter((p) => !p.defaultValue).length;
+                        let maxArgs = s.func.parameters.length;
+                        currentInfo.minArgs = minArgs < currentInfo.minArgs ? minArgs : currentInfo.minArgs;
+                        currentInfo.maxArgs = maxArgs > currentInfo.maxArgs ? maxArgs : currentInfo.maxArgs;
+                    }
                 }
             }
         }
@@ -538,10 +559,11 @@ export class Scope {
                     let member = ns.functionStatements[name.toLowerCase()];
                     if (member) {
                         let numArgs = ce.args.length;
-                        let expectedArgs = member.func.parameters.filter((p) => p.defaultValue).length;
-                        if (numArgs < expectedArgs) {
+                        let minArgs = member.func.parameters.filter((p) => !p.defaultValue).length;
+                        let maxArgs = member.func.parameters.length;
+                        if (numArgs < minArgs || numArgs > maxArgs) {
                             this.diagnostics.push({
-                                ...DiagnosticMessages.wrongMethodArgs(`${name}`, numArgs, expectedArgs),
+                                ...DiagnosticMessages.wrongMethodArgs(`${name}`, numArgs, minArgs, maxArgs),
                                 range: ce.range,
                                 file: file
                             });
@@ -559,13 +581,12 @@ export class Scope {
                         file: file
                     });
                 } else {
-                    let member = memberLookup[name.toLowerCase()];
-                    if (isClassMethodStatement(member)) {
+                    let member = memberLookup[name.toLowerCase()] as FunctionInfo;
+                    if (member) {
                         let numArgs = ce.args.length;
-                        let expectedArgs = member.func.parameters.filter((p) => p.defaultValue).length;
-                        if (numArgs < expectedArgs) {
+                        if (numArgs < member.minArgs || numArgs > member.maxArgs) {
                             this.diagnostics.push({
-                                ...DiagnosticMessages.wrongMethodArgs(`${name}`, numArgs, expectedArgs),
+                                ...DiagnosticMessages.wrongMethodArgs(`${name}`, numArgs, member.minArgs, member.maxArgs),
                                 range: ce.range,
                                 file: file
                             });
