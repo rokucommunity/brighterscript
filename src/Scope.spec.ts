@@ -356,6 +356,44 @@ describe('Scope', () => {
                     range: Range.create(6, 24, 6, 68)
                 });
             });
+
+            it('pushes out min and max args, when multiple definitions are encountered', () => {
+                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    sub main()
+                        person.sayThis()
+                        person.sayThis("hello")
+                        person.sayThis("hello", "world")
+                        person.sayThis("hello", "world", "valid")
+                        person.sayNothing("hello", "world", "valid")
+                    end sub
+                    class Person
+                        function sayThis(word1, word2)
+                        end function
+                        function sayNothing()
+                        end function
+                    end class
+                    class quietPerson
+                        function sayThis()
+                        end function
+                        function sayNothing()
+                        end function
+                    end class
+                    class george
+                        function sayThis(word1, word2, word3, word4)
+                        end function
+                        function sayNothing(word1, word2, word3, word4)
+                        end function
+                    end class
+                `);
+                program.validate();
+                let diagnostics = program.getDiagnostics().map(x => {
+                    return {
+                        message: x.message,
+                        range: x.range
+                    };
+                });
+                expect(diagnostics).to.be.empty;
+            });
             it('reports when wrong number of params are used on namespace function', () => {
                 program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     sub main()
@@ -391,6 +429,40 @@ describe('Scope', () => {
                     message: DiagnosticMessages.wrongMethodArgs('sayNothing', 3, 0).message,
                     range: Range.create(6, 24, 6, 68)
                 });
+            });
+            it('does not check when using a default function', () => {
+                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    sub main()
+                        person.getChildren(1,2,3,4)
+                    end sub
+                `);
+                program.validate();
+                let diagnostics = program.getDiagnostics().map(x => {
+                    return {
+                        message: x.message,
+                        range: x.range
+                    };
+                });
+                expect(diagnostics).to.be.empty;
+            });
+            it('prioritizes default functions over class members', () => {
+                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                    sub main()
+                        person.getChildren(1,2,3,4)
+                    end sub
+                    class person
+                        function getChildren(word1, word2, word3 = "valid")
+                        end function
+                    end class
+                `);
+                program.validate();
+                let diagnostics = program.getDiagnostics().map(x => {
+                    return {
+                        message: x.message,
+                        range: x.range
+                    };
+                });
+                expect(diagnostics).to.be.empty;
             });
         });
 

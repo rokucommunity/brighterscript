@@ -352,7 +352,7 @@ export class Scope {
                             minArgs: s.func.parameters.filter((p) => !p.defaultValue).length,
                             maxArgs: s.func.parameters.length
                         };
-                    } else {
+                    } else if (typeof currentInfo !== 'boolean') {
                         let minArgs = s.func.parameters.filter((p) => !p.defaultValue).length;
                         let maxArgs = s.func.parameters.length;
                         currentInfo.minArgs = minArgs < currentInfo.minArgs ? minArgs : currentInfo.minArgs;
@@ -582,7 +582,7 @@ export class Scope {
                     });
                 } else {
                     let member = memberLookup[name.toLowerCase()] as FunctionInfo;
-                    if (member) {
+                    if (typeof member !== 'boolean') {
                         let numArgs = ce.args.length;
                         if (numArgs < member.minArgs || numArgs > member.maxArgs) {
                             this.diagnostics.push({
