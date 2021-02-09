@@ -993,7 +993,7 @@ export class LanguageServer {
         );
 
         const activeSignature = signatures.length > 0 ? 0 : null;
-        const activeParameter = activeSignature >= 0 ? signatures[activeSignature].index : null;
+        const activeParameter = activeSignature >= 0 ? signatures[activeSignature]?.index : null;
         let results: SignatureHelp = {
             signatures: signatures.map((s) => s.signature),
             activeSignature: activeSignature,

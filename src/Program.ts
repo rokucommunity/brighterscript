@@ -774,7 +774,7 @@ export class Program {
         let functionScope = file.getFunctionScopeAtPosition(position);
         let identifierInfo = this.getPartialStatementInfo(file, position);
         if (identifierInfo.statementType === '') {
-            // just general functoin calls
+            // just general function calls
             let statements = file.program.getStatementsByName(identifierInfo.name, file);
             for (let statement of statements) {
                 //TODO better handling of collisions - if it's a namespace, then don't show any other overrides
@@ -869,19 +869,25 @@ export class Program {
             //try to get sig help based on the name
             index = position.character;
             let currentToken = file.getTokenAt(position);
-            name = file.getPartialVariableName(currentToken, [TokenKind.New]);
-            if (!name) {
-                //try the previous token, incase we're on a bracket
-                currentToken = file.getPreviousToken(currentToken);
+            if (currentToken && currentToken.kind !== TokenKind.Comment) {
                 name = file.getPartialVariableName(currentToken, [TokenKind.New]);
-            }
-            if (name?.indexOf('.')) {
-                let parts = name.split('.');
-                name = parts[parts.length - 1];
-            }
+                if (!name) {
+                    //try the previous token, incase we're on a bracket
+                    currentToken = file.getPreviousToken(currentToken);
+                    name = file.getPartialVariableName(currentToken, [TokenKind.New]);
+                }
+                if (name?.indexOf('.')) {
+                    let parts = name.split('.');
+                    name = parts[parts.length - 1];
+                }
 
-            index = currentToken.range.start.character;
-            argStartIndex = index;
+                index = currentToken.range.start.character;
+                argStartIndex = index;
+            } else {
+                // invalid location
+                index = 0;
+                itemCounts.comma = 0;
+            }
         }
         while (index > 0) {
             if (!(/[a-z0-9_\.\@]/i).test(line.charAt(index))) {
@@ -932,6 +938,11 @@ export class Program {
         };
         while (index >= 0) {
             const currentChar = line.charAt(index);
+
+            if (currentChar === '\'') { //found comment, invalid index
+                itemCounts.isArgStartFound = false;
+                break;
+            }
 
             if (isArgStartFound) {
                 if (currentChar !== ' ') {

@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.30.6] - 2021-02-07
+### Fixed
+ - bad transpile for nested class method super calls
+ - SceneGraph node attributes being wrongly removed when modifying attributes
+
+
+
+## [0.30.5] - 2021-02-03
+### Added
+ - syntax support for dim statements
+ - completion and code navigation for labels
+### Fixed
+ - exception related to signature help when writing comments
+
+
+
 ## [0.30.4] - 2021-02-02
 ### Fixed
  - fixed crash during validation caused by a missing function body when parsing malformed code
@@ -902,3 +918,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.30.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.1...v0.30.2
 [0.30.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.2...v0.30.3
 [0.30.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.3...v0.30.4
+[0.30.5]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.4...v0.30.5
+[0.30.6]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.5...v0.30.6

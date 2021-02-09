@@ -606,6 +606,21 @@ export let DiagnosticMessages = {
         message: `Missing exception expression after 'throw' keyword`,
         code: 1118,
         severity: DiagnosticSeverity.Error
+    }),
+    missingLeftSquareBracketAfterDimIdentifier: () => ({
+        message: `Missing left square bracket after 'dim' identifier`,
+        code: 1119,
+        severity: DiagnosticSeverity.Error
+    }),
+    missingRightSquareBracketAfterDimIdentifier: () => ({
+        message: `Missing right square bracket after 'dim' identifier`,
+        code: 1120,
+        severity: DiagnosticSeverity.Error
+    }),
+    missingExpressionsInDimStatement: () => ({
+        message: `Missing expression(s) in 'dim' statement`,
+        code: 1121,
+        severity: DiagnosticSeverity.Error
     })
 };
 
