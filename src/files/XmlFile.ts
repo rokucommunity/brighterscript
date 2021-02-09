@@ -381,8 +381,6 @@ export class XmlFile {
             if (diagnostic.code === DiagnosticMessages.xmlComponentMissingExtendsAttribute().code) {
                 //add the attribute at the end of the first attribute, or after the `<component` if no attributes
                 const pos = (this.parser.ast.component.attributes[0] ?? this.parser.ast.component.tag).range.end;
-                //add this extends attribute right after the closing `>` token
-                range.end.character -= 1;
                 result.push(
                     util.createCodeAction({
                         title: `Add default extends attribute`,
