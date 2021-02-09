@@ -621,8 +621,10 @@ export let DiagnosticMessages = {
         code: 1121,
         severity: DiagnosticSeverity.Error
     }),
-    wrongMethodArgs: (name: string, numArgs: number, expectedArgs: number) => ({
-        message: `Invoking '${name}' with wrong number of args. Received ${numArgs} instead of expected ${expectedArgs}'`,
+    wrongMethodArgs: (name: string, numArgs: number, minArgs: number, maxArgs?: number) => ({
+        message: maxArgs
+            ? `Invoking '${name}' with wrong number of args. Received ${numArgs} instead of expceted ${minArgs} to ${maxArgs}'`
+            : `Invoking '${name}' with wrong number of args. Received ${numArgs} instead of expected ${minArgs}'`,
         code: 1122,
         severity: DiagnosticSeverity.Error
     })
