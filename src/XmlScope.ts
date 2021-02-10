@@ -1,11 +1,11 @@
 import type { CodeAction, Location, Position, Range } from 'vscode-languageserver';
 import { Scope } from './Scope';
-import { DiagnosticMessages, DiagnosticCodeMap } from './DiagnosticMessages';
+import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
 import type { BscFile, CallableContainerMap, FileReference } from './interfaces';
 import type { Program } from './Program';
 import util from './util';
-import { isBrsFile, isXmlFile } from './astUtils/reflection';
+import { isXmlFile } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
 import type { SGTag } from './parser/SGTypes';
 
@@ -153,44 +153,9 @@ export class XmlScope extends Scope {
         });
     }
 
-    public getCodeActions(file: BscFile, range: Range) {
-        const result = [] as CodeAction[];
-        for (const diagnostic of this.diagnostics) {
-            //skip diagnostics that don't occur on this line
-            if (diagnostic.range?.start.line !== range.start.line) {
-                continue;
-            }
-            if (diagnostic.code === DiagnosticCodeMap.callToUnknownFunction) {
-                //functionName is stored on this specific diagnostic
-                const lowerFunctionName = (diagnostic as any).functionName.toLowerCase();
-
-                //find every file with this function defined
-                for (const key in this.program.files) {
-                    const file = this.program.files[key];
-                    if (isBrsFile(file)) {
-                        //TODO handle namespace-relative function calls
-                        const stmt = file.parser.references.functionStatementLookup.get(lowerFunctionName);
-                        const slashOpenToken = this.xmlFile.parser.ast.component?.ast.SLASH_OPEN?.[0];
-                        if (stmt && slashOpenToken) {
-                            const pkgPath = util.getRokuPkgPath(file.pkgPath);
-                            result.push(
-                                util.createCodeAction({
-                                    title: `Import "${pkgPath}" into component "${this.xmlFile.componentName.text ?? this.name}"`,
-                                    // diagnostics: [diagnostic]
-                                    changes: [{
-                                        filePath: this.xmlFile.pathAbsolute,
-                                        newText: `  <script type="text/brightscript" uri="${pkgPath}" />\n`,
-                                        type: 'insert',
-                                        position: util.createPosition(slashOpenToken.startLine - 1, slashOpenToken.startColumn - 1)
-                                    }]
-                                })
-                            );
-                        }
-                    }
-                }
-            }
-        }
-        return result;
+    public getCodeActions(file: BscFile, range: Range, codeActions: CodeAction[]) {
+        const relevantDiagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
+        this.program.plugins.emit('onScopeGetCodeActions', this, file, range, relevantDiagnostics, codeActions);
     }
 
     /**

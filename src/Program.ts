@@ -24,6 +24,7 @@ import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope } from './astU
 import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
+import { BscPlugin } from './bscPlugin/BscPlugin';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {
@@ -68,6 +69,10 @@ export class Program {
         this.options = util.normalizeConfig(options);
         this.logger = logger || new Logger(options.logLevel as LogLevel);
         this.plugins = plugins || new PluginInterface([], undefined);
+
+        //inject the bsc plugin as the first plugin in the stack.
+        //eslint-disable-next-line @typescript-eslint/dot-notation
+        this.plugins['plugins'].unshift(new BscPlugin());
 
         //normalize the root dir path
         this.options.rootDir = util.getRootDir(this.options);
@@ -740,26 +745,22 @@ export class Program {
         const codeActions = [] as CodeAction[];
         const file = this.getFile(pathAbsolute);
 
-        this.plugins.emit('beforeGetCodeActions', file, range, codeActions);
+        this.plugins.emit('beforeProgramGetCodeActions', this, file, range, codeActions);
 
         //get code actions from the file
-        codeActions.push(
-            ...file.getCodeActions(range)
-        );
+        file.getCodeActions(range, codeActions);
 
         //get code actions from every scope this file is a member of
         for (let key in this.scopes) {
             let scope = this.scopes[key];
 
             if (scope.hasFile(file)) {
-                //get code actions from each scope
-                codeActions.push(
-                    ...scope.getCodeActions(file, range)
-                );
+                //get code actions from each scope this file is a member of
+                scope.getCodeActions(file, range, codeActions);
             }
         }
 
-        this.plugins.emit('afterGetCodeActions', file, range, codeActions);
+        this.plugins.emit('afterProgramGetCodeActions', this, file, range, codeActions);
         return codeActions;
     }
 

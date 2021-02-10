@@ -1,7 +1,9 @@
-import type { BsDiagnostic } from './interfaces';
+import type { BsDiagnostic, CodeActionShorthand } from './interfaces';
 import * as assert from 'assert';
 import type { Diagnostic } from 'vscode-languageserver';
-
+import util from './util';
+import { createSandbox } from 'sinon';
+import { expect } from 'chai';
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
  */
@@ -80,4 +82,18 @@ export function expectZeroDiagnostics(arg: { getDiagnostics(): Array<Diagnostic>
  */
 export function trimMap(source: string) {
     return source.replace(/('|<!--)\/\/# sourceMappingURL=.*$/m, '');
+}
+
+export function expectCodeActions(test: () => any, expected: CodeActionShorthand[]) {
+    const sinon = createSandbox();
+    const stub = sinon.stub(util, 'createCodeAction');
+    try {
+        test();
+    } finally {
+        sinon.restore();
+    }
+
+    const args = stub.getCalls().map(x => x.args[0]);
+
+    expect(args).to.eql(expected);
 }

@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as sinonImport from 'sinon';
 import type { CompletionItem } from 'vscode-languageserver';
 import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
-
+import util from '../util';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
@@ -11,7 +11,7 @@ import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
 import { getTestTranspile } from './BrsFile.spec';
-import { trim, trimMap } from '../testHelpers.spec';
+import { expectCodeActions, trim, trimMap } from '../testHelpers.spec';
 
 describe('XmlFile', () => {
     let rootDir = process.cwd();
@@ -996,5 +996,33 @@ describe('XmlFile', () => {
             </component>
         `);
         expect(file.scriptTagImports[0]?.text).to.eql('SingleQuotedFile.brs');
+    });
+
+    describe('getCodeActions', () => {
+        it('suggests `extends=Group`', () => {
+            const file = program.addOrReplaceFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1">
+                </component>
+            `);
+
+            expectCodeActions(() => {
+                file.getCodeActions(
+                    //<comp|onent name="comp1">
+                    util.createRange(1, 5, 1, 5), []
+                );
+            }, [{
+                title: `Add default extends attribute`,
+                isPreferred: true,
+                kind: 'quickfix',
+                changes: [{
+                    filePath: s`${rootDir}/components/comp1.xml`,
+                    newText: ' extends="Group"',
+                    type: 'insert',
+                    //<component name="comp1"|>
+                    position: util.createPosition(1, 23)
+                }]
+            }]);
+        });
     });
 });

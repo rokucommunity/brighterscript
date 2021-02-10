@@ -1509,8 +1509,9 @@ export class BrsFile {
         }
     }
 
-    public getCodeActions(range: Range): CodeAction[] {
-        return [];
+    public getCodeActions(range: Range, codeActions: CodeAction[]) {
+        const relevantDiagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
+        this.program.plugins.emit('onFileGetCodeActions', this, range, relevantDiagnostics, codeActions);
     }
 
     public getSignatureHelpForNamespaceMethods(callableName: string, dottedGetText: string, scope: Scope): { key: string; signature: SignatureInformation }[] {

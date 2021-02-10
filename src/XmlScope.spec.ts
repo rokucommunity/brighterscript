@@ -3,7 +3,7 @@ import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
-import { trim } from './testHelpers.spec';
+import { expectCodeActions, trim } from './testHelpers.spec';
 import { standardizePath as s, util } from './util';
 let rootDir = s`${process.cwd()}/rootDir`;
 import { createSandbox } from 'sinon';
@@ -210,15 +210,15 @@ describe('XmlScope', () => {
                 end sub
             `);
             program.validate();
-            const stub = sinon.stub(util, 'createCodeAction');
-            const actions = program.getComponentScope('child').getCodeActions(
-                codebehind,
-                // doSo|mething()
-                util.createRange(2, 24, 2, 24)
-            );
-            expect(actions).to.be.lengthOf(1);
 
-            expect(stub.getCalls()[0].args[0]).to.eql({
+            expectCodeActions(() => {
+                program.getComponentScope('child').getCodeActions(
+                    codebehind,
+                    // doSo|mething()
+                    util.createRange(2, 24, 2, 24),
+                    []
+                );
+            }, [{
                 title: `Import "pkg:/source/common.brs" into component "child"`,
                 changes: [{
                     filePath: s`${rootDir}/components/comp1.xml`,
@@ -226,7 +226,7 @@ describe('XmlScope', () => {
                     type: 'insert',
                     position: util.createPosition(3, 0)
                 }]
-            });
+            }]);
         });
     });
 });

@@ -199,8 +199,13 @@ export interface CompilerPlugin {
     afterFileTranspile?: (entry: TranspileObj) => void;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
-    beforeGetCodeActions?: (file: BscFile, range: Range, codeActions: CodeAction[]) => void;
-    afterGetCodeActions?: (file: BscFile, range: Range, codeActions: CodeAction[]) => void;
+
+    beforeProgramGetCodeActions?: (program: Program, file: BscFile, range: Range, codeActions: CodeAction[]) => void;
+    afterProgramGetCodeActions?: (program: Program, file: BscFile, range: Range, codeActions: CodeAction[]) => void;
+
+    onFileGetCodeActions?: (file: BscFile, range: Range, diagnostics: BsDiagnostic[], codeActions: CodeAction[]) => void;
+
+    onScopeGetCodeActions?: (scope: Scope, file: BscFile, range: Range, diagnostics: BsDiagnostic[], codeActions: CodeAction[]) => void;
 }
 
 export interface TypedefProvider {

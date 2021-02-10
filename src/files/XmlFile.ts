@@ -2,7 +2,6 @@ import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CodeAction, CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
-import { CodeActionKind } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
@@ -370,34 +369,9 @@ export class XmlFile {
         return null;
     }
 
-    public getCodeActions(range: Range) {
-        const result = [] as CodeAction[];
-
-        for (const diagnostic of this.diagnostics) {
-            //skip diagnostics that don't occur on this line
-            if (diagnostic.range?.start.line !== range.start.line) {
-                continue;
-            }
-            if (diagnostic.code === DiagnosticMessages.xmlComponentMissingExtendsAttribute().code) {
-                //add the attribute at the end of the first attribute, or after the `<component` if no attributes
-                const pos = (this.parser.ast.component.attributes[0] ?? this.parser.ast.component.tag).range.end;
-                result.push(
-                    util.createCodeAction({
-                        title: `Add default extends attribute`,
-                        // diagnostics: [diagnostic],
-                        isPreferred: true,
-                        kind: CodeActionKind.QuickFix,
-                        changes: [{
-                            type: 'insert',
-                            filePath: this.pathAbsolute,
-                            position: util.createPosition(pos.line, pos.character),
-                            newText: ' extends="Group"'
-                        }]
-                    })
-                );
-            }
-        }
-        return result;
+    public getCodeActions(range: Range, codeActions: CodeAction[]) {
+        const relevantDiagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
+        this.program.plugins.emit('onFileGetCodeActions', this, range, relevantDiagnostics, codeActions);
     }
 
     public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
