@@ -14,7 +14,7 @@ The BrighterScript language provides new features and syntax enhancements to Rok
 ## Features
 BrighterScript adds several new features to the BrightScript language such as Namespaces, classes, import statements, and more. Take a look at the language specification docs for more information.
 
-[BrighterScript Language Specification](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md)
+[BrighterScript Language Specification](https://github.com/rokucommunity/BrighterScript/blob/master/docs/readme.md)
 
 ## Why use the BrighterScript compiler/CLI?
 
