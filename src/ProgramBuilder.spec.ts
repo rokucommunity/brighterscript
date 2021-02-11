@@ -12,7 +12,6 @@ import { Range } from '.';
 import { DiagnosticSeverity } from './astUtils';
 import { BrsFile } from './files/BrsFile';
 import { Deferred } from './deferred';
-import * as rokuDeploy from 'roku-deploy';
 
 describe('ProgramBuilder', () => {
 
