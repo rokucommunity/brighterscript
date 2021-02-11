@@ -11,7 +11,6 @@ import type { BscFile, BsDiagnostic } from '.';
 import { Range } from '.';
 import { DiagnosticSeverity } from './astUtils';
 import { BrsFile } from './files/BrsFile';
-import { Deferred } from './deferred';
 
 describe('ProgramBuilder', () => {
 
