@@ -282,7 +282,7 @@ describe('ProgramBuilder', () => {
         expect(printStub.called).to.be.true;
     });
 
-    it.only('watcher works', async () => {
+    it('watcher works', async () => {
         const code = 'sub main()\nend sub';
         fsExtra.outputFileSync(`${rootDir}/source/main.brs`, code);
         builder.options.watch = false;
