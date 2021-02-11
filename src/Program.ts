@@ -859,7 +859,8 @@ export class Program {
                 itemCounts.comma = 0;
             }
         }
-        while (index > 0) {
+        //this loop is quirky. walk to -1 (which will result in the last char being '' thus satisfying the situation where there is no leading whitespace).
+        while (index >= -1) {
             if (!(/[a-z0-9_\.\@]/i).test(line.charAt(index))) {
                 if (!name) {
                     name = line.substring(index + 1, argStartIndex);
