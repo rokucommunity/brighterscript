@@ -43,10 +43,13 @@ BrighterScript adds several new features to the BrightScript language such as Na
       - Automatically add a name prefix to all methods inside a namespace block.
       - Prevents method naming collisions and improves code readability and maintainability.
       - Missing method invocations, and other namespace related syntax errors are reported at compile time.
+    - [Ternary operator](https://github.com/rokucommunity/brighterscript/blob/master/docs/ternary-operator.md)
+      - `username = m.user <> invalid ? m.user.name : "not logged in"`
+    - [Template strings](https://github.com/rokucommunity/brighterscript/blob/master/docs/template-strings.md)
+      - ```print `Hello ${firstNameVar}` ```.
+    - [null-coalescing operator](https://github.com/rokucommunity/brighterscript/blob/master/docs/null-coalescing-operator.md)
+      - `user = m.user ?? getDefaultUser()`
     - Additional Language features coming soon
-      - Ternary operator: `username = m.user <> invalid ? m.user.name : "not logged in"`
-      - Template strings: ```print `Hello ${firstNameVar}` ```.
-      - null-coalescing operator: `user = m.user ?? getDefaultUser()`
       - null-conditional operator: `userSettings = m.user?.account?.profile?.settings`
     - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md)...
 
