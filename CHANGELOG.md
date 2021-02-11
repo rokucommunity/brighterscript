@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.30.7] - 2021-02-11
+### Fixed
+ - bug in `getSignatureHelp` that wouldn't work for function calls with no leading whitespace. ([#307](https://github.com/rokucommunity/brighterscript/issues/307))
+
+
+
 ## [0.30.6] - 2021-02-07
 ### Fixed
  - bad transpile for nested class method super calls
@@ -920,3 +926,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.30.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.3...v0.30.4
 [0.30.5]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.4...v0.30.5
 [0.30.6]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.5...v0.30.6
+[0.30.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.6...v0.30.7
