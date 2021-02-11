@@ -11,6 +11,8 @@ import type { BscFile, BsDiagnostic } from '.';
 import { Range } from '.';
 import { DiagnosticSeverity } from './astUtils';
 import { BrsFile } from './files/BrsFile';
+import { Deferred } from './deferred';
+import * as rokuDeploy from 'roku-deploy';
 
 describe('ProgramBuilder', () => {
 
@@ -279,6 +281,45 @@ describe('ProgramBuilder', () => {
         builder['printDiagnostics']();
 
         expect(printStub.called).to.be.true;
+    });
+
+    it.only('watcher works', async () => {
+        const code = 'sub main()\nend sub';
+        fsExtra.outputFileSync(`${rootDir}/source/main.brs`, code);
+        builder.options.watch = false;
+
+        //wait for the intial run to complete
+        await builder.run({
+            rootDir: rootDir,
+            copyToStaging: false,
+            createPackage: false,
+            deploy: false,
+            watch: true
+        });
+
+        const deferred = new Deferred();
+        const stub = sinon.stub(builder.program, 'addOrReplaceFile').callsFake(() => {
+            deferred.resolve();
+            return undefined;
+        });
+
+        console.log('wating for watcher');
+        //wait a little bit for the watcher to finish starting up
+        await util.sleep(10);
+
+        console.log('watcher ready. change file');
+        //changing a file on disk should trigger the watcher
+        fsExtra.outputFileSync(`${rootDir}/source/main.brs`, code);
+
+        //wait for addOrReplaceFile to finish
+        await deferred.promise;
+
+        expect(stub.getCalls()[0].args).to.eql([{
+            src: s`${rootDir}/source/main.brs`,
+            dest: s`source/main.brs`
+        }, code]);
+
+        builder.dispose();
     });
 });
 
