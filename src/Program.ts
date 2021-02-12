@@ -425,6 +425,7 @@ export class Program {
      * @param pathAbsolute
      */
     public removeFile(pathAbsolute: string) {
+        this.logger.debug('Program.removeFile()', pathAbsolute);
         if (!path.isAbsolute(pathAbsolute)) {
             throw new Error(`Path must be absolute: "${pathAbsolute}"`);
         }
