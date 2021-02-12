@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.30.8] - 2021-02-12
+### Changed
+ - add additional logging in `Program.removeFile`
+### Fixed
+ - Fix watcher bug on windows devices
+ - Don't mangle xml scripts during transpile
+
+
+
 ## [0.30.7] - 2021-02-11
 ### Fixed
  - bug in `getSignatureHelp` that wouldn't work for function calls with no leading whitespace. ([#307](https://github.com/rokucommunity/brighterscript/issues/307))
@@ -927,3 +936,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.30.5]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.4...v0.30.5
 [0.30.6]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.5...v0.30.6
 [0.30.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.6...v0.30.7
+[0.30.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.7...v0.30.8
