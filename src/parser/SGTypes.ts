@@ -47,7 +47,7 @@ export class SGTag {
                 attr.value = { text: value };
                 attr.range = undefined;
             } else {
-                this.attributes.splice(this.attributes.indexOf(attr));
+                this.attributes.splice(this.attributes.indexOf(attr), 1);
             }
         } else if (value) {
             this.attributes.push({

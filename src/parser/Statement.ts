@@ -591,6 +591,50 @@ export class PrintStatement extends Statement {
     }
 }
 
+export class DimStatement extends Statement {
+    constructor(
+        public dimToken: Token,
+        public identifier?: Identifier,
+        public openingSquare?: Token,
+        public dimensions?: Expression[],
+        public closingSquare?: Token
+    ) {
+        super();
+        this.range = util.createRangeFromPositions(
+            this.dimToken.range.start,
+            (this.closingSquare ?? this.dimensions[this.dimensions.length - 1] ?? this.openingSquare ?? this.identifier ?? this.dimToken).range.end
+        );
+    }
+    public range: Range;
+
+    public transpile(state: TranspileState) {
+        let result = [
+            state.sourceNode(this.dimToken, 'dim'),
+            ' ',
+            state.sourceNode(this.identifier, this.identifier.text),
+            state.sourceNode(this.openingSquare, '[')
+        ];
+        for (let i = 0; i < this.dimensions.length; i++) {
+            if (i > 0) {
+                result.push(', ');
+            }
+            result.push(
+                ...this.dimensions[i].transpile(state)
+            );
+        }
+        result.push(state.sourceNode(this.closingSquare, ']'));
+        return result;
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.dimensions?.length > 0 && options.walkMode & InternalWalkMode.walkExpressions) {
+            for (let i = 0; i < this.dimensions.length; i++) {
+                walk(this.dimensions, i, visitor, options, this);
+            }
+        }
+    }
+}
+
 export class GotoStatement extends Statement {
     constructor(
         readonly tokens: {

@@ -425,6 +425,7 @@ export class Program {
      * @param pathAbsolute
      */
     public removeFile(pathAbsolute: string) {
+        this.logger.debug('Program.removeFile()', pathAbsolute);
         if (!path.isAbsolute(pathAbsolute)) {
             throw new Error(`Path must be absolute: "${pathAbsolute}"`);
         }
@@ -744,7 +745,7 @@ export class Program {
         let functionScope = file.getFunctionScopeAtPosition(position);
         let identifierInfo = this.getPartialStatementInfo(file, position);
         if (identifierInfo.statementType === '') {
-            // just general functoin calls
+            // just general function calls
             let statements = file.program.getStatementsByName(identifierInfo.name, file);
             for (let statement of statements) {
                 //TODO better handling of collisions - if it's a namespace, then don't show any other overrides
@@ -839,21 +840,28 @@ export class Program {
             //try to get sig help based on the name
             index = position.character;
             let currentToken = file.getTokenAt(position);
-            name = file.getPartialVariableName(currentToken, [TokenKind.New]);
-            if (!name) {
-                //try the previous token, incase we're on a bracket
-                currentToken = file.getPreviousToken(currentToken);
+            if (currentToken && currentToken.kind !== TokenKind.Comment) {
                 name = file.getPartialVariableName(currentToken, [TokenKind.New]);
-            }
-            if (name?.indexOf('.')) {
-                let parts = name.split('.');
-                name = parts[parts.length - 1];
-            }
+                if (!name) {
+                    //try the previous token, incase we're on a bracket
+                    currentToken = file.getPreviousToken(currentToken);
+                    name = file.getPartialVariableName(currentToken, [TokenKind.New]);
+                }
+                if (name?.indexOf('.')) {
+                    let parts = name.split('.');
+                    name = parts[parts.length - 1];
+                }
 
-            index = currentToken.range.start.character;
-            argStartIndex = index;
+                index = currentToken.range.start.character;
+                argStartIndex = index;
+            } else {
+                // invalid location
+                index = 0;
+                itemCounts.comma = 0;
+            }
         }
-        while (index > 0) {
+        //this loop is quirky. walk to -1 (which will result in the last char being '' thus satisfying the situation where there is no leading whitespace).
+        while (index >= -1) {
             if (!(/[a-z0-9_\.\@]/i).test(line.charAt(index))) {
                 if (!name) {
                     name = line.substring(index + 1, argStartIndex);
@@ -902,6 +910,11 @@ export class Program {
         };
         while (index >= 0) {
             const currentChar = line.charAt(index);
+
+            if (currentChar === '\'') { //found comment, invalid index
+                itemCounts.isArgStartFound = false;
+                break;
+            }
 
             if (isArgStartFound) {
                 if (currentChar !== ' ') {
@@ -1029,8 +1042,14 @@ export class Program {
     }
 
     public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
+        // map fileEntries using their path as key, to avoid excessive "find()" operations
+        const mappedFileEntries = fileEntries.reduce<Record<string, FileObj>>((collection, entry) => {
+            collection[s`${entry.src}`] = entry;
+            return collection;
+        }, {});
+
         const entries = Object.values(this.files).map(file => {
-            let filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
+            let filePathObj = mappedFileEntries[s`${file.pathAbsolute}`];
             if (!filePathObj) {
                 //this file has been added in-memory, from a plugin, for example
                 filePathObj = {

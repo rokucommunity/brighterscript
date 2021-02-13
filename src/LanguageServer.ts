@@ -903,8 +903,8 @@ export class LanguageServer {
 
             await this.sendDiagnostics();
         } catch (e) {
-            this.connection.tracer.log(e);
-            this.sendCriticalFailure(`Critical error validating workspace: ${e.message}`);
+            this.connection.console.error(e);
+            this.sendCriticalFailure(`Critical error validating workspace: ${e.message}${e.stack ?? ''}`);
         }
 
         this.connection.sendNotification('build-status', 'success');
@@ -971,16 +971,17 @@ export class LanguageServer {
             );
 
             const activeSignature = signatures.length > 0 ? 0 : null;
-            const activeParameter = (activeSignature >= 0 && signatures[activeSignature]) ? signatures[activeSignature].index : null;
+
+            const activeParameter = activeSignature >= 0 ? signatures[activeSignature]?.index : null;
+
             let results: SignatureHelp = {
                 signatures: signatures.map((s) => s.signature),
                 activeSignature: activeSignature,
                 activeParameter: activeParameter
             };
-
             return results;
         } catch (e) {
-            console.error('error in onSigHelp', e);
+            this.connection.console.error(`error in onSignatureHelp: ${e.message}${e.stack ?? ''}`);
             return {
                 signatures: [],
                 activeSignature: 0,

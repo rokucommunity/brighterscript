@@ -13,7 +13,7 @@ import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import type { FunctionStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { trim, trimMap } from './testHelpers.spec';
+import { expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -1780,6 +1780,30 @@ describe('Program', () => {
     });
 
     describe('getSignatureHelp', () => {
+        it('works with no leading whitespace when the cursor is after the open paren', () => {
+            program.addOrReplaceFile('source/main.brs', `sub main()\nsayHello()\nend sub\nsub sayHello(name)\nend sub`);
+            let signatureHelp = program.getSignatureHelp(
+                `${rootDir}/source/main.brs`,
+                //sayHello(|)
+                util.createPosition(1, 9)
+            );
+            expectZeroDiagnostics(program);
+            expect(signatureHelp[0].signature.label).to.equal('sub sayHello(name)');
+        });
+
+        it('ignores comments and invalid ranges', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                function main()
+                    ' new func(((
+                end function
+            `);
+            for (let col = 0; col < 40; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(program.getDiagnostics()).to.be.empty;
+                expect(signatureHelp[0]?.signature).to.not.exist;
+            }
+        });
+
         it('gets signature help for constructor with no args', () => {
             program.addOrReplaceFile('source/main.bs', `
                 function main()

@@ -75,6 +75,20 @@ describe('SGParser', () => {
         `);
     });
 
+    it('does not crash when missing tag name', () => {
+        const parser = new SGParser();
+        parser.parse(
+            'pkg:/components/ParentScene.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+            <!-- a standalone less-than symbol used to cause issues -->
+            <
+            </component>
+        `);
+        //the test passes if the parser doesn't throw a runtime exception.
+    });
+
+
     it('Adds error when an unexpected tag is found in xml', () => {
         const parser = new SGParser();
         parser.parse(
