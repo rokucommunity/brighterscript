@@ -177,6 +177,7 @@ export type CompilerPluginFactory = () => CompilerPlugin;
 
 export interface CompilerPlugin {
     name: string;
+    //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
@@ -187,11 +188,16 @@ export interface CompilerPlugin {
     afterProgramValidate?: (program: Program) => void;
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    beforeProgramGetCodeActions?: (program: Program, file: BscFile, range: Range, codeActions: CodeAction[]) => void;
+    afterProgramGetCodeActions?: (program: Program, file: BscFile, range: Range, codeActions: CodeAction[]) => void;
+    //scope events
     afterScopeCreate?: (scope: Scope) => void;
     beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
     afterScopeValidate?: ValidateHandler;
+    onScopeGetCodeActions?: (scope: Scope, file: BscFile, range: Range, diagnostics: BsDiagnostic[], codeActions: CodeAction[]) => void;
+    //file events
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
     afterFileValidate?: (file: BscFile) => void;
@@ -199,13 +205,7 @@ export interface CompilerPlugin {
     afterFileTranspile?: (entry: TranspileObj) => void;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
-
-    beforeProgramGetCodeActions?: (program: Program, file: BscFile, range: Range, codeActions: CodeAction[]) => void;
-    afterProgramGetCodeActions?: (program: Program, file: BscFile, range: Range, codeActions: CodeAction[]) => void;
-
     onFileGetCodeActions?: (file: BscFile, range: Range, diagnostics: BsDiagnostic[], codeActions: CodeAction[]) => void;
-
-    onScopeGetCodeActions?: (scope: Scope, file: BscFile, range: Range, diagnostics: BsDiagnostic[], codeActions: CodeAction[]) => void;
 }
 
 export interface TypedefProvider {
