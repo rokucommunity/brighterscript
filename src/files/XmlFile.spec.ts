@@ -1004,19 +1004,38 @@ describe('XmlFile', () => {
                 <component name="comp1">
                 </component>
             `);
-
             expectCodeActions(() => {
                 file.getCodeActions(
                     //<comp|onent name="comp1">
                     util.createRange(1, 5, 1, 5), []
                 );
             }, [{
-                title: `Add default extends attribute`,
+                title: `Extend "Group"`,
                 isPreferred: true,
                 kind: 'quickfix',
                 changes: [{
                     filePath: s`${rootDir}/components/comp1.xml`,
                     newText: ' extends="Group"',
+                    type: 'insert',
+                    //<component name="comp1"|>
+                    position: util.createPosition(1, 23)
+                }]
+            }, {
+                title: `Extend "Task"`,
+                kind: 'quickfix',
+                changes: [{
+                    filePath: s`${rootDir}/components/comp1.xml`,
+                    newText: ' extends="Task"',
+                    type: 'insert',
+                    //<component name="comp1"|>
+                    position: util.createPosition(1, 23)
+                }]
+            }, {
+                title: `Extend "ContentNode"`,
+                kind: 'quickfix',
+                changes: [{
+                    filePath: s`${rootDir}/components/comp1.xml`,
+                    newText: ' extends="ContentNode"',
                     type: 'insert',
                     //<component name="comp1"|>
                     position: util.createPosition(1, 23)

@@ -28,7 +28,7 @@ export class XmlFileCodeActionsProcessor {
         const pos = (this.file.parser.ast.component.attributes[0] ?? this.file.parser.ast.component.tag).range.end;
         this.codeActions.push(
             util.createCodeAction({
-                title: `Add default extends attribute`,
+                title: `Extend "Group"`,
                 // diagnostics: [diagnostic],
                 isPreferred: true,
                 kind: CodeActionKind.QuickFix,
@@ -37,6 +37,32 @@ export class XmlFileCodeActionsProcessor {
                     filePath: this.file.pathAbsolute,
                     position: util.createPosition(pos.line, pos.character),
                     newText: ' extends="Group"'
+                }]
+            })
+        );
+        this.codeActions.push(
+            util.createCodeAction({
+                title: `Extend "Task"`,
+                // diagnostics: [diagnostic],
+                kind: CodeActionKind.QuickFix,
+                changes: [{
+                    type: 'insert',
+                    filePath: this.file.pathAbsolute,
+                    position: util.createPosition(pos.line, pos.character),
+                    newText: ' extends="Task"'
+                }]
+            })
+        );
+        this.codeActions.push(
+            util.createCodeAction({
+                title: `Extend "ContentNode"`,
+                // diagnostics: [diagnostic],
+                kind: CodeActionKind.QuickFix,
+                changes: [{
+                    type: 'insert',
+                    filePath: this.file.pathAbsolute,
+                    position: util.createPosition(pos.line, pos.character),
+                    newText: ' extends="ContentNode"'
                 }]
             })
         );
