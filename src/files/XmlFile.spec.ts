@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as sinonImport from 'sinon';
 import type { CodeAction, CompletionItem } from 'vscode-languageserver';
 import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
+import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
@@ -14,13 +15,20 @@ import { expectCodeActions, trim, trimMap } from '../testHelpers.spec';
 import { URI } from 'vscode-uri';
 
 describe('XmlFile', () => {
-    let rootDir = process.cwd();
+    const tempDir = s`${process.cwd()}/.tmp`;
+    const rootDir = s`${tempDir}/rootDir`;
+    const stagingDir = s`${tempDir}/stagingDir`;
+
     let program: Program;
     let sinon = sinonImport.createSandbox();
     let file: XmlFile;
     let testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
+        fsExtra.ensureDirSync(tempDir);
+        fsExtra.emptyDirSync(tempDir);
+        fsExtra.ensureDirSync(rootDir);
+        fsExtra.ensureDirSync(stagingDir);
         program = new Program({ rootDir: rootDir });
         file = new XmlFile(`${rootDir}/components/MainComponent.xml`, 'components/MainComponent.xml', program);
     });
@@ -618,6 +626,36 @@ describe('XmlFile', () => {
     });
 
     describe('transpile', () => {
+        /**
+         * There was a bug that would incorrectly replace one of the script paths on the second or third transpile, so this test verifies it doesn't do that anymore
+         */
+        it('does not mangle scripts on multiple transpile', async () => {
+            program.addOrReplaceFile('components/SimpleScene.bs', ``);
+
+            program.addOrReplaceFile(`components/SimpleScene.xml`, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script type="text/brightscript" uri="SimpleScene.bs" />
+                </component>
+            `);
+
+            const expected = trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script type="text/brightscript" uri="SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `;
+
+            await program.transpile([], stagingDir);
+            expect(fsExtra.readFileSync(`${stagingDir}/components/SimpleScene.xml`).toString()).to.eql(expected);
+
+            //clear the output folder
+            fsExtra.emptyDirSync(stagingDir);
+            await program.transpile([], stagingDir);
+            expect(fsExtra.readFileSync(`${stagingDir}/components/SimpleScene.xml`).toString()).to.eql(expected);
+        });
+
         it('keeps all content of the XML', () => {
             program.addOrReplaceFile(`components/SimpleScene.bs`, `
                 sub init()

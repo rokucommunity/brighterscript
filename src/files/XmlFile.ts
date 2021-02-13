@@ -459,16 +459,20 @@ export class XmlFile {
             return script;
         });
 
-        const extraImportIdx = this.ast.component.scripts.length - 1;
-        //temporarily add the missing imports as script tags
-        this.ast.component.scripts.push(...extraImportScripts);
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled || extraImportScripts.length > 0) {
+            //temporarily add the missing imports as script tags
+            const originalScripts = this.ast.component.scripts;
+            this.ast.component.scripts = [
+                ...originalScripts,
+                ...extraImportScripts
+            ];
+
             transpileResult = new SourceNode(null, null, state.source, this.parser.ast.transpile(state));
 
-            //remove the extra import scripts added pre-transpile
-            this.ast.component.scripts.splice(extraImportIdx, extraImportScripts.length);
+            //restore the original scripts array
+            this.ast.component.scripts = originalScripts;
 
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location

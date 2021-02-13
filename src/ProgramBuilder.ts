@@ -155,10 +155,19 @@ export class ProgramBuilder {
         }
     }
 
+    /**
+     * A handle for the watch mode interval that keeps the process alive.
+     * We need this so we can clear it if the builder is disposed
+     */
+    private watchInterval: NodeJS.Timer;
+
     public enableWatchMode() {
         this.watcher = new Watcher(this.options);
+        if (this.watchInterval) {
+            clearInterval(this.watchInterval);
+        }
         //keep the process alive indefinitely by setting an interval that runs once every 12 days
-        setInterval(() => { }, 1073741824);
+        this.watchInterval = setInterval(() => { }, 1073741824);
 
         //clear the console
         this.clearConsole();
@@ -176,8 +185,7 @@ export class ProgramBuilder {
         let debouncedRunOnce = debounce(async () => {
             this.logger.log('File change detected. Starting incremental compilation...');
             await this.runOnce();
-            let errorCount = this.getDiagnostics().length;
-            this.logger.log(`Found ${errorCount} errors. Watching for file changes.`);
+            this.logger.log(`Watching for file changes.`);
         }, 50);
 
         //on any file watcher event
@@ -186,11 +194,15 @@ export class ProgramBuilder {
             if (event === 'add' || event === 'change') {
                 const fileObj = {
                     src: thePath,
-                    dest: rokuDeploy.getDestPath(thePath, this.program.options.files, this.rootDir)
+                    dest: rokuDeploy.getDestPath(
+                        thePath,
+                        this.program.options.files,
+                        //some shells will toTowerCase the drive letter, so do it to rootDir for consistency
+                        util.driveLetterToLower(this.rootDir)
+                    )
                 };
                 this.program.addOrReplaceFile(
                     fileObj,
-                    //load the file synchronously because that's faster than async for a small number of filies
                     await this.getFileContents(fileObj.src)
                 );
             } else if (event === 'unlink') {
@@ -497,6 +509,9 @@ export class ProgramBuilder {
         }
         if (this.program) {
             this.program.dispose?.();
+        }
+        if (this.watchInterval) {
+            clearInterval(this.watchInterval);
         }
     }
 }
