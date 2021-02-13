@@ -986,21 +986,31 @@ export class LanguageServer {
         const filepath = util.uriToPath(params.textDocument.uri);
         await this.keyedThrottler.onIdleOnce(filepath, true);
 
-        const signatures = util.flatMap(
-            await Promise.all(this.getWorkspaces().map(workspace => workspace.builder.program.getSignatureHelp(filepath, params.position)
-            )),
-            c => c
-        );
+        try {
+            const signatures = util.flatMap(
+                await Promise.all(this.getWorkspaces().map(workspace => workspace.builder.program.getSignatureHelp(filepath, params.position)
+                )),
+                c => c
+            );
 
-        const activeSignature = signatures.length > 0 ? 0 : null;
-        const activeParameter = activeSignature >= 0 ? signatures[activeSignature]?.index : null;
-        let results: SignatureHelp = {
-            signatures: signatures.map((s) => s.signature),
-            activeSignature: activeSignature,
-            activeParameter: activeParameter
-        };
+            const activeSignature = signatures.length > 0 ? 0 : null;
 
-        return results;
+            const activeParameter = activeSignature >= 0 ? signatures[activeSignature]?.index : null;
+
+            let results: SignatureHelp = {
+                signatures: signatures.map((s) => s.signature),
+                activeSignature: activeSignature,
+                activeParameter: activeParameter
+            };
+            return results;
+        } catch (e) {
+            this.connection.console.error(`error in onSignatureHelp: ${e.message}${e.stack ?? ''}`);
+            return {
+                signatures: [],
+                activeSignature: 0,
+                activeParameter: 0
+            };
+        }
     }
 
     private async onReferences(params: ReferenceParams) {
