@@ -1,7 +1,7 @@
 import { assert, expect } from 'chai';
 import * as path from 'path';
 import * as sinonImport from 'sinon';
-import type { CompletionItem } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem } from 'vscode-languageserver';
 import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { BsDiagnostic, FileReference } from '../interfaces';
@@ -11,6 +11,7 @@ import { XmlFile } from './XmlFile';
 import util, { standardizePath as s } from '../util';
 import { getTestTranspile } from './BrsFile.spec';
 import { expectCodeActions, trim, trimMap } from '../testHelpers.spec';
+import { URI } from 'vscode-uri';
 
 describe('XmlFile', () => {
     let rootDir = process.cwd();
@@ -1041,6 +1042,24 @@ describe('XmlFile', () => {
                     position: util.createPosition(1, 23)
                 }]
             }]);
+        });
+
+        it('adds attribute at end of component with multiple attributes`', () => {
+            const file = program.addOrReplaceFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" attr2="attr3" attr3="attr3">
+                </component>
+            `);
+            const codeActions = [] as CodeAction[];
+            file.getCodeActions(
+                //<comp|onent name="comp1">
+                util.createRange(1, 5, 1, 5), codeActions
+            );
+            expect(
+                codeActions[0].edit.changes[URI.file(s`${rootDir}/components/comp1.xml`).toString()][0].range
+            ).to.eql(
+                util.createRange(1, 51, 1, 51)
+            );
         });
     });
 });

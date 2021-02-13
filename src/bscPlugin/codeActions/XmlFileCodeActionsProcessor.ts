@@ -24,8 +24,9 @@ export class XmlFileCodeActionsProcessor {
     }
 
     private addMissingExtends() {
-        //add the attribute at the end of the first attribute, or after the `<component` if no attributes
-        const pos = (this.file.parser.ast.component.attributes[0] ?? this.file.parser.ast.component.tag).range.end;
+        const { component } = this.file.parser.ast;
+        //inject new attribute after the final attribute, or after the `<component` if there are no attributes
+        const pos = (component.attributes[component.attributes.length - 1] ?? component.tag).range.end;
         this.codeActions.push(
             util.createCodeAction({
                 title: `Extend "Group"`,
@@ -35,7 +36,7 @@ export class XmlFileCodeActionsProcessor {
                 changes: [{
                     type: 'insert',
                     filePath: this.file.pathAbsolute,
-                    position: util.createPosition(pos.line, pos.character),
+                    position: pos,
                     newText: ' extends="Group"'
                 }]
             })
@@ -48,7 +49,7 @@ export class XmlFileCodeActionsProcessor {
                 changes: [{
                     type: 'insert',
                     filePath: this.file.pathAbsolute,
-                    position: util.createPosition(pos.line, pos.character),
+                    position: pos,
                     newText: ' extends="Task"'
                 }]
             })
@@ -61,7 +62,7 @@ export class XmlFileCodeActionsProcessor {
                 changes: [{
                     type: 'insert',
                     filePath: this.file.pathAbsolute,
-                    position: util.createPosition(pos.line, pos.character),
+                    position: pos,
                     newText: ' extends="ContentNode"'
                 }]
             })
