@@ -68,7 +68,7 @@ export class Program {
     ) {
         this.options = util.normalizeConfig(options);
         this.logger = logger || new Logger(options.logLevel as LogLevel);
-        this.plugins = plugins || new PluginInterface([], undefined);
+        this.plugins = plugins || new PluginInterface([], this.logger);
 
         //inject the bsc plugin as the first plugin in the stack.
         //eslint-disable-next-line @typescript-eslint/dot-notation
