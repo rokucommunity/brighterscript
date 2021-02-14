@@ -1,11 +1,11 @@
 import type { CodeAction, Range } from 'vscode-languageserver';
-import { isBrsFile } from '../../astUtils/reflection';
+import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
+import { isBrsFile } from '../../astUtils/reflection';
 import type { BscFile, BsDiagnostic } from '../../interfaces';
 import util from '../../util';
 import type { XmlScope } from '../../XmlScope';
 
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class XmlScopeCodeActionProcessor {
     public constructor(
         public scope: XmlScope,
@@ -20,14 +20,13 @@ export class XmlScopeCodeActionProcessor {
     public process() {
         for (const diagnostic of this.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.callToUnknownFunction) {
-                this.importXmlScript(diagnostic);
+                this.importXmlScript(diagnostic as any);
             }
         }
     }
 
-    public importXmlScript(diagnostic: BsDiagnostic) {
-        //functionName is stored on this specific diagnostic
-        const lowerFunctionName = (diagnostic as any).functionName.toLowerCase();
+    public importXmlScript(diagnostic: DiagnosticMessageType<'callToUnknownFunction'>) {
+        const lowerFunctionName = diagnostic.data.functionName.toLowerCase();
 
         //find every file with this function defined
         for (const key in this.scope.program.files) {

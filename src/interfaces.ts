@@ -14,6 +14,10 @@ import type { BscType } from './types/BscType';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
+    /**
+     * A generic data container where additional details of the diagnostic can be stored. These are stripped out before being sent to a languageclient, and not printed to the console.
+     */
+    data?: any;
 }
 
 export type BscFile = BrsFile | XmlFile;

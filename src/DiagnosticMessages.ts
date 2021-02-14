@@ -17,7 +17,9 @@ export let DiagnosticMessages = {
     callToUnknownFunction: (name: string, scopeName: string) => ({
         message: `Cannot find function with name '${name}' when this file is included in scope '${scopeName}'`,
         code: 1001,
-        functionName: name,
+        data: {
+            functionName: name
+        },
         severity: DiagnosticSeverity.Error
     }),
     mismatchArgumentCount: (expectedCount: number | string, actualCount: number) => ({
@@ -636,3 +638,10 @@ export interface DiagnosticInfo {
     code: number;
     severity: DiagnosticSeverity;
 }
+
+/**
+ * Provides easy type support for the return value of any DiagnosticMessage function.
+ * The second type parameter is optional, but allows plugins to pass in their own
+ * DiagnosticMessages-like object in order to get the same type support
+ */
+export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (...args: any) => any> = typeof DiagnosticMessages> = ReturnType<D[K]>;
