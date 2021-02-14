@@ -1,9 +1,9 @@
 import type { CodeAction, Range } from 'vscode-languageserver';
 import { CodeActionKind } from 'vscode-languageserver';
+import codeActionUtil from '../../CodeActionUtil';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { XmlFile } from '../../files/XmlFile';
 import type { BsDiagnostic } from '../../interfaces';
-import util from '../../util';
 
 export class XmlFileCodeActionsProcessor {
     public constructor(
@@ -28,7 +28,7 @@ export class XmlFileCodeActionsProcessor {
         //inject new attribute after the final attribute, or after the `<component` if there are no attributes
         const pos = (component.attributes[component.attributes.length - 1] ?? component.tag).range.end;
         this.codeActions.push(
-            util.createCodeAction({
+            codeActionUtil.createCodeAction({
                 title: `Extend "Group"`,
                 // diagnostics: [diagnostic],
                 isPreferred: true,
@@ -42,7 +42,7 @@ export class XmlFileCodeActionsProcessor {
             })
         );
         this.codeActions.push(
-            util.createCodeAction({
+            codeActionUtil.createCodeAction({
                 title: `Extend "Task"`,
                 // diagnostics: [diagnostic],
                 kind: CodeActionKind.QuickFix,
@@ -55,7 +55,7 @@ export class XmlFileCodeActionsProcessor {
             })
         );
         this.codeActions.push(
-            util.createCodeAction({
+            codeActionUtil.createCodeAction({
                 title: `Extend "ContentNode"`,
                 // diagnostics: [diagnostic],
                 kind: CodeActionKind.QuickFix,

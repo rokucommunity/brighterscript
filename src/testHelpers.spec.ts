@@ -1,9 +1,10 @@
-import type { BsDiagnostic, CodeActionShorthand } from './interfaces';
+import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import type { Diagnostic } from 'vscode-languageserver';
-import util from './util';
 import { createSandbox } from 'sinon';
 import { expect } from 'chai';
+import type { CodeActionShorthand } from './CodeActionUtil';
+import codeActionUtil from './CodeActionUtil';
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
  */
@@ -86,7 +87,7 @@ export function trimMap(source: string) {
 
 export function expectCodeActions(test: () => any, expected: CodeActionShorthand[]) {
     const sinon = createSandbox();
-    const stub = sinon.stub(util, 'createCodeAction');
+    const stub = sinon.stub(codeActionUtil, 'createCodeAction');
     try {
         test();
     } finally {

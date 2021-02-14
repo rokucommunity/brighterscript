@@ -5,6 +5,7 @@ import { isBrsFile } from '../../astUtils/reflection';
 import type { BscFile, BsDiagnostic } from '../../interfaces';
 import util from '../../util';
 import type { XmlScope } from '../../XmlScope';
+import codeActionUtil from '../../CodeActionUtil';
 
 export class XmlScopeCodeActionProcessor {
     public constructor(
@@ -38,7 +39,7 @@ export class XmlScopeCodeActionProcessor {
                 if (stmt && slashOpenToken) {
                     const pkgPath = util.getRokuPkgPath(file.pkgPath);
                     this.codeActions.push(
-                        util.createCodeAction({
+                        codeActionUtil.createCodeAction({
                             title: `Import "${pkgPath}" into component "${this.scope.xmlFile.componentName.text ?? this.scope.name}"`,
                             // diagnostics: [diagnostic]
                             changes: [{
