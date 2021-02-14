@@ -71,8 +71,7 @@ export class Program {
         this.plugins = plugins || new PluginInterface([], this.logger);
 
         //inject the bsc plugin as the first plugin in the stack.
-        //eslint-disable-next-line @typescript-eslint/dot-notation
-        this.plugins['plugins'].unshift(new BscPlugin());
+        this.plugins.addFirst(new BscPlugin());
 
         //normalize the root dir path
         this.options.rootDir = util.getRootDir(this.options);

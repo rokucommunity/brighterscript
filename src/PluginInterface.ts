@@ -26,6 +26,18 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
         }
     }
 
+    /**
+     * Add a plugin to the beginning of the list of plugins
+     */
+    public addFirst(plugin: CompilerPlugin) {
+        if (!this.has(plugin)) {
+            this.plugins.unshift(plugin);
+        }
+    }
+
+    /**
+     * Add a plugin to the end of the list of plugins
+     */
     public add(plugin: CompilerPlugin) {
         if (!this.has(plugin)) {
             this.plugins.push(plugin);
