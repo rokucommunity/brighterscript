@@ -368,7 +368,7 @@ export class SGComponent extends SGTag {
         if (content) {
             for (const tag of content) {
                 if (isSGInterface(tag)) {
-                    this.api = tag;
+                    this.interface = tag;
                 } else if (isSGScript(tag)) {
                     this.scripts.push(tag);
                 } else if (isSGChildren(tag)) {
@@ -380,7 +380,7 @@ export class SGComponent extends SGTag {
         }
     }
 
-    public api: SGInterface;
+    public interface: SGInterface;
 
     public scripts: SGScript[] = [];
 
@@ -403,8 +403,8 @@ export class SGComponent extends SGTag {
     protected transpileBody(state: SGTranspileState): (string | SourceNode)[] {
         const body: (string | SourceNode)[] = ['>\n'];
         state.blockDepth++;
-        if (this.api) {
-            body.push(this.api.transpile(state));
+        if (this.interface) {
+            body.push(this.interface.transpile(state));
         }
         if (this.scripts.length > 0) {
             body.push(...this.scripts.map(node => node.transpile(state)));

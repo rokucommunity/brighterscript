@@ -48,10 +48,10 @@ export class XmlScope extends Scope {
     }
 
     private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
-        if (!this.xmlFile.parser.ast?.component?.api) {
+        if (!this.xmlFile.parser.ast?.component?.interface) {
             return;
         }
-        const { api } = this.xmlFile.parser.ast.component;
+        const { interface: api } = this.xmlFile.parser.ast.component;
         //validate functions
         for (const fun of api.functions) {
             const name = fun.name;
