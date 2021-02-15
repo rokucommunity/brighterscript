@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.30.9] - 2021-02-15
+### Fixed
+ - prevent excess validations when non-workspace files are changed  ([#315](https://github.com/rokucommunity/brighterscript/pull/315))
+ - catch errors when getting signatures ([#285](https://github.com/rokucommunity/brighterscript/pull/285))
+ - missing `Roku_Ads` function in global functions list. ([#312](https://github.com/rokucommunity/brighterscript/pull/312))
+
+
+
 ## [0.30.8] - 2021-02-12
 ### Changed
  - add additional logging in `Program.removeFile`
@@ -937,3 +945,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.30.6]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.5...v0.30.6
 [0.30.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.6...v0.30.7
 [0.30.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.7...v0.30.8
+[0.30.9]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.8...v0.30.9

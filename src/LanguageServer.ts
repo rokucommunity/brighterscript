@@ -599,11 +599,13 @@ export class LanguageServer {
                 }
             })
         );
-        //wait for all of the programs to finish starting up
-        await this.waitAllProgramFirstRuns();
+        if (workspaces.length > 0) {
+            //wait for all of the programs to finish starting up
+            await this.waitAllProgramFirstRuns();
 
-        // valdiate all workspaces
-        this.validateAllThrottled(); //eslint-disable-line
+            // valdiate all workspaces
+            this.validateAllThrottled(); //eslint-disable-line
+        }
     }
 
     private getRootDir(workspace: Workspace) {
@@ -714,8 +716,11 @@ export class LanguageServer {
                         workspacesToReload.push(workspace);
                     }
                 }
-                //reload any workspaces that need to be reloaded
-                await this.reloadWorkspaces(workspacesToReload);
+                if (workspacesToReload.length > 0) {
+                    //vsc can generate a ton of these changes, for vsc system files, so we need to bail if there's no work to do on any of our actual workspace files
+                    //reload any workspaces that need to be reloaded
+                    await this.reloadWorkspaces(workspacesToReload);
+                }
 
                 //set the list of workspaces to non-reloaded workspaces
                 workspaces = workspaces.filter(x => !workspacesToReload.includes(x));
@@ -759,9 +764,6 @@ export class LanguageServer {
             await Promise.all(
                 workspaces.map((workspace) => this.handleFileChanges(workspace, changes))
             );
-
-            //validate all workspaces
-            await this.validateAllThrottled();
         }
         this.connection.sendNotification('build-status', 'success');
     }
@@ -774,11 +776,16 @@ export class LanguageServer {
     public async handleFileChanges(workspace: Workspace, changes: { type: FileChangeType; pathAbsolute: string }[]) {
         //this loop assumes paths are both file paths and folder paths, which eliminates the need to detect.
         //All functions below can handle being given a file path AND a folder path, and will only operate on the one they are looking for
+        let consumeCount = 0;
         await Promise.all(changes.map(async (change) => {
             await this.keyedThrottler.run(change.pathAbsolute, async () => {
-                await this.handleFileChange(workspace, change);
+                consumeCount += await this.handleFileChange(workspace, change) ? 1 : 0;
             });
         }));
+
+        if (consumeCount > 0) {
+            await this.validateAllThrottled();
+        }
     }
 
     /**
@@ -790,6 +797,7 @@ export class LanguageServer {
         const program = workspace.builder.program;
         const options = workspace.builder.options;
         const rootDir = workspace.builder.rootDir;
+
         //deleted
         if (change.type === FileChangeType.Deleted) {
             //try to act on this path as a directory
@@ -798,6 +806,9 @@ export class LanguageServer {
             //if this is a file loaded in the program, remove it
             if (program.hasFile(change.pathAbsolute)) {
                 program.removeFile(change.pathAbsolute);
+                return true;
+            } else {
+                return false;
             }
 
             //created
@@ -816,8 +827,10 @@ export class LanguageServer {
                     },
                     await workspace.builder.getFileContents(change.pathAbsolute)
                 );
+                return true;
             } else {
                 //no dest path means the program doesn't want this file
+                return false;
             }
 
             //changed
@@ -835,6 +848,7 @@ export class LanguageServer {
             } else {
                 program.removeFile(change.pathAbsolute);
             }
+            return true;
         }
     }
 

@@ -60,10 +60,10 @@ export function expectZeroDiagnostics(arg: { getDiagnostics(): Array<Diagnostic>
     let diagnostics: BsDiagnostic[];
     if (Array.isArray(arg)) {
         diagnostics = arg as BsDiagnostic[];
-    } else if ((arg as any).diagnostics) {
-        diagnostics = (arg as any).diagnostics;
     } else if ((arg as any).getDiagnostics) {
         diagnostics = (arg as any).getDiagnostics();
+    } else if ((arg as any).diagnostics) {
+        diagnostics = (arg as any).diagnostics;
     } else {
         throw new Error('Cannot derive a list of diagnostics from ' + JSON.stringify(arg));
     }
