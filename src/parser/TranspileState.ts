@@ -1,7 +1,8 @@
-import { SourceNode } from 'source-map';
+import type { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import type { BrsFile } from '../files/BrsFile';
 import type { ClassStatement } from './Statement';
+import util from '../util';
 
 /**
  * Holds the state of a transpile operation as it works its way through the transpile process
@@ -68,13 +69,7 @@ export class TranspileState {
     /**
      * Shorthand for creating a new source node
      */
-    public sourceNode(locatable: { range: Range }, code: string) {
-        let result = new SourceNode(
-            locatable.range.start.line,
-            locatable.range.start.character,
-            this.pathAbsolute,
-            code
-        );
-        return code || result;
+    public sourceNode(locatable: { range: Range }, code: string): SourceNode | undefined {
+        return util.sourceNode(this.pathAbsolute, locatable, code);
     }
 }

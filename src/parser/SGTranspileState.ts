@@ -2,6 +2,8 @@ import type { Range } from 'vscode-languageserver';
 import { SourceNode } from 'source-map';
 import type { SGToken } from './SGTypes';
 import type { XmlFile } from '../files/XmlFile';
+import util from '../util';
+import type { TranspileResult } from '../interfaces';
 
 export class SGTranspileState {
 
@@ -27,16 +29,17 @@ export class SGTranspileState {
      * If the file resides outside of rootDir, then no changes will be made to this path.
      */
     public source: string;
-    indent = '';
 
-    private _depth = 0;
+    public indent = '';
+
     get blockDepth() {
-        return this._depth;
+        return this._blockDepth;
     }
     set blockDepth(value: number) {
-        this._depth = value;
+        this._blockDepth = value;
         this.indent = value === 0 ? '' : '    '.repeat(value);
     }
+    private _blockDepth = 0;
 
     public rangeToSourceOffset(range: Range) {
         if (!range) {
@@ -71,5 +74,25 @@ export class SGTranspileState {
         } else {
             return new SourceNode(offset.line, offset.column, this.source, text);
         }
+    }
+
+    /**
+     * Append whitespace until we reach the current blockDepth amount
+     * @param blockDepthChange - if provided, this will add (or subtract if negative) the value to the block depth BEFORE getting the next indent amount.
+     */
+    public getIndent(blockDepthChange = 0) {
+        this.blockDepth += blockDepthChange;
+        return this.indent;
+    }
+
+    public newline() {
+        return '\n';
+    }
+
+    /**
+     * Shorthand for creating a new source node
+     */
+    public sourceNode(locatable: { range: Range }, code: string | TranspileResult) {
+        return util.sourceNode(this.source, locatable, code);
     }
 }

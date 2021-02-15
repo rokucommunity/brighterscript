@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -1174,6 +1174,27 @@ export class Util {
             },
             range: attr.range
         } as SGAttribute;
+    }
+
+    /**
+     * Shorthand for creating a new source node
+     */
+    public sourceNode(source: string, locatable: { range: Range }, code: string | TranspileResult): SourceNode | undefined {
+        if (code !== undefined) {
+            const node = new SourceNode(
+                null,
+                null,
+                source,
+                code
+            );
+            if (locatable.range) {
+                //convert 0-based Range line to 1-based SourceNode line
+                node.line = locatable.range.start.line + 1;
+                //SourceNode columns are 0-based so no conversion necessary
+                node.column = locatable.range.start.character;
+            }
+            return node;
+        }
     }
 }
 

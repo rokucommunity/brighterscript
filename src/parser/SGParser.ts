@@ -170,6 +170,15 @@ interface IToken {
     endColumn?: number;
 }
 
+export interface CstNodeLocation {
+    startOffset: number;
+    startLine: number;
+    startColumn?: number;
+    endOffset?: number;
+    endLine?: number;
+    endColumn?: number;
+}
+
 function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SGTag {
     const nameToken = children.Name[0];
     let range: Range;
@@ -324,7 +333,7 @@ function rangeFromTokens(start: IToken, end?: IToken) {
 }
 
 //make range not including quotes
-function rangeFromTokenValue(token: IToken) {
+function rangeFromTokenValue(token: IToken | CstNodeLocation) {
     if (!token) {
         return undefined;
     }
