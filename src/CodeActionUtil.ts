@@ -1,7 +1,6 @@
 import type { CodeActionKind, Diagnostic, Position, Range, WorkspaceEdit } from 'vscode-languageserver';
 import { CodeAction, TextEdit } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import type { SGComponent } from './parser/SGTypes';
 
 export class CodeActionUtil {
 
