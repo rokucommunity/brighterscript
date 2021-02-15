@@ -4,7 +4,7 @@ import type { Diagnostic } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from 'chai';
 import type { CodeActionShorthand } from './CodeActionUtil';
-import codeActionUtil from './CodeActionUtil';
+import { codeActionUtil } from './CodeActionUtil';
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
  */

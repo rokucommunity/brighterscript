@@ -26,18 +26,6 @@ export class CodeActionUtil {
         }
         return CodeAction.create(obj.title, edit);
     }
-    /**
-     * Create an edit that properly handles inserting a script to the end of the component,
-     * honoring the indentation
-     */
-    addXmlScript(component: SGComponent, uri: string) {
-        //find the last script tag (if one exists)
-        const lastScript = component.scripts[component.scripts.length - 1];
-        //TODO
-        if (lastScript) {
-        }
-        //find the closing interface tag
-    }
 }
 
 export interface CodeActionShorthand {
@@ -63,5 +51,3 @@ export interface ReplaceChange {
 }
 
 export const codeActionUtil = new CodeActionUtil();
-export default codeActionUtil;
-

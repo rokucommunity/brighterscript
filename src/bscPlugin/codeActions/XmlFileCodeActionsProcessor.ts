@@ -1,6 +1,6 @@
 import type { CodeAction, Range } from 'vscode-languageserver';
 import { CodeActionKind } from 'vscode-languageserver';
-import codeActionUtil from '../../CodeActionUtil';
+import { codeActionUtil } from '../../CodeActionUtil';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { XmlFile } from '../../files/XmlFile';
 import type { BsDiagnostic } from '../../interfaces';

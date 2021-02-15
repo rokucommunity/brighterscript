@@ -5,7 +5,6 @@ import { isSGChildren, isSGField, isSGFunction, isSGInterface, isSGScript } from
 import type { FileReference, TranspileResult } from '../interfaces';
 import type { SGTranspileState } from './SGTranspileState';
 import util from '../util';
-import type { ElementCtx } from '@xml-tools/parser';
 
 export interface SGToken {
     text: string;
@@ -360,7 +359,6 @@ export class SGInterface extends SGTag {
 
 export class SGComponent extends SGTag {
     constructor(
-        public ast: ElementCtx,
         tag: SGToken = { text: 'component' },
         attributes?: SGAttribute[],
         content?: SGTag[],
