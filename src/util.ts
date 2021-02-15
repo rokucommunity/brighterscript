@@ -963,16 +963,6 @@ export class Util {
     }
 
     /**
-     * Make a copy of the given position
-     */
-    public clonePosition(position: Position) {
-        return {
-            line: position.line,
-            character: position.character
-        };
-    }
-
-    /**
      * Convert a list of tokens into a string, including their leading whitespace
      */
     public tokensToString(tokens: Token[]) {
