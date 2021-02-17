@@ -2332,6 +2332,43 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('includes annotations', () => {
+            testTypedef(`
+                namespace test
+                    @an
+                    @anFunc("value")
+                    function getDuck()
+                    end function
+                    class Duck
+                        @anMember
+                        @anMember("field")
+                        private thing
+
+                        @anMember
+                        @anMember("func")
+                        private function foo()
+                        end function
+                    end class
+                end namespace
+            `, trim`
+                namespace test
+                    @an
+                    @anFunc("value")
+                    function getDuck()
+                    end function
+                    class Duck
+                        @anMember
+                        @anMember("field")
+                        private thing as dynamic
+                        @anMember
+                        @anMember("func")
+                        private function foo()
+                        end function
+                    end class
+                end namespace
+            `);
+        });
+
         it('includes import statements', () => {
             testTypedef(`
                import "pkg:/source/lib.brs"
