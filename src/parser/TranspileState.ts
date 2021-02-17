@@ -71,7 +71,9 @@ export class TranspileState {
      */
     public sourceNode(locatable: { range: Range }, code: string | SourceNode | Array<string | SourceNode>): SourceNode | undefined {
         return new SourceNode(
+            //convert 0-based range line to 1-based SourceNode line
             locatable.range.start.line + 1,
+            //range and SourceNode character are both 0-based, so no conversion necessary
             locatable.range.start.character,
             this.pathAbsolute,
             code
@@ -85,7 +87,9 @@ export class TranspileState {
      */
     public tokenToSourceNode(token: Token) {
         return new SourceNode(
+            //convert 0-based range line to 1-based SourceNode line
             token.range.start.line + 1,
+            //range and SourceNode character are both 0-based, so no conversion necessary
             token.range.start.character,
             this.pathAbsolute,
             token.text
