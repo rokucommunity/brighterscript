@@ -1279,9 +1279,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     getTypedef(state: TranspileState) {
-        //get annotations for class here
-        const result = [
-        ] as TranspileResult;
+        const result = [] as TranspileResult;
         for (let annotation of this.annotations ?? []) {
             result.push(
                 ...annotation.getTypedef(state),
