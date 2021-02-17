@@ -1,4 +1,4 @@
-module.exports = async (suite, name, brighterscript, projectPath) => {
+module.exports = async (suite, name, brighterscript, projectPath, options) => {
     const { ProgramBuilder } = brighterscript;
 
     const builder = new ProgramBuilder();
@@ -12,14 +12,18 @@ module.exports = async (suite, name, brighterscript, projectPath) => {
         logLevel: 'error'
     });
     //collect all the XML files
-    const xmlFiles = Object.values(builder.program.files).filter(x => x.extension === '.xml');
-    if (xmlFiles.length === 0) {
+    const files = Object.values(builder.program.files).filter(x => x.extension === '.xml');
+    //flag every file for transpilation
+    for (const file of files) {
+        file.needsTranspiled = true;
+    }
+    if (files.length === 0) {
         console.log('[xml-transpile] No XML files found in program');
         return;
     }
     suite.add(name, () => {
-        for (const x of xmlFiles) {
+        for (const x of files) {
             x.transpile();
         }
-    });
+    }, options);
 };
