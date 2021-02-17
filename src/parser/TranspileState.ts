@@ -68,13 +68,19 @@ export class TranspileState {
     /**
      * Shorthand for creating a new source node
      */
-    public sourceNode(locatable: { range: Range }, code: string) {
-        let result = new SourceNode(
-            locatable.range.start.line,
-            locatable.range.start.character,
+    public sourceNode(locatable: { range: Range }, code: string | SourceNode | Array<string | SourceNode>): SourceNode | undefined {
+        const node = new SourceNode(
+            null,
+            null,
             this.pathAbsolute,
-            code
+            code ?? ''
         );
-        return code || result;
+        if (locatable?.range) {
+            //convert 0-based Range line to 1-based SourceNode line
+            node.line = locatable.range.start.line + 1;
+            //SourceNode columns are 0-based so no conversion necessary
+            node.column = locatable.range.start.character;
+        }
+        return node;
     }
 }
