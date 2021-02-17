@@ -49,7 +49,7 @@ export class BinaryExpression extends Expression {
         return [
             state.sourceNode(this.left, this.left.transpile(state)),
             ' ',
-            state.sourceNode(this.operator, this.operator.text),
+            state.tokenToSourceNode(this.operator),
             ' ',
             state.sourceNode(this.right, this.right.transpile(state))
         ];
@@ -93,7 +93,7 @@ export class CallExpression extends Expression {
         }
 
         result.push(
-            state.sourceNode(this.openingParen, '(')
+            state.tokenToSourceNode(this.openingParen)
         );
         for (let i = 0; i < this.args.length; i++) {
             //add comma between args
@@ -104,7 +104,7 @@ export class CallExpression extends Expression {
             result.push(...arg.transpile(state));
         }
         result.push(
-            state.sourceNode(this.closingParen, ')')
+            state.tokenToSourceNode(this.closingParen)
         );
         return result;
     }
@@ -181,18 +181,18 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let results = [];
         //'function'|'sub'
         results.push(
-            state.sourceNode(this.functionType, this.functionType.text.toLowerCase())
+            state.tokenToSourceNode(this.functionType)
         );
         //functionName?
         if (name) {
             results.push(
                 ' ',
-                state.sourceNode(name, name.text)
+                state.tokenToSourceNode(name)
             );
         }
         //leftParen
         results.push(
-            state.sourceNode(this.leftParen, '(')
+            state.tokenToSourceNode(this.leftParen)
         );
         //parameters
         for (let i = 0; i < this.parameters.length; i++) {
@@ -206,17 +206,17 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         //right paren
         results.push(
-            state.sourceNode(this.rightParen, ')')
+            state.tokenToSourceNode(this.rightParen)
         );
         //as [Type]
         if (this.asToken) {
             results.push(
                 ' ',
                 //as
-                state.sourceNode(this.asToken, 'as'),
+                state.tokenToSourceNode(this.asToken),
                 ' ',
                 //return type
-                state.sourceNode(this.returnTypeToken, this.returnType.toTypeString())
+                state.tokenToSourceNode(this.returnTypeToken)
             );
         }
         if (includeBody) {
@@ -229,7 +229,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         //'end sub'|'end function'
         results.push(
             state.indent(),
-            state.sourceNode(this.end, this.end.text)
+            state.tokenToSourceNode(this.end)
         );
         return results;
     }
@@ -280,7 +280,7 @@ export class FunctionParameterExpression extends Expression {
     public transpile(state: TranspileState) {
         let result = [
             //name
-            state.sourceNode(this.name, this.name.text)
+            state.tokenToSourceNode(this.name)
         ] as any[];
         //default value
         if (this.defaultValue) {
@@ -290,7 +290,7 @@ export class FunctionParameterExpression extends Expression {
         //type declaration
         if (this.asToken) {
             result.push(' ');
-            result.push(state.sourceNode(this.asToken, 'as'));
+            result.push(state.tokenToSourceNode(this.asToken));
             result.push(' ');
             result.push(state.sourceNode(this.typeToken, this.type.toTypeString()));
         }
@@ -374,7 +374,7 @@ export class DottedGetExpression extends Expression {
             return [
                 ...this.obj.transpile(state),
                 '.',
-                state.sourceNode(this.name, this.name.text)
+                state.tokenToSourceNode(this.name)
             ];
         }
     }
@@ -402,7 +402,7 @@ export class XmlAttributeGetExpression extends Expression {
         return [
             ...this.obj.transpile(state),
             '@',
-            state.sourceNode(this.name, this.name.text)
+            state.tokenToSourceNode(this.name)
         ];
     }
 
@@ -429,9 +429,9 @@ export class IndexedGetExpression extends Expression {
     transpile(state: TranspileState) {
         return [
             ...this.obj.transpile(state),
-            state.sourceNode(this.openingSquare, '['),
+            state.tokenToSourceNode(this.openingSquare),
             ...this.index.transpile(state),
-            state.sourceNode(this.closingSquare, ']')
+            state.tokenToSourceNode(this.closingSquare)
         ];
     }
 
@@ -459,9 +459,9 @@ export class GroupingExpression extends Expression {
 
     transpile(state: TranspileState) {
         return [
-            state.sourceNode(this.tokens.left, '('),
+            state.tokenToSourceNode(this.tokens.left),
             ...this.expression.transpile(state),
-            state.sourceNode(this.tokens.right, ')')
+            state.tokenToSourceNode(this.tokens.right)
         ];
     }
 
@@ -554,7 +554,7 @@ export class ArrayLiteralExpression extends Expression {
     transpile(state: TranspileState) {
         let result = [];
         result.push(
-            state.sourceNode(this.open, '[')
+            state.tokenToSourceNode(this.open)
         );
         let hasChildren = this.elements.length > 0;
         state.blockDepth++;
@@ -602,7 +602,7 @@ export class ArrayLiteralExpression extends Expression {
         }
 
         result.push(
-            state.sourceNode(this.close, ']')
+            state.tokenToSourceNode(this.close)
         );
         return result;
     }
@@ -656,7 +656,7 @@ export class AALiteralExpression extends Expression {
         let result = [];
         //open curly
         result.push(
-            state.sourceNode(this.open, this.open.text)
+            state.tokenToSourceNode(this.open)
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
@@ -686,11 +686,11 @@ export class AALiteralExpression extends Expression {
             } else {
                 //key
                 result.push(
-                    state.sourceNode(element.keyToken, element.keyToken.text)
+                    state.tokenToSourceNode(element.keyToken)
                 );
                 //colon
                 result.push(
-                    state.sourceNode(element.colonToken, ':'),
+                    state.tokenToSourceNode(element.colonToken),
                     ' '
                 );
 
@@ -728,7 +728,7 @@ export class AALiteralExpression extends Expression {
         }
         //close curly
         result.push(
-            state.sourceNode(this.close, this.close.text)
+            state.tokenToSourceNode(this.close)
         );
         return result;
     }
@@ -759,7 +759,7 @@ export class UnaryExpression extends Expression {
 
     transpile(state: TranspileState) {
         return [
-            state.sourceNode(this.operator, this.operator.text),
+            state.tokenToSourceNode(this.operator),
             ' ',
             ...this.right.transpile(state)
         ];
@@ -803,7 +803,7 @@ export class VariableExpression extends Expression {
             //transpile  normally
         } else {
             result.push(
-                state.sourceNode(this.name, this.name.text)
+                state.tokenToSourceNode(this.name)
             );
         }
         return result;
@@ -957,7 +957,7 @@ export class CallfuncExpression extends Expression {
         result.push(
             ...this.callee.transpile(state),
             state.sourceNode(this.operator, '.callfunc'),
-            state.sourceNode(this.openingParen, '('),
+            state.tokenToSourceNode(this.openingParen),
             //the name of the function
             state.sourceNode(this.methodName, ['"', this.methodName.text, '"']),
             ', '
@@ -977,7 +977,7 @@ export class CallfuncExpression extends Expression {
             }
         }
         result.push(
-            state.sourceNode(this.closingParen, ')')
+            state.tokenToSourceNode(this.closingParen)
         );
         return result;
     }
@@ -1056,15 +1056,6 @@ export class TemplateStringExpression extends Expression {
             return this.quasis[0].transpile(state);
         }
         let result = [];
-        //wrap the expression in parens to readability
-        // result.push(
-        //     state.sourceNode(
-        //         this.openingBacktick.range.start.line + 1,
-        //         this.openingBacktick.range.start.character,
-        //         state.pathAbsolute,
-        //         '('
-        //     )
-        // );
         let plus = '';
         //helper function to figure out when to include the plus
         function add(...items) {
@@ -1105,15 +1096,6 @@ export class TemplateStringExpression extends Expression {
             }
         }
 
-        //wrap the expression in parens to readability
-        // result.push(
-        //     state.sourceNode(
-        //         this.openingBacktick.range.end.line + 1,
-        //         this.openingBacktick.range.end.character,
-        //         state.pathAbsolute,
-        //         ')'
-        //     )
-        // );
         return result;
     }
 
@@ -1152,7 +1134,7 @@ export class TaggedTemplateStringExpression extends Expression {
     transpile(state: TranspileState) {
         let result = [];
         result.push(
-            state.sourceNode(this.tagName, this.tagName.text),
+            state.tokenToSourceNode(this.tagName),
             '(['
         );
 

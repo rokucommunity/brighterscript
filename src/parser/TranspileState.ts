@@ -1,6 +1,7 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import type { BrsFile } from '../files/BrsFile';
+import type { Token } from '../lexer/Token';
 import type { ClassStatement } from './Statement';
 
 /**
@@ -69,18 +70,25 @@ export class TranspileState {
      * Shorthand for creating a new source node
      */
     public sourceNode(locatable: { range: Range }, code: string | SourceNode | Array<string | SourceNode>): SourceNode | undefined {
-        const node = new SourceNode(
-            null,
-            null,
+        return new SourceNode(
+            locatable.range.start.line + 1,
+            locatable.range.start.character,
             this.pathAbsolute,
-            code ?? ''
+            code
         );
-        if (locatable?.range) {
-            //convert 0-based Range line to 1-based SourceNode line
-            node.line = locatable.range.start.line + 1;
-            //SourceNode columns are 0-based so no conversion necessary
-            node.column = locatable.range.start.character;
-        }
-        return node;
+    }
+
+    /**
+     * Create a SourceNode from a token. This is more efficient than the above `sourceNode` function
+     * because the entire token is passed by reference, instead of the raw string being copied to the parameter,
+     * only to then be copied again for the SourceNode constructor
+     */
+    public tokenToSourceNode(token: Token) {
+        return new SourceNode(
+            token.range.start.line + 1,
+            token.range.start.character,
+            this.pathAbsolute,
+            token.text
+        );
     }
 }
