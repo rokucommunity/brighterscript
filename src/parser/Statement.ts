@@ -115,6 +115,7 @@ export class Body extends Statement implements TypedefProvider {
             //if the current statement supports generating typedef, call it
             if ('getTypedef' in statement) {
                 result.push(
+                    state.indent(),
                     ...(statement as TypedefProvider).getTypedef(state),
                     state.newline()
                 );
@@ -377,15 +378,19 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         return this.func.transpile(state, nameToken);
     }
 
-    getTypedef(state: TranspileState, isClassMethod = false) {
+    getTypedef(state: TranspileState) {
         let result = [];
-        if (!isClassMethod) {
-            for (let annotation of this.annotations ?? []) {
-                result.push(...annotation.getTypedef(state));
-            }
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline(),
+                state.indent()
+            );
         }
 
-        result.push(...this.func.getTypedef(state, this.name));
+        result.push(
+            ...this.func.getTypedef(state, this.name)
+        );
         return result;
     }
 
@@ -1132,12 +1137,12 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         ];
         state.blockDepth++;
         result.push(
-            state.indent(),
             ...this.body.getTypedef(state)
         );
         state.blockDepth--;
 
         result.push(
+            state.indent(),
             'end namespace'
         );
         return result;
@@ -1279,12 +1284,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
         ] as TranspileResult;
         for (let annotation of this.annotations ?? []) {
             result.push(
-                state.indent(),
-                ...annotation.getTypedef(state)
+                ...annotation.getTypedef(state),
+                state.newline(),
+                state.indent()
             );
         }
         result.push(
-            state.indent(),
             'class ',
             this.name.text
         );
@@ -1632,7 +1637,11 @@ export class ClassMethodStatement extends FunctionStatement {
     getTypedef(state: TranspileState) {
         const result = [] as string[];
         for (let annotation of this.annotations ?? []) {
-            result.push(...annotation.getTypedef(state));
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline(),
+                state.indent()
+            );
         }
         if (this.accessModifier) {
             result.push(
@@ -1644,7 +1653,7 @@ export class ClassMethodStatement extends FunctionStatement {
             result.push('override ');
         }
         result.push(
-            ...super.getTypedef(state, true)
+            ...this.func.getTypedef(state, this.name)
         );
         return result;
     }
@@ -1783,7 +1792,11 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
         const result = [];
         if (this.name) {
             for (let annotation of this.annotations ?? []) {
-                result.push(...annotation.getTypedef(state));
+                result.push(
+                    ...annotation.getTypedef(state),
+                    state.newline(),
+                    state.indent()
+                );
             }
 
             let type = this.getType();

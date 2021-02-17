@@ -1292,9 +1292,7 @@ export class AnnotationExpression extends Expression {
         return [
             '@',
             this.name,
-            ...(this.call?.transpile(state) ?? []),
-            '\n',
-            state.indent()
+            ...(this.call?.transpile(state) ?? [])
         ];
     }
 }
