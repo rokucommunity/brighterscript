@@ -377,8 +377,16 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         return this.func.transpile(state, nameToken);
     }
 
-    getTypedef(state: TranspileState) {
-        return this.func.getTypedef(state, this.name);
+    getTypedef(state: TranspileState, isClassMethod = false) {
+        let result = [];
+        if (!isClassMethod) {
+            for (let annotation of this.annotations ?? []) {
+                result.push(...annotation.getTypedef(state));
+            }
+        }
+
+        result.push(...this.func.getTypedef(state, this.name));
+        return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1266,7 +1274,11 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     getTypedef(state: TranspileState) {
+        //get annotations for class here
         const result = [] as Array<string | SourceNode>;
+        for (let annotation of this.annotations ?? []) {
+            result.push(...annotation.getTypedef(state));
+        }
         result.push(
             'class ',
             this.name.text
@@ -1614,6 +1626,9 @@ export class ClassMethodStatement extends FunctionStatement {
 
     getTypedef(state: TranspileState) {
         const result = [] as string[];
+        for (let annotation of this.annotations ?? []) {
+            result.push(...annotation.getTypedef(state));
+        }
         if (this.accessModifier) {
             result.push(
                 this.accessModifier.text,
@@ -1624,7 +1639,7 @@ export class ClassMethodStatement extends FunctionStatement {
             result.push('override ');
         }
         result.push(
-            ...super.getTypedef(state)
+            ...super.getTypedef(state, true)
         );
         return result;
     }
@@ -1762,6 +1777,10 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
     getTypedef(state: TranspileState) {
         const result = [];
         if (this.name) {
+            for (let annotation of this.annotations ?? []) {
+                result.push(...annotation.getTypedef(state));
+            }
+
             let type = this.getType();
             if (isInvalidType(type) || isVoidType(type)) {
                 type = new DynamicType();

@@ -1746,6 +1746,54 @@ describe('Program', () => {
                 expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.d.brs`)).to.be.false;
             });
 
+            it('includes annotations in type defs for .bs files', async () => {
+                program.addOrReplaceFile<BrsFile>('source/Duck.bs', `
+                    namespace test
+                    @an
+                    @anFunc("value")
+                    function getDuck()
+                    end function
+                        @anClass
+                        class Duck
+                            @anMember
+                            @anMember("field")
+                            private thing
+
+                            @anMember
+                            @anMember("func")
+                            private function foo()
+                            end function
+                        end class
+                    end namespace`);
+                program.options.emitDefinitions = true;
+                program.validate();
+                await program.transpile([], stagingFolderPath);
+
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.brs`)).to.be.true;
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.d.bs`)).to.be.true;
+                expect(fsExtra.pathExistsSync(s`${stagingFolderPath}/source/Duck.d.brs`)).to.be.false;
+                let dFileText = fsExtra.readFileSync(s`${stagingFolderPath}/source/Duck.d.bs`).toString();
+                expect(dFileText).to.equal(trim`namespace test
+    @an
+    @anFunc("value")
+    function getDuck()
+    end function
+@anClass
+    class Duck
+        sub new()
+        end sub
+        @anMember
+        @anMember("field")
+        private thing as dynamic
+        @anMember
+        @anMember("func")
+        private function foo()
+        end function
+    end class
+end namespace
+`);
+            });
+
             it('does not generate typedef for typedef file', async () => {
                 program.addOrReplaceFile<BrsFile>('source/Duck.d.bs', `
                     class Duck

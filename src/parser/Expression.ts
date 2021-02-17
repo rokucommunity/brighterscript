@@ -1288,6 +1288,15 @@ export class AnnotationExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
+    getTypedef(state: TranspileState) {
+        return [
+            '@',
+            this.name,
+            ...(this.call?.transpile(state) ?? []),
+            '\n',
+            state.indent()
+        ];
+    }
 }
 
 export class TernaryExpression extends Expression {
