@@ -1745,25 +1745,25 @@ describe('BrsFile', () => {
         });
 
         it('transpiles dim', () => {
-            testTranspile(`Dim c[5]`, `dim c[5]`);
-            testTranspile(`Dim c[5, 4]`, `dim c[5, 4]`);
-            testTranspile(`Dim c[5, 4, 6]`, `dim c[5, 4, 6]`);
-            testTranspile(`Dim requestData[requestList.count()]`, `dim requestData[requestList.count()]`);
-            testTranspile(`Dim requestData[1, requestList.count()]`, `dim requestData[1, requestList.count()]`);
-            testTranspile(`Dim requestData[1, requestList.count(), 2]`, `dim requestData[1, requestList.count(), 2]`);
-            testTranspile(`Dim requestData[requestList[2]]`, `dim requestData[requestList[2]]`);
-            testTranspile(`Dim requestData[1, requestList[2]]`, `dim requestData[1, requestList[2]]`);
-            testTranspile(`Dim requestData[1, requestList[2], 2]`, `dim requestData[1, requestList[2], 2]`);
-            testTranspile(`Dim requestData[requestList["2"]]`, `dim requestData[requestList["2"]]`);
-            testTranspile(`Dim requestData[1, requestList["2"]]`, `dim requestData[1, requestList["2"]]`);
-            testTranspile(`Dim requestData[1, requestList["2"], 2]`, `dim requestData[1, requestList["2"], 2]`);
-            testTranspile(`Dim requestData[1, getValue(), 2]`, `dim requestData[1, getValue(), 2]`);
+            testTranspile(`Dim c[5]`, `Dim c[5]`);
+            testTranspile(`Dim c[5, 4]`, `Dim c[5, 4]`);
+            testTranspile(`Dim c[5, 4, 6]`, `Dim c[5, 4, 6]`);
+            testTranspile(`Dim requestData[requestList.count()]`, `Dim requestData[requestList.count()]`);
+            testTranspile(`Dim requestData[1, requestList.count()]`, `Dim requestData[1, requestList.count()]`);
+            testTranspile(`Dim requestData[1, requestList.count(), 2]`, `Dim requestData[1, requestList.count(), 2]`);
+            testTranspile(`Dim requestData[requestList[2]]`, `Dim requestData[requestList[2]]`);
+            testTranspile(`Dim requestData[1, requestList[2]]`, `Dim requestData[1, requestList[2]]`);
+            testTranspile(`Dim requestData[1, requestList[2], 2]`, `Dim requestData[1, requestList[2], 2]`);
+            testTranspile(`Dim requestData[requestList["2"]]`, `Dim requestData[requestList["2"]]`);
+            testTranspile(`Dim requestData[1, requestList["2"]]`, `Dim requestData[1, requestList["2"]]`);
+            testTranspile(`Dim requestData[1, requestList["2"], 2]`, `Dim requestData[1, requestList["2"], 2]`);
+            testTranspile(`Dim requestData[1, getValue(), 2]`, `Dim requestData[1, getValue(), 2]`);
             testTranspile(`
                 Dim requestData[1, getValue({
                     key: "value"
                 }), 2]
             `, `
-                dim requestData[1, getValue({
+                Dim requestData[1, getValue({
                     key: "value"
                 }), 2]
             `);
