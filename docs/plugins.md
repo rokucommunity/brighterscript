@@ -92,6 +92,13 @@ After file addition/removal (note: throttled/debounced):
     - `afterScopeValidate`
 - `afterProgramValidate`
 
+Code Actions
+ - `beforeProgramGetCodeActions`
+ - `onFileGetCodeActions`
+ - for each scope that includes the file
+    - `onScopeGetCodeActions`
+ - `afterProgramGetCodeActions`
+
 ## Compiler API
 
 Objects in the brighterscript compiler dispatch a number of events that you can listen to. These events allow you to peek / modify the objects that the compiler manipulates.
