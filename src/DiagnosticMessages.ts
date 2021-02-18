@@ -17,6 +17,9 @@ export let DiagnosticMessages = {
     callToUnknownFunction: (name: string, scopeName: string) => ({
         message: `Cannot find function with name '${name}' when this file is included in scope '${scopeName}'`,
         code: 1001,
+        data: {
+            functionName: name
+        },
         severity: DiagnosticSeverity.Error
     }),
     mismatchArgumentCount: (expectedCount: number | string, actualCount: number) => ({
@@ -623,15 +626,22 @@ export let DiagnosticMessages = {
     })
 };
 
-let allCodes = [] as number[];
+export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
+export let diagnosticCodes = [] as number[];
 for (let key in DiagnosticMessages) {
-    allCodes.push(DiagnosticMessages[key]().code);
+    diagnosticCodes.push(DiagnosticMessages[key]().code);
+    DiagnosticCodeMap[key] = DiagnosticMessages[key]().code;
 }
-
-export let diagnosticCodes = allCodes;
 
 export interface DiagnosticInfo {
     message: string;
     code: number;
     severity: DiagnosticSeverity;
 }
+
+/**
+ * Provides easy type support for the return value of any DiagnosticMessage function.
+ * The second type parameter is optional, but allows plugins to pass in their own
+ * DiagnosticMessages-like object in order to get the same type support
+ */
+export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (...args: any) => any> = typeof DiagnosticMessages> = ReturnType<D[K]>;

@@ -52,6 +52,7 @@ describe('LanguageServer', () => {
         sendNotification: () => null,
         sendDiagnostics: () => null,
         onExecuteCommand: () => null,
+        onCodeAction: () => null,
         onDidOpenTextDocument: () => null,
         onDidChangeTextDocument: () => null,
         onDidCloseTextDocument: () => null,

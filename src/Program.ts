@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CompletionItem, Position, SignatureInformation } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation } from 'vscode-languageserver';
 import { Location, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -24,6 +24,7 @@ import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope } from './astU
 import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
+import { BscPlugin } from './bscPlugin/BscPlugin';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {
@@ -67,7 +68,10 @@ export class Program {
     ) {
         this.options = util.normalizeConfig(options);
         this.logger = logger || new Logger(options.logLevel as LogLevel);
-        this.plugins = plugins || new PluginInterface([], undefined);
+        this.plugins = plugins || new PluginInterface([], this.logger);
+
+        //inject the bsc plugin as the first plugin in the stack.
+        this.plugins.addFirst(new BscPlugin());
 
         //normalize the root dir path
         this.options.rootDir = util.getRootDir(this.options);
@@ -732,6 +736,32 @@ export class Program {
         }
 
         return Promise.resolve(file.getHover(position));
+    }
+
+    /**
+     * Compute code actions for the given file and range
+     */
+    public getCodeActions(pathAbsolute: string, range: Range) {
+        const codeActions = [] as CodeAction[];
+        const file = this.getFile(pathAbsolute);
+
+        this.plugins.emit('beforeProgramGetCodeActions', this, file, range, codeActions);
+
+        //get code actions from the file
+        file.getCodeActions(range, codeActions);
+
+        //get code actions from every scope this file is a member of
+        for (let key in this.scopes) {
+            let scope = this.scopes[key];
+
+            if (scope.hasFile(file)) {
+                //get code actions from each scope this file is a member of
+                scope.getCodeActions(file, range, codeActions);
+            }
+        }
+
+        this.plugins.emit('afterProgramGetCodeActions', this, file, range, codeActions);
+        return codeActions;
     }
 
     public getSignatureHelp(filepath: string, position: Position): SignatureInfoObj[] {

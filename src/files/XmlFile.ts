@@ -1,7 +1,7 @@
 import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
@@ -367,6 +367,11 @@ export class XmlFile {
         //TODO implement
         // let result = {} as Hover;
         return null;
+    }
+
+    public getCodeActions(range: Range, codeActions: CodeAction[]) {
+        const relevantDiagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
+        this.program.plugins.emit('onFileGetCodeActions', this, range, relevantDiagnostics, codeActions);
     }
 
     public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
