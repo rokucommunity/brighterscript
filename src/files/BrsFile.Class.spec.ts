@@ -441,7 +441,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new = sub(name as string)
                     end sub
                     instance.sayHello = function(text)
-                        print text
+                        ? text
                     end function
                     return instance
                 end function

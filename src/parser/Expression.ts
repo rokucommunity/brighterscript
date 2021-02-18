@@ -2,7 +2,6 @@
 import type { Token, Identifier } from '../lexer';
 import { TokenKind } from '../lexer';
 import type { Block, CommentStatement, FunctionStatement } from './Statement';
-import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
@@ -48,11 +47,11 @@ export class BinaryExpression extends Expression {
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.left.range.start.line + 1, this.left.range.start.character, state.pathAbsolute, this.left.transpile(state)),
+            state.sourceNode(this.left, this.left.transpile(state)),
             ' ',
-            new SourceNode(this.operator.range.start.line + 1, this.operator.range.start.character, state.pathAbsolute, this.operator.text),
+            state.tokenToSourceNode(this.operator),
             ' ',
-            new SourceNode(this.right.range.start.line + 1, this.right.range.start.character, state.pathAbsolute, this.right.transpile(state))
+            state.sourceNode(this.right, this.right.transpile(state))
         ];
     }
 
@@ -94,7 +93,7 @@ export class CallExpression extends Expression {
         }
 
         result.push(
-            new SourceNode(this.openingParen.range.start.line + 1, this.openingParen.range.start.character, state.pathAbsolute, '(')
+            state.tokenToSourceNode(this.openingParen)
         );
         for (let i = 0; i < this.args.length; i++) {
             //add comma between args
@@ -105,7 +104,7 @@ export class CallExpression extends Expression {
             result.push(...arg.transpile(state));
         }
         result.push(
-            new SourceNode(this.closingParen.range.start.line + 1, this.closingParen.range.start.character, state.pathAbsolute, ')')
+            state.tokenToSourceNode(this.closingParen)
         );
         return result;
     }
@@ -182,18 +181,18 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let results = [];
         //'function'|'sub'
         results.push(
-            new SourceNode(this.functionType.range.start.line + 1, this.functionType.range.start.character, state.pathAbsolute, this.functionType.text.toLowerCase())
+            state.tokenToSourceNode(this.functionType)
         );
         //functionName?
         if (name) {
             results.push(
                 ' ',
-                new SourceNode(name.range.start.line + 1, name.range.start.character, state.pathAbsolute, name.text)
+                state.tokenToSourceNode(name)
             );
         }
         //leftParen
         results.push(
-            new SourceNode(this.leftParen.range.start.line + 1, this.leftParen.range.start.character, state.pathAbsolute, '(')
+            state.tokenToSourceNode(this.leftParen)
         );
         //parameters
         for (let i = 0; i < this.parameters.length; i++) {
@@ -207,22 +206,17 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         //right paren
         results.push(
-            new SourceNode(this.rightParen.range.start.line + 1, this.rightParen.range.start.character, state.pathAbsolute, ')')
+            state.tokenToSourceNode(this.rightParen)
         );
         //as [Type]
         if (this.asToken) {
             results.push(
                 ' ',
                 //as
-                new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pathAbsolute, 'as'),
+                state.tokenToSourceNode(this.asToken),
                 ' ',
                 //return type
-                new SourceNode(
-                    this.returnTypeToken.range.start.line + 1,
-                    this.returnTypeToken.range.start.character,
-                    state.pathAbsolute,
-                    this.returnType.toTypeString()
-                )
+                state.tokenToSourceNode(this.returnTypeToken)
             );
         }
         if (includeBody) {
@@ -235,7 +229,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         //'end sub'|'end function'
         results.push(
             state.indent(),
-            new SourceNode(this.end.range.start.line + 1, this.end.range.start.character, state.pathAbsolute, this.end.text)
+            state.tokenToSourceNode(this.end)
         );
         return results;
     }
@@ -286,7 +280,7 @@ export class FunctionParameterExpression extends Expression {
     public transpile(state: TranspileState) {
         let result = [
             //name
-            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
+            state.tokenToSourceNode(this.name)
         ] as any[];
         //default value
         if (this.defaultValue) {
@@ -296,14 +290,9 @@ export class FunctionParameterExpression extends Expression {
         //type declaration
         if (this.asToken) {
             result.push(' ');
-            result.push(new SourceNode(this.asToken.range.start.line + 1, this.asToken.range.start.character, state.pathAbsolute, 'as'));
+            result.push(state.tokenToSourceNode(this.asToken));
             result.push(' ');
-            result.push(new SourceNode(
-                this.typeToken.range.start.line + 1,
-                this.typeToken.range.start.character,
-                state.pathAbsolute,
-                this.type.toTypeString()
-            ));
+            result.push(state.sourceNode(this.typeToken, this.type.toTypeString()));
         }
 
         return result;
@@ -329,12 +318,7 @@ export class NamespacedVariableNameExpression extends Expression {
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(
-                this.range.start.line + 1,
-                this.range.start.character,
-                state.pathAbsolute,
-                this.getName(ParseMode.BrightScript)
-            )
+            state.sourceNode(this, this.getName(ParseMode.BrightScript))
         ];
     }
 
@@ -390,7 +374,7 @@ export class DottedGetExpression extends Expression {
             return [
                 ...this.obj.transpile(state),
                 '.',
-                new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
+                state.tokenToSourceNode(this.name)
             ];
         }
     }
@@ -418,7 +402,7 @@ export class XmlAttributeGetExpression extends Expression {
         return [
             ...this.obj.transpile(state),
             '@',
-            new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
+            state.tokenToSourceNode(this.name)
         ];
     }
 
@@ -445,9 +429,9 @@ export class IndexedGetExpression extends Expression {
     transpile(state: TranspileState) {
         return [
             ...this.obj.transpile(state),
-            new SourceNode(this.openingSquare.range.start.line + 1, this.openingSquare.range.start.character, state.pathAbsolute, '['),
+            state.tokenToSourceNode(this.openingSquare),
             ...this.index.transpile(state),
-            new SourceNode(this.closingSquare.range.start.line + 1, this.closingSquare.range.start.character, state.pathAbsolute, ']')
+            state.tokenToSourceNode(this.closingSquare)
         ];
     }
 
@@ -475,9 +459,9 @@ export class GroupingExpression extends Expression {
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.tokens.left.range.start.line + 1, this.tokens.left.range.start.character, state.pathAbsolute, '('),
+            state.tokenToSourceNode(this.tokens.left),
             ...this.expression.transpile(state),
-            new SourceNode(this.tokens.right.range.start.line + 1, this.tokens.right.range.start.character, state.pathAbsolute, ')')
+            state.tokenToSourceNode(this.tokens.right)
         ];
     }
 
@@ -522,12 +506,7 @@ export class LiteralExpression extends Expression {
         }
 
         return [
-            new SourceNode(
-                this.range.start.line + 1,
-                this.range.start.character,
-                state.pathAbsolute,
-                text
-            )
+            state.sourceNode(this, text)
         ];
     }
 
@@ -551,12 +530,7 @@ export class EscapedCharCodeLiteralExpression extends Expression {
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(
-                this.range.start.line + 1,
-                this.range.start.character,
-                state.pathAbsolute,
-                `chr(${this.token.charCode})`
-            )
+            state.sourceNode(this, `chr(${this.token.charCode})`)
         ];
     }
 
@@ -580,7 +554,7 @@ export class ArrayLiteralExpression extends Expression {
     transpile(state: TranspileState) {
         let result = [];
         result.push(
-            new SourceNode(this.open.range.start.line + 1, this.open.range.start.character, state.pathAbsolute, '[')
+            state.tokenToSourceNode(this.open)
         );
         let hasChildren = this.elements.length > 0;
         state.blockDepth++;
@@ -628,7 +602,7 @@ export class ArrayLiteralExpression extends Expression {
         }
 
         result.push(
-            new SourceNode(this.close.range.start.line + 1, this.close.range.start.character, state.pathAbsolute, ']')
+            state.tokenToSourceNode(this.close)
         );
         return result;
     }
@@ -655,7 +629,7 @@ export class AAMemberExpression extends Expression {
 
     public range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string> {
+    transpile(state: TranspileState) {
         //TODO move the logic from AALiteralExpression loop into this function
         return [];
     }
@@ -678,11 +652,11 @@ export class AALiteralExpression extends Expression {
 
     public readonly range: Range;
 
-    transpile(state: TranspileState): Array<SourceNode | string> {
+    transpile(state: TranspileState) {
         let result = [];
         //open curly
         result.push(
-            new SourceNode(this.open.range.start.line + 1, this.open.range.start.character, state.pathAbsolute, this.open.text)
+            state.tokenToSourceNode(this.open)
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
@@ -712,11 +686,11 @@ export class AALiteralExpression extends Expression {
             } else {
                 //key
                 result.push(
-                    new SourceNode(element.keyToken.range.start.line + 1, element.keyToken.range.start.character, state.pathAbsolute, element.keyToken.text)
+                    state.tokenToSourceNode(element.keyToken)
                 );
                 //colon
                 result.push(
-                    new SourceNode(element.colonToken.range.start.line + 1, element.colonToken.range.start.character, state.pathAbsolute, ':'),
+                    state.tokenToSourceNode(element.colonToken),
                     ' '
                 );
 
@@ -754,7 +728,7 @@ export class AALiteralExpression extends Expression {
         }
         //close curly
         result.push(
-            new SourceNode(this.close.range.start.line + 1, this.close.range.start.character, state.pathAbsolute, this.close.text)
+            state.tokenToSourceNode(this.close)
         );
         return result;
     }
@@ -785,7 +759,7 @@ export class UnaryExpression extends Expression {
 
     transpile(state: TranspileState) {
         return [
-            new SourceNode(this.operator.range.start.line + 1, this.operator.range.start.character, state.pathAbsolute, this.operator.text),
+            state.tokenToSourceNode(this.operator),
             ' ',
             ...this.right.transpile(state)
         ];
@@ -819,18 +793,17 @@ export class VariableExpression extends Expression {
         //if the callee is the name of a known namespace function
         if (state.file.calleeIsKnownNamespaceFunction(this, this.namespaceName?.getName(ParseMode.BrighterScript))) {
             result.push(
-                new SourceNode(
-                    this.range.start.line + 1,
-                    this.range.start.character,
-                    state.pathAbsolute,
-                    `${this.namespaceName.getName(ParseMode.BrightScript)}_${this.getName(ParseMode.BrightScript)}`
-                )
+                state.sourceNode(this, [
+                    this.namespaceName.getName(ParseMode.BrightScript),
+                    '_',
+                    this.getName(ParseMode.BrightScript)
+                ])
             );
 
             //transpile  normally
         } else {
             result.push(
-                new SourceNode(this.name.range.start.line + 1, this.name.range.start.character, state.pathAbsolute, this.name.text)
+                state.tokenToSourceNode(this.name)
             );
         }
         return result;
@@ -906,12 +879,7 @@ export class SourceLiteralExpression extends Expression {
 
         }
         return [
-            new SourceNode(
-                this.range.start.line + 1,
-                this.range.start.character,
-                state.pathAbsolute,
-                text
-            )
+            state.sourceNode(this, text)
         ];
     }
 
@@ -988,15 +956,10 @@ export class CallfuncExpression extends Expression {
         let result = [];
         result.push(
             ...this.callee.transpile(state),
-            new SourceNode(this.operator.range.start.line + 1, this.operator.range.start.character, state.pathAbsolute, '.callfunc'),
-            new SourceNode(this.openingParen.range.start.line + 1, this.openingParen.range.start.character, state.pathAbsolute, '('),
+            state.sourceNode(this.operator, '.callfunc'),
+            state.tokenToSourceNode(this.openingParen),
             //the name of the function
-            new SourceNode(
-                this.methodName.range.start.line + 1,
-                this.methodName.range.start.character,
-                state.pathAbsolute,
-                `"${this.methodName.text}"`
-            ),
+            state.sourceNode(this.methodName, ['"', this.methodName.text, '"']),
             ', '
         );
         //transpile args
@@ -1014,7 +977,7 @@ export class CallfuncExpression extends Expression {
             }
         }
         result.push(
-            new SourceNode(this.closingParen.range.start.line + 1, this.closingParen.range.start.character, state.pathAbsolute, ')')
+            state.tokenToSourceNode(this.closingParen)
         );
         return result;
     }
@@ -1093,15 +1056,6 @@ export class TemplateStringExpression extends Expression {
             return this.quasis[0].transpile(state);
         }
         let result = [];
-        //wrap the expression in parens to readability
-        // result.push(
-        //     new SourceNode(
-        //         this.openingBacktick.range.start.line + 1,
-        //         this.openingBacktick.range.start.character,
-        //         state.pathAbsolute,
-        //         '('
-        //     )
-        // );
         let plus = '';
         //helper function to figure out when to include the plus
         function add(...items) {
@@ -1142,15 +1096,6 @@ export class TemplateStringExpression extends Expression {
             }
         }
 
-        //wrap the expression in parens to readability
-        // result.push(
-        //     new SourceNode(
-        //         this.openingBacktick.range.end.line + 1,
-        //         this.openingBacktick.range.end.character,
-        //         state.pathAbsolute,
-        //         ')'
-        //     )
-        // );
         return result;
     }
 
@@ -1189,12 +1134,7 @@ export class TaggedTemplateStringExpression extends Expression {
     transpile(state: TranspileState) {
         let result = [];
         result.push(
-            new SourceNode(
-                this.tagName.range.start.line + 1,
-                this.tagName.range.start.character,
-                state.pathAbsolute,
-                this.tagName.text
-            ),
+            state.tokenToSourceNode(this.tagName),
             '(['
         );
 
@@ -1228,12 +1168,7 @@ export class TaggedTemplateStringExpression extends Expression {
             );
         }
         result.push(
-            new SourceNode(
-                this.closingBacktick.range.end.line + 1,
-                this.closingBacktick.range.end.character,
-                state.pathAbsolute,
-                '])'
-            )
+            state.sourceNode(this.closingBacktick, '])')
         );
         return result;
     }
@@ -1287,6 +1222,13 @@ export class AnnotationExpression extends Expression {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+    getTypedef(state: TranspileState) {
+        return [
+            '@',
+            this.name,
+            ...(this.call?.transpile(state) ?? [])
+        ];
     }
 }
 
