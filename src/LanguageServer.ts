@@ -561,6 +561,8 @@ export class LanguageServer {
 
         let codeActions = this
             .getWorkspaces()
+            //skip programs that don't have this file
+            .filter(x => x.builder.program.hasFile(filePath))
             .flatMap(workspace => workspace.builder.program.getCodeActions(filePath, params.range));
 
         return codeActions;

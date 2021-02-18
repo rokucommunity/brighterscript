@@ -744,23 +744,25 @@ export class Program {
     public getCodeActions(pathAbsolute: string, range: Range) {
         const codeActions = [] as CodeAction[];
         const file = this.getFile(pathAbsolute);
+        if (file) {
 
-        this.plugins.emit('beforeProgramGetCodeActions', this, file, range, codeActions);
+            this.plugins.emit('beforeProgramGetCodeActions', this, file, range, codeActions);
 
-        //get code actions from the file
-        file.getCodeActions(range, codeActions);
+            //get code actions from the file
+            file.getCodeActions(range, codeActions);
 
-        //get code actions from every scope this file is a member of
-        for (let key in this.scopes) {
-            let scope = this.scopes[key];
+            //get code actions from every scope this file is a member of
+            for (let key in this.scopes) {
+                let scope = this.scopes[key];
 
-            if (scope.hasFile(file)) {
-                //get code actions from each scope this file is a member of
-                scope.getCodeActions(file, range, codeActions);
+                if (scope.hasFile(file)) {
+                    //get code actions from each scope this file is a member of
+                    scope.getCodeActions(file, range, codeActions);
+                }
             }
-        }
 
-        this.plugins.emit('afterProgramGetCodeActions', this, file, range, codeActions);
+            this.plugins.emit('afterProgramGetCodeActions', this, file, range, codeActions);
+        }
         return codeActions;
     }
 

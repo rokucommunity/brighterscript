@@ -14,6 +14,7 @@ import PluginInterface from './PluginInterface';
 import type { FunctionStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
 import { expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { doesNotThrow } from 'assert';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -681,6 +682,14 @@ describe('Program', () => {
 
             expect(program.getScopeByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
 
+        });
+    });
+
+    describe('getCodeActions', () => {
+        it('does not fail when file is missing from program', () => {
+            doesNotThrow(() => {
+                program.getCodeActions('not/real/file', util.createRange(1, 2, 3, 4));
+            });
         });
     });
 
