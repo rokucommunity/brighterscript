@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.31.0] - 2021-02-17
+### Added
+ - plugin and language server support for [codeActions](https://microsoft.github.io/language-server-protocol/specifications/specification-current/#textDocument_codeAction)
+ - codeAction to add missing `extends` attribute in components
+### Fixed
+ - wrong line numbers in certain sourcemaps generated during transpile
+ - include annotations in emitted type definitions
+
+
+
 ## [0.30.9] - 2021-02-15
 ### Fixed
  - prevent excess validations when non-workspace files are changed  ([#315](https://github.com/rokucommunity/brighterscript/pull/315))
@@ -946,3 +956,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.30.7]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.6...v0.30.7
 [0.30.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.7...v0.30.8
 [0.30.9]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.8...v0.30.9
+[0.31.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.9...v0.31.0
