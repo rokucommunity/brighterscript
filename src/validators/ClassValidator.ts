@@ -14,6 +14,9 @@ import type { BrsFile } from '../files/BrsFile';
 export class BsClassValidator {
     private scope: Scope;
     public diagnostics: BsDiagnostic[];
+    /**
+     * The key is the namespace-prefixed class name. (i.e. `NameA.NameB.SomeClass` or `CoolClass`
+     */
     private classes: Record<string, AugmentedClassStatement>;
 
     public validate(scope: Scope) {
@@ -24,6 +27,7 @@ export class BsClassValidator {
         this.findClasses();
         this.findNamespaceNonNamespaceCollisions();
         this.linkClassesWithParents();
+        this.detectCircularReferences();
         this.validateMemberCollisions();
         this.verifyChildConstructor();
         this.verifyNewExpressions();
@@ -156,6 +160,31 @@ export class BsClassValidator {
         }
     }
 
+    private detectCircularReferences() {
+        for (let key in this.classes) {
+            let cls = this.classes[key];
+            const names = new Map<string, string>();
+            do {
+                const className = cls.getName(ParseMode.BrighterScript);
+                const lowerClassName = className.toLowerCase();
+                //if we've already seen this class name before, then we have a circular dependency
+                if (names.has(lowerClassName)) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.circularReferenceDetected([
+                            ...names.values(),
+                            className
+                        ]),
+                        file: cls.file,
+                        range: cls.name.range
+                    });
+                    break;
+                }
+                names.set(lowerClassName, className);
+                cls = cls.parentClass;
+            } while (cls);
+        }
+    }
+
     private validateMemberCollisions() {
         for (let key in this.classes) {
             let classStatement = this.classes[key];
@@ -270,7 +299,7 @@ export class BsClassValidator {
     /**
      * Get the closest member with the specified name (case-insensitive)
      */
-    private getAncestorMember(classStatement: AugmentedClassStatement, memberName: string) {
+    getAncestorMember(classStatement, memberName) {
         let lowerMemberName = memberName.toLowerCase();
         let ancestor = classStatement.parentClass;
         while (ancestor) {
@@ -281,7 +310,7 @@ export class BsClassValidator {
                     classStatement: ancestor
                 };
             }
-            ancestor = ancestor.parentClass;
+            ancestor = ancestor.parentClass !== ancestor ? ancestor.parentClass : null;
         }
     }
 

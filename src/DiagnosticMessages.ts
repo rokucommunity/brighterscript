@@ -620,6 +620,11 @@ export let DiagnosticMessages = {
         message: `Missing expression(s) in 'dim' statement`,
         code: 1121,
         severity: DiagnosticSeverity.Error
+    }),
+    circularReferenceDetected: (items: string[]) => ({
+        message: `Circular reference detected between ${Array.isArray(items) ? items.join(' -> ') : ''}`,
+        code: 1122,
+        severity: DiagnosticSeverity.Error
     })
 };
 

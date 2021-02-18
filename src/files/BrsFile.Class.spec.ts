@@ -741,6 +741,46 @@ describe('BrsFile BrighterScript classes', () => {
         );
     });
 
+    it('detects direct circular extends', () => {
+        //direct
+        program.addOrReplaceFile('source/Direct.bs', `
+            class Parent extends Child
+            end class
+
+            class Child extends Parent
+            end class
+        `);
+        program.validate();
+        expect(
+            program.getDiagnostics().map(x => x.message).sort()
+        ).to.eql([
+            DiagnosticMessages.circularReferenceDetected(['Child', 'Parent', 'Child']).message,
+            DiagnosticMessages.circularReferenceDetected(['Parent', 'Child', 'Parent']).message
+        ]);
+    });
+
+    it('detects indirect circular extends', () => {
+        //direct
+        program.addOrReplaceFile('source/Direct.bs', `
+            class Parent extends Grandchild
+            end class
+
+            class Child extends Parent
+            end class
+
+            class Grandchild extends Child
+            end class
+        `);
+        program.validate();
+        expect(
+            program.getDiagnostics().map(x => x.message).sort()
+        ).to.eql([
+            DiagnosticMessages.circularReferenceDetected(['Child', 'Parent', 'Grandchild', 'Child']).message,
+            DiagnosticMessages.circularReferenceDetected(['Grandchild', 'Child', 'Parent', 'Grandchild']).message,
+            DiagnosticMessages.circularReferenceDetected(['Parent', 'Grandchild', 'Child', 'Parent']).message
+        ]);
+    });
+
     it('detects duplicate member names', () => {
         program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
