@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.31.1] - 2021-02-18
+### Fixed
+ - prevent exception in codeAction functionality when file cannot be found in a `Program`
+
+
+
 ## [0.31.0] - 2021-02-17
 ### Added
  - plugin and language server support for [codeActions](https://microsoft.github.io/language-server-protocol/specifications/specification-current/#textDocument_codeAction)
@@ -957,3 +963,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.30.8]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.7...v0.30.8
 [0.30.9]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.8...v0.30.9
 [0.31.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.9...v0.31.0
+[0.31.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.0...v0.31.1
