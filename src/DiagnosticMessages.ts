@@ -621,8 +621,8 @@ export let DiagnosticMessages = {
         code: 1121,
         severity: DiagnosticSeverity.Error
     }),
-    circularReferenceDetected: (items: string[]) => ({
-        message: `Circular reference detected between ${Array.isArray(items) ? items.join(' -> ') : ''}`,
+    circularReferenceDetected: (items: string[], scopeName: string) => ({
+        message: `Circular reference detected between ${Array.isArray(items) ? items.join(' -> ') : ''} in scope '${scopeName}'`,
         code: 1122,
         severity: DiagnosticSeverity.Error
     })

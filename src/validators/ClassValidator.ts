@@ -173,7 +173,7 @@ export class BsClassValidator {
                         ...DiagnosticMessages.circularReferenceDetected([
                             ...names.values(),
                             className
-                        ]),
+                        ], this.scope.name),
                         file: cls.file,
                         range: cls.name.range
                     });
