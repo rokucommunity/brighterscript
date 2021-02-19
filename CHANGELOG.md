@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.31.2] - 2021-02-18
+### Changed
+ - parent class names in typedefs for class `extends` expressions now always include their full namespace name.
+
+
+
 ## [0.31.1] - 2021-02-18
 ### Fixed
  - prevent exception in codeAction functionality when file cannot be found in a `Program`
@@ -964,3 +970,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.30.9]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.8...v0.30.9
 [0.31.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.9...v0.31.0
 [0.31.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.0...v0.31.1
+[0.31.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.1...v0.31.2
