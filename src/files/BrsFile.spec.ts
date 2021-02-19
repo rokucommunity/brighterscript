@@ -2321,6 +2321,23 @@ describe('BrsFile', () => {
             expect(file.getTypedef()).to.eql(expected);
         }
 
+        it('includes namespace on extend class names', () => {
+            testTypedef(`
+                namespace AnimalKingdom
+                    class Bird
+                    end class
+                    class Duck extends Bird
+                    end class
+                end namespace`, trim`
+                namespace AnimalKingdom
+                    class Bird
+                    end class
+                    class Duck extends AnimalKingdom.Bird
+                    end class
+                end namespace
+            `);
+        });
+
         it('strips function body', () => {
             testTypedef(`
                 sub main(param1 as string)

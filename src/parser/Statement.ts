@@ -1289,8 +1289,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
             this.name.text
         );
         if (this.extendsKeyword && this.parentClassName) {
+            const fqName = util.getFullyQualifiedClassName(
+                this.parentClassName.getName(ParseMode.BrighterScript),
+                this.namespaceName?.getName(ParseMode.BrighterScript)
+            );
             result.push(
-                ` extends ${this.parentClassName.getName(ParseMode.BrighterScript)}`
+                ` extends ${fqName}`
             );
         }
         result.push(state.newline());
