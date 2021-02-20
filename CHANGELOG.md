@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.32.2] - 2021-02-20
+### Fixed
+ - transpile bug when a template string starts with an expression ([#327](https://github.com/rokucommunity/brighterscript/pull/327))
+
+
+
 ## [0.31.2] - 2021-02-18
 ### Changed
  - parent class names in typedefs for class `extends` expressions now always include their full namespace name.
@@ -971,3 +977,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.31.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.9...v0.31.0
 [0.31.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.0...v0.31.1
 [0.31.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.1...v0.31.2
+[0.31.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.2...v0.31.3
