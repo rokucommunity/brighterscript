@@ -1,5 +1,6 @@
-# Template strings (Template literals)
-Template strings are string literals that can have embedded expressions and also capture newlines. 
+# BrighterScript Template Strings (Template Literals)
+
+Template strings are string literals that can have embedded expressions and also capture newlines.
 
 ## Syntax
 ```BrighterScript
@@ -38,7 +39,7 @@ line2
 Transpiles to
 ```BrightScript
 text = "line1" + chr(10) + "line2" + chr(10)
-``` 
+```
 
 You can also use escape characters in your text. For example, `\n` for unix-style line endings and `\r\n` for windows-style line endings.
 ```BrighterScript
@@ -47,7 +48,7 @@ windowsText = `line1\r\nline2`
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 unixText = "line1" + chr(10) + "line2"
 windowsText = "line1" + chr(13) + chr(10) + "line2"
@@ -60,7 +61,7 @@ textWithBacktick = `this is a backtick \` character`
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 textWithBacktick = "this is a backtick " + chr(96) + " character"
 ```
@@ -72,7 +73,7 @@ text = `look \${here}`
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 text = "look " + chr(36) + "{here}"
 ```
@@ -86,7 +87,7 @@ text = `abc\c22def`
 ```
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 text = "abc" + chr(22) + "def"
 ```
@@ -106,7 +107,7 @@ stringWithQuotes = "hello " + chr(34) + "John" + chr(34)
 
 
 ## Tagged Template Strings
-If a template string is preceeded by an expression, this is called a tagged template. In this situation, the tag expression will be called with all of the values of the template string. The tag function is not limited to returning strings: it can return whatever you want. 
+If a template string is preceeded by an expression, this is called a tagged template. In this situation, the tag expression will be called with all of the values of the template string. The tag function is not limited to returning strings: it can return whatever you want.
 
 The tag function accepts two arguments: an array of strings and an array of expressions. There will always be one more string than expression, and generally you should iterate through as follows: `strings[0] + values[0] + strings[1] values[1] + strings[2] ...`
 
@@ -133,7 +134,7 @@ end function
 
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 function zombify(strings, values)
     result = ""
@@ -171,7 +172,7 @@ end function
 
 <details>
   <summary>View the transpiled BrightScript code</summary>
-  
+
 ```BrightScript
 function zombify(strings, values)
     return Zombie(values[0])

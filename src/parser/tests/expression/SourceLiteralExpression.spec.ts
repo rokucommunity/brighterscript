@@ -17,8 +17,8 @@ describe('SourceLiteralExpression', () => {
 
     describe('transpile', () => {
 
-        it('allows bs source literals local vars in brs mode', async () => {
-            await testTranspile(`
+        it('allows bs source literals local vars in brs mode', () => {
+            testTranspile(`
                 sub main()
                     source_file_path = true
                     source_line_num = true
@@ -40,8 +40,8 @@ describe('SourceLiteralExpression', () => {
             `, undefined, 'none', 'main.brs');
         });
 
-        it('computes SOURCE_FILE_PATH', async () => {
-            await testTranspile(`
+        it('computes SOURCE_FILE_PATH', () => {
+            testTranspile(`
                 sub main()
                     print SOURCE_FILE_PATH
                 end sub
@@ -52,8 +52,8 @@ describe('SourceLiteralExpression', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('computes SOURCE_LINE_NUM', async () => {
-            await testTranspile(`
+        it('computes SOURCE_LINE_NUM', () => {
+            testTranspile(`
                 sub main()
                     print SOURCE_LINE_NUM
                     print "hello world"
@@ -68,8 +68,8 @@ describe('SourceLiteralExpression', () => {
             `);
         });
 
-        it('computes FUNCTION_NAME', async () => {
-            await testTranspile(`
+        it('computes FUNCTION_NAME', () => {
+            testTranspile(`
                 sub main1()
                     print FUNCTION_NAME
                 end sub
@@ -88,8 +88,8 @@ describe('SourceLiteralExpression', () => {
             `);
         });
 
-        it('computes SOURCE_FUNCTION_NAME', async () => {
-            await testTranspile(`
+        it('computes SOURCE_FUNCTION_NAME', () => {
+            testTranspile(`
                 sub main1()
                     print SOURCE_FUNCTION_NAME
                 end sub
@@ -108,8 +108,8 @@ describe('SourceLiteralExpression', () => {
             `);
         });
 
-        it('SOURCE_FUNCTION_NAME computes nested anon', async () => {
-            await testTranspile(`
+        it('SOURCE_FUNCTION_NAME computes nested anon', () => {
+            testTranspile(`
                 namespace NameA
                     sub main()
                         speak = sub()
@@ -132,8 +132,8 @@ describe('SourceLiteralExpression', () => {
             `);
         });
 
-        it('computes SOURCE_LOCATION', async () => {
-            await testTranspile(`
+        it('computes SOURCE_LOCATION', () => {
+            testTranspile(`
                 sub main()
                     print SOURCE_LOCATION
                 end sub
@@ -144,8 +144,8 @@ describe('SourceLiteralExpression', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('computes PKG_PATH', async () => {
-            await testTranspile(`
+        it('computes PKG_PATH', () => {
+            testTranspile(`
                 sub main()
                     print PKG_PATH
                 end sub
@@ -156,8 +156,8 @@ describe('SourceLiteralExpression', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('computes PKG_LOCATION', async () => {
-            await testTranspile(`
+        it('computes PKG_LOCATION', () => {
+            testTranspile(`
                 sub main()
                     print PKG_LOCATION
                 end sub
@@ -168,21 +168,21 @@ describe('SourceLiteralExpression', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('retains LINE_NUM', async () => {
-            await testTranspile(`
+        it('retains LINE_NUM', () => {
+            testTranspile(`
                 sub main()
                     print LINE_NUM
                 end sub
             `);
         });
 
-        it('accounts for sourceRoot in SOURCE_FILE_PATH', async () => {
+        it('accounts for sourceRoot in SOURCE_FILE_PATH', () => {
             let sourceRoot = s`${process.cwd()} / sourceRoot`;
             program = new Program({
                 rootDir: rootDir,
                 sourceRoot: sourceRoot
             });
-            await testTranspile(`
+            testTranspile(`
                 sub main()
                     print SOURCE_FILE_PATH
                 end sub
@@ -193,13 +193,13 @@ describe('SourceLiteralExpression', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('accounts for sourceRoot in SOURCE_LOCATION', async () => {
+        it('accounts for sourceRoot in SOURCE_LOCATION', () => {
             let sourceRoot = s`${process.cwd()} / sourceRoot`;
             program = new Program({
                 rootDir: rootDir,
                 sourceRoot: sourceRoot
             });
-            await testTranspile(`
+            testTranspile(`
                 sub main()
                     print SOURCE_LOCATION
                 end sub

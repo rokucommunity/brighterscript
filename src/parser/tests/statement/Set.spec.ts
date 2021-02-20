@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 
 import { Parser } from '../../Parser';
-import { Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
@@ -51,7 +50,7 @@ describe('parser indexed assignment', () => {
                 token(TokenKind.Dot, '.'),
                 identifier('bar'),
                 token(TokenKind.StarEqual, '*='),
-                token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+                token(TokenKind.IntegerLiteral, '5'),
                 token(TokenKind.Newline, '\\n'),
                 EOF
             ]);
@@ -67,7 +66,7 @@ describe('parser indexed assignment', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('someArray'),
                 token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+                token(TokenKind.IntegerLiteral, '0'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.Function, 'function'),
@@ -87,7 +86,7 @@ describe('parser indexed assignment', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('someArray'),
                 token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+                token(TokenKind.IntegerLiteral, '0'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.True, 'true'),
@@ -106,10 +105,10 @@ describe('parser indexed assignment', () => {
             let { statements, diagnostics } = Parser.parse([
                 identifier('someArray'),
                 token(TokenKind.LeftSquareBracket, '['),
-                token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+                token(TokenKind.IntegerLiteral, '0'),
                 token(TokenKind.RightSquareBracket, ']'),
                 token(TokenKind.StarEqual, '*='),
-                token(TokenKind.IntegerLiteral, '3', new Int32(3)),
+                token(TokenKind.IntegerLiteral, '3'),
                 EOF
             ]);
 
@@ -132,82 +131,92 @@ describe('parser indexed assignment', () => {
                 kind: TokenKind.Identifier,
                 text: 'arr',
                 isReserved: false,
-                range: Range.create(0, 0, 0, 3)
+                range: Range.create(0, 0, 0, 3),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.LeftSquareBracket,
                 text: '[',
                 isReserved: false,
-                range: Range.create(0, 3, 0, 4)
+                range: Range.create(0, 3, 0, 4),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
-                literal: new Int32(0),
                 isReserved: false,
-                range: Range.create(0, 4, 0, 5)
+                range: Range.create(0, 4, 0, 5),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.RightSquareBracket,
                 text: ']',
                 isReserved: false,
-                range: Range.create(0, 5, 0, 6)
+                range: Range.create(0, 5, 0, 6),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                range: Range.create(0, 7, 0, 8)
+                range: Range.create(0, 7, 0, 8),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '1',
-                literal: new Int32(1),
                 isReserved: false,
-                range: Range.create(0, 9, 0, 10)
+                range: Range.create(0, 9, 0, 10),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                range: Range.create(0, 10, 0, 11)
+                range: Range.create(0, 10, 0, 11),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'obj',
                 isReserved: false,
-                range: Range.create(1, 0, 1, 3)
+                range: Range.create(1, 0, 1, 3),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Dot,
                 text: '.',
                 isReserved: false,
-                range: Range.create(1, 3, 1, 4)
+                range: Range.create(1, 3, 1, 4),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
-                range: Range.create(1, 4, 1, 5)
+                range: Range.create(1, 4, 1, 5),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                range: Range.create(1, 6, 1, 7)
+                range: Range.create(1, 6, 1, 7),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
-                literal: new Int32(5),
                 isReserved: false,
-                range: Range.create(1, 8, 1, 9)
+                range: Range.create(1, 8, 1, 9),
+                leadingWhitespace: ''
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                range: Range.create(1, 10, 1, 11)
+                range: Range.create(1, 10, 1, 11),
+                leadingWhitespace: ''
             }
         ]);
 

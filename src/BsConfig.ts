@@ -1,4 +1,4 @@
-import { LogLevel } from './Logger';
+import type { LogLevel } from './Logger';
 
 export interface BsConfig {
     /**
@@ -91,7 +91,7 @@ export interface BsConfig {
     /**
      * A list of error codes the compiler should NOT emit, even if encountered.
      */
-    ignoreErrorCodes?: number[];
+    ignoreErrorCodes?: (number|string)[];
 
     /**
      * Emit full paths to files when printing diagnostics to the console. Defaults to false
@@ -99,9 +99,15 @@ export interface BsConfig {
     emitFullPaths?: boolean;
 
     /**
+     * Emit type definition files (`d.bs`)
+     * @default true
+     */
+    emitDefinitions?: boolean;
+
+    /**
      * A list of filters used to exclude diagnostics from the output
      */
-    diagnosticFilters?: Array<number | string | { src: string; codes: number[] } | { src: string } | { codes: number[] }>;
+    diagnosticFilters?: Array<number | string | { src: string; codes: (number|string)[] } | { src: string } | { codes: (number|string)[] }>;
 
     /**
      * Specify what diagnostic types should be printed to the console. Defaults to 'warn'
@@ -136,4 +142,9 @@ export interface BsConfig {
      * have their source maps changed. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
      */
     sourceRoot?: string;
+    /**
+     * Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.
+     * @default true
+     */
+    sourceMap?: boolean;
 }

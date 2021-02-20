@@ -22,8 +22,8 @@ describe('FunctionScope', () => {
             expect(variables).to.be.lengthOf(0);
         });
 
-        it('returns variables defined above the specified line number', async () => {
-            let file = await program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+        it('returns variables defined above the specified line number', () => {
+            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     var1 = 1
                     var2 = 2

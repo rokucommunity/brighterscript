@@ -1,7 +1,6 @@
 node_modules*
 dist
 out
-testProjects/plugins/*.js
 .tmp
 .history
 .DS_Store
@@ -13,3 +12,4 @@ graph.svg
 .history
 *.tgz
 benchmarks/*.json
+benchmarks/*.brs

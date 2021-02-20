@@ -1,7 +1,8 @@
+import type { Chalk } from 'chalk';
 import chalk from 'chalk';
-import { BsConfig } from './BsConfig';
+import type { BsConfig } from './BsConfig';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import { BsDiagnostic } from '.';
+import type { BsDiagnostic } from '.';
 
 /**
  * Prepare print diagnostic formatting options
@@ -13,11 +14,11 @@ export function getPrintDiagnosticOptions(options: BsConfig) {
 
     let diagnosticLevel = options?.diagnosticLevel || 'warn';
 
-    let diagnosticSeverityMap = {};
-    diagnosticSeverityMap['info'] = DiagnosticSeverity.Information;
-    diagnosticSeverityMap['hint'] = DiagnosticSeverity.Hint;
-    diagnosticSeverityMap['warn'] = DiagnosticSeverity.Warning;
-    diagnosticSeverityMap['error'] = DiagnosticSeverity.Error;
+    let diagnosticSeverityMap = {} as Record<string, DiagnosticSeverity>;
+    diagnosticSeverityMap.info = DiagnosticSeverity.Information;
+    diagnosticSeverityMap.hint = DiagnosticSeverity.Hint;
+    diagnosticSeverityMap.warn = DiagnosticSeverity.Warning;
+    diagnosticSeverityMap.error = DiagnosticSeverity.Error;
 
     let severityLevel = diagnosticSeverityMap[diagnosticLevel] || DiagnosticSeverity.Warning;
     let order = [DiagnosticSeverity.Information, DiagnosticSeverity.Hint, DiagnosticSeverity.Warning, DiagnosticSeverity.Error];
@@ -26,7 +27,7 @@ export function getPrintDiagnosticOptions(options: BsConfig) {
         return acc;
     }, {});
 
-    let typeColor = {} as any;
+    let typeColor = {} as Record<string, Chalk>;
     typeColor[DiagnosticSeverity.Information] = chalk.blue;
     typeColor[DiagnosticSeverity.Hint] = chalk.green;
     typeColor[DiagnosticSeverity.Warning] = chalk.yellow;
@@ -65,14 +66,15 @@ export function printDiagnostic(
     }
 
     let severityText = severityTextMap[severity];
+
     console.log('');
     console.log(
-        chalk.cyan(filePath) +
+        chalk.cyan(filePath ?? '<unknown file>') +
         ':' +
         chalk.yellow(
-            (diagnostic.range.start.line + 1) +
-            ':' +
-            (diagnostic.range.start.character + 1)
+            diagnostic.range
+                ? (diagnostic.range.start.line + 1) + ':' + (diagnostic.range.start.character + 1)
+                : 'line?:col?'
         ) +
         ' - ' +
         typeColor[severity](severityText) +
@@ -85,14 +87,17 @@ export function printDiagnostic(
 
     //Get the line referenced by the diagnostic. if we couldn't find a line,
     // default to an empty string so it doesn't crash the error printing below
-    let diagnosticLine = lines[diagnostic.range.start.line] ?? '';
+    let diagnosticLine = lines[diagnostic.range?.start?.line ?? -1] ?? '';
 
     let squigglyText = getDiagnosticSquigglyText(diagnostic, diagnosticLine);
 
-    let lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
-    let blankLineNumberText = chalk.bgWhite(' ' + chalk.bgWhite((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
-    console.log(lineNumberText + diagnosticLine);
-    console.log(blankLineNumberText + typeColor[severity](squigglyText));
+    //only print the line information if we have some
+    if (diagnostic.range && diagnosticLine) {
+        let lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
+        let blankLineNumberText = chalk.bgWhite(' ' + chalk.bgWhite((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
+        console.log(lineNumberText + diagnosticLine);
+        console.log(blankLineNumberText + typeColor[severity](squigglyText));
+    }
     console.log('');
 }
 

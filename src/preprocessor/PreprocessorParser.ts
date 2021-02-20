@@ -1,8 +1,9 @@
-import { Token } from '../lexer/Token';
+import type { Token } from '../lexer/Token';
 import { TokenKind, AllowedLocalIdentifiers, ReservedWords, DisallowedLocalIdentifiers, AllowedProperties } from '../lexer/TokenKind';
 import * as CC from './Chunk';
-import { Diagnostic } from 'vscode-languageserver';
-import { DiagnosticMessages, DiagnosticInfo } from '../DiagnosticMessages';
+import type { Diagnostic } from 'vscode-languageserver';
+import type { DiagnosticInfo } from '../DiagnosticMessages';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 
 /** * Parses `Tokens` into chunks of tokens, excluding conditional compilation directives. */
 export class PreprocessorParser {

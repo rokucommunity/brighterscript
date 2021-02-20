@@ -14,7 +14,7 @@ The BrighterScript language provides new features and syntax enhancements to Rok
 ## Features
 BrighterScript adds several new features to the BrightScript language such as Namespaces, classes, import statements, and more. Take a look at the language specification docs for more information.
 
-[BrighterScript Language Specification](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md)
+[BrighterScript Language Specification](https://github.com/rokucommunity/BrighterScript/blob/master/docs/readme.md)
 
 ## Why use the BrighterScript compiler/CLI?
 
@@ -43,10 +43,13 @@ BrighterScript adds several new features to the BrightScript language such as Na
       - Automatically add a name prefix to all methods inside a namespace block.
       - Prevents method naming collisions and improves code readability and maintainability.
       - Missing method invocations, and other namespace related syntax errors are reported at compile time.
+    - [Ternary operator](https://github.com/rokucommunity/brighterscript/blob/master/docs/ternary-operator.md)
+      - `username = m.user <> invalid ? m.user.name : "not logged in"`
+    - [Template strings](https://github.com/rokucommunity/brighterscript/blob/master/docs/template-strings.md)
+      - ```print `Hello ${firstNameVar}` ```.
+    - [null-coalescing operator](https://github.com/rokucommunity/brighterscript/blob/master/docs/null-coalescing-operator.md)
+      - `user = m.user ?? getDefaultUser()`
     - Additional Language features coming soon
-      - Ternary operator: `username = m.user <> invalid ? m.user.name : "not logged in"`
-      - Template strings: ```print `Hello ${firstNameVar}` ```.
-      - null-coalescing operator: `user = m.user ?? getDefaultUser()`
       - null-conditional operator: `userSettings = m.user?.account?.profile?.settings`
     - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md)...
 
@@ -260,4 +263,4 @@ This project also contributes a class that aligns with Microsoft's [Language Ser
 [Click here](CHANGELOG.md) to view the changelog.
 
 ## Special Thanks
-Special thanks to the [brs](https://github.com/sjbarag/brs) project for its fantastic work on its blazing fast BrightScript parser. It was used as the foundation for the BrighterScript parser.
+Special thanks to the [brs](https://github.com/sjbarag/brs) project for its fantastic work on its blazing fast BrightScript parser which was used as the foundation for the BrighterScript parser.

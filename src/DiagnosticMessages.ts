@@ -1,7 +1,8 @@
 /* eslint-disable camelcase */
 
-import { DiagnosticSeverity, Position } from 'vscode-languageserver';
-import { TokenKind } from './lexer/TokenKind';
+import type { Position } from 'vscode-languageserver';
+import { DiagnosticSeverity } from 'vscode-languageserver';
+import type { TokenKind } from './lexer/TokenKind';
 
 /**
  * An object that keeps track of all possible error messages.
@@ -16,6 +17,9 @@ export let DiagnosticMessages = {
     callToUnknownFunction: (name: string, scopeName: string) => ({
         message: `Cannot find function with name '${name}' when this file is included in scope '${scopeName}'`,
         code: 1001,
+        data: {
+            functionName: name
+        },
         severity: DiagnosticSeverity.Error
     }),
     mismatchArgumentCount: (expectedCount: number | string, actualCount: number) => ({
@@ -204,8 +208,8 @@ export let DiagnosticMessages = {
         code: 1038,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineOrColonAfterCallableSignature: (callableType: string) => ({
-        message: `Expected newline or ':' after ${callableType} signature`,
+    expectedNewlineOrColon: () => ({
+        message: `Expected newline or ':' at the end of a statement`,
         code: 1039,
         severity: DiagnosticSeverity.Error
     }),
@@ -230,7 +234,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     functionParameterTypeIsInvalid: (parameterName: string, typeText: string) => ({
-        message: `Function parameter '${parameterName}' is of invalid type '${parameterName}'`,
+        message: `Function parameter '${parameterName}' is of invalid type '${typeText}'`,
         code: 1044,
         severity: DiagnosticSeverity.Error
     }),
@@ -247,13 +251,13 @@ export let DiagnosticMessages = {
             severity: DiagnosticSeverity.Error
         };
     },
-    expectedNewlineOrColonAfterAssignment: () => ({
-        message: `Expected newline or ':' after assignment`,
+    expectedInlineIfStatement: () => ({
+        message: `If/else statement within an inline if should be also inline`,
         code: 1047,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineAfterWhileCondition: () => ({
-        message: `Expected newline after while condition`,
+    expectedFinalNewline: () => ({
+        message: `Expected newline at the end of an inline if statement`,
         code: 1048,
         severity: DiagnosticSeverity.Error
     }),
@@ -262,8 +266,8 @@ export let DiagnosticMessages = {
         code: 1049,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineAfterExitWhile: () => ({
-        message: `Expected newline after 'exit while'`,
+    expectedCatchBlockInTryCatch: () => ({
+        message: `Expected 'catch' block in 'try' statement`,
         code: 1050,
         severity: DiagnosticSeverity.Error
     }),
@@ -282,8 +286,8 @@ export let DiagnosticMessages = {
         code: 1053,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineAfterExitFor: () => ({
-        message: `Expected newline after 'exit for'`,
+    unexpectedColonBeforeIfStatement: () => ({
+        message: `Colon before 'if' statement is not allowed`,
         code: 1054,
         severity: DiagnosticSeverity.Error
     }),
@@ -307,8 +311,8 @@ export let DiagnosticMessages = {
         code: 1058,
         severity: DiagnosticSeverity.Error
     }),
-    expectedColonToPreceedEndIf: () => ({
-        message: `Expected ':' to preceed 'end if'`,
+    expectedEndTryToTerminateTryCatch: () => ({
+        message: `Expected 'end try' to terminate 'try-catch' statement`,
         code: 1059,
         severity: DiagnosticSeverity.Error
     }),
@@ -337,8 +341,8 @@ export let DiagnosticMessages = {
         code: 1064,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineOrColonAfterExpressionStatement: () => ({
-        message: `Expected newline or ':' after expression statement`,
+    xmlUnexpectedTag: (tagName: string) => ({
+        message: `Unexpected tag '${tagName}'`,
         code: 1065,
         severity: DiagnosticSeverity.Error
     }),
@@ -347,23 +351,23 @@ export let DiagnosticMessages = {
         code: 1066,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineOrColonAfterIndexedSetStatement: () => ({
-        message: `Expected newline or ':' after indexed set statement`,
+    xmlFunctionNotFound: (name: string) => ({
+        message: `Cannot find function with name '${name}' in component scope`,
         code: 1067,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineOrColonAfterDottedSetStatement: () => ({
-        message: `Expected newline or ':' after dotted set statement`,
+    xmlInvalidFieldType: (name: string) => ({
+        message: `Invalid field type ${name}`,
         code: 1068,
         severity: DiagnosticSeverity.Error
     }),
-    expectedNewlineOrColonAfterPrintedValues: () => ({
-        message: `Expected newline or ':' after printed values`,
+    xmlUnexpectedChildren: (tagName: string) => ({
+        message: `Tag '${tagName}' should not have children`,
         code: 1069,
         severity: DiagnosticSeverity.Error
     }),
-    labelsMustBeDeclaredOnTheirOwnLine: () => ({
-        message: `Labels must be declared on their own line`,
+    xmlTagMissingAttribute: (tagName: string, attrName: string) => ({
+        message: `Tag '${tagName}' must have a '${attrName}' attribute`,
         code: 1070,
         severity: DiagnosticSeverity.Error
     }),
@@ -520,8 +524,8 @@ export let DiagnosticMessages = {
         code: 1100,
         severity: DiagnosticSeverity.Error
     }),
-    classConstructorSuperMustBeFirstStatement: () => ({
-        message: `A call to 'super()' must be the first statement in this constructor method.`,
+    classConstructorIllegalUseOfMBeforeSuperCall: () => ({
+        message: `Illegal use of "m" before calling "super()"`,
         code: 1101,
         severity: DiagnosticSeverity.Error
     }),
@@ -530,10 +534,10 @@ export let DiagnosticMessages = {
         code: 1102,
         severity: DiagnosticSeverity.Error
     }),
-    autoImportComponentScriptCollision: () => ({
-        message: `Component script auto-import found '.bs' and '.brs' files with the same name and will import only the '.bs' file`,
+    unusedAnnotation: () => ({
+        message: `This annotation is not attached to any statement`,
         code: 1103,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Error
     }),
     localVarShadowedByScopedFunction: () => ({
         message: `Declaring a local variable with same name as scoped function can result in unexpected behavior`,
@@ -545,8 +549,8 @@ export let DiagnosticMessages = {
         code: 1105,
         severity: DiagnosticSeverity.Error
     }),
-    brighterscriptScriptTagMissingTypeAttribute: () => ({
-        message: `All BrighterScript script tags must include the type="text/brighterscript" attribute`,
+    localVarSameNameAsClass: (className: string) => ({
+        message: `Local variable has same name as class '${className}'`,
         code: 1106,
         severity: DiagnosticSeverity.Error
     }),
@@ -560,8 +564,8 @@ export let DiagnosticMessages = {
         code: 1108,
         severity: DiagnosticSeverity.Error
     }),
-    callfuncExpressionMustHaveAtLeastOneArgument: () => ({
-        message: `A callfunc expression must have at least one argument`,
+    expectedTokenAButFoundTokenB: (tokenA: string, tokenB: string) => ({
+        message: `Expected '${tokenA}' but instead found ${tokenB}`,
         code: 1109,
         severity: DiagnosticSeverity.Error
     }),
@@ -589,19 +593,55 @@ export let DiagnosticMessages = {
         message: `There are multiple components with the name '${componentName}'`,
         code: 1115,
         severity: DiagnosticSeverity.Error
+    }),
+    functionCannotHaveSameNameAsClass: (className: string) => ({
+        message: `Function has same name as class '${className}'`,
+        code: 1116,
+        severity: DiagnosticSeverity.Error
+    }),
+    missingExceptionVarToFollowCatch: () => ({
+        message: `Missing exception variable after 'catch' keyword`,
+        code: 1117,
+        severity: DiagnosticSeverity.Error
+    }),
+    missingExceptionExpressionAfterThrowKeyword: () => ({
+        message: `Missing exception expression after 'throw' keyword`,
+        code: 1118,
+        severity: DiagnosticSeverity.Error
+    }),
+    missingLeftSquareBracketAfterDimIdentifier: () => ({
+        message: `Missing left square bracket after 'dim' identifier`,
+        code: 1119,
+        severity: DiagnosticSeverity.Error
+    }),
+    missingRightSquareBracketAfterDimIdentifier: () => ({
+        message: `Missing right square bracket after 'dim' identifier`,
+        code: 1120,
+        severity: DiagnosticSeverity.Error
+    }),
+    missingExpressionsInDimStatement: () => ({
+        message: `Missing expression(s) in 'dim' statement`,
+        code: 1121,
+        severity: DiagnosticSeverity.Error
     })
-
 };
 
-let allCodes = [] as number[];
+export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
+export let diagnosticCodes = [] as number[];
 for (let key in DiagnosticMessages) {
-    allCodes.push(DiagnosticMessages[key]().code);
+    diagnosticCodes.push(DiagnosticMessages[key]().code);
+    DiagnosticCodeMap[key] = DiagnosticMessages[key]().code;
 }
-
-export let diagnosticCodes = allCodes;
 
 export interface DiagnosticInfo {
     message: string;
     code: number;
     severity: DiagnosticSeverity;
 }
+
+/**
+ * Provides easy type support for the return value of any DiagnosticMessage function.
+ * The second type parameter is optional, but allows plugins to pass in their own
+ * DiagnosticMessages-like object in order to get the same type support
+ */
+export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (...args: any) => any> = typeof DiagnosticMessages> = ReturnType<D[K]>;

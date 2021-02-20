@@ -1,13 +1,13 @@
-import { BsDiagnostic } from './interfaces';
+import type { BsDiagnostic } from './interfaces';
 import * as path from 'path';
 import * as minimatch from 'minimatch';
-import { BsConfig } from './BsConfig';
+import type { BsConfig } from './BsConfig';
 import { standardizePath as s } from './util';
 
 export class DiagnosticFilterer {
-    private byFile: { [filePath: string]: BsDiagnostic[] };
+    private byFile: Record<string, BsDiagnostic[]>;
     private filePaths: string[];
-    private filters: Array<{ src?: string; codes?: number[] }>;
+    private filters: Array<{ src?: string; codes?: (number|string)[] }>;
     private rootDir: string;
 
     /**
@@ -74,7 +74,7 @@ export class DiagnosticFilterer {
         }
     }
 
-    private filterAllFiles(filter: { src?: string; codes?: number[] }) {
+    private filterAllFiles(filter: { src?: string; codes?: (number|string)[] }) {
         let matchedFilePaths: string[];
 
         //if there's a src, match against all files
@@ -97,7 +97,7 @@ export class DiagnosticFilterer {
         }
     }
 
-    private filterFile(filter: { src?: string; codes?: number[] }, filePath: string) {
+    private filterFile(filter: { src?: string; codes?: (number|string)[] }, filePath: string) {
         //if there are no codes, throw out all diagnostics for this file
         if (!filter.codes) {
             delete this.byFile[filePath];
@@ -109,7 +109,7 @@ export class DiagnosticFilterer {
             let fileDiagnostics = this.byFile[filePath];
             for (let i = 0; i < fileDiagnostics.length; i++) {
                 let diagnostic = fileDiagnostics[i];
-                if (filter.codes.includes(diagnostic.code as number)) {
+                if (filter.codes.includes(diagnostic.code)) {
                     //remove this diagnostic
                     fileDiagnostics.splice(i, 1);
                     //repeat this loop iteration (with the new item at this index)
@@ -121,7 +121,7 @@ export class DiagnosticFilterer {
 
     public getDiagnosticFilters(config1: BsConfig) {
 
-        let globalIgnoreCodes = [...config1.ignoreErrorCodes ?? []];
+        let globalIgnoreCodes: (number|string)[] = [...config1.ignoreErrorCodes ?? []];
         let diagnosticFilters = [...config1.diagnosticFilters ?? []];
 
         let result = [];
@@ -153,6 +153,6 @@ export class DiagnosticFilterer {
                 codes: globalIgnoreCodes
             });
         }
-        return result as Array<{ src?: string; codes: number[] }>;
+        return result as Array<{ src?: string; codes: (number|string)[] }>;
     }
 }

@@ -1,14 +1,18 @@
 import { SourceNode } from 'source-map';
-import { ClassStatement } from './ClassStatement';
-import { Range } from 'vscode-languageserver';
-import { BrsFile } from '../files/BrsFile';
+import type { Range } from 'vscode-languageserver';
+import type { BrsFile } from '../files/BrsFile';
+import type { Token } from '../lexer/Token';
+import type { ClassStatement } from './Statement';
 
 /**
  * Holds the state of a transpile operation as it works its way through the transpile process
  */
 export class TranspileState {
     constructor(
-        file: BrsFile
+        /**
+         * The BrsFile that is currently being transpiled
+         */
+        public file: BrsFile
     ) {
         this.file = file;
 
@@ -22,11 +26,6 @@ export class TranspileState {
             this.pathAbsolute = this.file.pathAbsolute;
         }
     }
-
-    /**
-     * The BrsFile that is currently being transpiled
-     */
-    public file: BrsFile;
 
     /**
      * The absolute path to the source location of this file. If sourceRoot is specified,
@@ -54,9 +53,10 @@ export class TranspileState {
 
     /**
      * Append whitespace until we reach the current blockDepth amount
-     * @param state
+     * @param blockDepthChange - if provided, this will add (or subtract if negative) the value to the block depth BEFORE getting the next indent amount.
      */
-    public indent() {
+    public indent(blockDepthChange = 0) {
+        this.blockDepth += blockDepthChange;
         let totalSpaceCount = this.blockDepth * 4;
         totalSpaceCount = totalSpaceCount > -1 ? totalSpaceCount : 0;
         return ' '.repeat(totalSpaceCount);
@@ -69,13 +69,30 @@ export class TranspileState {
     /**
      * Shorthand for creating a new source node
      */
-    public sourceNode(locatable: { range: Range }, code: string) {
-        let result = new SourceNode(
-            locatable.range.start.line,
+    public sourceNode(locatable: { range: Range }, code: string | SourceNode | Array<string | SourceNode>): SourceNode | undefined {
+        return new SourceNode(
+            //convert 0-based range line to 1-based SourceNode line
+            locatable.range.start.line + 1,
+            //range and SourceNode character are both 0-based, so no conversion necessary
             locatable.range.start.character,
             this.pathAbsolute,
             code
         );
-        return code || result;
+    }
+
+    /**
+     * Create a SourceNode from a token. This is more efficient than the above `sourceNode` function
+     * because the entire token is passed by reference, instead of the raw string being copied to the parameter,
+     * only to then be copied again for the SourceNode constructor
+     */
+    public tokenToSourceNode(token: Token) {
+        return new SourceNode(
+            //convert 0-based range line to 1-based SourceNode line
+            token.range.start.line + 1,
+            //range and SourceNode character are both 0-based, so no conversion necessary
+            token.range.start.character,
+            this.pathAbsolute,
+            token.text
+        );
     }
 }

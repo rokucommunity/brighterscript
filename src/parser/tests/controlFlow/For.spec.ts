@@ -1,10 +1,10 @@
 import { expect } from 'chai';
-
 import { Parser } from '../../Parser';
-import { Int32 } from '../../../brsTypes';
 import { TokenKind } from '../../../lexer';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import type { ForStatement } from '../..';
+import { LiteralExpression } from '../..';
 
 describe('parser for loops', () => {
     it('accepts a \'step\' clause', () => {
@@ -12,11 +12,11 @@ describe('parser for loops', () => {
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+            token(TokenKind.IntegerLiteral, '0'),
             token(TokenKind.To, 'to'),
-            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5'),
             token(TokenKind.Step, 'step'),
-            token(TokenKind.IntegerLiteral, '2', new Int32(2)),
+            token(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.Newline, '\n'),
             // body would go here, but it's not necessary for this test
             token(TokenKind.EndFor, 'end for'),
@@ -24,21 +24,20 @@ describe('parser for loops', () => {
             EOF
         ]) as any;
 
-        expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
-        expect(statements[0]).to.exist;
-        expect(statements[0].increment).to.exist;
-        expect(statements[0].increment.value).to.include(new Int32(2));
+        const statement = statements[0] as ForStatement;
+        expect(diagnostics[0]?.message).not.to.exist;
+        expect(statement.increment).to.be.instanceof(LiteralExpression);
+        expect((statement.increment as LiteralExpression).token.text).to.equal('2');
     });
 
-    it('defaults a missing \'step\' clause to \'1\'', () => {
+    it('supports omitted \'step\' clause', () => {
         let { statements, diagnostics } = Parser.parse([
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+            token(TokenKind.IntegerLiteral, '0'),
             token(TokenKind.To, 'to'),
-            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5'),
             token(TokenKind.Newline, '\n'),
             // body would go here, but it's not necessary for this test
             token(TokenKind.EndFor, 'end for'),
@@ -46,11 +45,20 @@ describe('parser for loops', () => {
             EOF
         ]) as any;
 
-        expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
-        expect(statements[0]).to.exist;
-        expect(statements[0].increment).to.exist;
-        expect(statements[0].increment.value).to.include(new Int32(1));
+        expect(diagnostics[0]?.message).not.to.exist;
+        expect((statements[0] as ForStatement).increment).not.to.exist;
+    });
+
+    it('catches unterminated for reaching function boundary', () => {
+        const parser = Parser.parse(`
+            function test()
+                for i = 1 to 10
+                    print "while"
+            end function
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(1);
+        expect(parser.statements).to.be.lengthOf(1);
+        expect(parser.references.functionStatements[0].func.body.statements).to.be.lengthOf(1);
     });
 
     it('allows \'next\' to terminate loop', () => {
@@ -58,9 +66,9 @@ describe('parser for loops', () => {
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
-            token(TokenKind.IntegerLiteral, '0', new Int32(0)),
+            token(TokenKind.IntegerLiteral, '0'),
             token(TokenKind.To, 'to'),
-            token(TokenKind.IntegerLiteral, '5', new Int32(5)),
+            token(TokenKind.IntegerLiteral, '5'),
             token(TokenKind.Newline, '\n'),
             // body would go here, but it's not necessary for this test
             token(TokenKind.Next, 'next'),
@@ -70,6 +78,15 @@ describe('parser for loops', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
+    });
+
+    it('supports a single trailing colon after the `to` expression', () => {
+        const parser = Parser.parse(`
+            for i = 1 to 3:
+                print "for"
+            end for
+        `);
+        expect(parser.diagnostics[0]?.message).to.be.undefined;
     });
 
     it('location tracking', () => {
@@ -103,7 +120,6 @@ describe('parser for loops', () => {
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
-                literal: new Int32(0),
                 isReserved: false,
                 range: Range.create(0, 8, 0, 9)
             },
@@ -119,7 +135,6 @@ describe('parser for loops', () => {
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '10',
-                literal: new Int32(10),
                 isReserved: false,
                 range: Range.create(0, 13, 0, 15)
             },

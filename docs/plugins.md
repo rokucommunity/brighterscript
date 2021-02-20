@@ -1,4 +1,4 @@
-# BrighterScript plugins
+# BrighterScript Plugins
 
 The brighterscript compiler is extensible using **JavaScript** plugins.
 
@@ -92,6 +92,13 @@ After file addition/removal (note: throttled/debounced):
     - `afterScopeValidate`
 - `afterProgramValidate`
 
+Code Actions
+ - `beforeProgramGetCodeActions`
+ - `onFileGetCodeActions`
+ - for each scope that includes the file
+    - `onScopeGetCodeActions`
+ - `afterProgramGetCodeActions`
+
 ## Compiler API
 
 Objects in the brighterscript compiler dispatch a number of events that you can listen to. These events allow you to peek / modify the objects that the compiler manipulates.
@@ -111,6 +118,8 @@ The top level object is the `ProgramBuilder` which runs the overall process: pre
 ### API definition
 
 ```typescript
+export type CompilerPluginFactory = () => CompilierPlugin;
+
 export interface CompilerPlugin {
     name: string;
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
@@ -129,12 +138,12 @@ export interface CompilerPlugin {
     beforeScopeValidate?: ValidateHandler;
     afterScopeValidate?: ValidateHandler;
     beforeFileParse?: (source: SourceObj) => void;
-    afterFileParse?: (file: (BrsFile | XmlFile)) => void;
-    afterFileValidate?: (file: (BrsFile | XmlFile)) => void;
+    afterFileParse?: (file: BscFile) => void;
+    afterFileValidate?: (file: BscFile) => void;
     beforeFileTranspile?: (entry: TranspileObj) => void;
     afterFileTranspile?: (entry: TranspileObj) => void;
-    beforeFileDispose?: (file: (BrsFile | XmlFile)) => void;
-    afterFileDispose?: (file: (BrsFile | XmlFile)) => void;
+    beforeFileDispose?: (file: BscFile) => void;
+    afterFileDispose?: (file: BscFile) => void;
 }
 
 // related types:
@@ -149,11 +158,11 @@ interface SourceObj {
 }
 
 interface TranspileObj {
-    file: (BrsFile | XmlFile);
+    file: (BscFile);
     outputPath: string;
 }
 
-type ValidateHandler = (scope: Scope, files: (BrsFile | XmlFile)[], callables: CallableContainerMap) => void;
+type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
 interface CallableContainerMap {
     [name: string]: CallableContainer[];
 }
@@ -165,7 +174,7 @@ interface CallableContainer {
 
 ## Plugin API
 
-Plugins are JavaScript modules dynamically loaded by the compiler. Their entry point is a required default object following the `CompilerPlugin` interface and exposing event handlers.
+Plugins are JavaScript modules dynamically loaded by the compiler. Their entry point is a default function that returns an object that follows the `CompilerPlugin` interface.
 
 To walk/modify the AST, a number of helpers are provided in `brighterscript/dist/parser/ASTUtils`.
 
@@ -198,30 +207,29 @@ Note: in a language-server context, Scope validation happens every time a file c
 import { CompilerPlugin, BrsFile, XmlFile } from 'brighterscript';
 import { isBrsFile } from 'brighterscript/dist/parser/ASTUtils';
 
-// entry point
-const pluginInterface: CompilerPlugin = {
-    name: 'myDiagnosticPlugin',
-    afterFileValidate
-};
-export default pluginInterface;
-
-// post-parsing validation
-function afterFileValidate(file: BrsFile | XmlFile) {
-    if (!isBrsFile(file)) {
-        return;
-    }
-    // visit function statements and validate their name
-    file.parser.functionStatements.forEach((fun) => {
-        if (fun.name.text.toLowerCase() === 'main') {
-            file.addDiagnostics([{
-                code: 9000,
-                message: 'Use RunUserInterface as entry point',
-                range: fun.name.range,
-                file
-            }]);
+// plugin factory
+export default function () {
+    return {
+        name: 'myDiagnosticPlugin',
+        // post-parsing validation
+        afterFileValidate: (file: BscFile) => {
+            if (!isBrsFile(file)) {
+                return;
+            }
+            // visit function statements and validate their name
+            file.parser.functionStatements.forEach((fun) => {
+                if (fun.name.text.toLowerCase() === 'main') {
+                    file.addDiagnostics([{
+                        code: 9000,
+                        message: 'Use RunUserInterface as entry point',
+                        range: fun.name.range,
+                        file
+                    }]);
+                }
+            });
         }
-    });
-}
+    } as CompilerPlugin;
+};
 ```
 
 ### Example AST modifier plugin
@@ -234,23 +242,22 @@ import { CompilerPlugin, Program, TranspileObj } from 'brighterscript';
 import { EmptyStatement } from 'brighterscript/dist/parser';
 import { isBrsFile, createStatementEditor, editStatements } from 'brighterscript/dist/parser/ASTUtils';
 
-// entry point
-const pluginInterface: CompilerPlugin = {
-    name: 'removePrint',
-    beforeFileTranspile
+// plugin factory
+export default function () {
+    return {
+        name: 'removePrint',
+        // transform AST before transpilation
+        beforeFileTranspile: (entry: TranspileObj) => {
+            if (isBrsFile(entry.file)) {
+                // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
+                entry.file.parser.functionExpressions.forEach((fun) => {
+                    const visitor = createStatementEditor({
+                        PrintStatement: (statement) => new EmptyStatement()
+                    });
+                    editStatements(fun.body, visitor);
+                });
+            }
+        }
+    } as CompilerPlugin;
 };
-export default pluginInterface;
-
-// transform AST before transpilation
-function beforeFileTranspile(entry: TranspileObj) {
-    if (isBrsFile(entry.file)) {
-        // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-        entry.file.parser.functionExpressions.forEach((fun) => {
-            const visitor = createStatementEditor({
-                PrintStatement: (statement) => new EmptyStatement()
-            });
-            editStatements(fun.body, visitor);
-        });
-    }
-}
 ```

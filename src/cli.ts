@@ -8,6 +8,7 @@ let options = yargs
     .usage('$0', 'BrighterScript, a superset of Roku\'s BrightScript language')
     .help('help', 'View help information about this tool.')
     .option('create-package', { type: 'boolean', defaultDescription: 'true', description: 'Creates a zip package. This setting is ignored when deploy is enabled.' })
+    .option('source-map', { type: 'boolean', defaultDescription: 'false', description: 'Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.' })
     .option('cwd', { type: 'string', description: 'Override the current working directory.' })
     .option('copy-to-staging', { type: 'boolean', defaultDescription: 'true', description: 'Copy project files into the staging folder, ready to be packaged.' })
     .option('diagnostic-level', { type: 'string', defaultDescription: '"warn"', description: 'Specify what diagnostic types should be printed to the console. Value can be "error", "warn", "hint", "info".' })

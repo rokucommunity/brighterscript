@@ -1,22 +1,18 @@
-import { Range } from 'vscode-languageserver';
-
 import { BrsFile } from './files/BrsFile';
-import { Callable } from './interfaces';
+import type { Callable } from './interfaces';
 import { ArrayType } from './types/ArrayType';
 import { BooleanType } from './types/BooleanType';
 import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
 import { FunctionType } from './types/FunctionType';
 import { IntegerType } from './types/IntegerType';
-import { InterfaceType } from './types/InterfaceType';
 import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
-import { Parser } from './parser';
+import util from './util';
 
 export let globalFile = new BrsFile('global', 'global', null);
-globalFile.parser = new Parser();
-globalFile.parser.parse([]);
+globalFile.parse('');
 
 let mathFunctions = [{
     name: 'Abs',
@@ -190,6 +186,10 @@ let runtimeFunctions = [{
         name: 'param3',
         type: new DynamicType(),
         isOptional: true
+    }, {
+        name: 'param4',
+        type: new DynamicType(),
+        isOptional: true
     }]
 }, {
     name: 'Type',
@@ -294,7 +294,7 @@ let globalUtilityFunctions = [
     }, {
         name: 'GetInterface',
         shortDescription: 'Each BrightScript Component has one or more interfaces. This function returns a value of type "Interface". \nNote that generally BrightScript Components allow you to skip the interface specification. In which case, the appropriate interface within the object is used. This works as long as the function names within the interfaces are unique.',
-        type: new FunctionType(new InterfaceType()),
+        type: new FunctionType(new ObjectType()),
         file: globalFile,
         params: [{
             name: 'object',
@@ -306,7 +306,7 @@ let globalUtilityFunctions = [
     }, {
         name: 'FindMemberFunction',
         shortDescription: 'Returns the interface from the object that provides the specified function, or invalid if not found.',
-        type: new FunctionType(new InterfaceType()),
+        type: new FunctionType(new ObjectType()),
         file: globalFile,
         params: [{
             name: 'object',
@@ -722,13 +722,20 @@ let programStatementFunctions = [
             name: 'x',
             type: new IntegerType()
         }]
+        //TODO this is a temporary fix for library imported files. Eventually this should be moved into `Roku_Ads.brs` and handled by the `Library` statement
+    }, {
+        name: 'Roku_Ads',
+        shortDescription: 'The main entry point for instantiating the ad interface. This object manages ad server requests, parses ad structure, schedules and renders ads, and triggers tracking beacons.\n\nThe Roku ad parser/renderer object returned has global scope because it is meant to represent interaction with external resources (the ad server and any tracking services) that have persistence and state independent of the ad rendering within a client application.',
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: []
     }
 ] as Callable[];
 
 export let globalCallables = [...mathFunctions, ...runtimeFunctions, ...globalUtilityFunctions, ...globalStringFunctions, ...programStatementFunctions];
 for (let callable of globalCallables) {
     //give each callable a dummy location
-    callable.nameRange = Range.create(0, 0, 0, callable.name.length);
+    callable.nameRange = util.createRange(0, 0, 0, callable.name.length);
 
     //add each parameter to the type
     for (let param of callable.params) {
@@ -750,6 +757,6 @@ globalFile.callables = globalCallables;
  * so keep a single copy in memory to improve performance
  */
 export const globalCallableMap = globalCallables.reduce((map, x) => {
-    map[x.name.toLowerCase()] = x;
+    map.set(x.name.toLowerCase(), x);
     return map;
-}, {});
+}, new Map<string, Callable>());

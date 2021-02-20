@@ -59,9 +59,7 @@ describe('parser library statements', () => {
         `);
         const { statements, diagnostics } = Parser.parse(tokens) as any;
         //make sure the assignment is present in the function body
-        expect(statements[0].func.body.statements[0].value.elements[0].key.value).to.equal(
-            'library'
-        );
+        expect(statements[0].func.body.statements[0].value.elements[0].keyToken.text).to.equal('library');
         expect(diagnostics).to.be.lengthOf(0);
     });
 
