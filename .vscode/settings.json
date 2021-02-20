@@ -18,6 +18,5 @@
     "editor.tabSize": 4,
     "editor.insertSpaces": true,
     "typescript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
-    "files.trimTrailingWhitespace": true,
-    "files.eol": "\n"
+    "files.trimTrailingWhitespace": true
 }
