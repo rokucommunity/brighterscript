@@ -54,7 +54,7 @@ describe('import statements', () => {
                 return true
             end function
         `);
-        let files = Object.keys(program.files).map(x => program.getFile(x)).filter(x => !!x).map(x => {
+        let files = program.getFiles().filter(x => !!x).map(x => {
             return {
                 src: x.srcPath,
                 dest: util.removePkgProtocol(x.pkgPath)

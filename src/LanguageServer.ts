@@ -806,11 +806,11 @@ export class LanguageServer {
         //deleted
         if (change.type === FileChangeType.Deleted) {
             //try to act on this path as a directory
-            workspace.builder.removeFilesInFolder(change.srcPath);
+            workspace.builder.program.removeFilesInFolder(change.srcPath);
 
             //if this is a file loaded in the program, remove it
             if (program.hasFile(change.srcPath)) {
-                program.removeFileBySrcPath(change.srcPath);
+                program.removeFile(change.srcPath);
                 return true;
             } else {
                 return false;
@@ -851,7 +851,7 @@ export class LanguageServer {
                     await workspace.builder.getFileContents(change.srcPath)
                 );
             } else {
-                program.removeFileBySrcPath(change.srcPath);
+                program.removeFile(change.srcPath);
             }
             return true;
         }

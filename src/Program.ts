@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, SymbolInformation } from 'vscode-languageserver';
 import { Location, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -25,6 +25,7 @@ import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
 import { BscPlugin } from './bscPlugin/BscPlugin';
+import { util as rokuDeployUtil } from 'roku-deploy';
 
 export interface SourceObj {
     srcPath: string;
@@ -121,9 +122,12 @@ export class Program {
     private diagnostics = [] as BsDiagnostic[];
 
     /**
-     * A map of every file loaded into this program, indexed by its original file location
+     * A map of every file loaded into this program, indexed by its lower-case srcPath
      */
     private files = {} as Record<string, BscFile>;
+    /**
+     * A map of every file loaded ino this program, indexed by its lower-case pkgPath
+     */
     private pkgMap = {} as Record<string, BscFile>;
 
     /**
@@ -181,7 +185,7 @@ export class Program {
     public getUnreferencedFiles() {
         let result = [] as BscFile[];
         for (let key in this.files) {
-            let file = this.files[key];
+            const file = this.files[key];
             if (!this.fileIsIncludedInAnyScope(file)) {
                 //no scopes reference this file. add it to the list
                 result.push(file);
@@ -277,10 +281,10 @@ export class Program {
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
-     * @param destOrPkgPath the full pkg path (i.e. `pkg:/path/to/file.brs`) or the destPath (i.e. `path/to/file.brs`)
+     * @param srcDestOrPkgPath the full pkg path (i.e. `pkg:/path/to/file.brs`) or the destPath (i.e. `path/to/file.brs`)
      * @param fileContents the file contents
      */
-    public addOrReplaceFile<T extends BscFile>(destOrPkgPath: string, fileContents: string): T;
+    public addOrReplaceFile<T extends BscFile>(srcDestOrPkgPath: string, fileContents: string): T;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * @param fileEntry an object that specifies src and dest for the file.
@@ -292,11 +296,28 @@ export class Program {
         let srcPath: string;
         let pkgPath: string;
         if (typeof fileParam === 'string') {
+            //is a pkg path
             if (fileParam.startsWith('pkg:/')) {
-                fileParam = fileParam.substring('pkg:/'.length);
+                //srcPath is the pkgPath relative to the rootDir
+                srcPath = s`${this.options.rootDir}/${fileParam.substring(5)}`;
+                pkgPath = fileParam;
+                //is a srcPath (absolute path to src file location)
+            } else if (path.isAbsolute(fileParam)) {
+                srcPath = util.standardizePath(fileParam);
+                //assume the file path is a sub path of rootDir
+                pkgPath = util.sanitizePkgPath(
+                    rokuDeployUtil.stringReplaceInsensitive(
+                        srcPath,
+                        this.options.rootDir,
+                        ''
+                    )
+                );
+
+                //is destPath
+            } else {
+                srcPath = s`${this.options.rootDir}/${fileParam}`;
+                pkgPath = util.sanitizePkgPath(fileParam);
             }
-            srcPath = s`${this.options.rootDir}/${fileParam}`;
-            pkgPath = util.sanitizePkgPath(`pkg:/${fileParam}`);
         } else {
             srcPath = s`${fileParam.src}`;
             pkgPath = util.sanitizePkgPath(`pkg:/${fileParam.dest}`);
@@ -310,7 +331,7 @@ export class Program {
 
             //if the file is already loaded, remove it
             if (this.hasFile(srcPath)) {
-                this.removeFileBySrcPath(srcPath);
+                this.removeFile(srcPath);
             }
             let fileExtension = path.extname(srcPath).toLowerCase();
             let file: BscFile | undefined;
@@ -403,21 +424,20 @@ export class Program {
      */
     public removeFiles(srcPaths: string[]) {
         for (let srcPath of srcPaths) {
-            this.removeFileBySrcPath(srcPath);
+            this.removeFile(srcPath);
         }
     }
 
     /**
      * Remove a file from the program
-     * @param srcPath The absolute path to the source file on disk
-     */
-    public removeFileBySrcPath(srcPath: string) {
-        this.logger.debug('Program.removeFileBySrcPath()', srcPath);
-        if (!path.isAbsolute(srcPath)) {
-            throw new Error(`Path must be absolute: "${srcPath}"`);
-        }
+     * @param filePath can be a srcPath, a pkgPath, or a destPath (same as pkgPath but without `pkg:/`)
+     * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
 
-        let file = this.getFile(srcPath);
+     */
+    public removeFile(filePath: string, normalizePath = true) {
+        this.logger.debug('Program.removeFile()', filePath);
+
+        let file = this.getFile(filePath, normalizePath);
         if (file) {
             this.plugins.emit('beforeFileDispose', file);
 
@@ -450,6 +470,22 @@ export class Program {
     }
 
     /**
+     * Remove all files from the program that are in the specified folder path (recursive)
+     * @param folderSrcPath The absolute path to the folder on disk
+     */
+    public removeFilesInFolder(folderSrcPath: string) {
+        const lowerFolderSrcPath = folderSrcPath.toLowerCase();
+        for (const key in this.files) {
+            const file = this.files[key];
+            const lowerSrcPath = file.srcPath.toLowerCase();
+            //if the file path starts with the parent path and the file path does not exactly match the folder path
+            if (lowerSrcPath.toLowerCase().startsWith(lowerFolderSrcPath) && lowerSrcPath !== lowerFolderSrcPath) {
+                this.removeFile(file.srcPath, false);
+            }
+        }
+    }
+
+    /**
      * Traverse the entire project, and validate all scopes
      * @param force - if true, then all scopes are force to validate, even if they aren't marked as dirty
      */
@@ -465,8 +501,7 @@ export class Program {
 
             //find any files NOT loaded into a scope
             for (let key in this.files) {
-                let file = this.files[key];
-
+                const file = this.files[key];
                 if (!this.fileIsIncludedInAnyScope(file)) {
                     this.logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.pkgPath));
                     //the file is not loaded in any scope
@@ -488,21 +523,21 @@ export class Program {
      * Flag all duplicate component names
      */
     private detectDuplicateComponentNames() {
-        const componentsByName = Object.keys(this.files).reduce<Record<string, XmlFile[]>>((map, key) => {
+        const componentsByName = new Map<string, XmlFile[]>();
+        for (const key in this.files) {
             const file = this.files[key];
             //if this is an XmlFile, and it has a valid `componentName` property
             if (isXmlFile(file) && file.componentName?.text) {
                 let lowerName = file.componentName.text.toLowerCase();
-                if (!map[lowerName]) {
-                    map[lowerName] = [];
+                if (!componentsByName.has(lowerName)) {
+                    componentsByName.set(lowerName, [file]);
+                } else {
+                    componentsByName.get(lowerName).push(file);
                 }
-                map[lowerName].push(file);
             }
-            return map;
-        }, {});
+        }
 
-        for (let name in componentsByName) {
-            const xmlFiles = componentsByName[name];
+        for (const xmlFiles of componentsByName.values()) {
             //add diagnostics for every duplicate component with this name
             if (xmlFiles.length > 1) {
                 for (let xmlFile of xmlFiles) {
@@ -688,14 +723,16 @@ export class Program {
      * Goes through each file and builds a list of workspace symbols for the program. Used by LanguageServer's onWorkspaceSymbol functionality
      */
     public getWorkspaceSymbols() {
-        const results = Object.keys(this.files).map(key => {
+        const result = [] as SymbolInformation[];
+        for (const key in this.files) {
             const file = this.files[key];
             if (isBrsFile(file)) {
-                return file.getWorkspaceSymbols();
+                result.push(
+                    ...file.getWorkspaceSymbols()
+                );
             }
-            return [];
-        });
-        return util.flatMap(results, c => c);
+        }
+        return result;
     }
 
     /**
@@ -1017,8 +1054,8 @@ export class Program {
         let resultPkgPaths = {} as Record<string, boolean>;
 
         //restrict to only .brs files
-        for (let key in this.files) {
-            let file = this.files[key];
+        for (const key in this.files) {
+            const file = this.files[key];
             if (
                 //is a BrightScript or BrighterScript file
                 (file.extension === '.bs' || file.extension === '.brs') &&
@@ -1079,8 +1116,9 @@ export class Program {
             return collection;
         }, {});
 
-
-        const entries = Object.values(this.files).map(file => {
+        const entries = [] as TranspileObj[];
+        for (const key in this.files) {
+            const file = this.files[key];
             let filePathObj = mappedFileEntries[s`${file.srcPath}`];
             if (!filePathObj) {
                 //this file has been added in-memory, from a plugin, for example
@@ -1100,11 +1138,11 @@ export class Program {
 
             //prepend the staging folder path
             outputPath = s`${stagingFolderPath}/${outputPath}`;
-            return {
+            entries.push({
                 file: file,
                 outputPath: outputPath
-            };
-        });
+            });
+        }
 
         this.plugins.emit('beforeProgramTranspile', this, entries);
 
@@ -1175,11 +1213,12 @@ export class Program {
     private _manifest: Map<string, ManifestValue>;
 
     public dispose() {
-        for (let key in this.files) {
-            this.files[key].dispose();
+        for (const key in this.files) {
+            const file = this.files[key];
+            file.dispose?.();
         }
         for (let name in this.scopes) {
-            this.scopes[name].dispose();
+            this.scopes[name]?.dispose();
         }
         this.globalScope.dispose();
         this.dependencyGraph.dispose();

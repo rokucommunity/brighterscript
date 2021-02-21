@@ -46,7 +46,7 @@ describe('XmlScope', () => {
             expect(childScope.getParentScope()).to.equal(program.getComponentScope('Parent'));
 
             //remove the parent component
-            program.removeFileBySrcPath(`${rootDir}/components/parent.xml`);
+            program.removeFile(`${rootDir}/components/parent.xml`);
             program.validate();
             //the child should know the parent no longer exists
             expect(childXmlFile.parentComponent).not.to.exist;

@@ -51,13 +51,20 @@ describe('Program', () => {
     describe('addFile', () => {
         it('adds various files to `pkgMap`', () => {
             program.addOrReplaceFile('source/main.brs', '');
-            expect(program['pkgMap']).to.have.property('pkg:/source/main.brs');
+            expect(program['pkgMap']).to.have.key('pkg:/source/main.brs');
 
             program.addOrReplaceFile('source/main.bs', '');
-            expect(program['pkgMap']).to.have.property('pkg:/source/main.bs');
+            expect(Object.keys(program['pkgMap']).sort()).to.eql([
+                'pkg:/source/main.brs',
+                'pkg:/source/main.bs'
+            ]);
 
             program.addOrReplaceFile('components/comp1.xml', '');
-            expect(program['pkgMap']).to.have.property('pkg:/components/comp1.xml');
+            expect(Object.keys(program['pkgMap']).sort()).to.eql([
+                'pkg:/components/comp1.xml',
+                'pkg:/source/main.brs',
+                'pkg:/source/main.bs'
+            ]);
         });
 
         it('does not crash when given a totally bogus file', () => {
@@ -137,7 +144,7 @@ describe('Program', () => {
 
             //shouldn't throw an exception because it will find the correct path after normalizing the above path and remove it
             try {
-                program.removeFileBySrcPath(filePath);
+                program.removeFile(filePath);
                 //no error
             } catch (e) {
                 assert.fail(null, null, 'Should not have thrown exception');
@@ -439,7 +446,7 @@ describe('Program', () => {
                 end sub
                 `);
             expect(program.getScopeByName('source').getAllCallables().length).equals(initialCallableCount + 2);
-            program.removeFileBySrcPath(`${rootDir}/source/main.brs`);
+            program.removeFile(`${rootDir}/source/main.brs`);
             expect(program.getScopeByName('source').getAllCallables().length).equals(initialCallableCount);
         });
 

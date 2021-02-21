@@ -205,7 +205,7 @@ export class ProgramBuilder {
                     await this.getFileContents(fileObj.src)
                 );
             } else if (event === 'unlink') {
-                this.program.removeFileBySrcPath(thePath);
+                this.program.removeFile(thePath);
             }
             //wait for change events to settle, and then execute `run`
             await debouncedRunOnce();
@@ -479,19 +479,6 @@ export class ProgramBuilder {
             })
         );
         return errorCount;
-    }
-
-    /**
-     * Remove all files from the program that are in the specified folder path
-     * @param folderSrcPath The absolute path to the folder on disk
-     */
-    public removeFilesInFolder(folderSrcPath: string) {
-        for (let filePath in this.program.files) {
-            //if the file path starts with the parent path and the file path does not exactly match the folder path
-            if (filePath.startsWith(folderSrcPath) && filePath !== folderSrcPath) {
-                this.program.removeFileBySrcPath(filePath);
-            }
-        }
     }
 
     /**

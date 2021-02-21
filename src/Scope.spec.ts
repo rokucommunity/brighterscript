@@ -145,7 +145,7 @@ describe('Scope', () => {
             let initCallableCount = program.getScopeByName('source').getAllCallables().length;
 
             //remove the file
-            program.removeFileBySrcPath(file.srcPath);
+            program.removeFile(file.srcPath);
             expect(program.getScopeByName('source').getAllCallables().length).to.equal(initCallableCount - 1);
         });
     });

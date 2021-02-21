@@ -1,5 +1,4 @@
 import { assert, expect } from 'chai';
-import * as path from 'path';
 import * as sinonImport from 'sinon';
 import type { CodeAction, CompletionItem } from 'vscode-languageserver';
 import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
@@ -7,7 +6,6 @@ import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
-import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
 import util, { standardizePath as s } from '../util';
 import { getTestTranspile } from './BrsFile.spec';
@@ -377,8 +375,7 @@ describe('XmlFile', () => {
 
     describe('getCompletions', () => {
         it('formats completion paths with proper slashes', () => {
-            let scriptPath = s`C:/app/components/component1/component1.brs`;
-            program.files[scriptPath] = new BrsFile(scriptPath, 'pkg:/components/component1/component1.brs', program);
+            program.addOrReplaceFile('pkg:/components/component1/component1.brs', '');
 
             let xmlFile = new XmlFile(s`${rootDir}/components/component1/component1.xml`, 'pkg:/components/component1/component1.xml', <any>program);
             xmlFile.parser.references.scriptTagImports.push({
@@ -482,7 +479,7 @@ describe('XmlFile', () => {
         program.validate();
         expect(scope.isValidated).to.be.true;
 
-        program.removeFileBySrcPath(`${rootDir}/source/lib.bs`);
+        program.removeFile(`${rootDir}/source/lib.bs`);
         expect(scope.isValidated).to.be.false;
     });
 
@@ -1017,7 +1014,7 @@ describe('XmlFile', () => {
             expect(functionNames).not.to.include('logBrs');
 
             //remove the typdef file
-            program.removeFileBySrcPath(typedef.srcPath);
+            program.removeFile(typedef.srcPath);
 
             program.validate();
             functionNames = scope.getOwnCallables().map(x => x.callable.name);

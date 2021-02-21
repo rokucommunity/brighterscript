@@ -2273,7 +2273,7 @@ describe('BrsFile', () => {
             expect(file.hasTypedef).to.be.true;
             expect(file.typedefFile).to.exist;
 
-            program.removeFileBySrcPath(s`${rootDir}/source/main.d.bs`);
+            program.removeFile(s`${rootDir}/source/main.d.bs`);
 
             expect(file.hasTypedef).to.be.false;
             expect(file.typedefFile).not.to.exist;
@@ -2309,7 +2309,7 @@ describe('BrsFile', () => {
         it('removes typedef link when typedef is removed', () => {
             const typedef = program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
             const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
-            program.removeFileBySrcPath(typedef.srcPath);
+            program.removeFile(typedef.srcPath);
             expect(file.typedefFile).to.be.undefined;
         });
     });
