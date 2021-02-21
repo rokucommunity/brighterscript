@@ -18,12 +18,12 @@ export class TranspileState {
 
         //if a sourceRoot is specified, use that instead of the rootDir
         if (this.file.program.options.sourceRoot) {
-            this.pathAbsolute = this.file.pathAbsolute.replace(
+            this.srcPath = this.file.srcPath.replace(
                 this.file.program.options.rootDir,
                 this.file.program.options.sourceRoot
             );
         } else {
-            this.pathAbsolute = this.file.pathAbsolute;
+            this.srcPath = this.file.srcPath;
         }
     }
 
@@ -32,7 +32,7 @@ export class TranspileState {
      * this path will be full path to the file in sourceRoot instead of rootDir.
      * If the file resides outside of rootDir, then no changes will be made to this path.
      */
-    public pathAbsolute: string;
+    public srcPath: string;
 
     /**
      * The number of active parent blocks for the current location of the state.
@@ -75,7 +75,7 @@ export class TranspileState {
             locatable.range.start.line + 1,
             //range and SourceNode character are both 0-based, so no conversion necessary
             locatable.range.start.character,
-            this.pathAbsolute,
+            this.srcPath,
             code
         );
     }
@@ -91,7 +91,7 @@ export class TranspileState {
             token.range.start.line + 1,
             //range and SourceNode character are both 0-based, so no conversion necessary
             token.range.start.character,
-            this.pathAbsolute,
+            this.srcPath,
             token.text
         );
     }

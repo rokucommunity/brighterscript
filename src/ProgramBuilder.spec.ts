@@ -147,7 +147,7 @@ describe('ProgramBuilder', () => {
             });
             const diagnostics = builder.getDiagnostics();
             expect(diagnostics.map(x => x.message)).to.eql([]);
-            expect(builder.program.getFileByPathAbsolute(s``));
+            expect(builder.program.getFileBySrcPath(s``));
         });
     });
 
@@ -239,7 +239,7 @@ describe('ProgramBuilder', () => {
             f1.fileContents = `l1\nl2\nl3`;
             sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
-            sinon.stub(builder.program, 'getFileByPathAbsolute').returns(f1);
+            sinon.stub(builder.program, 'getFileBySrcPath').returns(f1);
 
             let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
@@ -257,7 +257,7 @@ describe('ProgramBuilder', () => {
         f1.fileContents = null;
         sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
-        sinon.stub(builder.program, 'getFileByPathAbsolute').returns(f1);
+        sinon.stub(builder.program, 'getFileBySrcPath').returns(f1);
 
         let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
@@ -272,7 +272,7 @@ describe('ProgramBuilder', () => {
         let diagnostics = createBsDiagnostic('p1', ['m1']);
         sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
-        sinon.stub(builder.program, 'getFileByPathAbsolute').returns(null);
+        sinon.stub(builder.program, 'getFileBySrcPath').returns(null);
 
         let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
@@ -311,4 +311,3 @@ function createDiagnostic(
     };
     return diagnostic;
 }
-

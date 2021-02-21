@@ -54,9 +54,9 @@ describe('import statements', () => {
                 return true
             end function
         `);
-        let files = Object.keys(program.files).map(x => program.getFileByPathAbsolute(x)).filter(x => !!x).map(x => {
+        let files = Object.keys(program.files).map(x => program.getFileBySrcPath(x)).filter(x => !!x).map(x => {
             return {
-                src: x.pathAbsolute,
+                src: x.srcPath,
                 dest: x.pkgPath
             };
         });

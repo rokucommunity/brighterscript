@@ -12,12 +12,12 @@ export class SGTranspileState {
 
         //if a sourceRoot is specified, use that instead of the rootDir
         if (this.file.program.options.sourceRoot) {
-            this.source = this.file.pathAbsolute.replace(
+            this.source = this.file.srcPath.replace(
                 this.file.program.options.rootDir,
                 this.file.program.options.sourceRoot
             );
         } else {
-            this.source = this.file.pathAbsolute;
+            this.source = this.file.srcPath;
         }
     }
 

@@ -35,7 +35,7 @@ export class XmlFileCodeActionsProcessor {
                 kind: CodeActionKind.QuickFix,
                 changes: [{
                     type: 'insert',
-                    filePath: this.file.pathAbsolute,
+                    filePath: this.file.srcPath,
                     position: pos,
                     newText: ' extends="Group"'
                 }]
@@ -48,7 +48,7 @@ export class XmlFileCodeActionsProcessor {
                 kind: CodeActionKind.QuickFix,
                 changes: [{
                     type: 'insert',
-                    filePath: this.file.pathAbsolute,
+                    filePath: this.file.srcPath,
                     position: pos,
                     newText: ' extends="Task"'
                 }]
@@ -61,7 +61,7 @@ export class XmlFileCodeActionsProcessor {
                 kind: CodeActionKind.QuickFix,
                 changes: [{
                     type: 'insert',
-                    filePath: this.file.pathAbsolute,
+                    filePath: this.file.srcPath,
                     position: pos,
                     newText: ' extends="ContentNode"'
                 }]

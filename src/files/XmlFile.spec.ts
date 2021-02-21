@@ -414,7 +414,7 @@ describe('XmlFile', () => {
                 </component>
             `);
 
-            expect(program.getCompletions(xmlFile.pathAbsolute, Position.create(1, 1))).to.be.empty;
+            expect(program.getCompletions(xmlFile.srcPath, Position.create(1, 1))).to.be.empty;
         });
     });
 
@@ -482,7 +482,7 @@ describe('XmlFile', () => {
         program.validate();
         expect(scope.isValidated).to.be.true;
 
-        program.removeFile(`${rootDir}/source/lib.bs`);
+        program.removeFileBySrcPath(`${rootDir}/source/lib.bs`);
         expect(scope.isValidated).to.be.false;
     });
 
@@ -839,7 +839,7 @@ describe('XmlFile', () => {
         program.plugins.add({
             name: 'Xml diagnostic test',
             afterFileParse: (file) => {
-                if (file.pathAbsolute.endsWith('.xml')) {
+                if (file.srcPath.endsWith('.xml')) {
                     file.addDiagnostics([{
                         file: file,
                         message: 'Test diagnostic',
@@ -1017,7 +1017,7 @@ describe('XmlFile', () => {
             expect(functionNames).not.to.include('logBrs');
 
             //remove the typdef file
-            program.removeFile(typedef.pathAbsolute);
+            program.removeFileBySrcPath(typedef.srcPath);
 
             program.validate();
             functionNames = scope.getOwnCallables().map(x => x.callable.name);

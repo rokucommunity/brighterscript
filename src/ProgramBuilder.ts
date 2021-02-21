@@ -2,7 +2,7 @@ import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
 import type { BsConfig } from './BsConfig';
-import type { BsDiagnostic, File, FileObj, FileResolver } from './interfaces';
+import type { BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
@@ -46,17 +46,18 @@ export class ProgramBuilder {
      * Get the contents of the specified file as a string.
      * This walks backwards through the file resolvers until we get a value.
      * This allow the language server to provide file contents directly from memory.
+     * @param srcPath The absolute path to the source file on disk
      */
-    public async getFileContents(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
+    public async getFileContents(srcPath: string) {
+        srcPath = s`${srcPath}`;
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
-            let result = await fileResolver(pathAbsolute);
+            let result = await fileResolver(srcPath);
             if (typeof result === 'string') {
                 return result;
             }
         }
-        throw new Error(`Could not load file "${pathAbsolute}"`);
+        throw new Error(`Could not load file "${srcPath}"`);
     }
 
     /**
@@ -64,18 +65,16 @@ export class ProgramBuilder {
      */
     private staticDiagnostics = [] as BsDiagnostic[];
 
-    public addDiagnostic(filePathAbsolute: string, diagnostic: Partial<BsDiagnostic>) {
-        let file: File = this.program.getFileByPathAbsolute(filePathAbsolute);
-        if (!file) {
-            file = {
-                pkgPath: this.program.getPkgPath(filePathAbsolute),
-                pathAbsolute: filePathAbsolute,
-                getDiagnostics: () => {
-                    return [<any>diagnostic];
-                }
+    /**
+     * @param srcPath The absolute path to the source file on disk
+     */
+    public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
+        diagnostic.file = this.program.getFileBySrcPath(srcPath);
+        if (!diagnostic.file) {
+            diagnostic.file = {
+                srcPath: srcPath
             };
         }
-        diagnostic.file = file;
         this.staticDiagnostics.push(<any>diagnostic);
     }
 
@@ -206,7 +205,7 @@ export class ProgramBuilder {
                     await this.getFileContents(fileObj.src)
                 );
             } else if (event === 'unlink') {
-                this.program.removeFile(thePath);
+                this.program.removeFileBySrcPath(thePath);
             }
             //wait for change events to settle, and then execute `run`
             await debouncedRunOnce();
@@ -258,19 +257,19 @@ export class ProgramBuilder {
         //group the diagnostics by file
         let diagnosticsByFile = {} as Record<string, BsDiagnostic[]>;
         for (let diagnostic of diagnostics) {
-            if (!diagnosticsByFile[diagnostic.file.pathAbsolute]) {
-                diagnosticsByFile[diagnostic.file.pathAbsolute] = [];
+            if (!diagnosticsByFile[diagnostic.file.srcPath]) {
+                diagnosticsByFile[diagnostic.file.srcPath] = [];
             }
-            diagnosticsByFile[diagnostic.file.pathAbsolute].push(diagnostic);
+            diagnosticsByFile[diagnostic.file.srcPath].push(diagnostic);
         }
 
         //get printing options
         const options = diagnosticUtils.getPrintDiagnosticOptions(this.options);
         const { cwd, emitFullPaths } = options;
 
-        let pathsAbsolute = Object.keys(diagnosticsByFile).sort();
-        for (let pathAbsolute of pathsAbsolute) {
-            let diagnosticsForFile = diagnosticsByFile[pathAbsolute];
+        let srcPaths = Object.keys(diagnosticsByFile).sort();
+        for (let srcPath of srcPaths) {
+            let diagnosticsForFile = diagnosticsByFile[srcPath];
             //sort the diagnostics in line and column order
             let sortedDiagnostics = diagnosticsForFile.sort((a, b) => {
                 return (
@@ -279,12 +278,12 @@ export class ProgramBuilder {
                 );
             });
 
-            let filePath = pathAbsolute;
+            let filePath = srcPath;
             if (!emitFullPaths) {
                 filePath = path.relative(cwd, filePath);
             }
             //load the file text
-            const file = this.program.getFileByPathAbsolute(pathAbsolute);
+            const file = this.program.getFileBySrcPath(srcPath);
             //get the file's in-memory contents if available
             const lines = file?.fileContents?.split(/\r?\n/g) ?? [];
 
@@ -484,13 +483,13 @@ export class ProgramBuilder {
 
     /**
      * Remove all files from the program that are in the specified folder path
-     * @param folderPathAbsolute
+     * @param folderSrcPath The absolute path to the folder on disk
      */
-    public removeFilesInFolder(folderPathAbsolute: string) {
+    public removeFilesInFolder(folderSrcPath: string) {
         for (let filePath in this.program.files) {
             //if the file path starts with the parent path and the file path does not exactly match the folder path
-            if (filePath.startsWith(folderPathAbsolute) && filePath !== folderPathAbsolute) {
-                this.program.removeFile(filePath);
+            if (filePath.startsWith(folderSrcPath) && filePath !== folderSrcPath) {
+                this.program.removeFileBySrcPath(filePath);
             }
         }
     }

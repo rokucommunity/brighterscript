@@ -170,12 +170,13 @@ export class Scope {
 
     /**
      * Get the file with the specified pkgPath
+     * @param srcPath The absolute path to the source file on disk
      */
-    public getFile(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
+    public getFile(srcPath: string) {
+        srcPath = s`${srcPath}`;
         let files = this.getAllFiles();
         for (let file of files) {
-            if (file.pathAbsolute === pathAbsolute) {
+            if (file.srcPath === srcPath) {
                 return file;
             }
         }
@@ -415,7 +416,7 @@ export class Scope {
             callables = callables.sort((a, b) => {
                 return (
                     //sort by path
-                    a.callable.file.pathAbsolute.localeCompare(b.callable.file.pathAbsolute) ||
+                    a.callable.file.srcPath.localeCompare(b.callable.file.srcPath) ||
                     //then sort by method name
                     a.callable.name.localeCompare(b.callable.name)
                 );
@@ -480,7 +481,7 @@ export class Scope {
                         relatedInformation: [{
                             message: 'Namespace declared here',
                             location: Location.create(
-                                URI.file(namespace.file.pathAbsolute).toString(),
+                                URI.file(namespace.file.srcPath).toString(),
                                 namespace.nameRange
                             )
                         }]
@@ -501,7 +502,7 @@ export class Scope {
                     relatedInformation: [{
                         message: 'Namespace declared here',
                         location: Location.create(
-                            URI.file(namespace.file.pathAbsolute).toString(),
+                            URI.file(namespace.file.srcPath).toString(),
                             namespace.nameRange
                         )
                     }]

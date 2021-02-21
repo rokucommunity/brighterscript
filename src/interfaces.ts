@@ -13,7 +13,12 @@ import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 
 export interface BsDiagnostic extends Diagnostic {
-    file: File;
+    file: {
+        /**
+         * The absolute path to the source file on disk
+         */
+        srcPath: string;
+    };
     /**
      * A generic data container where additional details of the diagnostic can be stored. These are stripped out before being sent to a languageclient, and not printed to the console.
      */
@@ -117,15 +122,6 @@ export interface FileReference {
     filePathRange?: Range;
 }
 
-export interface File {
-    /**
-     * The absolute path to the file, relative to the pkg
-     */
-    pkgPath: string;
-    pathAbsolute: string;
-    getDiagnostics(): BsDiagnostic[];
-}
-
 export interface VariableDeclaration {
     name: string;
     type: BscType;
@@ -218,7 +214,10 @@ export interface TypedefProvider {
 
 export type TranspileResult = Array<(string | SourceNode)>;
 
-export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined> | void;
+/**
+ * @param srcPath The absolute path to the source file on disk
+ */
+export type FileResolver = (srcPath: string) => string | undefined | Thenable<string | undefined> | void;
 
 export interface ExpressionInfo {
     expressions: Expression[];

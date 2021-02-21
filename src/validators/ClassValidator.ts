@@ -99,7 +99,7 @@ export class BsClassValidator {
                     range: classStatement.name.range,
                     relatedInformation: [{
                         location: Location.create(
-                            URI.file(nonNamespaceClass.file.pathAbsolute).toString(),
+                            URI.file(nonNamespaceClass.file.srcPath).toString(),
                             nonNamespaceClass.name.range
                         ),
                         message: 'Original class declared here'
@@ -321,7 +321,7 @@ export class BsClassValidator {
                         range: classStatement.name.range,
                         relatedInformation: [{
                             location: Location.create(
-                                URI.file(alreadyDefinedClass.file.pathAbsolute).toString(),
+                                URI.file(alreadyDefinedClass.file.srcPath).toString(),
                                 this.classes[lowerName].range
                             ),
                             message: ''

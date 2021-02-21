@@ -98,7 +98,7 @@ describe('Program', () => {
                 end sub
             `);
             (file.parser.ast.statements[0] as FunctionStatement).func.body.statements[0] = new EmptyStatement();
-            await program.transpile([{ src: file.pathAbsolute, dest: file.pkgPath }], tmpPath);
+            await program.transpile([{ src: file.srcPath, dest: file.pkgPath }], tmpPath);
         });
 
         it('works with different cwd', () => {
@@ -137,7 +137,7 @@ describe('Program', () => {
 
             //shouldn't throw an exception because it will find the correct path after normalizing the above path and remove it
             try {
-                program.removeFile(filePath);
+                program.removeFileBySrcPath(filePath);
                 //no error
             } catch (e) {
                 assert.fail(null, null, 'Should not have thrown exception');
@@ -439,7 +439,7 @@ describe('Program', () => {
                 end sub
                 `);
             expect(program.getScopeByName('source').getAllCallables().length).equals(initialCallableCount + 2);
-            program.removeFile(`${rootDir}/source/main.brs`);
+            program.removeFileBySrcPath(`${rootDir}/source/main.brs`);
             expect(program.getScopeByName('source').getAllCallables().length).equals(initialCallableCount);
         });
 
@@ -567,7 +567,7 @@ describe('Program', () => {
         it('adds xml file to files map', () => {
             let xmlPath = `${rootDir}/components/component1.xml`;
             program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, '');
-            expect(program.getFileByPathAbsolute(xmlPath)).to.exist;
+            expect(program.getFileBySrcPath(xmlPath)).to.exist;
         });
 
         it('detects missing script reference', () => {
@@ -583,7 +583,7 @@ describe('Program', () => {
             expect(diagnostics.length).to.equal(1);
             expect(diagnostics[0]).to.deep.include(<BsDiagnostic>{
                 ...DiagnosticMessages.referencedFileDoesNotExist(),
-                file: program.getFileByPathAbsolute(xmlPath),
+                file: program.getFileBySrcPath(xmlPath),
                 range: Range.create(2, 42, 2, 72)
             });
         });
@@ -1424,8 +1424,8 @@ describe('Program', () => {
             let ctx = program.getScopeByName(xmlFile.pkgPath);
             //the component scope should have the xml file AND the lib file
             expect(ctx.getOwnFiles().length).to.equal(2);
-            expect(ctx.getFile(xmlFile.pathAbsolute)).to.exist;
-            expect(ctx.getFile(libFile.pathAbsolute)).to.exist;
+            expect(ctx.getFile(xmlFile.srcPath)).to.exist;
+            expect(ctx.getFile(libFile.srcPath)).to.exist;
 
             //reload the xml file again, removing the script import.
             xmlFile = program.addOrReplaceFile({ src: `${rootDir}/components/component.xml`, dest: 'components/component.xml' }, trim`
@@ -1462,14 +1462,14 @@ describe('Program', () => {
 
     describe('getDiagnostics', () => {
         it('includes diagnostics from files not included in any scope', () => {
-            let pathAbsolute = s`${rootDir}/components/a/b/c/main.brs`;
-            program.addOrReplaceFile({ src: pathAbsolute, dest: 'components/a/b/c/main.brs' }, `
+            let srcPath = s`${rootDir}/components/a/b/c/main.brs`;
+            program.addOrReplaceFile({ src: srcPath, dest: 'components/a/b/c/main.brs' }, `
                 sub A()
                     "this string is not terminated
                 end sub
             `);
             //the file should be included in the program
-            expect(program.getFileByPathAbsolute(pathAbsolute)).to.exist;
+            expect(program.getFileBySrcPath(srcPath)).to.exist;
             let diagnostics = program.getDiagnostics();
             expect(diagnostics.length).to.be.greaterThan(0);
             let parseError = diagnostics.filter(x => x.message === 'Unterminated string at end of line')[0];

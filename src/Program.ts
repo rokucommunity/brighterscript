@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, BscFile } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -28,7 +28,7 @@ import { BscPlugin } from './bscPlugin/BscPlugin';
 const startOfSourcePkgPath = `source${path.sep}`;
 
 export interface SourceObj {
-    pathAbsolute: string;
+    srcPath: string;
     source: string;
     definitions?: string;
 }
@@ -173,7 +173,7 @@ export class Program {
      * by any scope in the program.
      */
     public getUnreferencedFiles() {
-        let result = [] as File[];
+        let result = [] as BscFile[];
         for (let filePath in this.files) {
             let file = this.files[filePath];
             if (!this.fileIsIncludedInAnyScope(file)) {
@@ -292,7 +292,7 @@ export class Program {
 
             //if the file is already loaded, remove it
             if (this.hasFile(srcPath)) {
-                this.removeFile(srcPath);
+                this.removeFileBySrcPath(srcPath);
             }
             let fileExtension = path.extname(srcPath).toLowerCase();
             let file: BscFile | undefined;
@@ -311,7 +311,7 @@ export class Program {
                 this.files[srcPath] = brsFile;
                 this.pkgMap[brsFile.pkgPath.toLowerCase()] = brsFile;
                 let sourceObj: SourceObj = {
-                    pathAbsolute: srcPath,
+                    srcPath: srcPath,
                     source: fileContents
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
@@ -335,7 +335,7 @@ export class Program {
                 this.files[srcPath] = xmlFile;
                 this.pkgMap[xmlFile.pkgPath.toLowerCase()] = xmlFile;
                 let sourceObj: SourceObj = {
-                    pathAbsolute: srcPath,
+                    srcPath: srcPath,
                     source: fileContents
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
@@ -358,8 +358,8 @@ export class Program {
                 this.plugins.emit('afterFileValidate', xmlFile);
             } else {
                 //TODO do we actually need to implement this? Figure out how to handle img paths
-                // let genericFile = this.files[pathAbsolute] = <any>{
-                //     pathAbsolute: pathAbsolute,
+                // let genericFile = this.files[srcPath] = <any>{
+                //     srcPath: srcPath,
                 //     pkgPath: pkgPath,
                 //     wasProcessed: true
                 // } as File;
@@ -385,12 +385,12 @@ export class Program {
      * Find the file by its absolute path. This is case INSENSITIVE, since
      * Roku is a case insensitive file system. It is an error to have multiple files
      * with the same path with only case being different.
-     * @param pathAbsolute
+     * @param srcPath The absolute path to the source file on disk
      */
-    public getFileByPathAbsolute<T extends BrsFile | XmlFile>(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
+    public getFileBySrcPath<T extends BscFile>(srcPath: string) {
+        srcPath = s`${srcPath}`;
         for (let filePath in this.files) {
-            if (filePath.toLowerCase() === pathAbsolute.toLowerCase()) {
+            if (filePath.toLowerCase() === srcPath.toLowerCase()) {
                 return this.files[filePath] as T;
             }
         }
@@ -416,25 +416,25 @@ export class Program {
 
     /**
      * Remove a set of files from the program
-     * @param absolutePaths
+     * @param srcPaths
      */
-    public removeFiles(absolutePaths: string[]) {
-        for (let pathAbsolute of absolutePaths) {
-            this.removeFile(pathAbsolute);
+    public removeFiles(srcPaths: string[]) {
+        for (let srcPath of srcPaths) {
+            this.removeFileBySrcPath(srcPath);
         }
     }
 
     /**
      * Remove a file from the program
-     * @param pathAbsolute
+     * @param srcPath The absolute path to the source file on disk
      */
-    public removeFile(pathAbsolute: string) {
-        this.logger.debug('Program.removeFile()', pathAbsolute);
-        if (!path.isAbsolute(pathAbsolute)) {
-            throw new Error(`Path must be absolute: "${pathAbsolute}"`);
+    public removeFileBySrcPath(srcPath: string) {
+        this.logger.debug('Program.removeFileBySrcPath()', srcPath);
+        if (!path.isAbsolute(srcPath)) {
+            throw new Error(`Path must be absolute: "${srcPath}"`);
         }
 
-        let file = this.getFile(pathAbsolute);
+        let file = this.getFile(srcPath);
         if (file) {
             this.plugins.emit('beforeFileDispose', file);
 
@@ -449,7 +449,7 @@ export class Program {
                 this.plugins.emit('afterScopeDispose', scope);
             }
             //remove the file from the program
-            delete this.files[file.pathAbsolute];
+            delete this.files[file.srcPath];
             delete this.pkgMap[file.pkgPath.toLowerCase()];
 
             this.dependencyGraph.remove(file.dependencyGraphKey);
@@ -532,7 +532,7 @@ export class Program {
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
                                 location: Location.create(
-                                    URI.file(xmlFile.pathAbsolute).toString(),
+                                    URI.file(xmlFile.srcPath).toString(),
                                     x.componentName.range
                                 ),
                                 message: 'Also defined here'
@@ -558,11 +558,11 @@ export class Program {
 
     /**
      * Get the file at the given path
-     * @param pathAbsolute
+     * @param srcPath The absolute path to the source file on disk
      */
-    private getFile<T extends BscFile>(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
-        return this.files[pathAbsolute] as T;
+    private getFile<T extends BscFile>(srcPath: string) {
+        srcPath = s`${srcPath}`;
+        return this.files[srcPath] as T;
     }
 
     /**
@@ -644,12 +644,12 @@ export class Program {
 
     /**
      * Find all available completion items at the given position
-     * @param pathAbsolute
+     * @param srcPath The absolute path to the source file on disk
      * @param lineIndex
      * @param columnIndex
      */
-    public getCompletions(pathAbsolute: string, position: Position) {
-        let file = this.getFile(pathAbsolute);
+    public getCompletions(srcPath: string, position: Position) {
+        let file = this.getFile(srcPath);
         if (!file) {
             return [];
         }
@@ -709,9 +709,10 @@ export class Program {
     /**
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
+     * @param srcPath The absolute path to the source file on disk
      */
-    public getDefinition(pathAbsolute: string, position: Position) {
-        let file = this.getFile(pathAbsolute);
+    public getDefinition(srcPath: string, position: Position) {
+        let file = this.getFile(srcPath);
         if (!file) {
             return [];
         }
@@ -728,9 +729,12 @@ export class Program {
         }
     }
 
-    public getHover(pathAbsolute: string, position: Position) {
+    /**
+     * @param srcPath The absolute path to the source file on disk
+     */
+    public getHover(srcPath: string, position: Position) {
         //find the file
-        let file = this.getFile(pathAbsolute);
+        let file = this.getFile(srcPath);
         if (!file) {
             return null;
         }
@@ -740,10 +744,11 @@ export class Program {
 
     /**
      * Compute code actions for the given file and range
+     * @param srcPath The absolute path to the source file on disk
      */
-    public getCodeActions(pathAbsolute: string, range: Range) {
+    public getCodeActions(srcPath: string, range: Range) {
         const codeActions = [] as CodeAction[];
-        const file = this.getFile(pathAbsolute);
+        const file = this.getFile(srcPath);
         if (file) {
 
             this.plugins.emit('beforeProgramGetCodeActions', this, file, range, codeActions);
@@ -992,9 +997,12 @@ export class Program {
 
     }
 
-    public getReferences(pathAbsolute: string, position: Position) {
+    /**
+     * @param srcPath The absolute path to the source file on disk
+     */
+    public getReferences(srcPath: string, position: Position) {
         //find the file
-        let file = this.getFile(pathAbsolute);
+        let file = this.getFile(srcPath);
         if (!file) {
             return null;
         }
@@ -1035,7 +1043,7 @@ export class Program {
 
                     result.push({
                         label: relativePath,
-                        detail: file.pathAbsolute,
+                        detail: file.srcPath,
                         kind: CompletionItemKind.File,
                         textEdit: {
                             newText: relativePath,
@@ -1046,7 +1054,7 @@ export class Program {
                     //add the absolute path
                     result.push({
                         label: filePkgPath,
-                        detail: file.pathAbsolute,
+                        detail: file.srcPath,
                         kind: CompletionItemKind.File,
                         textEdit: {
                             newText: filePkgPath,
@@ -1062,13 +1070,14 @@ export class Program {
     /**
      * Transpile a single file and get the result as a string.
      * This does not write anything to the file system.
+     * @param srcPath The absolute path to the source file on disk
      */
-    public getTranspiledFileContents(pathAbsolute: string) {
-        let file = this.getFile(pathAbsolute);
+    public getTranspiledFileContents(srcPath: string) {
+        let file = this.getFile(srcPath);
         let result = file.transpile();
         return {
             ...result,
-            pathAbsolute: file.pathAbsolute,
+            srcPath: file.srcPath,
             pkgPath: file.pkgPath
         };
     }
@@ -1081,7 +1090,7 @@ export class Program {
         }, {});
 
         const entries = Object.values(this.files).map(file => {
-            let filePathObj = mappedFileEntries[s`${file.pathAbsolute}`];
+            let filePathObj = mappedFileEntries[s`${file.srcPath}`];
             if (!filePathObj) {
                 //this file has been added in-memory, from a plugin, for example
                 filePathObj = {
@@ -1115,7 +1124,7 @@ export class Program {
             await fsExtra.ensureDir(path.dirname(outputPath));
 
             if (await fsExtra.pathExists(outputPath)) {
-                throw new Error(`Error while transpiling "${file.pathAbsolute}". A file already exists at "${outputPath}" and will not be overwritten.`);
+                throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
             }
             const writeMapPromise = result.map ? fsExtra.writeFile(`${outputPath}.map`, result.map.toString()) : null;
             await Promise.all([

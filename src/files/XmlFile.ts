@@ -4,7 +4,7 @@ import { SourceNode } from 'source-map';
 import type { CodeAction, CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
-import type { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
+import type { Callable, BsDiagnostic, FileReference, FunctionCall, BscFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
 import SGParser from '../parser/SGParser';
@@ -17,14 +17,14 @@ import { SGTranspileState } from '../parser/SGTranspileState';
 
 export class XmlFile {
     constructor(
-        public pathAbsolute: string,
         /**
-         * The absolute path to the file, relative to the pkg
+         * The absolute path to the source file on disk (e.g. '/usr/you/projects/RokuApp/source/main.brs' or 'c:/projects/RokuApp/source/main.brs').
          */
+        public srcPath: string,
         public pkgPath: string,
         public program: Program
     ) {
-        this.extension = path.extname(pathAbsolute).toLowerCase();
+        this.extension = path.extname(srcPath).toLowerCase();
 
         this.possibleCodebehindPkgPaths = [
             this.pkgPath.replace('.xml', '.bs'),
@@ -318,7 +318,7 @@ export class XmlFile {
      * Determines if this xml file has a reference to the specified file (or if it's itself)
      * @param file
      */
-    public doesReferenceFile(file: File) {
+    public doesReferenceFile(file: BscFile) {
         return this.cache.getOrAdd(`doesReferenceFile: ${file.pkgPath}`, () => {
             if (file === this) {
                 return true;

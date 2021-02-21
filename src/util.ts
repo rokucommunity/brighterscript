@@ -159,7 +159,7 @@ export class Util {
                 let diagnostic = {
                     ...DiagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
                     file: {
-                        pathAbsolute: configFilePath
+                        srcPath: configFilePath
                     },
                     range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
                 } as BsDiagnostic;
@@ -372,10 +372,10 @@ export class Util {
     /**
      * Given an absolute path to a source file, and a target path,
      * compute the pkg path for the target relative to the source file's location
-     * @param containingFilePathAbsolute
+     * @param containingFileSrcPath The absolute path to the file that contains the target path
      * @param targetPath
      */
-    public getPkgPathFromTarget(containingFilePathAbsolute: string, targetPath: string) {
+    public getPkgPathFromTarget(containingFileSrcPath: string, targetPath: string) {
         //if the target starts with 'pkg:', it's an absolute path. Return as is
         if (targetPath.startsWith('pkg:/')) {
             targetPath = targetPath.substring(5);
@@ -390,7 +390,7 @@ export class Util {
         }
 
         //remove the filename
-        let containingFolder = path.normalize(path.dirname(containingFilePathAbsolute));
+        let containingFolder = path.normalize(path.dirname(containingFileSrcPath));
         //start with the containing folder, split by slash
         let result = containingFolder.split(path.sep);
 
@@ -574,9 +574,10 @@ export class Util {
 
     /**
      * Given a file path, convert it to a URI string
+     * @param srcPath The absolute path to the source file on disk
      */
-    public pathToUri(pathAbsolute: string) {
-        return URI.file(pathAbsolute).toString();
+    public pathToUri(srcPath: string) {
+        return URI.file(srcPath).toString();
     }
 
     /**
@@ -606,6 +607,7 @@ export class Util {
     /**
      * Given a path to a brs file, compute the path to a theoretical d.bs file.
      * Only `.brs` files can have typedef path, so return undefined for everything else
+     * @param brsSrcPath The absolute path to the .brs source file on disk
      */
     public getTypedefPath(brsSrcPath: string) {
         const typedefPath = brsSrcPath

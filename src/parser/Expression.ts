@@ -843,7 +843,7 @@ export class SourceLiteralExpression extends Expression {
         let text: string;
         switch (this.token.kind) {
             case TokenKind.SourceFilePathLiteral:
-                text = `"${fileUrl(state.pathAbsolute)}"`;
+                text = `"${fileUrl(state.srcPath)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
                 text = `${this.token.range.start.line + 1}`;
@@ -855,7 +855,7 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
                 break;
             case TokenKind.SourceLocationLiteral:
-                text = `"${fileUrl(state.pathAbsolute)}:${this.token.range.start.line + 1}"`;
+                text = `"${fileUrl(state.srcPath)}:${this.token.range.start.line + 1}"`;
                 break;
             case TokenKind.PkgPathLiteral:
                 let pkgPath1 = `pkg:/${state.file.pkgPath}`

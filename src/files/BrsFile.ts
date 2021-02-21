@@ -32,15 +32,14 @@ import type { DependencyGraph } from '../DependencyGraph';
  */
 export class BrsFile {
     constructor(
-        public pathAbsolute: string,
         /**
-         * The full pkg path to this file
+         * The absolute path to the source file on disk (e.g. '/usr/you/projects/RokuApp/source/main.brs' or 'c:/projects/RokuApp/source/main.brs').
          */
+        public srcPath: string,
         public pkgPath: string,
         public program: Program
     ) {
-        this.pathAbsolute = s`${this.pathAbsolute}`;
-        this.pkgPath = s`${this.pkgPath}`;
+        this.srcPath = s`${this.srcPath}`;
         this.dependencyGraphKey = this.pkgPath.toLowerCase();
 
         this.extension = util.getExtension(this.pkgPath);
@@ -51,7 +50,7 @@ export class BrsFile {
         }
         this.isTypedef = this.extension === '.d.bs';
         if (!this.isTypedef) {
-            this.typedefKey = util.getTypedefPath(this.pathAbsolute);
+            this.typedefKey = util.getTypedefPath(this.srcPath);
         }
 
         //global file doesn't have a program, so only resolve typedef info if we have a program
@@ -182,7 +181,7 @@ export class BrsFile {
      * Find and set the typedef variables (if a matching typedef file exists)
      */
     private resolveTypedef() {
-        this.typedefFile = this.program.getFileByPathAbsolute<BrsFile>(this.typedefKey);
+        this.typedefFile = this.program.getFileBySrcPath<BrsFile>(this.typedefKey);
         this.hasTypedef = !!this.typedefFile;
     }
 
@@ -226,7 +225,7 @@ export class BrsFile {
             }
 
             //tokenize the input file
-            let lexer = this.program.logger.time(LogLevel.debug, ['lexer.lex', chalk.green(this.pathAbsolute)], () => {
+            let lexer = this.program.logger.time(LogLevel.debug, ['lexer.lex', chalk.green(this.srcPath)], () => {
                 return Lexer.scan(fileContents, {
                     includeWhitespace: false
                 });
@@ -240,7 +239,7 @@ export class BrsFile {
             //TODO preprocessor should go away in favor of the AST handling this internally (because it affects transpile)
             //currently the preprocessor throws exceptions on syntax errors...so we need to catch it
             try {
-                this.program.logger.time(LogLevel.debug, ['preprocessor.process', chalk.green(this.pathAbsolute)], () => {
+                this.program.logger.time(LogLevel.debug, ['preprocessor.process', chalk.green(this.srcPath)], () => {
                     preprocessor.process(lexer.tokens, this.program.getManifest());
                 });
             } catch (error) {
@@ -253,7 +252,7 @@ export class BrsFile {
             //if the preprocessor generated tokens, use them.
             let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
 
-            this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.pathAbsolute)], () => {
+            this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.srcPath)], () => {
                 this._parser = Parser.parse(tokens, {
                     mode: this.parseMode,
                     logger: this.program.logger
@@ -1016,7 +1015,7 @@ export class BrsFile {
             if (!location && statement.getName(ParseMode.BrighterScript).toLowerCase() === namespaceName) {
                 const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
                     if (!location && statement.name.text.toLowerCase() === endName) {
-                        const uri = util.pathToUri(file.pathAbsolute);
+                        const uri = util.pathToUri(file.srcPath);
                         location = Location.create(uri, statement.range);
                     }
                 };
@@ -1069,7 +1068,7 @@ export class BrsFile {
      * Determine if this file is a brighterscript file
      */
     public getParseMode() {
-        return this.pathAbsolute.toLowerCase().endsWith('.bs') ? ParseMode.BrighterScript : ParseMode.BrightScript;
+        return this.srcPath.toLowerCase().endsWith('.bs') ? ParseMode.BrighterScript : ParseMode.BrightScript;
     }
 
     public isPositionNextToTokenKind(position: Position, tokenKind: TokenKind) {
@@ -1299,7 +1298,7 @@ export class BrsFile {
         }
 
         const name = statement.getName(ParseMode.BrighterScript);
-        const uri = util.pathToUri(this.pathAbsolute);
+        const uri = util.pathToUri(this.srcPath);
         const symbol = SymbolInformation.create(name, symbolKind, statement.range, uri, containerStatement?.getName(ParseMode.BrighterScript));
         symbols.push(symbol);
         return symbols;
@@ -1335,7 +1334,7 @@ export class BrsFile {
                 //to only get functions defined in interface methods
                 const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                 if (callable) {
-                    results.push(Location.create(util.pathToUri((callable.callable.file as BrsFile).pathAbsolute), callable.callable.functionStatement.range));
+                    results.push(Location.create(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.range));
                 }
             }
             return results;
@@ -1348,7 +1347,7 @@ export class BrsFile {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
                 if (extendedClass) {
-                    results.push(Location.create(util.pathToUri(extendedClass.file.pathAbsolute), extendedClass.item.range));
+                    results.push(Location.create(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.range));
                 }
             }
             return results;
@@ -1372,14 +1371,14 @@ export class BrsFile {
             for (const varDeclaration of functionScope.variableDeclarations) {
                 //we found a variable declaration with this token text!
                 if (varDeclaration.name.toLowerCase() === textToSearchFor) {
-                    const uri = util.pathToUri(this.pathAbsolute);
+                    const uri = util.pathToUri(this.srcPath);
                     results.push(Location.create(uri, varDeclaration.nameRange));
                 }
             }
             if (this.tokenFollows(token, TokenKind.Goto)) {
                 for (const label of functionScope.labelStatements) {
                     if (label.name.toLocaleLowerCase() === textToSearchFor) {
-                        const uri = util.pathToUri(this.pathAbsolute);
+                        const uri = util.pathToUri(this.srcPath);
                         results.push(Location.create(uri, label.nameRange));
                     }
                 }
@@ -1404,7 +1403,7 @@ export class BrsFile {
                 }
                 const statementHandler = (statement: FunctionStatement) => {
                     if (statement.getName(this.getParseMode()).toLowerCase() === textToSearchFor) {
-                        const uri = util.pathToUri(file.pathAbsolute);
+                        const uri = util.pathToUri(file.srcPath);
                         results.push(Location.create(uri, statement.range));
                     }
                 };
@@ -1424,12 +1423,12 @@ export class BrsFile {
         //get class fields and members
         const statementHandler = (statement: ClassMethodStatement) => {
             if (statement.getName(file.getParseMode()).toLowerCase() === textToSearchFor) {
-                results.push(Location.create(util.pathToUri(file.pathAbsolute), statement.range));
+                results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
             }
         };
         const fieldStatementHandler = (statement: ClassFieldStatement) => {
             if (statement.name.text.toLowerCase() === textToSearchFor) {
-                results.push(Location.create(util.pathToUri(file.pathAbsolute), statement.range));
+                results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
             }
         };
         file.parser.ast.walk(createVisitor({
@@ -1659,7 +1658,7 @@ export class BrsFile {
                 file.ast.walk(createVisitor({
                     VariableExpression: (e) => {
                         if (e.name.text.toLowerCase() === searchFor) {
-                            locations.push(Location.create(util.pathToUri(file.pathAbsolute), e.range));
+                            locations.push(Location.create(util.pathToUri(file.srcPath), e.range));
                         }
                     }
                 }), {
@@ -1678,20 +1677,20 @@ export class BrsFile {
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
-            transpileResult = new SourceNode(null, null, state.pathAbsolute, this.ast.transpile(state));
+            transpileResult = new SourceNode(null, null, state.srcPath, this.ast.transpile(state));
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
-            transpileResult = util.simpleMap(state.pathAbsolute, this.fileContents);
+            transpileResult = util.simpleMap(state.srcPath, this.fileContents);
         } else {
             //simple SourceNode wrapping the entire file to simplify the logic below
-            transpileResult = new SourceNode(null, null, state.pathAbsolute, this.fileContents);
+            transpileResult = new SourceNode(null, null, state.srcPath, this.fileContents);
         }
 
         if (this.program.options.sourceMap) {
             return new SourceNode(null, null, null, [
                 transpileResult,
                 //add the sourcemap reference comment
-                `'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`
+                `'//# sourceMappingURL=./${path.basename(state.srcPath)}.map`
             ]).toStringWithSourceMap();
         } else {
             return {
@@ -1704,7 +1703,7 @@ export class BrsFile {
     public getTypedef() {
         const state = new TranspileState(this);
         const typedef = this.ast.getTypedef(state);
-        const programNode = new SourceNode(null, null, this.pathAbsolute, typedef);
+        const programNode = new SourceNode(null, null, this.srcPath, typedef);
         return programNode.toString();
     }
 
