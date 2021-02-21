@@ -215,7 +215,6 @@ describe('BrsFile', () => {
             expect(results.length).to.equal(1);
             expect(results[0]?.label).to.equal('something');
         });
-
     });
 
     describe('comment flags', () => {
@@ -2210,18 +2209,18 @@ describe('BrsFile', () => {
     describe('typedefKey', () => {
         it('works for .brs files', () => {
             expect(
-                s((program.addOrReplaceFile<BrsFile>('source/main.brs', '')).typedefKey)
+                s((program.addOrReplaceFile<BrsFile>('source/main.brs', '')).typedefSrcPath)
             ).to.equal(
                 s`${rootDir.toLowerCase()}/source/main.d.bs`
             );
         });
         it('returns undefined for files that should not have a typedef', () => {
-            expect((program.addOrReplaceFile<BrsFile>('source/main.bs', '')).typedefKey).to.be.undefined;
+            expect((program.addOrReplaceFile<BrsFile>('source/main.bs', '')).typedefSrcPath).to.be.undefined;
 
-            expect((program.addOrReplaceFile<BrsFile>('source/main.d.bs', '')).typedefKey).to.be.undefined;
+            expect((program.addOrReplaceFile<BrsFile>('source/main.d.bs', '')).typedefSrcPath).to.be.undefined;
 
             const xmlFile = program.addOrReplaceFile<BrsFile>('components/comp.xml', '');
-            expect(xmlFile.typedefKey).to.be.undefined;
+            expect(xmlFile.typedefSrcPath).to.be.undefined;
         });
     });
 
@@ -2283,11 +2282,11 @@ describe('BrsFile', () => {
 
     describe('typedef', () => {
         it('sets typedef path properly', () => {
-            expect((program.addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefKey).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
-            expect((program.addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefKey).to.equal(undefined);
-            expect((program.addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefKey).to.equal(undefined);
+            expect((program.addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefSrcPath).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
+            expect((program.addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefSrcPath).to.equal(undefined);
+            expect((program.addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefSrcPath).to.equal(undefined);
             //works for dest with `.brs` extension
-            expect((program.addOrReplaceFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefKey).to.equal(undefined);
+            expect((program.addOrReplaceFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefSrcPath).to.equal(undefined);
         });
 
         it('does not link when missing from program', () => {

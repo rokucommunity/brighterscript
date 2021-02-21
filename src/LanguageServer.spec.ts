@@ -13,6 +13,7 @@ import { standardizePath as s, util } from './util';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
 import * as assert from 'assert';
+import type { XmlFile } from './files/XmlFile';
 
 let sinon: sinonImport.SinonSandbox;
 beforeEach(() => {
@@ -116,15 +117,11 @@ describe('LanguageServer', () => {
     }
 
     function addScriptFile(name: string, contents: string, extension = 'brs') {
-        const filePath = s`components/${name}.${extension}`;
-        program.addOrReplaceFile(filePath, contents);
-        for (const key in program.files) {
-            if (key.includes(filePath)) {
-                const document = TextDocument.create(util.pathToUri(key), 'brightscript', 1, contents);
-                svr.documents._documents[document.uri] = document;
-                return document;
-            }
-        }
+        const pkgPath = `pkg:/components/${name}.${extension}`;
+        const file = program.addOrReplaceFile<XmlFile>(pkgPath, contents);
+        const document = TextDocument.create(util.pathToUri(file.srcPath), 'brightscript', 1, contents);
+        svr.documents._documents[document.uri] = document;
+        return document;
     }
 
     function writeToFs(srcPath: string, contents: string) {

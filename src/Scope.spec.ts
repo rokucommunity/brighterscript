@@ -6,7 +6,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
-import { trim } from './testHelpers.spec';
+import { expectZeroDiagnostics, trim } from './testHelpers.spec';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -497,7 +497,7 @@ describe('Scope', () => {
             `);
             program.addOrReplaceFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
-            const compScope = program.getScopeByName('components/comp.xml');
+            const compScope = program.getScopeByName('pkg:/components/comp.xml');
             program.plugins = new PluginInterface([{
                 name: 'Emits validation events',
                 beforeScopeValidate: validateStartScope,
@@ -745,8 +745,7 @@ describe('Scope', () => {
 
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
-
+                expectZeroDiagnostics(program);
             });
         });
     });

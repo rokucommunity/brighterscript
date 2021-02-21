@@ -94,7 +94,7 @@ describe('XmlFile', () => {
                 </component>
             `);
             expect(file.scriptTagImports.map(x => x.pkgPath)[0]).to.equal(
-                s`components/ChildScene.bs`
+                'pkg:/components/ChildScene.bs'
             );
         });
         it('does not include commented-out script imports', () => {
@@ -110,7 +110,7 @@ describe('XmlFile', () => {
             expect(
                 file.scriptTagImports?.[0]?.pkgPath
             ).to.eql(
-                s`components/ChildScene.brs`
+                'pkg:/components/ChildScene.brs'
             );
         });
 
@@ -245,7 +245,7 @@ describe('XmlFile', () => {
             expect(file.scriptTagImports[0]).to.deep.include(<FileReference>{
                 sourceFile: file,
                 text: 'pkg:/components/cmp1.brs',
-                pkgPath: `components${path.sep}cmp1.brs`,
+                pkgPath: `pkg:/components/cmp1.brs`,
                 filePathRange: Range.create(2, 42, 2, 66)
             });
         });
@@ -274,7 +274,7 @@ describe('XmlFile', () => {
             expect(file.scriptTagImports.length).to.equal(1);
             expect(file.scriptTagImports[0]).to.deep.include(<FileReference>{
                 text: 'cmp1.brs',
-                pkgPath: `components${path.sep}cmp1.brs`
+                pkgPath: `pkg:/components/cmp1.brs`
             });
         });
 
@@ -378,11 +378,11 @@ describe('XmlFile', () => {
     describe('getCompletions', () => {
         it('formats completion paths with proper slashes', () => {
             let scriptPath = s`C:/app/components/component1/component1.brs`;
-            program.files[scriptPath] = new BrsFile(scriptPath, s`components/component1/component1.brs`, program);
+            program.files[scriptPath] = new BrsFile(scriptPath, 'pkg:/components/component1/component1.brs', program);
 
-            let xmlFile = new XmlFile(s`${rootDir}/components/component1/component1.xml`, s`components/component1/component1.xml`, <any>program);
+            let xmlFile = new XmlFile(s`${rootDir}/components/component1/component1.xml`, 'pkg:/components/component1/component1.xml', <any>program);
             xmlFile.parser.references.scriptTagImports.push({
-                pkgPath: s`components/component1/component1.brs`,
+                pkgPath: 'pkg:/components/component1/component1.brs',
                 text: 'component1.brs',
                 filePathRange: Range.create(1, 1, 1, 1)
             });
@@ -427,8 +427,8 @@ describe('XmlFile', () => {
                 </component>
             `);
             expect(file.getOwnDependencies().sort()).to.eql([
-                s`source/lib.brs`,
-                s`source/lib.d.bs`
+                'pkg:/source/lib.brs',
+                'pkg:/source/lib.d.bs'
             ]);
         });
     });

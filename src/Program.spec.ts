@@ -51,13 +51,13 @@ describe('Program', () => {
     describe('addFile', () => {
         it('adds various files to `pkgMap`', () => {
             program.addOrReplaceFile('source/main.brs', '');
-            expect(program['pkgMap']).to.have.property(s`source/main.brs`);
+            expect(program['pkgMap']).to.have.property('pkg:/source/main.brs');
 
             program.addOrReplaceFile('source/main.bs', '');
-            expect(program['pkgMap']).to.have.property(s`source/main.bs`);
+            expect(program['pkgMap']).to.have.property('pkg:/source/main.bs');
 
             program.addOrReplaceFile('components/comp1.xml', '');
-            expect(program['pkgMap']).to.have.property(s`components/comp1.xml`);
+            expect(program['pkgMap']).to.have.property('pkg:/components/comp1.xml');
         });
 
         it('does not crash when given a totally bogus file', () => {
@@ -69,25 +69,25 @@ describe('Program', () => {
         });
 
         it('only parses xml files as components when file is found within the "components" folder', () => {
-            expect(Object.keys(program.files).length).to.equal(0);
+            expect(program.getFiles().length).to.equal(0);
 
             program.addOrReplaceFile({
                 src: s`${rootDir}/components/comp1.xml`,
                 dest: util.pathSepNormalize(`components/comp1.xml`)
             }, '');
-            expect(Object.keys(program.files).length).to.equal(1);
+            expect(program.getFiles().length).to.equal(1);
 
             program.addOrReplaceFile({
                 src: s`${rootDir}/notComponents/comp1.xml`,
                 dest: util.pathSepNormalize(`notComponents/comp1.xml`)
             }, '');
-            expect(Object.keys(program.files).length).to.equal(1);
+            expect(program.getFiles().length).to.equal(1);
 
             program.addOrReplaceFile({
                 src: s`${rootDir}/componentsExtra/comp1.xml`,
                 dest: util.pathSepNormalize(`componentsExtra/comp1.xml`)
             }, '');
-            expect(Object.keys(program.files).length).to.equal(1);
+            expect(program.getFiles().length).to.equal(1);
         });
 
         it('supports empty statements for transpile', async () => {
@@ -524,7 +524,7 @@ describe('Program', () => {
                 </component>
             `);
 
-            expect(program.getScopeByName('components/ChildScene.xml').getParentScope().name).to.equal(s`components/ParentScene.xml`);
+            expect(program.getScopeByName('pkg:/components/ChildScene.xml').getParentScope().name).to.equal('pkg:/components/ParentScene.xml');
 
             //change the parent's name.
             program.addOrReplaceFile({ src: s`${rootDir}/components/ParentScene.xml`, dest: 'components/ParentScene.xml' }, trim`
@@ -534,18 +534,18 @@ describe('Program', () => {
             `);
 
             //The child scope should no longer have the link to the parent scope, and should instead point back to global
-            expect(program.getScopeByName('components/ChildScene.xml').getParentScope().name).to.equal('global');
+            expect(program.getScopeByName('pkg:/components/ChildScene.xml').getParentScope().name).to.equal('global');
         });
 
         it('creates a new scope for every added component xml', () => {
             //we have global callables, so get that initial number
             program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, '');
-            expect(program.getScopeByName(`components/component1.xml`)).to.exist;
+            expect(program.getScopeByName(`pkg:/components/component1.xml`)).to.exist;
 
             program.addOrReplaceFile({ src: `${rootDir}/components/component1.xml`, dest: 'components/component1.xml' }, '');
             program.addOrReplaceFile({ src: `${rootDir}/components/component2.xml`, dest: 'components/component2.xml' }, '');
-            expect(program.getScopeByName(`components/component1.xml`)).to.exist;
-            expect(program.getScopeByName(`components/component2.xml`)).to.exist;
+            expect(program.getScopeByName(`pkg:/components/component1.xml`)).to.exist;
+            expect(program.getScopeByName(`pkg:/components/component2.xml`)).to.exist;
         });
 
         it('includes referenced files in xml scopes', () => {
@@ -559,15 +559,15 @@ describe('Program', () => {
             let brsPath = s`${rootDir}/components/component1.brs`;
             program.addOrReplaceFile({ src: brsPath, dest: 'components/component1.brs' }, '');
 
-            let scope = program.getScopeByName(`components/component1.xml`);
-            expect(scope.getFile(xmlPath).pkgPath).to.equal(s`components/component1.xml`);
-            expect(scope.getFile(brsPath).pkgPath).to.equal(s`components/component1.brs`);
+            let scope = program.getScopeByName(`pkg:/components/component1.xml`);
+            expect(scope.getFile(xmlPath).pkgPath).to.equal('pkg:/components/component1.xml');
+            expect(scope.getFile(brsPath).pkgPath).to.equal('pkg:/components/component1.brs');
         });
 
         it('adds xml file to files map', () => {
             let xmlPath = `${rootDir}/components/component1.xml`;
             program.addOrReplaceFile({ src: xmlPath, dest: 'components/component1.xml' }, '');
-            expect(program.getFileBySrcPath(xmlPath)).to.exist;
+            expect(program.getFile(xmlPath)).to.exist;
         });
 
         it('detects missing script reference', () => {
@@ -583,7 +583,7 @@ describe('Program', () => {
             expect(diagnostics.length).to.equal(1);
             expect(diagnostics[0]).to.deep.include(<BsDiagnostic>{
                 ...DiagnosticMessages.referencedFileDoesNotExist(),
-                file: program.getFileBySrcPath(xmlPath),
+                file: program.getFile(xmlPath),
                 range: Range.create(2, 42, 2, 72)
             });
         });
@@ -601,7 +601,7 @@ describe('Program', () => {
             program.validate();
             let diagnostics = program.getDiagnostics();
             expect(diagnostics.map(x => x.message)).to.eql([
-                DiagnosticMessages.scriptImportCaseMismatch(s`components\\COMPONENT1.brs`).message
+                DiagnosticMessages.scriptImportCaseMismatch('pkg:/components/COMPONENT1.brs').message
             ]);
         });
     });
@@ -1442,21 +1442,21 @@ describe('Program', () => {
 
     describe('getFileByPkgPath', () => {
         it('finds file in source folder', () => {
-            expect(program.getFileByPkgPath(s`source/main.brs`)).not.to.exist;
-            expect(program.getFileByPkgPath(s`source/main2.brs`)).not.to.exist;
+            expect(program.getFile('pkg:/source/main.brs')).not.to.exist;
+            expect(program.getFile('pkg:/source/main2.brs')).not.to.exist;
             program.addOrReplaceFile({ src: `${rootDir}/source/main2.brs`, dest: 'source/main2.brs' }, '');
             program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
-            expect(program.getFileByPkgPath(s`source/main.brs`)).to.exist;
-            expect(program.getFileByPkgPath(s`source/main2.brs`)).to.exist;
+            expect(program.getFile('pkg:/source/main.brs')).to.exist;
+            expect(program.getFile('pkg:/source/main2.brs')).to.exist;
         });
     });
 
     describe('removeFiles', () => {
         it('removes files by absolute paths', () => {
             program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
-            expect(program.getFileByPkgPath(s`source/main.brs`)).to.exist;
+            expect(program.getFile('pkg:/source/main.brs')).to.exist;
             program.removeFiles([`${rootDir}/source/main.brs`]);
-            expect(program.getFileByPkgPath(s`source/main.brs`)).not.to.exist;
+            expect(program.getFile('pkg:/source/main.brs')).not.to.exist;
         });
     });
 
@@ -1469,7 +1469,7 @@ describe('Program', () => {
                 end sub
             `);
             //the file should be included in the program
-            expect(program.getFileBySrcPath(srcPath)).to.exist;
+            expect(program.getFile(srcPath)).to.exist;
             let diagnostics = program.getDiagnostics();
             expect(diagnostics.length).to.be.greaterThan(0);
             let parseError = diagnostics.filter(x => x.message === 'Unterminated string at end of line')[0];

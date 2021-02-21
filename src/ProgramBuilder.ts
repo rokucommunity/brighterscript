@@ -69,7 +69,7 @@ export class ProgramBuilder {
      * @param srcPath The absolute path to the source file on disk
      */
     public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
-        diagnostic.file = this.program.getFileBySrcPath(srcPath);
+        diagnostic.file = this.program.getFile(srcPath);
         if (!diagnostic.file) {
             diagnostic.file = {
                 srcPath: srcPath
@@ -283,7 +283,7 @@ export class ProgramBuilder {
                 filePath = path.relative(cwd, filePath);
             }
             //load the file text
-            const file = this.program.getFileBySrcPath(srcPath);
+            const file = this.program.getFile(srcPath);
             //get the file's in-memory contents if available
             const lines = file?.fileContents?.split(/\r?\n/g) ?? [];
 

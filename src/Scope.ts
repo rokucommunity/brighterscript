@@ -207,7 +207,7 @@ export class Scope {
                         result.push(comp.file);
                     }
                 } else {
-                    let file = this.program.getFileByPkgPath(dependency);
+                    let file = this.program.getFile(dependency);
                     if (file) {
                         result.push(file);
                     }

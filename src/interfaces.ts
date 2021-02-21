@@ -18,6 +18,10 @@ export interface BsDiagnostic extends Diagnostic {
          * The absolute path to the source file on disk
          */
         srcPath: string;
+        /**
+         * A list of flags found in comments used to disable diagnostics
+         */
+        commentFlags?: CommentFlag[];
     };
     /**
      * A generic data container where additional details of the diagnostic can be stored. These are stripped out before being sent to a languageclient, and not printed to the console.
@@ -70,7 +74,7 @@ export interface FunctionCall {
      */
     range: Range;
     functionScope: FunctionScope;
-    file: File;
+    file: BscFile;
     name: string;
     args: CallableArg[];
     nameRange: Range;

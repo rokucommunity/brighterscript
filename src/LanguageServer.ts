@@ -978,7 +978,7 @@ export class LanguageServer {
 
         const srcPath = util.uriToPath(params.textDocument.uri);
         for (const workspace of this.getWorkspaces()) {
-            const file = workspace.builder.program.getFileBySrcPath(srcPath);
+            const file = workspace.builder.program.getFile(srcPath);
             if (isBrsFile(file)) {
                 return file.getDocumentSymbols();
             }

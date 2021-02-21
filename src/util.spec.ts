@@ -39,7 +39,7 @@ describe('util', () => {
 
     describe('getRokuPkgPath', () => {
         it('replaces more than one windows slash in a path', () => {
-            expect(util.getRokuPkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
+            expect(util.sanitizePkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
         });
     });
 
@@ -351,24 +351,19 @@ describe('util', () => {
     });
 
     describe('getPkgPathFromTarget', () => {
-        it('works with both types of separators', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', '../lib.brs')).to.equal('lib.brs');
-            expect(util.getPkgPathFromTarget('components\\component1.xml', '../lib.brs')).to.equal('lib.brs');
-        });
-
         it('resolves single dot directory', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', './lib.brs')).to.equal(s`components/lib.brs`);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', './lib.brs')).to.equal(`pkg:/components/lib.brs`);
         });
 
         it('resolves absolute pkg paths as relative paths', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/source/lib.brs')).to.equal(s`source/lib.brs`);
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/lib.brs')).to.equal(`lib.brs`);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg:/source/lib.brs')).to.equal(`pkg:/source/lib.brs`);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg:/lib.brs')).to.equal(`pkg:/lib.brs`);
         });
 
         it('resolves gracefully for invalid values', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/')).to.equal(null);
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:')).to.equal(null);
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg')).to.equal(s`components/pkg`);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg:/')).to.equal(null);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg:')).to.equal(null);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg')).to.equal(`pkg:/components/pkg`);
         });
     });
 

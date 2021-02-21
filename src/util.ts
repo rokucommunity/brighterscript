@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, BscFile } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -70,11 +70,13 @@ export class Util {
     /**
      * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
      */
-    public getRokuPkgPath(pkgPath: string) {
+    public sanitizePkgPath(pkgPath: string) {
         pkgPath = pkgPath.replace(/\\/g, '/');
-        return 'pkg:/' + pkgPath;
+        if (!pkgPath.startsWith('pkg:/')) {
+            pkgPath = 'pkg:/' + pkgPath;
+        }
+        return pkgPath;
     }
-
     /**
      * Given a path to a file/directory, replace all path separators with the current system's version.
      * @param filePath
@@ -370,32 +372,27 @@ export class Util {
     }
 
     /**
-     * Given an absolute path to a source file, and a target path,
-     * compute the pkg path for the target relative to the source file's location
-     * @param containingFileSrcPath The absolute path to the file that contains the target path
-     * @param targetPath
+     * Compute the pkg path for the target relative to the source file's location
+     * @param sourcePkgPath The pkgPath of the file that contains the target path
+     * @param targetPath a full pkgPath, or a path relative to the containing file
      */
-    public getPkgPathFromTarget(containingFileSrcPath: string, targetPath: string) {
-        //if the target starts with 'pkg:', it's an absolute path. Return as is
-        if (targetPath.startsWith('pkg:/')) {
-            targetPath = targetPath.substring(5);
-            if (targetPath === '') {
-                return null;
-            } else {
-                return path.normalize(targetPath);
-            }
-        }
-        if (targetPath === 'pkg:') {
+    public getPkgPathFromTarget(sourcePkgPath: string, targetPath: string) {
+        //handle some edge cases
+        if (targetPath === 'pkg:' || targetPath === 'pkg:/') {
             return null;
+        }
+        //if the target starts with 'pkg:', return as-is
+        if (targetPath.startsWith('pkg:/')) {
+            return targetPath;
         }
 
         //remove the filename
-        let containingFolder = path.normalize(path.dirname(containingFileSrcPath));
+        let containingFolder = path.posix.normalize(path.dirname(sourcePkgPath));
         //start with the containing folder, split by slash
-        let result = containingFolder.split(path.sep);
+        let result = containingFolder.split('/');
 
         //split on slash
-        let targetParts = path.normalize(targetPath).split(path.sep);
+        let targetParts = path.posix.normalize(targetPath).split('/');
 
         for (let part of targetParts) {
             if (part === '' || part === '.') {
@@ -409,7 +406,7 @@ export class Util {
                 result.push(part);
             }
         }
-        return result.join(path.sep);
+        return result.join('/');
     }
 
     /**
@@ -606,7 +603,7 @@ export class Util {
 
     /**
      * Given a path to a brs file, compute the path to a theoretical d.bs file.
-     * Only `.brs` files can have typedef path, so return undefined for everything else
+     * Only `.brs` files can have a typedef, so return undefined for everything else
      * @param brsSrcPath The absolute path to the .brs source file on disk
      */
     public getTypedefPath(brsSrcPath: string) {
@@ -627,7 +624,7 @@ export class Util {
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
         //for now, we only support suppressing brs file diagnostics
-        if (isBrsFile(diagnostic.file)) {
+        if (isBrsFile(diagnostic.file as BscFile)) {
             for (let flag of diagnostic.file.commentFlags) {
                 //this diagnostic is affected by this flag
                 if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
@@ -1177,6 +1174,23 @@ export class Util {
             range: attr.range
         } as SGAttribute;
     }
+
+    /**
+     * Given a pkgPath, remove the `pkg:/` portion of the path.
+     */
+    public removePkgProtocol(pkgPath: string) {
+        if (pkgPath.startsWith('pkg:/')) {
+            return pkgPath.substring(5);
+        } else {
+            return pkgPath;
+        }
+    }
+
+    public standardizePath(thePath: string) {
+        return util.driveLetterToLower(
+            rokuDeploy.standardizePath(thePath)
+        );
+    }
 }
 
 /**
@@ -1188,11 +1202,7 @@ export function standardizePath(stringParts, ...expressions: any[]) {
     for (let i = 0; i < stringParts.length; i++) {
         result.push(stringParts[i], expressions[i]);
     }
-    return util.driveLetterToLower(
-        rokuDeploy.standardizePath(
-            result.join('')
-        )
-    );
+    return util.standardizePath(result.join(''));
 }
 
 export let util = new Util();

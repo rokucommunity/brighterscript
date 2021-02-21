@@ -19,7 +19,7 @@ import type { XmlScope } from '../XmlScope';
 
 // File reflection
 
-export function isBrsFile(file: (BscFile)): file is BrsFile {
+export function isBrsFile(file: BscFile): file is BrsFile {
     return file?.constructor.name === 'BrsFile';
 }
 

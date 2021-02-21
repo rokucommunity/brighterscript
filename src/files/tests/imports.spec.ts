@@ -3,7 +3,7 @@ import * as sinonImport from 'sinon';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
-import { standardizePath as s } from '../../util';
+import { standardizePath as s, util } from '../../util';
 import type { XmlFile } from '../XmlFile';
 import type { BrsFile } from '../BrsFile';
 import { getTestTranspile } from '../BrsFile.spec';
@@ -54,10 +54,10 @@ describe('import statements', () => {
                 return true
             end function
         `);
-        let files = Object.keys(program.files).map(x => program.getFileBySrcPath(x)).filter(x => !!x).map(x => {
+        let files = Object.keys(program.files).map(x => program.getFile(x)).filter(x => !!x).map(x => {
             return {
                 src: x.srcPath,
-                dest: x.pkgPath
+                dest: util.removePkgProtocol(x.pkgPath)
             };
         });
         await program.transpile(files, stagingFolderPath);
@@ -103,9 +103,9 @@ describe('import statements', () => {
         expect(
             (component as XmlFile).getAvailableScriptImports().sort()
         ).to.eql([
-            s`source/intOps.bs`,
-            s`source/lib.bs`,
-            s`source/stringOps.bs`
+            'pkg:/source/intOps.bs',
+            'pkg:/source/lib.bs',
+            'pkg:/source/stringOps.bs'
         ]);
     });
 
@@ -133,8 +133,8 @@ describe('import statements', () => {
         expect(
             (component as XmlFile).getAvailableScriptImports()
         ).to.eql([
-            s`source/lib.bs`,
-            s`source/stringOps.brs`
+            'pkg:/source/lib.bs',
+            'pkg:/source/stringOps.brs'
         ]);
     });
 
@@ -159,7 +159,7 @@ describe('import statements', () => {
         program.validate();
 
         expect(program.getDiagnostics().map(x => x.message)).to.eql([
-            DiagnosticMessages.callToUnknownFunction('Waddle', s`components/ChildScene.xml`).message
+            DiagnosticMessages.callToUnknownFunction('Waddle', 'pkg:/components/ChildScene.xml').message
         ]);
 
         //change the dependency to now contain the file. the scope should re-validate

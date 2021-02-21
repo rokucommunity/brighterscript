@@ -21,6 +21,9 @@ export class XmlFile {
          * The absolute path to the source file on disk (e.g. '/usr/you/projects/RokuApp/source/main.brs' or 'c:/projects/RokuApp/source/main.brs').
          */
         public srcPath: string,
+        /**
+         * The full pkg path (i.e. `pkg:/path/to/file.brs`)
+         */
         public pkgPath: string,
         public program: Program
     ) {
@@ -107,7 +110,7 @@ export class XmlFile {
                 .filter(x => util.getExtension(x) !== '.d.bs');
 
             let result = [] as string[];
-            let filesInProgram = this.program.getFilesByPkgPaths(allDependencies);
+            let filesInProgram = allDependencies.map(x => this.program.getFile(x)).filter(file => file !== undefined);
             for (let file of filesInProgram) {
                 result.push(file.pkgPath);
             }
@@ -455,7 +458,7 @@ export class XmlFile {
 
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             const script = new SGScript();
-            script.uri = util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'));
+            script.uri = util.sanitizePkgPath(uri.replace(/\.bs$/, '.brs'));
             return script;
         });
 

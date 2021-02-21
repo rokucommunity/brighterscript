@@ -36,6 +36,9 @@ export class BrsFile {
          * The absolute path to the source file on disk (e.g. '/usr/you/projects/RokuApp/source/main.brs' or 'c:/projects/RokuApp/source/main.brs').
          */
         public srcPath: string,
+        /**
+         * The full pkg path (i.e. `pkg:/path/to/file.brs`)
+         */
         public pkgPath: string,
         public program: Program
     ) {
@@ -50,7 +53,7 @@ export class BrsFile {
         }
         this.isTypedef = this.extension === '.d.bs';
         if (!this.isTypedef) {
-            this.typedefKey = util.getTypedefPath(this.srcPath);
+            this.typedefSrcPath = util.getTypedefPath(this.srcPath);
         }
 
         //global file doesn't have a program, so only resolve typedef info if we have a program
@@ -157,10 +160,10 @@ export class BrsFile {
     public isTypedef: boolean;
 
     /**
-     * The key to find the typedef file in the program's files map.
+     * The srcPath to the potential typedef file for this file.
      * A falsey value means this file is ineligable for a typedef
      */
-    public typedefKey?: string;
+    public typedefSrcPath?: string;
 
     /**
      * If the file was given type definitions during parse
@@ -181,7 +184,7 @@ export class BrsFile {
      * Find and set the typedef variables (if a matching typedef file exists)
      */
     private resolveTypedef() {
-        this.typedefFile = this.program.getFileBySrcPath<BrsFile>(this.typedefKey);
+        this.typedefFile = this.program.getFile<BrsFile>(this.typedefSrcPath);
         this.hasTypedef = !!this.typedefFile;
     }
 
