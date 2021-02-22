@@ -268,11 +268,13 @@ export class Program {
      * Update internal maps with this file reference
      */
     private setFile(file: BscFile) {
-        //add the file to the program
         this.files[file.srcPath.toLowerCase()] = file;
         this.pkgMap[file.pkgPath.toLowerCase()] = file;
     }
 
+    /**
+     * Remove this file from internal maps
+     */
     private unsetFile(file: BscFile) {
         delete this.files[file.srcPath.toLowerCase()];
         delete this.pkgMap[file.pkgPath.toLowerCase()];
@@ -281,7 +283,7 @@ export class Program {
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * If file contents are provided, those are used, Otherwise, the file is loaded from the file system
-     * @param srcDestOrPkgPath the full pkg path (i.e. `pkg:/path/to/file.brs`) or the destPath (i.e. `path/to/file.brs`)
+     * @param srcDestOrPkgPath the absolute path, or the pkg path (i.e. `pkg:/path/to/file.brs`) or the destPath (i.e. `path/to/file.brs` relative to `pkg:/`)
      * @param fileContents the file contents
      */
     public addOrReplaceFile<T extends BscFile>(srcDestOrPkgPath: string, fileContents: string): T;
@@ -301,6 +303,7 @@ export class Program {
                 //srcPath is the pkgPath relative to the rootDir
                 srcPath = s`${this.options.rootDir}/${fileParam.substring(5)}`;
                 pkgPath = fileParam;
+
                 //is a srcPath (absolute path to src file location)
             } else if (path.isAbsolute(fileParam)) {
                 srcPath = util.standardizePath(fileParam);
@@ -313,14 +316,16 @@ export class Program {
                     )
                 );
 
-                //is destPath
+                //is destPath (path relative to rootDir and `pkg:/`)
             } else {
                 srcPath = s`${this.options.rootDir}/${fileParam}`;
                 pkgPath = util.sanitizePkgPath(fileParam);
             }
+
+            //is a FileObj
         } else {
             srcPath = s`${fileParam.src}`;
-            pkgPath = util.sanitizePkgPath(`pkg:/${fileParam.dest}`);
+            pkgPath = util.sanitizePkgPath(fileParam.dest);
         }
 
         const lowerPkgPath = pkgPath.toLowerCase();
@@ -472,8 +477,12 @@ export class Program {
     /**
      * Remove all files from the program that are in the specified folder path (recursive)
      * @param folderSrcPath The absolute path to the folder on disk
+     * @param normalizePath should the provided path be normalized before use?
      */
-    public removeFilesInFolder(folderSrcPath: string) {
+    public removeFilesInFolder(folderSrcPath: string, normalizePath = true) {
+        if (normalizePath) {
+            folderSrcPath = util.standardizePath(folderSrcPath);
+        }
         const lowerFolderSrcPath = folderSrcPath.toLowerCase();
         for (const key in this.files) {
             const file = this.files[key];
@@ -527,12 +536,14 @@ export class Program {
         for (const key in this.files) {
             const file = this.files[key];
             //if this is an XmlFile, and it has a valid `componentName` property
-            if (isXmlFile(file) && file.componentName?.text) {
-                let lowerName = file.componentName.text.toLowerCase();
-                if (!componentsByName.has(lowerName)) {
-                    componentsByName.set(lowerName, [file]);
-                } else {
-                    componentsByName.get(lowerName).push(file);
+            if (isXmlFile(file)) {
+                const componentNameLower = file.componentName?.text.toLowerCase();
+                if (componentNameLower) {
+                    if (!componentsByName.has(componentNameLower)) {
+                        componentsByName.set(componentNameLower, [file]);
+                    } else {
+                        componentsByName.get(componentNameLower).push(file);
+                    }
                 }
             }
         }

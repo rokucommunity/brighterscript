@@ -47,9 +47,12 @@ export class ProgramBuilder {
      * This walks backwards through the file resolvers until we get a value.
      * This allow the language server to provide file contents directly from memory.
      * @param srcPath The absolute path to the source file on disk
+     * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public async getFileContents(srcPath: string) {
-        srcPath = s`${srcPath}`;
+    public async getFileContents(srcPath: string, normalizePath = true) {
+        if (normalizePath) {
+            srcPath = util.standardizePath(srcPath);
+        }
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
             let result = await fileResolver(srcPath);
@@ -202,7 +205,7 @@ export class ProgramBuilder {
                 };
                 this.program.addOrReplaceFile(
                     fileObj,
-                    await this.getFileContents(fileObj.src)
+                    await this.getFileContents(fileObj.src, false)
                 );
             } else if (event === 'unlink') {
                 this.program.removeFile(thePath);
