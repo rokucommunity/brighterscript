@@ -573,7 +573,7 @@ export class BrsFile {
 
                 //function call
             } else if (isCallExpression(assignment.value)) {
-                let calleeName = (assignment.value.callee as any).name.text;
+                let calleeName = (assignment.value.callee as any)?.name?.text;
                 if (calleeName) {
                     let func = this.getCallableByName(calleeName);
                     if (func) {
@@ -581,7 +581,7 @@ export class BrsFile {
                     }
                 }
             } else if (isVariableExpression(assignment.value)) {
-                let variableName = assignment.value.name.text;
+                let variableName = assignment.value?.name?.text;
                 let variable = scope.getVariableByName(variableName);
                 return variable.type;
             }
@@ -1158,12 +1158,14 @@ export class BrsFile {
     public calleeIsKnownNamespaceFunction(callee: Expression, namespaceName: string) {
         //if we have a variable and a namespace
         if (isVariableExpression(callee) && namespaceName) {
-            let lowerCalleeName = callee.name.text.toLowerCase();
-            let scopes = this.program.getScopesForFile(this);
-            for (let scope of scopes) {
-                let namespace = scope.namespaceLookup[namespaceName.toLowerCase()];
-                if (namespace.functionStatements[lowerCalleeName]) {
-                    return true;
+            let lowerCalleeName = callee?.name?.text?.toLowerCase();
+            if (lowerCalleeName) {
+                let scopes = this.program.getScopesForFile(this);
+                for (let scope of scopes) {
+                    let namespace = scope.namespaceLookup[namespaceName.toLowerCase()];
+                    if (namespace.functionStatements[lowerCalleeName]) {
+                        return true;
+                    }
                 }
             }
         }
