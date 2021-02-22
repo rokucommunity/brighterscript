@@ -170,10 +170,13 @@ export class Scope {
 
     /**
      * Get the file with the specified pkgPath
-     * @param srcPath The absolute path to the source file on disk
+     * @param filePath can be a srcPath, a pkgPath, or a destPath (same as pkgPath but without `pkg:/`)
+     * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public getFile(srcPath: string) {
-        srcPath = s`${srcPath}`;
+    public getFile(srcPath: string, normalizePath = true) {
+        if (normalizePath) {
+            srcPath = s`${srcPath}`;
+        }
         let files = this.getAllFiles();
         for (let file of files) {
             if (file.srcPath === srcPath) {
@@ -207,7 +210,7 @@ export class Scope {
                         result.push(comp.file);
                     }
                 } else {
-                    let file = this.program.getFile(dependency);
+                    let file = this.program.getFile(dependency, false);
                     if (file) {
                         result.push(file);
                     }
