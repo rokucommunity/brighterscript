@@ -244,8 +244,15 @@ export class Scope {
     }
 
     public getCodeActions(file: BscFile, range: Range, codeActions: CodeAction[]) {
-        const diagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
-        this.program.plugins.emit('onScopeGetCodeActions', this, file, range, diagnostics, codeActions);
+        const rangeDiagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
+        this.program.plugins.emit('onScopeGetCodeActions', {
+            program: this.program,
+            scope: this,
+            file: file,
+            range: range,
+            diagnostics: rangeDiagnostics,
+            codeActions: codeActions
+        });
     }
 
     /**
@@ -425,11 +432,21 @@ export class Scope {
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
             let files = this.getOwnFiles();
 
-            this.program.plugins.emit('beforeScopeValidate', this, files, callableContainerMap);
+            this.program.plugins.emit('beforeScopeValidate', {
+                program: this.program,
+                scope: this,
+                files: files,
+                callables: callableContainerMap
+            });
 
             this._validate(callableContainerMap);
 
-            this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
+            this.program.plugins.emit('afterScopeValidate', {
+                program: this.program,
+                scope: this,
+                files: files,
+                callables: callableContainerMap
+            });
 
             (this as any).isValidated = true;
         });

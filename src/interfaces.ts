@@ -5,7 +5,7 @@ import type { XmlFile } from './files/XmlFile';
 import type { FunctionScope } from './FunctionScope';
 import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
-import type { Program, SourceObj, TranspileObj } from './Program';
+import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { Expression, FunctionStatement } from './parser';
 import type { TranspileState } from './parser/TranspileState';
@@ -175,41 +175,176 @@ export interface CommentFlag {
     codes: number[] | null;
 }
 
-type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
-
 export type CompilerPluginFactory = () => CompilerPlugin;
 
 export interface CompilerPlugin {
     name: string;
+    //ProgramBuilder events
+    beforeProgramCreate?: PluginHandler<BeforeProgramCreateEvent>;
+    beforePrepublish?: PluginHandler<BeforePrepublishEvent>;
+    afterPrepublish?: PluginHandler<AfterPrepublishEvent>;
+    beforePublish?: PluginHandler<BeforePublishEvent>;
+    afterPublish?: PluginHandler<AfterPublishEvent>;
+    afterProgramCreate?: PluginHandler<AfterProgramCreateEvent>;
     //program events
-    beforeProgramCreate?: (builder: ProgramBuilder) => void;
-    beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterProgramCreate?: (program: Program) => void;
-    beforeProgramValidate?: (program: Program) => void;
-    afterProgramValidate?: (program: Program) => void;
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
-    beforeProgramGetCodeActions?: (program: Program, file: BscFile, range: Range, codeActions: CodeAction[]) => void;
-    afterProgramGetCodeActions?: (program: Program, file: BscFile, range: Range, codeActions: CodeAction[]) => void;
+    beforeProgramValidate?: PluginHandler<BeforeProgramValidateEvent>;
+    afterProgramValidate?: PluginHandler<AfterProgramValidateEvent>;
+    beforeProgramTranspile?: PluginHandler<BeforeProgramTranspileEvent>;
+    afterProgramTranspile?: PluginHandler<AfterProgramTranspileEvent>;
+    beforeProgramGetCodeActions?: PluginHandler<BeforeProgramGetCodeActionsEvent>;
+    afterProgramGetCodeActions?: (event: AfterProgramGetCodeActionsEvent) => void;
     //scope events
-    afterScopeCreate?: (scope: Scope) => void;
-    beforeScopeDispose?: (scope: Scope) => void;
-    afterScopeDispose?: (scope: Scope) => void;
-    beforeScopeValidate?: ValidateHandler;
-    afterScopeValidate?: ValidateHandler;
-    onScopeGetCodeActions?: (scope: Scope, file: BscFile, range: Range, diagnostics: BsDiagnostic[], codeActions: CodeAction[]) => void;
+    afterScopeCreate?: PluginHandler<AfterScopeCreateEvent>;
+    beforeScopeDispose?: PluginHandler<BeforeScopeDisposeEvent>;
+    afterScopeDispose?: PluginHandler<AfterScopeDisposeEvent>;
+    beforeScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
+    afterScopeValidate?: PluginHandler<AfterScopeValidateEvent>;
+    onScopeGetCodeActions?: PluginHandler<OnScopeGetCodeActionsEvent>;
     //file events
-    beforeFileParse?: (source: SourceObj) => void;
-    afterFileParse?: (file: BscFile) => void;
-    afterFileValidate?: (file: BscFile) => void;
-    beforeFileTranspile?: (entry: TranspileObj) => void;
-    afterFileTranspile?: (entry: TranspileObj) => void;
-    beforeFileDispose?: (file: BscFile) => void;
-    afterFileDispose?: (file: BscFile) => void;
-    onFileGetCodeActions?: (file: BscFile, range: Range, diagnostics: BsDiagnostic[], codeActions: CodeAction[]) => void;
+    beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
+    afterFileParse?: PluginHandler<AfterFileParseEvent>;
+    afterFileValidate?: PluginHandler<AfterFileValidateEvent>;
+    beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
+    afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
+    beforeFileDispose?: PluginHandler<BeforeFileDisposeEvent>;
+    afterFileDispose?: PluginHandler<AfterFileDisposeEvent>;
+    onFileGetCodeActions?: PluginHandler<OnFileGetCodeActionsEvent>;
+}
+export type PluginHandler<T> = (event: T) => void;
+
+export interface BeforeProgramCreateEvent {
+    builder: ProgramBuilder;
+}
+export interface BeforePrepublishEvent {
+    builder: ProgramBuilder;
+    program: Program;
+    files: FileObj[];
+}
+export interface AfterPrepublishEvent {
+    builder: ProgramBuilder;
+    program: Program;
+    files: FileObj[];
+}
+export interface BeforePublishEvent {
+    builder: ProgramBuilder;
+    program: Program;
+    files: FileObj[];
+}
+export interface AfterPublishEvent {
+    builder: ProgramBuilder;
+    program: Program;
+    files: FileObj[];
+}
+export interface AfterProgramCreateEvent {
+    builder: ProgramBuilder;
+    program: Program;
+}
+export interface BeforeProgramValidateEvent {
+    program: Program;
+}
+export interface AfterProgramValidateEvent {
+    program: Program;
+}
+export interface BeforeProgramTranspileEvent {
+    program: Program;
+    entries: TranspileEntry[];
+}
+export interface AfterProgramTranspileEvent {
+    program: Program;
+    entries: TranspileEntry[];
+}
+export interface BeforeProgramGetCodeActionsEvent {
+    program: Program;
+    file: BscFile;
+    range: Range;
+    codeActions: CodeAction[];
+}
+export interface AfterProgramGetCodeActionsEvent {
+    program: Program;
+    file: BscFile;
+    range: Range;
+    codeActions: CodeAction[];
+}
+export interface AfterScopeCreateEvent {
+    program: Program;
+    scope: Scope;
+}
+export interface BeforeScopeDisposeEvent {
+    program: Program;
+    scope: Scope;
+}
+export interface AfterScopeDisposeEvent {
+    program: Program;
+    scope: Scope;
+}
+export interface BeforeScopeValidateEvent {
+    program: Program;
+    scope: Scope;
+    files: BscFile[];
+    callables: CallableContainerMap;
+}
+export interface AfterScopeValidateEvent {
+    program: Program;
+    scope: Scope;
+    files: BscFile[];
+    callables: CallableContainerMap;
+}
+export interface OnScopeGetCodeActionsEvent {
+    program: Program;
+    scope: Scope;
+    file: BscFile;
+    range: Range;
+    /**
+     * A filtered list of diagnostics whose lines touch the lines of the given range
+     */
+    diagnostics: BsDiagnostic[];
+    codeActions: CodeAction[];
+}
+export interface BeforeFileParseEvent {
+    program: Program;
+    pathAbsolute: string;
+    source: string;
+}
+export interface AfterFileParseEvent {
+    program: Program;
+    file: BscFile;
+}
+export interface AfterFileValidateEvent {
+    program: Program;
+    file: BscFile;
+}
+export interface BeforeFileTranspileEvent {
+    program: Program;
+    file: BscFile;
+    outputPath: string;
+}
+export interface AfterFileTranspileEvent {
+    program: Program;
+    file: BscFile;
+    outputPath: string;
+}
+export interface BeforeFileDisposeEvent {
+    program: Program;
+    file: BscFile;
+}
+export interface AfterFileDisposeEvent {
+    program: Program;
+    file: BscFile;
+}
+export interface OnFileGetCodeActionsEvent {
+    program: Program;
+    file: BscFile;
+    range: Range;
+    /**
+     * A filtered list of diagnostics whose lines touch the lines of the given range
+     */
+    diagnostics: BsDiagnostic[];
+    codeActions: CodeAction[];
+}
+
+export interface TranspileEntry {
+    file: BscFile;
+    outputPath: string;
 }
 
 export interface TypedefProvider {

@@ -154,8 +154,15 @@ export class XmlScope extends Scope {
     }
 
     public getCodeActions(file: BscFile, range: Range, codeActions: CodeAction[]) {
-        const relevantDiagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
-        this.program.plugins.emit('onScopeGetCodeActions', this, file, range, relevantDiagnostics, codeActions);
+        const rangeDiagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
+        this.program.plugins.emit('onScopeGetCodeActions', {
+            program: this.program,
+            scope: this,
+            file: file,
+            range: range,
+            diagnostics: rangeDiagnostics,
+            codeActions: codeActions
+        });
     }
 
     /**

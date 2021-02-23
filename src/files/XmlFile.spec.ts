@@ -838,7 +838,7 @@ describe('XmlFile', () => {
     it('plugin diagnostics work for xml files', () => {
         program.plugins.add({
             name: 'Xml diagnostic test',
-            afterFileParse: (file) => {
+            afterFileParse: ({ file }) => {
                 if (file.pathAbsolute.endsWith('.xml')) {
                     file.addDiagnostics([{
                         file: file,

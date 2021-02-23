@@ -268,7 +268,10 @@ export class BrsFile {
             );
 
             //notify AST ready
-            this.program.plugins.emit('afterFileParse', this);
+            this.program.plugins.emit('afterFileParse', {
+                program: this.program,
+                file: this
+            });
 
             //extract all callables from this file
             this.findCallables();
@@ -1510,8 +1513,14 @@ export class BrsFile {
     }
 
     public getCodeActions(range: Range, codeActions: CodeAction[]) {
-        const relevantDiagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
-        this.program.plugins.emit('onFileGetCodeActions', this, range, relevantDiagnostics, codeActions);
+        const lineDiagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
+        this.program.plugins.emit('onFileGetCodeActions', {
+            program: this.program,
+            file: this,
+            range: range,
+            diagnostics: lineDiagnostics,
+            codeActions: codeActions
+        });
     }
 
     public getSignatureHelpForNamespaceMethods(callableName: string, dottedGetText: string, scope: Scope): { key: string; signature: SignatureInformation }[] {

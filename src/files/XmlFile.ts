@@ -193,7 +193,10 @@ export class XmlFile {
         }
 
         //notify AST ready
-        this.program.plugins.emit('afterFileParse', this);
+        this.program.plugins.emit('afterFileParse', {
+            program: this.program,
+            file: this
+        });
 
         //initial validation
         this.validateComponent(this.parser.ast);
@@ -371,7 +374,13 @@ export class XmlFile {
 
     public getCodeActions(range: Range, codeActions: CodeAction[]) {
         const relevantDiagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
-        this.program.plugins.emit('onFileGetCodeActions', this, range, relevantDiagnostics, codeActions);
+        this.program.plugins.emit('onFileGetCodeActions', {
+            program: this.program,
+            file: this,
+            range: range,
+            diagnostics: relevantDiagnostics,
+            codeActions: codeActions
+        });
     }
 
     public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
