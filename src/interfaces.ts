@@ -181,18 +181,18 @@ export interface CompilerPlugin {
     name: string;
     //ProgramBuilder events
     beforeProgramCreate?: PluginHandler<BeforeProgramCreateEvent>;
+    afterProgramCreate?: PluginHandler<AfterProgramCreateEvent>;
     beforePrepublish?: PluginHandler<BeforePrepublishEvent>;
     afterPrepublish?: PluginHandler<AfterPrepublishEvent>;
     beforePublish?: PluginHandler<BeforePublishEvent>;
     afterPublish?: PluginHandler<AfterPublishEvent>;
-    afterProgramCreate?: PluginHandler<AfterProgramCreateEvent>;
     //program events
     beforeProgramValidate?: PluginHandler<BeforeProgramValidateEvent>;
     afterProgramValidate?: PluginHandler<AfterProgramValidateEvent>;
     beforeProgramTranspile?: PluginHandler<BeforeProgramTranspileEvent>;
     afterProgramTranspile?: PluginHandler<AfterProgramTranspileEvent>;
     beforeProgramGetCodeActions?: PluginHandler<BeforeProgramGetCodeActionsEvent>;
-    afterProgramGetCodeActions?: (event: AfterProgramGetCodeActionsEvent) => void;
+    afterProgramGetCodeActions?: PluginHandler<AfterProgramGetCodeActionsEvent>;
     //scope events
     afterScopeCreate?: PluginHandler<AfterScopeCreateEvent>;
     beforeScopeDispose?: PluginHandler<BeforeScopeDisposeEvent>;
@@ -203,6 +203,7 @@ export interface CompilerPlugin {
     //file events
     beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
     afterFileParse?: PluginHandler<AfterFileParseEvent>;
+    beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
     afterFileValidate?: PluginHandler<AfterFileValidateEvent>;
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
@@ -280,14 +281,10 @@ export interface AfterScopeDisposeEvent {
 export interface BeforeScopeValidateEvent {
     program: Program;
     scope: Scope;
-    files: BscFile[];
-    callables: CallableContainerMap;
 }
 export interface AfterScopeValidateEvent {
     program: Program;
     scope: Scope;
-    files: BscFile[];
-    callables: CallableContainerMap;
 }
 export interface OnScopeGetCodeActionsEvent {
     program: Program;
@@ -306,6 +303,10 @@ export interface BeforeFileParseEvent {
     source: string;
 }
 export interface AfterFileParseEvent {
+    program: Program;
+    file: BscFile;
+}
+export interface BeforeFileValidateEvent {
     program: Program;
     file: BscFile;
 }

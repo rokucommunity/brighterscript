@@ -76,6 +76,11 @@ export class BrsFile {
      */
     public extension: string;
 
+    /**
+     * Indicates whether this file needs to be validated.
+     */
+    public isValidated = false;
+
     private diagnostics = [] as BsDiagnostic[];
 
     public getDiagnostics() {
@@ -267,12 +272,6 @@ export class BrsFile {
                 ...this._parser.diagnostics as BsDiagnostic[]
             );
 
-            //notify AST ready
-            this.program.plugins.emit('afterFileParse', {
-                program: this.program,
-                file: this
-            });
-
             //extract all callables from this file
             this.findCallables();
 
@@ -293,6 +292,10 @@ export class BrsFile {
                 ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(serializeError(e)))
             });
         }
+    }
+
+    public validate() {
+
     }
 
     public findAndValidateImportAndImportStatements() {

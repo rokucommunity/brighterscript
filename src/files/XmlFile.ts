@@ -175,6 +175,11 @@ export class XmlFile {
     public fileContents: string;
 
     /**
+     * Indicates whether this file needs to be validated.
+     */
+    public isValidated = false;
+
+    /**
      * Calculate the AST for this file
      * @param fileContents
      */
@@ -186,18 +191,9 @@ export class XmlFile {
             ...diagnostic,
             file: this
         }));
+    }
 
-        if (!this.parser.ast.root) {
-            //skip empty XML
-            return;
-        }
-
-        //notify AST ready
-        this.program.plugins.emit('afterFileParse', {
-            program: this.program,
-            file: this
-        });
-
+    public validate() {
         //initial validation
         this.validateComponent(this.parser.ast);
     }

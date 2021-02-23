@@ -276,7 +276,7 @@ export class Program {
             srcPath = s`${fileParam.src}`;
             pkgPath = s`${fileParam.dest}`;
         }
-        let file = this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], () => {
+        return this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], () => {
 
             assert.ok(srcPath, 'fileEntry.src is required');
             assert.ok(pkgPath, 'fileEntry.dest is required');
@@ -317,7 +317,7 @@ export class Program {
 
                 brsFile.attachDependencyGraph(this.dependencyGraph);
 
-                this.plugins.emit('afterFileValidate', {
+                this.plugins.emit('afterFileParse', {
                     program: this,
                     file: brsFile
                 });
@@ -348,7 +348,7 @@ export class Program {
                 //   b) immediately emit its own changes
                 xmlFile.attachDependencyGraph(this.dependencyGraph);
 
-                this.plugins.emit('afterFileValidate', {
+                this.plugins.emit('afterFileParse', {
                     program: this,
                     file: xmlFile
                 });
@@ -362,8 +362,7 @@ export class Program {
                 // file = <any>genericFile;
             }
             return file;
-        });
-        return file as T;
+        }) as T;
     }
 
     /**
@@ -486,15 +485,10 @@ export class Program {
                 program: this
             });
 
-            for (let scopeName in this.scopes) {
-                let scope = this.scopes[scopeName];
-                scope.validate();
-            }
+            //validate every file
+            for (const file of Object.values(this.files)) {
 
-            //find any files NOT loaded into a scope
-            for (let filePath in this.files) {
-                let file = this.files[filePath];
-
+                //find any files NOT loaded into a scope
                 if (!this.fileIsIncludedInAnyScope(file)) {
                     this.logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.pkgPath));
                     //the file is not loaded in any scope
@@ -502,6 +496,41 @@ export class Program {
                         ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
                         file: file,
                         range: util.createRange(0, 0, 0, Number.MAX_VALUE)
+                    });
+                }
+
+                //for every unvalidated file, validate it
+                if (!file.isValidated) {
+                    this.plugins.emit('beforeFileValidate', {
+                        program: this,
+                        file: file
+                    });
+
+                    //call file.validate() IF the file has that function defined
+                    file.validate?.();
+                    file.isValidated = true;
+
+                    this.plugins.emit('afterFileValidate', {
+                        program: this,
+                        file: file
+                    });
+                }
+            }
+
+            for (let scope of Object.values(this.scopes)) {
+                //only validate unvalidated scopes
+                if (!scope.isValidated) {
+                    this.plugins.emit('beforeScopeValidate', {
+                        program: this,
+                        scope: scope
+                    });
+
+                    scope.validate();
+                    scope.isValidated = true;
+
+                    this.plugins.emit('afterScopeValidate', {
+                        program: this,
+                        scope: scope
                     });
                 }
             }
@@ -557,11 +586,11 @@ export class Program {
     }
 
     /**
-     * Determine if the given file is included in at least one scope in this program
+     * Determine at least one scope has the file
      */
     private fileIsIncludedInAnyScope(file: BscFile) {
-        for (let scopeName in this.scopes) {
-            if (this.scopes[scopeName].hasFile(file)) {
+        for (let scope of Object.values(this.scopes)) {
+            if (scope.hasFile(file)) {
                 return true;
             }
         }

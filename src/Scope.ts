@@ -39,7 +39,7 @@ export class Scope {
      * Indicates whether this scope needs to be validated.
      * Will be true when first constructed, or anytime one of its dependencies changes
      */
-    public readonly isValidated: boolean;
+    public isValidated: boolean;
 
     protected programHandles = [] as Array<() => void>;
 
@@ -397,21 +397,15 @@ export class Scope {
     }
     private _debugLogComponentName: string;
 
-    public validate(force = false) {
-        //if this scope is already validated, no need to revalidate
-        if (this.isValidated === true && !force) {
-            this.logDebug('validate(): already validated');
-            return;
-        }
-
+    public validate() {
         this.program.logger.time(LogLevel.info, [this._debugLogComponentName, 'validate()'], () => {
 
             let parentScope = this.getParentScope();
 
             //validate our parent before we validate ourself
-            if (parentScope && parentScope.isValidated === false) {
+            if (parentScope?.isValidated === false) {
                 this.logDebug('validate(): validating parent first');
-                parentScope.validate(force);
+                parentScope.validate();
             }
             //clear the scope's errors list (we will populate them from this method)
             this.diagnostics = [];
@@ -430,25 +424,8 @@ export class Scope {
 
             //get a list of all callables, indexed by their lower case names
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
-            let files = this.getOwnFiles();
-
-            this.program.plugins.emit('beforeScopeValidate', {
-                program: this.program,
-                scope: this,
-                files: files,
-                callables: callableContainerMap
-            });
 
             this._validate(callableContainerMap);
-
-            this.program.plugins.emit('afterScopeValidate', {
-                program: this.program,
-                scope: this,
-                files: files,
-                callables: callableContainerMap
-            });
-
-            (this as any).isValidated = true;
         });
     }
 
