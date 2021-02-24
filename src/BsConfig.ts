@@ -105,6 +105,14 @@ export interface BsConfig {
     emitDefinitions?: boolean;
 
     /**
+     * For BrighterScript features, how should bslib be included?
+     *  - 'embedded' will emit a copy of bslib at pkg:/source/bslib.brs
+     *  - 'ropm' will not emit a copy of bslib, instead expecting the developer to have installed bslib from ropm with the alias 'bslib'.
+     *          This means the bslib path will be `pkg:/source/roku_modules/bslib/bslib.brs`
+     */
+    bslib?: 'embedded'|'ropm';
+
+    /**
      * A list of filters used to exclude diagnostics from the output
      */
     diagnosticFilters?: Array<number | string | { src: string; codes: (number|string)[] } | { src: string } | { codes: (number|string)[] }>;

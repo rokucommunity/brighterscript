@@ -226,6 +226,11 @@ These are the options available in the `bsconfig.json` file.
 
  - **plugins**: `Array<string>` - List of node scripts or npm modules to load as plugins to the BrighterScript compiler.
 
+ - **bslib**: `string` - For BrighterScript features, how should bslib be included?
+    - `'embedded'` will emit a copy of bslib at pkg:/source/bslib.brs
+    - `'ropm'` will not emit a copy of bslib, instead expecting the developer to have installed bslib from ropm with the alias 'bslib'. This means the bslib path will be `pkg:/source/roku_modules/bslib/bslib.brs`
+
+
 ## Ignore errors and warnings on a per-line basis
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
  - `bs:disable-next-line`
@@ -254,6 +259,17 @@ end sub
 ```
 
 The primary motivation for this feature was to provide a stopgap measure to hide incorrectly-thrown errors on legitimate BrightScript code due to parser bugs. This is still a new project and it is likely to be missing support for certain BrightScript syntaxes. It is recommended that you only use these comments when absolutely necessary.
+
+
+## ropm support
+In order for brighterscript-transpiled projects to work as ropm modules, currently they need to bundle a version of bslib.brs (the library that makes ternary, null conditional, and template strings work), in their package. As `ropm` and `brighterscript` adoption grow, this could result in many duplicate copies of `bslib.brs`.
+
+To reduce code duplication, brighterscript includes a compiler option called `bslib` which indicates how bslib should be handled during transpile. The `'embedded'` bslib value will emit a copy of bslib at `pkg:/source/bslib.brs` during transpile. The `'ropm'` bslib option will not emit a copy of bslib, instead expecting the developer to have installed bslib from ropm with the alias 'bslib'. This means the bslib path will be `pkg:/source/roku_modules/bslib/bslib.brs`.
+
+### Installing bslib in your ropm-enabled project:
+```bash
+ropm install bslib@npm:@rokucommunity/bslib
+```
 
 ## Language Server Protocol
 

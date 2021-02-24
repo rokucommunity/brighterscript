@@ -122,6 +122,17 @@ export class Program {
     private diagnostics = [] as BsDiagnostic[];
 
     /**
+     * The path to bslib.brs (the BrightScript runtime for certain BrighterScript features)
+     */
+    public get bslibPkgPath() {
+        if (this.options.bslib === 'ropm') {
+            return 'source/roku_modules/rokucommunity_bslib/bslib.brs';
+        } else {
+            return 'source/bslib.brs';
+        }
+    }
+
+    /**
      * A map of every file loaded into this program, indexed by its original file location
      */
     public files = {} as Record<string, BscFile>;
@@ -1132,15 +1143,9 @@ export class Program {
             this.plugins.emit('afterFileTranspile', entry);
         });
 
-        //copy the brighterscript stdlib to the output directory
-        promises.push(
-            fsExtra.ensureDir(s`${stagingFolderPath}/source`).then(() => {
-                return fsExtra.copyFile(
-                    s`${__dirname}/../bslib.brs`,
-                    s`${stagingFolderPath}/source/bslib.brs`
-                );
-            })
-        );
+        if (this.options.bslib === 'embedded') {
+            promises.push(util.copyBslibToStaging(stagingFolderPath));
+        }
         await Promise.all(promises);
 
         this.plugins.emit('afterProgramTranspile', this, entries);

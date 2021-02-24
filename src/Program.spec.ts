@@ -1637,6 +1637,29 @@ describe('Program', () => {
     });
 
     describe('transpile', () => {
+        it('copies bslib.brs when no bslib option specified', async () => {
+            await program.transpile([], stagingFolderPath);
+            expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.true;
+        });
+
+        it('copies bslib.brs when options.bslib = "embedded"', async () => {
+            program = new Program({
+                stagingFolderPath: stagingFolderPath,
+                bslib: 'embedded'
+            });
+            await program.transpile([], stagingFolderPath);
+            expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.true;
+        });
+
+        it('does not copy bslib.brs when options.bslib = "ropm"', async () => {
+            program = new Program({
+                stagingFolderPath: stagingFolderPath,
+                bslib: 'ropm'
+            });
+            await program.transpile([], stagingFolderPath);
+            expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.false;
+        });
+
         it('transpiles in-memory-only files', async () => {
             program.addOrReplaceFile('source/logger.bs', trim`
                 sub logInfo()
@@ -2240,7 +2263,5 @@ describe('Program', () => {
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
             }
         });
-
-
     });
 });

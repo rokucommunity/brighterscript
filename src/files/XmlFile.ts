@@ -439,7 +439,7 @@ export class XmlFile {
             }
         }
 
-        result.push('source/bslib.brs');
+        result.push(this.program.bslibPkgPath);
         return result;
     }
 
