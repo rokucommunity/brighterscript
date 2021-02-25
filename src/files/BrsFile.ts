@@ -1243,6 +1243,8 @@ export class BrsFile {
             symbolKind = SymbolKind.Function;
         } else if (isClassMethodStatement(statement)) {
             symbolKind = SymbolKind.Method;
+        } else if (isClassFieldStatement(statement)) {
+            symbolKind = SymbolKind.Field;
         } else if (isNamespaceStatement(statement)) {
             symbolKind = SymbolKind.Namespace;
             for (const childStatement of statement.body.statements) {
@@ -1263,7 +1265,7 @@ export class BrsFile {
             return;
         }
 
-        const name = statement.getName(ParseMode.BrighterScript);
+        const name = isClassFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
         return DocumentSymbol.create(name, '', symbolKind, statement.range, statement.range, children);
     }
 
