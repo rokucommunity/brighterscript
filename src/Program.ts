@@ -26,6 +26,7 @@ import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 const startOfSourcePkgPath = `source${path.sep}`;
+const bslibRokuModulesPkgPath = 'source/roku_modules/bslib/bslib.brs';
 
 export interface SourceObj {
     pathAbsolute: string;
@@ -121,12 +122,17 @@ export class Program {
      */
     private diagnostics = [] as BsDiagnostic[];
 
+    private get hasRokuModulesBslib() {
+        return !!this.getFileByPkgPath(bslibRokuModulesPkgPath);
+    }
+
     /**
      * The path to bslib.brs (the BrightScript runtime for certain BrighterScript features)
      */
     public get bslibPkgPath() {
-        if (this.options.bslib === 'ropm') {
-            return 'source/roku_modules/rokucommunity_bslib/bslib.brs';
+        //if there's a version of bslib from roku_modules loaded into the program, use that
+        if (this.hasRokuModulesBslib) {
+            return bslibRokuModulesPkgPath;
         } else {
             return 'source/bslib.brs';
         }
@@ -1143,7 +1149,8 @@ export class Program {
             this.plugins.emit('afterFileTranspile', entry);
         });
 
-        if (this.options.bslib === 'embedded') {
+        //if there's no bslib file already loaded into the program, copy it to the staging directory
+        if (!this.hasRokuModulesBslib && !this.getFileByPkgPath('source/bslib.brs')) {
             promises.push(util.copyBslibToStaging(stagingFolderPath));
         }
         await Promise.all(promises);
