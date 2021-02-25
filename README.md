@@ -226,11 +226,6 @@ These are the options available in the `bsconfig.json` file.
 
  - **plugins**: `Array<string>` - List of node scripts or npm modules to load as plugins to the BrighterScript compiler.
 
- - **bslib**: `string` - For BrighterScript features, how should bslib be included?
-    - `'embedded'` will emit a copy of bslib at pkg:/source/bslib.brs
-    - `'ropm'` will not emit a copy of bslib, instead expecting the developer to have installed bslib from ropm with the alias 'bslib'. This means the bslib path will be `pkg:/source/roku_modules/bslib/bslib.brs`
-
-
 ## Ignore errors and warnings on a per-line basis
 In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
  - `bs:disable-next-line`
@@ -262,11 +257,16 @@ The primary motivation for this feature was to provide a stopgap measure to hide
 
 
 ## ropm support
-In order for brighterscript-transpiled projects to work as ropm modules, currently they need to bundle a version of bslib.brs (the library that makes ternary, null conditional, and template strings work), in their package. As `ropm` and `brighterscript` adoption grow, this could result in many duplicate copies of `bslib.brs`.
+In order for BrighterScript-transpiled projects to work as ropm modules, they need a reference to [bslib](https://github.com/rokucommunity/bslib/blob/master/source/bslib.brs) (the BrightScript runtime library for BrighterScript features) in their package. As `ropm` and `brighterscript` become more popular, this could result in many duplicate copies of `bslib.brs`.
 
-To reduce code duplication, brighterscript includes a compiler option called `bslib` which indicates how bslib should be handled during transpile. The `'embedded'` bslib value will emit a copy of bslib at `pkg:/source/bslib.brs` during transpile. The `'ropm'` bslib option will not emit a copy of bslib, instead expecting the developer to have installed bslib from ropm with the alias 'bslib'. This means the bslib path will be `pkg:/source/roku_modules/bslib/bslib.brs`.
+To encourage reducing code duplication, BrighterScript has built-in support for loading `bslib` from [ropm](https://github.com/rokucommunity/ropm). Here's how it works:
+1. if your program does not use ropm, or _does_ use ropm but does not directly reference bslib, then the BrighterScript compiler will copy bslib to `"pkg:/source/bslib.brs"` at transpile-time.
+2. if your program uses ropm and has installed `bslib` as a dependency, then the BrighterScript compiler will _not_ emit a copy of bslib at `pkg:/source/bslib.brs`, and will instead use the path to the version from ropm `pkg:/source/roku_modules/bslib/bslib.brs`.
 
-### Installing bslib in your ropm-enabled project:
+
+
+### Installing bslib in your ropm-enabled project
+bslib is actually published to npm under the name [@RokuCommunity/bslib](https://npmjs.com/package/@rokucommunity/bslib). However, to keep the bslib function names short, BrighterScript requires that you install @rokucommunity/bslib with the `bslib` alias. Here's the command to do that using the ropm CLI.
 ```bash
 ropm install bslib@npm:@rokucommunity/bslib
 ```
