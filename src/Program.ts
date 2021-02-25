@@ -26,6 +26,7 @@ import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 const startOfSourcePkgPath = `source${path.sep}`;
+const bslibRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
 
 export interface SourceObj {
     pathAbsolute: string;
@@ -126,10 +127,10 @@ export class Program {
      */
     public get bslibPkgPath() {
         //if there's a version of bslib from roku_modules loaded into the program, use that
-        if (this.getFileByPkgPath('source/roku_modules/bslib/bslib.brs')) {
-            return 'source/roku_modules/bslib/bslib.brs';
+        if (this.getFileByPkgPath(bslibRokuModulesPkgPath)) {
+            return bslibRokuModulesPkgPath;
         } else {
-            return 'source/bslib.brs';
+            return `source${path.sep}bslib.brs`;
         }
     }
 
@@ -1145,7 +1146,7 @@ export class Program {
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
-        if (!this.getFileByPkgPath(s`source/roku_modules/bslib/bslib.brs`) && !this.getFileByPkgPath(s`source/bslib.brs`)) {
+        if (!this.getFileByPkgPath(bslibRokuModulesPkgPath) && !this.getFileByPkgPath(s`source/bslib.brs`)) {
             promises.push(util.copyBslibToStaging(stagingFolderPath));
         }
         await Promise.all(promises);
