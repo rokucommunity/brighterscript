@@ -51,7 +51,7 @@ BrighterScript adds several new features to the BrightScript language such as Na
       - `user = m.user ?? getDefaultUser()`
     - Additional Language features coming soon
       - null-conditional operator: `userSettings = m.user?.account?.profile?.settings`
-    - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/index.md)...
+    - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/readme.md)...
 
 
   - Full BrighterScript support for syntax checking, validation, and intellisense is available within the [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) VSCode extension.
