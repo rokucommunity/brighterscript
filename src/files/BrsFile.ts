@@ -43,7 +43,7 @@ export class BrsFile {
         this.pkgPath = s`${this.pkgPath}`;
         this.dependencyGraphKey = this.pkgPath.toLowerCase();
 
-        this.extension = util.getExtension(this.pkgPath);
+        this.extension = util.getExtension(this.pathAbsolute);
 
         //all BrighterScript files need to be transpiled
         if (this.extension?.endsWith('.bs')) {
