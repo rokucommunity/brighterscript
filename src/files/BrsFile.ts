@@ -1,7 +1,7 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Hover, Range, Position, CodeAction } from 'vscode-languageserver';
-import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
+import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import type { Scope } from '../Scope';
@@ -768,8 +768,35 @@ export class BrsFile {
 
         //if cursor is within a comment, disable completions
         let currentToken = this.getTokenAt(position);
-        if (currentToken && currentToken.kind === TokenKind.Comment) {
+        if (currentToken?.kind === TokenKind.Comment) {
             return [];
+        } else if (currentToken?.kind === TokenKind.StringLiteral) {
+            const match = /^"(pkg|libpkg):/.exec(currentToken.text);
+            if (match) {
+                //include every absolute file path from this scope
+                for (const file of scope.getAllFiles()) {
+                    const pkgPath = `${match[1]}:/${file.pkgPath.replace(/\\/g, '/')}`;
+                    result.push({
+                        label: pkgPath,
+                        textEdit: TextEdit.replace(
+                            util.createRange(
+                                currentToken.range.start.line,
+                                //+1 to step past the opening quote
+                                currentToken.range.start.character + 1,
+                                currentToken.range.end.line,
+                                //-1 to exclude the closing quotemark (or the end character if there is no closing quotemark)
+                                currentToken.text.endsWith('"') ? currentToken.range.end.character - 1 : currentToken.range.end.character
+                            ),
+                            pkgPath
+                        ),
+                        kind: CompletionItemKind.File
+                    });
+                }
+                return result;
+            } else {
+                //do nothing. we don't want to show completions inside of strings...
+                return [];
+            }
         }
 
         let namespaceCompletions = this.getNamespaceCompletions(currentToken, parseMode, scope);
