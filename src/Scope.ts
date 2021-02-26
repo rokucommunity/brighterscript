@@ -863,6 +863,9 @@ export class Scope {
      * @param relativePath
      */
     protected getFileByRelativePath(relativePath: string) {
+        if (!relativePath) {
+            return;
+        }
         let files = this.getAllFiles();
         for (let file of files) {
             if (file.pkgPath.toLowerCase() === relativePath.toLowerCase()) {
