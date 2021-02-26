@@ -386,13 +386,12 @@ export class Util {
             return targetPath;
         }
 
-        //remove the filename
-        let containingFolder = path.posix.normalize(path.dirname(sourcePkgPath));
         //start with the containing folder, split by slash
-        let result = containingFolder.split('/');
+        const containingFolder = path.posix.normalize(path.dirname(sourcePkgPath));
+        let result = containingFolder.split(/[\\/]/);
 
         //split on slash
-        let targetParts = path.posix.normalize(targetPath).split('/');
+        let targetParts = path.posix.normalize(targetPath).split(/[\\/]/);
 
         for (let part of targetParts) {
             if (part === '' || part === '.') {
