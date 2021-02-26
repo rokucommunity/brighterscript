@@ -397,7 +397,7 @@ export class Scope {
             return;
         }
 
-        this.program.logger.time(LogLevel.info, [this._debugLogComponentName, 'validate()'], () => {
+        this.program.logger.time(LogLevel.debug, [this._debugLogComponentName, 'validate()'], () => {
 
             let parentScope = this.getParentScope();
 
