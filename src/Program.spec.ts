@@ -15,6 +15,7 @@ import type { FunctionStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
 import { expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
+import { Logger } from './Logger';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -175,7 +176,7 @@ describe('Program', () => {
                 beforeFileParse: beforeFileParse,
                 afterFileParse: afterFileParse,
                 afterFileValidate: afterFileValidate
-            }], undefined);
+            }], new Logger());
 
             let mainPath = s`${rootDir}/source/main.brs`;
             //add a new source file

@@ -2,9 +2,12 @@ import { expect } from 'chai';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import type { BsDiagnostic } from './interfaces';
 import { standardizePath as s } from './util';
+import { createSandbox } from 'sinon';
+const sinon = createSandbox();
 let rootDir = s`${process.cwd()}/rootDir`;
 
 describe('DiagnosticFilterer', () => {
+
     let filterer: DiagnosticFilterer;
     let options = {
         rootDir: rootDir,
@@ -19,6 +22,10 @@ describe('DiagnosticFilterer', () => {
             { src: 'source/main.brs', codes: [4] }
         ]
     };
+
+    afterEach(() => {
+        sinon.restore();
+    });
 
     beforeEach(() => {
         filterer = new DiagnosticFilterer();
@@ -144,6 +151,21 @@ describe('DiagnosticFilterer', () => {
                 { codes: [1, 2, 'X3'] }
             ]);
         });
+    });
+
+    it('only filters by file once per unique file (case-insensitive)', () => {
+        const stub = sinon.stub(filterer as any, 'filterFile').returns(null);
+        filterer.filter(options, [
+            getDiagnostic(1, s`${rootDir}/source/common1.brs`),
+            getDiagnostic(2, s`${rootDir}/source/Common1.brs`),
+            getDiagnostic(3, s`${rootDir}/source/common2.brs`),
+            getDiagnostic(4, s`${rootDir}/source/Common2.brs`)
+        ]);
+        expect(stub.callCount).to.eql(2);
+        expect(stub.getCalls().map(x => x.args[1])).to.eql([
+            s`${rootDir.toLowerCase()}/source/common1.brs`,
+            s`${rootDir.toLowerCase()}/source/common2.brs`
+        ]);
     });
 
 });

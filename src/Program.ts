@@ -199,30 +199,36 @@ export class Program {
      * by walking through every file, so call this sparingly.
      */
     public getDiagnostics() {
-        let diagnostics = [...this.diagnostics];
+        return this.logger.time(LogLevel.info, ['Program.getDiagnostics()'], () => {
 
-        //get the diagnostics from all scopes
-        for (let scopeName in this.scopes) {
-            let scope = this.scopes[scopeName];
-            diagnostics.push(
-                ...scope.getDiagnostics()
-            );
-        }
+            let diagnostics = [...this.diagnostics];
 
-        //get the diagnostics from all unreferenced files
-        let unreferencedFiles = this.getUnreferencedFiles();
-        for (let file of unreferencedFiles) {
-            diagnostics.push(
-                ...file.getDiagnostics()
-            );
-        }
+            //get the diagnostics from all scopes
+            for (let scopeName in this.scopes) {
+                let scope = this.scopes[scopeName];
+                diagnostics.push(
+                    ...scope.getDiagnostics()
+                );
+            }
 
-        //filter out diagnostics based on our diagnostic filters
-        let finalDiagnostics = this.diagnosticFilterer.filter({
-            ...this.options,
-            rootDir: this.options.rootDir
-        }, diagnostics);
-        return finalDiagnostics;
+            //get the diagnostics from all unreferenced files
+            let unreferencedFiles = this.getUnreferencedFiles();
+            for (let file of unreferencedFiles) {
+                diagnostics.push(
+                    ...file.getDiagnostics()
+                );
+            }
+            const filteredDiagnostics = this.logger.time(LogLevel.debug, ['filter diagnostics'], () => {
+                //filter out diagnostics based on our diagnostic filters
+                let finalDiagnostics = this.diagnosticFilterer.filter({
+                    ...this.options,
+                    rootDir: this.options.rootDir
+                }, diagnostics);
+                return finalDiagnostics;
+            });
+            this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
+            return filteredDiagnostics;
+        });
     }
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
@@ -358,7 +364,7 @@ export class Program {
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
 
-                this.logger.time(LogLevel.info, ['parse', chalk.green(srcPath)], () => {
+                this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
                     brsFile.parse(sourceObj.source);
                 });
                 file = brsFile;
@@ -381,7 +387,9 @@ export class Program {
                     source: fileContents
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
-                xmlFile.parse(sourceObj.source);
+                this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
+                    xmlFile.parse(sourceObj.source);
+                });
 
                 file = xmlFile;
 
@@ -499,14 +507,16 @@ export class Program {
      * @param force - if true, then all scopes are force to validate, even if they aren't marked as dirty
      */
     public validate() {
-        this.logger.time(LogLevel.debug, ['Program.validate()'], () => {
+        this.logger.time(LogLevel.log, ['Validating project'], () => {
             this.diagnostics = [];
             this.plugins.emit('beforeProgramValidate', this);
 
-            for (let scopeName in this.scopes) {
-                let scope = this.scopes[scopeName];
-                scope.validate();
-            }
+            this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
+                for (let scopeName in this.scopes) {
+                    let scope = this.scopes[scopeName];
+                    scope.validate();
+                }
+            });
 
             //find any files NOT loaded into a scope
             for (let key in this.files) {

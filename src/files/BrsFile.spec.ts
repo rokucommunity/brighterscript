@@ -18,6 +18,7 @@ import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
 import { trim, trimMap } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
+import { Logger } from '../Logger';
 
 let sinon = sinonImport.createSandbox();
 
@@ -2648,7 +2649,7 @@ describe('BrsFile', () => {
                 util.loadPlugins('', [
                     require.resolve('../examples/plugins/removePrint')
                 ]),
-                undefined
+                new Logger()
             );
             testPluginTranspile();
         });
@@ -2658,7 +2659,7 @@ describe('BrsFile', () => {
                 util.loadPlugins('', [
                     path.resolve(process.cwd(), './dist/examples/plugins/removePrint.js')
                 ]),
-                undefined
+                new Logger()
             );
             testPluginTranspile();
         });
@@ -2668,7 +2669,7 @@ describe('BrsFile', () => {
                 util.loadPlugins(process.cwd(), [
                     './dist/examples/plugins/removePrint.js'
                 ]),
-                undefined
+                new Logger()
             );
             testPluginTranspile();
         });
