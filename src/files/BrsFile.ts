@@ -768,24 +768,26 @@ export class BrsFile {
 
         //if cursor is within a comment, disable completions
         let currentToken = this.getTokenAt(position);
-        if (currentToken?.kind === TokenKind.Comment) {
+        const tokenKind = currentToken?.kind;
+        if (tokenKind === TokenKind.Comment) {
             return [];
-        } else if (currentToken?.kind === TokenKind.StringLiteral) {
-            const match = /^"(pkg|libpkg):/.exec(currentToken.text);
+        } else if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
+            const match = /^("?)(pkg|libpkg):/.exec(currentToken.text);
             if (match) {
+                const [, openingQuote, fileProtocol] = match;
                 //include every absolute file path from this scope
                 for (const file of scope.getAllFiles()) {
-                    const pkgPath = `${match[1]}:/${file.pkgPath.replace(/\\/g, '/')}`;
+                    const pkgPath = `${fileProtocol}:/${file.pkgPath.replace(/\\/g, '/')}`;
                     result.push({
                         label: pkgPath,
                         textEdit: TextEdit.replace(
                             util.createRange(
                                 currentToken.range.start.line,
                                 //+1 to step past the opening quote
-                                currentToken.range.start.character + 1,
+                                currentToken.range.start.character + (openingQuote ? 1 : 0),
                                 currentToken.range.end.line,
                                 //-1 to exclude the closing quotemark (or the end character if there is no closing quotemark)
-                                currentToken.text.endsWith('"') ? currentToken.range.end.character - 1 : currentToken.range.end.character
+                                currentToken.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
                             ),
                             pkgPath
                         ),

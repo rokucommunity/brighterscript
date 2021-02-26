@@ -105,7 +105,7 @@ describe('BrsFile', () => {
             ]);
         });
 
-        it('suggests pkg paths in strings that match that criteria', () => {
+        it('suggests libpkg paths in strings that match that criteria', () => {
             program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     print "libpkg:"
@@ -115,6 +115,19 @@ describe('BrsFile', () => {
             const names = result.map(x => x.label);
             expect(names.sort()).to.eql([
                 'libpkg:/source/main.brs'
+            ]);
+        });
+
+        it('suggests pkg paths in template strings', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print \`pkg:\`
+                end sub
+            `);
+            const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
+            const names = result.map(x => x.label);
+            expect(names.sort()).to.eql([
+                'pkg:/source/main.brs'
             ]);
         });
 
