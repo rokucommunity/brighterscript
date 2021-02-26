@@ -377,7 +377,11 @@ describe('XmlFile', () => {
         it('formats completion paths with proper slashes', () => {
             program.addOrReplaceFile('pkg:/components/component1/component1.brs', '');
 
-            let xmlFile = new XmlFile(s`${rootDir}/components/component1/component1.xml`, 'pkg:/components/component1/component1.xml', <any>program);
+            const xmlFile = program.addOrReplaceFile<XmlFile>('components/component1/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Group">
+                </component
+            `);
             xmlFile.parser.references.scriptTagImports.push({
                 pkgPath: 'pkg:/components/component1/component1.brs',
                 text: 'component1.brs',
@@ -732,9 +736,7 @@ describe('XmlFile', () => {
         });
 
         it('returns the XML unmodified if needsTranspiled is false', () => {
-            let file = program.addOrReplaceFile(
-                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
-                trim`
+            let file = program.addOrReplaceFile('components/SimpleScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <!-- should stay as-is -->
                 <component name="SimpleScene" extends="Scene" >
@@ -753,9 +755,7 @@ describe('XmlFile', () => {
         });
 
         it('needsTranspiled is false by default', () => {
-            let file = program.addOrReplaceFile(
-                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
-                trim`
+            let file = program.addOrReplaceFile('components/SimpleScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene" >
                 </component>
@@ -764,9 +764,7 @@ describe('XmlFile', () => {
         });
 
         it('needsTranspiled is true if an import is brighterscript', () => {
-            let file = program.addOrReplaceFile(
-                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
-                trim`
+            let file = program.addOrReplaceFile('components/SimpleScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene" >
                     <script type="text/brightscript" uri="SimpleScene.bs"/>
@@ -777,9 +775,7 @@ describe('XmlFile', () => {
 
         it('simple source mapping includes sourcemap reference', () => {
             program.options.sourceMap = true;
-            let file = program.addOrReplaceFile(
-                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
-                trim`
+            let file = program.addOrReplaceFile('components/SimpleScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
                 </component>
@@ -792,9 +788,7 @@ describe('XmlFile', () => {
 
         it('AST-based source mapping includes sourcemap reference', () => {
             program.options.sourceMap = true;
-            let file = program.addOrReplaceFile(
-                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
-                trim`
+            let file = program.addOrReplaceFile('components/SimpleScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
                 </component>
