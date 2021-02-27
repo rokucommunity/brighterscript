@@ -837,7 +837,7 @@ export class Scope {
             //if we can't find the file
             if (!referencedFile) {
                 //skip the default bslib file, it will exist at transpile time but should not show up in the program during validation cycle
-                if (s`${scriptImport.pkgPath}` === `source${path.sep}bslib.brs`) {
+                if (scriptImport.pkgPath === `source${path.sep}bslib.brs`) {
                     continue;
                 }
                 let dInfo: DiagnosticInfo;
