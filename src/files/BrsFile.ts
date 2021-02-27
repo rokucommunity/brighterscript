@@ -1074,17 +1074,18 @@ export class BrsFile {
     }
 
     public isPositionNextToTokenKind(position: Position, tokenKind: TokenKind) {
-        let closestToken = this.getClosestToken(position);
-        let previousToken = this.getPreviousToken(closestToken);
+        const closestToken = this.getClosestToken(position);
+        const previousToken = this.getPreviousToken(closestToken);
+        const previousTokenKind = previousToken?.kind;
         //next to matched token
         if (!closestToken || closestToken.kind === TokenKind.Eof) {
             return false;
         } else if (closestToken.kind === tokenKind) {
             return true;
-        } else if (closestToken.kind === TokenKind.Newline || previousToken.kind === TokenKind.Newline) {
+        } else if (closestToken.kind === TokenKind.Newline || previousTokenKind === TokenKind.Newline) {
             return false;
             //next to an identifier, which is next to token kind
-        } else if (closestToken.kind === TokenKind.Identifier && previousToken.kind === tokenKind) {
+        } else if (closestToken.kind === TokenKind.Identifier && previousTokenKind === tokenKind) {
             return true;
         } else {
             return false;
