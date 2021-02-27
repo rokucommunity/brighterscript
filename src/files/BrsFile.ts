@@ -43,11 +43,12 @@ export class BrsFile {
         this.pkgPath = s`${this.pkgPath}`;
         this.dependencyGraphKey = this.pkgPath.toLowerCase();
 
-        this.extension = util.getExtension(this.pkgPath);
+        this.extension = util.getExtension(this.pathAbsolute);
 
         //all BrighterScript files need to be transpiled
         if (this.extension?.endsWith('.bs')) {
             this.needsTranspiled = true;
+            this.parseMode = ParseMode.BrighterScript;
         }
         this.isTypedef = this.extension === '.d.bs';
         if (!this.isTypedef) {
@@ -63,9 +64,7 @@ export class BrsFile {
     /**
      * The parseMode used for the parser for this file
      */
-    public get parseMode() {
-        return this.extension.endsWith('.bs') ? ParseMode.BrighterScript : ParseMode.BrightScript;
-    }
+    public parseMode = ParseMode.BrightScript;
 
     /**
      * The key used to identify this file in the dependency graph
@@ -755,7 +754,6 @@ export class BrsFile {
      */
     public getCompletions(position: Position, scope?: Scope): CompletionItem[] {
         let result = [] as CompletionItem[];
-        let parseMode = this.getParseMode();
 
         //a map of lower-case names of all added options
         let names = {} as Record<string, boolean>;
@@ -772,7 +770,7 @@ export class BrsFile {
             return [];
         }
 
-        let namespaceCompletions = this.getNamespaceCompletions(currentToken, parseMode, scope);
+        let namespaceCompletions = this.getNamespaceCompletions(currentToken, this.parseMode, scope);
         if (namespaceCompletions.length > 0) {
             return namespaceCompletions;
         }
@@ -782,13 +780,13 @@ export class BrsFile {
             //we aren't in any function scope, so return the keyword completions and namespaces
             if (this.getTokenBefore(currentToken, TokenKind.New)) {
                 // there's a new keyword, so only class types are viable here
-                return [...this.getGlobalClassStatementCompletions(currentToken, parseMode)];
+                return [...this.getGlobalClassStatementCompletions(currentToken, this.parseMode)];
             } else {
-                return [...KeywordCompletions, ...this.getGlobalClassStatementCompletions(currentToken, parseMode), ...namespaceCompletions];
+                return [...KeywordCompletions, ...this.getGlobalClassStatementCompletions(currentToken, this.parseMode), ...namespaceCompletions];
             }
         }
 
-        const classNameCompletions = this.getGlobalClassStatementCompletions(currentToken, parseMode);
+        const classNameCompletions = this.getGlobalClassStatementCompletions(currentToken, this.parseMode);
         const newToken = this.getTokenBefore(currentToken, TokenKind.New);
         if (newToken) {
             //we are after a new keyword; so we can only be namespaces or classes at this point
@@ -829,7 +827,7 @@ export class BrsFile {
             result.push(...classNameCompletions);
 
             //include the global callables
-            result.push(...scope.getCallablesAsCompletions(parseMode));
+            result.push(...scope.getCallablesAsCompletions(this.parseMode));
 
             //add `m` because that's always valid within a function
             result.push({
@@ -854,7 +852,7 @@ export class BrsFile {
                 });
             }
 
-            if (parseMode === ParseMode.BrighterScript) {
+            if (this.parseMode === ParseMode.BrighterScript) {
                 //include the first part of namespaces
                 let namespaces = scope.getAllNamespaceStatements();
                 for (let stmt of namespaces) {
@@ -1063,13 +1061,6 @@ export class BrsFile {
         } else {
             return undefined;
         }
-    }
-
-    /**
-     * Determine if this file is a brighterscript file
-     */
-    public getParseMode() {
-        return this.pathAbsolute.toLowerCase().endsWith('.bs') ? ParseMode.BrighterScript : ParseMode.BrightScript;
     }
 
     public isPositionNextToTokenKind(position: Position, tokenKind: TokenKind) {
@@ -1406,7 +1397,7 @@ export class BrsFile {
                     }
                 }
                 const statementHandler = (statement: FunctionStatement) => {
-                    if (statement.getName(this.getParseMode()).toLowerCase() === textToSearchFor) {
+                    if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
                         const uri = util.pathToUri(file.pathAbsolute);
                         results.push(Location.create(uri, statement.range));
                     }
@@ -1426,7 +1417,7 @@ export class BrsFile {
         let results: Location[] = [];
         //get class fields and members
         const statementHandler = (statement: ClassMethodStatement) => {
-            if (statement.getName(file.getParseMode()).toLowerCase() === textToSearchFor) {
+            if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
                 results.push(Location.create(util.pathToUri(file.pathAbsolute), statement.range));
             }
         };
