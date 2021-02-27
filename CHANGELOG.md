@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.32.3] - 2021-02-25
+### Fixed
+ - fix significant performance bug in diagnostic filtering
+ - tweaks to the logging system to make `logLevel=verbose` less chatty
+ - null reference error in `Scope.getFileByRelativePath()`
+ - fix class fields that were missing in getSymbol requests
+
+
+
 ## [0.32.2] - 2021-02-20
 ### Fixed
  - transpile bug when a template string starts with an expression ([#327](https://github.com/rokucommunity/brighterscript/pull/327))
@@ -977,4 +986,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.31.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.9...v0.31.0
 [0.31.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.0...v0.31.1
 [0.31.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.1...v0.31.2
-[0.31.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.2...v0.31.3
+[0.32.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.2...v0.32.2
+[0.32.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.32.2...v0.32.3
