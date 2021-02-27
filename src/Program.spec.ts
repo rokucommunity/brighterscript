@@ -1638,6 +1638,18 @@ describe('Program', () => {
     });
 
     describe('transpile', () => {
+        it('copies bslib.brs when no ropm version was found', async () => {
+            await program.transpile([], stagingFolderPath);
+            expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.true;
+        });
+
+        it('does not copy bslib.brs when found in roku_modules', async () => {
+            program.addOrReplaceFile('source/roku_modules/bslib/bslib.brs', '');
+            await program.transpile([], stagingFolderPath);
+            expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.false;
+            expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/roku_modules/bslib/bslib.brs`)).to.be.true;
+        });
+
         it('transpiles in-memory-only files', async () => {
             program.addOrReplaceFile('source/logger.bs', trim`
                 sub logInfo()
@@ -2241,7 +2253,5 @@ describe('Program', () => {
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
             }
         });
-
-
     });
 });
