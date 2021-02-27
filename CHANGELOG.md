@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.33.0] - 2021-02-27
+### Added
+ - support for ropm version of bslib.([#334](https://github.com/rokucommunity/brighterscript/pull/334))
+### Fixed
+ - parse crash when encountering immediately-invoked function expressions (IIFEs) ([#343](https://github.com/rokucommunity/brighterscript/pull/343))
+ - error during language server completions when activated on the first token in the file ([#342](https://github.com/rokucommunity/brighterscript/pull/342))
+ - refactored BrsFile.parseMode to be a property instead of a getter since there was no reason it needed to be a getter ([#341](https://github.com/rokucommunity/brighterscript/pull/341))
+
+
+
 ## [0.32.3] - 2021-02-25
 ### Fixed
  - fix significant performance bug in diagnostic filtering
@@ -988,3 +998,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.31.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.1...v0.31.2
 [0.32.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.2...v0.32.2
 [0.32.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.32.2...v0.32.3
+[0.33.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.32.3...v0.33.0
