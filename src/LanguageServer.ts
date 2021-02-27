@@ -194,7 +194,7 @@ export class LanguageServer {
                 completionProvider: {
                     resolveProvider: true,
                     //anytime the user types a period, auto-show the completion results
-                    triggerCharacters: ['.', ':'],
+                    triggerCharacters: ['.'],
                     allCommitCharacters: ['.', '@']
                 },
                 documentSymbolProvider: true,
