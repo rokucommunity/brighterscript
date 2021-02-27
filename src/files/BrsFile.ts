@@ -649,12 +649,13 @@ export class BrsFile {
         for (let func of this._parser.references.functionExpressions) {
             //for all function calls in this function
             for (let expression of func.callExpressions) {
-
                 if (
                     //filter out dotted function invocations (i.e. object.doSomething()) (not currently supported. TODO support it)
                     (expression.callee as any).obj ||
                     //filter out method calls on method calls for now (i.e. getSomething().getSomethingElse())
-                    (expression.callee as any).callee
+                    (expression.callee as any).callee ||
+                    //filter out callees without a name (immediately-invoked function expressions)
+                    !(expression.callee as any).name
                 ) {
                     continue;
                 }

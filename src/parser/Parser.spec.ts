@@ -120,6 +120,16 @@ describe('parser', () => {
             expectZeroDiagnostics(parser);
         });
 
+        it('supports returning iife call', () => {
+            const parser = parse(`
+                sub main()
+                    return (sub()
+                    end sub)()
+                end sub
+            `);
+            expectZeroDiagnostics(parser);
+        });
+
         it('supports using "interface" as parameter name', () => {
             expect(parse(`
                 sub main(interface as object)
