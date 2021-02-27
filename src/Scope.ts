@@ -398,7 +398,7 @@ export class Scope {
     private _debugLogComponentName: string;
 
     public validate() {
-        this.program.logger.time(LogLevel.info, [this._debugLogComponentName, 'validate()'], () => {
+        this.program.logger.time(LogLevel.debug, [this._debugLogComponentName, 'validate()'], () => {
 
             let parentScope = this.getParentScope();
 
@@ -857,6 +857,9 @@ export class Scope {
      * @param relativePath
      */
     protected getFileByRelativePath(relativePath: string) {
+        if (!relativePath) {
+            return;
+        }
         let files = this.getAllFiles();
         for (let file of files) {
             if (file.pkgPath.toLowerCase() === relativePath.toLowerCase()) {

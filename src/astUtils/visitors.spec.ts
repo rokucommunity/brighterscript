@@ -18,7 +18,6 @@ import type { AfterFileParseEvent } from '../interfaces';
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
     let program: Program;
-    let file: BrsFile;
 
     const PRINTS_SRC = `
         sub Main()
@@ -80,7 +79,6 @@ describe('astUtils visitors', () => {
     });
     afterEach(() => {
         program.dispose();
-        file = undefined;
     });
 
     function functionsWalker(visitor: (statement: Statement, parent: Statement) => void, cancel?: CancellationToken) {
@@ -105,7 +103,7 @@ describe('astUtils visitors', () => {
                 name: 'walker',
                 afterFileParse: (event) => walker(event.file as BrsFile)
             });
-            file = program.addOrReplaceFile('source/main.brs', PRINTS_SRC);
+            program.addOrReplaceFile('source/main.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block:0',                // Main sub body
                 'PrintStatement:1',       // print 1
@@ -142,7 +140,7 @@ describe('astUtils visitors', () => {
                 name: 'walker',
                 afterFileParse: (event) => walker(event.file as BrsFile)
             });
-            file = program.addOrReplaceFile('source/file.brs', PRINTS_SRC);
+            program.addOrReplaceFile('source/file.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block',                // Main sub body
                 'PrintStatement',       // print 1
@@ -189,7 +187,7 @@ describe('astUtils visitors', () => {
                     walker(event.file as BrsFile);
                 }
             });
-            file = program.addOrReplaceFile('source/file.brs', PRINTS_SRC);
+            program.addOrReplaceFile('source/file.brs', PRINTS_SRC);
             expect(actual).to.deep.equal([
                 'Block',                // Main sub body
                 'PrintStatement',       // print 1
@@ -269,7 +267,7 @@ describe('astUtils visitors', () => {
                 afterFileParse: (event) => walker(event.file as BrsFile)
             });
 
-            file = program.addOrReplaceFile('source/file.brs', EXPRESSIONS_SRC);
+            program.addOrReplaceFile('source/file.brs', EXPRESSIONS_SRC);
             expect(actual).to.deep.equal([
                 //The comment statement is weird because it can't be both a statement and expression, but is treated that way. Just ignore it for now until we refactor comments.
                 //'CommentStatement:1:CommentStatement',          // '<comment>

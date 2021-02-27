@@ -1,12 +1,13 @@
 import { expect } from 'chai';
 import * as sinon from 'sinon';
+import { Logger } from './Logger';
 import PluginInterface from './PluginInterface';
 
 describe('PluginInterface', () => {
     let pluginInterface: PluginInterface;
 
     beforeEach(() => {
-        pluginInterface = new PluginInterface([], undefined);
+        pluginInterface = new PluginInterface([], new Logger());
     });
 
     it('allows adding a plugin', () => {
