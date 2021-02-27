@@ -1937,7 +1937,13 @@ export class Parser {
 
     private anonymousFunction(): Expression {
         if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
-            return this.functionDeclaration(true);
+            const func = this.functionDeclaration(true);
+            //if there's an open paren after this, this is an IIFE
+            if (this.check(TokenKind.LeftParen)) {
+                return this.finishCall(this.advance(), func);
+            } else {
+                return func;
+            }
         }
 
         //template string
