@@ -266,7 +266,7 @@ To encourage reducing code duplication, BrighterScript has built-in support for 
 
 
 ### Installing bslib in your ropm-enabled project
-bslib is actually published to npm under the name [@RokuCommunity/bslib](https://npmjs.com/package/@rokucommunity/bslib). However, to keep the bslib function names short, BrighterScript requires that you install @rokucommunity/bslib with the `bslib` alias. Here's the command to do that using the ropm CLI.
+bslib is actually published to npm under the name [@rokucommunity/bslib](https://npmjs.com/package/@rokucommunity/bslib). However, to keep the bslib function names short, BrighterScript requires that you install @rokucommunity/bslib with the `bslib` alias. Here's the command to do that using the ropm CLI.
 ```bash
 ropm install bslib@npm:@rokucommunity/bslib
 ```

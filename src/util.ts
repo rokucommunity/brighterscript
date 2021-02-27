@@ -1186,7 +1186,7 @@ export class Util {
         const bslib = require('bslib');
         let source = bslib.source as string;
 
-        //apply the `bslib_` prefixe to the functions
+        //apply the `bslib_` prefix to the functions
         let match: RegExpExecArray;
         const positions = [] as number[];
         // eslint-disable-next-line no-cond-assign
