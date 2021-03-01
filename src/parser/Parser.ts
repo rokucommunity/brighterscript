@@ -1750,6 +1750,8 @@ export class Parser {
                 values.push(this.advance() as PrintSeparatorSpace);
             } else if (this.check(TokenKind.Comma)) {
                 values.push(this.advance() as PrintSeparatorTab);
+            } else if (this.check(TokenKind.Else)) {
+                break; // inline branch
             } else {
                 values.push(this.expression());
             }

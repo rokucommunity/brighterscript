@@ -220,6 +220,19 @@ describe('parser if statements', () => {
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);
         });
+
+        it('parses print statement in inline block', () => {
+            const { statements, diagnostics } = Parser.parse(`
+                if true print 1 else print 1
+                if true then print 1 else print 1
+                if true print "x=" ; 1 else print 1
+                if true then print "x=", 1 else print 1
+                if true print "x=" 1 else print 1
+            `);
+
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(statements).to.be.length.greaterThan(0);
+        });
     });
 
     describe('block if', () => {
