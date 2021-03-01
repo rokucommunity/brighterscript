@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.34.0] - 2021-02-28
+### Added
+ - language server file path completions inside strings that start with `pkg:` or `libpkg:`
+
+
+
 ## [0.33.0] - 2021-02-27
 ### Added
  - support for ropm version of bslib.([#334](https://github.com/rokucommunity/brighterscript/pull/334))
@@ -999,3 +1005,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.32.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.2...v0.32.2
 [0.32.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.32.2...v0.32.3
 [0.33.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.32.3...v0.33.0
+[0.34.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.33.0...v0.34.0
