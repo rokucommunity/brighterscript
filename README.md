@@ -271,7 +271,7 @@ bslib is actually published to npm under the name [@rokucommunity/bslib](https:/
 ropm install bslib@npm:@rokucommunity/bslib
 ```
 
-If you're using a version of NodeJS that doesn't support aliases, then you can also simply install @rokucommunity/bslib directly without the alias, and BrighterScript will recognize this as well.
+If you're using a version of NodeJS that doesn't support npm aliases, then you can also simply install @rokucommunity/bslib directly without the alias, and BrighterScript will recognize this as well.
 ```bash
 ropm install @rokucommunity/bslib
 ```
