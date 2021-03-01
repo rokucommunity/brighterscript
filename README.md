@@ -271,6 +271,10 @@ bslib is actually published to npm under the name [@rokucommunity/bslib](https:/
 ropm install bslib@npm:@rokucommunity/bslib
 ```
 
+If you're using a version of NodeJS that doesn't support aliases, then you can also simply install @rokucommunity/bslib directly without the alias, and BrighterScript will recognize this as well.
+```bash
+ropm install @rokucommunity/bslib
+```
 ## Language Server Protocol
 
 This project also contributes a class that aligns with Microsoft's [Language Server Protocol](https://microsoft.github.io/language-server-protocol/), which makes it easy to integrate `BrightScript` and `BrighterScript` with any IDE that supports the protocol. We won't go into more detail here, but you can use the `LanguageServer` class from this project to integrate into your IDE. The [vscode-BrightScript-language](https://github.com/rokucommunity/vscode-BrightScript-language) extension uses this LanguageServer class to bring `BrightScript` and `BrighterScript` language support to Visual Studio Code.
