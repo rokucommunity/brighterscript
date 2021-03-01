@@ -1183,7 +1183,7 @@ export class Util {
         //copy bslib to the output directory
         await fsExtra.ensureDir(standardizePath(`${stagingDir}/source`));
         // eslint-disable-next-line
-        const bslib = require('bslib');
+        const bslib = require('@rokucommunity/bslib');
         let source = bslib.source as string;
 
         //apply the `bslib_` prefix to the functions
