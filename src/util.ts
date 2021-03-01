@@ -1189,8 +1189,9 @@ export class Util {
         //apply the `bslib_` prefix to the functions
         let match: RegExpExecArray;
         const positions = [] as number[];
+        const regexp = /^(\s*(?:function|sub)\s+)([a-z0-9_]+)/mg;
         // eslint-disable-next-line no-cond-assign
-        while (match = /^(\s*(?:function|sub)\s+)([a-z0-9_]+)/.exec(source)) {
+        while (match = regexp.exec(source)) {
             positions.push(match.index + match[1].length);
         }
 

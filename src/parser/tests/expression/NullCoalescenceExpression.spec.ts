@@ -190,6 +190,14 @@ describe('NullCoalescingExpression', () => {
             program.dispose();
         });
 
+        it('uses the proper prefix when aliased package is installed', () => {
+            program.addOrReplaceFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
+            testTranspile(
+                'a = user ?? false',
+                `a = rokucommunity_bslib_coalesce(user, false)`
+            );
+        });
+
         it('properly transpiles null coalesence assignments - simple', () => {
             testTranspile(`a = user ?? {"id": "default"}`, 'a = bslib_coalesce(user, {\n    "id": "default"\n})', 'none');
         });
