@@ -31,7 +31,6 @@ import {
 } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-
 import type { BsConfig } from './BsConfig';
 import { Deferred } from './deferred';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -42,6 +41,7 @@ import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { isBrsFile } from './astUtils/reflection';
+import { codeActionUtil } from './CodeActionUtil';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
@@ -565,7 +565,15 @@ export class LanguageServer {
             .filter(x => x.builder.program.hasFile(filePath))
             .flatMap(workspace => workspace.builder.program.getCodeActions(filePath, params.range));
 
-        return codeActions;
+        const distinctCodeActions = codeActionUtil.dedupe(codeActions);
+
+        //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
+        for (const codeAction of distinctCodeActions) {
+            if (codeAction.diagnostics) {
+                codeAction.diagnostics = codeAction.diagnostics.map(x => util.toDiagnostic(x));
+            }
+        }
+        return distinctCodeActions;
     }
 
     /**
@@ -1051,16 +1059,7 @@ export class LanguageServer {
         const patch = await this.diagnosticCollection.getPatch(this.workspaces);
 
         for (let filePath in patch) {
-            const diagnostics = patch[filePath].map(d => {
-                return {
-                    severity: d.severity,
-                    range: d.range,
-                    message: d.message,
-                    relatedInformation: d.relatedInformation,
-                    code: d.code,
-                    source: 'brs'
-                };
-            });
+            const diagnostics = patch[filePath].map(d => util.toDiagnostic(d));
 
             this.connection.sendDiagnostics({
                 uri: URI.file(filePath).toString(),

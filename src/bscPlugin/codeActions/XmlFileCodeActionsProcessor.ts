@@ -1,6 +1,7 @@
 import type { CodeAction, Range } from 'vscode-languageserver';
 import { CodeActionKind } from 'vscode-languageserver';
 import { codeActionUtil } from '../../CodeActionUtil';
+import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { XmlFile } from '../../files/XmlFile';
 import type { BsDiagnostic } from '../../interfaces';
@@ -18,19 +19,19 @@ export class XmlFileCodeActionsProcessor {
     public process() {
         for (const diagnostic of this.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
-                this.addMissingExtends();
+                this.addMissingExtends(diagnostic as any);
             }
         }
     }
 
-    private addMissingExtends() {
+    private addMissingExtends(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
         const { component } = this.file.parser.ast;
         //inject new attribute after the final attribute, or after the `<component` if there are no attributes
         const pos = (component.attributes[component.attributes.length - 1] ?? component.tag).range.end;
         this.codeActions.push(
             codeActionUtil.createCodeAction({
                 title: `Extend "Group"`,
-                // diagnostics: [diagnostic],
+                diagnostics: [diagnostic],
                 isPreferred: true,
                 kind: CodeActionKind.QuickFix,
                 changes: [{
@@ -44,7 +45,7 @@ export class XmlFileCodeActionsProcessor {
         this.codeActions.push(
             codeActionUtil.createCodeAction({
                 title: `Extend "Task"`,
-                // diagnostics: [diagnostic],
+                diagnostics: [diagnostic],
                 kind: CodeActionKind.QuickFix,
                 changes: [{
                     type: 'insert',
@@ -57,7 +58,7 @@ export class XmlFileCodeActionsProcessor {
         this.codeActions.push(
             codeActionUtil.createCodeAction({
                 title: `Extend "ContentNode"`,
-                // diagnostics: [diagnostic],
+                diagnostics: [diagnostic],
                 kind: CodeActionKind.QuickFix,
                 changes: [{
                     type: 'insert',

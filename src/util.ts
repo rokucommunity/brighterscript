@@ -4,7 +4,7 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import type { Position, Range } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
@@ -1199,6 +1199,23 @@ export class Util {
             source = source.slice(0, position) + 'bslib_' + source.slice(position);
         }
         await fsExtra.writeFile(`${stagingDir}/source/bslib.brs`, source);
+    }
+
+    /**
+     * Given a Diagnostic or BsDiagnostic, return a copy of the diagnostic
+     */
+    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic) {
+        return {
+            severity: diagnostic.severity,
+            range: diagnostic.range,
+            message: diagnostic.message,
+            relatedInformation: diagnostic.relatedInformation?.map(x => {
+                //clone related information just in case a plugin added circular ref info here
+                return { ...x };
+            }),
+            code: diagnostic.code,
+            source: 'brs'
+        };
     }
 }
 
