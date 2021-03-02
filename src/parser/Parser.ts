@@ -1750,6 +1750,8 @@ export class Parser {
                 values.push(this.advance() as PrintSeparatorSpace);
             } else if (this.check(TokenKind.Comma)) {
                 values.push(this.advance() as PrintSeparatorTab);
+            } else if (this.check(TokenKind.Else)) {
+                break; // inline branch
             } else {
                 values.push(this.expression());
             }
@@ -1780,7 +1782,7 @@ export class Parser {
             return new ReturnStatement(tokens);
         }
 
-        let toReturn = this.expression();
+        let toReturn = this.check(TokenKind.Else) ? undefined : this.expression();
         return new ReturnStatement(tokens, toReturn);
     }
 
