@@ -1782,7 +1782,7 @@ export class Parser {
             return new ReturnStatement(tokens);
         }
 
-        let toReturn = this.expression();
+        let toReturn = this.check(TokenKind.Else) ? undefined : this.expression();
         return new ReturnStatement(tokens, toReturn);
     }
 
