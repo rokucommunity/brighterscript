@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.34.1] - 2021-03-02
+### Fixed
+ - syntax parsing bugs within single-line if statements
+
+
+
 ## [0.34.0] - 2021-02-28
 ### Added
  - language server file path completions inside strings that start with `pkg:` or `libpkg:`
@@ -1006,3 +1012,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.32.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.32.2...v0.32.3
 [0.33.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.32.3...v0.33.0
 [0.34.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.33.0...v0.34.0
+[0.34.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.0...v0.34.1
