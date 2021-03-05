@@ -1750,7 +1750,6 @@ describe('Program', () => {
                 s`${sourceRoot}/source/main.bs`
             );
         });
-
     });
 
     describe('typedef', () => {
