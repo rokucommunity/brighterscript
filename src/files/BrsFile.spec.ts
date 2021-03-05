@@ -2191,7 +2191,7 @@ describe('BrsFile', () => {
             expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
         });
 
-        it('replaces custom types in parameter types and return types', async () => {
+        it('replaces custom types in parameter types and return types', () => {
             testTranspile(`
                 function foo() as SomeKlass
                     return new SomeKlass()
