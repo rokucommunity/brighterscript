@@ -1750,6 +1750,36 @@ describe('Program', () => {
                 s`${sourceRoot}/source/main.bs`
             );
         });
+
+        it('replaces custom types in bs files', async () => {
+            let sourceRoot = s`${tmpPath}/sourceRootFolder`;
+            program = new Program({
+                rootDir: rootDir,
+                stagingFolderPath: stagingFolderPath,
+                sourceRoot: sourceRoot,
+                sourceMap: true
+            });
+            program.addOrReplaceFile('source/customType.bs', `
+                class SomeKlass
+                end class
+
+                function foo() as SomeKlass
+                    return new SomeKlass()
+                end function
+
+                sub bar(obj as SomeKlass)
+                end function
+            `);
+            await program.transpile([{
+                src: s`${rootDir}/source/main.bs`,
+                dest: s`source/main.bs`
+            }], stagingFolderPath);
+
+            const transpiledSource =
+                fsExtra.readFileSync(s`${stagingFolderPath}/source/customType.brs`).toString();
+            expect(transpiledSource.indexOf("as SomeKlass")).to.eq(-1);
+        });
+
     });
 
     describe('typedef', () => {
