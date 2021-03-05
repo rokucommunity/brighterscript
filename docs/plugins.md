@@ -93,8 +93,7 @@ After file addition/removal (note: throttled/debounced):
 - `afterProgramValidate`
 
 Code Actions
- - `beforeProgramGetCodeActions`
- - `afterProgramGetCodeActions`
+ - `onProgramGetCodeActions`
 
 ## Compiler API
 
