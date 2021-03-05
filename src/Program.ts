@@ -767,23 +767,24 @@ export class Program {
         const codeActions = [] as CodeAction[];
         const file = this.getFile(pathAbsolute);
         if (file) {
+            const diagnostics = this
+                //get all current diagnostics (filtered by diagnostic filters)
+                .getDiagnostics()
+                //only keep diagnostics related to this file
+                .filter(x => x.file === file)
+                //only keep diagnostics that touch this range
+                .filter(x => util.rangesIntersect(x.range, range));
 
-            this.plugins.emit('beforeProgramGetCodeActions', this, file, range, codeActions);
+            const scopes = this.getScopesForFile(file);
 
-            //get code actions from the file
-            file.getCodeActions(range, codeActions);
-
-            //get code actions from every scope this file is a member of
-            for (let key in this.scopes) {
-                let scope = this.scopes[key];
-
-                if (scope.hasFile(file)) {
-                    //get code actions from each scope this file is a member of
-                    scope.getCodeActions(file, range, codeActions);
-                }
-            }
-
-            this.plugins.emit('afterProgramGetCodeActions', this, file, range, codeActions);
+            this.plugins.emit('onGetCodeActions', {
+                program: this,
+                file: file,
+                range: range,
+                diagnostics: diagnostics,
+                scopes: scopes,
+                codeActions: codeActions
+            });
         }
         return codeActions;
     }

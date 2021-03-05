@@ -467,6 +467,24 @@ export class Util {
     }
 
     /**
+     * Does a touch b in any way?
+     */
+    public rangesIntersect(a: Range, b: Range) {
+        // Check if `a` is before `b`
+        if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character <= b.start.character)) {
+            return false;
+        }
+
+        // Check if `b` is before `a`
+        if (b.end.line < a.start.line || (b.end.line === a.start.line && b.end.character <= a.start.character)) {
+            return false;
+        }
+
+        // These ranges must intersect
+        return true;
+    }
+
+    /**
      * Test if `position` is in `range`. If the position is at the edges, will return true.
      * Adapted from core vscode
      * @param range

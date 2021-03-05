@@ -192,15 +192,13 @@ export interface CompilerPlugin {
     afterProgramValidate?: (program: Program) => void;
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
-    beforeProgramGetCodeActions?: (program: Program, file: BscFile, range: Range, codeActions: CodeAction[]) => void;
-    afterProgramGetCodeActions?: (program: Program, file: BscFile, range: Range, codeActions: CodeAction[]) => void;
+    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
     beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
     afterScopeValidate?: ValidateHandler;
-    onScopeGetCodeActions?: (scope: Scope, file: BscFile, range: Range, diagnostics: BsDiagnostic[], codeActions: CodeAction[]) => void;
     //file events
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
@@ -209,7 +207,16 @@ export interface CompilerPlugin {
     afterFileTranspile?: (entry: TranspileObj) => void;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
-    onFileGetCodeActions?: (file: BscFile, range: Range, diagnostics: BsDiagnostic[], codeActions: CodeAction[]) => void;
+}
+export type PluginHandler<T> = (event: T) => void;
+
+export interface OnGetCodeActionsEvent {
+    program: Program;
+    file: BscFile;
+    range: Range;
+    scopes: Scope[];
+    diagnostics: BsDiagnostic[];
+    codeActions: CodeAction[];
 }
 
 export interface TypedefProvider {

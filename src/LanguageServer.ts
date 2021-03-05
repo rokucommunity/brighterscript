@@ -41,7 +41,6 @@ import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { isBrsFile } from './astUtils/reflection';
-import { codeActionUtil } from './CodeActionUtil';
 
 export class LanguageServer {
     //cast undefined as any to get around strictNullChecks...it's ok in this case
@@ -554,26 +553,24 @@ export class LanguageServer {
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
 
-        let filePath = util.uriToPath(params.textDocument.uri);
+        let srcPath = util.uriToPath(params.textDocument.uri);
 
         //wait until the file has settled
-        await this.keyedThrottler.onIdleOnce(filePath, true);
+        await this.keyedThrottler.onIdleOnce(srcPath, true);
 
-        let codeActions = this
+        const codeActions = this
             .getWorkspaces()
             //skip programs that don't have this file
-            .filter(x => x.builder.program.hasFile(filePath))
-            .flatMap(workspace => workspace.builder.program.getCodeActions(filePath, params.range));
-
-        const distinctCodeActions = codeActionUtil.dedupe(codeActions);
+            .filter(x => x.builder?.program?.hasFile(srcPath))
+            .flatMap(workspace => workspace.builder.program.getCodeActions(srcPath, params.range));
 
         //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
-        for (const codeAction of distinctCodeActions) {
+        for (const codeAction of codeActions) {
             if (codeAction.diagnostics) {
                 codeAction.diagnostics = codeAction.diagnostics.map(x => util.toDiagnostic(x));
             }
         }
-        return distinctCodeActions;
+        return codeActions;
     }
 
     /**
