@@ -216,7 +216,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 state.tokenToSourceNode(this.asToken),
                 ' ',
                 //return type
-                state.tokenToSourceNode(this.returnTypeToken)
+                state.sourceNode(this.returnTypeToken, this.returnType.toTypeString())
             );
         }
         if (includeBody) {
