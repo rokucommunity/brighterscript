@@ -1088,7 +1088,7 @@ export class TemplateStringExpression extends Expression {
                     //wrap all other expressions with a bslib_toString call to prevent runtime type mismatch errors
                 } else {
                     add(
-                        'bslib_toString(',
+                        state.bslibPrefix + '_toString(',
                         ...expression.transpile(state),
                         ')'
                     );
@@ -1296,7 +1296,7 @@ export class TernaryExpression extends Expression {
             state.blockDepth--;
         } else {
             result.push(
-                state.sourceNode(this.test, `bslib_ternary(`),
+                state.sourceNode(this.test, state.bslibPrefix + `_ternary(`),
                 ...this.test.transpile(state),
                 state.sourceNode(this.test, `, `),
                 ...this.consequent?.transpile(state) ?? ['invalid'],
@@ -1381,7 +1381,7 @@ export class NullCoalescingExpression extends Expression {
             state.blockDepth--;
         } else {
             result.push(
-                `bslib_coalesce(`,
+                state.bslibPrefix + `_coalesce(`,
                 ...this.consequent.transpile(state),
                 ', ',
                 ...this.alternate.transpile(state),

@@ -1201,14 +1201,15 @@ export class Util {
         //copy bslib to the output directory
         await fsExtra.ensureDir(standardizePath(`${stagingDir}/source`));
         // eslint-disable-next-line
-        const bslib = require('bslib');
+        const bslib = require('@rokucommunity/bslib');
         let source = bslib.source as string;
 
         //apply the `bslib_` prefix to the functions
         let match: RegExpExecArray;
         const positions = [] as number[];
+        const regexp = /^(\s*(?:function|sub)\s+)([a-z0-9_]+)/mg;
         // eslint-disable-next-line no-cond-assign
-        while (match = /^(\s*(?:function|sub)\s+)([a-z0-9_]+)/.exec(source)) {
+        while (match = regexp.exec(source)) {
             positions.push(match.index + match[1].length);
         }
 

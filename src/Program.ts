@@ -26,7 +26,8 @@ import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 const startOfSourcePkgPath = `source${path.sep}`;
-const bslibRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
+const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
+const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
 
 export interface SourceObj {
     pathAbsolute: string;
@@ -126,13 +127,28 @@ export class Program {
      * The path to bslib.brs (the BrightScript runtime for certain BrighterScript features)
      */
     public get bslibPkgPath() {
-        //if there's a version of bslib from roku_modules loaded into the program, use that
-        if (this.getFileByPkgPath(bslibRokuModulesPkgPath)) {
-            return bslibRokuModulesPkgPath;
+        //if there's an aliased (preferred) version of bslib from roku_modules loaded into the program, use that
+        if (this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath)) {
+            return bslibAliasedRokuModulesPkgPath;
+
+            //if there's a non-aliased version of bslib from roku_modules, use that
+        } else if (this.getFileByPkgPath(bslibNonAliasedRokuModulesPkgPath)) {
+            return bslibNonAliasedRokuModulesPkgPath;
+
+            //default to the embedded version
         } else {
             return `source${path.sep}bslib.brs`;
         }
     }
+
+    public get bslibPrefix() {
+        if (this.bslibPkgPath === bslibNonAliasedRokuModulesPkgPath) {
+            return 'rokucommunity_bslib';
+        } else {
+            return 'bslib';
+        }
+    }
+
 
     /**
      * A map of every file loaded into this program, indexed by its original file location
@@ -1156,7 +1172,7 @@ export class Program {
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
-        if (!this.getFileByPkgPath(bslibRokuModulesPkgPath) && !this.getFileByPkgPath(s`source/bslib.brs`)) {
+        if (!this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath) && !this.getFileByPkgPath(s`source/bslib.brs`)) {
             promises.push(util.copyBslibToStaging(stagingFolderPath));
         }
         await Promise.all(promises);

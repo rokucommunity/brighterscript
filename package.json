@@ -108,9 +108,9 @@
         "vscode-jsonrpc": "^5.0.1"
     },
     "dependencies": {
+        "@rokucommunity/bslib": "^0.1.1",
         "@xml-tools/parser": "^1.0.7",
         "array-flat-polyfill": "^1.0.1",
-        "bslib": "npm:@rokucommunity/bslib@^0.1.1",
         "chalk": "^2.4.2",
         "chokidar": "^3.0.2",
         "clear": "^0.1.0",
