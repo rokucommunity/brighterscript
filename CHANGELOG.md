@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.34.2] - 2021-03-04
+### Added
+ - support for loading bslib without alias (i.e. `@rokucommunity/bslib`).
+### Fixed
+ - bslib npm alias bug crashing npm install on nodeJS < 12
+ - infinite loop during transpile when copying bslib
+ - bug where bslib.brs functions were not properly prefixed during transpile
+
+
+
 ## [0.34.1] - 2021-03-02
 ### Fixed
  - syntax parsing bugs within single-line if statements
@@ -1013,3 +1023,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.33.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.32.3...v0.33.0
 [0.34.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.33.0...v0.34.0
 [0.34.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.0...v0.34.1
+[0.34.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.1...v0.34.2
