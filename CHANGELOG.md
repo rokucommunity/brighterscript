@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.34.3]
+### Fixed
+ - bug when transpiling bsc with custom function and parameter return types
+
+
+
 ## [0.34.2] - 2021-03-04
 ### Added
  - support for loading bslib without alias (i.e. `@rokucommunity/bslib`).
@@ -1024,3 +1030,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.34.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.33.0...v0.34.0
 [0.34.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.0...v0.34.1
 [0.34.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.1...v0.34.2
+[0.34.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.2...v0.34.3
