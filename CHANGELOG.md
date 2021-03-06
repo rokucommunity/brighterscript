@@ -6,6 +6,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.34.3]
+### Fixed
+ - bug when transpiling bsc with custom function and parameter return types
+
+
+
+## [0.34.2] - 2021-03-04
+### Added
+ - support for loading bslib without alias (i.e. `@rokucommunity/bslib`).
+### Fixed
+ - bslib npm alias bug crashing npm install on nodeJS < 12
+ - infinite loop during transpile when copying bslib
+ - bug where bslib.brs functions were not properly prefixed during transpile
+
+
+
+## [0.34.1] - 2021-03-02
+### Fixed
+ - syntax parsing bugs within single-line if statements
+
+
+
+## [0.34.0] - 2021-02-28
+### Added
+ - language server file path completions inside strings that start with `pkg:` or `libpkg:`
+
+
+
+## [0.33.0] - 2021-02-27
+### Added
+ - support for ropm version of bslib.([#334](https://github.com/rokucommunity/brighterscript/pull/334))
+### Fixed
+ - parse crash when encountering immediately-invoked function expressions (IIFEs) ([#343](https://github.com/rokucommunity/brighterscript/pull/343))
+ - error during language server completions when activated on the first token in the file ([#342](https://github.com/rokucommunity/brighterscript/pull/342))
+ - refactored BrsFile.parseMode to be a property instead of a getter since there was no reason it needed to be a getter ([#341](https://github.com/rokucommunity/brighterscript/pull/341))
+
+
+
+## [0.32.3] - 2021-02-25
+### Fixed
+ - fix significant performance bug in diagnostic filtering
+ - tweaks to the logging system to make `logLevel=verbose` less chatty
+ - null reference error in `Scope.getFileByRelativePath()`
+ - fix class fields that were missing in getSymbol requests
+
+
+
 ## [0.32.2] - 2021-02-20
 ### Fixed
  - transpile bug when a template string starts with an expression ([#327](https://github.com/rokucommunity/brighterscript/pull/327))
@@ -977,4 +1024,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.31.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.30.9...v0.31.0
 [0.31.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.0...v0.31.1
 [0.31.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.1...v0.31.2
-[0.31.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.2...v0.31.3
+[0.32.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.31.2...v0.32.2
+[0.32.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.32.2...v0.32.3
+[0.33.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.32.3...v0.33.0
+[0.34.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.33.0...v0.34.0
+[0.34.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.0...v0.34.1
+[0.34.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.1...v0.34.2
+[0.34.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.2...v0.34.3

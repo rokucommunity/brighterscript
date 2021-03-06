@@ -1,4 +1,5 @@
 import type { CodeAction, CompletionItem, Position, Range } from 'vscode-languageserver';
+import * as path from 'path';
 import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
@@ -397,7 +398,7 @@ export class Scope {
             return;
         }
 
-        this.program.logger.time(LogLevel.info, [this._debugLogComponentName, 'validate()'], () => {
+        this.program.logger.time(LogLevel.debug, [this._debugLogComponentName, 'validate()'], () => {
 
             let parentScope = this.getParentScope();
 
@@ -835,6 +836,10 @@ export class Scope {
             let referencedFile = this.getFileByRelativePath(scriptImport.pkgPath);
             //if we can't find the file
             if (!referencedFile) {
+                //skip the default bslib file, it will exist at transpile time but should not show up in the program during validation cycle
+                if (scriptImport.pkgPath === `source${path.sep}bslib.brs`) {
+                    continue;
+                }
                 let dInfo: DiagnosticInfo;
                 if (scriptImport.text.trim().length === 0) {
                     dInfo = DiagnosticMessages.scriptSrcCannotBeEmpty();
@@ -863,6 +868,9 @@ export class Scope {
      * @param relativePath
      */
     protected getFileByRelativePath(relativePath: string) {
+        if (!relativePath) {
+            return;
+        }
         let files = this.getAllFiles();
         for (let file of files) {
             if (file.pkgPath.toLowerCase() === relativePath.toLowerCase()) {

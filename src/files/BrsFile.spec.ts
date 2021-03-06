@@ -16,8 +16,9 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { trim, trimMap } from '../testHelpers.spec';
+import { expectZeroDiagnostics, trim, trimMap } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
+import { Logger } from '../Logger';
 
 let sinon = sinonImport.createSandbox();
 
@@ -91,6 +92,45 @@ describe('BrsFile', () => {
     });
 
     describe('getCompletions', () => {
+        it('suggests pkg paths in strings that match that criteria', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print "pkg:"
+                end sub
+            `);
+            const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
+            const names = result.map(x => x.label);
+            expect(names.sort()).to.eql([
+                'pkg:/source/main.brs'
+            ]);
+        });
+
+        it('suggests libpkg paths in strings that match that criteria', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print "libpkg:"
+                end sub
+            `);
+            const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
+            const names = result.map(x => x.label);
+            expect(names.sort()).to.eql([
+                'libpkg:/source/main.brs'
+            ]);
+        });
+
+        it('suggests pkg paths in template strings', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print \`pkg:\`
+                end sub
+            `);
+            const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
+            const names = result.map(x => x.label);
+            expect(names.sort()).to.eql([
+                'pkg:/source/main.brs'
+            ]);
+        });
+
         it('waits for the file to be processed before collecting completions', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile('source/main.brs', `
@@ -122,7 +162,15 @@ describe('BrsFile', () => {
             expect(names).to.contain('m');
         });
 
-        it('includes all keywordsm`', () => {
+        it('does not fail for missing previousToken', () => {
+            //add a single character to the file, and get completions after it
+            program.addOrReplaceFile('source/main.brs', `i`);
+            expect(() => {
+                program.getCompletions(`${rootDir}/source/main.brs`, Position.create(0, 1)).map(x => x.label);
+            }).not.to.throw;
+        });
+
+        it('includes all keywords`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
@@ -374,6 +422,18 @@ describe('BrsFile', () => {
     });
 
     describe('parse', () => {
+        it('supports iife in assignment', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    result = sub()
+                    end sub()
+                    result = (sub()
+                    end sub)()
+                end sub
+            `);
+            expectZeroDiagnostics(program);
+        });
+
         it('uses the proper parse mode based on file extension', () => {
             function testParseMode(destPath: string, expectedParseMode: ParseMode) {
                 const file = program.addOrReplaceFile<BrsFile>(destPath, '');
@@ -2130,6 +2190,25 @@ describe('BrsFile', () => {
             const { code } = file.transpile();
             expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
         });
+
+        it('replaces custom types in parameter types and return types', () => {
+            testTranspile(`
+                function foo() as SomeKlass
+                    return new SomeKlass()
+                end function
+
+                sub bar(obj as SomeKlass)
+                end sub
+            `, `
+                function foo() as object
+                    return SomeKlass()
+                end function
+
+                sub bar(obj as object)
+                end sub
+            `);
+        });
+
     });
 
     describe('callfunc operator', () => {
@@ -2649,7 +2728,7 @@ describe('BrsFile', () => {
                 util.loadPlugins('', [
                     require.resolve('../examples/plugins/removePrint')
                 ]),
-                undefined
+                new Logger()
             );
             testPluginTranspile();
         });
@@ -2659,7 +2738,7 @@ describe('BrsFile', () => {
                 util.loadPlugins('', [
                     path.resolve(process.cwd(), './dist/examples/plugins/removePrint.js')
                 ]),
-                undefined
+                new Logger()
             );
             testPluginTranspile();
         });
@@ -2669,7 +2748,7 @@ describe('BrsFile', () => {
                 util.loadPlugins(process.cwd(), [
                     './dist/examples/plugins/removePrint.js'
                 ]),
-                undefined
+                new Logger()
             );
             testPluginTranspile();
         });

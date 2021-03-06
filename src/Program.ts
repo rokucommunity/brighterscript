@@ -26,6 +26,8 @@ import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 const startOfSourcePkgPath = `source${path.sep}`;
+const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
+const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
 
 export interface SourceObj {
     pathAbsolute: string;
@@ -122,6 +124,33 @@ export class Program {
     private diagnostics = [] as BsDiagnostic[];
 
     /**
+     * The path to bslib.brs (the BrightScript runtime for certain BrighterScript features)
+     */
+    public get bslibPkgPath() {
+        //if there's an aliased (preferred) version of bslib from roku_modules loaded into the program, use that
+        if (this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath)) {
+            return bslibAliasedRokuModulesPkgPath;
+
+            //if there's a non-aliased version of bslib from roku_modules, use that
+        } else if (this.getFileByPkgPath(bslibNonAliasedRokuModulesPkgPath)) {
+            return bslibNonAliasedRokuModulesPkgPath;
+
+            //default to the embedded version
+        } else {
+            return `source${path.sep}bslib.brs`;
+        }
+    }
+
+    public get bslibPrefix() {
+        if (this.bslibPkgPath === bslibNonAliasedRokuModulesPkgPath) {
+            return 'rokucommunity_bslib';
+        } else {
+            return 'bslib';
+        }
+    }
+
+
+    /**
      * A map of every file loaded into this program, indexed by its original file location
      */
     public files = {} as Record<string, BscFile>;
@@ -189,30 +218,36 @@ export class Program {
      * by walking through every file, so call this sparingly.
      */
     public getDiagnostics() {
-        let diagnostics = [...this.diagnostics];
+        return this.logger.time(LogLevel.info, ['Program.getDiagnostics()'], () => {
 
-        //get the diagnostics from all scopes
-        for (let scopeName in this.scopes) {
-            let scope = this.scopes[scopeName];
-            diagnostics.push(
-                ...scope.getDiagnostics()
-            );
-        }
+            let diagnostics = [...this.diagnostics];
 
-        //get the diagnostics from all unreferenced files
-        let unreferencedFiles = this.getUnreferencedFiles();
-        for (let file of unreferencedFiles) {
-            diagnostics.push(
-                ...file.getDiagnostics()
-            );
-        }
+            //get the diagnostics from all scopes
+            for (let scopeName in this.scopes) {
+                let scope = this.scopes[scopeName];
+                diagnostics.push(
+                    ...scope.getDiagnostics()
+                );
+            }
 
-        //filter out diagnostics based on our diagnostic filters
-        let finalDiagnostics = this.diagnosticFilterer.filter({
-            ...this.options,
-            rootDir: this.options.rootDir
-        }, diagnostics);
-        return finalDiagnostics;
+            //get the diagnostics from all unreferenced files
+            let unreferencedFiles = this.getUnreferencedFiles();
+            for (let file of unreferencedFiles) {
+                diagnostics.push(
+                    ...file.getDiagnostics()
+                );
+            }
+            const filteredDiagnostics = this.logger.time(LogLevel.debug, ['filter diagnostics'], () => {
+                //filter out diagnostics based on our diagnostic filters
+                let finalDiagnostics = this.diagnosticFilterer.filter({
+                    ...this.options,
+                    rootDir: this.options.rootDir
+                }, diagnostics);
+                return finalDiagnostics;
+            });
+            this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
+            return filteredDiagnostics;
+        });
     }
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
@@ -316,7 +351,7 @@ export class Program {
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
 
-                this.logger.time(LogLevel.info, ['parse', chalk.green(srcPath)], () => {
+                this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
                     brsFile.parse(sourceObj.source);
                 });
                 file = brsFile;
@@ -339,7 +374,9 @@ export class Program {
                     source: fileContents
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
-                xmlFile.parse(sourceObj.source);
+                this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
+                    xmlFile.parse(sourceObj.source);
+                });
 
                 file = xmlFile;
 
@@ -472,14 +509,16 @@ export class Program {
      * @param force - if true, then all scopes are force to validate, even if they aren't marked as dirty
      */
     public validate() {
-        this.logger.time(LogLevel.debug, ['Program.validate()'], () => {
+        this.logger.time(LogLevel.log, ['Validating project'], () => {
             this.diagnostics = [];
             this.plugins.emit('beforeProgramValidate', this);
 
-            for (let scopeName in this.scopes) {
-                let scope = this.scopes[scopeName];
-                scope.validate();
-            }
+            this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
+                for (let scopeName in this.scopes) {
+                    let scope = this.scopes[scopeName];
+                    scope.validate();
+                }
+            });
 
             //find any files NOT loaded into a scope
             for (let filePath in this.files) {
@@ -584,7 +623,6 @@ export class Program {
     public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {
         let results = new Map<Statement, FileLink<Statement>>();
         const filesSearched = new Set<BrsFile>();
-        let parseMode = originFile.getParseMode();
         let lowerNamespaceName = namespaceName?.toLowerCase();
         let lowerName = name?.toLowerCase();
         //look through all files in scope for matches
@@ -596,7 +634,7 @@ export class Program {
                 filesSearched.add(file);
 
                 for (const statement of [...file.parser.references.functionStatements, ...file.parser.references.classStatements.flatMap((cs) => cs.methods)]) {
-                    let parentNamespaceName = statement.namespaceName?.getName(parseMode)?.toLowerCase();
+                    let parentNamespaceName = statement.namespaceName?.getName(originFile.parseMode)?.toLowerCase();
                     if (statement.name.text.toLowerCase() === lowerName && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                         if (!results.has(statement)) {
                             results.set(statement, { item: statement, file: file });
@@ -1132,15 +1170,10 @@ export class Program {
             this.plugins.emit('afterFileTranspile', entry);
         });
 
-        //copy the brighterscript stdlib to the output directory
-        promises.push(
-            fsExtra.ensureDir(s`${stagingFolderPath}/source`).then(() => {
-                return fsExtra.copyFile(
-                    s`${__dirname}/../bslib.brs`,
-                    s`${stagingFolderPath}/source/bslib.brs`
-                );
-            })
-        );
+        //if there's no bslib file already loaded into the program, copy it to the staging directory
+        if (!this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath) && !this.getFileByPkgPath(s`source/bslib.brs`)) {
+            promises.push(util.copyBslibToStaging(stagingFolderPath));
+        }
         await Promise.all(promises);
 
         this.plugins.emit('afterProgramTranspile', this, entries);

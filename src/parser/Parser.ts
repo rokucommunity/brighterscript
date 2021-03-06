@@ -1750,6 +1750,8 @@ export class Parser {
                 values.push(this.advance() as PrintSeparatorSpace);
             } else if (this.check(TokenKind.Comma)) {
                 values.push(this.advance() as PrintSeparatorTab);
+            } else if (this.check(TokenKind.Else)) {
+                break; // inline branch
             } else {
                 values.push(this.expression());
             }
@@ -1780,7 +1782,7 @@ export class Parser {
             return new ReturnStatement(tokens);
         }
 
-        let toReturn = this.expression();
+        let toReturn = this.check(TokenKind.Else) ? undefined : this.expression();
         return new ReturnStatement(tokens, toReturn);
     }
 
@@ -1937,7 +1939,13 @@ export class Parser {
 
     private anonymousFunction(): Expression {
         if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
-            return this.functionDeclaration(true);
+            const func = this.functionDeclaration(true);
+            //if there's an open paren after this, this is an IIFE
+            if (this.check(TokenKind.LeftParen)) {
+                return this.finishCall(this.advance(), func);
+            } else {
+                return func;
+            }
         }
 
         //template string
