@@ -35,9 +35,9 @@ export class CodeActionsProcessor {
         }
 
         this.suggestedImports.add(lowerFunctionName);
-
+        const importStatements = (this.event.file as BrsFile).parser.references.importStatements;
         //find the position of the first import statement, or the top of the file if there is none
-        const insertPosition = (this.event.file as BrsFile).parser.references.importStatements[0]?.importToken.range?.start ?? util.createPosition(0, 0);
+        const insertPosition = importStatements[importStatements.length - 1]?.importToken.range?.start ?? util.createPosition(0, 0);
 
         //find all files that reference this function
         for (const file of this.event.file.program.findFilesForFunction(lowerFunctionName)) {
