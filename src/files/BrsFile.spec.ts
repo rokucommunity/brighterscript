@@ -92,7 +92,7 @@ describe('BrsFile', () => {
     });
 
     describe('getCompletions', () => {
-        it.only('does not crash for callfunc on a function call', () => {
+        it('does not crash for callfunc on a function call', () => {
             const file = program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     getManager()@.
