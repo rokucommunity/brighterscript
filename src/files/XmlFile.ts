@@ -294,7 +294,7 @@ export class XmlFile {
 
     /**
      * A slight hack. Gives the Program a way to support multiple components with the same name
-     * without causing major issues. If this value is larger than 0, it will be appended to the dependency graph key
+     * without causing major issues. If this value is anything other than 0, it will be appended to the dependency graph key
      * so this component won't collide with the primary component
      */
     public dependencyGraphIndex = -1;
@@ -311,7 +311,7 @@ export class XmlFile {
         } else {
             key = this.pkgPath.toLowerCase();
         }
-        if (this.dependencyGraphIndex > 0) {
+        if (this.dependencyGraphIndex !== 0) {
             key += '[' + this.dependencyGraphIndex + ']';
         }
         return key;
