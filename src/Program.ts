@@ -85,7 +85,8 @@ export class Program {
 
     private createGlobalScope() {
         //create the 'global' scope
-        this.globalScope = new Scope('global', 'scope:global', this);
+        this.globalScope = new Scope('global', this, 'scope:global');
+        this.globalScope.attachDependencyGraph(this.dependencyGraph);
         this.scopes.global = this.globalScope;
         //hardcode the files list for global scope to only contain the global file
         this.globalScope.getAllFiles = () => [globalFile];
@@ -102,7 +103,7 @@ export class Program {
      *      File.xml -> [lib1.brs, lib2.brs]
      *      lib2.brs -> [lib3.brs] //via an import statement
      */
-    public dependencyGraph = new DependencyGraph();
+    private dependencyGraph = new DependencyGraph();
 
     private diagnosticFilterer = new DiagnosticFilterer();
 
@@ -164,16 +165,20 @@ export class Program {
     }
 
     /**
-     * A map of every component currently loaded into the program, indexed by the component name
+     * A map of every component currently loaded into the program, indexed by the component name.
+     * It is an error to have multiple components with the sane name. However, we do store an array of components
+     * by name. With this approach we can provide a better developer expreience.
      */
-    private components = {} as Record<string, { file: XmlFile; scope: XmlScope }>;
+    private components = {} as Record<string, { file: XmlFile; scope: XmlScope }[]>;
 
     /**
      * Get the component with the specified name
      */
     public getComponent(componentName: string) {
         if (componentName) {
-            return this.components[componentName.toLowerCase()];
+            //return the first compoment in the list with this name
+            //(because they are sorted by pkgPath, this should provide a consistent read experience)
+            return this.components[componentName.toLowerCase()]?.[0];
         } else {
             return undefined;
         }
@@ -183,18 +188,50 @@ export class Program {
      * Register (or replace) the reference to a component in the component map
      */
     private registerComponent(xmlFile: XmlFile, scope: XmlScope) {
-        //store a reference to this component by its component name
-        this.components[(xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase()] = {
+        const key = (xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+        if (!this.components[key]) {
+            this.components[key] = [];
+        }
+        this.components[key].push({
             file: xmlFile,
             scope: scope
-        };
+        });
+        this.components[key].sort(
+            (x, y) => x.file.pkgPath.toLowerCase().localeCompare(y.file.pkgPath.toLowerCase())
+        );
+        this.syncComponentDependencyGraph(this.components[key]);
     }
 
     /**
      * Remove the specified component from the components map
      */
     private unregisterComponent(xmlFile: XmlFile) {
-        delete this.components[(xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase()];
+        const key = (xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+        const arr = this.components[key] || [];
+        for (let i = 0; i < arr.length; i++) {
+            if (arr[i].file === xmlFile) {
+                arr.splice(i, 1);
+                break;
+            }
+        }
+        this.syncComponentDependencyGraph(arr);
+    }
+
+    /**
+     * re-attach the dependency graph with a new key for any component who changed
+     * their position in their own named array (only matters when there are multiple
+     * components with the same name)
+     */
+    private syncComponentDependencyGraph(components: Array<{ file: XmlFile; scope: XmlScope }>) {
+        //reattach every dependency graph
+        for (let i = 0; i < components.length; i++) {
+            const xmlFile = components[i].file;
+            //re-attach the dependencyGraph for every component whose position changed
+            if (xmlFile.dependencyGraphIndex !== i) {
+                xmlFile.dependencyGraphIndex = i;
+                xmlFile.attachDependencyGraph(this.dependencyGraph);
+            }
+        }
     }
 
     /**
@@ -382,6 +419,7 @@ export class Program {
 
                 //create a new scope for this xml file
                 let scope = new XmlScope(xmlFile, this);
+                scope.attachDependencyGraph(this.dependencyGraph);
                 this.addScope(scope);
 
                 //register this compoent now that we have parsed it and know its component name
@@ -413,7 +451,8 @@ export class Program {
      */
     public createSourceScope() {
         if (!this.scopes.source) {
-            const sourceScope = new Scope('source', 'scope:source', this);
+            const sourceScope = new Scope('source', this, 'scope:source');
+            sourceScope.attachDependencyGraph(this.dependencyGraph);
             this.addScope(sourceScope);
         }
     }
