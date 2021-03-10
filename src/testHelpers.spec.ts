@@ -95,6 +95,9 @@ export function expectCodeActions(test: () => any, expected: CodeActionShorthand
     }
 
     const args = stub.getCalls().map(x => x.args[0]);
-
+    //delete any `diagnostics` arrays to help with testing performance (since it's circular...causes all sorts of issues)
+    for (let arg of args) {
+        delete arg.diagnostics;
+    }
     expect(args).to.eql(expected);
 }
