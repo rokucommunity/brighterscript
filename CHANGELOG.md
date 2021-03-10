@@ -6,7 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.34.3]
+## [0.35.0] - 2021-03-09
+### Added
+ - code actions for suggesting import statements in brighterscript files ([#347](https://github.com/rokucommunity/brighterscript/pull/347))
+### Fixed
+ - safer access to nullable callables and values during certain language server operations ([#328](https://github.com/rokucommunity/brighterscript/pull/328))
+
+
+
+## [0.34.3] -2021-03-05
 ### Fixed
  - bug when transpiling bsc with custom function and parameter return types
 
@@ -1031,3 +1039,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.34.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.0...v0.34.1
 [0.34.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.1...v0.34.2
 [0.34.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.2...v0.34.3
+[0.35.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.3...v0.35.0
