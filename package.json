@@ -91,7 +91,7 @@
         "eslint": "^7.11.0",
         "eslint-plugin-github": "^4.1.1",
         "eslint-plugin-no-only-tests": "^2.4.0",
-        "madge": "^3.4.4",
+        "madge": "^4.0.1",
         "mocha": "^7.1.1",
         "node-run-cmd": "^1.0.1",
         "nyc": "^15.0.0",
