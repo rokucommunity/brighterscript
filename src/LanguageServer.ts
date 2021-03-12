@@ -31,7 +31,6 @@ import {
 } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-
 import type { BsConfig } from './BsConfig';
 import { Deferred } from './deferred';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -559,17 +558,23 @@ export class LanguageServer {
         //ensure programs are initialized
         await this.waitAllProgramFirstRuns();
 
-        let filePath = util.uriToPath(params.textDocument.uri);
+        let srcPath = util.uriToPath(params.textDocument.uri);
 
         //wait until the file has settled
-        await this.keyedThrottler.onIdleOnce(filePath, true);
+        await this.keyedThrottler.onIdleOnce(srcPath, true);
 
-        let codeActions = this
+        const codeActions = this
             .getWorkspaces()
             //skip programs that don't have this file
-            .filter(x => x.builder.program.hasFile(filePath))
-            .flatMap(workspace => workspace.builder.program.getCodeActions(filePath, params.range));
+            .filter(x => x.builder?.program?.hasFile(srcPath))
+            .flatMap(workspace => workspace.builder.program.getCodeActions(srcPath, params.range));
 
+        //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
+        for (const codeAction of codeActions) {
+            if (codeAction.diagnostics) {
+                codeAction.diagnostics = codeAction.diagnostics.map(x => util.toDiagnostic(x));
+            }
+        }
         return codeActions;
     }
 
@@ -1066,16 +1071,7 @@ export class LanguageServer {
         const patch = await this.diagnosticCollection.getPatch(this.workspaces);
 
         for (let filePath in patch) {
-            const diagnostics = patch[filePath].map(d => {
-                return {
-                    severity: d.severity,
-                    range: d.range,
-                    message: d.message,
-                    relatedInformation: d.relatedInformation,
-                    code: d.code,
-                    source: 'brs'
-                };
-            });
+            const diagnostics = patch[filePath].map(d => util.toDiagnostic(d));
 
             this.connection.sendDiagnostics({
                 uri: URI.file(filePath).toString(),
