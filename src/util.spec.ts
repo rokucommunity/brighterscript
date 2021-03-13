@@ -2,7 +2,6 @@ import { expect } from 'chai';
 import * as path from 'path';
 import util, { standardizePath as s } from './util';
 import { Position, Range } from 'vscode-languageserver';
-import { Lexer } from './lexer';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
