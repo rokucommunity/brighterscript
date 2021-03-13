@@ -163,7 +163,7 @@ export interface CallableContainer {
 export type CallableContainerMap = Map<string, CallableContainer[]>;
 
 export interface CommentFlag {
-    file: BrsFile;
+    file: BscFile;
     /**
      * The location of the ignore comment.
      */
@@ -172,7 +172,7 @@ export interface CommentFlag {
      * The range that this flag applies to (i.e. the lines that should be suppressed/re-enabled)
      */
     affectedRange: Range;
-    codes: number[] | null;
+    codes: DiagnosticCode[] | null;
 }
 
 type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
@@ -232,3 +232,5 @@ export interface ExpressionInfo {
     varExpressions: Expression[];
     uniqueVarNames: string[];
 }
+
+export type DiagnosticCode = number | string;
