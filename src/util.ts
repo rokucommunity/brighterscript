@@ -26,7 +26,7 @@ import type { DottedGetExpression, Expression, VariableExpression } from './pars
 import { Logger, LogLevel } from './Logger';
 import type { Token } from './lexer';
 import { TokenKind } from './lexer';
-import { isBrsFile, isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
+import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
@@ -642,15 +642,12 @@ export class Util {
      * @param diagnostic
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
-        //for now, we only support suppressing brs file diagnostics
-        if (isBrsFile(diagnostic.file)) {
-            for (let flag of diagnostic.file.commentFlags) {
-                //this diagnostic is affected by this flag
-                if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
-                    //if the flag acts upon this diagnostic's code
-                    if (flag.codes === null || flag.codes.includes(diagnostic.code as number)) {
-                        return true;
-                    }
+        for (let flag of diagnostic.file?.commentFlags ?? []) {
+            //this diagnostic is affected by this flag
+            if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
+                //if the flag acts upon this diagnostic's code
+                if (flag.codes === null || flag.codes.includes(diagnostic.code as number)) {
+                    return true;
                 }
             }
         }

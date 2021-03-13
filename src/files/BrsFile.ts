@@ -392,7 +392,7 @@ export class BrsFile {
      * @param lines - the lines of the program
      */
     public getCommentFlags(tokens: Token[]) {
-        const processor = new CommentFlagProcessor(this, ['rem', `'`], [], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
+        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
 
         this.commentFlags = [];
         for (let token of tokens) {

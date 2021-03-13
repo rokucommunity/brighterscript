@@ -1093,4 +1093,56 @@ describe('XmlFile', () => {
         `);
         expect(file.scriptTagImports[0]?.text).to.eql('SingleQuotedFile.brs');
     });
+
+    describe('commentFlags', () => {
+        it('ignores warning from previous line comment', () => {
+            //component without a name attribute
+            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <!--bs:disable-next-line-->
+                <component>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('ignores warning from previous line just for the specified code', () => {
+            //component without a name attribute
+            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <!--bs:disable-next-line 1006-->
+                <component>
+                </component>
+            `);
+            program.validate();
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                DiagnosticMessages.xmlComponentMissingExtendsAttribute().message
+            ]);
+        });
+
+        it('ignores warning from previous line comment', () => {
+            //component without a name attribute
+            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component> <!--bs:disable-line-->
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('ignores warning from previous line just for the specified code', () => {
+            //component without a name attribute
+            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component> <!--bs:disable-line 1006-->
+                </component>
+            `);
+            program.validate();
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                DiagnosticMessages.xmlComponentMissingExtendsAttribute().message
+            ]);
+        });
+    });
 });

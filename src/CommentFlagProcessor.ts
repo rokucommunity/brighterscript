@@ -14,10 +14,6 @@ export class CommentFlagProcessor {
          */
         public commentStarters = [] as string[],
         /**
-         * An array of strings containing the types of text that a comment ends with. (i.e. `-->`)
-         */
-        public commentFinishers = [] as string[],
-        /**
          * Valid diagnostic codes. Codes NOT in this list will be flagged
          */
         public diagnosticCodes = [] as DiagnosticCode[],
