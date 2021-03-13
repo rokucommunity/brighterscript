@@ -1065,7 +1065,10 @@ export class TemplateStringExpression extends Expression {
                     ...items
                 );
             }
-            plus = items.length > 0 ? ' + ' : '';
+            //set the plus after the first occurance of a nonzero length set of items
+            if (plus === '' && items.length > 0) {
+                plus = ' + ';
+            }
         }
 
         for (let i = 0; i < this.quasis.length; i++) {
