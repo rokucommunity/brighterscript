@@ -1,9 +1,12 @@
+/* eslint-disable no-cond-assign */
 import { JSDOM } from 'jsdom';
 import * as phin from 'phin';
 import { parse as parseJsonc } from 'jsonc-parser';
 import * as fsExtra from 'fs-extra';
 import { standardizePath as s } from '../src/util';
-
+import { Parser } from '../src/parser/Parser';
+import type { CallExpression, LiteralExpression } from '../src/parser/Expression';
+import type { ExpressionStatement } from '../src/parser/Statement';
 
 class ComponentListBuilder {
     private references: any;
@@ -44,8 +47,46 @@ class ComponentListBuilder {
                 url: this.getDocUrl(docPath),
                 interfaces: this.getUlData(document, 'supported-interfaces'),
                 events: this.getUlData(document, 'supported-events'),
-                parameters: []
+                signatures: []
             } as Component;
+
+            if (document.body.innerHTML.match(/this object is created with no parameters/)) {
+                component.signatures.push({
+                    params: [],
+                    returnType: name
+                });
+                //scan the text for the constructor signatures
+            } else {
+
+                //find all createObject calls
+                const regexp = /CreateObject\(.*?\)/g;
+                let match;
+                while (match = regexp.exec(document.body.innerHTML)) {
+                    const { statements } = Parser.parse(match[0]);
+                    if (statements.length > 0) {
+                        const signature = {
+                            params: [],
+                            returnType: name
+                        } as Signature;
+                        const call = (statements[0] as ExpressionStatement).expression as CallExpression;
+                        //only scan createObject calls for our own name
+                        if ((call.args[0] as LiteralExpression)?.token?.text === `"${name}"`) {
+                            //skip the first arg because that's the name of the component
+                            for (let i = 1; i < call.args.length; i++) {
+                                const arg = call.args[i];
+                                signature.params.push({
+                                    name: `param${i}`,
+                                    default: 'invalid',
+                                    isRequred: true,
+                                    type: (arg as any).type?.toString() ?? 'dynamic'
+                                });
+                            }
+                            component.signatures.push(signature);
+                        }
+                    }
+                }
+            }
+            this.reduceSignatures(component.signatures);
 
             //if there is a custom handler for this doc, call it
             if (this[name]) {
@@ -54,6 +95,22 @@ class ComponentListBuilder {
             }
 
             this.result.components[name] = component;
+        }
+    }
+
+    private reduceSignatures(signatures: Array<Signature>) {
+        //remove duplicate signatures
+        const keys = {};
+        for (let i = signatures.length - 1; i >= 0; i--) {
+            const signature = signatures[i];
+            const paramKeys = signature.params.map(x => `${x.name}-${x.type}-${x.default}-${x.isRequred}`);
+            const key = `${signature.returnType}-${paramKeys.join('-')}`;
+            //if we already have this key, remove this signature from the list
+            if (keys[key]) {
+                signatures.splice(i, 1);
+            } else {
+                keys[key] = true;
+            }
         }
     }
 
@@ -176,7 +233,7 @@ class ComponentListBuilder {
 interface Component {
     name: string;
     url: string;
-    parameters: Param[];
+    signatures: Array<Signature>;
     interfaces: Reference[];
     events: Reference[];
 }
@@ -195,7 +252,7 @@ interface RokuInterface {
 
 interface Func {
     name: string;
-    parameters: Param[];
+    signatures: Array<Signature>;
 }
 interface Param {
     name: string;
@@ -208,6 +265,10 @@ interface Prop {
     description: string;
     type: string;
     default: string;
+}
+interface Signature {
+    params: Param[];
+    returnType: string;
 }
 
 //run the builder
