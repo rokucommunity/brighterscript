@@ -1,0 +1,2024 @@
+{
+    "components": {
+        "roAppInfo": {
+            "name": "roAppInfo",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roappinfo.md",
+            "interfaces": [
+                {
+                    "name": "ifAppInfo",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifappinfo.md"
+                }
+            ],
+            "events": []
+        },
+        "roAppManager": {
+            "name": "roAppManager",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roappmanager.md",
+            "interfaces": [
+                {
+                    "name": "ifAppManager",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifappmanager.md"
+                }
+            ],
+            "events": []
+        },
+        "roArray": {
+            "name": "roArray",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roarray.md",
+            "interfaces": [
+                {
+                    "name": "ifArray",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarray.md"
+                },
+                {
+                    "name": "ifArrayGet",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarrayget.md"
+                },
+                {
+                    "name": "ifArraySet",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarrayset.md"
+                },
+                {
+                    "name": "ifEnum",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifenum.md"
+                },
+                {
+                    "name": "ifArrayJoin",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarrayjoin.md"
+                },
+                {
+                    "name": "ifArraySort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarraysort.md"
+                }
+            ],
+            "events": []
+        },
+        "roAssociativeArray": {
+            "name": "roAssociativeArray",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roassociativearray.md",
+            "interfaces": [
+                {
+                    "name": "ifAssociativeArray",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifassociativearray.md"
+                },
+                {
+                    "name": "ifEnum",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifenum.md"
+                }
+            ],
+            "events": []
+        },
+        "roAudioGuide": {
+            "name": "roAudioGuide",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roaudioguide.md",
+            "interfaces": [
+                {
+                    "name": "ifAudioGuide",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifaudioguide.md"
+                }
+            ],
+            "events": []
+        },
+        "roAudioMetadata": {
+            "name": "roAudioMetadata",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roaudiometadata.md",
+            "interfaces": [
+                {
+                    "name": "ifAudioMetadata",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifaudiometadata.md"
+                }
+            ],
+            "events": []
+        },
+        "roAudioPlayer": {
+            "name": "roAudioPlayer",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roaudioplayer.md",
+            "interfaces": [
+                {
+                    "name": "ifAudioPlayer",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifaudioplayer.md"
+                },
+                {
+                    "name": "ifHttpAgent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roAudioPlayerEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roaudioplayerevent.md"
+                }
+            ]
+        },
+        "roAudioResource": {
+            "name": "roAudioResource",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roaudioresource.md",
+            "interfaces": [
+                {
+                    "name": "ifAudioResource",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifaudioresource.md"
+                }
+            ],
+            "events": []
+        },
+        "roBitmap": {
+            "name": "roBitmap",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/robitmap.md",
+            "interfaces": [
+                {
+                    "name": "ifDraw2D",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdraw2d.md"
+                }
+            ],
+            "events": []
+        },
+        "roBoolean": {
+            "name": "roBoolean",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roboolean.md",
+            "interfaces": [
+                {
+                    "name": "ifBoolean",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifboolean.md"
+                },
+                {
+                    "name": "ifToStr",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
+                }
+            ],
+            "events": []
+        },
+        "roByteArray": {
+            "name": "roByteArray",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/robytearray.md",
+            "interfaces": [
+                {
+                    "name": "ifByteArray",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifbytearray.md"
+                },
+                {
+                    "name": "ifArray",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarray.md"
+                },
+                {
+                    "name": "ifArrayGet",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarrayget.md"
+                },
+                {
+                    "name": "ifArraySet",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarrayset.md"
+                },
+                {
+                    "name": "ifEnum",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifenum.md"
+                }
+            ],
+            "events": []
+        },
+        "roCaptionRenderer": {
+            "name": "roCaptionRenderer",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rocaptionrenderer.md",
+            "interfaces": [
+                {
+                    "name": "ifCaptionRenderer",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifcaptionrenderer.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roCaptionRendererEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/event/rocaptionrendererevent.md"
+                }
+            ]
+        },
+        "roChannelStore": {
+            "name": "roChannelStore",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rochannelstore.md",
+            "interfaces": [
+                {
+                    "name": "ifChannelStore",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifchannelstore.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort ",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roChannelStoreEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rochannelstoreevent.md"
+                }
+            ]
+        },
+        "roCodeRegistrationScreen": {
+            "name": "roCodeRegistrationScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rocoderegistrationscreen.md",
+            "interfaces": [
+                {
+                    "name": "ifCodeRegistrationScreen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iifCodeRegistrationScreen.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roCodeRegistrationScreenEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rocoderegistrationscreenevent.md"
+                }
+            ]
+        },
+        "roCompositor": {
+            "name": "roCompositor",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rocompositor.md",
+            "interfaces": [
+                {
+                    "name": "ifCompositor",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifcompositor.md"
+                }
+            ],
+            "events": []
+        },
+        "roDataGramSocket": {
+            "name": "roDataGramSocket",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodatagramsocket.md",
+            "interfaces": [
+                {
+                    "name": "ifSocket",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocket.md"
+                },
+                {
+                    "name": "ifSocketAsync",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketasync.md"
+                },
+                {
+                    "name": "ifSocketStatus",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketstatus.md"
+                },
+                {
+                    "name": "ifSocketOption",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketoption.md"
+                },
+                {
+                    "name": "ifSocketCastOption ",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketcastoption.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roSocketEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifappinfo.md"
+                }
+            ]
+        },
+        "roDateTime": {
+            "name": "roDateTime",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodatetime.md",
+            "interfaces": [
+                {
+                    "name": "ifDateTime",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdatetime.md"
+                }
+            ],
+            "events": []
+        },
+        "roDeviceInfo": {
+            "name": "roDeviceInfo",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodeviceinfo.md",
+            "interfaces": [
+                {
+                    "name": "ifDeviceInfo",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdeviceinfo.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roDeviceInfoEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rodeviceinfoevent.md"
+                }
+            ]
+        },
+        "roDouble": {
+            "name": "roDouble",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodouble.md",
+            "interfaces": [
+                {
+                    "name": "ifDouble",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdouble.md"
+                },
+                {
+                    "name": "ifToStr",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
+                }
+            ],
+            "events": []
+        },
+        "roDeviceCrypto": {
+            "name": "roDeviceCrypto",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rodevicecrypto.md",
+            "interfaces": [
+                {
+                    "name": "ifDeviceCrypto",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdevicecrypto.md"
+                }
+            ],
+            "events": []
+        },
+        "roEVPCipher": {
+            "name": "roEVPCipher",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roevpcipher.md",
+            "interfaces": [
+                {
+                    "name": "ifEVPCipher",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifevpcipher.md"
+                }
+            ],
+            "events": []
+        },
+        "roEVPDigest": {
+            "name": "roEVPDigest",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roevpdigest.md",
+            "interfaces": [
+                {
+                    "name": "ifEVPDigest",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifevpdigest.md"
+                }
+            ],
+            "events": []
+        },
+        "roFileSystem": {
+            "name": "roFileSystem",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofilesystem.md",
+            "interfaces": [
+                {
+                    "name": "ifFileSystem",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffilesystem.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roFileSystemEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rofilesystemevent.md"
+                }
+            ]
+        },
+        "roFloat": {
+            "name": "roFloat",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofloat.md",
+            "interfaces": [
+                {
+                    "name": "ifFloat",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffloat.md"
+                },
+                {
+                    "name": "ifToStr",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
+                }
+            ],
+            "events": []
+        },
+        "roFont": {
+            "name": "roFont",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofont.md",
+            "interfaces": [
+                {
+                    "name": "ifFont",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffont.md"
+                }
+            ],
+            "events": []
+        },
+        "roFontMetrics": {
+            "name": "roFontMetrics",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofontmetrics.md",
+            "interfaces": [
+                {
+                    "name": "ifFontMetrics",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffontmetrics.md"
+                }
+            ],
+            "events": []
+        },
+        "roFontRegistry": {
+            "name": "roFontRegistry",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofontregistry.md",
+            "interfaces": [
+                {
+                    "name": "ifFontRegistry",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffontregistry.md"
+                }
+            ],
+            "events": []
+        },
+        "roFunction": {
+            "name": "roFunction",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rofunction.md",
+            "interfaces": [
+                {
+                    "name": "ifFunction",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffunction.md"
+                },
+                {
+                    "name": "ifToStr",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
+                }
+            ],
+            "events": []
+        },
+        "roGridScreen": {
+            "name": "roGridScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rogridscreen.md",
+            "interfaces": [
+                {
+                    "name": "ifGridScreen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgridscreen.md"
+                },
+                {
+                    "name": "ifHttpAgent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roGridScreenEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rogridscreenevent.md"
+                }
+            ]
+        },
+        "roHdmiStatus": {
+            "name": "roHdmiStatus",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rohdmistatus.md",
+            "interfaces": [
+                {
+                    "name": "ifHdmiStatus",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhdmistatus.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                }
+            ],
+            "events": []
+        },
+        "roHMAC": {
+            "name": "roHMAC",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rohmac.md",
+            "interfaces": [
+                {
+                    "name": "ifHMAC",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhmac.md"
+                }
+            ],
+            "events": []
+        },
+        "roHttpAgent": {
+            "name": "roHttpAgent",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rohttpagent.md",
+            "interfaces": [
+                {
+                    "name": "ifHttpAgent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
+                }
+            ],
+            "events": []
+        },
+        "roImageCanvas": {
+            "name": "roImageCanvas",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roimagecanvas.md",
+            "interfaces": [
+                {
+                    "name": "ifImageCanvas",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifimagecanvas.md"
+                },
+                {
+                    "name": "ifHttpAgent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roImageCanvasEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roimagecanvasevent.md"
+                }
+            ]
+        },
+        "roImageMetaData": {
+            "name": "roImageMetaData",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roimagemetadata.md",
+            "interfaces": [
+                {
+                    "name": "ifImageMetadata",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifimagemetadata.md"
+                }
+            ],
+            "events": []
+        },
+        "roInput": {
+            "name": "roInput",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roinput.md",
+            "interfaces": [
+                {
+                    "name": "ifInput",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifinput.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roInputEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roinputevent.md"
+                }
+            ]
+        },
+        "roInt": {
+            "name": "roInt",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roint.md",
+            "interfaces": [
+                {
+                    "name": "ifInt",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifint.md"
+                },
+                {
+                    "name": "ifIntOps",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifintops.md"
+                },
+                {
+                    "name": "ifToStr",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
+                }
+            ],
+            "events": []
+        },
+        "roInvalid": {
+            "name": "roInvalid",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roinvalid.md",
+            "interfaces": [
+                {
+                    "name": "ifToStr",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
+                }
+            ],
+            "events": []
+        },
+        "roKeyboardScreen": {
+            "name": "roKeyboardScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rokeyboardscreen.md",
+            "interfaces": [
+                {
+                    "name": "ifKeyboardScreen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifkeyboardscreen.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roKeyboardScreenEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rokeyboardscreenevent.md"
+                }
+            ]
+        },
+        "roList": {
+            "name": "roList",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolist.md",
+            "interfaces": [
+                {
+                    "name": "ifList",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflist.md"
+                },
+                {
+                    "name": "ifArray",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarray.md"
+                },
+                {
+                    "name": "ifArrayGet",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarrayget.md"
+                },
+                {
+                    "name": "ifArraySet",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarrayset.md"
+                },
+                {
+                    "name": "ifEnum",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifenum.md"
+                },
+                {
+                    "name": "ifListToArray",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflisttoarray.md"
+                }
+            ],
+            "events": []
+        },
+        "roListScreen": {
+            "name": "roListScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolistscreen.md",
+            "interfaces": [
+                {
+                    "name": "ifListScreen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflistscreen.md"
+                },
+                {
+                    "name": "ifHttpAgent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roListScreenEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rolistscreenevent.md"
+                }
+            ]
+        },
+        "roLocalization": {
+            "name": "roLocalization",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolocalization.md",
+            "interfaces": [
+                {
+                    "name": "ifLocalization",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflocalization.md"
+                }
+            ],
+            "events": []
+        },
+        "roLongInteger": {
+            "name": "roLongInteger",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rolonginteger.md",
+            "interfaces": [
+                {
+                    "name": "ifLongInt",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflongint.md"
+                },
+                {
+                    "name": "ifToStr",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
+                }
+            ],
+            "events": []
+        },
+        "roMessageDialog": {
+            "name": "roMessageDialog",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/romessagedialog.md",
+            "interfaces": [
+                {
+                    "name": "ifMessageDialog",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifmessagedialog.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort ",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roMessageDialogEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/romessagedialogevent.md"
+                }
+            ]
+        },
+        "roMessagePort": {
+            "name": "roMessagePort",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/romessageport.md",
+            "interfaces": [
+                {
+                    "name": "ifMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifmessageport.md"
+                }
+            ],
+            "events": []
+        },
+        "roMicrophone": {
+            "name": "roMicrophone",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/romicrophone.md",
+            "interfaces": [
+                {
+                    "name": "ifMicrophone",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifmicrophone.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roMicrophoneEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/romicrophoneevent.md"
+                }
+            ]
+        },
+        "roOneLineDialog": {
+            "name": "roOneLineDialog",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roonelinedialog.md",
+            "interfaces": [
+                {
+                    "name": "ifOneLineDialog",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifonelinedialog.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifGetMessagePort.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roOneLineDialogEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roonelinedialogevent.md"
+                }
+            ]
+        },
+        "roParagraphScreen": {
+            "name": "roParagraphScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roparagraphscreen.md",
+            "interfaces": [
+                {
+                    "name": "ifParagraphScreen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifparagraphscreen.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roParagraphScreenEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roparagraphscreenevent.md"
+                }
+            ]
+        },
+        "roPath": {
+            "name": "roPath",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/ropath.md",
+            "interfaces": [
+                {
+                    "name": "ifPath",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifpath.md"
+                },
+                {
+                    "name": "ifString",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifstring.md"
+                }
+            ],
+            "events": []
+        },
+        "roPinEntryDialog": {
+            "name": "roPinEntryDialog",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/ropinentrydialog.md",
+            "interfaces": [
+                {
+                    "name": "ifPinEntryDialog",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifpinentrydialog.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roPinEntryDialogEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/ropinentrydialogevent.md"
+                }
+            ]
+        },
+        "roPosterScreen": {
+            "name": "roPosterScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roposterscreen.md",
+            "interfaces": [
+                {
+                    "name": "ifPosterScreen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifposterscreen.md"
+                },
+                {
+                    "name": "ifHttpAgent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roPosterScreenEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roposterscreenevent.md"
+                }
+            ]
+        },
+        "roProgramGuide": {
+            "name": "roProgramGuide",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roprogramguide.md",
+            "interfaces": [
+                {
+                    "name": "ifProgramGuide",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifprogramguide.md"
+                }
+            ],
+            "events": []
+        },
+        "roRegex": {
+            "name": "roRegex",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roregex.md",
+            "interfaces": [
+                {
+                    "name": "ifRegex",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifregex.md"
+                }
+            ],
+            "events": []
+        },
+        "roRegion": {
+            "name": "roRegion",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roregion.md",
+            "interfaces": [
+                {
+                    "name": "ifRegion",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifregion.md"
+                }
+            ],
+            "events": []
+        },
+        "roRegistry": {
+            "name": "roRegistry",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roregistry.md",
+            "interfaces": [
+                {
+                    "name": "ifRegistry",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifregistry.md"
+                }
+            ],
+            "events": []
+        },
+        "roRegistrySection": {
+            "name": "roRegistrySection",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roregistrysection.md",
+            "interfaces": [
+                {
+                    "name": "ifRegistrySection",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifregistrysection.md"
+                }
+            ],
+            "events": []
+        },
+        "roRSA": {
+            "name": "roRSA",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rorsa.md",
+            "interfaces": [
+                {
+                    "name": "ifRSA",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifrsa.md"
+                }
+            ],
+            "events": []
+        },
+        "roScreen": {
+            "name": "roScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roscreen.md",
+            "interfaces": [
+                {
+                    "name": "ifScreen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifscreen.md"
+                },
+                {
+                    "name": "ifDraw2D",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdraw2d.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roUniversalControlEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rouniversalcontrolevent.md"
+                }
+            ]
+        },
+        "roSearchHistory": {
+            "name": "roSearchHistory",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosearchhistory.md",
+            "interfaces": [
+                {
+                    "name": "ifSearchHistory",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsearchhistory.md"
+                }
+            ],
+            "events": []
+        },
+        "roSearchScreen": {
+            "name": "roSearchScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosearchscreen.md",
+            "interfaces": [
+                {
+                    "name": "ifSearchScreen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsearchscreen.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roSearchScreenEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rosearchscreenevent.md"
+                }
+            ]
+        },
+        "roSGNode": {
+            "name": "roSGNode",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgnode.md",
+            "interfaces": [
+                {
+                    "name": "ifAssociativeArray",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifassociativearray.md"
+                },
+                {
+                    "name": "ifSGNodeChildren",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodechildren.md"
+                },
+                {
+                    "name": "ifSGNodeField",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodefield.md"
+                },
+                {
+                    "name": "ifSGNodeDict",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodedict.md"
+                },
+                {
+                    "name": "ifSGNodeFocus",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodefocus.md"
+                },
+                {
+                    "name": "ifSGNodeBoundingRect",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodeboundingrect.md"
+                },
+                {
+                    "name": "ifSGNodeHttpAgentAccess",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgnodehttpagentaccess.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roSGNodeEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rosgnodeevent.md"
+                }
+            ]
+        },
+        "roSGScreen": {
+            "name": "roSGScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosgscreen.md",
+            "interfaces": [
+                {
+                    "name": "ifSgScreen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsgscreen.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roSGScreenEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rosgscreenevent.md"
+                }
+            ]
+        },
+        "roSlideShow": {
+            "name": "roSlideShow",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roslideshow.md",
+            "interfaces": [
+                {
+                    "name": "ifSlideShow",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifslideshow.md"
+                },
+                {
+                    "name": "ifHttpAgent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roSlideShowEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roslideshowevent.md"
+                }
+            ]
+        },
+        "roSocketAddress": {
+            "name": "roSocketAddress",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosocketaddress.md",
+            "interfaces": [
+                {
+                    "name": "ifSocketAddress",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketaddress.md"
+                }
+            ],
+            "events": []
+        },
+        "roSpringboardScreen": {
+            "name": "roSpringboardScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rospringboardscreen.md",
+            "interfaces": [
+                {
+                    "name": "ifSpringboardScreen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifspringboardscreen.md"
+                },
+                {
+                    "name": "ifHttpAgent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roSpringboardScreenEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rospringboardscreenevent.md"
+                }
+            ]
+        },
+        "roSprite": {
+            "name": "roSprite",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosprite.md",
+            "interfaces": [
+                {
+                    "name": "ifSprite",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsprite.md"
+                }
+            ],
+            "events": []
+        },
+        "roStreamSocket": {
+            "name": "roStreamSocket",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostreamsocket.md",
+            "interfaces": [
+                {
+                    "name": "ifSocketConnection",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketconnection.md"
+                },
+                {
+                    "name": "ifSocket",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocket.md"
+                },
+                {
+                    "name": "ifSocketAsync",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketasync.md"
+                },
+                {
+                    "name": "ifSocketStatus",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketstatus.md"
+                },
+                {
+                    "name": "ifSocketConnectionStatus",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketconnectionstatus.md"
+                },
+                {
+                    "name": "ifSocketConnectionOption",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketconnectionoption.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roSocketEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rosocketevent.md"
+                }
+            ]
+        },
+        "roString": {
+            "name": "roString",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rostring.md",
+            "interfaces": [
+                {
+                    "name": "ifString",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifstring.md"
+                },
+                {
+                    "name": "ifStringOps",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifstringops.md"
+                },
+                {
+                    "name": "ifToStr",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
+                }
+            ],
+            "events": []
+        },
+        "roSystemlog": {
+            "name": "roSystemlog",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rosystemlog.md",
+            "interfaces": [
+                {
+                    "name": "ifSystemLog",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsystemlog.md"
+                }
+            ],
+            "events": []
+        },
+        "roTextScreen": {
+            "name": "roTextScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotextscreen.md",
+            "interfaces": [
+                {
+                    "name": "ifTextScreen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftextscreen.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roTextScreenEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rotextscreenevent.md"
+                }
+            ]
+        },
+        "roTextToSpeech": {
+            "name": "roTextToSpeech",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexttospeech.md",
+            "interfaces": [
+                {
+                    "name": "ifTextToSpeech",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftexttospeech.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roTextToSpeechEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rotexttospeechevent.md"
+                }
+            ]
+        },
+        "roTextureManager": {
+            "name": "roTextureManager",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexturemanager.md",
+            "interfaces": [
+                {
+                    "name": "ifTextureManager",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftexturemanager.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                },
+                {
+                    "name": "ifHttpAgent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roTextureRequestEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rotexturerequestevent.md"
+                }
+            ]
+        },
+        "roTextureRequest": {
+            "name": "roTextureRequest",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotexturerequest.md",
+            "interfaces": [
+                {
+                    "name": "ifTextureRequest",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftexturerequest.md"
+                },
+                {
+                    "name": "ifHttpAgent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
+                }
+            ],
+            "events": []
+        },
+        "roTimespan": {
+            "name": "roTimespan",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rotimespan.md",
+            "interfaces": [
+                {
+                    "name": "ifTimespan",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftimespan.md"
+                }
+            ],
+            "events": []
+        },
+        "roUrlTransfer": {
+            "name": "roUrlTransfer",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rourltransfer.md",
+            "interfaces": [
+                {
+                    "name": "ifUrlTransfer",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifurltransfer.md"
+                },
+                {
+                    "name": "ifHttpAgent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roUrlEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rourlevent.md"
+                }
+            ]
+        },
+        "roVideoPlayer": {
+            "name": "roVideoPlayer",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rovideoplayer.md",
+            "interfaces": [
+                {
+                    "name": "ifVideoPlayer",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifvideoplayer.md"
+                },
+                {
+                    "name": "ifHttpAgent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roVideoPlayerEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rovideoplayerevent.md"
+                }
+            ]
+        },
+        "roVideoScreen": {
+            "name": "roVideoScreen",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/rovideoscreen.md",
+            "interfaces": [
+                {
+                    "name": "ifVideoScreen",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifvideoscreen.md"
+                },
+                {
+                    "name": "ifHttpAgent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
+                },
+                {
+                    "name": "ifSetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
+                },
+                {
+                    "name": "ifGetMessagePort",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifgetmessageport.md"
+                }
+            ],
+            "events": [
+                {
+                    "name": "roVideoScreenEvent",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rovideoscreenevent.md"
+                }
+            ]
+        },
+        "roXMLElement": {
+            "name": "roXMLElement",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmlelement.md",
+            "interfaces": [
+                {
+                    "name": "ifXMLElement",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifxmlelement.md"
+                }
+            ],
+            "events": []
+        },
+        "roXMLList": {
+            "name": "roXMLList",
+            "url": "https://developer.roku.com/en-ca/docs/references/brightscript/components/roxmllist.md",
+            "interfaces": [
+                {
+                    "name": "ifList",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflist.md"
+                },
+                {
+                    "name": "ifXMLList",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifxmllist.md"
+                },
+                {
+                    "name": "ifListToArray",
+                    "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflisttoarray.md"
+                }
+            ],
+            "events": []
+        }
+    },
+    "interfaces": {
+        "AppManagerTheme": {
+            "name": "AppManagerTheme",
+            "properties": [
+                {
+                    "name": "BackgroundColor",
+                    "description": "HTML HEX Color Value. Screen types: Gr Li Pa Po Se Sp Te. Example: #E0DFDF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "BreadcrumbDelimiter",
+                    "description": "HTML HEX Color Value. Screen types: Gr Li Pa Po Se Sp Te. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "BreadcrumbTextLeft",
+                    "description": "HTML HEX Color Value. Screen types: Gr Li Pa Po Se Sp Te. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "BreadcrumbTextRight",
+                    "description": "HTML HEX Color Value. Screen types: Gr Li Pa Po Se Sp Te. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ButtonHighlightColor",
+                    "description": "HTML HEX Color Value. Screen types: Di Se Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ButtonMenuHighlightText",
+                    "description": "HTML HEX Color Value. Screen types: Di Se Sp. Example: #0033FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ButtonMenuNormalOverlayText",
+                    "description": "HTML HEX Color Value. Screen types: Di Se Sp. Example: #B0B0B0",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ButtonMenuNormalText",
+                    "description": "HTML HEX Color Value. Screen types: Di Se Sp. Example: #686868",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ButtonNormalColor",
+                    "description": "HTML HEX Color Value. Screen types: Di Se Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "CounterSeparator",
+                    "description": "HTML HEX Color Value. Screen types: Gr Po. Example: #00FF00",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "CounterTextLeft",
+                    "description": "HTML HEX Color Value. Screen types: Gr Po. Example: #FF0000",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "CounterTextRight",
+                    "description": "HTML HEX Color Value. Screen types: Gr Po. Example: #0000FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "DialogBodyText",
+                    "description": "HTML HEX Color Value. Must be a grayscale value. Screen types: Di. Example: #808080",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "DialogTitleText",
+                    "description": "HTML HEX Color Value. Must be a grayscale value. Screen types: Di. Example: #363636",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "EpisodeSynopsisText",
+                    "description": "HTML HEX Color Value. Screen types: Po. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "FilterBannerActiveColor",
+                    "description": "HTML HEX Color Value. Screen types: Po. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "FilterBannerActiveHD",
+                    "description": "URL to set HD Filter Banner Active/Focus Highlighter. Screen types: Po. Example: pkg:/images/Filter_ActiveHint_HD.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "FilterBannerActiveSD",
+                    "description": "URL to set SD Filter Banner Active/Focus Highlighter. Screen types: Po. Example: pkg:/images/Filter_ActiveHint_SD43.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "FilterBannerInactiveColor",
+                    "description": "HTML HEX Color Value. Screen types: Po. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "FilterBannerInactiveHD",
+                    "description": "URL to set HD Filter Banner Inactive Highlighter. Screen types: Po. Example: pkg:/images/Filter_InactiveHint_HD.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "FilterBannerInactiveSD",
+                    "description": "URL to set SD Filter Banner Inactive Highlighter. Screen types: Po. Example: pkg:/images/Filter_ActiveHint_SD43.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "FilterBannerSideColor",
+                    "description": "HTML HEX Color Value. Screen types: Po. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "FilterBannerSliceHD",
+                    "description": "URL to set HD Filter Banner Background Image. Screen types: Po. Example: pkg:/images/Filter_ActiveHint_HD.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "FilterBannerSliceSD",
+                    "description": "URL to set SD Filter Banner Background Image. Screen types: Po. Example: pkg:/images/Filter_ActiveHint_SD43.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenBackgroundColor",
+                    "description": "HTML HEX Color Value Must be a grayscale value. Screen types: Gr. Example: #363636",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenBorderOffsetHD",
+                    "description": "String representing point \"(x, y)\" that is the offset from the upper left corner of the focused HD image. Set to the negative width &amp; height of border. Screen types: Gr. Example: (-25,-25)",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenBorderOffsetSD",
+                    "description": "String representing point \"(x, y)\" that is the offset from the upper left corner of the focused SD image. Set to the negative width &amp; height of border. Screen types: Gr. Example: (-20,-20)",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenDescriptionDateColor",
+                    "description": "HTML HEX Color Value. Screen types: Gr. Example: #FF005B",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenDescriptionImageHD",
+                    "description": "URL to set HD Description callout background image on Grid. Screen types: Gr. Example: pkg:/images/Description_Background_HD.ng",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenDescriptionImageSD",
+                    "description": "URL to set SD Description callout background image on Grid. Screen types: Gr. Example: pkg:/images/Description_Background_SD43.ng",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenDescriptionOffsetHD",
+                    "description": "String representing point \"(x, y)\" that is the offset from the upper left corner of the focused HD image. Negative values have the description above and to the left of the focused image. Screen types: Gr. Example: (190,255)",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenDescriptionOffsetSD",
+                    "description": "String representing point \"(x, y)\" that is the offset from the upper left corner of the focused SD image. Negative values have the description above and to the left of the focused image. Screen types: Gr. Example: (125,170)",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenDescriptionRuntimeColor",
+                    "description": "HTML HEX Color Value. Screen types: Gr. Example: #5B005B",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenDescriptionSynopsisColor",
+                    "description": "HTML HEX Color Value. Screen types: Gr. Example: #606000",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenDescriptionTitleColor",
+                    "description": "HTML HEX Color Value. Screen types: Gr. Example: #00FFFF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenFocusBorderHD",
+                    "description": "URL to set HD Focus image on Active Grid Poster. Screen types: Gr. Example: pkg:/images/Border_16x9_HD.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenFocusBorderSD",
+                    "description": "URL to set SD Focus image on Active Grid Poster. Screen types: Gr. Example: pkg:/images/Border_16x9_SD43.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenListNameColor",
+                    "description": "HTML HEX Color Value. Must be a grayscale value. Screen types: Gr. Example: #FFFFFF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenLogoHD",
+                    "description": "Logo formatted for display in the overhang. Screen types: Gr. Example: pkg:/images/gridlogoHD.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenLogoOffsetHD_X",
+                    "description": "Offset in pixels from the top-left origin of the display. Range 0 to 1280. Screen types: Gr. Example: 592",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenLogoOffsetHD_Y",
+                    "description": "Offset in pixels from the top-left origin of the display. Range 0 to 720. Screen types: Gr. Example: 31",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenLogoOffsetSD_X",
+                    "description": "Offset in pixels from the top-left origin of the display. Range 0 to 720. Screen types: Gr. Example: 324",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenLogoOffsetSD_Y",
+                    "description": "Offset in pixels from the top-left origin of the display. Range 0 to 480. Screen types: Gr. Example: 21",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenLogoSD",
+                    "description": "Logo formatted for display in the overhang. Screen types: Gr. Example: pkg:/images/gridlogoSD.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenMessageColor",
+                    "description": "HTML HEX Color Value. Must be a grayscale value. Screen types: Gr. Example: #808080",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenOverhangHeightHD",
+                    "description": "The HD overhang height. Default: \"69\". Screen types: Gr. Example: 75",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenOverhangHeightSD",
+                    "description": "The SD overhang height. Default: \"49\". Screen types: Gr. Example: 55",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenOverhangSliceHD",
+                    "description": "URI for the overhang slice (thin piece of top of screen border). Screen types: Gr. Example: pkg:/images/gridoverhangHD.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenOverhangSliceSD",
+                    "description": "URI for the overhang slice (thin piece of top of screen border). Screen types: Gr. Example: pkg:/images/gridoverhangSD.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "GridScreenRetrievingColor",
+                    "description": "HTML HEX Color Value. Must be a grayscale value. Screen types: Gr. Example: #CCCCCC",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ListItemHighlightHD",
+                    "description": "URL to set HD highlight image. Screen types: Gr Li Po. Example: pkg:/images/listitem_highlight_hd.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ListItemHighlightSD",
+                    "description": "URL to set SD highlight image. Screen types: Gr Li Po. Example: pkg:/images/listitem_highlight_sd.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ListItemHighlightText",
+                    "description": "HTML HEX Color Value. Screen types: Gr Li Po. Example: #CCCC00",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ListItemText",
+                    "description": "HTML HEX Color Value. Screen types: Gr Li Po. Example: #CCCC00",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ListScreenDescriptionText",
+                    "description": "HTML HEX Color Value. Screen types: Li. Example: #CCCC00",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ListScreenTitleColor",
+                    "description": "HTML HEX Color Value. Screen types: Li. Example: #CC0000",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangPrimaryLogoHD",
+                    "description": "Small application logo formatted for display in overhang top left. Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/co_logo_sd.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangPrimaryLogoOffsetHD_X",
+                    "description": "Offset in pixels from the top-left origin of the display films.Range 0 to 1280. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 25",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangPrimaryLogoOffsetHD_Y",
+                    "description": "Offset in pixels from the top-left origin of the display films.Range 0 to 720. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 50",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangPrimaryLogoOffsetSD_X",
+                    "description": "Offset in pixels from the top-left origin of the display films.Range 0 to 720. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 25",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangPrimaryLogoOffsetSD_Y",
+                    "description": "Offset in pixels from the top-left origin of the display films.Range 0 to 480. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 50",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangPrimaryLogoSD",
+                    "description": "Small application logo formatted for display in overhang top left. Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/co_logo_sd.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangSecondaryLogoHD",
+                    "description": "Small application logo formatted for display in overhang top left. Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/co_logo_hd.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangSecondaryLogoOffsetHD_X",
+                    "description": "Offset in pixels from the top-left origin of the display films. Range 0 to 1280. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 25",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangSecondaryLogoOffsetHD_Y",
+                    "description": "Offset in pixels from the top-left origin of the display films. Range 0 to 720. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 50",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangSecondaryLogoOffsetSD_X",
+                    "description": "Offset in pixels from the top-left origin of the display films. Range 0 to 720. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 25",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangSecondaryLogoOffsetSD_Y",
+                    "description": "Offset in pixels from the top-left origin of the display films. Range 0 to 480. Screen types: Co Ke Li Pa Po Se Sp Te. Example: 50",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangSecondaryLogoSD",
+                    "description": "Small application logo formatted for display in overhang top left. Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/co_logo_sd.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangSliceHD",
+                    "description": "URI for the overhang slice (thin piece of border at the top of the screen in HD size). Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/overhang_hd.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "OverhangSliceSD",
+                    "description": "URI for the overhang slice (thin piece of top of screen border). Screen types: Co Ke Li Pa Po Se Sp Te. Example: pkg:/images/overhang_sd.png",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ParagraphBodyText",
+                    "description": "HTML HEX Color Value. Screen types: Co Pa Te. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ParagraphHeaderText",
+                    "description": "HTML HEX Color Value. Screen types: Co Pa Te. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "PosterScreenLine1Text",
+                    "description": "HTML HEX Color Value. Screen types: Po. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "PosterScreenLine2Text",
+                    "description": "HTML HEX Color Value. Screen types: Po. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "RegistrationCodeColor",
+                    "description": "HTML HEX Color Value. Screen types: Co. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "RegistrationFocalColor",
+                    "description": "HTML HEX Color Value. Screen types: Co. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "RegistrationFocalRectColor",
+                    "description": "HTML HEX Color Value. Screen types: Co. Example: #10FF80",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "RegistrationFocalRectHD",
+                    "description": "Position and size of the HD focal rectangle. Four integer: (x,y,width,height). Screen types: Co. Example: (228,360,120,82)",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "RegistrationFocalRectSD",
+                    "description": "Position and size of the SD focal rectangle. Four integer: (x,y,width,height). Screen types: Co. Example: (172,220,90,76)",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardActorColor",
+                    "description": "HTML HEX Color Value. Screen types: Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardAlbumColor",
+                    "description": "HTML HEX Color Value. Screen types: Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardAlbumLabel",
+                    "description": "Album Label. Screen types: Sp. Example: on",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardAlbumLabelColor",
+                    "description": "HTML HEX Color Value. Screen types: Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardAllow6Buttons",
+                    "description": "boolean string. Screen types: Sp. Example: true",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardArtistColor",
+                    "description": "HTML HEX Color Value. Screen types: Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardArtistLabel",
+                    "description": "Artist Label. Screen types: Sp. Example: by",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardArtistLabelColor",
+                    "description": "HTML HEX Color Value. Screen types: Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardDirectorColor",
+                    "description": "HTML HEX Color Value. Screen types: Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardDirectorText",
+                    "description": "Director Label. Screen types: Sp. Example: Written by",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardDirectorLabelColor",
+                    "description": "HTML HEX Color Value. Screen types: Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardDirectorPrefixText",
+                    "description": "HTML HEX Color Value. Screen types: Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardGenreColor",
+                    "description": "HTML HEX Color Value. Screen types: Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardRuntimeColor",
+                    "description": "HTML HEX Color Value. Screen types: Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardSynopsisColor",
+                    "description": "HTML HEX Color Value. Screen types: Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "SpringboardTitleText",
+                    "description": "HTML HEX Color Value. Screen types: Sp. Example: #FF00FF",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "TextScreenBodyBackgroundColor",
+                    "description": "HTML HEX Color Value. Must be a grayscale value. Screen types: Te. Example: #808080",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "TextScreenBodyText",
+                    "description": "HTML HEX Color Value. Screen types: Te. Example: #363636",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "TextScreenScrollBarColor",
+                    "description": "HTML HEX Color Value. Screen types: Te. Example: #CC0000",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "TextScreenScrollThumbColor",
+                    "description": "HTML HEX Color Value. Screen types: Te. Example: #00CC00",
+                    "default": "invalid",
+                    "type": "string"
+                },
+                {
+                    "name": "ThemeType",
+                    "description": "Theme type. Generic-dark is the only valid value. Otherwise the default theme applies. Screen types: . Example: generic-dark",
+                    "default": "invalid",
+                    "type": "string"
+                }
+            ]
+        }
+    }
+}

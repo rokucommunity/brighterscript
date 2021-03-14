@@ -97,6 +97,7 @@
         "node-run-cmd": "^1.0.1",
         "nyc": "^15.1.0",
         "object.pick": "^1.3.0",
+        "phin": "^3.5.1",
         "rimraf": "^2.6.2",
         "semver-extra": "^3.0.0",
         "sinon": "^9.0.2",
