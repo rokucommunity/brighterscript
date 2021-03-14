@@ -9,7 +9,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifappinfo.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roAppInfo"
+                }
+            ]
         },
         "roAppManager": {
             "name": "roAppManager",
@@ -20,7 +26,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifappmanager.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roAppManager"
+                }
+            ]
         },
         "roArray": {
             "name": "roArray",
@@ -51,7 +63,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifarraysort.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roAssociativeArray": {
             "name": "roAssociativeArray",
@@ -66,7 +79,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifenum.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roAssociativeArray"
+                }
+            ]
         },
         "roAudioGuide": {
             "name": "roAudioGuide",
@@ -77,7 +96,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifaudioguide.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roAudioMetadata": {
             "name": "roAudioMetadata",
@@ -88,7 +108,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifaudiometadata.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roAudioMetadata"
+                }
+            ]
         },
         "roAudioPlayer": {
             "name": "roAudioPlayer",
@@ -116,6 +142,12 @@
                     "name": "roAudioPlayerEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roaudioplayerevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roAudioPlayer"
+                }
             ]
         },
         "roAudioResource": {
@@ -127,7 +159,31 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifaudioresource.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "dynamic"
+                        }
+                    ],
+                    "returnType": "roAudioResource"
+                },
+                {
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "string"
+                        }
+                    ],
+                    "returnType": "roAudioResource"
+                }
+            ]
         },
         "roBitmap": {
             "name": "roBitmap",
@@ -138,7 +194,31 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdraw2d.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "string"
+                        }
+                    ],
+                    "returnType": "roBitmap"
+                },
+                {
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "dynamic"
+                        }
+                    ],
+                    "returnType": "roBitmap"
+                }
+            ]
         },
         "roBoolean": {
             "name": "roBoolean",
@@ -153,7 +233,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roByteArray": {
             "name": "roByteArray",
@@ -180,7 +261,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifenum.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roByteArray"
+                }
+            ]
         },
         "roCaptionRenderer": {
             "name": "roCaptionRenderer",
@@ -196,7 +283,8 @@
                     "name": "roCaptionRendererEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/event/rocaptionrendererevent.md"
                 }
-            ]
+            ],
+            "signatures": []
         },
         "roChannelStore": {
             "name": "roChannelStore",
@@ -219,6 +307,12 @@
                 {
                     "name": "roChannelStoreEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rochannelstoreevent.md"
+                }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roChannelStore"
                 }
             ]
         },
@@ -244,6 +338,12 @@
                     "name": "roCodeRegistrationScreenEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rocoderegistrationscreenevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roCodeRegistrationScreen"
+                }
             ]
         },
         "roCompositor": {
@@ -255,7 +355,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifcompositor.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roCompositor"
+                }
+            ]
         },
         "roDataGramSocket": {
             "name": "roDataGramSocket",
@@ -287,6 +393,12 @@
                     "name": "roSocketEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifappinfo.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roDataGramSocket"
+                }
             ]
         },
         "roDateTime": {
@@ -298,7 +410,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdatetime.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roDateTime"
+                }
+            ]
         },
         "roDeviceInfo": {
             "name": "roDeviceInfo",
@@ -322,6 +440,12 @@
                     "name": "roDeviceInfoEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rodeviceinfoevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roDeviceInfo"
+                }
             ]
         },
         "roDouble": {
@@ -337,7 +461,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roDeviceCrypto": {
             "name": "roDeviceCrypto",
@@ -348,7 +473,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifdevicecrypto.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roDeviceCrypto"
+                }
+            ]
         },
         "roEVPCipher": {
             "name": "roEVPCipher",
@@ -359,7 +490,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifevpcipher.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roEVPDigest": {
             "name": "roEVPDigest",
@@ -370,7 +502,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifevpdigest.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roEVPDigest"
+                }
+            ]
         },
         "roFileSystem": {
             "name": "roFileSystem",
@@ -394,6 +532,12 @@
                     "name": "roFileSystemEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rofilesystemevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roFileSystem"
+                }
             ]
         },
         "roFloat": {
@@ -409,7 +553,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roFont": {
             "name": "roFont",
@@ -420,7 +565,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffont.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roFontMetrics": {
             "name": "roFontMetrics",
@@ -431,7 +577,20 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffontmetrics.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "dynamic"
+                        }
+                    ],
+                    "returnType": "roFontMetrics"
+                }
+            ]
         },
         "roFontRegistry": {
             "name": "roFontRegistry",
@@ -442,7 +601,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iffontregistry.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roFontRegistry"
+                }
+            ]
         },
         "roFunction": {
             "name": "roFunction",
@@ -457,7 +622,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roGridScreen": {
             "name": "roGridScreen",
@@ -485,6 +651,12 @@
                     "name": "roGridScreenEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rogridscreenevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roGridScreen"
+                }
             ]
         },
         "roHdmiStatus": {
@@ -500,7 +672,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsetmessageport.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roHMAC": {
             "name": "roHMAC",
@@ -511,7 +684,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhmac.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roHMAC"
+                }
+            ]
         },
         "roHttpAgent": {
             "name": "roHttpAgent",
@@ -522,7 +701,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roHttpAgent"
+                }
+            ]
         },
         "roImageCanvas": {
             "name": "roImageCanvas",
@@ -542,6 +727,12 @@
                     "name": "roImageCanvasEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roimagecanvasevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roImageCanvas"
+                }
             ]
         },
         "roImageMetaData": {
@@ -553,7 +744,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifimagemetadata.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roInput": {
             "name": "roInput",
@@ -568,6 +760,12 @@
                 {
                     "name": "roInputEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roinputevent.md"
+                }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roInput"
                 }
             ]
         },
@@ -588,7 +786,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roInt"
+                }
+            ]
         },
         "roInvalid": {
             "name": "roInvalid",
@@ -599,7 +803,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roKeyboardScreen": {
             "name": "roKeyboardScreen",
@@ -622,6 +827,12 @@
                 {
                     "name": "roKeyboardScreenEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rokeyboardscreenevent.md"
+                }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roKeyboardScreen"
                 }
             ]
         },
@@ -654,7 +865,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflisttoarray.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roList"
+                }
+            ]
         },
         "roListScreen": {
             "name": "roListScreen",
@@ -682,7 +899,8 @@
                     "name": "roListScreenEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rolistscreenevent.md"
                 }
-            ]
+            ],
+            "signatures": []
         },
         "roLocalization": {
             "name": "roLocalization",
@@ -693,7 +911,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflocalization.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roLocalization"
+                }
+            ]
         },
         "roLongInteger": {
             "name": "roLongInteger",
@@ -708,7 +932,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roMessageDialog": {
             "name": "roMessageDialog",
@@ -732,6 +957,12 @@
                     "name": "roMessageDialogEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/romessagedialogevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roMessageDialog"
+                }
             ]
         },
         "roMessagePort": {
@@ -743,7 +974,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifmessageport.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roMessagePort"
+                }
+            ]
         },
         "roMicrophone": {
             "name": "roMicrophone",
@@ -767,7 +1004,8 @@
                     "name": "roMicrophoneEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/romicrophoneevent.md"
                 }
-            ]
+            ],
+            "signatures": []
         },
         "roOneLineDialog": {
             "name": "roOneLineDialog",
@@ -791,7 +1029,8 @@
                     "name": "roOneLineDialogEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roonelinedialogevent.md"
                 }
-            ]
+            ],
+            "signatures": []
         },
         "roParagraphScreen": {
             "name": "roParagraphScreen",
@@ -815,6 +1054,12 @@
                     "name": "roParagraphScreenEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roparagraphscreenevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roParagraphScreen"
+                }
             ]
         },
         "roPath": {
@@ -830,7 +1075,31 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifstring.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "string"
+                        }
+                    ],
+                    "returnType": "roPath"
+                },
+                {
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "dynamic"
+                        }
+                    ],
+                    "returnType": "roPath"
+                }
+            ]
         },
         "roPinEntryDialog": {
             "name": "roPinEntryDialog",
@@ -854,7 +1123,8 @@
                     "name": "roPinEntryDialogEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/ropinentrydialogevent.md"
                 }
-            ]
+            ],
+            "signatures": []
         },
         "roPosterScreen": {
             "name": "roPosterScreen",
@@ -874,6 +1144,12 @@
                     "name": "roPosterScreenEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roposterscreenevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roPosterScreen"
+                }
             ]
         },
         "roProgramGuide": {
@@ -885,7 +1161,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifprogramguide.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roRegex": {
             "name": "roRegex",
@@ -896,7 +1173,26 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifregex.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "string"
+                        },
+                        {
+                            "name": "param2",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "string"
+                        }
+                    ],
+                    "returnType": "roRegex"
+                }
+            ]
         },
         "roRegion": {
             "name": "roRegion",
@@ -907,7 +1203,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifregion.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roRegistry": {
             "name": "roRegistry",
@@ -918,7 +1215,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifregistry.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roRegistry"
+                }
+            ]
         },
         "roRegistrySection": {
             "name": "roRegistrySection",
@@ -929,7 +1232,20 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifregistrysection.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "string"
+                        }
+                    ],
+                    "returnType": "roRegistrySection"
+                }
+            ]
         },
         "roRSA": {
             "name": "roRSA",
@@ -940,7 +1256,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifrsa.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roRSA"
+                }
+            ]
         },
         "roScreen": {
             "name": "roScreen",
@@ -968,6 +1290,46 @@
                     "name": "roUniversalControlEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rouniversalcontrolevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "boolean"
+                        }
+                    ],
+                    "returnType": "roScreen"
+                },
+                {
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "param2",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "integer"
+                        },
+                        {
+                            "name": "param3",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "integer"
+                        }
+                    ],
+                    "returnType": "roScreen"
+                },
+                {
+                    "params": [],
+                    "returnType": "roScreen"
+                }
             ]
         },
         "roSearchHistory": {
@@ -979,7 +1341,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsearchhistory.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roSearchHistory"
+                }
+            ]
         },
         "roSearchScreen": {
             "name": "roSearchScreen",
@@ -1002,6 +1370,12 @@
                 {
                     "name": "roSearchScreenEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rosearchscreenevent.md"
+                }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roSearchScreen"
                 }
             ]
         },
@@ -1043,6 +1417,19 @@
                     "name": "roSGNodeEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rosgnodeevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "string"
+                        }
+                    ],
+                    "returnType": "roSGNode"
+                }
             ]
         },
         "roSGScreen": {
@@ -1058,6 +1445,12 @@
                 {
                     "name": "roSGScreenEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rosgscreenevent.md"
+                }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roSGScreen"
                 }
             ]
         },
@@ -1079,6 +1472,12 @@
                     "name": "roSlideShowEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/roslideshowevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roSlideShow"
+                }
             ]
         },
         "roSocketAddress": {
@@ -1090,7 +1489,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsocketaddress.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roSocketAddress"
+                }
+            ]
         },
         "roSpringboardScreen": {
             "name": "roSpringboardScreen",
@@ -1118,6 +1523,12 @@
                     "name": "roSpringboardScreenEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rospringboardscreenevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roSpringboardScreen"
+                }
             ]
         },
         "roSprite": {
@@ -1129,7 +1540,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsprite.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roStreamSocket": {
             "name": "roStreamSocket",
@@ -1165,6 +1577,12 @@
                     "name": "roSocketEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rosocketevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roStreamSocket"
+                }
             ]
         },
         "roString": {
@@ -1184,7 +1602,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftostr.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roSystemlog": {
             "name": "roSystemlog",
@@ -1195,7 +1614,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifsystemlog.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roTextScreen": {
             "name": "roTextScreen",
@@ -1219,7 +1639,8 @@
                     "name": "roTextScreenEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rotextscreenevent.md"
                 }
-            ]
+            ],
+            "signatures": []
         },
         "roTextToSpeech": {
             "name": "roTextToSpeech",
@@ -1242,6 +1663,12 @@
                 {
                     "name": "roTextToSpeechEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rotexttospeechevent.md"
+                }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roTextToSpeech"
                 }
             ]
         },
@@ -1271,6 +1698,12 @@
                     "name": "roTextureRequestEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rotexturerequestevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roTextureManager"
+                }
             ]
         },
         "roTextureRequest": {
@@ -1286,7 +1719,20 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifhttpagent.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [
+                        {
+                            "name": "param1",
+                            "default": "invalid",
+                            "isRequred": true,
+                            "type": "string"
+                        }
+                    ],
+                    "returnType": "roTextureRequest"
+                }
+            ]
         },
         "roTimespan": {
             "name": "roTimespan",
@@ -1297,7 +1743,13 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iftimespan.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roTimespan"
+                }
+            ]
         },
         "roUrlTransfer": {
             "name": "roUrlTransfer",
@@ -1324,6 +1776,12 @@
                 {
                     "name": "roUrlEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rourlevent.md"
+                }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roUrlTransfer"
                 }
             ]
         },
@@ -1353,6 +1811,12 @@
                     "name": "roVideoPlayerEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rovideoplayerevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roVideoPlayer"
+                }
             ]
         },
         "roVideoScreen": {
@@ -1381,6 +1845,12 @@
                     "name": "roVideoScreenEvent",
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/events/rovideoscreenevent.md"
                 }
+            ],
+            "signatures": [
+                {
+                    "params": [],
+                    "returnType": "roVideoScreen"
+                }
             ]
         },
         "roXMLElement": {
@@ -1392,7 +1862,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/ifxmlelement.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         },
         "roXMLList": {
             "name": "roXMLList",
@@ -1411,7 +1882,8 @@
                     "url": "https://developer.roku.com/en-ca/docs/references/brightscript/interfaces/iflisttoarray.md"
                 }
             ],
-            "events": []
+            "events": [],
+            "signatures": []
         }
     },
     "interfaces": {
