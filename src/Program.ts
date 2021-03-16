@@ -654,7 +654,7 @@ export class Program {
         let funcNames = new Set<string>();
         let currentScope = scope;
         while (isXmlScope(currentScope)) {
-            for (let name of currentScope.xmlFile.ast.component.api.functions.map((f) => f.name)) {
+            for (let name of currentScope.xmlFile.ast.component.api?.functions.map((f) => f.name) ?? []) {
                 if (!filterName || name === filterName) {
                     funcNames.add(name);
                 }
@@ -1192,6 +1192,25 @@ export class Program {
                 //TODO handle namespace-relative function calls
                 //if the file has a function with this name
                 if (file.parser.references.functionStatementLookup.get(lowerFunctionName) !== undefined) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
+    }
+
+    /**
+     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     */
+    public findFilesForClass(className: string) {
+        const files = [] as BscFile[];
+        const lowerClassName = className.toLowerCase();
+        //find every file with this class defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                //TODO handle namespace-relative classes
+                //if the file has a function with this name
+                if (file.parser.references.classStatementLookup.get(lowerClassName) !== undefined) {
                     files.push(file);
                 }
             }
