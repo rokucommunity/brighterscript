@@ -16,6 +16,8 @@ import { EmptyStatement } from './parser/Statement';
 import { expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { Logger } from './Logger';
+import { createToken } from './astUtils';
+import { TokenKind } from './lexer';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -1802,6 +1804,15 @@ describe('Program', () => {
     });
 
     describe('getSignatureHelp', () => {
+        it('does not crash when second previousToken is undefined', () => {
+            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ` `);
+            sinon.stub(file, 'getPreviousToken').returns(undefined);
+            //should not crash
+            expect(
+                file['getClassFromMReference'](util.createPosition(2, 3), createToken(TokenKind.Dot, '.'), null)
+            ).to.be.undefined;
+        });
+
         it('works with no leading whitespace when the cursor is after the open paren', () => {
             program.addOrReplaceFile('source/main.brs', `sub main()\nsayHello()\nend sub\nsub sayHello(name)\nend sub`);
             let signatureHelp = program.getSignatureHelp(
