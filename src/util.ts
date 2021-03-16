@@ -4,7 +4,7 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import type { Position, Range } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
@@ -464,6 +464,24 @@ export class Util {
                 break;
             }
         }
+    }
+
+    /**
+     * Does a touch b in any way?
+     */
+    public rangesIntersect(a: Range, b: Range) {
+        // Check if `a` is before `b`
+        if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character <= b.start.character)) {
+            return false;
+        }
+
+        // Check if `b` is before `a`
+        if (b.end.line < a.start.line || (b.end.line === a.start.line && b.end.character <= a.start.character)) {
+            return false;
+        }
+
+        // These ranges must intersect
+        return true;
     }
 
     /**
@@ -1177,6 +1195,49 @@ export class Util {
             },
             range: attr.range
         } as SGAttribute;
+    }
+
+    /**
+     * Copy the version of bslib from local node_modules to the staging folder
+     */
+    public async copyBslibToStaging(stagingDir: string) {
+        //copy bslib to the output directory
+        await fsExtra.ensureDir(standardizePath(`${stagingDir}/source`));
+        // eslint-disable-next-line
+        const bslib = require('@rokucommunity/bslib');
+        let source = bslib.source as string;
+
+        //apply the `bslib_` prefix to the functions
+        let match: RegExpExecArray;
+        const positions = [] as number[];
+        const regexp = /^(\s*(?:function|sub)\s+)([a-z0-9_]+)/mg;
+        // eslint-disable-next-line no-cond-assign
+        while (match = regexp.exec(source)) {
+            positions.push(match.index + match[1].length);
+        }
+
+        for (let i = positions.length - 1; i >= 0; i--) {
+            const position = positions[i];
+            source = source.slice(0, position) + 'bslib_' + source.slice(position);
+        }
+        await fsExtra.writeFile(`${stagingDir}/source/bslib.brs`, source);
+    }
+
+    /**
+     * Given a Diagnostic or BsDiagnostic, return a copy of the diagnostic
+     */
+    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic) {
+        return {
+            severity: diagnostic.severity,
+            range: diagnostic.range,
+            message: diagnostic.message,
+            relatedInformation: diagnostic.relatedInformation?.map(x => {
+                //clone related information just in case a plugin added circular ref info here
+                return { ...x };
+            }),
+            code: diagnostic.code,
+            source: 'brs'
+        };
     }
 }
 

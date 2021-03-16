@@ -1,6 +1,7 @@
 import { standardizePath as s } from './util';
 import { Program } from './Program';
 import { expect } from 'chai';
+import { expectZeroDiagnostics } from './testHelpers.spec';
 
 let tmpPath = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tmpPath}/rootDir`;
@@ -16,6 +17,18 @@ describe('globalCallables', () => {
     });
     afterEach(() => {
         program.dispose();
+    });
+
+    describe('Roku_ads', () => {
+        it('exists', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    adIface = Roku_Ads()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('val', () => {

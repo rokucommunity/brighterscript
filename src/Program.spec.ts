@@ -13,7 +13,9 @@ import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import type { FunctionStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { trim, trimMap } from './testHelpers.spec';
+import { expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { doesNotThrow } from 'assert';
+import { Logger } from './Logger';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -167,7 +169,7 @@ describe('Program', () => {
                 beforeFileParse: beforeFileParse,
                 afterFileParse: afterFileParse,
                 afterFileValidate: afterFileValidate
-            }], undefined);
+            }], new Logger());
 
             let mainPath = s`${rootDir}/source/main.brs`;
             //add a new source file
@@ -681,6 +683,14 @@ describe('Program', () => {
 
             expect(program.getScopeByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
 
+        });
+    });
+
+    describe('getCodeActions', () => {
+        it('does not fail when file is missing from program', () => {
+            doesNotThrow(() => {
+                program.getCodeActions('not/real/file', util.createRange(1, 2, 3, 4));
+            });
         });
     });
 
@@ -1628,6 +1638,18 @@ describe('Program', () => {
     });
 
     describe('transpile', () => {
+        it('copies bslib.brs when no ropm version was found', async () => {
+            await program.transpile([], stagingFolderPath);
+            expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.true;
+        });
+
+        it('does not copy bslib.brs when found in roku_modules', async () => {
+            program.addOrReplaceFile('source/roku_modules/bslib/bslib.brs', '');
+            await program.transpile([], stagingFolderPath);
+            expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.false;
+            expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/roku_modules/bslib/bslib.brs`)).to.be.true;
+        });
+
         it('transpiles in-memory-only files', async () => {
             program.addOrReplaceFile('source/logger.bs', trim`
                 sub logInfo()
@@ -1780,6 +1802,30 @@ describe('Program', () => {
     });
 
     describe('getSignatureHelp', () => {
+        it('works with no leading whitespace when the cursor is after the open paren', () => {
+            program.addOrReplaceFile('source/main.brs', `sub main()\nsayHello()\nend sub\nsub sayHello(name)\nend sub`);
+            let signatureHelp = program.getSignatureHelp(
+                `${rootDir}/source/main.brs`,
+                //sayHello(|)
+                util.createPosition(1, 9)
+            );
+            expectZeroDiagnostics(program);
+            expect(signatureHelp[0].signature.label).to.equal('sub sayHello(name)');
+        });
+
+        it('ignores comments and invalid ranges', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                function main()
+                    ' new func(((
+                end function
+            `);
+            for (let col = 0; col < 40; col++) {
+                let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, col)));
+                expect(program.getDiagnostics()).to.be.empty;
+                expect(signatureHelp[0]?.signature).to.not.exist;
+            }
+        });
+
         it('gets signature help for constructor with no args', () => {
             program.addOrReplaceFile('source/main.bs', `
                 function main()
@@ -2207,7 +2253,5 @@ describe('Program', () => {
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
             }
         });
-
-
     });
 });

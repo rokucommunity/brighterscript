@@ -1,7 +1,10 @@
 import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import type { Diagnostic } from 'vscode-languageserver';
-
+import { createSandbox } from 'sinon';
+import { expect } from 'chai';
+import type { CodeActionShorthand } from './CodeActionUtil';
+import { codeActionUtil } from './CodeActionUtil';
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
  */
@@ -57,10 +60,10 @@ export function expectZeroDiagnostics(arg: { getDiagnostics(): Array<Diagnostic>
     let diagnostics: BsDiagnostic[];
     if (Array.isArray(arg)) {
         diagnostics = arg as BsDiagnostic[];
-    } else if ((arg as any).diagnostics) {
-        diagnostics = (arg as any).diagnostics;
     } else if ((arg as any).getDiagnostics) {
         diagnostics = (arg as any).getDiagnostics();
+    } else if ((arg as any).diagnostics) {
+        diagnostics = (arg as any).diagnostics;
     } else {
         throw new Error('Cannot derive a list of diagnostics from ' + JSON.stringify(arg));
     }
@@ -80,4 +83,21 @@ export function expectZeroDiagnostics(arg: { getDiagnostics(): Array<Diagnostic>
  */
 export function trimMap(source: string) {
     return source.replace(/('|<!--)\/\/# sourceMappingURL=.*$/m, '');
+}
+
+export function expectCodeActions(test: () => any, expected: CodeActionShorthand[]) {
+    const sinon = createSandbox();
+    const stub = sinon.stub(codeActionUtil, 'createCodeAction');
+    try {
+        test();
+    } finally {
+        sinon.restore();
+    }
+
+    const args = stub.getCalls().map(x => x.args[0]);
+    //delete any `diagnostics` arrays to help with testing performance (since it's circular...causes all sorts of issues)
+    for (let arg of args) {
+        delete arg.diagnostics;
+    }
+    expect(args).to.eql(expected);
 }

@@ -417,6 +417,63 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
+        it('transpiles super in nested blocks', () => {
+            testTranspile(`
+                class Creature
+                    sub new(name as string)
+                    end sub
+                    function sayHello(text)
+                    ? text
+                    end function
+                end class
+
+                class Duck extends Creature
+                    override function sayHello(text)
+                        text = "The duck says " + text
+                        if text <> invalid
+                            super.sayHello(text)
+                        end if
+                    end function
+                end class
+            `, `
+                function __Creature_builder()
+                    instance = {}
+                    instance.new = sub(name as string)
+                    end sub
+                    instance.sayHello = function(text)
+                        ? text
+                    end function
+                    return instance
+                end function
+                function Creature(name as string)
+                    instance = __Creature_builder()
+                    instance.new(name)
+                    return instance
+                end function
+                function __Duck_builder()
+                    instance = __Creature_builder()
+                    instance.super0_new = instance.new
+                    instance.new = sub()
+                        m.super0_new()
+                    end sub
+                    instance.super0_sayHello = instance.sayHello
+                    instance.sayHello = function(text)
+                        text = "The duck says " + text
+                        if text <> invalid then
+                            m.super0_sayHello(text)
+                        end if
+                    end function
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs'
+            );
+        });
+
         it('properly transpiles classes from outside current namespace', () => {
             addFile('source/Animals.bs', `
                 namespace Animals

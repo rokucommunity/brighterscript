@@ -250,14 +250,18 @@ function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diag
     if (element) {
         for (const entry of element) {
             const name = entry.children.Name?.[0];
-            if (name && allow.includes(name.image)) {
-                tags.push(mapElement(entry, diagnostics));
+            if (name?.image) {
+                if (allow.includes(name.image)) {
+                    tags.push(mapElement(entry, diagnostics));
+                } else {
+                    //unexpected tag
+                    diagnostics.push({
+                        ...DiagnosticMessages.xmlUnexpectedTag(name.image),
+                        range: rangeFromTokens(name)
+                    });
+                }
             } else {
-                //unexpected tag
-                diagnostics.push({
-                    ...DiagnosticMessages.xmlUnexpectedTag(name.image),
-                    range: rangeFromTokens(name)
-                });
+                //bad xml syntax...
             }
         }
     }

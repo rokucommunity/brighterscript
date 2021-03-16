@@ -13,6 +13,11 @@ export class Logger {
     }
     private static emitter = new EventEmitter();
 
+    /**
+     * A string with whitespace used for indenting all messages
+     */
+    private indent = '';
+
     constructor(logLevel?: LogLevel) {
         this.logLevel = logLevel;
     }
@@ -30,12 +35,7 @@ export class Logger {
     private _logLevel = LogLevel.log;
 
     private getTimestamp() {
-        let milliseconds = '';
-        //show milliseconds when in the more chatty log levels
-        if (this._logLevel === LogLevel.info || this._logLevel === LogLevel.debug || this._logLevel === LogLevel.trace) {
-            milliseconds = ':SSSS';
-        }
-        return '[' + chalk.grey(moment().format(`hh:mm:ss${milliseconds} A`)) + ']';
+        return '[' + chalk.grey(moment().format(`hh:mm:ss:SSSS A`)) + ']';
     }
 
     private writeToLog(method: (...consoleArgs: any[]) => void, ...args: any[]) {
@@ -51,7 +51,7 @@ export class Logger {
             }
             finalArgs.push(arg);
         }
-        method.call(console, this.getTimestamp(), ...finalArgs);
+        method.call(console, this.getTimestamp(), this.indent, ...finalArgs);
         if (Logger.emitter.listenerCount('log') > 0) {
             Logger.emitter.emit('log', finalArgs.join(' '));
         }
@@ -123,15 +123,20 @@ export class Logger {
             let stopwatch = new Stopwatch();
             let logLevelString = LogLevel[logLevel];
 
-            //return a function to call when the timer is complete
-            let done = () => {
-                this[logLevelString](...messages, `finished. (${chalk.blue(stopwatch.getDurationText())})`);
-            };
+            //write the initial log
+            this[logLevelString](...messages);
+            this.indent += '  ';
 
             stopwatch.start();
             //execute the action
             let result = action(stopwatch.stop.bind(stopwatch), stopwatch.start.bind(stopwatch)) as any;
             stopwatch.stop();
+
+            //return a function to call when the timer is complete
+            let done = () => {
+                this.indent = this.indent.substring(2);
+                this[logLevelString](...messages, `finished. (${chalk.blue(stopwatch.getDurationText())})`);
+            };
 
             //if this is a promise, wait for it to resolve and then return the original result
             if (typeof result?.then === 'function') {

@@ -7,11 +7,11 @@ import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement 
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils';
+import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { VoidType } from '../types/VoidType';
 import type { FunctionType } from '../types/FunctionType';
 import { StringType } from '../types/StringType';
 import { CustomType } from '../types/CustomType';
-import { expectZeroDiagnostics } from '../testHelpers.spec';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -159,6 +159,40 @@ describe('parser', () => {
     });
 
     describe('parse', () => {
+        it('supports ungrouped iife in assignment', () => {
+            const parser = parse(`
+                sub main()
+                    result = sub()
+                    end sub()
+                    result = function()
+                    end function()
+                end sub
+            `);
+            expectZeroDiagnostics(parser);
+        });
+
+        it('supports grouped iife in assignment', () => {
+            const parser = parse(`
+                sub main()
+                    result = (sub()
+                    end sub)()
+                    result = (function()
+                    end function)()
+                end sub
+            `);
+            expectZeroDiagnostics(parser);
+        });
+
+        it('supports returning iife call', () => {
+            const parser = parse(`
+                sub main()
+                    return (sub()
+                    end sub)()
+                end sub
+            `);
+            expectZeroDiagnostics(parser);
+        });
+
         it('supports using "interface" as parameter name', () => {
             expect(parse(`
                 sub main(interface as object)

@@ -1,7 +1,7 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Hover, Range, Position } from 'vscode-languageserver';
-import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
+import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import type { Scope } from '../Scope';
@@ -41,11 +41,12 @@ export class BrsFile {
         this.pkgPath = s`${this.pkgPath}`;
         this.dependencyGraphKey = this.pkgPath.toLowerCase();
 
-        this.extension = util.getExtension(this.pkgPath);
+        this.extension = util.getExtension(this.pathAbsolute);
 
         //all BrighterScript files need to be transpiled
         if (this.extension?.endsWith('.bs')) {
             this.needsTranspiled = true;
+            this.parseMode = ParseMode.BrighterScript;
         }
         this.isTypedef = this.extension === '.d.bs';
         if (!this.isTypedef) {
@@ -61,9 +62,7 @@ export class BrsFile {
     /**
      * The parseMode used for the parser for this file
      */
-    public get parseMode() {
-        return this.extension.endsWith('.bs') ? ParseMode.BrighterScript : ParseMode.BrightScript;
-    }
+    public parseMode = ParseMode.BrightScript;
 
     /**
      * The key used to identify this file in the dependency graph
@@ -498,12 +497,13 @@ export class BrsFile {
         for (let func of this._parser.references.functionExpressions) {
             //for all function calls in this function
             for (let expression of func.callExpressions) {
-
                 if (
                     //filter out dotted function invocations (i.e. object.doSomething()) (not currently supported. TODO support it)
                     (expression.callee as any).obj ||
                     //filter out method calls on method calls for now (i.e. getSomething().getSomethingElse())
-                    (expression.callee as any).callee
+                    (expression.callee as any).callee ||
+                    //filter out callees without a name (immediately-invoked function expressions)
+                    !(expression.callee as any).name
                 ) {
                     continue;
                 }
@@ -563,7 +563,7 @@ export class BrsFile {
                         });
                     }
                 }
-                let functionCall = {
+                let functionCall: FunctionCall = {
                     range: util.createRangeFromPositions(expression.range.start, expression.closingParen.range.end),
                     functionExpression: this.getFunctionExpressionAtPosition(callee.range.start),
                     file: this,
@@ -571,7 +571,7 @@ export class BrsFile {
                     nameRange: util.createRange(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
                     //TODO keep track of parameters
                     args: args
-                } as FunctionCall;
+                };
                 this.functionCalls.push(functionCall);
             }
         }
@@ -602,7 +602,6 @@ export class BrsFile {
      */
     public getCompletions(position: Position, scope?: Scope): CompletionItem[] {
         let result = [] as CompletionItem[];
-        let parseMode = this.getParseMode();
 
         //a map of lower-case names of all added options
         let names = {} as Record<string, boolean>;
@@ -615,11 +614,40 @@ export class BrsFile {
 
         //if cursor is within a comment, disable completions
         let currentToken = this.getTokenAt(position);
-        if (currentToken && currentToken.kind === TokenKind.Comment) {
+        const tokenKind = currentToken?.kind;
+        if (tokenKind === TokenKind.Comment) {
             return [];
+        } else if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
+            const match = /^("?)(pkg|libpkg):/.exec(currentToken.text);
+            if (match) {
+                const [, openingQuote, fileProtocol] = match;
+                //include every absolute file path from this scope
+                for (const file of scope.getAllFiles()) {
+                    const pkgPath = `${fileProtocol}:/${file.pkgPath.replace(/\\/g, '/')}`;
+                    result.push({
+                        label: pkgPath,
+                        textEdit: TextEdit.replace(
+                            util.createRange(
+                                currentToken.range.start.line,
+                                //+1 to step past the opening quote
+                                currentToken.range.start.character + (openingQuote ? 1 : 0),
+                                currentToken.range.end.line,
+                                //-1 to exclude the closing quotemark (or the end character if there is no closing quotemark)
+                                currentToken.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
+                            ),
+                            pkgPath
+                        ),
+                        kind: CompletionItemKind.File
+                    });
+                }
+                return result;
+            } else {
+                //do nothing. we don't want to show completions inside of strings...
+                return [];
+            }
         }
 
-        let namespaceCompletions = this.getNamespaceCompletions(currentToken, parseMode, scope);
+        let namespaceCompletions = this.getNamespaceCompletions(currentToken, this.parseMode, scope);
         if (namespaceCompletions.length > 0) {
             return namespaceCompletions;
         }
@@ -629,19 +657,23 @@ export class BrsFile {
             //we aren't in any function scope, so return the keyword completions and namespaces
             if (this.getTokenBefore(currentToken, TokenKind.New)) {
                 // there's a new keyword, so only class types are viable here
-                return [...this.getGlobalClassStatementCompletions(currentToken, parseMode)];
+                return [...this.getGlobalClassStatementCompletions(currentToken, this.parseMode)];
             } else {
-                return [...KeywordCompletions, ...this.getGlobalClassStatementCompletions(currentToken, parseMode), ...namespaceCompletions];
+                return [...KeywordCompletions, ...this.getGlobalClassStatementCompletions(currentToken, this.parseMode), ...namespaceCompletions];
             }
         }
 
-        const classNameCompletions = this.getGlobalClassStatementCompletions(currentToken, parseMode);
+        const classNameCompletions = this.getGlobalClassStatementCompletions(currentToken, this.parseMode);
         const newToken = this.getTokenBefore(currentToken, TokenKind.New);
         if (newToken) {
             //we are after a new keyword; so we can only be namespaces or classes at this point
             result.push(...classNameCompletions);
             result.push(...namespaceCompletions);
             return result;
+        }
+
+        if (this.tokenFollows(currentToken, TokenKind.Goto)) {
+            return this.getLabelCompletion(functionExpression);
         }
 
         if (this.isPositionNextToTokenKind(position, TokenKind.Dot)) {
@@ -672,7 +704,7 @@ export class BrsFile {
             result.push(...classNameCompletions);
 
             //include the global callables
-            result.push(...scope.getCallablesAsCompletions(parseMode));
+            result.push(...scope.getCallablesAsCompletions(this.parseMode));
 
             //add `m` because that's always valid within a function
             result.push({
@@ -700,7 +732,7 @@ export class BrsFile {
                 });
             }
 
-            if (parseMode === ParseMode.BrighterScript) {
+            if (this.parseMode === ParseMode.BrighterScript) {
                 //include the first part of namespaces
                 let namespaces = scope.getAllNamespaceStatements();
                 for (let stmt of namespaces) {
@@ -718,6 +750,13 @@ export class BrsFile {
             }
         }
         return result;
+    }
+
+    private getLabelCompletion(func: FunctionExpression) {
+        return func.labelStatements.map(label => ({
+            label: label.tokens.identifier.text,
+            kind: CompletionItemKind.Reference
+        }));
     }
 
     private getClassMemberCompletions(position: Position, currentToken: Token, functionExpression: FunctionExpression, scope: Scope) {
@@ -904,33 +943,28 @@ export class BrsFile {
         }
     }
 
-    /**
-     * Determine if this file is a brighterscript file
-     */
-    public getParseMode() {
-        return this.pathAbsolute.toLowerCase().endsWith('.bs') ? ParseMode.BrighterScript : ParseMode.BrightScript;
-    }
-
     public isPositionNextToTokenKind(position: Position, tokenKind: TokenKind) {
-        let closestToken = this.getClosestToken(position);
-        let previousToken = this.getPreviousToken(closestToken);
+        const closestToken = this.getClosestToken(position);
+        const previousToken = this.getPreviousToken(closestToken);
+        const previousTokenKind = previousToken?.kind;
         //next to matched token
         if (!closestToken || closestToken.kind === TokenKind.Eof) {
             return false;
         } else if (closestToken.kind === tokenKind) {
             return true;
-        } else if (closestToken.kind === TokenKind.Newline || previousToken.kind === TokenKind.Newline) {
+        } else if (closestToken.kind === TokenKind.Newline || previousTokenKind === TokenKind.Newline) {
             return false;
             //next to an identifier, which is next to token kind
-        } else if (closestToken.kind === TokenKind.Identifier && previousToken.kind === tokenKind) {
+        } else if (closestToken.kind === TokenKind.Identifier && previousTokenKind === tokenKind) {
             return true;
         } else {
             return false;
         }
     }
 
-    private getTokenBefore(currentToken: Token, tokenKind: TokenKind) {
-        for (let i = this.parser.tokens.indexOf(currentToken); i >= 0; i--) {
+    private getTokenBefore(currentToken: Token, tokenKind: TokenKind): Token {
+        const index = this.parser.tokens.indexOf(currentToken);
+        for (let i = index - 1; i >= 0; i--) {
             currentToken = this.parser.tokens[i];
             if (currentToken.kind === TokenKind.Newline) {
                 break;
@@ -939,6 +973,14 @@ export class BrsFile {
             }
         }
         return undefined;
+    }
+
+    private tokenFollows(currentToken: Token, tokenKind: TokenKind): boolean {
+        const index = this.parser.tokens.indexOf(currentToken);
+        if (index > 0) {
+            return this.parser.tokens[index - 1].kind === tokenKind;
+        }
+        return false;
     }
 
     public getTokensUntil(currentToken: Token, tokenKind: TokenKind, direction: -1 | 1 = -1) {
@@ -988,12 +1030,14 @@ export class BrsFile {
     public calleeIsKnownNamespaceFunction(callee: Expression, namespaceName: string) {
         //if we have a variable and a namespace
         if (isVariableExpression(callee) && namespaceName) {
-            let lowerCalleeName = callee.name.text.toLowerCase();
-            let scopes = this.program.getScopesForFile(this);
-            for (let scope of scopes) {
-                let namespace = scope.namespaceLookup[namespaceName.toLowerCase()];
-                if (namespace.functionStatements[lowerCalleeName]) {
-                    return true;
+            let lowerCalleeName = callee?.name?.text?.toLowerCase();
+            if (lowerCalleeName) {
+                let scopes = this.program.getScopesForFile(this);
+                for (let scope of scopes) {
+                    let namespace = scope.namespaceLookup[namespaceName.toLowerCase()];
+                    if (namespace.functionStatements[lowerCalleeName]) {
+                        return true;
+                    }
                 }
             }
         }
@@ -1073,6 +1117,8 @@ export class BrsFile {
             symbolKind = SymbolKind.Function;
         } else if (isClassMethodStatement(statement)) {
             symbolKind = SymbolKind.Method;
+        } else if (isClassFieldStatement(statement)) {
+            symbolKind = SymbolKind.Field;
         } else if (isNamespaceStatement(statement)) {
             symbolKind = SymbolKind.Namespace;
             for (const childStatement of statement.body.statements) {
@@ -1093,7 +1139,7 @@ export class BrsFile {
             return;
         }
 
-        const name = statement.getName(ParseMode.BrighterScript);
+        const name = isClassFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
         return DocumentSymbol.create(name, '', symbolKind, statement.range, statement.range, children);
     }
 
@@ -1195,14 +1241,23 @@ export class BrsFile {
             textToSearchFor = textToSearchFor.substring(startIndex, endIndex);
         }
 
+        const func = this.getFunctionExpressionAtPosition(position);
         //look through local variables first
-        const localVars = this.getLocalVarsAtPosition(position);
+        const localVars = this.getLocalVarsAtPosition(position, func);
         //find any variable with this name
         for (const localVar of localVars) {
             //we found a variable declaration with this token text
             if (localVar.lowerName === textToSearchFor) {
                 const uri = util.pathToUri(this.pathAbsolute);
                 results.push(Location.create(uri, localVar.nameToken.range));
+            }
+        }
+        if (this.tokenFollows(token, TokenKind.Goto)) {
+            for (const label of func.labelStatements) {
+                if (label.tokens.identifier.text.toLocaleLowerCase() === textToSearchFor) {
+                    const uri = util.pathToUri(this.pathAbsolute);
+                    results.push(Location.create(uri, label.tokens.identifier.range));
+                }
             }
         }
 
@@ -1223,7 +1278,7 @@ export class BrsFile {
                     }
                 }
                 const statementHandler = (statement: FunctionStatement) => {
-                    if (statement.getName(this.getParseMode()).toLowerCase() === textToSearchFor) {
+                    if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
                         const uri = util.pathToUri(file.pathAbsolute);
                         results.push(Location.create(uri, statement.range));
                     }
@@ -1243,16 +1298,18 @@ export class BrsFile {
      * Get local variables at the given position.
      * Will return empty array if none are found or if position is outside function boundaries
      */
-    public getLocalVarsAtPosition(position: Position) {
-        let functionExpression = this.getFunctionExpressionAtPosition(position);
-        return this.parser.references.localVars.get(functionExpression) ?? [];
+    public getLocalVarsAtPosition(position: Position, func?: FunctionExpression) {
+        if (!func) {
+            func = this.getFunctionExpressionAtPosition(position);
+        }
+        return this.parser.references.localVars.get(func) ?? [];
     }
 
     public getClassMemberDefinitions(textToSearchFor: string, file: BrsFile): Location[] {
         let results: Location[] = [];
         //get class fields and members
         const statementHandler = (statement: ClassMethodStatement) => {
-            if (statement.getName(file.getParseMode()).toLowerCase() === textToSearchFor) {
+            if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
                 results.push(Location.create(util.pathToUri(file.pathAbsolute), statement.range));
             }
         };
@@ -1292,7 +1349,8 @@ export class BrsFile {
 
         //look through local variables first
         {
-            const localVars = this.getLocalVarsAtPosition(position);
+            const func = this.getFunctionExpressionAtPosition(position);
+            const localVars = this.getLocalVarsAtPosition(position, func);
             //find any variable with this name
             for (let localVar of localVars) {
                 //we found a variable declaration with this token text!
@@ -1308,6 +1366,14 @@ export class BrsFile {
                         range: token.range,
                         //append the variable name to the front for scope
                         contents: typeText
+                    };
+                }
+            }
+            for (const labelStatement of func.labelStatements) {
+                if (labelStatement.tokens.identifier.text.toLocaleLowerCase() === lowerTokenText) {
+                    return {
+                        range: token.range,
+                        contents: `${labelStatement.tokens.identifier.text}: label`
                     };
                 }
             }

@@ -10,6 +10,7 @@
         "strict": true,
         "strictNullChecks": false,
         "forceConsistentCasingInFileNames": true,
+        "experimentalDecorators": true,
         "preserveConstEnums": true,
         "downlevelIteration": true,
         "noUnusedLocals": true,

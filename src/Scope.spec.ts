@@ -7,6 +7,7 @@ import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
 import { trim } from './testHelpers.spec';
+import { Logger } from './Logger';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -502,7 +503,7 @@ describe('Scope', () => {
                 name: 'Emits validation events',
                 beforeScopeValidate: validateStartScope,
                 afterScopeValidate: validateEndScope
-            }], undefined);
+            }], new Logger());
             program.validate();
             expect(validateStartScope.callCount).to.equal(2);
             expect(validateStartScope.calledWith(sourceScope)).to.be.true;

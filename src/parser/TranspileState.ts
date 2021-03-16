@@ -1,6 +1,7 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
 import type { BrsFile } from '../files/BrsFile';
+import type { Token } from '../lexer/Token';
 import type { ClassStatement } from './Statement';
 
 /**
@@ -24,6 +25,7 @@ export class TranspileState {
         } else {
             this.pathAbsolute = this.file.pathAbsolute;
         }
+        this.bslibPrefix = this.file.program.bslibPrefix;
     }
 
     /**
@@ -32,6 +34,11 @@ export class TranspileState {
      * If the file resides outside of rootDir, then no changes will be made to this path.
      */
     public pathAbsolute: string;
+
+    /**
+     * The prefix to use in front of all bslib functions
+     */
+    public bslibPrefix: string;
 
     /**
      * The number of active parent blocks for the current location of the state.
@@ -68,13 +75,30 @@ export class TranspileState {
     /**
      * Shorthand for creating a new source node
      */
-    public sourceNode(locatable: { range: Range }, code: string) {
-        let result = new SourceNode(
-            locatable.range.start.line,
+    public sourceNode(locatable: { range: Range }, code: string | SourceNode | Array<string | SourceNode>): SourceNode | undefined {
+        return new SourceNode(
+            //convert 0-based range line to 1-based SourceNode line
+            locatable.range.start.line + 1,
+            //range and SourceNode character are both 0-based, so no conversion necessary
             locatable.range.start.character,
             this.pathAbsolute,
             code
         );
-        return code || result;
+    }
+
+    /**
+     * Create a SourceNode from a token. This is more efficient than the above `sourceNode` function
+     * because the entire token is passed by reference, instead of the raw string being copied to the parameter,
+     * only to then be copied again for the SourceNode constructor
+     */
+    public tokenToSourceNode(token: Token) {
+        return new SourceNode(
+            //convert 0-based range line to 1-based SourceNode line
+            token.range.start.line + 1,
+            //range and SourceNode character are both 0-based, so no conversion necessary
+            token.range.start.character,
+            this.pathAbsolute,
+            token.text
+        );
     }
 }

@@ -1,4 +1,4 @@
-import type { Range, Diagnostic } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -13,6 +13,10 @@ import type { BscType } from './types/BscType';
 
 export interface BsDiagnostic extends Diagnostic {
     file: File;
+    /**
+     * A generic data container where additional details of the diagnostic can be stored. These are stripped out before being sent to a languageclient, and not printed to the console.
+     */
+    data?: any;
 }
 
 export type BscFile = BrsFile | XmlFile;
@@ -135,6 +139,18 @@ export interface VariableDeclaration {
     lineIndex: number;
 }
 
+export interface LabelDeclaration {
+    name: string;
+    /**
+     * The range for the label name
+     */
+    nameRange: Range;
+    /**
+     * The line of the label
+     */
+    lineIndex: number;
+}
+
 /**
  * A wrapper around a callable to provide more information about where it came from
  */
@@ -164,6 +180,7 @@ export type CompilerPluginFactory = () => CompilerPlugin;
 
 export interface CompilerPlugin {
     name: string;
+    //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
@@ -174,11 +191,14 @@ export interface CompilerPlugin {
     afterProgramValidate?: (program: Program) => void;
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+    //scope events
     afterScopeCreate?: (scope: Scope) => void;
     beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
     afterScopeValidate?: ValidateHandler;
+    //file events
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
     afterFileValidate?: (file: BscFile) => void;
@@ -186,6 +206,16 @@ export interface CompilerPlugin {
     afterFileTranspile?: (entry: TranspileObj) => void;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
+}
+export type PluginHandler<T> = (event: T) => void;
+
+export interface OnGetCodeActionsEvent {
+    program: Program;
+    file: BscFile;
+    range: Range;
+    scopes: Scope[];
+    diagnostics: BsDiagnostic[];
+    codeActions: CodeAction[];
 }
 
 export interface TypedefProvider {

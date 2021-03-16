@@ -52,6 +52,7 @@ describe('LanguageServer', () => {
         sendNotification: () => null,
         sendDiagnostics: () => null,
         onExecuteCommand: () => null,
+        onCodeAction: () => null,
         onDidOpenTextDocument: () => null,
         onDidChangeTextDocument: () => null,
         onDidCloseTextDocument: () => null,
@@ -250,6 +251,7 @@ describe('LanguageServer', () => {
             let libPath = s`${workspacePath}/source/lib.brs`;
             writeToFs(libPath, 'sub lib(): return : end sub');
 
+            server.workspaces[0].configFilePath = `${workspacePath}/bsconfig.json`;
             await svr.onDidChangeWatchedFiles({
                 changes: [{
                     uri: getFileProtocolPath(libPath),
@@ -338,6 +340,44 @@ describe('LanguageServer', () => {
                 changes: [{
                     type: FileChangeType.Created,
                     uri: getFileProtocolPath(sourcePath)
+                }]
+            } as DidChangeWatchedFilesParams);
+
+            expect(stub.callCount).to.equal(1);
+
+            expect(stub.getCalls()[0].args[1]).to.eql([{
+                type: FileChangeType.Created,
+                pathAbsolute: s`${rootDir}/source/main.brs`
+            }, {
+                type: FileChangeType.Created,
+                pathAbsolute: s`${rootDir}/source/lib.brs`
+            }]);
+        });
+
+        it('does not trigger revalidates when changes are in files which are not tracked', async () => {
+            svr.connection = {
+                sendNotification: () => { }
+            };
+            svr.workspaces.push({
+                builder: {
+                    getDiagnostics: () => [],
+                    program: {
+                        validate: () => { }
+                    }
+                }
+            });
+
+            sinon.stub(util, 'isDirectorySync').returns(true);
+            sinon.stub(glob, 'sync').returns([
+                s`${rootDir}/source/main.brs`,
+                s`${rootDir}/source/lib.brs`
+            ]);
+            const stub = sinon.stub(server, 'handleFileChanges').returns(Promise.resolve());
+
+            await (server as any).onDidChangeWatchedFiles({
+                changes: [{
+                    type: FileChangeType.Created,
+                    uri: getFileProtocolPath('some/other/folder/maybe/some/vscode/settings')
                 }]
             } as DidChangeWatchedFilesParams);
 

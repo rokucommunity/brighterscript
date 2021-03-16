@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CompletionItem, Position, SignatureInformation } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation } from 'vscode-languageserver';
 import { Location, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -24,7 +24,10 @@ import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope } from './astU
 import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
+import { BscPlugin } from './bscPlugin/BscPlugin';
 const startOfSourcePkgPath = `source${path.sep}`;
+const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
+const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
 
 export interface SourceObj {
     pathAbsolute: string;
@@ -67,7 +70,10 @@ export class Program {
     ) {
         this.options = util.normalizeConfig(options);
         this.logger = logger || new Logger(options.logLevel as LogLevel);
-        this.plugins = plugins || new PluginInterface([], undefined);
+        this.plugins = plugins || new PluginInterface([], this.logger);
+
+        //inject the bsc plugin as the first plugin in the stack.
+        this.plugins.addFirst(new BscPlugin());
 
         //normalize the root dir path
         this.options.rootDir = util.getRootDir(this.options);
@@ -116,6 +122,33 @@ export class Program {
      * Should only be set from `this.validate()`
      */
     private diagnostics = [] as BsDiagnostic[];
+
+    /**
+     * The path to bslib.brs (the BrightScript runtime for certain BrighterScript features)
+     */
+    public get bslibPkgPath() {
+        //if there's an aliased (preferred) version of bslib from roku_modules loaded into the program, use that
+        if (this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath)) {
+            return bslibAliasedRokuModulesPkgPath;
+
+            //if there's a non-aliased version of bslib from roku_modules, use that
+        } else if (this.getFileByPkgPath(bslibNonAliasedRokuModulesPkgPath)) {
+            return bslibNonAliasedRokuModulesPkgPath;
+
+            //default to the embedded version
+        } else {
+            return `source${path.sep}bslib.brs`;
+        }
+    }
+
+    public get bslibPrefix() {
+        if (this.bslibPkgPath === bslibNonAliasedRokuModulesPkgPath) {
+            return 'rokucommunity_bslib';
+        } else {
+            return 'bslib';
+        }
+    }
+
 
     /**
      * A map of every file loaded into this program, indexed by its original file location
@@ -185,30 +218,36 @@ export class Program {
      * by walking through every file, so call this sparingly.
      */
     public getDiagnostics() {
-        let diagnostics = [...this.diagnostics];
+        return this.logger.time(LogLevel.info, ['Program.getDiagnostics()'], () => {
 
-        //get the diagnostics from all scopes
-        for (let scopeName in this.scopes) {
-            let scope = this.scopes[scopeName];
-            diagnostics.push(
-                ...scope.getDiagnostics()
-            );
-        }
+            let diagnostics = [...this.diagnostics];
 
-        //get the diagnostics from all unreferenced files
-        let unreferencedFiles = this.getUnreferencedFiles();
-        for (let file of unreferencedFiles) {
-            diagnostics.push(
-                ...file.getDiagnostics()
-            );
-        }
+            //get the diagnostics from all scopes
+            for (let scopeName in this.scopes) {
+                let scope = this.scopes[scopeName];
+                diagnostics.push(
+                    ...scope.getDiagnostics()
+                );
+            }
 
-        //filter out diagnostics based on our diagnostic filters
-        let finalDiagnostics = this.diagnosticFilterer.filter({
-            ...this.options,
-            rootDir: this.options.rootDir
-        }, diagnostics);
-        return finalDiagnostics;
+            //get the diagnostics from all unreferenced files
+            let unreferencedFiles = this.getUnreferencedFiles();
+            for (let file of unreferencedFiles) {
+                diagnostics.push(
+                    ...file.getDiagnostics()
+                );
+            }
+            const filteredDiagnostics = this.logger.time(LogLevel.debug, ['filter diagnostics'], () => {
+                //filter out diagnostics based on our diagnostic filters
+                let finalDiagnostics = this.diagnosticFilterer.filter({
+                    ...this.options,
+                    rootDir: this.options.rootDir
+                }, diagnostics);
+                return finalDiagnostics;
+            });
+            this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
+            return filteredDiagnostics;
+        });
     }
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
@@ -312,7 +351,7 @@ export class Program {
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
 
-                this.logger.time(LogLevel.info, ['parse', chalk.green(srcPath)], () => {
+                this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
                     brsFile.parse(sourceObj.source);
                 });
                 file = brsFile;
@@ -335,7 +374,9 @@ export class Program {
                     source: fileContents
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
-                xmlFile.parse(sourceObj.source);
+                this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
+                    xmlFile.parse(sourceObj.source);
+                });
 
                 file = xmlFile;
 
@@ -425,6 +466,7 @@ export class Program {
      * @param pathAbsolute
      */
     public removeFile(pathAbsolute: string) {
+        this.logger.debug('Program.removeFile()', pathAbsolute);
         if (!path.isAbsolute(pathAbsolute)) {
             throw new Error(`Path must be absolute: "${pathAbsolute}"`);
         }
@@ -467,14 +509,16 @@ export class Program {
      * @param force - if true, then all scopes are force to validate, even if they aren't marked as dirty
      */
     public validate() {
-        this.logger.time(LogLevel.debug, ['Program.validate()'], () => {
+        this.logger.time(LogLevel.log, ['Validating project'], () => {
             this.diagnostics = [];
             this.plugins.emit('beforeProgramValidate', this);
 
-            for (let scopeName in this.scopes) {
-                let scope = this.scopes[scopeName];
-                scope.validate();
-            }
+            this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
+                for (let scopeName in this.scopes) {
+                    let scope = this.scopes[scopeName];
+                    scope.validate();
+                }
+            });
 
             //find any files NOT loaded into a scope
             for (let filePath in this.files) {
@@ -579,7 +623,6 @@ export class Program {
     public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {
         let results = new Map<Statement, FileLink<Statement>>();
         const filesSearched = new Set<BrsFile>();
-        let parseMode = originFile.getParseMode();
         let lowerNamespaceName = namespaceName?.toLowerCase();
         let lowerName = name?.toLowerCase();
         //look through all files in scope for matches
@@ -591,7 +634,7 @@ export class Program {
                 filesSearched.add(file);
 
                 for (const statement of [...file.parser.references.functionStatements, ...file.parser.references.classStatements.flatMap((cs) => cs.methods)]) {
-                    let parentNamespaceName = statement.namespaceName?.getName(parseMode)?.toLowerCase();
+                    let parentNamespaceName = statement.namespaceName?.getName(originFile.parseMode)?.toLowerCase();
                     if (statement.name.text.toLowerCase() === lowerName && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                         if (!results.has(statement)) {
                             results.set(statement, { item: statement, file: file });
@@ -733,6 +776,35 @@ export class Program {
         return Promise.resolve(file.getHover(position));
     }
 
+    /**
+     * Compute code actions for the given file and range
+     */
+    public getCodeActions(pathAbsolute: string, range: Range) {
+        const codeActions = [] as CodeAction[];
+        const file = this.getFile(pathAbsolute);
+        if (file) {
+            const diagnostics = this
+                //get all current diagnostics (filtered by diagnostic filters)
+                .getDiagnostics()
+                //only keep diagnostics related to this file
+                .filter(x => x.file === file)
+                //only keep diagnostics that touch this range
+                .filter(x => util.rangesIntersect(x.range, range));
+
+            const scopes = this.getScopesForFile(file);
+
+            this.plugins.emit('onGetCodeActions', {
+                program: this,
+                file: file,
+                range: range,
+                diagnostics: diagnostics,
+                scopes: scopes,
+                codeActions: codeActions
+            });
+        }
+        return codeActions;
+    }
+
     public getSignatureHelp(filepath: string, position: Position): SignatureInfoObj[] {
         let file: BrsFile = this.getFile(filepath);
         if (!file || !isBrsFile(file)) {
@@ -744,7 +816,7 @@ export class Program {
         let functionExpression = file.getFunctionExpressionAtPosition(position);
         let identifierInfo = this.getPartialStatementInfo(file, position);
         if (identifierInfo.statementType === '') {
-            // just general functoin calls
+            // just general function calls
             let statements = file.program.getStatementsByName(identifierInfo.name, file);
             for (let statement of statements) {
                 //TODO better handling of collisions - if it's a namespace, then don't show any other overrides
@@ -839,21 +911,28 @@ export class Program {
             //try to get sig help based on the name
             index = position.character;
             let currentToken = file.getTokenAt(position);
-            name = file.getPartialVariableName(currentToken, [TokenKind.New]);
-            if (!name) {
-                //try the previous token, incase we're on a bracket
-                currentToken = file.getPreviousToken(currentToken);
+            if (currentToken && currentToken.kind !== TokenKind.Comment) {
                 name = file.getPartialVariableName(currentToken, [TokenKind.New]);
-            }
-            if (name?.indexOf('.')) {
-                let parts = name.split('.');
-                name = parts[parts.length - 1];
-            }
+                if (!name) {
+                    //try the previous token, incase we're on a bracket
+                    currentToken = file.getPreviousToken(currentToken);
+                    name = file.getPartialVariableName(currentToken, [TokenKind.New]);
+                }
+                if (name?.indexOf('.')) {
+                    let parts = name.split('.');
+                    name = parts[parts.length - 1];
+                }
 
-            index = currentToken.range.start.character;
-            argStartIndex = index;
+                index = currentToken.range.start.character;
+                argStartIndex = index;
+            } else {
+                // invalid location
+                index = 0;
+                itemCounts.comma = 0;
+            }
         }
-        while (index > 0) {
+        //this loop is quirky. walk to -1 (which will result in the last char being '' thus satisfying the situation where there is no leading whitespace).
+        while (index >= -1) {
             if (!(/[a-z0-9_\.\@]/i).test(line.charAt(index))) {
                 if (!name) {
                     name = line.substring(index + 1, argStartIndex);
@@ -902,6 +981,11 @@ export class Program {
         };
         while (index >= 0) {
             const currentChar = line.charAt(index);
+
+            if (currentChar === '\'') { //found comment, invalid index
+                itemCounts.isArgStartFound = false;
+                break;
+            }
 
             if (isArgStartFound) {
                 if (currentChar !== ' ') {
@@ -1029,8 +1113,14 @@ export class Program {
     }
 
     public async transpile(fileEntries: FileObj[], stagingFolderPath: string) {
+        // map fileEntries using their path as key, to avoid excessive "find()" operations
+        const mappedFileEntries = fileEntries.reduce<Record<string, FileObj>>((collection, entry) => {
+            collection[s`${entry.src}`] = entry;
+            return collection;
+        }, {});
+
         const entries = Object.values(this.files).map(file => {
-            let filePathObj = fileEntries.find(x => s`${x.src}` === s`${file.pathAbsolute}`);
+            let filePathObj = mappedFileEntries[s`${file.pathAbsolute}`];
             if (!filePathObj) {
                 //this file has been added in-memory, from a plugin, for example
                 filePathObj = {
@@ -1081,18 +1171,32 @@ export class Program {
             this.plugins.emit('afterFileTranspile', entry);
         });
 
-        //copy the brighterscript stdlib to the output directory
-        promises.push(
-            fsExtra.ensureDir(s`${stagingFolderPath}/source`).then(() => {
-                return fsExtra.copyFile(
-                    s`${__dirname}/../bslib.brs`,
-                    s`${stagingFolderPath}/source/bslib.brs`
-                );
-            })
-        );
+        //if there's no bslib file already loaded into the program, copy it to the staging directory
+        if (!this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath) && !this.getFileByPkgPath(s`source/bslib.brs`)) {
+            promises.push(util.copyBslibToStaging(stagingFolderPath));
+        }
         await Promise.all(promises);
 
         this.plugins.emit('afterProgramTranspile', this, entries);
+    }
+
+    /**
+     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     */
+    public findFilesForFunction(functionName: string) {
+        const files = [] as BscFile[];
+        const lowerFunctionName = functionName.toLowerCase();
+        //find every file with this function defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                //TODO handle namespace-relative function calls
+                //if the file has a function with this name
+                if (file.parser.references.functionStatementLookup.get(lowerFunctionName) !== undefined) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
     }
 
     /**

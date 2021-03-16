@@ -74,6 +74,21 @@ describe('TemplateStringExpression', () => {
             program.dispose();
         });
 
+        it('uses the proper prefix when aliased package is installed', () => {
+            program.addOrReplaceFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
+            testTranspile(
+                'a = `${one},${two}`',
+                `a = rokucommunity_bslib_toString(one) + "," + rokucommunity_bslib_toString(two)`
+            );
+        });
+
+        it('properly transpiles simple template string with no leading text', () => {
+            testTranspile(
+                'a = `${one},${two}`',
+                `a = bslib_toString(one) + "," + bslib_toString(two)`
+            );
+        });
+
         it('properly transpiles simple template string', () => {
             testTranspile(
                 'a = `hello world`',

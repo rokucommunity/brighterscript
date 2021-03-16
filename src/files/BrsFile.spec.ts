@@ -16,8 +16,9 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { trim, trimMap } from '../testHelpers.spec';
+import { expectZeroDiagnostics, trim, trimMap } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
+import { Logger } from '../Logger';
 import { LazyType } from '../types/LazyType';
 
 let sinon = sinonImport.createSandbox();
@@ -92,6 +93,45 @@ describe('BrsFile', () => {
     });
 
     describe('getCompletions', () => {
+        it('suggests pkg paths in strings that match that criteria', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print "pkg:"
+                end sub
+            `);
+            const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
+            const names = result.map(x => x.label);
+            expect(names.sort()).to.eql([
+                'pkg:/source/main.brs'
+            ]);
+        });
+
+        it('suggests libpkg paths in strings that match that criteria', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print "libpkg:"
+                end sub
+            `);
+            const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
+            const names = result.map(x => x.label);
+            expect(names.sort()).to.eql([
+                'libpkg:/source/main.brs'
+            ]);
+        });
+
+        it('suggests pkg paths in template strings', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print \`pkg:\`
+                end sub
+            `);
+            const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
+            const names = result.map(x => x.label);
+            expect(names.sort()).to.eql([
+                'pkg:/source/main.brs'
+            ]);
+        });
+
         it('waits for the file to be processed before collecting completions', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile('source/main.brs', `
@@ -123,7 +163,15 @@ describe('BrsFile', () => {
             expect(names).to.contain('m');
         });
 
-        it('includes all keywordsm`', () => {
+        it('does not fail for missing previousToken', () => {
+            //add a single character to the file, and get completions after it
+            program.addOrReplaceFile('source/main.brs', `i`);
+            expect(() => {
+                program.getCompletions(`${rootDir}/source/main.brs`, Position.create(0, 1)).map(x => x.label);
+            }).not.to.throw;
+        });
+
+        it('includes all keywords`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
@@ -204,6 +252,19 @@ describe('BrsFile', () => {
             expect(results).to.be.empty;
         });
 
+        it('does provide intellisence for labels only after a goto keyword', () => {
+            //eslint-disable-next-line @typescript-eslint/no-floating-promises
+            program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                sub Main(name as string)
+                    something:
+                    goto \nend sub
+            `);
+
+            let results = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(3, 25));
+            expect(results.length).to.equal(1);
+            expect(results[0]?.label).to.equal('something');
+        });
+
     });
 
     describe('comment flags', () => {
@@ -211,7 +272,7 @@ describe('BrsFile', () => {
             it('disables critical diagnostic issues', () => {
                 program.addOrReplaceFile('source/main.brs', `
                     sub main()
-                        Dim requestData[requestList.count()]
+                        Dim requestData
                     end sub
                 `);
                 //should have an error
@@ -221,7 +282,7 @@ describe('BrsFile', () => {
                 program.addOrReplaceFile('source/main.brs', `
                     sub main()
                         'bs:disable-next-line
-                        Dim requestData[requestList.count()]
+                        Dim requestData
                     end sub
                 `);
                 //should have an error
@@ -362,6 +423,18 @@ describe('BrsFile', () => {
     });
 
     describe('parse', () => {
+        it('supports iife in assignment', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    result = sub()
+                    end sub()
+                    result = (sub()
+                    end sub)()
+                end sub
+            `);
+            expectZeroDiagnostics(program);
+        });
+
         it('uses the proper parse mode based on file extension', () => {
             function testParseMode(destPath: string, expectedParseMode: ParseMode) {
                 const file = program.addOrReplaceFile<BrsFile>(destPath, '');
@@ -1709,6 +1782,31 @@ describe('BrsFile', () => {
             `, 'trim', 'source/main.bs');
         });
 
+        it('transpiles dim', () => {
+            testTranspile(`Dim c[5]`, `Dim c[5]`);
+            testTranspile(`Dim c[5, 4]`, `Dim c[5, 4]`);
+            testTranspile(`Dim c[5, 4, 6]`, `Dim c[5, 4, 6]`);
+            testTranspile(`Dim requestData[requestList.count()]`, `Dim requestData[requestList.count()]`);
+            testTranspile(`Dim requestData[1, requestList.count()]`, `Dim requestData[1, requestList.count()]`);
+            testTranspile(`Dim requestData[1, requestList.count(), 2]`, `Dim requestData[1, requestList.count(), 2]`);
+            testTranspile(`Dim requestData[requestList[2]]`, `Dim requestData[requestList[2]]`);
+            testTranspile(`Dim requestData[1, requestList[2]]`, `Dim requestData[1, requestList[2]]`);
+            testTranspile(`Dim requestData[1, requestList[2], 2]`, `Dim requestData[1, requestList[2], 2]`);
+            testTranspile(`Dim requestData[requestList["2"]]`, `Dim requestData[requestList["2"]]`);
+            testTranspile(`Dim requestData[1, requestList["2"]]`, `Dim requestData[1, requestList["2"]]`);
+            testTranspile(`Dim requestData[1, requestList["2"], 2]`, `Dim requestData[1, requestList["2"], 2]`);
+            testTranspile(`Dim requestData[1, getValue(), 2]`, `Dim requestData[1, getValue(), 2]`);
+            testTranspile(`
+                Dim requestData[1, getValue({
+                    key: "value"
+                }), 2]
+            `, `
+                Dim requestData[1, getValue({
+                    key: "value"
+                }), 2]
+            `);
+        });
+
         it('transpiles calls to fully-qualified namespaced functions', () => {
             testTranspile(`
                 namespace NameA
@@ -2070,6 +2168,25 @@ describe('BrsFile', () => {
             const { code } = file.transpile();
             expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
         });
+
+        it('replaces custom types in parameter types and return types', () => {
+            testTranspile(`
+                function foo() as SomeKlass
+                    return new SomeKlass()
+                end function
+
+                sub bar(obj as SomeKlass)
+                end sub
+            `, `
+                function foo() as object
+                    return SomeKlass()
+                end function
+
+                sub bar(obj as object)
+                end sub
+            `);
+        });
+
     });
 
     describe('callfunc operator', () => {
@@ -2261,6 +2378,23 @@ describe('BrsFile', () => {
             expect(file.getTypedef()).to.eql(expected);
         }
 
+        it('includes namespace on extend class names', () => {
+            testTypedef(`
+                namespace AnimalKingdom
+                    class Bird
+                    end class
+                    class Duck extends Bird
+                    end class
+                end namespace`, trim`
+                namespace AnimalKingdom
+                    class Bird
+                    end class
+                    class Duck extends AnimalKingdom.Bird
+                    end class
+                end namespace
+            `);
+        });
+
         it('strips function body', () => {
             testTypedef(`
                 sub main(param1 as string)
@@ -2269,6 +2403,43 @@ describe('BrsFile', () => {
             `, trim`
                 sub main(param1 as string)
                 end sub
+            `);
+        });
+
+        it('includes annotations', () => {
+            testTypedef(`
+                namespace test
+                    @an
+                    @anFunc("value")
+                    function getDuck()
+                    end function
+                    class Duck
+                        @anMember
+                        @anMember("field")
+                        private thing
+
+                        @anMember
+                        @anMember("func")
+                        private function foo()
+                        end function
+                    end class
+                end namespace
+            `, trim`
+                namespace test
+                    @an
+                    @anFunc("value")
+                    function getDuck()
+                    end function
+                    class Duck
+                        @anMember
+                        @anMember("field")
+                        private thing as dynamic
+                        @anMember
+                        @anMember("func")
+                        private function foo()
+                        end function
+                    end class
+                end namespace
             `);
         });
 
@@ -2535,7 +2706,7 @@ describe('BrsFile', () => {
                 util.loadPlugins('', [
                     require.resolve('../examples/plugins/removePrint')
                 ]),
-                undefined
+                new Logger()
             );
             testPluginTranspile();
         });
@@ -2545,7 +2716,7 @@ describe('BrsFile', () => {
                 util.loadPlugins('', [
                     path.resolve(process.cwd(), './dist/examples/plugins/removePrint.js')
                 ]),
-                undefined
+                new Logger()
             );
             testPluginTranspile();
         });
@@ -2555,7 +2726,7 @@ describe('BrsFile', () => {
                 util.loadPlugins(process.cwd(), [
                     './dist/examples/plugins/removePrint.js'
                 ]),
-                undefined
+                new Logger()
             );
             testPluginTranspile();
         });

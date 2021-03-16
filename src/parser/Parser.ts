@@ -21,35 +21,36 @@ import type {
     PrintSeparatorSpace
 } from './Statement';
 import {
-    FunctionStatement,
-    CommentStatement,
     AssignmentStatement,
-    WhileStatement,
-    ExitWhileStatement,
-    ForStatement,
-    ForEachStatement,
-    ExitForStatement,
-    LibraryStatement,
     Block,
-    IfStatement,
-    DottedSetStatement,
-    IndexedSetStatement,
-    ExpressionStatement,
-    IncrementStatement,
-    ReturnStatement,
-    EndStatement,
-    PrintStatement,
-    LabelStatement,
-    GotoStatement,
-    StopStatement,
-    NamespaceStatement,
     Body,
-    ImportStatement,
     ClassFieldStatement,
     ClassMethodStatement,
     ClassStatement,
+    CommentStatement,
+    DimStatement,
+    DottedSetStatement,
+    EndStatement,
+    ExitForStatement,
+    ExitWhileStatement,
+    ExpressionStatement,
+    ForEachStatement,
+    ForStatement,
+    FunctionStatement,
+    GotoStatement,
+    IfStatement,
+    ImportStatement,
+    IncrementStatement,
+    IndexedSetStatement,
+    LabelStatement,
+    LibraryStatement,
+    NamespaceStatement,
+    PrintStatement,
+    ReturnStatement,
+    StopStatement,
+    ThrowStatement,
     TryCatchStatement,
-    ThrowStatement
+    WhileStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -127,7 +128,7 @@ export class Parser {
         return this._references;
     }
 
-    private _references: References = createReferences();
+    private _references = new References();
 
     /**
      * Invalidates (clears) the references collection. This should be called anytime the AST has been manipulated.
@@ -864,6 +865,9 @@ export class Parser {
         if (this.checkAny(TokenKind.Print, TokenKind.Question)) {
             return this.printStatement();
         }
+        if (this.check(TokenKind.Dim)) {
+            return this.dimStatement();
+        }
 
         if (this.check(TokenKind.While)) {
             return this.whileStatement();
@@ -1422,6 +1426,44 @@ export class Parser {
         return new ThrowStatement(throwToken, expression);
     }
 
+    private dimStatement() {
+        const dim = this.advance();
+
+        let identifier = this.tryConsume(DiagnosticMessages.expectedIdentifierAfterKeyword('dim'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
+        // force to an identifier so the AST makes some sense
+        if (identifier) {
+            identifier.kind = TokenKind.Identifier;
+        }
+
+        let leftSquareBracket = this.tryConsume(DiagnosticMessages.missingLeftSquareBracketAfterDimIdentifier(), TokenKind.LeftSquareBracket);
+
+        let expressions: Expression[] = [];
+        let expression: Expression;
+        do {
+            try {
+                expression = this.expression();
+                expressions.push(expression);
+                if (this.check(TokenKind.Comma)) {
+                    this.advance();
+                } else {
+                    // will also exit for right square braces
+                    break;
+                }
+            } catch (error) {
+            }
+        } while (expression);
+
+        if (expressions.length === 0) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.missingExpressionsInDimStatement(),
+                range: this.peek().range
+            });
+        }
+        let rightSquareBracket = this.tryConsume(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier(), TokenKind.RightSquareBracket);
+
+        return new DimStatement(dim, identifier, leftSquareBracket, expressions, rightSquareBracket);
+    }
+
     private ifStatement(): IfStatement {
         // colon before `if` is usually not allowed, unless it's after `then`
         if (this.current > 0) {
@@ -1755,6 +1797,8 @@ export class Parser {
                 values.push(this.advance() as PrintSeparatorSpace);
             } else if (this.check(TokenKind.Comma)) {
                 values.push(this.advance() as PrintSeparatorTab);
+            } else if (this.check(TokenKind.Else)) {
+                break; // inline branch
             } else {
                 values.push(this.expression());
             }
@@ -1785,7 +1829,7 @@ export class Parser {
             return new ReturnStatement(tokens);
         }
 
-        let toReturn = this.expression();
+        let toReturn = this.check(TokenKind.Else) ? undefined : this.expression();
         return new ReturnStatement(tokens, toReturn);
     }
 
@@ -1806,7 +1850,9 @@ export class Parser {
             throw new CancelStatementError();
         }
 
-        return new LabelStatement(tokens);
+        const stmt = new LabelStatement(tokens);
+        this.currentFunctionExpression.labelStatements.push(stmt);
+        return stmt;
     }
 
     /**
@@ -1942,7 +1988,13 @@ export class Parser {
 
     private anonymousFunction(): Expression {
         if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
-            return this.functionDeclaration(true);
+            const func = this.functionDeclaration(true);
+            //if there's an open paren after this, this is an IIFE
+            if (this.check(TokenKind.LeftParen)) {
+                return this.finishCall(this.advance(), func);
+            } else {
+                return func;
+            }
         }
 
         //template string
@@ -2613,7 +2665,7 @@ export class Parser {
      * This does that walk.
      */
     private findReferences() {
-        this._references = createReferences();
+        this._references = new References();
 
         //gather up all the top-level statements
         this.ast.walk(createVisitor({
@@ -2714,35 +2766,33 @@ export interface ParseOptions {
     logger?: Logger;
 }
 
-function createReferences(): References {
-    return {
-        assignmentStatements: [],
-        classStatements: [],
-        functionExpressions: [],
-        functionStatements: [],
-        importStatements: [],
-        libraryStatements: [],
-        namespaceStatements: [],
-        newExpressions: [],
-        propertyHints: {},
-        localVars: new Map<FunctionExpression, LocalVarEntry[]>()
-    };
-}
-
-export interface References {
-    assignmentStatements: AssignmentStatement[];
-    classStatements: ClassStatement[];
-    functionExpressions: FunctionExpression[];
-    functionStatements: FunctionStatement[];
-    importStatements: ImportStatement[];
-    libraryStatements: LibraryStatement[];
-    namespaceStatements: NamespaceStatement[];
-    newExpressions: NewExpression[];
-    propertyHints: Record<string, string>;
+export class References {
+    public assignmentStatements = [] as AssignmentStatement[];
+    public classStatements = [] as ClassStatement[];
+    public functionExpressions = [] as FunctionExpression[];
+    public functionStatements = [] as FunctionStatement[];
     /**
-     * Array of local variables for each function expression
+     * A map of function statements, indexed by fully-namespaced lower function name.
      */
-    localVars: Map<FunctionExpression, LocalVarEntry[]>;
+    public get functionStatementLookup() {
+        if (!this._functionStatementLookup) {
+            this._functionStatementLookup = new Map();
+            for (const stmt of this.functionStatements) {
+                this._functionStatementLookup.set(stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt);
+            }
+        }
+        return this._functionStatementLookup;
+    }
+    private _functionStatementLookup: Map<string, FunctionStatement>;
+    public importStatements = [] as ImportStatement[];
+    public libraryStatements = [] as LibraryStatement[];
+    public namespaceStatements = [] as NamespaceStatement[];
+    public newExpressions = [] as NewExpression[];
+    public propertyHints = {} as Record<string, string>;
+    /**
+    * Array of local variables for each function expression
+    */
+    localVars = new Map<FunctionExpression, LocalVarEntry[]>();
 }
 
 export interface LocalVarEntry {

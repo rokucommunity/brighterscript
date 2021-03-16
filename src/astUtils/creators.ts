@@ -39,7 +39,16 @@ export function createDottedIdentifier(path: string[], range?: Range, namespaceN
     return new DottedGetExpression(obj, createToken(TokenKind.Identifier, ident, range), createToken(TokenKind.Dot, '.', range));
 }
 
+/**
+ * Create a StringLiteralExpression. The TokenKind.StringLiteral token value includes the leading and trailing doublequote during lexing.
+ * Since brightscript doesn't support strings with quotes in them, we can safely auto-detect and wrap the value in quotes in this function.
+ * @param value - the string value. (value will be wrapped in quotes if they are missing)
+ */
 export function createStringLiteral(value: string, range?: Range) {
+    //wrap the value in double quotes
+    if (!value.startsWith('"') && !value.endsWith('"')) {
+        value = '"' + value + '"';
+    }
     return new LiteralExpression(createToken(TokenKind.StringLiteral, value, range));
 }
 export function createIntegerLiteral(value: string, range?: Range) {
