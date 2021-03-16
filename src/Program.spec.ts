@@ -1837,6 +1837,21 @@ describe('Program', () => {
             }
         });
 
+        it('does not crash on callfunc operator', () => {
+            //there needs to be at least one xml component WITHOUT an interface
+            program.addOrReplaceFile<XmlFile>('components/MyNode.xml', trim`<?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
+                </component>
+            `);
+            const file = program.addOrReplaceFile('source/main.bs', `
+                sub main()
+                    someFunc()@.
+                end sub
+            `);
+            program.getCompletions(file.pathAbsolute, util.createPosition(2, 32));
+        });
+
         it('gets signature help for constructor with no args', () => {
             program.addOrReplaceFile('source/main.bs', `
                 function main()
