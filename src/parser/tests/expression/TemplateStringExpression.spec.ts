@@ -191,6 +191,13 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
+        it('properly transpiles two template strings side-by-side', () => {
+            testTranspile(
+                'a = `${"hello"}${"world"}`',
+                'a = "hello" + "world"'
+            );
+        });
+
         it('skips calling toString on strings', () => {
             testTranspile(`
                 text = \`Hello \${"world"}\`
