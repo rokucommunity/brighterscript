@@ -160,7 +160,10 @@ export let DiagnosticMessages = {
     classCouldNotBeFound: (className: string, scopeName: string) => ({
         message: `Class '${className}' could not be found when this file is included in scope '${scopeName}'`,
         code: 1029,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        data: {
+            className: className
+        }
     }),
     expectedClassFieldIdentifier: () => ({
         message: `Expected identifier in class body`,
