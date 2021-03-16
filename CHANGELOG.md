@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.36.0] - 2021-03-15
+### Added
+ - class import code actions ([#365](https://github.com/rokucommunity/brighterscript/pull/365))
+### Changed
+ - append stack trace to every language server error ([#354)](https://github.com/rokucommunity/brighterscript/pull/354))
+### Fixed
+ - restrict function and class imports to .bs files only ([#365)](https://github.com/rokucommunity/brighterscript/pull/365))
+ - language server crashes due to unsafe property access in callfunc expressions ([#360)](https://github.com/rokucommunity/brighterscript/pull/360))
+ - crashes in signature help ([#358)](https://github.com/rokucommunity/brighterscript/pull/358))
+ - template string transpile bug when two expressions were next to each other ([#361)](https://github.com/rokucommunity/brighterscript/pull/361))
+
+
+
 ## [0.35.0] - 2021-03-09
 ### Added
  - code actions for suggesting import statements in brighterscript files ([#347](https://github.com/rokucommunity/brighterscript/pull/347))
@@ -1040,3 +1053,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.34.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.1...v0.34.2
 [0.34.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.2...v0.34.3
 [0.35.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.3...v0.35.0
+[0.36.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.35.0...v0.36.0
