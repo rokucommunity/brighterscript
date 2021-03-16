@@ -2769,6 +2769,18 @@ export interface ParseOptions {
 export class References {
     public assignmentStatements = [] as AssignmentStatement[];
     public classStatements = [] as ClassStatement[];
+
+    public get classStatementLookup() {
+        if (!this._classStatementLookup) {
+            this._classStatementLookup = new Map();
+            for (const stmt of this.classStatements) {
+                this._classStatementLookup.set(stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt);
+            }
+        }
+        return this._classStatementLookup;
+    }
+    private _classStatementLookup: Map<string, ClassStatement>;
+
     public functionExpressions = [] as FunctionExpression[];
     public functionStatements = [] as FunctionStatement[];
     /**

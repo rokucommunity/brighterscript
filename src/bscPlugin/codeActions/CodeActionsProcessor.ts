@@ -1,10 +1,12 @@
+import type { Diagnostic } from 'vscode-languageserver';
 import { CodeActionKind } from 'vscode-languageserver';
 import { codeActionUtil } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { OnGetCodeActionsEvent } from '../../interfaces';
+import type { BscFile, OnGetCodeActionsEvent } from '../../interfaces';
+import { ParseMode } from '../../parser';
 import { util } from '../../util';
 
 export class CodeActionsProcessor {
@@ -17,7 +19,9 @@ export class CodeActionsProcessor {
     public process() {
         for (const diagnostic of this.event.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.callToUnknownFunction) {
-                this.suggestImports(diagnostic as any);
+                this.suggestFunctionImports(diagnostic as any);
+            } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
+                this.suggestClassImports(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
                 this.addMissingExtends(diagnostic as any);
             }
@@ -26,21 +30,22 @@ export class CodeActionsProcessor {
 
     private suggestedImports = new Set<string>();
 
-    private suggestImports(diagnostic: DiagnosticMessageType<'callToUnknownFunction'>) {
-        const lowerFunctionName = diagnostic.data.functionName.toLowerCase();
-
-        //skip generating duplicate suggestions if we've already done this one
-        if (this.suggestedImports.has(lowerFunctionName)) {
+    /**
+     * Generic import suggestion function. Shouldn't be called directly from the main loop, but instead called by more specific diagnostic handlers
+     */
+    private suggestImports(diagnostic: Diagnostic, key: string, files: BscFile[]) {
+        //skip if we already have this suggestion
+        if (this.suggestedImports.has(key)) {
             return;
         }
 
-        this.suggestedImports.add(lowerFunctionName);
+        this.suggestedImports.add(key);
         const importStatements = (this.event.file as BrsFile).parser.references.importStatements;
         //find the position of the first import statement, or the top of the file if there is none
         const insertPosition = importStatements[importStatements.length - 1]?.importToken.range?.start ?? util.createPosition(0, 0);
 
         //find all files that reference this function
-        for (const file of this.event.file.program.findFilesForFunction(lowerFunctionName)) {
+        for (const file of files) {
             const pkgPath = util.getRokuPkgPath(file.pkgPath);
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
@@ -57,6 +62,32 @@ export class CodeActionsProcessor {
                 })
             );
         }
+    }
+
+    private suggestFunctionImports(diagnostic: DiagnosticMessageType<'callToUnknownFunction'>) {
+        //skip if not a BrighterScript file
+        if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
+            return;
+        }
+        const lowerFunctionName = diagnostic.data.functionName.toLowerCase();
+        this.suggestImports(
+            diagnostic,
+            lowerFunctionName,
+            this.event.file.program.findFilesForFunction(lowerFunctionName)
+        );
+    }
+
+    private suggestClassImports(diagnostic: DiagnosticMessageType<'classCouldNotBeFound'>) {
+        //skip if not a BrighterScript file
+        if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
+            return;
+        }
+        const lowerClassName = diagnostic.data.className.toLowerCase();
+        this.suggestImports(
+            diagnostic,
+            lowerClassName,
+            this.event.file.program.findFilesForClass(lowerClassName)
+        );
     }
 
     private addMissingExtends(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
