@@ -101,7 +101,7 @@ Objects in the brighterscript compiler dispatch a number of events that you can 
 
 The top level object is the `ProgramBuilder` which runs the overall process: preparation, running the compiler (`Program`) and producing the output.
 
-`Program` is the compiler itself; it handles the creation of program objects (`Scope`, `BrsFile`, `XmlFile`) and overal validation.
+`Program` is the compiler itself; it handles the creation of program objects (`Scope`, `BrsFile`, `XmlFile`) and overall validation.
 
 `BrsFile` is a `.brs` or `.bs` file; its AST can be modified by a plugin.
 
@@ -200,8 +200,7 @@ Note: in a language-server context, Scope validation happens every time a file c
 
 ```typescript
 // myDiagnosticPlugin.ts
-import { CompilerPlugin, BrsFile, XmlFile } from 'brighterscript';
-import { isBrsFile } from 'brighterscript/dist/parser/ASTUtils';
+import type { BscFile, CompilerPlugin } from 'brighterscript/dist/interfaces';
 
 // plugin factory
 export default function () {
@@ -213,16 +212,17 @@ export default function () {
                 return;
             }
             // visit function statements and validate their name
-            file.parser.functionStatements.forEach((fun) => {
-                if (fun.name.text.toLowerCase() === 'main') {
+            for (const func of file.parser.references.functionExpressions) {
+                // file.parser.functionStatements.forEach((fun) => {
+                if (func?.functionStatement.name.text.toLowerCase() === 'main') {
                     file.addDiagnostics([{
                         code: 9000,
                         message: 'Use RunUserInterface as entry point',
-                        range: fun.name.range,
+                        range: func.range,
                         file
                     }]);
                 }
-            });
+            };
         }
     } as CompilerPlugin;
 };
@@ -234,26 +234,31 @@ AST modification can be done after parsing (`afterFileParsed`), but it is recomm
 
 ```typescript
 // removePrint.ts
-import { CompilerPlugin, Program, TranspileObj } from 'brighterscript';
-import { EmptyStatement } from 'brighterscript/dist/parser';
-import { isBrsFile, createStatementEditor, editStatements } from 'brighterscript/dist/parser/ASTUtils';
+import { isBrsFile } from 'brighterscript/dist/astUtils/reflection';
+import { createVisitor, WalkMode } from 'brighterscript/dist/astUtils/visitors';
+import type { BscFile, CompilerPlugin } from 'brighterscript/dist/interfaces';
+import { EmptyStatement } from 'brighterscript/dist/parser/Statement';
 
 // plugin factory
-export default function () {
+export default function plugin() {
     return {
         name: 'removePrint',
         // transform AST before transpilation
-        beforeFileTranspile: (entry: TranspileObj) => {
-            if (isBrsFile(entry.file)) {
-                // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-                entry.file.parser.functionExpressions.forEach((fun) => {
-                    const visitor = createStatementEditor({
-                        PrintStatement: (statement) => new EmptyStatement()
-                    });
-                    editStatements(fun.body, visitor);
-                });
-            }
-        }
-    } as CompilerPlugin;
-};
+		// note: it is normally not recommended to modify the AST too much at this stage,
+		// because if the plugin runs in a language-server context it could break intellisense
+		afterFileParse: (file: BscFile) => {
+			if (!isBrsFile(file)) {
+				return;
+			}
+			// visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
+			for (const func of file.parser.references.functionExpressions) {
+				func.body.walk(createVisitor({
+					PrintStatement: (statement) => new EmptyStatement()
+				}), {
+					walkMode: WalkMode.visitStatements
+				});
+			}
+		}
+	} as CompilerPlugin;
+}
 ```
