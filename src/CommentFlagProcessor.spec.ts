@@ -124,5 +124,33 @@ describe('CommentFlagProcessor', () => {
                 }]
             });
         });
+
+        it('tokenizes bs:disable-line comment with leading space', () => {
+            const token = Lexer.scan(`' bs:disable-line:1`).tokens[0];
+            expect(
+                processor['tokenize'](token.text, token.range)
+            ).to.eql({
+                commentTokenText: `'`,
+                disableType: 'line',
+                codes: [{
+                    code: '1',
+                    range: Range.create(0, 18, 0, 19)
+                }]
+            });
+        });
+
+        it('tokenizes bs:disable-line comment with leading tab', () => {
+            const token = Lexer.scan(`'\tbs:disable-line:1`).tokens[0];
+            expect(
+                processor['tokenize'](token.text, token.range)
+            ).to.eql({
+                commentTokenText: `'`,
+                disableType: 'line',
+                codes: [{
+                    code: '1',
+                    range: Range.create(0, 18, 0, 19)
+                }]
+            });
+        });
     });
 });
