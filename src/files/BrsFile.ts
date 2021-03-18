@@ -1,11 +1,11 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Range, Position } from 'vscode-languageserver';
+import type { CompletionItem, Hover, Position } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import type { Scope } from '../Scope';
-import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
+import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import type { Token } from '../lexer';
@@ -26,6 +26,7 @@ import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentSt
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
+import { CommentFlagProcessor } from '../CommentFlagProcessor';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -231,7 +232,7 @@ export class BrsFile {
                 });
             });
 
-            this.getIgnores(lexer.tokens);
+            this.getCommentFlags(lexer.tokens);
 
             let preprocessor = new Preprocessor();
 
@@ -390,77 +391,17 @@ export class BrsFile {
      * Find all comment flags in the source code. These enable or disable diagnostic messages.
      * @param lines - the lines of the program
      */
-    public getIgnores(tokens: Token[]) {
-        //TODO use the comment statements found in the AST for this instead of text search
-        let allCodesExcept1014 = diagnosticCodes.filter((x) => x !== DiagnosticMessages.unknownDiagnosticCode(0).code);
+    public getCommentFlags(tokens: Token[]) {
+        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
+
         this.commentFlags = [];
         for (let token of tokens) {
-            let tokenized = util.tokenizeBsDisableComment(token);
-            if (!tokenized) {
-                continue;
-            }
-
-            let affectedRange: Range;
-            if (tokenized.disableType === 'line') {
-                affectedRange = util.createRange(token.range.start.line, 0, token.range.start.line, token.range.start.character);
-            } else if (tokenized.disableType === 'next-line') {
-                affectedRange = util.createRange(token.range.start.line + 1, 0, token.range.start.line + 1, Number.MAX_SAFE_INTEGER);
-            }
-
-            let commentFlag: CommentFlag;
-
-            //statement to disable EVERYTHING
-            if (tokenized.codes.length === 0) {
-                commentFlag = {
-                    file: this,
-                    //null means all codes
-                    codes: null,
-                    range: token.range,
-                    affectedRange: affectedRange
-                };
-
-                //disable specific diagnostic codes
-            } else {
-                let codes = [] as number[];
-                for (let codeToken of tokenized.codes) {
-                    let codeInt = parseInt(codeToken.code);
-                    if (isNaN(codeInt)) {
-                        //don't validate non-numeric codes
-                        continue;
-                    }
-                    //add a warning for unknown codes
-                    if (diagnosticCodes.includes(codeInt)) {
-                        codes.push(codeInt);
-                    } else {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.unknownDiagnosticCode(codeInt),
-                            file: this,
-                            range: codeToken.range
-                        });
-                    }
-                }
-                if (codes.length > 0) {
-                    commentFlag = {
-                        file: this,
-                        codes: codes,
-                        range: token.range,
-                        affectedRange: affectedRange
-                    };
-                }
-            }
-
-            if (commentFlag) {
-                this.commentFlags.push(commentFlag);
-
-                //add an ignore for everything in this comment except for Unknown_diagnostic_code_1014
-                this.commentFlags.push({
-                    affectedRange: commentFlag.range,
-                    range: commentFlag.range,
-                    codes: allCodesExcept1014,
-                    file: this
-                });
+            if (token.kind === TokenKind.Comment) {
+                processor.tryAdd(token.text, token.range);
             }
         }
+        this.commentFlags.push(...processor.commentFlags);
+        this.diagnostics.push(...processor.diagnostics);
     }
 
     public scopesByFunc = new Map<FunctionExpression, FunctionScope>();

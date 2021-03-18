@@ -13,7 +13,7 @@ import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 
 export interface BsDiagnostic extends Diagnostic {
-    file: File;
+    file: BscFile;
     /**
      * A generic data container where additional details of the diagnostic can be stored. These are stripped out before being sent to a languageclient, and not printed to the console.
      */
@@ -163,7 +163,7 @@ export interface CallableContainer {
 export type CallableContainerMap = Map<string, CallableContainer[]>;
 
 export interface CommentFlag {
-    file: BrsFile;
+    file: BscFile;
     /**
      * The location of the ignore comment.
      */
@@ -172,7 +172,7 @@ export interface CommentFlag {
      * The range that this flag applies to (i.e. the lines that should be suppressed/re-enabled)
      */
     affectedRange: Range;
-    codes: number[] | null;
+    codes: DiagnosticCode[] | null;
 }
 
 type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
@@ -232,3 +232,5 @@ export interface ExpressionInfo {
     varExpressions: Expression[];
     uniqueVarNames: string[];
 }
+
+export type DiagnosticCode = number | string;
