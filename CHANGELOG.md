@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.37.0] - 2021-03-18
+### Added
+ - support for `bs:disable` comments in xml files ([#363](https://github.com/rokucommunity/brighterscript/pull/363))
+
+
+
 ## [0.36.0] - 2021-03-15
 ### Added
  - class import code actions ([#365](https://github.com/rokucommunity/brighterscript/pull/365))
@@ -1054,3 +1060,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.34.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.2...v0.34.3
 [0.35.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.3...v0.35.0
 [0.36.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.35.0...v0.36.0
+[0.37.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.36.0...v0.37.0
