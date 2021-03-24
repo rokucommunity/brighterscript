@@ -15,8 +15,7 @@ import {
     NullCoalescingExpression
 } from '../../Expression';
 import { Program } from '../../..';
-import { getTestTranspile } from '../../../files/BrsFile.spec';
-import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 
 describe('NullCoalescingExpression', () => {
     it('throws exception when used in brightscript scope', () => {

@@ -10,8 +10,7 @@ import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
-import { getTestTranspile } from './BrsFile.spec';
-import { expectZeroDiagnostics, trim, trimMap } from '../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 
 describe('XmlFile', () => {
     const tempDir = s`${process.cwd()}/.tmp`;
