@@ -578,19 +578,22 @@ export class PrintStatement extends Statement {
             ' '
         ];
         for (let i = 0; i < this.expressions.length; i++) {
-            let expression: any = this.expressions[i];
-            if (expression.transpile) {
-                //separate print statements with a semi-colon
-                if (i > 0) {
-                    result.push(' ; ');
-                }
-                result.push(...(expression as ExpressionStatement).transpile(state));
+            const expressionOrSeparator: any = this.expressions[i];
+            if (expressionOrSeparator.transpile) {
+                result.push(...(expressionOrSeparator as ExpressionStatement).transpile(state));
             } else {
-                //skip these because I think they are bogus items only added for use in the runtime
+                result.push(
+                    state.tokenToSourceNode(expressionOrSeparator)
+                );
+            }
+            //if there's an expression after us, add a space
+            if ((this.expressions[i + 1] as any)?.transpile) {
+                result.push(' ');
             }
         }
         return result;
     }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             for (let i = 0; i < this.expressions.length; i++) {
