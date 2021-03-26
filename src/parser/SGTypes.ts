@@ -5,6 +5,7 @@ import { isSGChildren, isSGField, isSGFunction, isSGInterface, isSGScript } from
 import type { FileReference, TranspileResult } from '../interfaces';
 import type { SGTranspileState } from './SGTranspileState';
 import util from '../util';
+import { Locatable } from '../lexer/Token';
 
 export interface SGToken {
     text: string;
@@ -56,8 +57,24 @@ export class SGTag {
          * The endTag `<`
          */
         public endTagOpen?: SGToken,
-        public endTagName?: SGToken
+        public endTagName?: SGToken,
+        public endTagClose?: SGToken
     ) { }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.startTagOpen.range.start,
+            (
+                this.endTagClose ??
+                this.endTagName ??
+                this.endTagOpen ??
+                (this.children?.[this.children?.length - 1] as Locatable) ??
+                this.startTagClose ??
+                this.attributes?.[this.attributes?.length - 1] ??
+                this.startTagOpen
+            ).range.end
+        );
+    }
 
     /**
      * Is this a self-closing tag?
