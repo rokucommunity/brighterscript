@@ -14,6 +14,10 @@ import PluginInterface from './PluginInterface';
 import type { FunctionStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
 import { expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { doesNotThrow } from 'assert';
+import { Logger } from './Logger';
+import { createToken } from './astUtils';
+import { TokenKind } from './lexer';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -167,7 +171,7 @@ describe('Program', () => {
                 beforeFileParse: beforeFileParse,
                 afterFileParse: afterFileParse,
                 afterFileValidate: afterFileValidate
-            }], undefined);
+            }], new Logger());
 
             let mainPath = s`${rootDir}/source/main.brs`;
             //add a new source file
@@ -681,6 +685,14 @@ describe('Program', () => {
 
             expect(program.getScopeByName(xmlFile.pkgPath).getFile(brsPath)).to.exist;
 
+        });
+    });
+
+    describe('getCodeActions', () => {
+        it('does not fail when file is missing from program', () => {
+            doesNotThrow(() => {
+                program.getCodeActions('not/real/file', util.createRange(1, 2, 3, 4));
+            });
         });
     });
 
@@ -1628,6 +1640,18 @@ describe('Program', () => {
     });
 
     describe('transpile', () => {
+        it('copies bslib.brs when no ropm version was found', async () => {
+            await program.transpile([], stagingFolderPath);
+            expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.true;
+        });
+
+        it('does not copy bslib.brs when found in roku_modules', async () => {
+            program.addOrReplaceFile('source/roku_modules/bslib/bslib.brs', '');
+            await program.transpile([], stagingFolderPath);
+            expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/bslib.brs`)).to.be.false;
+            expect(fsExtra.pathExistsSync(`${stagingFolderPath}/source/roku_modules/bslib/bslib.brs`)).to.be.true;
+        });
+
         it('transpiles in-memory-only files', async () => {
             program.addOrReplaceFile('source/logger.bs', trim`
                 sub logInfo()
@@ -1780,6 +1804,15 @@ describe('Program', () => {
     });
 
     describe('getSignatureHelp', () => {
+        it('does not crash when second previousToken is undefined', () => {
+            const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ` `);
+            sinon.stub(file, 'getPreviousToken').returns(undefined);
+            //should not crash
+            expect(
+                file['getClassFromMReference'](util.createPosition(2, 3), createToken(TokenKind.Dot, '.'), null)
+            ).to.be.undefined;
+        });
+
         it('works with no leading whitespace when the cursor is after the open paren', () => {
             program.addOrReplaceFile('source/main.brs', `sub main()\nsayHello()\nend sub\nsub sayHello(name)\nend sub`);
             let signatureHelp = program.getSignatureHelp(
@@ -1802,6 +1835,21 @@ describe('Program', () => {
                 expect(program.getDiagnostics()).to.be.empty;
                 expect(signatureHelp[0]?.signature).to.not.exist;
             }
+        });
+
+        it('does not crash on callfunc operator', () => {
+            //there needs to be at least one xml component WITHOUT an interface
+            program.addOrReplaceFile<XmlFile>('components/MyNode.xml', trim`<?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
+                </component>
+            `);
+            const file = program.addOrReplaceFile('source/main.bs', `
+                sub main()
+                    someFunc()@.
+                end sub
+            `);
+            program.getCompletions(file.pathAbsolute, util.createPosition(2, 32));
         });
 
         it('gets signature help for constructor with no args', () => {
@@ -2231,7 +2279,5 @@ describe('Program', () => {
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(2);
             }
         });
-
-
     });
 });

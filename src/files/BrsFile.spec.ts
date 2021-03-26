@@ -16,8 +16,9 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { trim, trimMap } from '../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
+import { Logger } from '../Logger';
 
 let sinon = sinonImport.createSandbox();
 
@@ -91,6 +92,45 @@ describe('BrsFile', () => {
     });
 
     describe('getCompletions', () => {
+        it('suggests pkg paths in strings that match that criteria', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print "pkg:"
+                end sub
+            `);
+            const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
+            const names = result.map(x => x.label);
+            expect(names.sort()).to.eql([
+                'pkg:/source/main.brs'
+            ]);
+        });
+
+        it('suggests libpkg paths in strings that match that criteria', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print "libpkg:"
+                end sub
+            `);
+            const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
+            const names = result.map(x => x.label);
+            expect(names.sort()).to.eql([
+                'libpkg:/source/main.brs'
+            ]);
+        });
+
+        it('suggests pkg paths in template strings', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print \`pkg:\`
+                end sub
+            `);
+            const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
+            const names = result.map(x => x.label);
+            expect(names.sort()).to.eql([
+                'pkg:/source/main.brs'
+            ]);
+        });
+
         it('waits for the file to be processed before collecting completions', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile('source/main.brs', `
@@ -122,7 +162,15 @@ describe('BrsFile', () => {
             expect(names).to.contain('m');
         });
 
-        it('includes all keywordsm`', () => {
+        it('does not fail for missing previousToken', () => {
+            //add a single character to the file, and get completions after it
+            program.addOrReplaceFile('source/main.brs', `i`);
+            expect(() => {
+                program.getCompletions(`${rootDir}/source/main.brs`, Position.create(0, 1)).map(x => x.label);
+            }).not.to.throw;
+        });
+
+        it('includes all keywords`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
@@ -374,6 +422,18 @@ describe('BrsFile', () => {
     });
 
     describe('parse', () => {
+        it('supports iife in assignment', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    result = sub()
+                    end sub()
+                    result = (sub()
+                    end sub)()
+                end sub
+            `);
+            expectZeroDiagnostics(program);
+        });
+
         it('uses the proper parse mode based on file extension', () => {
             function testParseMode(destPath: string, expectedParseMode: ParseMode) {
                 const file = program.addOrReplaceFile<BrsFile>(destPath, '');
@@ -1745,25 +1805,25 @@ describe('BrsFile', () => {
         });
 
         it('transpiles dim', () => {
-            testTranspile(`Dim c[5]`, `dim c[5]`);
-            testTranspile(`Dim c[5, 4]`, `dim c[5, 4]`);
-            testTranspile(`Dim c[5, 4, 6]`, `dim c[5, 4, 6]`);
-            testTranspile(`Dim requestData[requestList.count()]`, `dim requestData[requestList.count()]`);
-            testTranspile(`Dim requestData[1, requestList.count()]`, `dim requestData[1, requestList.count()]`);
-            testTranspile(`Dim requestData[1, requestList.count(), 2]`, `dim requestData[1, requestList.count(), 2]`);
-            testTranspile(`Dim requestData[requestList[2]]`, `dim requestData[requestList[2]]`);
-            testTranspile(`Dim requestData[1, requestList[2]]`, `dim requestData[1, requestList[2]]`);
-            testTranspile(`Dim requestData[1, requestList[2], 2]`, `dim requestData[1, requestList[2], 2]`);
-            testTranspile(`Dim requestData[requestList["2"]]`, `dim requestData[requestList["2"]]`);
-            testTranspile(`Dim requestData[1, requestList["2"]]`, `dim requestData[1, requestList["2"]]`);
-            testTranspile(`Dim requestData[1, requestList["2"], 2]`, `dim requestData[1, requestList["2"], 2]`);
-            testTranspile(`Dim requestData[1, getValue(), 2]`, `dim requestData[1, getValue(), 2]`);
+            testTranspile(`Dim c[5]`, `Dim c[5]`);
+            testTranspile(`Dim c[5, 4]`, `Dim c[5, 4]`);
+            testTranspile(`Dim c[5, 4, 6]`, `Dim c[5, 4, 6]`);
+            testTranspile(`Dim requestData[requestList.count()]`, `Dim requestData[requestList.count()]`);
+            testTranspile(`Dim requestData[1, requestList.count()]`, `Dim requestData[1, requestList.count()]`);
+            testTranspile(`Dim requestData[1, requestList.count(), 2]`, `Dim requestData[1, requestList.count(), 2]`);
+            testTranspile(`Dim requestData[requestList[2]]`, `Dim requestData[requestList[2]]`);
+            testTranspile(`Dim requestData[1, requestList[2]]`, `Dim requestData[1, requestList[2]]`);
+            testTranspile(`Dim requestData[1, requestList[2], 2]`, `Dim requestData[1, requestList[2], 2]`);
+            testTranspile(`Dim requestData[requestList["2"]]`, `Dim requestData[requestList["2"]]`);
+            testTranspile(`Dim requestData[1, requestList["2"]]`, `Dim requestData[1, requestList["2"]]`);
+            testTranspile(`Dim requestData[1, requestList["2"], 2]`, `Dim requestData[1, requestList["2"], 2]`);
+            testTranspile(`Dim requestData[1, getValue(), 2]`, `Dim requestData[1, getValue(), 2]`);
             testTranspile(`
                 Dim requestData[1, getValue({
                     key: "value"
                 }), 2]
             `, `
-                dim requestData[1, getValue({
+                Dim requestData[1, getValue({
                     key: "value"
                 }), 2]
             `);
@@ -2130,6 +2190,25 @@ describe('BrsFile', () => {
             const { code } = file.transpile();
             expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
         });
+
+        it('replaces custom types in parameter types and return types', () => {
+            testTranspile(`
+                function foo() as SomeKlass
+                    return new SomeKlass()
+                end function
+
+                sub bar(obj as SomeKlass)
+                end sub
+            `, `
+                function foo() as object
+                    return SomeKlass()
+                end function
+
+                sub bar(obj as object)
+                end sub
+            `);
+        });
+
     });
 
     describe('callfunc operator', () => {
@@ -2321,6 +2400,23 @@ describe('BrsFile', () => {
             expect(file.getTypedef()).to.eql(expected);
         }
 
+        it('includes namespace on extend class names', () => {
+            testTypedef(`
+                namespace AnimalKingdom
+                    class Bird
+                    end class
+                    class Duck extends Bird
+                    end class
+                end namespace`, trim`
+                namespace AnimalKingdom
+                    class Bird
+                    end class
+                    class Duck extends AnimalKingdom.Bird
+                    end class
+                end namespace
+            `);
+        });
+
         it('strips function body', () => {
             testTypedef(`
                 sub main(param1 as string)
@@ -2329,6 +2425,43 @@ describe('BrsFile', () => {
             `, trim`
                 sub main(param1 as string)
                 end sub
+            `);
+        });
+
+        it('includes annotations', () => {
+            testTypedef(`
+                namespace test
+                    @an
+                    @anFunc("value")
+                    function getDuck()
+                    end function
+                    class Duck
+                        @anMember
+                        @anMember("field")
+                        private thing
+
+                        @anMember
+                        @anMember("func")
+                        private function foo()
+                        end function
+                    end class
+                end namespace
+            `, trim`
+                namespace test
+                    @an
+                    @anFunc("value")
+                    function getDuck()
+                    end function
+                    class Duck
+                        @anMember
+                        @anMember("field")
+                        private thing as dynamic
+                        @anMember
+                        @anMember("func")
+                        private function foo()
+                        end function
+                    end class
+                end namespace
             `);
         });
 
@@ -2595,7 +2728,7 @@ describe('BrsFile', () => {
                 util.loadPlugins('', [
                     require.resolve('../examples/plugins/removePrint')
                 ]),
-                undefined
+                new Logger()
             );
             testPluginTranspile();
         });
@@ -2605,7 +2738,7 @@ describe('BrsFile', () => {
                 util.loadPlugins('', [
                     path.resolve(process.cwd(), './dist/examples/plugins/removePrint.js')
                 ]),
-                undefined
+                new Logger()
             );
             testPluginTranspile();
         });
@@ -2615,59 +2748,9 @@ describe('BrsFile', () => {
                 util.loadPlugins(process.cwd(), [
                     './dist/examples/plugins/removePrint.js'
                 ]),
-                undefined
+                new Logger()
             );
             testPluginTranspile();
         });
     });
 });
-
-export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) => {
-        let [program, rootDir] = scopeGetter();
-        expected = expected ? expected : source;
-        let file = program.addOrReplaceFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
-        program.validate();
-        let diagnostics = file.getDiagnostics();
-        if (diagnostics.length > 0 && failOnDiagnostic !== false) {
-            throw new Error(
-                diagnostics[0].range.start.line +
-                ':' +
-                diagnostics[0].range.start.character +
-                ' ' +
-                diagnostics[0]?.message
-            );
-        }
-        let transpiled = file.transpile();
-
-        let sources = [transpiled.code, expected];
-        for (let i = 0; i < sources.length; i++) {
-            if (formatType === 'trim') {
-                let lines = sources[i].split('\n');
-                //throw out leading newlines
-                while (lines[0].length === 0) {
-                    lines.splice(0, 1);
-                }
-                let trimStartIndex = null;
-                for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                    //if we don't have a starting trim count, compute it
-                    if (!trimStartIndex) {
-                        trimStartIndex = lines[lineIndex].length - lines[lineIndex].trim().length;
-                    }
-                    //only trim the expected file (since that's what we passed in from the test)
-                    if (lines[lineIndex].length > 0 && i === 1) {
-                        lines[lineIndex] = lines[lineIndex].substring(trimStartIndex);
-                    }
-                }
-                //trim trailing newlines
-                while (lines[lines.length - 1]?.length === 0) {
-                    lines.splice(lines.length - 1);
-                }
-                sources[i] = lines.join('\n');
-
-            }
-        }
-        expect(trimMap(sources[0])).to.equal(sources[1]);
-        return transpiled;
-    };
-}

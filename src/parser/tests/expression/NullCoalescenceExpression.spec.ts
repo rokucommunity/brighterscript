@@ -15,8 +15,7 @@ import {
     NullCoalescingExpression
 } from '../../Expression';
 import { Program } from '../../..';
-import { getTestTranspile } from '../../../files/BrsFile.spec';
-import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 
 describe('NullCoalescingExpression', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -188,6 +187,14 @@ describe('NullCoalescingExpression', () => {
         });
         afterEach(() => {
             program.dispose();
+        });
+
+        it('uses the proper prefix when aliased package is installed', () => {
+            program.addOrReplaceFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
+            testTranspile(
+                'a = user ?? false',
+                `a = rokucommunity_bslib_coalesce(user, false)`
+            );
         });
 
         it('properly transpiles null coalesence assignments - simple', () => {

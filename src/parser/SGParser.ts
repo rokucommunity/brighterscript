@@ -14,6 +14,8 @@ export default class SGParser {
      */
     public ast: SGAst = new SGAst();
 
+    public tokens: IToken[];
+
     /**
      * The list of diagnostics found during the parse process
      */
@@ -81,6 +83,7 @@ export default class SGParser {
         this.diagnostics = [];
 
         const { cst, tokenVector, lexErrors, parseErrors } = parser.parse(fileContents);
+        this.tokens = tokenVector;
 
         if (lexErrors.length) {
             for (const err of lexErrors) {
@@ -333,7 +336,7 @@ function rangeFromTokens(start: IToken, end?: IToken) {
 }
 
 //make range not including quotes
-function rangeFromTokenValue(token: IToken | CstNodeLocation) {
+export function rangeFromTokenValue(token: IToken | CstNodeLocation) {
     if (!token) {
         return undefined;
     }

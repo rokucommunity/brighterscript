@@ -722,6 +722,13 @@ let programStatementFunctions = [
             name: 'x',
             type: new IntegerType()
         }]
+        //TODO this is a temporary fix for library imported files. Eventually this should be moved into `Roku_Ads.brs` and handled by the `Library` statement
+    }, {
+        name: 'Roku_Ads',
+        shortDescription: 'The main entry point for instantiating the ad interface. This object manages ad server requests, parses ad structure, schedules and renders ads, and triggers tracking beacons.\n\nThe Roku ad parser/renderer object returned has global scope because it is meant to represent interaction with external resources (the ad server and any tracking services) that have persistence and state independent of the ad rendering within a client application.',
+        type: new FunctionType(new ObjectType()),
+        file: globalFile,
+        params: []
     }
 ] as Callable[];
 

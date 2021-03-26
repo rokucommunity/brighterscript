@@ -10,8 +10,7 @@ import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
-import { getTestTranspile } from './BrsFile.spec';
-import { trim, trimMap } from '../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 
 describe('XmlFile', () => {
     const tempDir = s`${process.cwd()}/.tmp`;
@@ -625,6 +624,65 @@ describe('XmlFile', () => {
     });
 
     describe('transpile', () => {
+        it('includes bslib script', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/Comp.xml');
+        });
+
+        it('does not include additional bslib script if already there ', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/child.xml');
+        });
+
+        it('does not include bslib script if already there from ropm', () => {
+            program.addOrReplaceFile('source/roku_modules/bslib/bslib.brs', ``);
+            program.addOrReplaceFile('source/lib.bs', ``);
+            //include a bs file to force transpile for the xml file
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/lib.bs" />
+                    <script type="text/brightscript" uri="pkg:/source/roku_modules/bslib/bslib.brs" />
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/roku_modules/bslib/bslib.brs" />
+                </component>
+            `, 'none', 'components/child.xml');
+        });
+
+        it('does not transpile xml file when bslib script is already present', () => {
+            const file = program.addOrReplaceFile('components/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(file.needsTranspiled).to.be.false;
+        });
+
+
         /**
          * There was a bug that would incorrectly replace one of the script paths on the second or third transpile, so this test verifies it doesn't do that anymore
          */
@@ -1033,5 +1091,57 @@ describe('XmlFile', () => {
             </component>
         `);
         expect(file.scriptTagImports[0]?.text).to.eql('SingleQuotedFile.brs');
+    });
+
+    describe('commentFlags', () => {
+        it('ignores warning from previous line comment', () => {
+            //component without a name attribute
+            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <!--bs:disable-next-line-->
+                <component>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('ignores warning from previous line just for the specified code', () => {
+            //component without a name attribute
+            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <!--bs:disable-next-line 1006-->
+                <component>
+                </component>
+            `);
+            program.validate();
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                DiagnosticMessages.xmlComponentMissingExtendsAttribute().message
+            ]);
+        });
+
+        it('ignores warning from previous line comment', () => {
+            //component without a name attribute
+            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component> <!--bs:disable-line-->
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('ignores warning from previous line just for the specified code', () => {
+            //component without a name attribute
+            program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component> <!--bs:disable-line 1006-->
+                </component>
+            `);
+            program.validate();
+            expect(program.getDiagnostics().map(x => x.message)).to.eql([
+                DiagnosticMessages.xmlComponentMissingExtendsAttribute().message
+            ]);
+        });
     });
 });
