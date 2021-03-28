@@ -10,7 +10,7 @@ import { ParseMode } from '../parser/Parser';
 import { expectZeroDiagnostics, getTestTranspile } from '../testHelpers.spec';
 import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
-import { TranspileState } from '../parser/TranspileState';
+import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
 
 let sinon = sinonImport.createSandbox();
@@ -1090,7 +1090,7 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         doesNotThrow(() => {
-            file.parser.references.classStatements[0].getParentClassIndex(new TranspileState(file));
+            file.parser.references.classStatements[0].getParentClassIndex(new BrsTranspileState(file));
         });
     });
 });
