@@ -2149,7 +2149,7 @@ describe('BrsFile', () => {
                         returnValue = 12 'comment
                         return returnValue 'comment
                     end function 'comment
-                    print "a" ; "b" ; 3 'comment
+                    print "a"; "b"; 3 'comment
                     a(1, 2, 3) 'comment
                     person.functionCall(1, 2, 3) 'comment
                     if true then 'comment
