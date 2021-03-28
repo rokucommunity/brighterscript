@@ -105,7 +105,7 @@ describe('parser print statements', () => {
         expect(statements[0].range).to.deep.include(Range.create(0, 0, 0, 11));
     });
 
-    describe.only('transpile', () => {
+    describe('transpile', () => {
         it('retains comma separators', () => {
             testTranspile(`
                 a$ = "string"
