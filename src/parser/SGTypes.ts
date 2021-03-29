@@ -3,9 +3,8 @@ import type { Range } from 'vscode-languageserver';
 import { createSGAttribute } from '../astUtils/creators';
 import { isSGChildren, isSGField, isSGFunction, isSGInterface, isSGScript } from '../astUtils/xml';
 import type { FileReference, TranspileResult } from '../interfaces';
-import type { SGTranspileState } from './SGTranspileState';
 import util from '../util';
-import { Locatable } from '../lexer/Token';
+import type { TranspileState } from './TranspileState';
 
 export interface SGToken {
     text: string;
@@ -28,7 +27,7 @@ export class SGAttribute {
     }
     public range: Range;
 
-    public transpile(state: SGTranspileState) {
+    public transpile(state: TranspileState) {
         return state.sourceNode(this, [
             this.key.text,
             '=',
@@ -111,8 +110,8 @@ export class SGTag {
             this.attributes.push(
                 new SGAttribute(
                     { text: name },
-                    { text: '"' },
                     { text: '=' },
+                    { text: '"' },
                     { text: value },
                     { text: '"' }
                 )
@@ -120,21 +119,24 @@ export class SGTag {
         }
     }
 
-    transpile(state: SGTranspileState): SourceNode {
-        return new SourceNode(null, null, state.source, [
+    transpile(state: TranspileState): SourceNode {
+        return new SourceNode(null, null, state.srcPath, [
             state.indentText,
-            state.transpileToken(this.startTagOpen),
-            ' ',
+            state.transpileToken(this.startTagOpen), // <
+            state.transpileToken(this.tagName),
             ...this.transpileAttributes(state, this.attributes),
             ...this.transpileBody(state)
         ]);
     }
 
-    protected transpileBody(state: SGTranspileState): (string | SourceNode)[] {
-        return [' />\n'];
+    protected transpileBody(state: TranspileState): (string | SourceNode)[] {
+        return [
+            ' />',
+            state.newline
+        ];
     }
 
-    protected transpileAttributes(state: SGTranspileState, attributes: SGAttribute[]): (string | SourceNode)[] {
+    protected transpileAttributes(state: TranspileState, attributes: SGAttribute[]): (string | SourceNode)[] {
         const result = [];
         for (const attr of attributes) {
             result.push(' ', attr.transpile(state));
@@ -144,8 +146,8 @@ export class SGTag {
 }
 
 export class SGProlog extends SGTag {
-    transpile(state: SGTranspileState) {
-        return new SourceNode(null, null, state.source, [
+    transpile(state: TranspileState) {
+        return new SourceNode(null, null, state.srcPath, [
             '<?xml',
             ...this.transpileAttributes(state, this.attributes),
             ' ?>\n'
@@ -154,18 +156,16 @@ export class SGProlog extends SGTag {
 }
 
 export class SGNode extends SGTag {
-    protected transpileBody(state: SGTranspileState): (string | SourceNode)[] {
+    protected transpileBody(state: TranspileState): (string | SourceNode)[] {
         if (this.children.length > 0) {
             return [
                 '>',
-                state.newline(),
-                state.getIndent(1),
+                state.newline,
+                state.indent(1),
+                ...this.children.map(node => node.transpile(state)),
+                state.indent(-1),
+                '</', this.tagName.text, '>\n'
             ];
-            state.blockDepth++;
-            body.push(...this.children.map(node => node.transpile(state)));
-            state.blockDepth--;
-            body.push(state.indentText, '</', this.tagName.text, '>\n');
-            return body;
         } else {
             return super.transpileBody(state);
         }
@@ -211,7 +211,7 @@ export class SGScript extends SGTag {
         this.setAttribute('uri', value);
     }
 
-    protected transpileBody(state: SGTranspileState): (string | SourceNode)[] {
+    protected transpileBody(state: TranspileState): (string | SourceNode)[] {
         if (this.cdata) {
             return [
                 '>',
@@ -225,7 +225,7 @@ export class SGScript extends SGTag {
         }
     }
 
-    protected transpileAttributes(state: SGTranspileState, attributes: SGAttribute[]): (string | SourceNode)[] {
+    protected transpileAttributes(state: TranspileState, attributes: SGAttribute[]): (string | SourceNode)[] {
         const modifiedAttributes = [] as SGAttribute[];
         let foundType = false;
         const bsExtensionRegexp = /\.bs$/i;
@@ -385,7 +385,7 @@ export class SGInterface extends SGTag {
         }
     }
 
-    protected transpileBody(state: SGTranspileState): (string | SourceNode)[] {
+    protected transpileBody(state: TranspileState): (string | SourceNode)[] {
         const body: (string | SourceNode)[] = ['>\n'];
         state.blockDepth++;
         if (this.fields.length > 0) {
@@ -443,7 +443,7 @@ export class SGComponent extends SGTag {
         this.setAttribute('extends', value);
     }
 
-    protected transpileBody(state: SGTranspileState): (string | SourceNode)[] {
+    protected transpileBody(state: TranspileState): (string | SourceNode)[] {
         const body: (string | SourceNode)[] = ['>\n'];
         state.blockDepth++;
         if (this.interface) {
@@ -476,7 +476,7 @@ export class SGAst {
     ) {
     }
 
-    transpile(state: SGTranspileState) {
+    transpile(state: TranspileState) {
         const chunks = [] as TranspileResult;
         //write XML prolog
         if (this.prolog) {
