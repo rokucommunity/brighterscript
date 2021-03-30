@@ -878,14 +878,22 @@ export class Util {
         let leftmost: { range?: Range };
         let rightmost: { range?: Range };
 
-        for (const locatable of locatables) {
-            if (locatable?.range) {
-                //set leftomost to the first non-null range we find
-                if (!leftmost) {
-                    leftmost = locatable;
-                }
-                //set rightmost every time we find a new non-null range
-                rightmost = locatable;
+        for (let i = 0; i < locatables.length; i++) {
+            //set the leftmost non-null-range item
+            const left = locatables[i];
+            if (!leftmost && left?.range) {
+                leftmost = left;
+            }
+
+            //set the rightmost non-null-range item
+            const right = locatables[locatables.length - 1 - i];
+            if (!rightmost && right?.range) {
+                rightmost = right;
+            }
+
+            //if we have both sides, quit
+            if (leftmost && rightmost) {
+                break;
             }
         }
         if (leftmost) {

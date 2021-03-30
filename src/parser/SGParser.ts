@@ -67,7 +67,7 @@ export default class SGParser {
 
         for (const script of component.getScripts()) {
             const uriAttr = script.getAttribute('uri');
-            if (uriAttr) {
+            if (uriAttr?.value) {
                 const uri = uriAttr.value.text;
                 this._references.scriptTagImports.push({
                     filePathRange: uriAttr.value.range,
@@ -103,7 +103,7 @@ export default class SGParser {
             const token = err.token;
             this.diagnostics.push({
                 ...DiagnosticMessages.xmlGenericParseError(`Syntax error: ${err.message}`),
-                range: !isNaN(token.startLine) ? this.rangeFromTokens(token) : util.createRange(0, 0, 0, Number.MAX_VALUE)
+                range: !isNaN(token.startLine) ? this.rangeFromToken(token) : util.createRange(0, 0, 0, Number.MAX_VALUE)
             });
         }
 
@@ -118,7 +118,7 @@ export default class SGParser {
             ) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
-                    range: this.rangeFromTokens(token1)
+                    range: this.rangeFromToken(token1)
                 });
             }
         }
@@ -188,24 +188,24 @@ export default class SGParser {
             case 'field':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text),
-                        range: startTagName.range
+                        range: startTagName.range,
+                        ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
                 return new SGInterfaceField(startTagOpen, startTagName, attributes, startTagClose, childrenContent, endTagOpen, endTagName, endTagClose);
             case 'function':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text),
-                        range: startTagName.range
+                        range: startTagName.range,
+                        ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
                 return new SGInterfaceFunction(startTagOpen, startTagName, attributes, startTagClose, childrenContent, endTagOpen, endTagName, endTagClose);
             case 'script':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text),
-                        range: startTagName.range
+                        range: startTagName.range,
+                        ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
                 const script = new SGScript(startTagOpen, startTagName, attributes, startTagClose, childrenContent, endTagOpen, endTagName, endTagClose);
@@ -253,7 +253,7 @@ export default class SGParser {
                         //unexpected tag
                         this.diagnostics.push({
                             ...DiagnosticMessages.xmlUnexpectedTag(name.image),
-                            range: this.rangeFromTokens(name)
+                            range: this.rangeFromToken(name)
                         });
                     }
                     tags.push(this.mapElement(entry));
@@ -286,31 +286,48 @@ export default class SGParser {
     }
 
     private mapToken(token: IToken): SGToken {
-        if (!token) {
+        if (token) {
+            return {
+                text: token.image,
+                range: this.rangeFromToken(token)
+            };
+        } else {
             return undefined;
         }
-        return {
-            text: token.image,
-            range: this.rangeFromTokens(token)
-        };
     }
 
+    /**
+     * Build SGAttributes from the underlying XML parser attributes array
+     */
     mapAttributes(attributes: AttributeCstNode[]) {
+        // this is a hot function and has been optimized, so don't refactor unless you know what you're doing...
         const result = [] as SGAttribute[];
-        for (const { children } of attributes ?? []) {
-            const value = children.STRING?.[0];
-            result.push(
-                new SGAttribute(
-                    this.mapToken(children.Name[0]),
-                    this.mapToken(children.EQUALS?.[0]),
-                    //leading quote
-                    value ? this.createPartialToken(value, 0, 1) : undefined,
-                    //value between quotes
-                    value ? this.createPartialToken(value, 1, -2) : undefined,
-                    //trailing quote
-                    value ? this.createPartialToken(value, -1, 1) : undefined
-                )
-            );
+        if (attributes) {
+            for (let i = 0; i < attributes.length; i++) {
+                const children = attributes[i].children;
+                let equals: SGToken;
+                if (children.EQUALS) {
+                    equals = this.mapToken(children.EQUALS[0]);
+                }
+                let leadingQuote: SGToken;
+                let value: SGToken;
+                let trailingQuote: SGToken;
+                if (children.STRING) {
+                    const valueToken = children.STRING[0];
+                    leadingQuote = this.createPartialToken(valueToken, 0, 1);
+                    value = this.createPartialToken(valueToken, 1, -2);
+                    trailingQuote = this.createPartialToken(valueToken, -1, 1);
+                }
+                result.push(
+                    new SGAttribute(
+                        this.mapToken(children.Name[0]),
+                        equals,
+                        leadingQuote,
+                        value,
+                        trailingQuote
+                    )
+                );
+            }
         }
         return result;
     }
@@ -342,27 +359,16 @@ export default class SGParser {
         };
     }
 
-    //make range from `start` to `end` tokens
-    public rangeFromTokens(start: IToken, end?: IToken) {
-        if (!end) {
-            end = start;
-        }
-        return util.createRange(
-            start.startLine - 1,
-            start.startColumn - 1,
-            end.endLine - 1,
-            end.endColumn
-        );
-    }
-
     /**
-     * Remove leading and trailing quotes from a string
+     * Create a range based on the xmltools token
      */
-    public stripQuotes(value: string) {
-        if (value?.length > 1) {
-            return value.substr(1, value.length - 2);
-        }
-        return '';
+    public rangeFromToken(token: IToken) {
+        return util.createRange(
+            token.startLine - 1,
+            token.startColumn - 1,
+            token.endLine - 1,
+            token.endColumn
+        );
     }
 
     private emptySGReferences(): SGReferences {

@@ -218,7 +218,7 @@ export class XmlFile {
                     //remove the close comment symbol
                     token.image.replace(/\-\-\>$/, ''),
                     //technically this range is 3 characters longer due to the removed `-->`, but that probably doesn't matter
-                    this.parser.rangeFromTokens(token)
+                    this.parser.rangeFromToken(token)
                 );
             }
         }

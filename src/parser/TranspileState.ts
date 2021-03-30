@@ -90,10 +90,10 @@ export class TranspileState {
      */
     public transpileToken(token: { range?: Range; text: string }, defaultValue?: string) {
         if (!token && defaultValue !== undefined) {
-            return defaultValue;
+            return new SourceNode(null, null, null, defaultValue);
         }
         if (!token.range) {
-            return token.text;
+            return new SourceNode(null, null, null, token.text);
         }
         //split multi-line text
         if (token.range.end.line > token.range.start.line) {
