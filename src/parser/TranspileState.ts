@@ -25,6 +25,7 @@ export class TranspileState {
         } else {
             this.srcPath = this.file.srcPath;
         }
+        this.bslibPrefix = this.file.program.bslibPrefix;
     }
 
     /**
@@ -33,6 +34,11 @@ export class TranspileState {
      * If the file resides outside of rootDir, then no changes will be made to this path.
      */
     public srcPath: string;
+
+    /**
+     * The prefix to use in front of all bslib functions
+     */
+    public bslibPrefix: string;
 
     /**
      * The number of active parent blocks for the current location of the state.

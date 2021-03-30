@@ -16,7 +16,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { trim, trimMap } from '../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
 
@@ -92,6 +92,45 @@ describe('BrsFile', () => {
     });
 
     describe('getCompletions', () => {
+        it('suggests pkg paths in strings that match that criteria', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print "pkg:"
+                end sub
+            `);
+            const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
+            const names = result.map(x => x.label);
+            expect(names.sort()).to.eql([
+                'pkg:/source/main.brs'
+            ]);
+        });
+
+        it('suggests libpkg paths in strings that match that criteria', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print "libpkg:"
+                end sub
+            `);
+            const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
+            const names = result.map(x => x.label);
+            expect(names.sort()).to.eql([
+                'libpkg:/source/main.brs'
+            ]);
+        });
+
+        it('suggests pkg paths in template strings', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print \`pkg:\`
+                end sub
+            `);
+            const result = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 31));
+            const names = result.map(x => x.label);
+            expect(names.sort()).to.eql([
+                'pkg:/source/main.brs'
+            ]);
+        });
+
         it('waits for the file to be processed before collecting completions', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile('source/main.brs', `
@@ -123,7 +162,15 @@ describe('BrsFile', () => {
             expect(names).to.contain('m');
         });
 
-        it('includes all keywordsm`', () => {
+        it('does not fail for missing previousToken', () => {
+            //add a single character to the file, and get completions after it
+            program.addOrReplaceFile('source/main.brs', `i`);
+            expect(() => {
+                program.getCompletions(`${rootDir}/source/main.brs`, Position.create(0, 1)).map(x => x.label);
+            }).not.to.throw;
+        });
+
+        it('includes all keywords`', () => {
             //eslint-disable-next-line @typescript-eslint/no-floating-promises
             program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub Main()
@@ -374,6 +421,18 @@ describe('BrsFile', () => {
     });
 
     describe('parse', () => {
+        it('supports iife in assignment', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    result = sub()
+                    end sub()
+                    result = (sub()
+                    end sub)()
+                end sub
+            `);
+            expectZeroDiagnostics(program);
+        });
+
         it('uses the proper parse mode based on file extension', () => {
             function testParseMode(destPath: string, expectedParseMode: ParseMode) {
                 const file = program.addOrReplaceFile<BrsFile>(destPath, '');
@@ -2089,7 +2148,7 @@ describe('BrsFile', () => {
                         returnValue = 12 'comment
                         return returnValue 'comment
                     end function 'comment
-                    print "a" ; "b" ; 3 'comment
+                    print "a"; "b"; 3 'comment
                     a(1, 2, 3) 'comment
                     person.functionCall(1, 2, 3) 'comment
                     if true then 'comment
@@ -2130,6 +2189,25 @@ describe('BrsFile', () => {
             const { code } = file.transpile();
             expect(code.endsWith(`'//# sourceMappingURL=./logger.brs.map`)).to.be.true;
         });
+
+        it('replaces custom types in parameter types and return types', () => {
+            testTranspile(`
+                function foo() as SomeKlass
+                    return new SomeKlass()
+                end function
+
+                sub bar(obj as SomeKlass)
+                end sub
+            `, `
+                function foo() as object
+                    return SomeKlass()
+                end function
+
+                sub bar(obj as object)
+                end sub
+            `);
+        });
+
     });
 
     describe('callfunc operator', () => {
@@ -2675,53 +2753,3 @@ describe('BrsFile', () => {
         });
     });
 });
-
-export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) => {
-        let [program, rootDir] = scopeGetter();
-        expected = expected ? expected : source;
-        let file = program.addOrReplaceFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
-        program.validate();
-        let diagnostics = file.getDiagnostics();
-        if (diagnostics.length > 0 && failOnDiagnostic !== false) {
-            throw new Error(
-                diagnostics[0].range.start.line +
-                ':' +
-                diagnostics[0].range.start.character +
-                ' ' +
-                diagnostics[0]?.message
-            );
-        }
-        let transpiled = file.transpile();
-
-        let sources = [transpiled.code, expected];
-        for (let i = 0; i < sources.length; i++) {
-            if (formatType === 'trim') {
-                let lines = sources[i].split('\n');
-                //throw out leading newlines
-                while (lines[0].length === 0) {
-                    lines.splice(0, 1);
-                }
-                let trimStartIndex = null;
-                for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                    //if we don't have a starting trim count, compute it
-                    if (!trimStartIndex) {
-                        trimStartIndex = lines[lineIndex].length - lines[lineIndex].trim().length;
-                    }
-                    //only trim the expected file (since that's what we passed in from the test)
-                    if (lines[lineIndex].length > 0 && i === 1) {
-                        lines[lineIndex] = lines[lineIndex].substring(trimStartIndex);
-                    }
-                }
-                //trim trailing newlines
-                while (lines[lines.length - 1]?.length === 0) {
-                    lines.splice(lines.length - 1);
-                }
-                sources[i] = lines.join('\n');
-
-            }
-        }
-        expect(trimMap(sources[0])).to.equal(sources[1]);
-        return transpiled;
-    };
-}

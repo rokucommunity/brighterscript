@@ -6,8 +6,7 @@ import { Program } from '../../Program';
 import { standardizePath as s, util } from '../../util';
 import type { XmlFile } from '../XmlFile';
 import type { BrsFile } from '../BrsFile';
-import { getTestTranspile } from '../BrsFile.spec';
-import { trim, trimMap } from '../../testHelpers.spec';
+import { getTestTranspile, trim, trimMap } from '../../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;

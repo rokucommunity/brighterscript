@@ -27,6 +27,9 @@ import { TokenKind } from './lexer';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { util as rokuDeployUtil } from 'roku-deploy';
 
+const bslibNonAliasedRokuModulesPkgPath = `pkg:/source/roku_modules/rokucommunity_bslib/bslib.brs`;
+const bslibAliasedRokuModulesPkgPath = `pkg:/source/roku_modules/bslib/bslib.brs`;
+
 export interface SourceObj {
     srcPath: string;
     source: string;
@@ -122,13 +125,40 @@ export class Program {
     private diagnostics = [] as BsDiagnostic[];
 
     /**
-     * A map of every file loaded into this program, indexed by its lower-case srcPath
+     * The path to bslib.brs (the BrightScript runtime for certain BrighterScript features)
      */
-    private files = {} as Record<string, BscFile>;
+    public get bslibPkgPath() {
+        //if there's an aliased (preferred) version of bslib from roku_modules loaded into the program, use that
+        if (this.getFile(bslibAliasedRokuModulesPkgPath)) {
+            return bslibAliasedRokuModulesPkgPath;
+
+            //if there's a non-aliased version of bslib from roku_modules, use that
+        } else if (this.getFile(bslibNonAliasedRokuModulesPkgPath)) {
+            return bslibNonAliasedRokuModulesPkgPath;
+
+            //default to the embedded version
+        } else {
+            return `pkg:/source/bslib.brs`;
+        }
+    }
+
+    public get bslibPrefix() {
+        if (this.bslibPkgPath === bslibNonAliasedRokuModulesPkgPath) {
+            return 'rokucommunity_bslib';
+        } else {
+            return 'bslib';
+        }
+    }
+
     /**
      * A map of every file loaded ino this program, indexed by its lower-case pkgPath
      */
     private pkgMap = {} as Record<string, BscFile>;
+
+    /**
+     * A map of every file loaded into this program, indexed by its lower-case srcPath
+     */
+    private files = {} as Record<string, BscFile>;
 
     /**
      * Get a copy of the list of files currently loaded in the program
@@ -632,7 +662,6 @@ export class Program {
     public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {
         let results = new Map<Statement, FileLink<Statement>>();
         const filesSearched = new Set<BrsFile>();
-        let parseMode = originFile.getParseMode();
         let lowerNamespaceName = namespaceName?.toLowerCase();
         let lowerName = name?.toLowerCase();
         //look through all files in scope for matches
@@ -644,7 +673,7 @@ export class Program {
                 filesSearched.add(file);
 
                 for (const statement of [...file.parser.references.functionStatements, ...file.parser.references.classStatements.flatMap((cs) => cs.methods)]) {
-                    let parentNamespaceName = statement.namespaceName?.getName(parseMode)?.toLowerCase();
+                    let parentNamespaceName = statement.namespaceName?.getName(originFile.parseMode)?.toLowerCase();
                     if (statement.name.text.toLowerCase() === lowerName && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                         if (!results.has(statement)) {
                             results.set(statement, { item: statement, file: file });
@@ -664,7 +693,7 @@ export class Program {
         let funcNames = new Set<string>();
         let currentScope = scope;
         while (isXmlScope(currentScope)) {
-            for (let name of currentScope.xmlFile.ast.component.api.functions.map((f) => f.name)) {
+            for (let name of currentScope.xmlFile.ast.component.api?.functions.map((f) => f.name) ?? []) {
                 if (!filterName || name === filterName) {
                     funcNames.add(name);
                 }
@@ -800,23 +829,24 @@ export class Program {
         const codeActions = [] as CodeAction[];
         const file = this.getFile(srcPath);
         if (file) {
+            const diagnostics = this
+                //get all current diagnostics (filtered by diagnostic filters)
+                .getDiagnostics()
+                //only keep diagnostics related to this file
+                .filter(x => x.file === file)
+                //only keep diagnostics that touch this range
+                .filter(x => util.rangesIntersect(x.range, range));
 
-            this.plugins.emit('beforeProgramGetCodeActions', this, file, range, codeActions);
+            const scopes = this.getScopesForFile(file);
 
-            //get code actions from the file
-            file.getCodeActions(range, codeActions);
-
-            //get code actions from every scope this file is a member of
-            for (let key in this.scopes) {
-                let scope = this.scopes[key];
-
-                if (scope.hasFile(file)) {
-                    //get code actions from each scope this file is a member of
-                    scope.getCodeActions(file, range, codeActions);
-                }
-            }
-
-            this.plugins.emit('afterProgramGetCodeActions', this, file, range, codeActions);
+            this.plugins.emit('onGetCodeActions', {
+                program: this,
+                file: file,
+                range: range,
+                diagnostics: diagnostics,
+                scopes: scopes,
+                codeActions: codeActions
+            });
         }
         return codeActions;
     }
@@ -1197,18 +1227,51 @@ export class Program {
             this.plugins.emit('afterFileTranspile', entry);
         });
 
-        //copy the brighterscript stdlib to the output directory
-        promises.push(
-            fsExtra.ensureDir(s`${stagingFolderPath}/source`).then(() => {
-                return fsExtra.copyFile(
-                    s`${__dirname}/../bslib.brs`,
-                    s`${stagingFolderPath}/source/bslib.brs`
-                );
-            })
-        );
+        //if there's no bslib file already loaded into the program, copy it to the staging directory
+        if (!this.getFile(bslibAliasedRokuModulesPkgPath) && !this.getFile(`pkg:/source/bslib.brs`)) {
+            promises.push(util.copyBslibToStaging(stagingFolderPath));
+        }
         await Promise.all(promises);
 
         this.plugins.emit('afterProgramTranspile', this, entries);
+    }
+
+    /**
+     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     */
+    public findFilesForFunction(functionName: string) {
+        const files = [] as BscFile[];
+        const lowerFunctionName = functionName.toLowerCase();
+        //find every file with this function defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                //TODO handle namespace-relative function calls
+                //if the file has a function with this name
+                if (file.parser.references.functionStatementLookup.get(lowerFunctionName) !== undefined) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
+    }
+
+    /**
+     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     */
+    public findFilesForClass(className: string) {
+        const files = [] as BscFile[];
+        const lowerClassName = className.toLowerCase();
+        //find every file with this class defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                //TODO handle namespace-relative classes
+                //if the file has a function with this name
+                if (file.parser.references.classStatementLookup.get(lowerClassName) !== undefined) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
     }
 
     /**

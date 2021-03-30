@@ -1,19 +1,21 @@
 import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CodeAction, CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
-import { DiagnosticMessages } from '../DiagnosticMessages';
+import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
+import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
-import type { Callable, BsDiagnostic, FileReference, FunctionCall, BscFile } from '../interfaces';
+import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, BscFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
-import SGParser from '../parser/SGParser';
+import SGParser, { rangeFromTokenValue } from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyGraph } from '../DependencyGraph';
 import type { SGAst, SGToken } from '../parser/SGTypes';
 import { SGScript } from '../parser/SGTypes';
 import { SGTranspileState } from '../parser/SGTranspileState';
+import { CommentFlagProcessor } from '../CommentFlagProcessor';
+import type { IToken, TokenType } from 'chevrotain';
 
 export class XmlFile {
     constructor(
@@ -51,6 +53,8 @@ export class XmlFile {
      * The extension for this file
      */
     public extension: string;
+
+    public commentFlags = [] as CommentFlag[];
 
     /**
      * The list of script imports delcared in the XML of this file.
@@ -190,6 +194,8 @@ export class XmlFile {
             file: this
         }));
 
+        this.getCommentFlags(this.parser.tokens as any[]);
+
         if (!this.parser.ast.root) {
             //skip empty XML
             return;
@@ -200,6 +206,26 @@ export class XmlFile {
 
         //initial validation
         this.validateComponent(this.parser.ast);
+    }
+
+    /**
+     * Collect all bs: comment flags
+     */
+    public getCommentFlags(tokens: Array<IToken & { tokenType: TokenType }>) {
+        const processor = new CommentFlagProcessor(this, ['<!--'], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
+
+        this.commentFlags = [];
+        for (let token of tokens) {
+            if (token.tokenType.name === 'Comment') {
+                processor.tryAdd(
+                    //remove the close comment symbol
+                    token.image.replace(/\-\-\>$/, ''),
+                    rangeFromTokenValue(token)
+                );
+            }
+        }
+        this.commentFlags.push(...processor.commentFlags);
+        this.diagnostics.push(...processor.diagnostics);
     }
 
     private validateComponent(ast: SGAst) {
@@ -372,11 +398,6 @@ export class XmlFile {
         return null;
     }
 
-    public getCodeActions(range: Range, codeActions: CodeAction[]) {
-        const relevantDiagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
-        this.program.plugins.emit('onFileGetCodeActions', this, range, relevantDiagnostics, codeActions);
-    }
-
     public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
         //TODO implement
         return null;
@@ -416,33 +437,38 @@ export class XmlFile {
      */
     private getMissingImportsForTranspile() {
         let ownImports = this.getAvailableScriptImports();
+        //add the bslib path to ownImports, it'll get filtered down below
+        ownImports.push(this.program.bslibPkgPath);
 
         let parentImports = this.parentComponent?.getAvailableScriptImports() ?? [];
 
         let parentMap = parentImports.reduce((map, pkgPath) => {
-            map[pkgPath] = true;
+            map[pkgPath.toLowerCase()] = true;
             return map;
         }, {});
 
         //if the XML already has this import, skip this one
         let alreadyThereScriptImportMap = this.scriptTagImports.reduce((map, fileReference) => {
-            map[fileReference.pkgPath] = true;
+            map[fileReference.pkgPath.toLowerCase()] = true;
             return map;
         }, {});
 
+        let resultMap = {};
         let result = [] as string[];
         for (let ownImport of ownImports) {
+            const ownImportLower = ownImport.toLowerCase();
             if (
                 //if the parent doesn't have this import
-                !parentMap[ownImport] &&
+                !parentMap[ownImportLower] &&
                 //the XML doesn't already have a script reference for this
-                !alreadyThereScriptImportMap[ownImport]
+                !alreadyThereScriptImportMap[ownImportLower] &&
+                //the result doesn't already have this reference
+                !resultMap[ownImportLower]
             ) {
                 result.push(ownImport);
+                resultMap[ownImportLower] = true;
             }
         }
-
-        result.push('source/bslib.brs');
         return result;
     }
 

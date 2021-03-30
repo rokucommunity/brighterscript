@@ -1,4 +1,4 @@
-import type { CodeAction, CompletionItem, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Position, Range } from 'vscode-languageserver';
 import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
@@ -245,11 +245,6 @@ export class Scope {
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
         this.diagnostics.push(...diagnostics);
-    }
-
-    public getCodeActions(file: BscFile, range: Range, codeActions: CodeAction[]) {
-        const diagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
-        this.program.plugins.emit('onScopeGetCodeActions', this, file, range, diagnostics, codeActions);
     }
 
     /**
@@ -839,6 +834,10 @@ export class Scope {
             let referencedFile = this.getFileByRelativePath(scriptImport.pkgPath);
             //if we can't find the file
             if (!referencedFile) {
+                //skip the default bslib file, it will exist at transpile time but should not show up in the program during validation cycle
+                if (scriptImport.pkgPath === `pkg:/source/bslib.brs`) {
+                    continue;
+                }
                 let dInfo: DiagnosticInfo;
                 if (scriptImport.text.trim().length === 0) {
                     dInfo = DiagnosticMessages.scriptSrcCannotBeEmpty();

@@ -2,7 +2,7 @@ import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
 import type { BsConfig } from './BsConfig';
-import type { BsDiagnostic, FileObj, FileResolver } from './interfaces';
+import type { BscFile, BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
@@ -72,13 +72,10 @@ export class ProgramBuilder {
      * @param srcPath The absolute path to the source file on disk
      */
     public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
-        diagnostic.file = this.program.getFile(srcPath);
-        if (!diagnostic.file) {
-            diagnostic.file = {
-                srcPath: srcPath
-            };
-        }
-        this.staticDiagnostics.push(<any>diagnostic);
+        diagnostic.file = this.program.getFile(srcPath) ?? {
+            srcPath: srcPath
+        } as BscFile;
+        this.staticDiagnostics.push(diagnostic as BsDiagnostic);
     }
 
     public getDiagnostics() {

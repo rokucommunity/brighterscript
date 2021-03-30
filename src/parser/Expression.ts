@@ -216,7 +216,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 state.tokenToSourceNode(this.asToken),
                 ' ',
                 //return type
-                state.tokenToSourceNode(this.returnTypeToken)
+                state.sourceNode(this.returnTypeToken, this.returnType.toTypeString())
             );
         }
         if (includeBody) {
@@ -1057,7 +1057,10 @@ export class TemplateStringExpression extends Expression {
                     ...items
                 );
             }
-            plus = items.length > 0 ? ' + ' : '';
+            //set the plus after the first occurance of a nonzero length set of items
+            if (plus === '' && items.length > 0) {
+                plus = ' + ';
+            }
         }
 
         for (let i = 0; i < this.quasis.length; i++) {
@@ -1080,7 +1083,7 @@ export class TemplateStringExpression extends Expression {
                     //wrap all other expressions with a bslib_toString call to prevent runtime type mismatch errors
                 } else {
                     add(
-                        'bslib_toString(',
+                        state.bslibPrefix + '_toString(',
                         ...expression.transpile(state),
                         ')'
                     );
@@ -1288,7 +1291,7 @@ export class TernaryExpression extends Expression {
             state.blockDepth--;
         } else {
             result.push(
-                state.sourceNode(this.test, `bslib_ternary(`),
+                state.sourceNode(this.test, state.bslibPrefix + `_ternary(`),
                 ...this.test.transpile(state),
                 state.sourceNode(this.test, `, `),
                 ...this.consequent?.transpile(state) ?? ['invalid'],
@@ -1373,7 +1376,7 @@ export class NullCoalescingExpression extends Expression {
             state.blockDepth--;
         } else {
             result.push(
-                `bslib_coalesce(`,
+                state.bslibPrefix + `_coalesce(`,
                 ...this.consequent.transpile(state),
                 ', ',
                 ...this.alternate.transpile(state),
