@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.37.1] - 2021-03-30
+### Fixed
+ - bug when transpiling print statements that wouldn't retain the existing separators (semicolon, comma, no separator) which all have unique uses ([#373](https://github.com/rokucommunity/brighterscript/pull/373))
+
+
+
 ## [0.37.0] - 2021-03-18
 ### Added
  - support for `bs:disable` comments in xml files ([#363](https://github.com/rokucommunity/brighterscript/pull/363))
@@ -1061,3 +1067,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.35.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.3...v0.35.0
 [0.36.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.35.0...v0.36.0
 [0.37.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.36.0...v0.37.0
+[0.37.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.0...v0.37.1
