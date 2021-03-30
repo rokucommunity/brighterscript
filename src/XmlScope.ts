@@ -48,25 +48,25 @@ export class XmlScope extends Scope {
     }
 
     private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
-        if (!this.xmlFile.parser.ast?.component?.interface) {
+        const iface = this.xmlFile.parser.ast?.component?.getInterface();
+        if (!iface) {
             return;
         }
-        const { interface: api } = this.xmlFile.parser.ast.component;
         //validate functions
-        for (const fun of api.functions) {
-            const name = fun.name;
+        for (const func of iface.getFunctions()) {
+            const name = func.name;
             if (!name) {
-                this.diagnosticMissingAttribute(fun, 'name');
+                this.diagnosticMissingAttribute(func, 'name');
             } else if (!callableContainerMap.has(name.toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlFunctionNotFound(name),
-                    range: fun.getAttribute('name').value.range,
+                    range: func.getAttribute('name').value.range,
                     file: this.xmlFile
                 });
             }
         }
         //validate fields
-        for (const field of api.fields) {
+        for (const field of iface.getFields()) {
             const { id, type } = field;
             if (!id) {
                 this.diagnosticMissingAttribute(field, 'id');
@@ -86,7 +86,7 @@ export class XmlScope extends Scope {
     }
 
     private diagnosticMissingAttribute(tag: SGTag, name: string) {
-        const { text, range } = tag.tag;
+        const { text, range } = tag.startTagName;
         this.diagnostics.push({
             ...DiagnosticMessages.xmlTagMissingAttribute(text, name),
             range: range,

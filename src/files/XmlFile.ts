@@ -7,15 +7,15 @@ import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall, CommentFlag } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
-import SGParser, { rangeFromTokenValue } from '../parser/SGParser';
+import SGParser from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyGraph } from '../DependencyGraph';
 import type { SGAst, SGToken } from '../parser/SGTypes';
-import { SGScript } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
+import { createSGScript } from '../astUtils/creators';
 
 export class XmlFile {
     constructor(
@@ -217,7 +217,8 @@ export class XmlFile {
                 processor.tryAdd(
                     //remove the close comment symbol
                     token.image.replace(/\-\-\>$/, ''),
-                    rangeFromTokenValue(token)
+                    //technically this range is 3 characters longer due to the removed `-->`, but that probably doesn't matter
+                    this.parser.rangeFromTokens(token)
                 );
             }
         }
@@ -241,20 +242,20 @@ export class XmlFile {
         if (!component.name) {
             this.diagnostics.push({
                 ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
-                range: component.tag.range,
+                range: component.startTagName.range,
                 file: this
             });
         }
         if (!component.extends) {
             this.diagnostics.push({
                 ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
-                range: component.tag.range,
+                range: component.startTagName.range,
                 file: this
             });
         }
 
         //needsTranspiled should be true if an import is brighterscript
-        this.needsTranspiled = component.scripts.some(
+        this.needsTranspiled = component.getScripts().some(
             script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
         );
 
@@ -480,25 +481,26 @@ export class XmlFile {
         const state = new TranspileState(this.pathAbsolute, this.program.options);
 
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
-            const script = new SGScript();
-            script.uri = util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'));
-            return script;
+            return createSGScript({
+                type: 'text/brightscript',
+                uri: util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'))
+            });
         });
 
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled || extraImportScripts.length > 0) {
             //temporarily add the missing imports as script tags
-            const originalScripts = this.ast.component.scripts;
-            this.ast.component.scripts = [
-                ...originalScripts,
-                ...extraImportScripts
-            ];
+            for (const script of extraImportScripts) {
+                this.ast.component.addChild(script);
+            }
 
             transpileResult = new SourceNode(null, null, state.srcPath, this.parser.ast.transpile(state));
 
-            //restore the original scripts array
-            this.ast.component.scripts = originalScripts;
+            //remove the extra script imports
+            for (const script of extraImportScripts) {
+                this.ast.component.removeChild(script);
+            }
 
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location

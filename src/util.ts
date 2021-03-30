@@ -29,7 +29,7 @@ import { TokenKind } from './lexer';
 import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
-import type { SGAttribute } from './parser/SGTypes';
+import { SGAttribute } from './parser/SGTypes';
 
 export class Util {
     public clearConsole() {
@@ -123,7 +123,7 @@ export class Util {
                 colIndex++;
             }
         }
-        return util.createRange(lineIndex, colIndex, lineIndex, colIndex + length);
+        return this.createRange(lineIndex, colIndex, lineIndex, colIndex + length);
     }
 
     /**
@@ -871,6 +871,31 @@ export class Util {
     }
 
     /**
+     * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
+     * righthand range. Returns undefined if none of the items have a range.
+     */
+    public createBoundingRange(...locatables: Array<{ range?: Range }>) {
+        let leftmost: { range?: Range };
+        let rightmost: { range?: Range };
+
+        for (const locatable of locatables) {
+            if (locatable?.range) {
+                //set leftomost to the first non-null range we find
+                if (!leftmost) {
+                    leftmost = locatable;
+                }
+                //set rightmost every time we find a new non-null range
+                rightmost = locatable;
+            }
+        }
+        if (leftmost) {
+            return this.createRangeFromPositions(leftmost.range.start, rightmost.range.end);
+        } else {
+            return undefined;
+        }
+    }
+
+    /**
      * Create a `Position` object. Prefer this over `Position.create` for performance reasons
      */
     public createPosition(line: number, character: number) {
@@ -1081,17 +1106,13 @@ export class Util {
      * Creates a new SGAttribute object, but keeps the existing Range references (since those shouldn't ever get changed directly)
      */
     public cloneSGAttribute(attr: SGAttribute, value: string) {
-        return {
-            key: {
-                text: attr.key.text,
-                range: attr.range
-            },
-            value: {
-                text: value,
-                range: attr.value.range
-            },
-            range: attr.range
-        } as SGAttribute;
+        return new SGAttribute(
+            { text: attr.key.text, range: attr.range },
+            { text: '=' },
+            { text: '"' },
+            { text: value, range: attr.value.range },
+            { text: '"' }
+        );
     }
 
     /**

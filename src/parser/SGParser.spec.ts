@@ -7,8 +7,8 @@ import { standardizePath as s, util } from '../util';
 import { createSandbox } from 'sinon';
 import { Program } from '../Program';
 import type { XmlFile } from '../files/XmlFile';
+const sinon = createSandbox();
 
-let sinon = createSandbox();
 describe('SGParser', () => {
 
     let rootDir = s`${process.cwd()}/.tmp/rootDir`;
@@ -47,8 +47,8 @@ describe('SGParser', () => {
                         font="font:MediumBoldSystemFont"
                         />
                 </children>
-            </component>`
-        );
+            </component>
+        `);
         const { ast } = file.parser;
         expect(ast.prolog).to.exist;
         expect(ast.component).to.exist;
@@ -69,10 +69,10 @@ describe('SGParser', () => {
                             print "hello"
                         end function
                     ]]></script>
-                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 <children>
                     <Label id="loadingIndicator" text="Loading..." font="font:MediumBoldSystemFont" />
                 </children>
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
             </component>
         `);
     });
@@ -161,7 +161,7 @@ describe('SGParser', () => {
     });
 
     describe('location tracking', () => {
-        it.only('tracks prolog', () => {
+        it('tracks prolog', () => {
             parser.parse('comp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene">

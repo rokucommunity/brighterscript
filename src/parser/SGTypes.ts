@@ -1,7 +1,6 @@
-import { SourceNode } from 'source-map';
+import type { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
-import { createSGAttribute } from '../astUtils/creators';
-import { isSGChildren, isSGField, isSGFunction, isSGInterface, isSGScript } from '../astUtils/xml';
+import { createSGAttribute, createSGInterfaceField, createSGInterfaceFunction } from '../astUtils/creators';
 import type { FileReference, TranspileResult } from '../interfaces';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
@@ -14,27 +13,28 @@ export interface SGToken {
 export class SGAttribute {
     public constructor(
         public key: SGToken,
-        public equals: SGToken,
-        public openingQuote: SGToken,
-        public value: SGToken,
-        public closingQuote: SGToken
+        public equals?: SGToken,
+        public openingQuote?: SGToken,
+        public value?: SGToken,
+        public closingQuote?: SGToken
     ) {
-        //TODO handle null ranges
-        this.range = util.createRangeFromPositions(
-            this.key.range.start,
-            (this.value?.range ?? this.equals?.range ?? this.key?.range).end
-        );
+        this.range = util.createBoundingRange(this.key, this.equals, this.openingQuote, this.value, this.closingQuote);
     }
-    public range: Range;
+    public range?: Range;
 
-    public transpile(state: TranspileState) {
-        return state.sourceNode(this, [
-            this.key.text,
-            '=',
-            '"',
-            this.value.text,
-            '"'
-        ]);
+    public transpile(state: TranspileState): TranspileResult {
+        const result = [
+            state.transpileToken(this.key)
+        ];
+        if (this.value) {
+            result.push(
+                state.transpileToken(this.equals, '='),
+                state.transpileToken(this.openingQuote, '"'),
+                state.transpileToken(this.value),
+                state.transpileToken(this.closingQuote, '"')
+            );
+        }
+        return result;
     }
 }
 
@@ -45,41 +45,54 @@ export class SGTag {
          * The first portion of the startTag. (i.e. `<` or `<?`)
          */
         public startTagOpen: SGToken,
-        public tagName: SGToken,
+        /**
+         * The name of the opening tag (i.e. CoolTag in `<CoolTag>`).
+         */
+        public startTagName: SGToken,
+        /**
+         * Array of attributes found on this tag
+         */
         public attributes = [] as SGAttribute[],
         /**
-         * The last bit of the startTag (i.e. `/>` for self-closing, or `>` for tag with children)
+         * The last bit of the startTag (i.e. `/>` for self-closing, `?>` for xml prologue, or `>` for tag with children)
          */
         public startTagClose?: SGToken,
-        public children = [],
         /**
-         * The endTag `<`
+         * The array of direct children AST elements of this AST node
+         */
+        public children = [] as SGTag[],
+        /**
+         * The endTag opening char `<`
          */
         public endTagOpen?: SGToken,
+        /**
+         * The name of the ending tag (i.e. CoolTag in `</CoolTag>`)
+         */
         public endTagName?: SGToken,
+        /**
+         * The endTag closing char `>`
+         */
         public endTagClose?: SGToken
-    ) { }
-
-    public get range() {
-        return util.createRangeFromPositions(
-            this.startTagOpen.range.start,
-            (
-                this.endTagClose ??
-                this.endTagName ??
-                this.endTagOpen ??
-                (this.children?.[this.children?.length - 1] as Locatable) ??
-                this.startTagClose ??
-                this.attributes?.[this.attributes?.length - 1] ??
-                this.startTagOpen
-            ).range.end
+    ) {
+        this.range = util.createBoundingRange(
+            this.startTagOpen,
+            this.startTagName,
+            this.attributes?.[this.attributes?.length - 1],
+            this.startTagClose,
+            this.children?.[this.children?.length - 1],
+            this.endTagOpen,
+            this.endTagName,
+            this.endTagClose
         );
     }
+
+    public range: Range;
 
     /**
      * Is this a self-closing tag?
      */
     get isSelfClosing() {
-        return this.startTagClose?.text.startsWith('/');
+        return !this.endTagName;
     }
 
     get id() {
@@ -87,6 +100,38 @@ export class SGTag {
     }
     set id(value: string) {
         this.setAttribute('id', value);
+    }
+
+    /**
+     * Find all direct children by their tag name (case insensitive)
+     */
+    public getChildrenByTagName<T extends SGTag>(tagName: string) {
+        const result = [] as T[];
+        const lowerTagName = tagName.toLowerCase();
+        for (const el of this.children) {
+            if (el.startTagName.text.toLowerCase() === lowerTagName) {
+                result.push(el as T);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Add a child to the end of the children array
+     */
+    public addChild<T extends SGTag>(tag: T) {
+        this.children.push(tag);
+        return tag;
+    }
+
+    /**
+     * Remove a child from the children array
+     */
+    public removeChild(tag: SGTag) {
+        const idx = this.children.indexOf(tag);
+        if (idx > -1) {
+            this.children.splice(idx, 1);
+        }
     }
 
     getAttribute(name: string): SGAttribute | undefined {
@@ -108,32 +153,49 @@ export class SGTag {
             }
         } else if (value) {
             this.attributes.push(
-                new SGAttribute(
-                    { text: name },
-                    { text: '=' },
-                    { text: '"' },
-                    { text: value },
-                    { text: '"' }
-                )
+                createSGAttribute(name, value)
             );
         }
     }
 
-    transpile(state: TranspileState): SourceNode {
-        return new SourceNode(null, null, state.srcPath, [
-            state.indentText,
-            state.transpileToken(this.startTagOpen), // <
-            state.transpileToken(this.tagName),
+    public transpile(state: TranspileState): TranspileResult {
+        return [
+            state.transpileToken(this.startTagOpen, '<'), // <
+            state.transpileToken(this.startTagName),
             ...this.transpileAttributes(state, this.attributes),
             ...this.transpileBody(state)
-        ]);
+        ];
     }
 
     protected transpileBody(state: TranspileState): (string | SourceNode)[] {
-        return [
-            ' />',
-            state.newline
-        ];
+        if (this.isSelfClosing) {
+            return [
+                ' ',
+                state.transpileToken(this.startTagClose, '/>'),
+                state.newline
+            ];
+        } else {
+            const result = [
+                state.transpileToken(this.startTagClose, '>'),
+                state.newline
+            ];
+            state.blockDepth++;
+            for (const child of this.children) {
+                result.push(
+                    state.indentText,
+                    ...child.transpile(state)
+                );
+            }
+            state.blockDepth--;
+            result.push(
+                state.indentText,
+                state.transpileToken(this.endTagOpen, '</'),
+                state.transpileToken(this.endTagName ?? this.startTagName),
+                state.transpileToken(this.endTagClose, '>'),
+                state.newline
+            );
+            return result;
+        }
     }
 
     protected transpileAttributes(state: TranspileState, attributes: SGAttribute[]): (string | SourceNode)[] {
@@ -145,57 +207,15 @@ export class SGTag {
     }
 }
 
-export class SGProlog extends SGTag {
-    transpile(state: TranspileState) {
-        return new SourceNode(null, null, state.srcPath, [
-            '<?xml',
-            ...this.transpileAttributes(state, this.attributes),
-            ' ?>\n'
-        ]);
-    }
-}
+export class SGProlog extends SGTag { }
 
-export class SGNode extends SGTag {
-    protected transpileBody(state: TranspileState): (string | SourceNode)[] {
-        if (this.children.length > 0) {
-            return [
-                '>',
-                state.newline,
-                state.indent(1),
-                ...this.children.map(node => node.transpile(state)),
-                state.indent(-1),
-                '</', this.tagName.text, '>\n'
-            ];
-        } else {
-            return super.transpileBody(state);
-        }
-    }
-}
+export class SGNode extends SGTag { }
 
-export class SGChildren extends SGNode {
-
-    constructor(
-        tag: SGToken = { text: 'children' },
-        children: SGNode[] = [],
-        range?: Range
-    ) {
-        super(tag, [], children, range);
-    }
-}
+export class SGChildren extends SGTag { }
 
 export class SGScript extends SGTag {
 
-    constructor(
-        tag: SGToken = { text: 'script' },
-        attributes?: SGAttribute[],
-        public cdata?: SGToken,
-        range?: Range
-    ) {
-        super(tag, attributes, range);
-        if (!attributes) {
-            this.type = 'text/brightscript';
-        }
-    }
+    public cdata?: SGToken;
 
     get type() {
         return this.getAttributeValue('type');
@@ -217,8 +237,9 @@ export class SGScript extends SGTag {
                 '>',
                 state.transpileToken(this.cdata),
                 '</',
-                this.tag.text,
-                '>\n'
+                this.startTagName.text,
+                '>',
+                state.newline
             ];
         } else {
             return super.transpileBody(state);
@@ -258,15 +279,7 @@ export class SGScript extends SGTag {
     }
 }
 
-export class SGField extends SGTag {
-
-    constructor(
-        tag: SGToken = { text: 'field' },
-        attributes: SGAttribute[] = [],
-        range?: Range
-    ) {
-        super(tag, attributes, range);
-    }
+export class SGInterfaceField extends SGTag {
 
     get type() {
         return this.getAttributeValue('type');
@@ -311,16 +324,7 @@ export const SGFieldTypes = [
     'array', 'roarray', 'rect2d', 'rect2darray'
 ];
 
-export class SGFunction extends SGTag {
-
-    constructor(
-        tag: SGToken = { text: 'function' },
-        attributes: SGAttribute[] = [],
-        range?: Range
-    ) {
-        super(tag, attributes, range);
-    }
-
+export class SGInterfaceFunction extends SGTag {
     get name() {
         return this.getAttributeValue('name');
     }
@@ -330,38 +334,21 @@ export class SGFunction extends SGTag {
 }
 
 export class SGInterface extends SGTag {
-
-    fields: SGField[] = [];
-    functions: SGFunction[] = [];
-
-    constructor(
-        tag: SGToken = { text: 'interface' },
-        content?: SGTag[],
-        range?: Range
-    ) {
-        super(tag, [], range);
-        if (content) {
-            for (const tag of content) {
-                if (isSGField(tag)) {
-                    this.fields.push(tag);
-                } else if (isSGFunction(tag)) {
-                    this.functions.push(tag);
-                } else {
-                    throw new Error(`Unexpected tag ${tag.tag.text}`);
-                }
-            }
-        }
+    public getFields() {
+        return this.getChildrenByTagName<SGInterfaceField>('field');
+    }
+    public getFunctions() {
+        return this.getChildrenByTagName<SGInterfaceFunction>('function');
     }
 
     getField(id: string) {
-        return this.fields.find(field => field.id === id);
+        return this.getFields().find(field => field.id === id);
     }
     setField(id: string, type: string, onChange?: string, alwaysNotify?: boolean, alias?: string) {
         let field = this.getField(id);
         if (!field) {
-            field = new SGField();
-            field.id = id;
-            this.fields.push(field);
+            field = createSGInterfaceField(id);
+            this.children.push(field);
         }
         field.type = type;
         field.onChange = onChange;
@@ -374,60 +361,35 @@ export class SGInterface extends SGTag {
     }
 
     getFunction(name: string) {
-        return this.functions.find(field => field.name === name);
+        return this.getFunctions().find(field => field.name === name);
     }
     setFunction(name: string) {
         let func = this.getFunction(name);
         if (!func) {
-            func = new SGFunction();
-            func.name = name;
-            this.functions.push(func);
+            func = createSGInterfaceFunction(name);
+            this.children.push(func);
         }
-    }
-
-    protected transpileBody(state: TranspileState): (string | SourceNode)[] {
-        const body: (string | SourceNode)[] = ['>\n'];
-        state.blockDepth++;
-        if (this.fields.length > 0) {
-            body.push(...this.fields.map(node => node.transpile(state)));
-        }
-        if (this.functions.length > 0) {
-            body.push(...this.functions.map(node => node.transpile(state)));
-        }
-        state.blockDepth--;
-        body.push(state.indentText, '</', this.tag.text, '>\n');
-        return body;
     }
 }
 
 export class SGComponent extends SGTag {
-    constructor(
-        tag: SGToken = { text: 'component' },
-        attributes?: SGAttribute[],
-        content?: SGTag[],
-        range?: Range
-    ) {
-        super(tag, attributes, range);
-        if (content) {
-            for (const tag of content) {
-                if (isSGInterface(tag)) {
-                    this.interface = tag;
-                } else if (isSGScript(tag)) {
-                    this.scripts.push(tag);
-                } else if (isSGChildren(tag)) {
-                    this.children = tag;
-                } else {
-                    throw new Error(`Unexpected tag ${tag.tag.text}`);
-                }
-            }
-        }
+    /**
+     * Get the <interface> element
+     */
+    public getInterface() {
+        return this.getChildrenByTagName<SGInterface>('interface')[0];
     }
 
-    public interface: SGInterface;
+    public getScripts() {
+        return this.getChildrenByTagName<SGScript>('script');
+    }
 
-    public scripts: SGScript[] = [];
-
-    public children: SGChildren;
+    /**
+     * Finds the `<children>` element of this component. (not to be confused with the AST `children` property)
+     */
+    public getChildren() {
+        return this.getChildrenByTagName<SGChildren>('children')[0];
+    }
 
     get name() {
         return this.getAttributeValue('name');
@@ -441,23 +403,6 @@ export class SGComponent extends SGTag {
     }
     set extends(value: string) {
         this.setAttribute('extends', value);
-    }
-
-    protected transpileBody(state: TranspileState): (string | SourceNode)[] {
-        const body: (string | SourceNode)[] = ['>\n'];
-        state.blockDepth++;
-        if (this.interface) {
-            body.push(this.interface.transpile(state));
-        }
-        if (this.scripts.length > 0) {
-            body.push(...this.scripts.map(node => node.transpile(state)));
-        }
-        if (this.children) {
-            body.push(this.children.transpile(state));
-        }
-        state.blockDepth--;
-        body.push(state.indentText, '</', this.tag.text, '>\n');
-        return body;
     }
 }
 
@@ -476,15 +421,19 @@ export class SGAst {
     ) {
     }
 
-    transpile(state: TranspileState) {
+    public transpile(state: TranspileState): TranspileResult {
         const chunks = [] as TranspileResult;
         //write XML prolog
         if (this.prolog) {
-            chunks.push(this.prolog.transpile(state));
+            chunks.push(
+                ...this.prolog.transpile(state)
+            );
         }
         if (this.component) {
             //write content
-            chunks.push(this.component.transpile(state));
+            chunks.push(
+                ...this.component.transpile(state)
+            );
         }
         return chunks;
     }

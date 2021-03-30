@@ -59,7 +59,7 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterFileParse: () => {
-                    let child = file.parser.ast.component.children.children[0];
+                    let child = file.parser.ast.component.getChildren().children[0];
                     expect(child.attributes).to.have.lengthOf(4);
                     child.setAttribute('text', undefined);
                     expect(child.getAttribute('id').value.text).to.equal('one');
@@ -745,12 +745,12 @@ describe('XmlFile', () => {
                         <function name="b" />
                     </interface>
                     <script type="text/brightscript" uri="SimpleScene.brs" />
-                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                     <children>
                         <aa id="aa">
                             <bb id="bb" />
                         </aa>
                     </children>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 </component>
             `, 'none', 'components/SimpleScene.xml');
         });
