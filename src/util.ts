@@ -26,7 +26,7 @@ import type { DottedGetExpression, Expression, VariableExpression } from './pars
 import { Logger, LogLevel } from './Logger';
 import type { Token } from './lexer';
 import { TokenKind } from './lexer';
-import { isBrsFile, isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
+import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
@@ -642,115 +642,15 @@ export class Util {
      * @param diagnostic
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
-        //for now, we only support suppressing brs file diagnostics
-        if (isBrsFile(diagnostic.file)) {
-            for (let flag of diagnostic.file.commentFlags) {
-                //this diagnostic is affected by this flag
-                if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
-                    //if the flag acts upon this diagnostic's code
-                    if (flag.codes === null || flag.codes.includes(diagnostic.code as number)) {
-                        return true;
-                    }
+        for (let flag of diagnostic.file?.commentFlags ?? []) {
+            //this diagnostic is affected by this flag
+            if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
+                //if the flag acts upon this diagnostic's code
+                if (flag.codes === null || flag.codes.includes(diagnostic.code as number)) {
+                    return true;
                 }
             }
         }
-    }
-
-    /**
-     * Small tokenizer for bs:disable comments
-     */
-    public tokenizeBsDisableComment(token: Token) {
-        if (token.kind !== TokenKind.Comment) {
-            return null;
-        }
-        let lowerText = token.text.toLowerCase();
-        let offset = 0;
-        let commentTokenText: string;
-
-        if (token.text.startsWith(`'`)) {
-            commentTokenText = `'`;
-            offset = 1;
-            lowerText = lowerText.substring(1);
-        } else if (lowerText.startsWith('rem')) {
-            commentTokenText = lowerText.substring(0, 3);
-            offset = 3;
-            lowerText = lowerText.substring(3);
-        }
-
-        let disableType: 'line' | 'next-line';
-        //trim leading/trailing whitespace
-        let len = lowerText.length;
-        lowerText = lowerText.trimLeft();
-        offset += len - lowerText.length;
-        if (lowerText.startsWith('bs:disable-line')) {
-            lowerText = lowerText.substring('bs:disable-line'.length);
-            offset += 'bs:disable-line'.length;
-            disableType = 'line';
-        } else if (lowerText.startsWith('bs:disable-next-line')) {
-            lowerText = lowerText.substring('bs:disable-next-line'.length);
-            offset += 'bs:disable-next-line'.length;
-            disableType = 'next-line';
-        } else {
-            return null;
-        }
-        //do something with the colon
-        if (lowerText.startsWith(':')) {
-            lowerText = lowerText.substring(1);
-            offset += 1;
-        }
-
-        let items = this.tokenizeByWhitespace(lowerText);
-        let codes = [] as Array<{ code: string; range: Range }>;
-        for (let item of items) {
-            codes.push({
-                code: item.text,
-                range: util.createRange(
-                    token.range.start.line,
-                    token.range.start.character + offset + item.startIndex,
-                    token.range.start.line,
-                    token.range.start.character + offset + item.startIndex + item.text.length
-                )
-            });
-        }
-
-        return {
-            commentTokenText: commentTokenText,
-            disableType: disableType,
-            codes: codes
-        };
-    }
-
-    /**
-     * Given a string, extract each item split by whitespace
-     * @param text
-     */
-    public tokenizeByWhitespace(text: string) {
-        let tokens = [] as Array<{ startIndex: number; text: string }>;
-        let currentToken = null;
-        for (let i = 0; i < text.length; i++) {
-            let char = text[i];
-            //if we hit whitespace
-            if (char === ' ' || char === '\t') {
-                if (currentToken) {
-                    tokens.push(currentToken);
-                    currentToken = null;
-                }
-
-                //we hit non-whitespace
-            } else {
-                if (!currentToken) {
-                    currentToken = {
-                        startIndex: i,
-                        text: ''
-                    };
-                }
-                currentToken.text += char;
-            }
-        }
-        if (currentToken) {
-            tokens.push(currentToken);
-        }
-        return tokens;
     }
 
     /**

@@ -6,8 +6,8 @@ import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Lexer } from '../../../lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { AssignmentStatement } from '../../Statement';
-import { getTestTranspile } from '../../../files/BrsFile.spec';
 import { Program } from '../../../Program';
+import { getTestTranspile } from '../../../testHelpers.spec';
 
 describe('TemplateStringExpression', () => {
     describe('parser template String', () => {

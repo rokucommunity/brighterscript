@@ -2,7 +2,6 @@ import { expect } from 'chai';
 import * as path from 'path';
 import util, { standardizePath as s } from './util';
 import { Position, Range } from 'vscode-languageserver';
-import { Lexer } from './lexer';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
@@ -393,116 +392,6 @@ describe('util', () => {
     describe('padLeft', () => {
         it('stops at an upper limit to prevent terrible memory explosions', () => {
             expect(util.padLeft('', Number.MAX_VALUE, ' ')).to.be.lengthOf(1000);
-        });
-    });
-
-    describe('tokenizeByWhitespace', () => {
-        it('works with single chars', () => {
-            expect(util.tokenizeByWhitespace('a b c')).to.deep.equal([{
-                startIndex: 0,
-                text: 'a'
-            }, {
-                startIndex: 2,
-                text: 'b'
-            },
-            {
-                startIndex: 4,
-                text: 'c'
-            }]);
-        });
-
-        it('works with tabs', () => {
-            expect(util.tokenizeByWhitespace('a\tb\t c')).to.deep.equal([{
-                startIndex: 0,
-                text: 'a'
-            }, {
-                startIndex: 2,
-                text: 'b'
-            },
-            {
-                startIndex: 5,
-                text: 'c'
-            }]);
-
-            it('works with leading whitespace', () => {
-                expect(util.tokenizeByWhitespace('  \ta\tb\t c')).to.deep.equal([{
-                    startIndex: 4,
-                    text: 'a'
-                }, {
-                    startIndex: 6,
-                    text: 'b'
-                },
-                {
-                    startIndex: 9,
-                    text: 'c'
-                }]);
-            });
-
-            it('works with multiple characters in a word', () => {
-                expect(util.tokenizeByWhitespace('abc 123')).to.deep.equal([{
-                    startIndex: 0,
-                    text: 'abc'
-                }, {
-                    startIndex: 4,
-                    text: '123'
-                }]);
-            });
-        });
-    });
-
-    describe('tokenizeBsDisableComment', () => {
-        it('skips non disable comments', () => {
-            expect(util.tokenizeBsDisableComment(
-                Lexer.scan(`'not disable comment`).tokens[0]
-            )).not.to.exist;
-        });
-
-        it('tokenizes bs:disable-line comment', () => {
-            expect(util.tokenizeBsDisableComment(
-                Lexer.scan(`'bs:disable-line`).tokens[0])
-            ).to.eql({
-                commentTokenText: `'`,
-                disableType: 'line',
-                codes: []
-            });
-        });
-
-        it('works for special case', () => {
-            expect(util.tokenizeBsDisableComment(
-                Lexer.scan(`print "hi" 'bs:disable-line: 123456 999999   aaaab`).tokens[2])
-            ).to.eql({
-                commentTokenText: `'`,
-                disableType: 'line',
-                codes: [{
-                    code: '123456',
-                    range: Range.create(0, 29, 0, 35)
-                }, {
-                    code: '999999',
-                    range: Range.create(0, 36, 0, 42)
-                }, {
-                    code: 'aaaab',
-                    range: Range.create(0, 45, 0, 50)
-                }]
-            });
-        });
-
-        it('tokenizes bs:disable-line comment with codes', () => {
-            expect(util.tokenizeBsDisableComment(
-                Lexer.scan(`'bs:disable-line:1 2 3`).tokens[0])
-            ).to.eql({
-                commentTokenText: `'`,
-                disableType: 'line',
-                codes: [{
-                    code: '1',
-                    range: Range.create(0, 17, 0, 18)
-                }, {
-                    code: '2',
-                    range: Range.create(0, 19, 0, 20)
-                }, {
-                    code: '3',
-                    range: Range.create(0, 21, 0, 22)
-                }]
-            });
         });
     });
 

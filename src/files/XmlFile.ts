@@ -2,17 +2,19 @@ import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
-import { DiagnosticMessages } from '../DiagnosticMessages';
-import type { Callable, BsDiagnostic, File, FileReference, FunctionCall } from '../interfaces';
+import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
+import type { Callable, BsDiagnostic, File, FileReference, FunctionCall, CommentFlag } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
-import SGParser from '../parser/SGParser';
+import SGParser, { rangeFromTokenValue } from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyGraph } from '../DependencyGraph';
 import type { SGAst, SGToken } from '../parser/SGTypes';
 import { SGScript } from '../parser/SGTypes';
-import { SGTranspileState } from '../parser/SGTranspileState';
+import { CommentFlagProcessor } from '../CommentFlagProcessor';
+import type { IToken, TokenType } from 'chevrotain';
+import { TranspileState } from '../parser/TranspileState';
 import type { FunctionExpression } from '../parser/Expression';
 
 export class XmlFile {
@@ -48,6 +50,8 @@ export class XmlFile {
      * The extension for this file
      */
     public extension: string;
+
+    public commentFlags = [] as CommentFlag[];
 
     /**
      * The list of script imports delcared in the XML of this file.
@@ -185,6 +189,8 @@ export class XmlFile {
             file: this
         }));
 
+        this.getCommentFlags(this.parser.tokens as any[]);
+
         if (!this.parser.ast.root) {
             //skip empty XML
             return;
@@ -195,6 +201,26 @@ export class XmlFile {
 
         //initial validation
         this.validateComponent(this.parser.ast);
+    }
+
+    /**
+     * Collect all bs: comment flags
+     */
+    public getCommentFlags(tokens: Array<IToken & { tokenType: TokenType }>) {
+        const processor = new CommentFlagProcessor(this, ['<!--'], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
+
+        this.commentFlags = [];
+        for (let token of tokens) {
+            if (token.tokenType.name === 'Comment') {
+                processor.tryAdd(
+                    //remove the close comment symbol
+                    token.image.replace(/\-\-\>$/, ''),
+                    rangeFromTokenValue(token)
+                );
+            }
+        }
+        this.commentFlags.push(...processor.commentFlags);
+        this.diagnostics.push(...processor.diagnostics);
     }
 
     private validateComponent(ast: SGAst) {
@@ -454,7 +480,7 @@ export class XmlFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new SGTranspileState(this);
+        const state = new TranspileState(this.pathAbsolute, this.program.options);
 
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             const script = new SGScript();
@@ -472,25 +498,25 @@ export class XmlFile {
                 ...extraImportScripts
             ];
 
-            transpileResult = new SourceNode(null, null, state.source, this.parser.ast.transpile(state));
+            transpileResult = new SourceNode(null, null, state.srcPath, this.parser.ast.transpile(state));
 
             //restore the original scripts array
             this.ast.component.scripts = originalScripts;
 
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
-            transpileResult = util.simpleMap(state.source, this.fileContents);
+            transpileResult = util.simpleMap(state.srcPath, this.fileContents);
         } else {
             //simple SourceNode wrapping the entire file to simplify the logic below
-            transpileResult = new SourceNode(null, null, state.source, this.fileContents);
+            transpileResult = new SourceNode(null, null, state.srcPath, this.fileContents);
         }
 
         //add the source map comment if configured to emit sourcemaps
         if (this.program.options.sourceMap) {
-            return new SourceNode(null, null, state.source, [
+            return new SourceNode(null, null, state.srcPath, [
                 transpileResult,
                 //add the sourcemap reference comment
-                `<!--//# sourceMappingURL=./${path.basename(state.source)}.map -->`
+                `<!--//# sourceMappingURL=./${path.basename(state.srcPath)}.map -->`
             ]).toStringWithSourceMap();
         } else {
             return {
