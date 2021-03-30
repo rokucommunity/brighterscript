@@ -18,7 +18,7 @@ import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
 import { standardizePath as s, util } from '../util';
-import { TranspileState } from '../parser/TranspileState';
+import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
@@ -1636,24 +1636,24 @@ export class BrsFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new TranspileState(this);
+        const state = new BrsTranspileState(this);
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
-            transpileResult = new SourceNode(null, null, state.pathAbsolute, this.ast.transpile(state));
+            transpileResult = new SourceNode(null, null, state.srcPath, this.ast.transpile(state));
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
-            transpileResult = util.simpleMap(state.pathAbsolute, this.fileContents);
+            transpileResult = util.simpleMap(state.srcPath, this.fileContents);
         } else {
             //simple SourceNode wrapping the entire file to simplify the logic below
-            transpileResult = new SourceNode(null, null, state.pathAbsolute, this.fileContents);
+            transpileResult = new SourceNode(null, null, state.srcPath, this.fileContents);
         }
 
         if (this.program.options.sourceMap) {
             return new SourceNode(null, null, null, [
                 transpileResult,
                 //add the sourcemap reference comment
-                `'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`
+                `'//# sourceMappingURL=./${path.basename(state.srcPath)}.map`
             ]).toStringWithSourceMap();
         } else {
             return {
@@ -1664,7 +1664,7 @@ export class BrsFile {
     }
 
     public getTypedef() {
-        const state = new TranspileState(this);
+        const state = new BrsTranspileState(this);
         const typedef = this.ast.getTypedef(state);
         const programNode = new SourceNode(null, null, this.pathAbsolute, typedef);
         return programNode.toString();
