@@ -1062,13 +1062,15 @@ export class Parser {
         }
 
         let endFor = this.advance();
+        //TODO infer type from `target`
+        const itemType = new DynamicType();
 
         this.currentFunctionLocalVars?.push({
             lowerName: name.text.toLowerCase(),
             nameToken: name,
-            //TODO infer type from `target`
-            type: new DynamicType()
+            type: itemType
         });
+        this.currentSymbolTable.addSymbol(name, itemType);
 
         return new ForEachStatement(
             forEach,
@@ -2677,10 +2679,6 @@ export class Parser {
      * Gets the return type of a function, taking into account that the function may not have been declared yet
      * If the callee already exists in symbol table, use that return type
      * otherwise, make a lazy type which will not compute its type until the file is done parsing
-     * @private
-     * @param {CallExpression} call
-     * @param {FunctionExpression} functionExpression
-     * @returns {BscType}
      */
     private getAssignmentTypeFromCallExpression(call: CallExpression, functionExpression: FunctionExpression): BscType {
         let calleeName = ((call.callee as any).name.text as string)?.toLowerCase();
@@ -2709,11 +2707,7 @@ export class Parser {
      * Gets the type of a variable
      * if it already exists in symbol table, use that type
      * otherwise defer the type until first read, which will allow us to derive types from variables defined after this one (like from a loop perhaps)
-     * @private
-     * @param {VariableExpressionVariableExpression} variable
-     * @param {FunctionExpression} functionExpression
-     * @returns {BscType}
-     */
+    */
     private getAssignmentTypeFromVariableExpression(variable: VariableExpression, functionExpression: FunctionExpression): BscType {
         let variableName = variable.name.text.toLowerCase();
         const currentKnownType = functionExpression.symbolTable.getSymbolType(variableName);

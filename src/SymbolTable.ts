@@ -3,10 +3,6 @@ import type { BscType } from './types/BscType';
 import { DynamicType } from './types/DynamicType';
 import { UninitializedType } from './types/UninitializedType';
 
-export interface BscSymbol {
-    name: Identifier;
-    type: BscType;
-}
 
 /**
  * Stores the types associated with variables and functions in the Brighterscript code
@@ -23,7 +19,7 @@ export class SymbolTable {
     /**
      * Sets the parent table for lookups
      *
-     * @param {SymbolTable} [parent]
+     * @param [parent]
      */
     setParent(parent?: SymbolTable) {
         this.parent = parent;
@@ -33,8 +29,8 @@ export class SymbolTable {
      * Gets the name/type pair for a given named variable or function name
      * If the identifier is not in this table, it will check the parent
      *
-     * @param {string)} name the name to lookup
-     * @returns {BscSymbol}
+     * @param  name the name to lookup
+     * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
     getSymbol(name: string): BscSymbol[] {
         const key = name.toLowerCase();
@@ -43,8 +39,8 @@ export class SymbolTable {
 
     /**
      * Adds a new symbol to the table
-     * @param {Identifier} name
-     * @param {BscType} type
+     * @param name
+     * @param  type
      */
     addSymbol(name: Identifier, type: BscType) {
         const key = name.text.toLowerCase();
@@ -59,7 +55,7 @@ export class SymbolTable {
 
     /**
      * Gets the type for a symbol
-     * @param {string} name the name of the symbol to get the type for
+     * @param name the name of the symbol to get the type for
      * @returns The type, if found. If the type has ever changed, return DynamicType. If not found, returns UninitializedType
      */
     getSymbolType(name: string): BscType {
@@ -90,8 +86,16 @@ export class SymbolTable {
      * @param symbolTable
      */
     mergeSymbolTable(symbolTable: SymbolTable) {
-        for (let [key, value] of symbolTable.symbols) {
-            this.symbols.set(key, value);
+        for (let [, value] of symbolTable.symbols) {
+            for (const symbol of value) {
+                this.addSymbol(symbol.name, symbol.type);
+            }
         }
     }
+}
+
+
+export interface BscSymbol {
+    name: Identifier;
+    type: BscType;
 }

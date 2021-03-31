@@ -1191,6 +1191,36 @@ describe('parser', () => {
             const addOneSymbolTable = parser.references.functionExpressions[0].childFunctionExpressions[0].symbolTable;
             expect(addOneSymbolTable.getSymbolType('oldVal').toString()).to.eq('uninitialized');
         });
+
+        describe('loops', () => {
+            it('stores the loop variable in a for loop', () => {
+                const parser = parse(`
+                sub main()
+                    for i = 0 to 10 step 10
+                      print i
+                    end for
+                end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser.diagnostics);
+                const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
+                expect(currentSymbolTable.getSymbolType('i').toString()).to.eq('integer');
+            });
+
+
+            it('stores the loop variable in a for each loop', () => {
+                const parser = parse(`
+                sub doLoop(someData)
+                    for each datum in someData
+                      print datum
+                    end for
+                end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser.diagnostics);
+                const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
+                expect(currentSymbolTable.getSymbolType('datum').toString()).to.eq('dynamic');
+            });
+        });
+
     });
 });
 

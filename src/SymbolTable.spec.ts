@@ -77,4 +77,19 @@ describe('SymbolTable', () => {
             expect(st.getSymbolType('foo').toString()).eq('uninitialized');
         });
     });
+
+    describe('mergeSymbolTable', () => {
+
+        it('adds each symbol to the table', () => {
+            const st = new SymbolTable();
+            st.addSymbol(makeIdentifier('foo'), new StringType());
+            const otherTable = new SymbolTable();
+            otherTable.addSymbol(makeIdentifier('bar'), new IntegerType());
+            otherTable.addSymbol(makeIdentifier('foo'), new IntegerType());
+            expect(st.getSymbolType('foo').toString()).eq('string');
+            st.mergeSymbolTable(otherTable);
+            expect(st.getSymbolType('foo').toString()).eq('dynamic');
+            expect(st.getSymbolType('bar').toString()).eq('integer');
+        });
+    });
 });
