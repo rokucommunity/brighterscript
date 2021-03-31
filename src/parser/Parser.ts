@@ -2663,8 +2663,6 @@ export class Parser {
             } else if (isCallExpression(assignment.value)) {
                 return this.getAssignmentTypeFromCallExpression(assignment.value, functionExpression);
             } else if (isVariableExpression(assignment.value)) {
-                // if it already exists in symbol table, use that type
-                //
                 return this.getAssignmentTypeFromVariableExpression(assignment.value, functionExpression);
             }
         } catch (e) {
