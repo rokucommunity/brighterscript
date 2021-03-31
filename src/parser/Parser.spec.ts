@@ -1143,10 +1143,10 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(parser.diagnostics);
             const mainSymbolTable = parser.references.functionExpressions[0].symbolTable;
-            expect(mainSymbolTable.getSymbol('someNum').type).to.be.instanceof(IntegerType);
-            expect(mainSymbolTable.getSymbol('someString').type).to.be.instanceof(StringType);
-            expect(mainSymbolTable.getSymbol('someObj').type).to.be.instanceof(ObjectType);
-            expect(mainSymbolTable.getSymbol('someCustom').type).to.be.instanceof(CustomType);
+            expect(mainSymbolTable.getSymbolType('someNum')).to.be.instanceof(IntegerType);
+            expect(mainSymbolTable.getSymbolType('someString')).to.be.instanceof(StringType);
+            expect(mainSymbolTable.getSymbolType('someObj')).to.be.instanceof(ObjectType);
+            expect(mainSymbolTable.getSymbolType('someCustom')).to.be.instanceof(CustomType);
         });
 
         it('stores typed parameters in functions', () => {
@@ -1157,9 +1157,9 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(parser.diagnostics);
             const someFuncSymbolTable = parser.references.functionExpressions[0].symbolTable;
-            expect(someFuncSymbolTable.getSymbol('param1').type).to.be.instanceof(StringType);
-            expect(someFuncSymbolTable.getSymbol('param2').type).to.be.instanceof(IntegerType);
-            expect(someFuncSymbolTable.getSymbol('temp').type).to.be.instanceof(IntegerType);
+            expect(someFuncSymbolTable.getSymbolType('param1')).to.be.instanceof(StringType);
+            expect(someFuncSymbolTable.getSymbolType('param2')).to.be.instanceof(IntegerType);
+            expect(someFuncSymbolTable.getSymbolType('temp')).to.be.instanceof(IntegerType);
         });
 
         it('properly defers typing lazy types', () => {
@@ -1174,23 +1174,22 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(parser.diagnostics);
             const someFuncSymbolTable = parser.references.functionExpressions[0].symbolTable;
-            expect(someFuncSymbolTable.getSymbol('temp').type).to.be.instanceof(LazyType);
-            expect(someFuncSymbolTable.getSymbol('temp').type.toTypeString()).to.eq('string');
+            expect(someFuncSymbolTable.getSymbolType('temp')).to.be.instanceof(LazyType);
+            expect(someFuncSymbolTable.getSymbolType('temp').toTypeString()).to.eq('string');
         });
 
-        it('properly gets the type of symbols declared in parent functions', () => {
+        it('does not know about symbols declared in parent functions', () => {
             const parser = parse(`
                 sub main()
                     count = 0
                     addOne = sub()
                         oldVal = count
-                        count = oldVal+1
                     end sub
                 end sub
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(parser.diagnostics);
             const addOneSymbolTable = parser.references.functionExpressions[0].childFunctionExpressions[0].symbolTable;
-            expect(addOneSymbolTable.getSymbol('oldVal').type).to.be.instanceof(IntegerType);
+            expect(addOneSymbolTable.getSymbolType('oldVal').toString()).to.eq('uninitialized');
         });
     });
 });

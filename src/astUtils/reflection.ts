@@ -16,6 +16,7 @@ import { DoubleType } from '../types/DoubleType';
 import { CustomType } from '../types/CustomType';
 import type { Scope } from '../Scope';
 import type { XmlScope } from '../XmlScope';
+import { UninitializedType } from '../types/UninitializedType';
 
 // File reflection
 
@@ -237,6 +238,9 @@ export function isVoidType(e: any): e is VoidType {
 }
 export function isCustomType(e: any): e is CustomType {
     return e?.constructor.name === CustomType.name;
+}
+export function isUninitializedType(e: any): e is CustomType {
+    return e?.constructor.name === UninitializedType.name;
 }
 
 const numberConstructorNames = [

@@ -137,7 +137,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
          */
         readonly parentFunction?: FunctionExpression,
         readonly namespaceName?: NamespacedVariableNameExpression,
-        readonly fallbackSymbolTable?: SymbolTable // If there is no parent function, use this symbolTable
+        readonly parentSymbolTable?: SymbolTable
     ) {
         super();
         if (this.returnTypeToken) {
@@ -147,7 +147,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         } else {
             this.returnType = new DynamicType();
         }
-        this.symbolTable = new SymbolTable(parentFunction?.symbolTable ?? fallbackSymbolTable);
+        this.symbolTable = new SymbolTable(parentSymbolTable);
         for (let param of parameters) {
             this.symbolTable.addSymbol(param.name, param.type);
         }
