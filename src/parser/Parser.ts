@@ -2692,7 +2692,7 @@ export class Parser {
             if (isFunctionType(currentKnownType)) {
                 return currentKnownType.returnType;
             }
-            if (!isUninitializedType) {
+            if (!isUninitializedType(currentKnownType)) {
                 // this will probably only happen if a functionName has been assigned to something else previously?
                 return currentKnownType;
             }
