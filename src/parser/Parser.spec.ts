@@ -12,6 +12,9 @@ import { VoidType } from '../types/VoidType';
 import type { FunctionType } from '../types/FunctionType';
 import { StringType } from '../types/StringType';
 import { CustomType } from '../types/CustomType';
+import { IntegerType } from '../types/IntegerType';
+import { ObjectType } from '../types/ObjectType';
+import { LazyType } from '../types/LazyType';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -1122,6 +1125,72 @@ describe('parser', () => {
             const func = (parser.ast.statements[0] as FunctionStatement).func;
             const type = parser['getBscTypeFromAssignment'](func.body.statements[0] as AssignmentStatement, func) as FunctionType;
             expect(type.returnType).to.be.instanceof(CustomType);
+        });
+    });
+
+    describe('symbolTable', () => {
+        it('stores the types', () => {
+            const parser = parse(`
+                sub main()
+                    someNum = 123
+                    someString = "hello world"
+                    someObj = {foo: "bar"}
+                    someCustom = new CustomKlass()
+                end sub
+
+                class CustomKlass
+                end class
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const mainSymbolTable = parser.references.functionExpressions[0].symbolTable;
+            expect(mainSymbolTable.getSymbol('someNum').type).to.be.instanceof(IntegerType);
+            expect(mainSymbolTable.getSymbol('someString').type).to.be.instanceof(StringType);
+            expect(mainSymbolTable.getSymbol('someObj').type).to.be.instanceof(ObjectType);
+            expect(mainSymbolTable.getSymbol('someCustom').type).to.be.instanceof(CustomType);
+        });
+
+        it('stores typed parameters in functions', () => {
+            const parser = parse(`
+                sub someFunc(param1 as string, param2 as integer)
+                temp = param2
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const someFuncSymbolTable = parser.references.functionExpressions[0].symbolTable;
+            expect(someFuncSymbolTable.getSymbol('param1').type).to.be.instanceof(StringType);
+            expect(someFuncSymbolTable.getSymbol('param2').type).to.be.instanceof(IntegerType);
+            expect(someFuncSymbolTable.getSymbol('temp').type).to.be.instanceof(IntegerType);
+        });
+
+        it('properly defers typing lazy types', () => {
+            const parser = parse(`
+                sub someFunc()
+                temp = foo()
+                end sub
+
+                function foo() as string
+                return "foo"
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const someFuncSymbolTable = parser.references.functionExpressions[0].symbolTable;
+            expect(someFuncSymbolTable.getSymbol('temp').type).to.be.instanceof(LazyType);
+            expect(someFuncSymbolTable.getSymbol('temp').type.toTypeString()).to.eq('string');
+        });
+
+        it('properly gets the type of symbols declared in parent functions', () => {
+            const parser = parse(`
+                sub main()
+                    count = 0
+                    addOne = sub()
+                        oldVal = count
+                        count = oldVal+1
+                    end sub
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const addOneSymbolTable = parser.references.functionExpressions[0].childFunctionExpressions[0].symbolTable;
+            expect(addOneSymbolTable.getSymbol('oldVal').type).to.be.instanceof(IntegerType);
         });
     });
 });

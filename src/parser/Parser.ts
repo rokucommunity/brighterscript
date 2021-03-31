@@ -86,13 +86,16 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isVariableExpression, isAALiteralExpression, isArrayLiteralExpression, isNewExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { BscType } from '../types/BscType';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { LazyType } from '../types/LazyType';
+import { SymbolTable } from '../SymbolTable';
+import { ObjectType } from '../types/ObjectType';
+import { CustomType } from '../types/CustomType';
 
 export class Parser {
     /**
@@ -113,6 +116,9 @@ export class Parser {
     public get statements() {
         return this.ast.statements;
     }
+
+
+    public symbolTable = new SymbolTable();
 
     /**
      * References for significant statements/expressions in the parser.
@@ -660,11 +666,19 @@ export class Parser {
                 asToken,
                 typeToken, //return type
                 this.currentFunctionExpression,
-                this.currentNamespaceName
+                this.currentNamespaceName,
+                this.symbolTable
             );
+
+
             //if there is a parent function, register this function with the parent
             if (this.currentFunctionExpression) {
                 this.currentFunctionExpression.childFunctionExpressions.push(func);
+            }
+
+            // add the function to the relevant symbol table
+            if (!isAnonymous) {
+                (this.currentFunctionExpression?.symbolTable ?? this.symbolTable).addSymbol(name, new FunctionType(func.returnType));
             }
 
             this._references.functionExpressions.push(func);
@@ -808,13 +822,13 @@ export class Parser {
             );
         }
         this._references.assignmentStatements.push(result);
+        const assignmentType = this.getBscTypeFromAssignment(result, this.currentFunctionExpression);
         this.currentFunctionLocalVars?.push({
             lowerName: name.text.toLowerCase(),
             nameToken: name,
-            //TODO
-            type: this.getBscTypeFromAssignment(result, this.currentFunctionExpression)
+            type: assignmentType
         });
-
+        (this.currentFunctionExpression?.symbolTable ?? this.symbolTable).addSymbol(name, assignmentType);
         return result;
     }
 
@@ -2632,24 +2646,32 @@ export class Parser {
                 //literal
             } else if (isLiteralExpression(assignment.value)) {
                 return assignment.value.type;
-
+                //Associative array literal
+            } else if (isAALiteralExpression(assignment.value)) {
+                return new ObjectType();
+                //Array literal
+            } else if (isArrayLiteralExpression(assignment.value)) {
+                return new ObjectType(); //TODO: It would be AWESOME to have an ArrayType!
                 //function call
+            } else if (isNewExpression(assignment.value)) {
+                return new CustomType(assignment.value.className.getName(this.options.mode));
+                //Array literal
             } else if (isCallExpression(assignment.value)) {
                 let calleeName = ((assignment.value.callee as any).name.text as string).toLowerCase();
                 if (calleeName) {
-                    //make a lazy type which will not compute its type until the file is done parsing
-                    return new LazyType(() => {
-                        //TODO this should really be scope-aware...
-                        const func = this.references.functionStatements.find(x => x.name.text.toLowerCase() === calleeName);
-                        return func?.func.returnType ?? new DynamicType();
+                    // if it already exists in symbol table, use that type
+                    // otherwise, make a lazy type which will not compute its type until the file is done parsing
+                    return (functionExpression.symbolTable.getSymbol(calleeName)?.type as FunctionType)?.returnType ?? new LazyType(() => {
+                        return (functionExpression.symbolTable.getSymbol(calleeName)?.type as FunctionType)?.returnType ?? new DynamicType();
                     });
                 }
             } else if (isVariableExpression(assignment.value)) {
-                //defer the type until first read, which will allow us to derive types from variables defined after this one (like from a loop perhaps)
-                return new LazyType(() => {
+                // if it already exists in symbol table, use that type
+                //otherwise defer the type until first read, which will allow us to derive types from variables defined after this one (like from a loop perhaps)
+                let variableName = (assignment.value).name.text.toLowerCase();
+                return functionExpression.symbolTable.getSymbol(variableName)?.type ?? new LazyType(() => {
                     let variableName = (assignment.value as VariableExpression).name.text.toLowerCase();
-                    const localVars = this.references.localVars.get(functionExpression);
-                    return localVars.find(x => x.lowerName === variableName)?.type ?? new DynamicType();
+                    return functionExpression.symbolTable.getSymbol(variableName)?.type ?? new DynamicType();
                 });
             }
         } catch (e) {
