@@ -14,6 +14,7 @@ import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
+import { SymbolTable } from '../SymbolTable';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -120,6 +121,8 @@ export class CallExpression extends Expression {
 }
 
 export class FunctionExpression extends Expression implements TypedefProvider {
+    readonly symbolTable: SymbolTable;
+
     constructor(
         readonly parameters: FunctionParameterExpression[],
         public body: Block,
@@ -133,7 +136,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
          * If this function is enclosed within another function, this will reference that parent function
          */
         readonly parentFunction?: FunctionExpression,
-        readonly namespaceName?: NamespacedVariableNameExpression
+        readonly namespaceName?: NamespacedVariableNameExpression,
+        readonly parentSymbolTable?: SymbolTable
     ) {
         super();
         if (this.returnTypeToken) {
@@ -142,6 +146,10 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             this.returnType = new VoidType();
         } else {
             this.returnType = new DynamicType();
+        }
+        this.symbolTable = new SymbolTable(parentSymbolTable);
+        for (let param of parameters) {
+            this.symbolTable.addSymbol(param.name.text, param.name.range, param.type);
         }
     }
 

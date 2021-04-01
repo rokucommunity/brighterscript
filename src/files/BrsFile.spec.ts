@@ -1429,8 +1429,7 @@ describe('BrsFile', () => {
             const localVars = file.parser.references.localVars.get(file.parser.references.functionExpressions[0]);
             expect(localVars).to.be.lengthOf(2);
             expect(localVars[1].lowerName).to.eql('namecopy');
-            expect(localVars[1].type).to.be.instanceof(LazyType);
-            expect((localVars[1].type as LazyType).type).to.be.instanceof(StringType);
+            expect(localVars[1].type).to.be.instanceof(StringType);
         });
 
         it('sets proper range for functions', () => {

@@ -86,13 +86,16 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isVariableExpression, isAALiteralExpression, isArrayLiteralExpression, isNewExpression, isUninitializedType, isFunctionType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { BscType } from '../types/BscType';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { LazyType } from '../types/LazyType';
+import { SymbolTable } from '../SymbolTable';
+import { ObjectType } from '../types/ObjectType';
+import { CustomType } from '../types/CustomType';
 
 export class Parser {
     /**
@@ -112,6 +115,13 @@ export class Parser {
 
     public get statements() {
         return this.ast.statements;
+    }
+
+
+    public symbolTable = new SymbolTable();
+
+    private get currentSymbolTable() {
+        return this.currentFunctionExpression?.symbolTable ?? this.symbolTable;
     }
 
     /**
@@ -660,11 +670,19 @@ export class Parser {
                 asToken,
                 typeToken, //return type
                 this.currentFunctionExpression,
-                this.currentNamespaceName
+                this.currentNamespaceName,
+                this.symbolTable
             );
+
+
             //if there is a parent function, register this function with the parent
             if (this.currentFunctionExpression) {
                 this.currentFunctionExpression.childFunctionExpressions.push(func);
+            }
+
+            // add the function to the relevant symbol table
+            if (!isAnonymous) {
+                this.currentSymbolTable.addSymbol(name.text, name.range, new FunctionType(func.returnType));
             }
 
             this._references.functionExpressions.push(func);
@@ -808,13 +826,13 @@ export class Parser {
             );
         }
         this._references.assignmentStatements.push(result);
+        const assignmentType = this.getBscTypeFromAssignment(result, this.currentFunctionExpression);
         this.currentFunctionLocalVars?.push({
             lowerName: name.text.toLowerCase(),
             nameToken: name,
-            //TODO
-            type: this.getBscTypeFromAssignment(result, this.currentFunctionExpression)
+            type: assignmentType
         });
-
+        this.currentSymbolTable.addSymbol(name.text, name.range, assignmentType);
         return result;
     }
 
@@ -1044,13 +1062,15 @@ export class Parser {
         }
 
         let endFor = this.advance();
+        //TODO infer type from `target`
+        const itemType = new DynamicType();
 
         this.currentFunctionLocalVars?.push({
             lowerName: name.text.toLowerCase(),
             nameToken: name,
-            //TODO infer type from `target`
-            type: new DynamicType()
+            type: itemType
         });
+        this.currentSymbolTable.addSymbol(name.text, name.range, itemType);
 
         return new ForEachStatement(
             forEach,
@@ -2632,31 +2652,71 @@ export class Parser {
                 //literal
             } else if (isLiteralExpression(assignment.value)) {
                 return assignment.value.type;
-
+                //Associative array literal
+            } else if (isAALiteralExpression(assignment.value)) {
+                return new ObjectType();
+                //Array literal
+            } else if (isArrayLiteralExpression(assignment.value)) {
+                return new ObjectType(); //TODO: It would be AWESOME to have an ArrayType!
                 //function call
+            } else if (isNewExpression(assignment.value)) {
+                return new CustomType(assignment.value.className.getName(this.options.mode));
+                //Function call
             } else if (isCallExpression(assignment.value)) {
-                let calleeName = ((assignment.value.callee as any).name.text as string).toLowerCase();
-                if (calleeName) {
-                    //make a lazy type which will not compute its type until the file is done parsing
-                    return new LazyType(() => {
-                        //TODO this should really be scope-aware...
-                        const func = this.references.functionStatements.find(x => x.name.text.toLowerCase() === calleeName);
-                        return func?.func.returnType ?? new DynamicType();
-                    });
-                }
+                return this.getAssignmentTypeFromCallExpression(assignment.value, functionExpression);
             } else if (isVariableExpression(assignment.value)) {
-                //defer the type until first read, which will allow us to derive types from variables defined after this one (like from a loop perhaps)
-                return new LazyType(() => {
-                    let variableName = (assignment.value as VariableExpression).name.text.toLowerCase();
-                    const localVars = this.references.localVars.get(functionExpression);
-                    return localVars.find(x => x.lowerName === variableName)?.type ?? new DynamicType();
-                });
+                return this.getAssignmentTypeFromVariableExpression(assignment.value, functionExpression);
             }
         } catch (e) {
             //do nothing. Just return dynamic
         }
         //fallback to dynamic
         return new DynamicType();
+    }
+
+
+    /**
+     * Gets the return type of a function, taking into account that the function may not have been declared yet
+     * If the callee already exists in symbol table, use that return type
+     * otherwise, make a lazy type which will not compute its type until the file is done parsing
+     */
+    private getAssignmentTypeFromCallExpression(call: CallExpression, functionExpression: FunctionExpression): BscType {
+        let calleeName = ((call.callee as any).name.text as string)?.toLowerCase();
+        if (calleeName) {
+            // i
+            const currentKnownType = functionExpression.symbolTable.getSymbolType(calleeName);
+            if (isFunctionType(currentKnownType)) {
+                return currentKnownType.returnType;
+            }
+            if (!isUninitializedType(currentKnownType)) {
+                // this will probably only happen if a functionName has been assigned to something else previously?
+                return currentKnownType;
+            }
+            return new LazyType(() => {
+                const futureType = functionExpression.symbolTable.getSymbolType(calleeName);
+                if (isFunctionType(futureType)) {
+                    return futureType.returnType;
+                }
+
+                return futureType;
+            });
+        }
+    }
+
+    /**
+     * Gets the type of a variable
+     * if it already exists in symbol table, use that type
+     * otherwise defer the type until first read, which will allow us to derive types from variables defined after this one (like from a loop perhaps)
+    */
+    private getAssignmentTypeFromVariableExpression(variable: VariableExpression, functionExpression: FunctionExpression): BscType {
+        let variableName = variable.name.text.toLowerCase();
+        const currentKnownType = functionExpression.symbolTable.getSymbolType(variableName);
+        if (!isUninitializedType(currentKnownType)) {
+            return currentKnownType;
+        }
+        return new LazyType(() => {
+            return functionExpression.symbolTable.getSymbolType(variableName);
+        });
     }
 
     /**

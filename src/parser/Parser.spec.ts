@@ -12,6 +12,9 @@ import { VoidType } from '../types/VoidType';
 import type { FunctionType } from '../types/FunctionType';
 import { StringType } from '../types/StringType';
 import { CustomType } from '../types/CustomType';
+import { IntegerType } from '../types/IntegerType';
+import { ObjectType } from '../types/ObjectType';
+import { LazyType } from '../types/LazyType';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -1123,6 +1126,101 @@ describe('parser', () => {
             const type = parser['getBscTypeFromAssignment'](func.body.statements[0] as AssignmentStatement, func) as FunctionType;
             expect(type.returnType).to.be.instanceof(CustomType);
         });
+    });
+
+    describe('symbolTable', () => {
+        it('stores the types', () => {
+            const parser = parse(`
+                sub main()
+                    someNum = 123
+                    someString = "hello world"
+                    someObj = {foo: "bar"}
+                    someCustom = new CustomKlass()
+                end sub
+
+                class CustomKlass
+                end class
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const mainSymbolTable = parser.references.functionExpressions[0].symbolTable;
+            expect(mainSymbolTable.getSymbolType('someNum')).to.be.instanceof(IntegerType);
+            expect(mainSymbolTable.getSymbolType('someString')).to.be.instanceof(StringType);
+            expect(mainSymbolTable.getSymbolType('someObj')).to.be.instanceof(ObjectType);
+            expect(mainSymbolTable.getSymbolType('someCustom')).to.be.instanceof(CustomType);
+        });
+
+        it('stores typed parameters in functions', () => {
+            const parser = parse(`
+                sub someFunc(param1 as string, param2 as integer)
+                temp = param2
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const someFuncSymbolTable = parser.references.functionExpressions[0].symbolTable;
+            expect(someFuncSymbolTable.getSymbolType('param1')).to.be.instanceof(StringType);
+            expect(someFuncSymbolTable.getSymbolType('param2')).to.be.instanceof(IntegerType);
+            expect(someFuncSymbolTable.getSymbolType('temp')).to.be.instanceof(IntegerType);
+        });
+
+        it('properly defers typing lazy types', () => {
+            const parser = parse(`
+                sub someFunc()
+                temp = foo()
+                end sub
+
+                function foo() as string
+                return "foo"
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const someFuncSymbolTable = parser.references.functionExpressions[0].symbolTable;
+            expect(someFuncSymbolTable.getSymbolType('temp')).to.be.instanceof(LazyType);
+            expect(someFuncSymbolTable.getSymbolType('temp').toTypeString()).to.eq('string');
+        });
+
+        it('does not know about symbols declared in parent functions', () => {
+            const parser = parse(`
+                sub main()
+                    count = 0
+                    addOne = sub()
+                        oldVal = count
+                    end sub
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const addOneSymbolTable = parser.references.functionExpressions[0].childFunctionExpressions[0].symbolTable;
+            expect(addOneSymbolTable.getSymbolType('oldVal').toString()).to.eq('uninitialized');
+        });
+
+        describe('loops', () => {
+            it('stores the loop variable in a for loop', () => {
+                const parser = parse(`
+                sub main()
+                    for i = 0 to 10 step 10
+                      print i
+                    end for
+                end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser.diagnostics);
+                const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
+                expect(currentSymbolTable.getSymbolType('i').toString()).to.eq('integer');
+            });
+
+
+            it('stores the loop variable in a for each loop', () => {
+                const parser = parse(`
+                sub doLoop(someData)
+                    for each datum in someData
+                      print datum
+                    end for
+                end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser.diagnostics);
+                const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
+                expect(currentSymbolTable.getSymbolType('datum').toString()).to.eq('dynamic');
+            });
+        });
+
     });
 });
 
