@@ -682,7 +682,7 @@ export class Parser {
 
             // add the function to the relevant symbol table
             if (!isAnonymous) {
-                this.currentSymbolTable.addSymbol(name, new FunctionType(func.returnType));
+                this.currentSymbolTable.addSymbol(name.text, name.range, new FunctionType(func.returnType));
             }
 
             this._references.functionExpressions.push(func);
@@ -832,7 +832,7 @@ export class Parser {
             nameToken: name,
             type: assignmentType
         });
-        this.currentSymbolTable.addSymbol(name, assignmentType);
+        this.currentSymbolTable.addSymbol(name.text, name.range, assignmentType);
         return result;
     }
 
@@ -1070,7 +1070,7 @@ export class Parser {
             nameToken: name,
             type: itemType
         });
-        this.currentSymbolTable.addSymbol(name, itemType);
+        this.currentSymbolTable.addSymbol(name.text, name.range, itemType);
 
         return new ForEachStatement(
             forEach,

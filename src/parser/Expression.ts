@@ -149,7 +149,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         this.symbolTable = new SymbolTable(parentSymbolTable);
         for (let param of parameters) {
-            this.symbolTable.addSymbol(param.name, param.type);
+            this.symbolTable.addSymbol(param.name.text, param.name.range, param.type);
         }
     }
 

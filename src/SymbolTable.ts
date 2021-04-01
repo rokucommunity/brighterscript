@@ -1,4 +1,4 @@
-import type { Identifier } from './lexer/Token';
+import type { Range } from './astUtils';
 import type { BscType } from './types/BscType';
 import { DynamicType } from './types/DynamicType';
 import { UninitializedType } from './types/UninitializedType';
@@ -42,13 +42,14 @@ export class SymbolTable {
      * @param name
      * @param  type
      */
-    addSymbol(name: Identifier, type: BscType) {
-        const key = name.text.toLowerCase();
+    addSymbol(name: string, range: Range, type: BscType) {
+        const key = name.toLowerCase();
         if (!this.symbols.has(key)) {
             this.symbols.set(key, []);
         }
         this.symbols.get(key).push({
             name: name,
+            range: range,
             type: type
         });
     }
@@ -88,7 +89,11 @@ export class SymbolTable {
     mergeSymbolTable(symbolTable: SymbolTable) {
         for (let [, value] of symbolTable.symbols) {
             for (const symbol of value) {
-                this.addSymbol(symbol.name, symbol.type);
+                this.addSymbol(
+                    symbol.name,
+                    symbol.range,
+                    symbol.type
+                );
             }
         }
     }
@@ -96,6 +101,7 @@ export class SymbolTable {
 
 
 export interface BscSymbol {
-    name: Identifier;
+    name: string;
+    range: Range;
     type: BscType;
 }
