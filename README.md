@@ -264,11 +264,17 @@ To encourage reducing code duplication, BrighterScript has built-in support for 
 2. if your program uses ropm and has installed `bslib` as a dependency, then the BrighterScript compiler will _not_ emit a copy of bslib at `pkg:/source/bslib.brs`, and will instead use the path to the version from ropm `pkg:/source/roku_modules/bslib/bslib.brs`.
 
 
-
 ### Installing bslib in your ropm-enabled project
-bslib is actually published to npm under the name [@rokucommunity/bslib](https://npmjs.com/package/@rokucommunity/bslib). However, to keep the bslib function names short, BrighterScript requires that you install @rokucommunity/bslib with the `bslib` alias. Here's the command to do that using the ropm CLI.
+bslib is published to npm under the name [@rokucommunity/bslib](https://npmjs.com/package/@rokucommunity/bslib). If you use NodeJS version 12 or above, we recommend installing `@rokucommunity/bslib` with the `bslib` alias, as it produces smaller transpiled code (i.e. emits `bslib_` prefix instead of `rokucommunity_bslib_`). Here's the command to install bslib under the `bslib` alias using the ropm CLI.
+
 ```bash
 ropm install bslib@npm:@rokucommunity/bslib
+```
+
+#### bslib support on NodeJS versions less than 12
+npm aliases only work in NodeJS version 12 and above. If you're using a NodeJS version less than 12, you will need to install @rokucommunity/bslib directly without the alias. BrighterScript recognizes this pattern as well, it's just not preferred (for the reasons mentioned previously). Here's the command for that:
+```bash
+ropm install @rokucommunity/bslib
 ```
 
 ## Language Server Protocol

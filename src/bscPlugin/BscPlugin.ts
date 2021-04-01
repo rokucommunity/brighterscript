@@ -1,13 +1,10 @@
-import { isXmlFile } from '../astUtils/reflection';
-import type { CompilerPlugin, OnFileGetCodeActionsEvent } from '../interfaces';
-import { XmlFileCodeActionsProcessor } from './codeActions/XmlFileCodeActionsProcessor';
+import type { OnGetCodeActionsEvent, CompilerPlugin } from '../interfaces';
+import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 
 export class BscPlugin implements CompilerPlugin {
     public name = 'BscPlugin';
 
-    public onFileGetCodeActions({ file, range, diagnostics, codeActions }: OnFileGetCodeActionsEvent) {
-        if (isXmlFile(file)) {
-            new XmlFileCodeActionsProcessor(file, range, diagnostics, codeActions).process();
-        }
+    public onGetCodeActions(event: OnGetCodeActionsEvent) {
+        new CodeActionsProcessor(event).process();
     }
 }

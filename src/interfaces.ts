@@ -13,7 +13,7 @@ import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 
 export interface BsDiagnostic extends Diagnostic {
-    file: File;
+    file: BscFile;
     /**
      * A generic data container where additional details of the diagnostic can be stored. These are stripped out before being sent to a languageclient, and not printed to the console.
      */
@@ -163,7 +163,7 @@ export interface CallableContainer {
 export type CallableContainerMap = Map<string, CallableContainer[]>;
 
 export interface CommentFlag {
-    file: BrsFile;
+    file: BscFile;
     /**
      * The location of the ignore comment.
      */
@@ -172,7 +172,7 @@ export interface CommentFlag {
      * The range that this flag applies to (i.e. the lines that should be suppressed/re-enabled)
      */
     affectedRange: Range;
-    codes: number[] | null;
+    codes: DiagnosticCode[] | null;
 }
 
 export type CompilerPluginFactory = () => CompilerPlugin;
@@ -191,15 +191,13 @@ export interface CompilerPlugin {
     afterProgramValidate?: PluginHandler<AfterProgramValidateEvent>;
     beforeProgramTranspile?: PluginHandler<BeforeProgramTranspileEvent>;
     afterProgramTranspile?: PluginHandler<AfterProgramTranspileEvent>;
-    beforeProgramGetCodeActions?: PluginHandler<BeforeProgramGetCodeActionsEvent>;
-    afterProgramGetCodeActions?: PluginHandler<AfterProgramGetCodeActionsEvent>;
+    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
     //scope events
     afterScopeCreate?: PluginHandler<AfterScopeCreateEvent>;
     beforeScopeDispose?: PluginHandler<BeforeScopeDisposeEvent>;
     afterScopeDispose?: PluginHandler<AfterScopeDisposeEvent>;
     beforeScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
     afterScopeValidate?: PluginHandler<AfterScopeValidateEvent>;
-    onScopeGetCodeActions?: PluginHandler<OnScopeGetCodeActionsEvent>;
     //file events
     beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
     afterFileParse?: PluginHandler<AfterFileParseEvent>;
@@ -209,7 +207,6 @@ export interface CompilerPlugin {
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
     beforeFileDispose?: PluginHandler<BeforeFileDisposeEvent>;
     afterFileDispose?: PluginHandler<AfterFileDisposeEvent>;
-    onFileGetCodeActions?: PluginHandler<OnFileGetCodeActionsEvent>;
 }
 export type PluginHandler<T> = (event: T) => void;
 
@@ -254,16 +251,12 @@ export interface AfterProgramTranspileEvent {
     program: Program;
     entries: TranspileEntry[];
 }
-export interface BeforeProgramGetCodeActionsEvent {
+export interface OnGetCodeActionsEvent {
     program: Program;
     file: BscFile;
     range: Range;
-    codeActions: CodeAction[];
-}
-export interface AfterProgramGetCodeActionsEvent {
-    program: Program;
-    file: BscFile;
-    range: Range;
+    scopes: Scope[];
+    diagnostics: BsDiagnostic[];
     codeActions: CodeAction[];
 }
 export interface AfterScopeCreateEvent {
@@ -361,3 +354,5 @@ export interface ExpressionInfo {
     varExpressions: Expression[];
     uniqueVarNames: string[];
 }
+
+export type DiagnosticCode = number | string;

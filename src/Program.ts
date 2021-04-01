@@ -26,7 +26,8 @@ import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 const startOfSourcePkgPath = `source${path.sep}`;
-const bslibRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
+const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
+const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
 
 export interface SignatureInfoObj {
     index: number;
@@ -114,13 +115,28 @@ export class Program {
      * The path to bslib.brs (the BrightScript runtime for certain BrighterScript features)
      */
     public get bslibPkgPath() {
-        //if there's a version of bslib from roku_modules loaded into the program, use that
-        if (this.getFileByPkgPath(bslibRokuModulesPkgPath)) {
-            return bslibRokuModulesPkgPath;
+        //if there's an aliased (preferred) version of bslib from roku_modules loaded into the program, use that
+        if (this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath)) {
+            return bslibAliasedRokuModulesPkgPath;
+
+            //if there's a non-aliased version of bslib from roku_modules, use that
+        } else if (this.getFileByPkgPath(bslibNonAliasedRokuModulesPkgPath)) {
+            return bslibNonAliasedRokuModulesPkgPath;
+
+            //default to the embedded version
         } else {
             return `source${path.sep}bslib.brs`;
         }
     }
+
+    public get bslibPrefix() {
+        if (this.bslibPkgPath === bslibNonAliasedRokuModulesPkgPath) {
+            return 'rokucommunity_bslib';
+        } else {
+            return 'bslib';
+        }
+    }
+
 
     /**
      * A map of every file loaded into this program, indexed by its original file location
@@ -680,7 +696,7 @@ export class Program {
         let funcNames = new Set<string>();
         let currentScope = scope;
         while (isXmlScope(currentScope)) {
-            for (let name of currentScope.xmlFile.ast.component.api.functions.map((f) => f.name)) {
+            for (let name of currentScope.xmlFile.ast.component.api?.functions.map((f) => f.name) ?? []) {
                 if (!filterName || name === filterName) {
                     funcNames.add(name);
                 }
@@ -809,31 +825,22 @@ export class Program {
         const codeActions = [] as CodeAction[];
         const file = this.getFile(pathAbsolute);
         if (file) {
+            const diagnostics = this
+                //get all current diagnostics (filtered by diagnostic filters)
+                .getDiagnostics()
+                //only keep diagnostics related to this file
+                .filter(x => x.file === file)
+                //only keep diagnostics that touch this range
+                .filter(x => util.rangesIntersect(x.range, range));
 
-            this.plugins.emit('beforeProgramGetCodeActions', {
+            const scopes = this.getScopesForFile(file);
+
+            this.plugins.emit('onGetCodeActions', {
                 program: this,
                 file: file,
                 range: range,
-                codeActions: codeActions
-            });
-
-            //get code actions from the file
-            file.getCodeActions(range, codeActions);
-
-            //get code actions from every scope this file is a member of
-            for (let key in this.scopes) {
-                let scope = this.scopes[key];
-
-                if (scope.hasFile(file)) {
-                    //get code actions from each scope this file is a member of
-                    scope.getCodeActions(file, range, codeActions);
-                }
-            }
-
-            this.plugins.emit('afterProgramGetCodeActions', {
-                program: this,
-                file: file,
-                range: range,
+                diagnostics: diagnostics,
+                scopes: scopes,
                 codeActions: codeActions
             });
         }
@@ -1218,7 +1225,7 @@ export class Program {
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
-        if (!this.getFileByPkgPath(bslibRokuModulesPkgPath) && !this.getFileByPkgPath(s`source/bslib.brs`)) {
+        if (!this.getFileByPkgPath(bslibAliasedRokuModulesPkgPath) && !this.getFileByPkgPath(s`source/bslib.brs`)) {
             promises.push(util.copyBslibToStaging(stagingFolderPath));
         }
         await Promise.all(promises);
@@ -1227,6 +1234,44 @@ export class Program {
             program: this,
             entries: entries
         });
+    }
+
+    /**
+     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     */
+    public findFilesForFunction(functionName: string) {
+        const files = [] as BscFile[];
+        const lowerFunctionName = functionName.toLowerCase();
+        //find every file with this function defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                //TODO handle namespace-relative function calls
+                //if the file has a function with this name
+                if (file.parser.references.functionStatementLookup.get(lowerFunctionName) !== undefined) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
+    }
+
+    /**
+     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     */
+    public findFilesForClass(className: string) {
+        const files = [] as BscFile[];
+        const lowerClassName = className.toLowerCase();
+        //find every file with this class defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                //TODO handle namespace-relative classes
+                //if the file has a function with this name
+                if (file.parser.references.classStatementLookup.get(lowerClassName) !== undefined) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
     }
 
     /**

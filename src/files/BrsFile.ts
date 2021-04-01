@@ -1,11 +1,11 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Range, Position, CodeAction } from 'vscode-languageserver';
-import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation } from 'vscode-languageserver';
+import type { CompletionItem, Hover, Position } from 'vscode-languageserver';
+import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import type { Scope } from '../Scope';
-import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
+import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import type { Token } from '../lexer';
@@ -18,7 +18,7 @@ import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
 import { standardizePath as s, util } from '../util';
-import { TranspileState } from '../parser/TranspileState';
+import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
@@ -26,6 +26,7 @@ import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentSt
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
+import { CommentFlagProcessor } from '../CommentFlagProcessor';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -236,7 +237,7 @@ export class BrsFile {
                 });
             });
 
-            this.getIgnores(lexer.tokens);
+            this.getCommentFlags(lexer.tokens);
 
             let preprocessor = new Preprocessor();
 
@@ -293,9 +294,7 @@ export class BrsFile {
         }
     }
 
-    public validate() {
-
-    }
+    public validate() { }
 
     public findAndValidateImportAndImportStatements() {
         let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement>;
@@ -396,77 +395,17 @@ export class BrsFile {
      * Find all comment flags in the source code. These enable or disable diagnostic messages.
      * @param lines - the lines of the program
      */
-    public getIgnores(tokens: Token[]) {
-        //TODO use the comment statements found in the AST for this instead of text search
-        let allCodesExcept1014 = diagnosticCodes.filter((x) => x !== DiagnosticMessages.unknownDiagnosticCode(0).code);
+    public getCommentFlags(tokens: Token[]) {
+        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
+
         this.commentFlags = [];
         for (let token of tokens) {
-            let tokenized = util.tokenizeBsDisableComment(token);
-            if (!tokenized) {
-                continue;
-            }
-
-            let affectedRange: Range;
-            if (tokenized.disableType === 'line') {
-                affectedRange = util.createRange(token.range.start.line, 0, token.range.start.line, token.range.start.character);
-            } else if (tokenized.disableType === 'next-line') {
-                affectedRange = util.createRange(token.range.start.line + 1, 0, token.range.start.line + 1, Number.MAX_SAFE_INTEGER);
-            }
-
-            let commentFlag: CommentFlag;
-
-            //statement to disable EVERYTHING
-            if (tokenized.codes.length === 0) {
-                commentFlag = {
-                    file: this,
-                    //null means all codes
-                    codes: null,
-                    range: token.range,
-                    affectedRange: affectedRange
-                };
-
-                //disable specific diagnostic codes
-            } else {
-                let codes = [] as number[];
-                for (let codeToken of tokenized.codes) {
-                    let codeInt = parseInt(codeToken.code);
-                    if (isNaN(codeInt)) {
-                        //don't validate non-numeric codes
-                        continue;
-                    }
-                    //add a warning for unknown codes
-                    if (diagnosticCodes.includes(codeInt)) {
-                        codes.push(codeInt);
-                    } else {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.unknownDiagnosticCode(codeInt),
-                            file: this,
-                            range: codeToken.range
-                        });
-                    }
-                }
-                if (codes.length > 0) {
-                    commentFlag = {
-                        file: this,
-                        codes: codes,
-                        range: token.range,
-                        affectedRange: affectedRange
-                    };
-                }
-            }
-
-            if (commentFlag) {
-                this.commentFlags.push(commentFlag);
-
-                //add an ignore for everything in this comment except for Unknown_diagnostic_code_1014
-                this.commentFlags.push({
-                    affectedRange: commentFlag.range,
-                    range: commentFlag.range,
-                    codes: allCodesExcept1014,
-                    file: this
-                });
+            if (token.kind === TokenKind.Comment) {
+                processor.tryAdd(token.text, token.range);
             }
         }
+        this.commentFlags.push(...processor.commentFlags);
+        this.diagnostics.push(...processor.diagnostics);
     }
 
     public scopesByFunc = new Map<FunctionExpression, FunctionScope>();
@@ -578,7 +517,7 @@ export class BrsFile {
 
                 //function call
             } else if (isCallExpression(assignment.value)) {
-                let calleeName = (assignment.value.callee as any).name.text;
+                let calleeName = (assignment.value.callee as any)?.name?.text;
                 if (calleeName) {
                     let func = this.getCallableByName(calleeName);
                     if (func) {
@@ -586,7 +525,7 @@ export class BrsFile {
                     }
                 }
             } else if (isVariableExpression(assignment.value)) {
-                let variableName = assignment.value.name.text;
+                let variableName = assignment.value?.name?.text;
                 let variable = scope.getVariableByName(variableName);
                 return variable.type;
             }
@@ -773,8 +712,37 @@ export class BrsFile {
 
         //if cursor is within a comment, disable completions
         let currentToken = this.getTokenAt(position);
-        if (currentToken && currentToken.kind === TokenKind.Comment) {
+        const tokenKind = currentToken?.kind;
+        if (tokenKind === TokenKind.Comment) {
             return [];
+        } else if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
+            const match = /^("?)(pkg|libpkg):/.exec(currentToken.text);
+            if (match) {
+                const [, openingQuote, fileProtocol] = match;
+                //include every absolute file path from this scope
+                for (const file of scope.getAllFiles()) {
+                    const pkgPath = `${fileProtocol}:/${file.pkgPath.replace(/\\/g, '/')}`;
+                    result.push({
+                        label: pkgPath,
+                        textEdit: TextEdit.replace(
+                            util.createRange(
+                                currentToken.range.start.line,
+                                //+1 to step past the opening quote
+                                currentToken.range.start.character + (openingQuote ? 1 : 0),
+                                currentToken.range.end.line,
+                                //-1 to exclude the closing quotemark (or the end character if there is no closing quotemark)
+                                currentToken.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
+                            ),
+                            pkgPath
+                        ),
+                        kind: CompletionItemKind.File
+                    });
+                }
+                return result;
+            } else {
+                //do nothing. we don't want to show completions inside of strings...
+                return [];
+            }
         }
 
         let namespaceCompletions = this.getNamespaceCompletions(currentToken, this.parseMode, scope);
@@ -911,7 +879,7 @@ export class BrsFile {
         if (previousToken?.kind === TokenKind.Dot) {
             previousToken = this.getPreviousToken(previousToken);
         }
-        if (previousToken.kind === TokenKind.Identifier && previousToken.text.toLowerCase() === 'm' && isClassMethodStatement(functionScope.func.functionStatement)) {
+        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && isClassMethodStatement(functionScope.func.functionStatement)) {
             return { item: this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, position)), file: this };
         }
         return undefined;
@@ -1157,12 +1125,14 @@ export class BrsFile {
     public calleeIsKnownNamespaceFunction(callee: Expression, namespaceName: string) {
         //if we have a variable and a namespace
         if (isVariableExpression(callee) && namespaceName) {
-            let lowerCalleeName = callee.name.text.toLowerCase();
-            let scopes = this.program.getScopesForFile(this);
-            for (let scope of scopes) {
-                let namespace = scope.namespaceLookup[namespaceName.toLowerCase()];
-                if (namespace.functionStatements[lowerCalleeName]) {
-                    return true;
+            let lowerCalleeName = callee?.name?.text?.toLowerCase();
+            if (lowerCalleeName) {
+                let scopes = this.program.getScopesForFile(this);
+                for (let scope of scopes) {
+                    let namespace = scope.namespaceLookup[namespaceName.toLowerCase()];
+                    if (namespace.functionStatements[lowerCalleeName]) {
+                        return true;
+                    }
                 }
             }
         }
@@ -1510,17 +1480,6 @@ export class BrsFile {
         }
     }
 
-    public getCodeActions(range: Range, codeActions: CodeAction[]) {
-        const lineDiagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
-        this.program.plugins.emit('onFileGetCodeActions', {
-            program: this.program,
-            file: this,
-            range: range,
-            diagnostics: lineDiagnostics,
-            codeActions: codeActions
-        });
-    }
-
     public getSignatureHelpForNamespaceMethods(callableName: string, dottedGetText: string, scope: Scope): { key: string; signature: SignatureInformation }[] {
         if (!dottedGetText) {
             return [];
@@ -1681,24 +1640,24 @@ export class BrsFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new TranspileState(this);
+        const state = new BrsTranspileState(this);
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
-            transpileResult = new SourceNode(null, null, state.pathAbsolute, this.ast.transpile(state));
+            transpileResult = new SourceNode(null, null, state.srcPath, this.ast.transpile(state));
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
-            transpileResult = util.simpleMap(state.pathAbsolute, this.fileContents);
+            transpileResult = util.simpleMap(state.srcPath, this.fileContents);
         } else {
             //simple SourceNode wrapping the entire file to simplify the logic below
-            transpileResult = new SourceNode(null, null, state.pathAbsolute, this.fileContents);
+            transpileResult = new SourceNode(null, null, state.srcPath, this.fileContents);
         }
 
         if (this.program.options.sourceMap) {
             return new SourceNode(null, null, null, [
                 transpileResult,
                 //add the sourcemap reference comment
-                `'//# sourceMappingURL=./${path.basename(state.pathAbsolute)}.map`
+                `'//# sourceMappingURL=./${path.basename(state.srcPath)}.map`
             ]).toStringWithSourceMap();
         } else {
             return {
@@ -1709,7 +1668,7 @@ export class BrsFile {
     }
 
     public getTypedef() {
-        const state = new TranspileState(this);
+        const state = new BrsTranspileState(this);
         const typedef = this.ast.getTypedef(state);
         const programNode = new SourceNode(null, null, this.pathAbsolute, typedef);
         return programNode.toString();

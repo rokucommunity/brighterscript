@@ -6,8 +6,8 @@ import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Lexer } from '../../../lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { AssignmentStatement } from '../../Statement';
-import { getTestTranspile } from '../../../files/BrsFile.spec';
 import { Program } from '../../../Program';
+import { getTestTranspile } from '../../../testHelpers.spec';
 
 describe('TemplateStringExpression', () => {
     describe('parser template String', () => {
@@ -72,6 +72,14 @@ describe('TemplateStringExpression', () => {
 
         afterEach(() => {
             program.dispose();
+        });
+
+        it('uses the proper prefix when aliased package is installed', () => {
+            program.addOrReplaceFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
+            testTranspile(
+                'a = `${one},${two}`',
+                `a = rokucommunity_bslib_toString(one) + "," + rokucommunity_bslib_toString(two)`
+            );
         });
 
         it('properly transpiles simple template string with no leading text', () => {
@@ -181,6 +189,13 @@ describe('TemplateStringExpression', () => {
                     ]))
                 ]
             `);
+        });
+
+        it('properly transpiles two template strings side-by-side', () => {
+            testTranspile(
+                'a = `${"hello"}${"world"}`',
+                'a = "hello" + "world"'
+            );
         });
 
         it('skips calling toString on strings', () => {

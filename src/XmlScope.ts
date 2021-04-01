@@ -1,4 +1,4 @@
-import type { CodeAction, Location, Position, Range } from 'vscode-languageserver';
+import type { Location, Position } from 'vscode-languageserver';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
@@ -150,18 +150,6 @@ export class XmlScope extends Scope {
                 }
             }
             return result;
-        });
-    }
-
-    public getCodeActions(file: BscFile, range: Range, codeActions: CodeAction[]) {
-        const rangeDiagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
-        this.program.plugins.emit('onScopeGetCodeActions', {
-            program: this.program,
-            scope: this,
-            file: file,
-            range: range,
-            diagnostics: rangeDiagnostics,
-            codeActions: codeActions
         });
     }
 

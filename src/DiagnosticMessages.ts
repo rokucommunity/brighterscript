@@ -1,7 +1,6 @@
-/* eslint-disable camelcase */
-
 import type { Position } from 'vscode-languageserver';
 import { DiagnosticSeverity } from 'vscode-languageserver';
+import type { BsDiagnostic } from './interfaces';
 import type { TokenKind } from './lexer/TokenKind';
 
 /**
@@ -161,7 +160,10 @@ export let DiagnosticMessages = {
     classCouldNotBeFound: (className: string, scopeName: string) => ({
         message: `Class '${className}' could not be found when this file is included in scope '${scopeName}'`,
         code: 1029,
-        severity: DiagnosticSeverity.Error
+        severity: DiagnosticSeverity.Error,
+        data: {
+            className: className
+        }
     }),
     expectedClassFieldIdentifier: () => ({
         message: `Expected identifier in class body`,
@@ -644,4 +646,7 @@ export interface DiagnosticInfo {
  * The second type parameter is optional, but allows plugins to pass in their own
  * DiagnosticMessages-like object in order to get the same type support
  */
-export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (...args: any) => any> = typeof DiagnosticMessages> = ReturnType<D[K]>;
+export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (...args: any) => any> = typeof DiagnosticMessages> =
+    ReturnType<D[K]> &
+    //include the missing properties from BsDiagnostic
+    Pick<BsDiagnostic, 'range' | 'file' | 'relatedInformation' | 'tags'>;
