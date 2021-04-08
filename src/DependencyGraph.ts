@@ -11,8 +11,6 @@ export class DependencyGraph {
 
     /**
      * An internal event emitter for when keys have changed.
-     * the `notified` property of the event object is a list of every key that has already been notified,
-     * and is used to prevent infinite notification loops
      */
     private onchangeEmitter = new EventEmitter<string, DependencyChangedEvent>();
 
@@ -110,7 +108,13 @@ export class DependencyGraph {
 }
 
 export interface DependencyChangedEvent {
+    /**
+     * The key that was the initiator of this event. Child keys will emit this same event object, but this key will remain the same
+     */
     sourceKey: string;
+    /**
+     * A set of keys that have already been notified of this change. Used to prevent circular reference notification cycles
+     */
     notifiedKeys: Set<string>;
 }
 
