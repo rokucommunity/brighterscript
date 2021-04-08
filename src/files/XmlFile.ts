@@ -489,7 +489,7 @@ export class XmlFile {
 
         if (this.needsTranspiled || extraImportScripts.length > 0) {
             //temporarily add the missing imports as script tags
-            const originalScripts = this.ast.component.scripts;
+            const originalScripts = this.ast.component?.scripts ?? [];
             this.ast.component.scripts = [
                 ...originalScripts,
                 ...extraImportScripts
