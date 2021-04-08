@@ -16,6 +16,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
+import type { DependencyChangedEvent } from './DependencyGraph';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -32,8 +33,10 @@ export class Scope {
 
         //anytime a dependency for this scope changes, we need to be revalidated
         this.programHandles.push(
-            this.program.dependencyGraph.onchange(this.dependencyGraphKey, this.onDependenciesChanged.bind(this), true)
+            this.program.dependencyGraph.onchange(this.dependencyGraphKey, this.onDependenciesChanged.bind(this))
         );
+        //invalidate immediately since this is a new scope
+        this.invalidate();
     }
 
     /**
@@ -119,8 +122,8 @@ export class Scope {
      */
     protected diagnostics = [] as BsDiagnostic[];
 
-    protected onDependenciesChanged(key: string) {
-        this.logDebug('invalidated because dependency graph said [', key, '] changed');
+    protected onDependenciesChanged(event: DependencyChangedEvent) {
+        this.logDebug('invalidated because dependency graph said [', event.sourceKey, '] changed');
         this.invalidate();
     }
 
