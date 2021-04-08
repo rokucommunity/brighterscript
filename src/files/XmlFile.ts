@@ -13,9 +13,9 @@ import { Cache } from '../Cache';
 import type { DependencyGraph } from '../DependencyGraph';
 import type { SGAst, SGToken } from '../parser/SGTypes';
 import { SGScript } from '../parser/SGTypes';
-import { SGTranspileState } from '../parser/SGTranspileState';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
+import { TranspileState } from '../parser/TranspileState';
 
 export class XmlFile {
     constructor(
@@ -477,7 +477,7 @@ export class XmlFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new SGTranspileState(this);
+        const state = new TranspileState(this.pathAbsolute, this.program.options);
 
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             const script = new SGScript();
@@ -489,31 +489,31 @@ export class XmlFile {
 
         if (this.needsTranspiled || extraImportScripts.length > 0) {
             //temporarily add the missing imports as script tags
-            const originalScripts = this.ast.component.scripts;
+            const originalScripts = this.ast.component?.scripts ?? [];
             this.ast.component.scripts = [
                 ...originalScripts,
                 ...extraImportScripts
             ];
 
-            transpileResult = new SourceNode(null, null, state.source, this.parser.ast.transpile(state));
+            transpileResult = new SourceNode(null, null, state.srcPath, this.parser.ast.transpile(state));
 
             //restore the original scripts array
             this.ast.component.scripts = originalScripts;
 
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
-            transpileResult = util.simpleMap(state.source, this.fileContents);
+            transpileResult = util.simpleMap(state.srcPath, this.fileContents);
         } else {
             //simple SourceNode wrapping the entire file to simplify the logic below
-            transpileResult = new SourceNode(null, null, state.source, this.fileContents);
+            transpileResult = new SourceNode(null, null, state.srcPath, this.fileContents);
         }
 
         //add the source map comment if configured to emit sourcemaps
         if (this.program.options.sourceMap) {
-            return new SourceNode(null, null, state.source, [
+            return new SourceNode(null, null, state.srcPath, [
                 transpileResult,
                 //add the sourcemap reference comment
-                `<!--//# sourceMappingURL=./${path.basename(state.source)}.map -->`
+                `<!--//# sourceMappingURL=./${path.basename(state.srcPath)}.map -->`
             ]).toStringWithSourceMap();
         } else {
             return {
