@@ -142,10 +142,15 @@ describe('DependencyGraph', () => {
             expect(mock.callCount).to.equal(1);
         });
 
-        it('emits immediately when configured to do so', () => {
-            let mock = sinon.mock();
-            graph.onchange('a', mock, true);
-            expect(mock.callCount).to.equal(1);
+        it('does not cause infinite loop on circular dependency', () => {
+            //direct
+            graph.addOrReplace('a', ['b']);
+            graph.addOrReplace('b', ['a']);
+
+            //indirect
+            graph.addOrReplace('c', ['d']);
+            graph.addOrReplace('d', ['e']);
+            graph.addOrReplace('e', ['c']);
         });
     });
 
