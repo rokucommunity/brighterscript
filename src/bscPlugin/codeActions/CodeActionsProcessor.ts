@@ -53,15 +53,16 @@ export class CodeActionsProcessor {
         const functionNameToken = file.getNextToken(openParenToken);
 
         const comma = file.getNextToken(functionNameToken, TokenKind.Comma);
+        const invalidLiteral = file.getNextToken(comma, TokenKind.Invalid);
         let endPosition: Position;
+        const endToken = invalidLiteral ?? comma;
         //consume the comma and any space up until the next token
-        if (comma) {
-            const tokenAfterComma = file.getNextToken(comma);
-            endPosition = tokenAfterComma?.range.start ?? comma?.range.end;
+        if (endToken) {
+            const tokenAfter = file.getNextToken(endToken);
+            endPosition = tokenAfter?.range.start ?? comma?.range.end;
         } else {
             endPosition = functionNameToken.range.end;
         }
-
 
         //if we have the necessary tokens
         if (openParenToken?.kind === TokenKind.LeftParen && functionNameToken?.kind === TokenKind.StringLiteral) {

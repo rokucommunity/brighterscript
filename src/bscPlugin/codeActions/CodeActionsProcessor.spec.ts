@@ -226,12 +226,10 @@ describe('CodeActionsProcessor', () => {
             ]);
         });
 
-        it('suggests callfunc operator refactor', () => {
-            //define the function in two files
+        it('suggests callfunc operator refactor (parameterless)', () => {
             const file = program.addOrReplaceFile('components/main.bs', `
                 sub doSomething()
                     someComponent.callfunc("doThing")
-                    someComponent.callfunc("doOtherThing", 1, 2)
                 end sub
             `);
             program.validate();
@@ -252,11 +250,20 @@ describe('CodeActionsProcessor', () => {
                     range: util.createRange(2, 33, 2, 52)
                 }]
             }]);
+        });
+
+        it('suggests callfunc operator refactor (parameters)', () => {
+            const file = program.addOrReplaceFile('components/main.bs', `
+                sub doSomething()
+                    someComponent.callfunc("doOtherThing", someIdentifier, 2)
+                end sub
+            `);
+            program.validate();
 
             expectCodeActions(() => {
                 program.getCodeActions(
                     file.pathAbsolute,
-                    util.createRange(3, 39, 3, 39)
+                    util.createRange(2, 39, 2, 39)
                 );
             }, [{
                 title: `Refactor to use callfunc operator`,
@@ -266,7 +273,33 @@ describe('CodeActionsProcessor', () => {
                     filePath: file.pathAbsolute,
                     newText: '@.doOtherThing(',
                     type: 'replace',
-                    range: util.createRange(3, 33, 3, 59)
+                    range: util.createRange(2, 33, 2, 59)
+                }]
+            }]);
+        });
+
+        it('suggests callfunc operator refactor (remove "invalid" first param)', () => {
+            const file = program.addOrReplaceFile('components/main.bs', `
+                sub doSomething()
+                    someComponent.callfunc("doYetAnotherThing", invalid)
+                end sub
+            `);
+            program.validate();
+
+            expectCodeActions(() => {
+                program.getCodeActions(
+                    file.pathAbsolute,
+                    util.createRange(2, 39, 2, 39)
+                );
+            }, [{
+                title: `Refactor to use callfunc operator`,
+                isPreferred: false,
+                kind: 'quickfix',
+                changes: [{
+                    filePath: file.pathAbsolute,
+                    newText: '@.doYetAnotherThing(',
+                    type: 'replace',
+                    range: util.createRange(2, 33, 2, 71)
                 }]
             }]);
         });
