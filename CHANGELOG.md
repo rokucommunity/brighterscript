@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.37.2] - 2021-04-08
+### Fixed
+ - erraneous syntax issue when concatenating a template string and a regular string. ([#383](https://github.com/rokucommunity/brighterscript/pull/383))
+ - prevent circular import causing stack overflow crash. ([#381](https://github.com/rokucommunity/brighterscript/pull/381))
+
+
+
 ## [0.37.1] - 2021-03-30
 ### Fixed
  - bug when transpiling print statements that wouldn't retain the existing separators (semicolon, comma, no separator) which all have unique uses ([#373](https://github.com/rokucommunity/brighterscript/pull/373))
@@ -1068,3 +1075,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.36.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.35.0...v0.36.0
 [0.37.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.36.0...v0.37.0
 [0.37.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.0...v0.37.1
+[0.37.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.1...v0.37.2
