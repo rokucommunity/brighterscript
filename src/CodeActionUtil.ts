@@ -20,7 +20,11 @@ export class CodeActionUtil {
                     TextEdit.insert(change.position, change.newText)
                 );
             } else if (change.type === 'replace') {
-                TextEdit.replace(change.range, change.newText);
+                edit.changes[uri].push(
+                    TextEdit.replace(change.range, change.newText)
+                );
+            } else if (change.type === 'delete') {
+                TextEdit.del(change.range);
             }
         }
         return CodeAction.create(obj.title, edit);
@@ -32,7 +36,7 @@ export interface CodeActionShorthand {
     diagnostics?: Diagnostic[];
     kind?: CodeActionKind;
     isPreferred?: boolean;
-    changes: Array<InsertChange | ReplaceChange>;
+    changes: Array<InsertChange | ReplaceChange | DeleteChange>;
 }
 
 export interface InsertChange {
@@ -46,6 +50,12 @@ export interface ReplaceChange {
     filePath: string;
     newText: string;
     type: 'replace';
+    range: Range;
+}
+
+export interface DeleteChange {
+    filePath: string;
+    type: 'delete';
     range: Range;
 }
 
