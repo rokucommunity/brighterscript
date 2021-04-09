@@ -624,6 +624,22 @@ describe('XmlFile', () => {
     });
 
     describe('transpile', () => {
+        it(`honors the 'needsTranspiled' flag when set in 'afterFileParse'`, () => {
+            program.plugins.add({
+                name: 'test',
+                afterFileParse: (file) => {
+                    //enable transpile for every file
+                    file.needsTranspiled = true;
+                }
+            });
+            const file = program.addOrReplaceFile('components/file.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                </component>
+            `);
+            expect(file.needsTranspiled).to.be.true;
+        });
+
         it('includes bslib script', () => {
             testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
