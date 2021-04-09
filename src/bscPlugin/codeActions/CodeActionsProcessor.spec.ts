@@ -225,6 +225,51 @@ describe('CodeActionsProcessor', () => {
                 `import "pkg:/source/Animals.bs"`
             ]);
         });
+
+        it('suggests callfunc operator refactor', () => {
+            //define the function in two files
+            const file = program.addOrReplaceFile('components/main.bs', `
+                sub doSomething()
+                    someComponent.callfunc("doThing")
+                    someComponent.callfunc("doOtherThing", 1, 2)
+                end sub
+            `);
+            program.validate();
+
+            expectCodeActions(() => {
+                program.getCodeActions(
+                    file.pathAbsolute,
+                    util.createRange(2, 39, 2, 39)
+                );
+            }, [{
+                title: `Refactor to use callfunc operator`,
+                isPreferred: false,
+                kind: 'quickfix',
+                changes: [{
+                    filePath: file.pathAbsolute,
+                    newText: '@.doThing(',
+                    type: 'replace',
+                    range: util.createRange(2, 33, 2, 52)
+                }]
+            }]);
+
+            expectCodeActions(() => {
+                program.getCodeActions(
+                    file.pathAbsolute,
+                    util.createRange(3, 39, 3, 39)
+                );
+            }, [{
+                title: `Refactor to use callfunc operator`,
+                isPreferred: false,
+                kind: 'quickfix',
+                changes: [{
+                    filePath: file.pathAbsolute,
+                    newText: '@.doOtherThing(',
+                    type: 'replace',
+                    range: util.createRange(3, 33, 3, 59)
+                }]
+            }]);
+        });
     });
 
 });
