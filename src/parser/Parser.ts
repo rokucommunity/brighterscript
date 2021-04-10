@@ -124,7 +124,7 @@ export class Parser {
         return this._references;
     }
 
-    private _references: References = createReferences();
+    private _references = new References();
 
     /**
      * Invalidates (clears) the references collection. This should be called anytime the AST has been manipulated.
@@ -1948,13 +1948,6 @@ export class Parser {
             }
         }
 
-        //template string
-        if (this.check(TokenKind.BackTick)) {
-            return this.templateString(false);
-            //tagged template string (currently we do not support spaces between the identifier and the backtick
-        } else if (this.checkAny(TokenKind.Identifier, ...AllowedLocalIdentifiers) && this.checkNext(TokenKind.BackTick)) {
-            return this.templateString(true);
-        }
         let expr = this.boolean();
 
         if (this.check(TokenKind.Question)) {
@@ -2234,6 +2227,12 @@ export class Parser {
             //capture source literals (LINE_NUM if brightscript, or a bunch of them if brighterscript)
             case this.matchAny(TokenKind.LineNumLiteral, ...(this.options.mode === ParseMode.BrightScript ? [] : BrighterScriptSourceLiterals)):
                 return new SourceLiteralExpression(this.previous());
+            //template string
+            case this.check(TokenKind.BackTick):
+                return this.templateString(false);
+            //tagged template string (currently we do not support spaces between the identifier and the backtick)
+            case this.checkAny(TokenKind.Identifier, ...AllowedLocalIdentifiers) && this.checkNext(TokenKind.BackTick):
+                return this.templateString(true);
             case this.matchAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
                 return new VariableExpression(this.previous() as Identifier, this.currentNamespaceName);
             case this.match(TokenKind.LeftParen):
@@ -2571,7 +2570,7 @@ export class Parser {
      * This does that walk.
      */
     private findReferences() {
-        this._references = createReferences();
+        this._references = new References();
 
         this.ast.walk(createVisitor({
             AssignmentStatement: s => {
@@ -2634,30 +2633,41 @@ export interface ParseOptions {
     logger?: Logger;
 }
 
-function createReferences(): References {
-    return {
-        assignmentStatements: [],
-        classStatements: [],
-        functionExpressions: [],
-        functionStatements: [],
-        importStatements: [],
-        libraryStatements: [],
-        namespaceStatements: [],
-        newExpressions: [],
-        propertyHints: {}
-    };
-}
+export class References {
+    public assignmentStatements = [] as AssignmentStatement[];
+    public classStatements = [] as ClassStatement[];
 
-export interface References {
-    assignmentStatements: AssignmentStatement[];
-    classStatements: ClassStatement[];
-    functionExpressions: FunctionExpression[];
-    functionStatements: FunctionStatement[];
-    importStatements: ImportStatement[];
-    libraryStatements: LibraryStatement[];
-    namespaceStatements: NamespaceStatement[];
-    newExpressions: NewExpression[];
-    propertyHints: Record<string, string>;
+    public get classStatementLookup() {
+        if (!this._classStatementLookup) {
+            this._classStatementLookup = new Map();
+            for (const stmt of this.classStatements) {
+                this._classStatementLookup.set(stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt);
+            }
+        }
+        return this._classStatementLookup;
+    }
+    private _classStatementLookup: Map<string, ClassStatement>;
+
+    public functionExpressions = [] as FunctionExpression[];
+    public functionStatements = [] as FunctionStatement[];
+    /**
+     * A map of function statements, indexed by fully-namespaced lower function name.
+     */
+    public get functionStatementLookup() {
+        if (!this._functionStatementLookup) {
+            this._functionStatementLookup = new Map();
+            for (const stmt of this.functionStatements) {
+                this._functionStatementLookup.set(stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt);
+            }
+        }
+        return this._functionStatementLookup;
+    }
+    private _functionStatementLookup: Map<string, FunctionStatement>;
+    public importStatements = [] as ImportStatement[];
+    public libraryStatements = [] as LibraryStatement[];
+    public namespaceStatements = [] as NamespaceStatement[];
+    public newExpressions = [] as NewExpression[];
+    public propertyHints = {} as Record<string, string>;
 }
 
 class CancelStatementError extends Error {

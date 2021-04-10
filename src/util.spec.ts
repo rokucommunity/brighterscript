@@ -2,7 +2,6 @@ import { expect } from 'chai';
 import * as path from 'path';
 import util, { standardizePath as s } from './util';
 import { Position, Range } from 'vscode-languageserver';
-import { Lexer } from './lexer';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
@@ -396,116 +395,6 @@ describe('util', () => {
         });
     });
 
-    describe('tokenizeByWhitespace', () => {
-        it('works with single chars', () => {
-            expect(util.tokenizeByWhitespace('a b c')).to.deep.equal([{
-                startIndex: 0,
-                text: 'a'
-            }, {
-                startIndex: 2,
-                text: 'b'
-            },
-            {
-                startIndex: 4,
-                text: 'c'
-            }]);
-        });
-
-        it('works with tabs', () => {
-            expect(util.tokenizeByWhitespace('a\tb\t c')).to.deep.equal([{
-                startIndex: 0,
-                text: 'a'
-            }, {
-                startIndex: 2,
-                text: 'b'
-            },
-            {
-                startIndex: 5,
-                text: 'c'
-            }]);
-
-            it('works with leading whitespace', () => {
-                expect(util.tokenizeByWhitespace('  \ta\tb\t c')).to.deep.equal([{
-                    startIndex: 4,
-                    text: 'a'
-                }, {
-                    startIndex: 6,
-                    text: 'b'
-                },
-                {
-                    startIndex: 9,
-                    text: 'c'
-                }]);
-            });
-
-            it('works with multiple characters in a word', () => {
-                expect(util.tokenizeByWhitespace('abc 123')).to.deep.equal([{
-                    startIndex: 0,
-                    text: 'abc'
-                }, {
-                    startIndex: 4,
-                    text: '123'
-                }]);
-            });
-        });
-    });
-
-    describe('tokenizeBsDisableComment', () => {
-        it('skips non disable comments', () => {
-            expect(util.tokenizeBsDisableComment(
-                Lexer.scan(`'not disable comment`).tokens[0]
-            )).not.to.exist;
-        });
-
-        it('tokenizes bs:disable-line comment', () => {
-            expect(util.tokenizeBsDisableComment(
-                Lexer.scan(`'bs:disable-line`).tokens[0])
-            ).to.eql({
-                commentTokenText: `'`,
-                disableType: 'line',
-                codes: []
-            });
-        });
-
-        it('works for special case', () => {
-            expect(util.tokenizeBsDisableComment(
-                Lexer.scan(`print "hi" 'bs:disable-line: 123456 999999   aaaab`).tokens[2])
-            ).to.eql({
-                commentTokenText: `'`,
-                disableType: 'line',
-                codes: [{
-                    code: '123456',
-                    range: Range.create(0, 29, 0, 35)
-                }, {
-                    code: '999999',
-                    range: Range.create(0, 36, 0, 42)
-                }, {
-                    code: 'aaaab',
-                    range: Range.create(0, 45, 0, 50)
-                }]
-            });
-        });
-
-        it('tokenizes bs:disable-line comment with codes', () => {
-            expect(util.tokenizeBsDisableComment(
-                Lexer.scan(`'bs:disable-line:1 2 3`).tokens[0])
-            ).to.eql({
-                commentTokenText: `'`,
-                disableType: 'line',
-                codes: [{
-                    code: '1',
-                    range: Range.create(0, 17, 0, 18)
-                }, {
-                    code: '2',
-                    range: Range.create(0, 19, 0, 20)
-                }, {
-                    code: '3',
-                    range: Range.create(0, 21, 0, 22)
-                }]
-            });
-        });
-    });
-
     describe('getTextForRange', () => {
         const testArray = ['The quick', 'brown fox', 'jumps over', 'the lazy dog'];
         const testString = testArray.join('\n');
@@ -640,6 +529,80 @@ describe('util', () => {
                     fsExtra.readFileSync(`${tempDir}/source/bslib.brs`).toString()
                 )
             ).not.to.be.null;
+        });
+    });
+
+    describe('rangesIntersect', () => {
+        it('does not match when ranges touch at right edge', () => {
+            // AABB
+            expect(util.rangesIntersect(
+                util.createRange(0, 0, 0, 1),
+                util.createRange(0, 1, 0, 2)
+            )).to.be.false;
+        });
+
+        it('does not match when ranges touch at left edge', () => {
+            // BBAA
+            expect(util.rangesIntersect(
+                util.createRange(0, 1, 0, 2),
+                util.createRange(0, 0, 0, 1)
+            )).to.be.false;
+        });
+
+        it('matches when range overlaps by single character on the right', () => {
+            // A BA B
+            expect(util.rangesIntersect(
+                util.createRange(0, 1, 0, 3),
+                util.createRange(0, 2, 0, 4)
+            )).to.be.true;
+        });
+
+        it('matches when range overlaps by single character on the left', () => {
+            // B AB A
+            expect(util.rangesIntersect(
+                util.createRange(0, 2, 0, 4),
+                util.createRange(0, 1, 0, 3)
+            )).to.be.true;
+        });
+
+        it('matches when A is contained by B at the edges', () => {
+            // B AA B
+            expect(util.rangesIntersect(
+                util.createRange(0, 2, 0, 3),
+                util.createRange(0, 1, 0, 4)
+            )).to.be.true;
+        });
+
+        it('matches when B is contained by A at the edges', () => {
+            // A BB A
+            expect(util.rangesIntersect(
+                util.createRange(0, 1, 0, 4),
+                util.createRange(0, 2, 0, 3)
+            )).to.be.true;
+        });
+
+        it('matches when A and B are identical', () => {
+            // ABBA
+            expect(util.rangesIntersect(
+                util.createRange(0, 1, 0, 2),
+                util.createRange(0, 1, 0, 2)
+            )).to.be.true;
+        });
+
+        it('matches when A spans multiple lines', () => {
+            // ABBA
+            expect(util.rangesIntersect(
+                util.createRange(0, 1, 2, 0),
+                util.createRange(0, 1, 0, 3)
+            )).to.be.true;
+        });
+
+        it('matches when B spans multiple lines', () => {
+            // ABBA
+            expect(util.rangesIntersect(
+                util.createRange(0, 1, 0, 3),
+                util.createRange(0, 1, 2, 0)
+            )).to.be.true;
         });
     });
 });

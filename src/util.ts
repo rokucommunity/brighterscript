@@ -4,7 +4,7 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import * as rokuDeploy from 'roku-deploy';
-import type { Position, Range } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
@@ -26,7 +26,7 @@ import type { DottedGetExpression, Expression, VariableExpression } from './pars
 import { Logger, LogLevel } from './Logger';
 import type { Token } from './lexer';
 import { TokenKind } from './lexer';
-import { isBrsFile, isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
+import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
@@ -467,6 +467,24 @@ export class Util {
     }
 
     /**
+     * Does a touch b in any way?
+     */
+    public rangesIntersect(a: Range, b: Range) {
+        // Check if `a` is before `b`
+        if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character <= b.start.character)) {
+            return false;
+        }
+
+        // Check if `b` is before `a`
+        if (b.end.line < a.start.line || (b.end.line === a.start.line && b.end.character <= a.start.character)) {
+            return false;
+        }
+
+        // These ranges must intersect
+        return true;
+    }
+
+    /**
      * Test if `position` is in `range`. If the position is at the edges, will return true.
      * Adapted from core vscode
      * @param range
@@ -624,115 +642,15 @@ export class Util {
      * @param diagnostic
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
-        //for now, we only support suppressing brs file diagnostics
-        if (isBrsFile(diagnostic.file)) {
-            for (let flag of diagnostic.file.commentFlags) {
-                //this diagnostic is affected by this flag
-                if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
-                    //if the flag acts upon this diagnostic's code
-                    if (flag.codes === null || flag.codes.includes(diagnostic.code as number)) {
-                        return true;
-                    }
+        for (let flag of diagnostic.file?.commentFlags ?? []) {
+            //this diagnostic is affected by this flag
+            if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
+                //if the flag acts upon this diagnostic's code
+                if (flag.codes === null || flag.codes.includes(diagnostic.code as number)) {
+                    return true;
                 }
             }
         }
-    }
-
-    /**
-     * Small tokenizer for bs:disable comments
-     */
-    public tokenizeBsDisableComment(token: Token) {
-        if (token.kind !== TokenKind.Comment) {
-            return null;
-        }
-        let lowerText = token.text.toLowerCase();
-        let offset = 0;
-        let commentTokenText: string;
-
-        if (token.text.startsWith(`'`)) {
-            commentTokenText = `'`;
-            offset = 1;
-            lowerText = lowerText.substring(1);
-        } else if (lowerText.startsWith('rem')) {
-            commentTokenText = lowerText.substring(0, 3);
-            offset = 3;
-            lowerText = lowerText.substring(3);
-        }
-
-        let disableType: 'line' | 'next-line';
-        //trim leading/trailing whitespace
-        let len = lowerText.length;
-        lowerText = lowerText.trimLeft();
-        offset += len - lowerText.length;
-        if (lowerText.startsWith('bs:disable-line')) {
-            lowerText = lowerText.substring('bs:disable-line'.length);
-            offset += 'bs:disable-line'.length;
-            disableType = 'line';
-        } else if (lowerText.startsWith('bs:disable-next-line')) {
-            lowerText = lowerText.substring('bs:disable-next-line'.length);
-            offset += 'bs:disable-next-line'.length;
-            disableType = 'next-line';
-        } else {
-            return null;
-        }
-        //do something with the colon
-        if (lowerText.startsWith(':')) {
-            lowerText = lowerText.substring(1);
-            offset += 1;
-        }
-
-        let items = this.tokenizeByWhitespace(lowerText);
-        let codes = [] as Array<{ code: string; range: Range }>;
-        for (let item of items) {
-            codes.push({
-                code: item.text,
-                range: util.createRange(
-                    token.range.start.line,
-                    token.range.start.character + offset + item.startIndex,
-                    token.range.start.line,
-                    token.range.start.character + offset + item.startIndex + item.text.length
-                )
-            });
-        }
-
-        return {
-            commentTokenText: commentTokenText,
-            disableType: disableType,
-            codes: codes
-        };
-    }
-
-    /**
-     * Given a string, extract each item split by whitespace
-     * @param text
-     */
-    public tokenizeByWhitespace(text: string) {
-        let tokens = [] as Array<{ startIndex: number; text: string }>;
-        let currentToken = null;
-        for (let i = 0; i < text.length; i++) {
-            let char = text[i];
-            //if we hit whitespace
-            if (char === ' ' || char === '\t') {
-                if (currentToken) {
-                    tokens.push(currentToken);
-                    currentToken = null;
-                }
-
-                //we hit non-whitespace
-            } else {
-                if (!currentToken) {
-                    currentToken = {
-                        startIndex: i,
-                        text: ''
-                    };
-                }
-                currentToken.text += char;
-            }
-        }
-        if (currentToken) {
-            tokens.push(currentToken);
-        }
-        return tokens;
     }
 
     /**
@@ -1200,6 +1118,23 @@ export class Util {
             source = source.slice(0, position) + 'bslib_' + source.slice(position);
         }
         await fsExtra.writeFile(`${stagingDir}/source/bslib.brs`, source);
+    }
+
+    /**
+     * Given a Diagnostic or BsDiagnostic, return a copy of the diagnostic
+     */
+    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic) {
+        return {
+            severity: diagnostic.severity,
+            range: diagnostic.range,
+            message: diagnostic.message,
+            relatedInformation: diagnostic.relatedInformation?.map(x => {
+                //clone related information just in case a plugin added circular ref info here
+                return { ...x };
+            }),
+            code: diagnostic.code,
+            source: 'brs'
+        };
     }
 }
 

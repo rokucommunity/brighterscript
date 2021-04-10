@@ -6,8 +6,7 @@ import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
 import type { XmlFile } from '../XmlFile';
 import type { BrsFile } from '../BrsFile';
-import { getTestTranspile } from '../BrsFile.spec';
-import { trim, trimMap } from '../../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 let tmpPath = s`${process.cwd()}/.tmp`;
@@ -162,7 +161,7 @@ describe('import statements', () => {
             DiagnosticMessages.callToUnknownFunction('Waddle', s`components/ChildScene.xml`).message
         ]);
 
-        //change the dependency to now contain the file. the scope should re-validate
+        //add the missing function
         program.addOrReplaceFile('components/animalActions.bs', `
             sub Waddle()
                 print "Waddling"
@@ -173,8 +172,7 @@ describe('import statements', () => {
         program.validate();
 
         //the error should be gone
-        expect(program.getDiagnostics()).to.be.empty;
-
+        expectZeroDiagnostics(program);
     });
 
     it('adds brs imports to xml file during transpile', () => {

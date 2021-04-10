@@ -1,17 +1,16 @@
 import * as sinonImport from 'sinon';
 
 import { Program } from '../Program';
-import { getTestTranspile } from './BrsFile.spec';
 import type { BrsFile } from './BrsFile';
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { Diagnostic } from 'vscode-languageserver';
 import { Range, DiagnosticSeverity } from 'vscode-languageserver';
 import { ParseMode } from '../parser/Parser';
-import { expectZeroDiagnostics } from '../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile } from '../testHelpers.spec';
 import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
-import { TranspileState } from '../parser/TranspileState';
+import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
 
 let sinon = sinonImport.createSandbox();
@@ -1091,7 +1090,7 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         doesNotThrow(() => {
-            file.parser.references.classStatements[0].getParentClassIndex(new TranspileState(file));
+            file.parser.references.classStatements[0].getParentClassIndex(new BrsTranspileState(file));
         });
     });
 });

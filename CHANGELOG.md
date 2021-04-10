@@ -6,7 +6,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.34.3]
+## [0.37.2] - 2021-04-08
+### Fixed
+ - erraneous syntax issue when concatenating a template string and a regular string. ([#383](https://github.com/rokucommunity/brighterscript/pull/383))
+ - prevent circular import causing stack overflow crash. ([#381](https://github.com/rokucommunity/brighterscript/pull/381))
+
+
+
+## [0.37.1] - 2021-03-30
+### Fixed
+ - bug when transpiling print statements that wouldn't retain the existing separators (semicolon, comma, no separator) which all have unique uses ([#373](https://github.com/rokucommunity/brighterscript/pull/373))
+
+
+
+## [0.37.0] - 2021-03-18
+### Added
+ - support for `bs:disable` comments in xml files ([#363](https://github.com/rokucommunity/brighterscript/pull/363))
+
+
+
+## [0.36.0] - 2021-03-15
+### Added
+ - class import code actions ([#365](https://github.com/rokucommunity/brighterscript/pull/365))
+### Changed
+ - append stack trace to every language server error ([#354)](https://github.com/rokucommunity/brighterscript/pull/354))
+### Fixed
+ - restrict function and class imports to .bs files only ([#365)](https://github.com/rokucommunity/brighterscript/pull/365))
+ - language server crashes due to unsafe property access in callfunc expressions ([#360)](https://github.com/rokucommunity/brighterscript/pull/360))
+ - crashes in signature help ([#358)](https://github.com/rokucommunity/brighterscript/pull/358))
+ - template string transpile bug when two expressions were next to each other ([#361)](https://github.com/rokucommunity/brighterscript/pull/361))
+
+
+
+## [0.35.0] - 2021-03-09
+### Added
+ - code actions for suggesting import statements in brighterscript files ([#347](https://github.com/rokucommunity/brighterscript/pull/347))
+### Fixed
+ - safer access to nullable callables and values during certain language server operations ([#328](https://github.com/rokucommunity/brighterscript/pull/328))
+
+
+
+## [0.34.3] -2021-03-05
 ### Fixed
  - bug when transpiling bsc with custom function and parameter return types
 
@@ -1031,3 +1071,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.34.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.0...v0.34.1
 [0.34.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.1...v0.34.2
 [0.34.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.2...v0.34.3
+[0.35.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.34.3...v0.35.0
+[0.36.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.35.0...v0.36.0
+[0.37.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.36.0...v0.37.0
+[0.37.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.0...v0.37.1
+[0.37.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.1...v0.37.2

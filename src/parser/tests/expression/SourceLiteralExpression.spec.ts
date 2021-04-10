@@ -1,7 +1,7 @@
-import { getTestTranspile } from '../../../files/BrsFile.spec';
 import { Program } from '../../../Program';
 import { standardizePath as s } from '../../../util';
 import * as fileUrl from 'file-url';
+import { getTestTranspile } from '../../../testHelpers.spec';
 
 describe('SourceLiteralExpression', () => {
     let rootDir = s`${process.cwd()}/rootDir`;

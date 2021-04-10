@@ -225,11 +225,13 @@ export class Program {
     private syncComponentDependencyGraph(components: Array<{ file: XmlFile; scope: XmlScope }>) {
         //reattach every dependency graph
         for (let i = 0; i < components.length; i++) {
-            const xmlFile = components[i].file;
+            const { file, scope } = components[i];
+
             //re-attach the dependencyGraph for every component whose position changed
-            if (xmlFile.dependencyGraphIndex !== i) {
-                xmlFile.dependencyGraphIndex = i;
-                xmlFile.attachDependencyGraph(this.dependencyGraph);
+            if (file.dependencyGraphIndex !== i) {
+                file.dependencyGraphIndex = i;
+                file.attachDependencyGraph(this.dependencyGraph);
+                scope.attachDependencyGraph(this.dependencyGraph);
             }
         }
     }
@@ -419,16 +421,10 @@ export class Program {
 
                 //create a new scope for this xml file
                 let scope = new XmlScope(xmlFile, this);
-                scope.attachDependencyGraph(this.dependencyGraph);
                 this.addScope(scope);
 
                 //register this compoent now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
-
-                //attach the dependency graph, so the component can
-                //   a) be regularly notified of changes
-                //   b) immediately emit its own changes
-                xmlFile.attachDependencyGraph(this.dependencyGraph);
 
                 this.plugins.emit('afterFileValidate', xmlFile);
             } else {
@@ -693,7 +689,7 @@ export class Program {
         let funcNames = new Set<string>();
         let currentScope = scope;
         while (isXmlScope(currentScope)) {
-            for (let name of currentScope.xmlFile.ast.component.api.functions.map((f) => f.name)) {
+            for (let name of currentScope.xmlFile.ast.component.api?.functions.map((f) => f.name) ?? []) {
                 if (!filterName || name === filterName) {
                     funcNames.add(name);
                 }
@@ -822,23 +818,24 @@ export class Program {
         const codeActions = [] as CodeAction[];
         const file = this.getFile(pathAbsolute);
         if (file) {
+            const diagnostics = this
+                //get all current diagnostics (filtered by diagnostic filters)
+                .getDiagnostics()
+                //only keep diagnostics related to this file
+                .filter(x => x.file === file)
+                //only keep diagnostics that touch this range
+                .filter(x => util.rangesIntersect(x.range, range));
 
-            this.plugins.emit('beforeProgramGetCodeActions', this, file, range, codeActions);
+            const scopes = this.getScopesForFile(file);
 
-            //get code actions from the file
-            file.getCodeActions(range, codeActions);
-
-            //get code actions from every scope this file is a member of
-            for (let key in this.scopes) {
-                let scope = this.scopes[key];
-
-                if (scope.hasFile(file)) {
-                    //get code actions from each scope this file is a member of
-                    scope.getCodeActions(file, range, codeActions);
-                }
-            }
-
-            this.plugins.emit('afterProgramGetCodeActions', this, file, range, codeActions);
+            this.plugins.emit('onGetCodeActions', {
+                program: this,
+                file: file,
+                range: range,
+                diagnostics: diagnostics,
+                scopes: scopes,
+                codeActions: codeActions
+            });
         }
         return codeActions;
     }
@@ -1216,6 +1213,44 @@ export class Program {
         await Promise.all(promises);
 
         this.plugins.emit('afterProgramTranspile', this, entries);
+    }
+
+    /**
+     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     */
+    public findFilesForFunction(functionName: string) {
+        const files = [] as BscFile[];
+        const lowerFunctionName = functionName.toLowerCase();
+        //find every file with this function defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                //TODO handle namespace-relative function calls
+                //if the file has a function with this name
+                if (file.parser.references.functionStatementLookup.get(lowerFunctionName) !== undefined) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
+    }
+
+    /**
+     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     */
+    public findFilesForClass(className: string) {
+        const files = [] as BscFile[];
+        const lowerClassName = className.toLowerCase();
+        //find every file with this class defined
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                //TODO handle namespace-relative classes
+                //if the file has a function with this name
+                if (file.parser.references.classStatementLookup.get(lowerClassName) !== undefined) {
+                    files.push(file);
+                }
+            }
+        }
+        return files;
     }
 
     /**

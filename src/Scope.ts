@@ -1,4 +1,4 @@
-import type { CodeAction, CompletionItem, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Position, Range } from 'vscode-languageserver';
 import * as path from 'path';
 import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
@@ -16,7 +16,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
-import type { DependencyGraph } from './DependencyGraph';
+import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -117,8 +117,8 @@ export class Scope {
      */
     protected diagnostics = [] as BsDiagnostic[];
 
-    protected onDependenciesChanged(key: string) {
-        this.logDebug('invalidated because dependency graph said [', key, '] changed');
+    protected onDependenciesChanged(event: DependencyChangedEvent) {
+        this.logDebug('invalidated because dependency graph said [', event.sourceKey, '] changed');
         this.invalidate();
     }
 
@@ -177,8 +177,11 @@ export class Scope {
             this.unsubscribeFromDependencyGraph();
         }
 
-        //anytime a dependency changes, clean up some cached values
-        this.unsubscribeFromDependencyGraph = this.dependencyGraph.onchange(this.dependencyGraphKey, this.onDependenciesChanged.bind(this), true);
+        //anytime a dependency for this scope changes, we need to be revalidated
+        this.unsubscribeFromDependencyGraph = this.dependencyGraph.onchange(this.dependencyGraphKey, this.onDependenciesChanged.bind(this));
+
+        //invalidate immediately since this is a new scope
+        this.invalidate();
     }
 
     /**
@@ -254,11 +257,6 @@ export class Scope {
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
         this.diagnostics.push(...diagnostics);
-    }
-
-    public getCodeActions(file: BscFile, range: Range, codeActions: CodeAction[]) {
-        const diagnostics = this.diagnostics.filter(x => x.range?.start.line === range.start.line);
-        this.program.plugins.emit('onScopeGetCodeActions', this, file, range, diagnostics, codeActions);
     }
 
     /**
