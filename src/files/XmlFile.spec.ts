@@ -1162,7 +1162,6 @@ describe('XmlFile', () => {
     });
 
     describe('duplicate components', () => {
-
         it('more gracefully handles multiple components with the same name', () => {
             program.addOrReplaceFile('components/comp1.brs', ``);
             program.addOrReplaceFile('components/comp1.xml', trim`

@@ -166,8 +166,9 @@ export class Program {
 
     /**
      * A map of every component currently loaded into the program, indexed by the component name.
-     * It is an error to have multiple components with the sane name. However, we do store an array of components
-     * by name. With this approach we can provide a better developer expreience.
+     * It is a compile-time error to have multiple components with the same name. However, we store an array of components
+     * by name so we can provide a better developer expreience. You shouldn't be directly accessing this array,
+     * but if you do, only ever use the component at index 0.
      */
     private components = {} as Record<string, { file: XmlFile; scope: XmlScope }[]>;
 
@@ -177,7 +178,7 @@ export class Program {
     public getComponent(componentName: string) {
         if (componentName) {
             //return the first compoment in the list with this name
-            //(because they are sorted by pkgPath, this should provide a consistent read experience)
+            //(components are ordered in this list by pkgPath to ensure consistency)
             return this.components[componentName.toLowerCase()]?.[0];
         } else {
             return undefined;
@@ -227,7 +228,7 @@ export class Program {
         for (let i = 0; i < components.length; i++) {
             const { file, scope } = components[i];
 
-            //re-attach the dependencyGraph for every component whose position changed
+            //attach (or re-attach) the dependencyGraph for every component whose position changed
             if (file.dependencyGraphIndex !== i) {
                 file.dependencyGraphIndex = i;
                 file.attachDependencyGraph(this.dependencyGraph);

@@ -320,8 +320,10 @@ export class XmlFile {
 
     /**
      * A slight hack. Gives the Program a way to support multiple components with the same name
-     * without causing major issues. If this value is anything other than 0, it will be appended to the dependency graph key
-     * so this component won't collide with the primary component
+     * without causing major issues. A value of 0 will be ignored as part of the dependency graph key.
+     * Howver, a nonzero value will be used as part of the dependency graph key so this component doesn't
+     * collide with the primary component. For example, if there are three components with the same name, you will
+     * have the following dependency graph keys: ["component:CustomGrid", "component:CustomGrid[1]", "component:CustomGrid[2]"]
      */
     public dependencyGraphIndex = -1;
 
@@ -337,6 +339,8 @@ export class XmlFile {
         } else {
             key = this.pkgPath.toLowerCase();
         }
+        //if our index is not zero, then we are not the primary component with that name, and need to
+        //append our index to the dependency graph key as to prevent collisions in the program.
         if (this.dependencyGraphIndex !== 0) {
             key += '[' + this.dependencyGraphIndex + ']';
         }
