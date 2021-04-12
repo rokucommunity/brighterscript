@@ -1160,4 +1160,60 @@ describe('XmlFile', () => {
             ]);
         });
     });
+
+    describe('duplicate components', () => {
+        it('more gracefully handles multiple components with the same name', () => {
+            program.addOrReplaceFile('components/comp1.brs', ``);
+            program.addOrReplaceFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Group">
+                    <script uri="comp1.brs" />
+                </component>
+            `);
+            //add another component with the same name
+            program.addOrReplaceFile('components/comp2.brs', ``);
+            program.addOrReplaceFile('components/comp2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Group">
+                    <script uri="comp2.brs" />
+                </component>
+            `);
+            program.validate();
+            expect(program.getDiagnostics().map(x => x.message).sort()).to.eql([
+                DiagnosticMessages.duplicateComponentName('comp1').message,
+                DiagnosticMessages.duplicateComponentName('comp1').message
+            ]);
+        });
+
+        it('maintains consistent component selection', () => {
+            //add comp2 first
+            const comp2 = program.addOrReplaceFile('components/comp2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1">
+                </component>
+            `);
+            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+
+            //add comp1. it should become the main component with this name
+            const comp1 = program.addOrReplaceFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Group">
+                </component>
+            `);
+            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp1.pkgPath);
+
+            //remove comp1, comp2 should be the primary again
+            program.removeFile(s`${rootDir}/components/comp1.xml`);
+            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+
+            //add comp3
+            program.addOrReplaceFile('components/comp3.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1">
+                </component>
+            `);
+            //...the 2nd file should still be main
+            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+        });
+    });
 });
