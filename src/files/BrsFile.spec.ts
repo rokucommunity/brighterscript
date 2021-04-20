@@ -1483,143 +1483,33 @@ describe('BrsFile', () => {
         });
     });
 
-    describe('getHover', () => {
-        it('works for param types', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub DoSomething(name as string)
-                    name = 1
-                    sayMyName = function(name as string)
-                    end function
-                end sub
-            `);
+    it('handles mixed case `then` partions of conditionals', () => {
+        let mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            sub Main()
+                if true then
+                    print "works"
+                end if
+            end sub
+        `);
 
-            //hover over the `name = 1` line
-            let hover = file.getHover(Position.create(2, 24));
-            expect(hover).to.exist;
-            expect(hover.range).to.eql(Range.create(2, 20, 2, 24));
+        expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
+        mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            sub Main()
+                if true Then
+                    print "works"
+                end if
+            end sub
+        `);
+        expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
 
-            //hover over the `name` parameter declaration
-            hover = file.getHover(Position.create(1, 34));
-            expect(hover).to.exist;
-            expect(hover.range).to.eql(Range.create(1, 32, 1, 36));
-        });
-
-        //ignore this for now...it's not a huge deal
-        it('does not match on keywords or data types', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub Main(name as string)
-                end sub
-                sub as()
-                end sub
-            `);
-            //hover over the `as`
-            expect(file.getHover(Position.create(1, 31))).not.to.exist;
-            //hover over the `string`
-            expect(file.getHover(Position.create(1, 36))).not.to.exist;
-        });
-
-        it('finds declared function', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                function Main(count = 1)
-                    firstName = "bob"
-                    age = 21
-                    shoeSize = 10
-                end function
-            `);
-
-            let hover = file.getHover(Position.create(1, 28));
-            expect(hover).to.exist;
-
-            expect(hover.range).to.eql(Range.create(1, 25, 1, 29));
-            expect(hover.contents).to.equal('function Main(count? as dynamic) as dynamic');
-        });
-
-        it('finds variable function hover in same scope', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub Main()
-                    sayMyName = sub(name as string)
-                    end sub
-
-                    sayMyName()
-                end sub
-            `);
-
-            let hover = file.getHover(Position.create(5, 24));
-
-            expect(hover.range).to.eql(Range.create(5, 20, 5, 29));
-            expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
-        });
-
-        it('finds function hover in file scope', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub Main()
-                    sayMyName()
-                end sub
-
-                sub sayMyName()
-
-                end sub
-            `);
-
-            let hover = file.getHover(Position.create(2, 25));
-
-            expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
-            expect(hover.contents).to.equal('sub sayMyName() as void');
-        });
-
-        it('finds function hover in scope', () => {
-            let rootDir = process.cwd();
-            program = new Program({
-                rootDir: rootDir
-            });
-
-            let mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub Main()
-                    sayMyName()
-                end sub
-            `);
-
-            program.addOrReplaceFile({ src: `${rootDir}/source/lib.brs`, dest: 'source/lib.brs' }, `
-                sub sayMyName(name as string)
-
-                end sub
-            `);
-
-            let hover = mainFile.getHover(Position.create(2, 25));
-            expect(hover).to.exist;
-
-            expect(hover.range).to.eql(Range.create(2, 20, 2, 29));
-            expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
-        });
-
-        it('handles mixed case `then` partions of conditionals', () => {
-            let mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub Main()
-                    if true then
-                        print "works"
-                    end if
-                end sub
-            `);
-
-            expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
-            mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub Main()
-                    if true Then
-                        print "works"
-                    end if
-                end sub
-            `);
-            expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
-
-            mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub Main()
-                    if true THEN
-                        print "works"
-                    end if
-                end sub
-            `);
-            expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
-        });
+        mainFile = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            sub Main()
+                if true THEN
+                    print "works"
+                end if
+            end sub
+        `);
+        expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
     });
 
     it('does not throw when encountering incomplete import statement', () => {

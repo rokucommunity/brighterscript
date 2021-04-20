@@ -24,7 +24,7 @@ import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
-import type { Token } from './lexer';
+import type { Locatable, Token } from './lexer';
 import { TokenKind } from './lexer';
 import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
 import { CustomType } from './types/CustomType';
@@ -1135,6 +1135,18 @@ export class Util {
             code: diagnostic.code,
             source: 'brs'
         };
+    }
+
+    /**
+     * Get the first locatable item found at the specified position
+     * @param position
+     */
+    public getFirstLocatableAt(locatables: Locatable[], position: Position) {
+        for (let token of locatables) {
+            if (util.rangeContains(token.range, position)) {
+                return token;
+            }
+        }
     }
 }
 

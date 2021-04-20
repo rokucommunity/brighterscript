@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, OnGetHoverEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -802,14 +802,22 @@ export class Program {
         }
     }
 
-    public getHover(pathAbsolute: string, position: Position) {
-        //find the file
-        let file = this.getFile(pathAbsolute);
-        if (!file) {
-            return null;
+    /**
+     * Get hover information for a file and position
+     */
+    public getHover(srcPath: string, position: Position) {
+        let file = this.getFile(srcPath);
+        if (file) {
+            const event = {
+                program: this,
+                file: file,
+                position: position,
+                scopes: this.getScopesForFile(file),
+                hover: null
+            } as OnGetHoverEvent;
+            this.plugins.emit('onGetHover', event);
+            return event.hover;
         }
-
-        return Promise.resolve(file.getHover(position));
     }
 
     /**
