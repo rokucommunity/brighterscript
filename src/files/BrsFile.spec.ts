@@ -92,6 +92,17 @@ describe('BrsFile', () => {
     });
 
     describe('getCompletions', () => {
+        it('does not crash for callfunc on a function call', () => {
+            const file = program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    getManager()@.
+                end sub
+            `);
+            expect(() => {
+                program.getCompletions(file.pathAbsolute, util.createPosition(2, 34));
+            }).not.to.throw;
+        });
+
         it('suggests pkg paths in strings that match that criteria', () => {
             program.addOrReplaceFile('source/main.brs', `
                 sub main()
