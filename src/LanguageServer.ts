@@ -6,7 +6,6 @@ import type {
     CompletionItem,
     Connection,
     DidChangeWatchedFilesParams,
-    Hover,
     InitializeParams,
     ServerCapabilities,
     TextDocumentPositionParams,

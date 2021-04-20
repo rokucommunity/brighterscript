@@ -1,6 +1,6 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Position } from 'vscode-languageserver';
+import type { CompletionItem, Position } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
