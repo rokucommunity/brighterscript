@@ -184,7 +184,11 @@ export class Parser {
      * When a namespace has been started, this gets set. When it's done, this gets unset.
      * It is useful for passing the namespace into certain statements that need it
      */
-    private currentNamespaceName: NamespacedVariableNameExpression;
+    private currentNamespace: NamespaceStatement;
+
+    private get currentNamespaceName(): NamespacedVariableNameExpression {
+        return this.currentNamespace?.nameExpression;
+    }
 
     /**
      * When a FunctionExpression has been started, this gets set. When it's done, this gets unset.
@@ -682,7 +686,16 @@ export class Parser {
 
             // add the function to the relevant symbol table
             if (!isAnonymous) {
-                this.currentSymbolTable.addSymbol(name.text, name.range, new FunctionType(func.returnType));
+                const funcType = func.getFunctionType(name.text);
+
+                // add the function as declared to the current namespace's table
+                this.currentNamespace?.symbolTable.addSymbol(name.text, name.range, funcType);
+                let fullyQualifiedName = name.text;
+                if (this.currentNamespaceName) {
+                    // add the "namespaced" name of this function to the parent symbol table
+                    fullyQualifiedName = this.currentNamespaceName.getName(ParseMode.BrighterScript) + '.' + name.text;
+                }
+                this.currentSymbolTable.addSymbol(fullyQualifiedName, name.range, funcType);
             }
 
             this._references.functionExpressions.push(func);
@@ -690,7 +703,7 @@ export class Parser {
             let previousFunctionExpression = this.currentFunctionExpression;
             this.currentFunctionExpression = func;
 
-            //regiser new _references array for this function's local vars
+            //register new _references array for this function's local vars
             this._references.localVars.set(func, this.currentFunctionLocalVars);
 
             //make sure to restore the currentFunctionExpression even if the body block fails to parse
@@ -1117,16 +1130,16 @@ export class Parser {
         this.namespaceAndFunctionDepth++;
 
         let name = this.getNamespacedVariableNameExpression();
-
         //set the current namespace name
-        this.currentNamespaceName = name;
+        let result = new NamespaceStatement(keyword, name, null, null, this.currentSymbolTable);
+        this.currentNamespace = result;
 
         this.globalTerminators.push([TokenKind.EndNamespace]);
         let body = this.body();
         this.globalTerminators.pop();
 
         //unset the current namespace name
-        this.currentNamespaceName = undefined;
+        this.currentNamespace = undefined;
 
         let endKeyword: Token;
         if (this.check(TokenKind.EndNamespace)) {
@@ -1140,7 +1153,8 @@ export class Parser {
         }
 
         this.namespaceAndFunctionDepth--;
-        let result = new NamespaceStatement(keyword, name, body, endKeyword);
+        result.body = body;
+        result.endKeyword = endKeyword;
         this._references.namespaceStatements.push(result);
 
         return result;
@@ -2638,17 +2652,7 @@ export class Parser {
         try {
             //function
             if (isFunctionExpression(assignment.value)) {
-                let functionType = new FunctionType(assignment.value.returnType);
-                functionType.isSub = assignment.value.functionType.text === 'sub';
-
-                functionType.setName(assignment.name.text);
-                for (let param of assignment.value.parameters) {
-                    let isRequired = !param.defaultValue;
-                    //TODO compute optional parameters
-                    functionType.addParameter(param.name.text, param.type, isRequired);
-                }
-                return functionType;
-
+                return assignment.value.getFunctionType(assignment.name.text);
                 //literal
             } else if (isLiteralExpression(assignment.value)) {
                 return assignment.value.type;

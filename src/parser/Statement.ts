@@ -14,6 +14,7 @@ import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isComm
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
+import { SymbolTable } from '../SymbolTable';
 
 /**
  * A BrightScript statement
@@ -1099,15 +1100,19 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 }
 
 export class NamespaceStatement extends Statement implements TypedefProvider {
+    readonly symbolTable: SymbolTable;
+
     constructor(
         public keyword: Token,
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
         public nameExpression: NamespacedVariableNameExpression,
         public body: Body,
-        public endKeyword: Token
+        public endKeyword: Token,
+        readonly parentSymbolTable?: SymbolTable
     ) {
         super();
         this.name = this.nameExpression.getName(ParseMode.BrighterScript);
+        this.symbolTable = new SymbolTable(parentSymbolTable);
     }
 
     /**
