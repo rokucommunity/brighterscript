@@ -37,7 +37,7 @@ describe('SourceLiteralExpression', () => {
                     print pkg_path
                     print pkg_location
                 end sub
-            `, undefined, 'none', 'main.brs');
+            `, undefined, 'none', 'source/main.brs');
         });
 
         it('computes SOURCE_FILE_PATH', () => {

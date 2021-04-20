@@ -113,15 +113,8 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
         expected = expected ? expected : source;
         let file = program.addOrReplaceFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
         program.validate();
-        let diagnostics = file.getDiagnostics();
-        if (diagnostics.length > 0 && failOnDiagnostic !== false) {
-            throw new Error(
-                diagnostics[0].range.start.line +
-                ':' +
-                diagnostics[0].range.start.character +
-                ' ' +
-                diagnostics[0]?.message
-            );
+        if (failOnDiagnostic !== false) {
+            expectZeroDiagnostics(program);
         }
         let transpiled = file.transpile();
 
