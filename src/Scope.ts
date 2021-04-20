@@ -458,6 +458,7 @@ export class Scope {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
+            this.diagnosticDetectInvalidFunctionCalls(file, callableContainerMap);
         });
     }
 
@@ -593,6 +594,45 @@ export class Scope {
                         });
 
                     }
+                }
+            }
+        }
+    }
+
+
+    private diagnosticDetectInvalidFunctionCalls(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
+        for (let funcCall of file.functionCalls) {
+            const callableContainersWithThisName = callableContainersByLowerName.get(funcCall.name.toLowerCase());
+
+            //use the first item from callablesByLowerName, because if there are more, that's a separate error
+            let knownCallableContainer = callableContainersWithThisName ? callableContainersWithThisName[0] : undefined;
+            if (!knownCallableContainer) {
+                continue;
+            }
+            const nsSymbolTable = funcCall.functionExpression.namespaceName ? this.namespaceLookup[funcCall.functionExpression.namespaceName.getName(ParseMode.BrighterScript)]?.symbolTable : null;
+
+            const funcType = nsSymbolTable?.getSymbolType(funcCall.name) ?? knownCallableContainer.scope.symbolTable.getSymbolType(funcCall.name);
+
+            if (!isFunctionType(funcType)) {
+                // can not find function. Handled in a different validation function
+                continue;
+            }
+            if (funcType.params.length !== funcCall.args.length) {
+                // Argument count mismatch. Handled in a different validation function
+                continue;
+            }
+
+            for (let index = 0; index < funcType.params.length; index++) {
+                const param = funcType.params[index];
+                const arg = funcCall.args[index];
+                const argType = arg.type;//funcCall.functionExpression.symbolTable.getSymbolType(arg.text);
+
+                if (!argType.isAssignableTo(param.type)) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.argumentTypeMismatch(arg.type.toTypeString(), param.type.toTypeString()),
+                        range: arg.range,
+                        file: file
+                    });
                 }
             }
         }
@@ -739,7 +779,7 @@ export class Scope {
 
             //if we don't already have a variable with this name.
             if (!localVar) {
-                let callablesWithThisName = callablesByLowerName.get(lowerName);
+                let callablesWithThisName = callablesByLowerName.get(lowerName) || callablesByLowerName.get(expCall.functionExpression.namespaceName?.getName(ParseMode.BrightScript).toLowerCase() + '_' + lowerName);
 
                 //use the first item from callablesByLowerName, because if there are more, that's a separate error
                 let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;

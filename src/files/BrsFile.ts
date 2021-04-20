@@ -25,6 +25,7 @@ import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedG
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
+import { LazyType } from '../types/LazyType';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -470,11 +471,17 @@ export class BrsFile {
 
                         //is variable being passed into argument
                     } else if (arg.name) {
+                        const argName = arg.name.text;
                         args.push({
                             range: arg.range,
-                            //TODO - look up the data type of the actual variable
-                            type: new DynamicType(),
-                            text: arg.name.text
+                            type: new LazyType(() => {
+                                const futureType = func.symbolTable.getSymbolType(argName);
+                                if (isFunctionType(futureType)) {
+                                    return futureType.returnType;
+                                }
+                                return futureType;
+                            }),
+                            text: argName
                         });
 
                     } else if (arg.value) {
@@ -513,6 +520,9 @@ export class BrsFile {
                     //TODO keep track of parameters
                     args: args
                 };
+
+
+
                 this.functionCalls.push(functionCall);
             }
         }

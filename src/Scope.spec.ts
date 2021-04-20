@@ -360,6 +360,23 @@ describe('Scope', () => {
             });
         });
 
+        it.only('does not error with calls to callables in same namespace', () => {
+            program.addOrReplaceFile('source/file.bs', `
+                namespace Name.Space
+                    sub a(param as string)
+                        print param
+                    end sub
+
+                    sub b()
+                        a("hello")
+                    end sub
+                end namespace
+            `);
+            //validate the scope
+            program.validate();
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
         it('recognizes known callables', () => {
             program.addOrReplaceFile('source/file.brs', `
                 function DoA()
@@ -473,6 +490,63 @@ describe('Scope', () => {
             );
         });
 
+        it('Catches argument type mismatches on function calls', () => {
+            program.addOrReplaceFile('source/file.brs', `
+                sub a(age as integer)
+                end sub
+                sub b()
+                    a("hello")
+                end sub
+            `);
+            program.validate();
+            //should have an error
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            );
+        });
+
+        it('Catches argument type mismatches on function calls for functions defined in another file', () => {
+            program.addOrReplaceFile('source/file.brs', `
+                sub a(age as integer)
+                end sub
+            `);
+            program.addOrReplaceFile('source/file2.brs', `
+                sub b()
+                    a("hello")
+                    foo = "foo"
+                    a(foo)
+                end sub
+            `);
+            program.validate();
+            //should have an error
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            );
+        });
+
+        it.only('Catches argument type mismatches on function calls within namespaces', () => {
+            program.addOrReplaceFile('source/file.bs', `
+                namespace Name.Space
+                    sub a(param as integer)
+                        print param
+                    end sub
+
+                    sub b()
+                        a("hello")
+                        foo = "foo"
+                        a(foo)
+                    end sub
+                end namespace
+                `);
+            program.validate();
+            //should have an error
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            );
+        });
+
+
+
         it('handles JavaScript reserved names', () => {
             program.addOrReplaceFile('source/file.brs', `
                 sub constructor()
@@ -483,7 +557,7 @@ describe('Scope', () => {
                 end sub
                 sub getPrototypeOf()
                 end sub
-            `);
+                `);
             program.validate();
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
@@ -493,12 +567,12 @@ describe('Scope', () => {
             const validateEndScope = sinon.spy();
             program.addOrReplaceFile('source/file.brs', ``);
             program.addOrReplaceFile('components/comp.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="comp" extends="Scene">
-                    <script uri="comp.brs"/>
-                </component>
-            `);
-            program.addOrReplaceFile(s`components/comp.brs`, ``);
+                <? xml version = "1.0" encoding = "utf-8" ?>
+                    <component name="comp" extends="Scene" >
+            <script uri="comp.brs" />
+            </component>
+                `);
+            program.addOrReplaceFile(s`components / comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
             const compScope = program.getScopeByName('components/comp.xml');
             program.plugins = new PluginInterface([{
@@ -517,28 +591,28 @@ describe('Scope', () => {
 
         describe('custom types', () => {
             it('detects an unknown function return type', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.addOrReplaceFile({ src: s`${rootDir} / source / main.bs`, dest: s`source / main.bs` }, `
                     function a()
                         return invalid
-                    end function
+            end function
 
                     function b() as integer
-                        return 1
-                    end function
+            return 1
+            end function
 
                     function c() as unknownType 'error
-                        return 2
-                    end function
+            return 2
+            end function
 
                     class myClass
                         function myClassMethod() as unknownType 'error
-                            return 2
-                        end function
-                    end class
+            return 2
+            end function
+                end class
 
                     function d() as myClass
-                        return new myClass()
-                    end function
+            return new myClass()
+            end function
                 `);
                 program.validate();
                 expect(program.getDiagnostics().map(x => x.message)).to.eql([
@@ -548,20 +622,20 @@ describe('Scope', () => {
             });
 
             it('detects an unknown function parameter type', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                    sub a(num as integer)
-                    end sub
+                program.addOrReplaceFile({ src: s`${rootDir} /source/main.bs`, dest: s`source / main.bs` }, `
+            sub a(num as integer)
+            end sub
 
-                    sub b(unknownParam as unknownType) 'error
-                    end sub
+            sub b(unknownParam as unknownType) 'error
+            end sub
 
-                    class myClass
+            class myClass
                         sub myClassMethod(unknownParam as unknownType) 'error
-                        end sub
-                    end class
+            end sub
+            end class
 
-                    sub d(obj as myClass)
-                    end sub
+                sub d(obj as myClass)
+            end sub
                 `);
                 program.validate();
                 expect(program.getDiagnostics().map(x => x.message)).to.eql([
@@ -571,16 +645,16 @@ describe('Scope', () => {
             });
 
             it('detects an unknown field parameter type', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                    class myClass
+                program.addOrReplaceFile({ src: s`${rootDir} /source/main.bs`, dest: s`source / main.bs` }, `
+            class myClass
                         foo as unknownType 'error
-                    end class
+            end class
 
                     class myOtherClass
                         foo as unknownType 'error
-                        bar as myClass
-                        buz as myOtherClass
-                    end class
+            bar as myClass
+            buz as myOtherClass
+            end class
                 `);
                 program.validate();
                 expect(program.getDiagnostics().map(x => x.message)).to.eql([
@@ -590,34 +664,34 @@ describe('Scope', () => {
             });
 
             it('finds custom types inside namespaces', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                    namespace MyNamespace
+                program.addOrReplaceFile({ src: s`${rootDir} /source/main.bs`, dest: s`source / main.bs` }, `
+            namespace MyNamespace
                         class MyClass
                         end class
 
                         function foo(param as MyClass) as MyClass
-                        end function
+            end function
 
                         function bar(param as MyNamespace.MyClass) as MyNamespace.MyClass
-                        end function
+            end function
 
-                    end namespace
+                end namespace
 
-                `);
+                    `);
                 program.validate();
 
                 expect(program.getDiagnostics()[0]?.message).not.to.exist;
             });
 
             it('finds custom types from other namespaces', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                    namespace MyNamespace
+                program.addOrReplaceFile({ src: s`${rootDir} /source/main.bs`, dest: s`source / main.bs` }, `
+            namespace MyNamespace
                         class MyClass
                         end class
-                    end namespace
+                end namespace
 
-                    function foo(param as MyNamespace.MyClass) as MyNamespace.MyClass
-                    end function
+            function foo(param as MyNamespace.MyClass) as MyNamespace.MyClass
+            end function
                 `);
                 program.validate();
 
@@ -625,15 +699,15 @@ describe('Scope', () => {
             });
 
             it('detects missing custom types from current namespaces', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                    namespace MyNamespace
+                program.addOrReplaceFile({ src: s`${rootDir} /source/main.bs`, dest: s`source / main.bs` }, `
+            namespace MyNamespace
                         class MyClass
                         end class
 
                         function foo() as UnknownType
-                        end function
-                    end namespace
-                `);
+            end function
+                end namespace
+                    `);
                 program.validate();
 
                 expect(program.getDiagnostics().map(x => x.message)).to.eql([
@@ -642,12 +716,12 @@ describe('Scope', () => {
             });
 
             it('finds custom types from other other files', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                    function foo(param as MyClass) as MyClass
-                    end function
+                program.addOrReplaceFile({ src: s`${rootDir} /source/main.bs`, dest: s`source / main.bs` }, `
+            function foo(param as MyClass) as MyClass
+            end function
                 `);
-                program.addOrReplaceFile({ src: s`${rootDir}/source/MyClass.bs`, dest: s`source/MyClass.bs` }, `
-                    class MyClass
+                program.addOrReplaceFile({ src: s`${rootDir} /source/MyClass.bs`, dest: s`source / MyClass.bs` }, `
+            class MyClass
                     end class
                 `);
                 program.validate();
@@ -656,30 +730,30 @@ describe('Scope', () => {
             });
 
             it('finds custom types from other other files', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                    function foo(param as MyNameSpace.MyClass) as MyNameSpace.MyClass
-                    end function
+                program.addOrReplaceFile({ src: s`${rootDir} /source/main.bs`, dest: s`source / main.bs` }, `
+            function foo(param as MyNameSpace.MyClass) as MyNameSpace.MyClass
+            end function
                 `);
-                program.addOrReplaceFile({ src: s`${rootDir}/source/MyNameSpace.bs`, dest: s`source/MyNameSpace.bs` }, `
-                    namespace MyNameSpace
+                program.addOrReplaceFile({ src: s`${rootDir} /source/MyNameSpace.bs`, dest: s`source / MyNameSpace.bs` }, `
+            namespace MyNameSpace
                       class MyClass
                       end class
-                    end namespace
-                `);
+                end namespace
+                    `);
                 program.validate();
 
                 expect(program.getDiagnostics()[0]?.message).not.to.exist;
             });
 
             it('detects missing custom types from another namespaces', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
-                    namespace MyNamespace
+                program.addOrReplaceFile({ src: s`${rootDir} /source/main.bs`, dest: s`source / main.bs` }, `
+            namespace MyNamespace
                         class MyClass
                         end class
-                    end namespace
+                end namespace
 
-                    function foo() as MyNamespace.UnknownType
-                    end function
+            function foo() as MyNamespace.UnknownType
+            end function
                 `);
                 program.validate();
 
@@ -692,13 +766,13 @@ describe('Scope', () => {
                 program = new Program({ rootDir: rootDir });
 
                 program.addOrReplaceFile('components/foo.xml', trim`
-                    <?xml version="1.0" encoding="utf-8" ?>
-                    <component name="foo" extends="Scene">
-                        <script uri="foo.bs"/>
-                    </component>
-                `);
-                program.addOrReplaceFile(s`components/foo.bs`, `
-                    class MyClass
+                <? xml version = "1.0" encoding = "utf-8" ?>
+                    <component name="foo" extends="Scene" >
+                        <script uri="foo.bs" />
+                            </component>
+                                `);
+                program.addOrReplaceFile(s`components / foo.bs`, `
+            class MyClass
                     end class
                 `);
                 program.validate();
@@ -706,14 +780,14 @@ describe('Scope', () => {
                 expect(program.getDiagnostics()[0]?.message).not.to.exist;
 
                 program.addOrReplaceFile('components/bar.xml', trim`
-                    <?xml version="1.0" encoding="utf-8" ?>
-                    <component name="bar" extends="Scene">
-                        <script uri="bar.bs"/>
-                    </component>
-                `);
-                program.addOrReplaceFile(s`components/bar.bs`, `
-                    function getFoo() as MyClass
-                    end function
+                <? xml version = "1.0" encoding = "utf-8" ?>
+                    <component name="bar" extends="Scene" >
+                        <script uri="bar.bs" />
+                            </component>
+                                `);
+                program.addOrReplaceFile(s`components / bar.bs`, `
+            function getFoo() as MyClass
+            end function
                 `);
                 program.validate();
 
@@ -726,24 +800,24 @@ describe('Scope', () => {
                 program = new Program({ rootDir: rootDir });
 
                 program.addOrReplaceFile('components/parent.xml', trim`
-                    <?xml version="1.0" encoding="utf-8" ?>
-                    <component name="parent" extends="Scene">
-                        <script uri="parent.bs"/>
-                    </component>
-                `);
-                program.addOrReplaceFile(s`components/parent.bs`, `
-                    class MyClass
+                <? xml version = "1.0" encoding = "utf-8" ?>
+                    <component name="parent" extends="Scene" >
+                        <script uri="parent.bs" />
+                            </component>
+                                `);
+                program.addOrReplaceFile(s`components / parent.bs`, `
+            class MyClass
                     end class
                 `);
                 program.addOrReplaceFile('components/child.xml', trim`
-                    <?xml version="1.0" encoding="utf-8" ?>
-                    <component name="child" extends="parent">
-                        <script uri="child.bs"/>
-                    </component>
-                `);
-                program.addOrReplaceFile(s`components/child.bs`, `
-                    function getFoo() as MyClass
-                    end function
+                <? xml version = "1.0" encoding = "utf-8" ?>
+                    <component name="child" extends="parent" >
+                        <script uri="child.bs" />
+                            </component>
+                                `);
+                program.addOrReplaceFile(s`components / child.bs`, `
+            function getFoo() as MyClass
+            end function
                 `);
 
                 program.validate();
@@ -759,26 +833,26 @@ describe('Scope', () => {
             program = new Program({ rootDir: rootDir });
 
             program.addOrReplaceFile('components/child.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="child" extends="parent">
-                    <script uri="child.brs"/>
-                </component>
-            `);
-            program.addOrReplaceFile(s`components/child.brs`, ``);
+                <? xml version = "1.0" encoding = "utf-8" ?>
+                    <component name="child" extends="parent" >
+                        <script uri="child.brs" />
+                            </component>
+                                `);
+            program.addOrReplaceFile(s`components / child.brs`, ``);
             program.validate();
             let childScope = program.getComponentScope('child');
             expect(childScope.getAllCallables().map(x => x.callable.name)).not.to.include('parentSub');
 
             program.addOrReplaceFile('components/parent.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="parent" extends="Scene">
-                    <script uri="parent.brs"/>
-                </component>
-            `);
-            program.addOrReplaceFile(s`components/parent.brs`, `
-                sub parentSub()
-                end sub
-            `);
+                <? xml version = "1.0" encoding = "utf-8" ?>
+                    <component name="parent" extends="Scene" >
+                        <script uri="parent.brs" />
+                            </component>
+                                `);
+            program.addOrReplaceFile(s`components / parent.brs`, `
+            sub parentSub()
+            end sub
+                `);
             program.validate();
 
             expect(childScope.getAllCallables().map(x => x.callable.name)).to.include('parentSub');
@@ -793,7 +867,7 @@ describe('Scope', () => {
 
     describe('getDefinition', () => {
         it('returns empty list when there are no files', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
+            let file = program.addOrReplaceFile({ src: `${rootDir} /source/main.brs`, dest: 'source/main.brs' }, '');
             let scope = program.getScopeByName('source');
             expect(scope.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
         });
@@ -812,22 +886,22 @@ describe('Scope', () => {
     describe('scope symbol tables', () => {
         it('adds symbols for the complete scope', () => {
             program.addOrReplaceFile('source/file.brs', `
-                function funcInt() as integer
-                    return 3
-                end function
+            function funcInt() as integer
+            return 3
+            end function
 
                 function funcStr() as string
-                    return "hello"
-                end function
+            return "hello"
+            end function
             `);
             program.addOrReplaceFile('source/file2.brs', `
-                function funcBool() as boolean
-                    return true
-                end function
+            function funcBool() as boolean
+            return true
+            end function
 
                 function funcObject() as object
-                    return {}
-                end function
+            return {}
+            end function
             `);
             const sourceSymbols = program.getScopeByName('source').symbolTable;
 
@@ -839,13 +913,13 @@ describe('Scope', () => {
 
         it('adds updates symbol tables on invalidation', () => {
             program.addOrReplaceFile('source/file.brs', `
-                function funcInt() as integer
-                    return 3
-                end function
+            function funcInt() as integer
+            return 3
+            end function
 
                 function funcStr() as string
-                    return "hello"
-                end function
+            return "hello"
+            end function
             `);
 
             let sourceSymbols = program.getScopeByName('source').symbolTable;
@@ -855,9 +929,9 @@ describe('Scope', () => {
             program.getScopeByName('source').invalidate();
 
             program.addOrReplaceFile('source/file.brs', `
-                function funcFloat() as float
-                    return 3.14
-                end function
+            function funcFloat() as float
+            return 3.14
+            end function
             `);
             sourceSymbols = program.getScopeByName('source').symbolTable;
 
@@ -869,21 +943,21 @@ describe('Scope', () => {
 
         it('adds namespaced symbols tables to the scope', () => {
             program.addOrReplaceFile('source/file.brs', `
-                function funcInt() as integer
-                    return 1 + Name.Space.nsFunc2(1)
-                end function
+            function funcInt() as integer
+            return 1 + Name.Space.nsFunc2(1)
+            end function
             `);
             program.addOrReplaceFile('source/namespace.brs', `
-                namespace Name.Space
+            namespace Name.Space
                     function nsFunc1() as integer
-                        return 1
-                    end function
+            return 1
+            end function
 
                     function nsFunc2(num as integer) as integer
-                        return num + Name.Space.nsFunc1()
-                    end function
+            return num + Name.Space.nsFunc1()
+            end function
                 end namespace
-            `);
+                    `);
 
             const sourceScope = program.getScopeByName('source');
             const sourceSymbols = sourceScope.symbolTable;
@@ -896,26 +970,26 @@ describe('Scope', () => {
 
         it('merges namespace symbol tables in namespaceLookup', () => {
             program.addOrReplaceFile('source/ns1.brs', `
-                namespace Name.Space
+            namespace Name.Space
                     function nsFunc1() as integer
-                        return 1
-                    end function
+            return 1
+            end function
                 end namespace
 
-                namespace Name
+            namespace Name
                  function outerNsFunc() as string
-                   return "hello"
-                 end function
+            return "hello"
+            end function
                 end namespace
-            `);
+                    `);
             program.addOrReplaceFile('source/namespace.brs', `
-                namespace Name.Space
+            namespace Name.Space
                     function nsFunc2(num as integer) as integer
-                        print Name.outerNsFunc()
-                        return num + nsFunc1()
-                    end function
+            print Name.outerNsFunc()
+            return num + nsFunc1()
+            end function
                 end namespace
-            `);
+                    `);
 
             const sourceScope = program.getScopeByName('source');
             const mergedNsSymbolTable = sourceScope.namespaceLookup['name.space']?.symbolTable;
