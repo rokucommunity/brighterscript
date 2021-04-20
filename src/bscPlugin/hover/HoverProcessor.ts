@@ -24,8 +24,6 @@ export class HoverProcessor {
         if (hover) {
             //assign the hover to the event
             this.event.hover = hover;
-            //return false to short-circuit the event
-            return false;
         }
     }
 

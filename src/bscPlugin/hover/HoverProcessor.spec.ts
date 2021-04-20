@@ -16,7 +16,7 @@ describe('HoverProcessor', () => {
         program.dispose();
     });
 
-    it('short-circuits the event', () => {
+    it('does not short-circuit the event since our plugin is the base plugin', () => {
         const mock = sinon.mock();
         program.plugins.add({
             name: 'test-plugin',
@@ -28,9 +28,9 @@ describe('HoverProcessor', () => {
         `);
         //get the hover
         program.getHover(file.pathAbsolute, util.createPosition(1, 20));
-        //the onGetHover function from `test-plugin` should never get called because
-        //BscPlugin should have short-circuited the event
-        expect(mock.called).to.be.false;
+        //the onGetHover function from `test-plugin` should always get called because
+        //BscPlugin should never short-circuit the event
+        expect(mock.called).to.be.true;
     });
 
     describe('BrsFile', () => {
