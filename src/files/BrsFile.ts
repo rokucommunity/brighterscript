@@ -21,7 +21,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isUninitializedType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -1291,25 +1291,6 @@ export class BrsFile {
         //look through local variables first
         {
             const func = this.getFunctionExpressionAtPosition(position);
-            const localVars = this.getLocalVarsAtPosition(position, func);
-            //find any variable with this name
-            for (let localVar of localVars) {
-                //we found a variable declaration with this token text!
-                if (localVar.lowerName === lowerTokenText) {
-                    let typeText: string;
-                    //TODO figure out what type this var is
-                    if (isFunctionType(localVar.type)) {
-                        typeText = localVar.type.toString();
-                    } else {
-                        typeText = `${localVar.nameToken.text} as ${localVar.type.toString()}`;
-                    }
-                    return {
-                        range: token.range,
-                        //append the variable name to the front for scope
-                        contents: typeText
-                    };
-                }
-            }
             for (const labelStatement of func.labelStatements) {
                 if (labelStatement.tokens.identifier.text.toLocaleLowerCase() === lowerTokenText) {
                     return {
@@ -1317,6 +1298,22 @@ export class BrsFile {
                         contents: `${labelStatement.tokens.identifier.text}: label`
                     };
                 }
+            }
+
+            let type = func.symbolTable?.getSymbolType(lowerTokenText);
+            if (!isUninitializedType(type)) { //TODO hasKEY
+                let typeText: string;
+                //TODO figure out what type this var is
+                if (isFunctionType(type)) {
+                    typeText = type.toString();
+                } else {
+                    typeText = `${token.text} as ${type.toString()}`;
+                }
+                return {
+                    range: token.range,
+                    //append the variable name to the front for scope
+                    contents: typeText
+                };
             }
         }
 
