@@ -1,6 +1,6 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Position } from 'vscode-languageserver';
+import type { CompletionItem, Position } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
@@ -1532,37 +1532,6 @@ export class BrsFile {
             sigHelp.signature.label = sigHelp.signature.label.replace(/(function|sub) new/, sigHelp.key);
         }
         return sigHelp;
-    }
-
-    public getReferences(position: Position) {
-
-        const callSiteToken = this.getTokenAt(position);
-
-        let locations = [] as Location[];
-
-        const searchFor = callSiteToken.text.toLowerCase();
-
-        const scopes = this.program.getScopesForFile(this);
-
-        for (const scope of scopes) {
-            const processedFiles = new Set<BrsFile>();
-            for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || processedFiles.has(file)) {
-                    continue;
-                }
-                processedFiles.add(file);
-                file.ast.walk(createVisitor({
-                    VariableExpression: (e) => {
-                        if (e.name.text.toLowerCase() === searchFor) {
-                            locations.push(Location.create(util.pathToUri(file.pathAbsolute), e.range));
-                        }
-                    }
-                }), {
-                    walkMode: WalkMode.visitExpressionsRecursive
-                });
-            }
-        }
-        return locations;
     }
 
     /**

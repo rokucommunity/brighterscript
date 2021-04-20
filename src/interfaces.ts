@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, Position, Hover } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, Position, Hover, Location } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -194,6 +194,7 @@ export interface CompilerPlugin {
     afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void | boolean;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
     onGetHover?: PluginHandler<OnGetHoverEvent>;
+    onGetReferences?: PluginHandler<OnGetReferencesEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void | boolean;
     beforeScopeDispose?: (scope: Scope) => void | boolean;
@@ -226,6 +227,14 @@ export interface OnGetHoverEvent {
     position: Position;
     scopes: Scope[];
     hover: Hover;
+}
+
+export interface OnGetReferencesEvent {
+    program: Program;
+    file: BscFile;
+    position: Position;
+    scopes: Scope[];
+    references: Location[];
 }
 
 export interface TypedefProvider {

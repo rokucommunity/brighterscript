@@ -408,11 +408,6 @@ export class XmlFile {
         });
     }
 
-    public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
-        //TODO implement
-        return null;
-    }
-
     public getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]): FunctionScope { //eslint-disable-line
         //TODO implement
         return null;

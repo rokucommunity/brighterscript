@@ -6,7 +6,6 @@ import type {
     CompletionItem,
     Connection,
     DidChangeWatchedFilesParams,
-    Hover,
     InitializeParams,
     ServerCapabilities,
     TextDocumentPositionParams,
@@ -1041,13 +1040,14 @@ export class LanguageServer {
         const position = params.position;
         const pathAbsolute = util.uriToPath(params.textDocument.uri);
 
-        const results = util.flatMap(
-            await Promise.all(this.getWorkspaces().map(workspace => {
-                return workspace.builder.program.getReferences(pathAbsolute, position);
-            })),
-            c => c
-        );
-        return results.filter((r) => r);
+        const result = [];
+        for (const workspace of this.getWorkspaces()) {
+            result.push(
+                ...workspace.builder.program.getReferences(pathAbsolute, position)
+            );
+        }
+        //remove falsey references
+        return result.filter(r => !!r);
     }
 
     private diagnosticCollection = new DiagnosticCollection();

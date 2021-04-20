@@ -9,7 +9,6 @@ export class HoverProcessor {
     public constructor(
         public event: OnGetHoverEvent
     ) {
-
     }
 
     public process() {
