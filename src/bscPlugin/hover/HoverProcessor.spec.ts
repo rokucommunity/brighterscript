@@ -81,7 +81,10 @@ describe('HoverProcessor', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(util.createRange(1, 25, 1, 29));
-            expect(hover.contents).to.equal('function Main(count? as dynamic) as dynamic');
+            expect(hover.contents).to.eql({
+                language: 'brighterscript',
+                value: 'function Main(count? as dynamic) as dynamic'
+            });
         });
 
         it('finds variable function hover in same scope', () => {
@@ -97,7 +100,10 @@ describe('HoverProcessor', () => {
             let hover = program.getHover(file.pathAbsolute, util.createPosition(5, 24));
 
             expect(hover.range).to.eql(util.createRange(5, 20, 5, 29));
-            expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
+            expect(hover.contents).to.eql({
+                language: 'brighterscript',
+                value: 'sub sayMyName(name as string) as void'
+            });
         });
 
         it('finds function hover in file scope', () => {
@@ -114,7 +120,10 @@ describe('HoverProcessor', () => {
             let hover = program.getHover(file.pathAbsolute, util.createPosition(2, 25));
 
             expect(hover.range).to.eql(util.createRange(2, 20, 2, 29));
-            expect(hover.contents).to.equal('sub sayMyName() as void');
+            expect(hover.contents).to.eql({
+                language: 'brighterscript',
+                value: 'sub sayMyName() as void'
+            });
         });
 
         it('finds function hover in scope', () => {
@@ -139,7 +148,10 @@ describe('HoverProcessor', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(util.createRange(2, 20, 2, 29));
-            expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
+            expect(hover.contents).to.eql({
+                language: 'brighterscript',
+                value: 'sub sayMyName(name as string) as void'
+            });
         });
     });
 });

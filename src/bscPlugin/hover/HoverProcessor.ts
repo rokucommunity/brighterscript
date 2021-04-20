@@ -66,7 +66,7 @@ export class HoverProcessor {
                         return {
                             range: token.range,
                             contents: {
-                                language: 'brightscript',
+                                language: 'brighterscript',
                                 value: typeText
                             }
                         };
@@ -77,7 +77,7 @@ export class HoverProcessor {
                         return {
                             range: token.range,
                             contents: {
-                                language: 'brightscript',
+                                language: 'brighterscript',
                                 value: `${labelStatement.name}: label`
                             }
                         };
@@ -93,7 +93,7 @@ export class HoverProcessor {
                 return {
                     range: token.range,
                     contents: {
-                        language: 'brightscript',
+                        language: 'brighterscript',
                         value: callable.type.toString()
                     }
                 };
