@@ -8,6 +8,8 @@ import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
 import { trim } from './testHelpers.spec';
 import { Logger } from './Logger';
+import type { FunctionType } from './types/FunctionType';
+import { UninitializedType } from './types/UninitializedType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -804,6 +806,124 @@ describe('Scope', () => {
             expect(completions).to.be.length.greaterThan(0);
             //it should find documentation for completions
             expect(completions.filter(x => !!x.documentation)).to.have.length.greaterThan(0);
+        });
+    });
+
+    describe('scope symbol tables', () => {
+        it('adds symbols for the complete scope', () => {
+            program.addOrReplaceFile('source/file.brs', `
+                function funcInt() as integer
+                    return 3
+                end function
+
+                function funcStr() as string
+                    return "hello"
+                end function
+            `);
+            program.addOrReplaceFile('source/file2.brs', `
+                function funcBool() as boolean
+                    return true
+                end function
+
+                function funcObject() as object
+                    return {}
+                end function
+            `);
+            const sourceSymbols = program.getScopeByName('source').symbolTable;
+
+            expect((sourceSymbols.getSymbolType('funcInt') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('funcStr') as FunctionType).returnType.toString()).to.equal('string');
+            expect((sourceSymbols.getSymbolType('funcBool') as FunctionType).returnType.toString()).to.equal('boolean');
+            expect((sourceSymbols.getSymbolType('funcObject') as FunctionType).returnType.toString()).to.equal('object');
+        });
+
+        it('adds updates symbol tables on invalidation', () => {
+            program.addOrReplaceFile('source/file.brs', `
+                function funcInt() as integer
+                    return 3
+                end function
+
+                function funcStr() as string
+                    return "hello"
+                end function
+            `);
+
+            let sourceSymbols = program.getScopeByName('source').symbolTable;
+
+            expect((sourceSymbols.getSymbolType('funcInt') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('funcStr') as FunctionType).returnType.toString()).to.equal('string');
+            program.getScopeByName('source').invalidate();
+
+            program.addOrReplaceFile('source/file.brs', `
+                function funcFloat() as float
+                    return 3.14
+                end function
+            `);
+            sourceSymbols = program.getScopeByName('source').symbolTable;
+
+            expect(sourceSymbols.getSymbolType('funcInt')).to.be.instanceOf(UninitializedType);
+            expect(sourceSymbols.getSymbolType('funcStr')).to.be.instanceOf(UninitializedType);
+            expect((sourceSymbols.getSymbolType('funcFloat') as FunctionType).returnType.toString()).to.equal('float');
+        });
+
+
+        it('adds namespaced symbols tables to the scope', () => {
+            program.addOrReplaceFile('source/file.brs', `
+                function funcInt() as integer
+                    return 1 + Name.Space.nsFunc2(1)
+                end function
+            `);
+            program.addOrReplaceFile('source/namespace.brs', `
+                namespace Name.Space
+                    function nsFunc1() as integer
+                        return 1
+                    end function
+
+                    function nsFunc2(num as integer) as integer
+                        return num + Name.Space.nsFunc1()
+                    end function
+                end namespace
+            `);
+
+            const sourceScope = program.getScopeByName('source');
+            const sourceSymbols = sourceScope.symbolTable;
+
+            expect((sourceSymbols.getSymbolType('funcInt') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('Name.Space.nsFunc1') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('Name.Space.nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');
+
+        });
+
+        it('merges namespace symbol tables in namespaceLookup', () => {
+            program.addOrReplaceFile('source/ns1.brs', `
+                namespace Name.Space
+                    function nsFunc1() as integer
+                        return 1
+                    end function
+                end namespace
+
+                namespace Name
+                 function outerNsFunc() as string
+                   return "hello"
+                 end function
+                end namespace
+            `);
+            program.addOrReplaceFile('source/namespace.brs', `
+                namespace Name.Space
+                    function nsFunc2(num as integer) as integer
+                        print Name.outerNsFunc()
+                        return num + nsFunc1()
+                    end function
+                end namespace
+            `);
+
+            const sourceScope = program.getScopeByName('source');
+            const mergedNsSymbolTable = sourceScope.namespaceLookup['name.space']?.symbolTable;
+            expect(mergedNsSymbolTable).not.to.be.undefined;
+            expect((mergedNsSymbolTable.getSymbolType('nsFunc1') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((mergedNsSymbolTable.getSymbolType('nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((mergedNsSymbolTable.getSymbolType('Name.Space.nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((mergedNsSymbolTable.getSymbolType('Name.outerNsFunc') as FunctionType).returnType.toString()).to.equal('string');
         });
     });
 });

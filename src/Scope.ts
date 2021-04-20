@@ -16,6 +16,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
+import { SymbolTable } from './SymbolTable';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -45,6 +46,8 @@ export class Scope {
     protected programHandles = [] as Array<() => void>;
 
     protected cache = new Cache();
+
+    private _symbolTable: SymbolTable;
 
     /**
      * A dictionary of namespaces, indexed by the lower case full name of each namespace.
@@ -323,6 +326,7 @@ export class Scope {
      */
     public buildNamespaceLookup() {
         let namespaceLookup = {} as Record<string, NamespaceContainer>;
+        let parentSymbolTable = this.symbolTable;
         this.enumerateBrsFiles((file) => {
             for (let namespace of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
@@ -343,8 +347,10 @@ export class Scope {
                         namespaces: {},
                         classStatements: {},
                         functionStatements: {},
-                        statements: []
+                        statements: [],
+                        symbolTable: new SymbolTable(parentSymbolTable)
                     };
+                    parentSymbolTable = namespaceLookup[lowerLoopName].symbolTable;
                 }
                 let ns = namespaceLookup[name.toLowerCase()];
                 ns.statements.push(...namespace.body.statements);
@@ -354,7 +360,10 @@ export class Scope {
                     } else if (isFunctionStatement(statement)) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     }
+
+
                 }
+                ns.symbolTable.mergeSymbolTable(namespace.symbolTable);
             }
 
             //associate child namespaces with their parents
@@ -459,6 +468,24 @@ export class Scope {
         (this as any).isValidated = false;
         //clear out various lookups (they'll get regenerated on demand the next time they're requested)
         this.cache.clear();
+
+        this._symbolTable = null;
+    }
+
+    /**
+     * Gets ths current symbol table for the scope, by merging the tables for all the files in this scope.
+     * This will be rebuilt if this scope is invalidated
+     */
+    public get symbolTable() {
+        if (!this._symbolTable) {
+            this._symbolTable = new SymbolTable(this.getParentScope()?.symbolTable);
+            for (let file of this.getOwnFiles()) {
+                if (isBrsFile(file)) {
+                    this._symbolTable.mergeSymbolTable(file.parser?.symbolTable);
+                }
+            }
+        }
+        return this._symbolTable;
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {
@@ -982,6 +1009,7 @@ interface NamespaceContainer {
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
     namespaces: Record<string, NamespaceContainer>;
+    symbolTable: SymbolTable;
 }
 
 interface AugmentedNewExpression extends NewExpression {
