@@ -1026,7 +1026,7 @@ describe('BrsFile', () => {
         });
 
         it('succeeds when finding variables with "sub" in them', () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            let file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
                 function DoSomething()
                     return value.subType()
                 end function
@@ -1331,7 +1331,7 @@ describe('BrsFile', () => {
         });
 
         it('finds return type', () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            let file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
                 function DoSomething() as string
                 end function
             `);
@@ -1434,7 +1434,7 @@ describe('BrsFile', () => {
         });
 
         it('finds value from global return', () => {
-            let file = program.addOrReplaceFile('source/main.brs', `
+            let file = program.addOrReplaceFile<BrsFile>('source/main.brs', `
                 sub Main()
                    myName = GetName()
                 end sub
@@ -2183,7 +2183,7 @@ describe('BrsFile', () => {
         });
 
         it('simple mapped files include a reference to the source map', () => {
-            let file = program.addOrReplaceFile('source/logger.brs', trim`
+            let file = program.addOrReplaceFile<BrsFile>('source/logger.brs', trim`
                 sub logInfo()
                 end sub
             `);
@@ -2193,7 +2193,7 @@ describe('BrsFile', () => {
         });
 
         it('AST generated files include a reference to the source map', () => {
-            let file = program.addOrReplaceFile('source/logger.brs', trim`
+            let file = program.addOrReplaceFile<BrsFile>('source/logger.brs', trim`
                 sub logInfo()
                 end sub
             `);

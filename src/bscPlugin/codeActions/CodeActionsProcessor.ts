@@ -1,5 +1,6 @@
 import type { Diagnostic } from 'vscode-languageserver';
 import { CodeActionKind } from 'vscode-languageserver';
+import { isBrsFile } from '../../astUtils';
 import { codeActionUtil } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
@@ -66,28 +67,26 @@ export class CodeActionsProcessor {
 
     private suggestFunctionImports(diagnostic: DiagnosticMessageType<'callToUnknownFunction'>) {
         //skip if not a BrighterScript file
-        if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
-            return;
+        if (isBrsFile(diagnostic.file) && diagnostic.file.parseMode === ParseMode.BrighterScript) {
+            const lowerFunctionName = diagnostic.data.functionName.toLowerCase();
+            this.suggestImports(
+                diagnostic,
+                lowerFunctionName,
+                diagnostic.file.program.findFilesForFunction(lowerFunctionName)
+            );
         }
-        const lowerFunctionName = diagnostic.data.functionName.toLowerCase();
-        this.suggestImports(
-            diagnostic,
-            lowerFunctionName,
-            this.event.file.program.findFilesForFunction(lowerFunctionName)
-        );
     }
 
     private suggestClassImports(diagnostic: DiagnosticMessageType<'classCouldNotBeFound'>) {
         //skip if not a BrighterScript file
-        if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
-            return;
+        if (isBrsFile(diagnostic.file) && diagnostic.file.parseMode === ParseMode.BrighterScript) {
+            const lowerClassName = diagnostic.data.className.toLowerCase();
+            this.suggestImports(
+                diagnostic,
+                lowerClassName,
+                diagnostic.file.program.findFilesForClass(lowerClassName)
+            );
         }
-        const lowerClassName = diagnostic.data.className.toLowerCase();
-        this.suggestImports(
-            diagnostic,
-            lowerClassName,
-            this.event.file.program.findFilesForClass(lowerClassName)
-        );
     }
 
     private addMissingExtends(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {

@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import type { BrsFile } from './files/BrsFile';
 
 import { FunctionScope } from './FunctionScope';
 import { Program } from './Program';
@@ -23,7 +24,7 @@ describe('FunctionScope', () => {
         });
 
         it('returns variables defined above the specified line number', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.addOrReplaceFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub main()
                     var1 = 1
                     var2 = 2

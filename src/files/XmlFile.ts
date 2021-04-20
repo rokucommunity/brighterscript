@@ -1,10 +1,10 @@
 import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
-import type { Callable, BsDiagnostic, File, FileReference, FunctionCall, CommentFlag } from '../interfaces';
+import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, BscFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
 import SGParser, { rangeFromTokenValue } from '../parser/SGParser';
@@ -361,7 +361,7 @@ export class XmlFile {
      * Determines if this xml file has a reference to the specified file (or if it's itself)
      * @param file
      */
-    public doesReferenceFile(file: File) {
+    public doesReferenceFile(file: BscFile) {
         return this.cache.getOrAdd(`doesReferenceFile: ${file.pkgPath}`, () => {
             if (file === this) {
                 return true;
@@ -404,22 +404,6 @@ export class XmlFile {
         return this.cache.getOrAdd('parent', () => {
             return this.program.getComponent(this.parentComponentName?.text)?.file ?? null;
         });
-    }
-
-    public getHover(position: Position): Hover { //eslint-disable-line
-        //TODO implement
-        // let result = {} as Hover;
-        return null;
-    }
-
-    public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
-        //TODO implement
-        return null;
-    }
-
-    public getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]): FunctionScope { //eslint-disable-line
-        //TODO implement
-        return null;
     }
 
     /**

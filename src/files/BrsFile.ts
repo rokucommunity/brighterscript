@@ -7,7 +7,7 @@ import * as path from 'path';
 import type { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
+import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, BscFile } from '../interfaces';
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
 import { Parser, ParseMode } from '../parser';
@@ -22,7 +22,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement } from '../astUtils/reflection';
+import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isClassFieldStatement, isBrsFile } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
@@ -1357,34 +1357,35 @@ export class BrsFile {
             }
         }
 
-        const filesSearched = new Set<BrsFile>();
+        const filesSearched = new Set<BscFile>();
         //look through all files in scope for matches
         for (const scope of this.program.getScopesForFile(this)) {
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || filesSearched.has(file)) {
+                if (filesSearched.has(file)) {
                     continue;
                 }
-                filesSearched.add(file);
-
-                if (previousToken?.kind === TokenKind.Dot && file.parseMode === ParseMode.BrighterScript) {
-                    results.push(...this.getClassMemberDefinitions(textToSearchFor, file));
-                    const namespaceDefinition = this.getNamespaceDefinitions(token, file);
-                    if (namespaceDefinition) {
-                        results.push(namespaceDefinition);
+                if (isBrsFile(file)) {
+                    if (previousToken?.kind === TokenKind.Dot && file.parseMode === ParseMode.BrighterScript) {
+                        results.push(...this.getClassMemberDefinitions(textToSearchFor, file));
+                        const namespaceDefinition = this.getNamespaceDefinitions(token, file);
+                        if (namespaceDefinition) {
+                            results.push(namespaceDefinition);
+                        }
                     }
+                    const statementHandler = (statement: FunctionStatement) => {
+                        if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
+                            const uri = util.pathToUri(file.pathAbsolute);
+                            results.push(Location.create(uri, statement.range));
+                        }
+                    };
+
+                    file.parser.ast.walk(createVisitor({
+                        FunctionStatement: statementHandler
+                    }), {
+                        walkMode: WalkMode.visitStatements
+                    });
+                    filesSearched.add(file);
                 }
-                const statementHandler = (statement: FunctionStatement) => {
-                    if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
-                        const uri = util.pathToUri(file.pathAbsolute);
-                        results.push(Location.create(uri, statement.range));
-                    }
-                };
-
-                file.parser.ast.walk(createVisitor({
-                    FunctionStatement: statementHandler
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });
             }
         }
         return results;
@@ -1616,21 +1617,23 @@ export class BrsFile {
         const scopes = this.program.getScopesForFile(this);
 
         for (const scope of scopes) {
-            const processedFiles = new Set<BrsFile>();
+            const processedFiles = new Set<BscFile>();
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || processedFiles.has(file)) {
+                if (processedFiles.has(file)) {
                     continue;
                 }
-                processedFiles.add(file);
-                file.ast.walk(createVisitor({
-                    VariableExpression: (e) => {
-                        if (e.name.text.toLowerCase() === searchFor) {
-                            locations.push(Location.create(util.pathToUri(file.pathAbsolute), e.range));
+                if (isBrsFile(file)) {
+                    file.ast.walk(createVisitor({
+                        VariableExpression: (e) => {
+                            if (e.name.text.toLowerCase() === searchFor) {
+                                locations.push(Location.create(util.pathToUri(file.pathAbsolute), e.range));
+                            }
                         }
-                    }
-                }), {
-                    walkMode: WalkMode.visitExpressionsRecursive
-                });
+                    }), {
+                        walkMode: WalkMode.visitExpressionsRecursive
+                    });
+                }
+                processedFiles.add(file);
             }
         }
         return locations;

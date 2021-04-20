@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, CompletionItem, Position, Hover, Location } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -9,7 +9,7 @@ import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { Expression, FunctionStatement } from './parser';
 import type { TranspileState } from './parser/TranspileState';
-import type { SourceNode } from 'source-map';
+import type { CodeWithSourceMap, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 
 export interface BsDiagnostic extends Diagnostic {
@@ -20,7 +20,54 @@ export interface BsDiagnostic extends Diagnostic {
     data?: any;
 }
 
-export type BscFile = BrsFile | XmlFile;
+export interface BscFile {
+    /**
+     * A collection of flags found in comments (generally the bs:disable flags)
+     */
+    commentFlags?: CommentFlag[];
+    /**
+     * The pkgPath to the file (without the `pkg:` prefix)
+     */
+    pkgPath: string;
+    pathAbsolute: string;
+    /**
+     * The key used to identify this file in the dependency graph
+     */
+    dependencyGraphKey: string;
+    /**
+     * Dispose of any resources the file may have created.
+     */
+    dispose?(): void;
+    /**
+     * Get completions available at the given cursor with respect to the given Scope.
+     */
+    getCompletions?(position: Position, scope?: Scope): CompletionItem[];
+    /**
+     * Get all diagnostics for the file
+     */
+    getDiagnostics?(): BsDiagnostic[];
+    /**
+     * Get hover information from the file related to the given position.
+     */
+    getHover?(position: Position): Hover;
+    /**
+     * Get all references of the item under the given position
+     */
+    getReferences?(position: Position): Location[];
+    /**
+     * Indicates whether this file has been validated yet. If this property is omitted, it is assumed the file is always valid.
+     */
+    isValidated?: boolean;
+    /**
+     * Transpile the file.
+     */
+    transpile?(): CodeWithSourceMap;
+    /**
+     * Function to validate the file. Optional, and if omitted, the file is assumed
+     * to always be valid
+     */
+    validate?();
+}
 
 export interface Callable {
     file: BscFile;
@@ -65,7 +112,7 @@ export interface FunctionCall {
      */
     range: Range;
     functionScope: FunctionScope;
-    file: File;
+    file: BscFile;
     name: string;
     args: CallableArg[];
     nameRange: Range;
@@ -115,15 +162,6 @@ export interface FileReference {
      * If the range is null, then this import is derived so skip any location-based logic
      */
     filePathRange?: Range;
-}
-
-export interface File {
-    /**
-     * The absolute path to the file, relative to the pkg
-     */
-    pkgPath: string;
-    pathAbsolute: string;
-    getDiagnostics(): BsDiagnostic[];
 }
 
 export interface VariableDeclaration {
@@ -199,6 +237,7 @@ export interface CompilerPlugin {
     beforeScopeValidate?: PluginHandler<BeforeScopeValidateEvent>;
     afterScopeValidate?: PluginHandler<AfterScopeValidateEvent>;
     //file events
+    onProvideFile?: PluginHandler<OnProvideFileEvent, void | BscFile>;
     beforeFileParse?: PluginHandler<BeforeFileParseEvent>;
     afterFileParse?: PluginHandler<AfterFileParseEvent>;
     beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
@@ -208,7 +247,7 @@ export interface CompilerPlugin {
     beforeFileDispose?: PluginHandler<BeforeFileDisposeEvent>;
     afterFileDispose?: PluginHandler<AfterFileDisposeEvent>;
 }
-export type PluginHandler<T> = (event: T) => void;
+export type PluginHandler<T, R = void> = (event: T) => R;
 
 export interface BeforeProgramCreateEvent {
     builder: ProgramBuilder;
@@ -270,6 +309,13 @@ export interface BeforeScopeDisposeEvent {
 export interface AfterScopeDisposeEvent {
     program: Program;
     scope: Scope;
+}
+export interface OnProvideFileEvent {
+    program: Program;
+    /**
+     * The absolute path to the source location of the file
+     */
+    srcPath: string;
 }
 export interface BeforeScopeValidateEvent {
     program: Program;

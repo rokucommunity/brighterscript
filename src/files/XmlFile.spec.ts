@@ -627,12 +627,12 @@ describe('XmlFile', () => {
         it(`honors the 'needsTranspiled' flag when set in 'afterFileParse'`, () => {
             program.plugins.add({
                 name: 'test',
-                afterFileParse: (file) => {
+                afterFileParse: (file: any) => {
                     //enable transpile for every file
                     file.needsTranspiled = true;
                 }
             });
-            const file = program.addOrReplaceFile('components/file.xml', trim`
+            const file = program.addOrReplaceFile<BrsFile>('components/file.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Comp" extends="Group">
                 </component>
@@ -687,7 +687,7 @@ describe('XmlFile', () => {
         });
 
         it('does not transpile xml file when bslib script is already present', () => {
-            const file = program.addOrReplaceFile('components/comp.xml', trim`
+            const file = program.addOrReplaceFile<BrsFile>('components/comp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Comp" extends="Group">
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
@@ -829,7 +829,7 @@ describe('XmlFile', () => {
         });
 
         it('needsTranspiled is false by default', () => {
-            let file = program.addOrReplaceFile(
+            let file = program.addOrReplaceFile<BrsFile>(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
                 trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -840,7 +840,7 @@ describe('XmlFile', () => {
         });
 
         it('needsTranspiled is true if an import is brighterscript', () => {
-            let file = program.addOrReplaceFile(
+            let file = program.addOrReplaceFile<BrsFile>(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
                 trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -869,7 +869,7 @@ describe('XmlFile', () => {
 
         it('AST-based source mapping includes sourcemap reference', () => {
             program.options.sourceMap = true;
-            let file = program.addOrReplaceFile(
+            let file = program.addOrReplaceFile<BrsFile>(
                 { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
                 trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -910,7 +910,7 @@ describe('XmlFile', () => {
     it('plugin diagnostics work for xml files', () => {
         program.plugins.add({
             name: 'Xml diagnostic test',
-            afterFileParse: ({ file }) => {
+            afterFileParse: ({ file: any }) => {
                 if (file.pathAbsolute.endsWith('.xml')) {
                     file.addDiagnostics([{
                         file: file,

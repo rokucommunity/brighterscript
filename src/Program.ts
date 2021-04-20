@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, BeforeFileParseEvent } from './interfaces';
+import type { BsDiagnostic, BscFile, FileReference, FileObj, BeforeFileParseEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -233,7 +233,7 @@ export class Program {
      * by any scope in the program.
      */
     public getUnreferencedFiles() {
-        let result = [] as File[];
+        let result = [] as BscFile[];
         for (let filePath in this.files) {
             let file = this.files[filePath];
             if (!this.fileIsIncludedInAnyScope(file)) {
@@ -574,7 +574,7 @@ export class Program {
                 }
 
                 //for every unvalidated file, validate it
-                if (!file.isValidated) {
+                if (file.isValidated === false) {
                     this.plugins.emit('beforeFileValidate', {
                         program: this,
                         file: file
@@ -686,7 +686,7 @@ export class Program {
      * Get a list of all scopes the file is loaded into
      * @param file
      */
-    public getScopesForFile(file: XmlFile | BrsFile) {
+    public getScopesForFile(file: BscFile) {
         let result = [] as Scope[];
         for (let key in this.scopes) {
             let scope = this.scopes[key];
@@ -700,25 +700,27 @@ export class Program {
 
     public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {
         let results = new Map<Statement, FileLink<Statement>>();
-        const filesSearched = new Set<BrsFile>();
+        const filesSearched = new Set<BscFile>();
         let lowerNamespaceName = namespaceName?.toLowerCase();
         let lowerName = name?.toLowerCase();
         //look through all files in scope for matches
         for (const scope of this.getScopesForFile(originFile)) {
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || filesSearched.has(file)) {
+                if (filesSearched.has(file)) {
                     continue;
                 }
-                filesSearched.add(file);
-
-                for (const statement of [...file.parser.references.functionStatements, ...file.parser.references.classStatements.flatMap((cs) => cs.methods)]) {
-                    let parentNamespaceName = statement.namespaceName?.getName(originFile.parseMode)?.toLowerCase();
-                    if (statement.name.text.toLowerCase() === lowerName && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
-                        if (!results.has(statement)) {
-                            results.set(statement, { item: statement, file: file });
+                if (isBrsFile(file)) {
+                    for (const statement of [...file.parser.references.functionStatements, ...file.parser.references.classStatements.flatMap((cs) => cs.methods)]) {
+                        let parentNamespaceName = statement.namespaceName?.getName(originFile.parseMode)?.toLowerCase();
+                        if (statement.name.text.toLowerCase() === lowerName && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
+                            if (!results.has(statement)) {
+                                results.set(statement, { item: statement, file: file });
+                            }
                         }
                     }
                 }
+
+                filesSearched.add(file);
             }
         }
         return [...results.values()];
@@ -726,7 +728,7 @@ export class Program {
 
     public getStatementsForXmlFile(scope: XmlScope, filterName?: string): FileLink<FunctionStatement>[] {
         let results = new Map<Statement, FileLink<FunctionStatement>>();
-        const filesSearched = new Set<BrsFile>();
+        const filesSearched = new Set<BscFile>();
 
         //get all function names for the xml file and parents
         let funcNames = new Set<string>();
@@ -742,18 +744,19 @@ export class Program {
 
         //look through all files in scope for matches
         for (const file of scope.getOwnFiles()) {
-            if (isXmlFile(file) || filesSearched.has(file)) {
+            if (filesSearched.has(file)) {
                 continue;
             }
-            filesSearched.add(file);
-
-            for (const statement of file.parser.references.functionStatements) {
-                if (funcNames.has(statement.name.text)) {
-                    if (!results.has(statement)) {
-                        results.set(statement, { item: statement, file: file });
+            if (isBrsFile(file)) {
+                for (const statement of file.parser.references.functionStatements) {
+                    if (funcNames.has(statement.name.text)) {
+                        if (!results.has(statement)) {
+                            results.set(statement, { item: statement, file: file });
+                        }
                     }
                 }
             }
+            filesSearched.add(file);
         }
         return [...results.values()];
     }
@@ -792,7 +795,7 @@ export class Program {
 
         //get the completions from all scopes for this file
         let allCompletions = util.flatMap(
-            scopes.map(ctx => file.getCompletions(position, ctx)),
+            scopes.map(ctx => file.getCompletions?.(position, ctx) ?? []),
             c => c
         );
 
@@ -844,14 +847,13 @@ export class Program {
         }
     }
 
+    /**
+     * Get hover information from the file related to the given position.
+     */
     public getHover(pathAbsolute: string, position: Position) {
         //find the file
         let file = this.getFile(pathAbsolute);
-        if (!file) {
-            return null;
-        }
-
-        return Promise.resolve(file.getHover(position));
+        return file?.getHover?.(position);
     }
 
     /**
@@ -1112,11 +1114,7 @@ export class Program {
     public getReferences(pathAbsolute: string, position: Position) {
         //find the file
         let file = this.getFile(pathAbsolute);
-        if (!file) {
-            return null;
-        }
-
-        return file.getReferences(position);
+        return file?.getReferences?.(position);
     }
 
     /**
@@ -1137,6 +1135,7 @@ export class Program {
         for (let key in this.files) {
             let file = this.files[key];
             if (
+                isBrsFile(file) &&
                 //is a BrightScript or BrighterScript file
                 (file.extension === '.bs' || file.extension === '.brs') &&
                 //this file is not the current file
