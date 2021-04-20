@@ -729,7 +729,17 @@ export class Scope {
 
             //if we don't already have a variable with this name.
             if (!scope?.getVariableByName(lowerName)) {
-                let callablesWithThisName = callablesByLowerName.get(lowerName);
+                let callablesWithThisName: CallableContainer[];
+
+                if (expCall.functionScope.func.namespaceName) {
+                    // prefer namespaced function
+                    const potentialNamespacedCallable = expCall.functionScope.func.namespaceName.getName(ParseMode.BrightScript).toLowerCase() + '_' + lowerName;
+                    callablesWithThisName = callablesByLowerName.get(potentialNamespacedCallable.toLowerCase());
+                }
+                if (!callablesWithThisName) {
+                    // just try it as is
+                    callablesWithThisName = callablesByLowerName.get(lowerName);
+                }
 
                 //use the first item from callablesByLowerName, because if there are more, that's a separate error
                 let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
