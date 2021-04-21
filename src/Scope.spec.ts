@@ -620,11 +620,11 @@ describe('Scope', () => {
             const validateEndScope = sinon.spy();
             program.addOrReplaceFile('source/file.brs', ``);
             program.addOrReplaceFile('components/comp.xml', trim`
-                <? xml version = "1.0" encoding = "utf-8" ?>
-                    <component name="comp" extends="Scene" >
-            <script uri="comp.brs" />
-            </component>
-                `);
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Scene" >
+                    <script uri="comp.brs" />
+                 </component>
+            `);
             program.addOrReplaceFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
             const compScope = program.getScopeByName('components/comp.xml');
