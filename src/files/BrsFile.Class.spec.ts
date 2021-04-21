@@ -797,7 +797,7 @@ describe('BrsFile BrighterScript classes', () => {
         );
     });
 
-    it('detects overridden property name in child class', () => {
+    it('allows untyped overridden field in child class', () => {
         program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
                 public name
@@ -807,9 +807,41 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
-        let diagnostics = program.getDiagnostics().map(x => x.message);
-        expect(diagnostics).to.eql([
-            DiagnosticMessages.memberAlreadyExistsInParentClass('field', 'Animal').message
+        expectZeroDiagnostics(program);
+    });
+
+    it('allows overridden property name in child class', () => {
+        program.addOrReplaceFile('source/main.bs', `
+            class Bird
+                public name = "bird"
+            end class
+            class Duck extends Bird
+                public name = "duck"
+            end class
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('flags incompatible child field type changes', () => {
+        program.addOrReplaceFile('source/main.bs', `
+            class Bird
+                public age = 12
+                public name = "bird"
+                public owner as Person
+            end class
+            class Duck extends Bird
+                public age = 12.2 'should be integer but is float
+                public name = 12 'should be string but is integer
+                public owner as string
+            end class
+        `);
+        program.validate();
+        expect(program.getDiagnostics().map(x => x.message).sort()).to.eql([
+            DiagnosticMessages.cannotFindType('Person').message,
+            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'age', 'float', 'integer').message,
+            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'name', 'integer', 'string').message,
+            DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Duck', 'Bird', 'owner', 'string', 'Person').message
         ]);
     });
 
