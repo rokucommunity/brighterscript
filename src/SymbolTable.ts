@@ -12,6 +12,8 @@ export class SymbolTable {
 
     private symbols = new Map<string, BscSymbol[]>();
 
+    public readonly children: SymbolTable[] = [];
+
     constructor(
         private parent?: SymbolTable | undefined
     ) { }
@@ -22,7 +24,17 @@ export class SymbolTable {
      * @param [parent]
      */
     setParent(parent?: SymbolTable) {
+        if (this.parent) {
+            this.parent.removeChild(this);
+        }
         this.parent = parent;
+    }
+
+    private removeChild(child: SymbolTable) {
+        const index = this.children.indexOf(child);
+        if (index > -1) {
+            this.children.splice(index, 1);
+        }
     }
 
     /**

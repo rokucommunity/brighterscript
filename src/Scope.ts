@@ -9,7 +9,7 @@ import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
 import { ParseMode } from './parser';
-import { standardizePath as s, util } from './util';
+import { standardizePath as s, getCallableContainersFromContainerMapByFunctionCall, util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
@@ -364,6 +364,7 @@ export class Scope {
 
                 }
                 ns.symbolTable.mergeSymbolTable(namespace.symbolTable);
+                namespace.symbolTable.setParent(ns.symbolTable);
             }
 
             //associate child namespaces with their parents
@@ -458,7 +459,7 @@ export class Scope {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
-            this.diagnosticDetectInvalidFunctionCalls(file, callableContainerMap);
+            this.diagnosticDetectInvalidFunctionCalls(file);
         });
     }
 
@@ -469,7 +470,15 @@ export class Scope {
         (this as any).isValidated = false;
         //clear out various lookups (they'll get regenerated on demand the next time they're requested)
         this.cache.clear();
+        this.clearSymbolTable();
+    }
 
+    private clearSymbolTable() {
+        if (this._symbolTable) {
+            for (const childTable of this._symbolTable.children) {
+                childTable.setParent(null);
+            }
+        }
         this._symbolTable = null;
     }
 
@@ -483,6 +492,7 @@ export class Scope {
             for (let file of this.getOwnFiles()) {
                 if (isBrsFile(file)) {
                     this._symbolTable.mergeSymbolTable(file.parser?.symbolTable);
+                    file.parser?.symbolTable.setParent(this._symbolTable);
                 }
             }
         }
@@ -600,32 +610,23 @@ export class Scope {
     }
 
 
-    private diagnosticDetectInvalidFunctionCalls(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
-        for (let funcCall of file.functionCalls) {
-            const callableContainersWithThisName = callableContainersByLowerName.get(funcCall.name.toLowerCase());
-
-            //use the first item from callablesByLowerName, because if there are more, that's a separate error
-            let knownCallableContainer = callableContainersWithThisName ? callableContainersWithThisName[0] : undefined;
-            if (!knownCallableContainer) {
-                continue;
-            }
-            const nsSymbolTable = funcCall.functionExpression.namespaceName ? this.namespaceLookup[funcCall.functionExpression.namespaceName.getName(ParseMode.BrighterScript)]?.symbolTable : null;
-
-            const funcType = nsSymbolTable?.getSymbolType(funcCall.name) ?? knownCallableContainer.scope.symbolTable.getSymbolType(funcCall.name);
+    private diagnosticDetectInvalidFunctionCalls(file: BscFile) {
+        for (let expCall of file.functionCalls) {
+            const funcType = expCall.functionExpression.symbolTable.getSymbolType(expCall.name);
 
             if (!isFunctionType(funcType)) {
                 // can not find function. Handled in a different validation function
                 continue;
             }
-            if (funcType.params.length !== funcCall.args.length) {
+            if (funcType.params.length !== expCall.args.length) {
                 // Argument count mismatch. Handled in a different validation function
                 continue;
             }
 
             for (let index = 0; index < funcType.params.length; index++) {
                 const param = funcType.params[index];
-                const arg = funcCall.args[index];
-                const argType = arg.type;//funcCall.functionExpression.symbolTable.getSymbolType(arg.text);
+                const arg = expCall.args[index];
+                const argType = arg.type;
 
                 if (!argType.isAssignableTo(param.type)) {
                     this.diagnostics.push({
@@ -759,6 +760,7 @@ export class Scope {
         }
     }
 
+
     /**
      * Detect calls to functions that are not defined in this scope
      * @param file
@@ -779,7 +781,7 @@ export class Scope {
 
             //if we don't already have a variable with this name.
             if (!localVar) {
-                let callablesWithThisName = callablesByLowerName.get(lowerName) || callablesByLowerName.get(expCall.functionExpression.namespaceName?.getName(ParseMode.BrightScript).toLowerCase() + '_' + lowerName);
+                const callablesWithThisName = getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName, expCall);
 
                 //use the first item from callablesByLowerName, because if there are more, that's a separate error
                 let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;

@@ -91,11 +91,11 @@ import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { BscType } from '../types/BscType';
 import { DynamicType } from '../types/DynamicType';
-import { FunctionType } from '../types/FunctionType';
 import { LazyType } from '../types/LazyType';
 import { SymbolTable } from '../SymbolTable';
 import { ObjectType } from '../types/ObjectType';
 import { CustomType } from '../types/CustomType';
+import { ArrayType } from '../types/ArrayType';
 
 export class Parser {
     /**
@@ -665,6 +665,7 @@ export class Parser {
             this.consumeStatementSeparators(true);
 
             let func = new FunctionExpression(
+                name,
                 params,
                 undefined, //body
                 functionType,
@@ -675,7 +676,7 @@ export class Parser {
                 typeToken, //return type
                 this.currentFunctionExpression,
                 this.currentNamespaceName,
-                this.symbolTable
+                this.currentNamespace?.symbolTable ?? this.symbolTable
             );
 
 
@@ -686,7 +687,7 @@ export class Parser {
 
             // add the function to the relevant symbol table
             if (!isAnonymous) {
-                const funcType = func.getFunctionType(name.text);
+                const funcType = func.getFunctionType();
 
                 // add the function as declared to the current namespace's table
                 this.currentNamespace?.symbolTable.addSymbol(name.text, name.range, funcType);
@@ -839,7 +840,12 @@ export class Parser {
             );
         }
         this._references.assignmentStatements.push(result);
-        const assignmentType = this.getBscTypeFromAssignment(result, this.currentFunctionExpression);
+        if (isFunctionExpression(result.value)) {
+            // Use the name of the variable assignment as the name of the anonymous function
+            result.value.name = name;
+        }
+        const assignmentType = getBscTypeFromExpression(result.value, this.currentFunctionExpression);
+
         this.currentFunctionLocalVars?.push({
             lowerName: name.text.toLowerCase(),
             nameToken: name,
@@ -2648,80 +2654,6 @@ export class Parser {
         }
     }
 
-    private getBscTypeFromAssignment(assignment: AssignmentStatement, functionExpression: FunctionExpression): BscType {
-        try {
-            //function
-            if (isFunctionExpression(assignment.value)) {
-                return assignment.value.getFunctionType(assignment.name.text);
-                //literal
-            } else if (isLiteralExpression(assignment.value)) {
-                return assignment.value.type;
-                //Associative array literal
-            } else if (isAALiteralExpression(assignment.value)) {
-                return new ObjectType();
-                //Array literal
-            } else if (isArrayLiteralExpression(assignment.value)) {
-                return new ObjectType(); //TODO: It would be AWESOME to have an ArrayType!
-                //function call
-            } else if (isNewExpression(assignment.value)) {
-                return new CustomType(assignment.value.className.getName(this.options.mode));
-                //Function call
-            } else if (isCallExpression(assignment.value)) {
-                return this.getAssignmentTypeFromCallExpression(assignment.value, functionExpression);
-            } else if (isVariableExpression(assignment.value)) {
-                return this.getAssignmentTypeFromVariableExpression(assignment.value, functionExpression);
-            }
-        } catch (e) {
-            //do nothing. Just return dynamic
-        }
-        //fallback to dynamic
-        return new DynamicType();
-    }
-
-
-    /**
-     * Gets the return type of a function, taking into account that the function may not have been declared yet
-     * If the callee already exists in symbol table, use that return type
-     * otherwise, make a lazy type which will not compute its type until the file is done parsing
-     */
-    private getAssignmentTypeFromCallExpression(call: CallExpression, functionExpression: FunctionExpression): BscType {
-        let calleeName = ((call.callee as any).name.text as string)?.toLowerCase();
-        if (calleeName) {
-            // i
-            const currentKnownType = functionExpression.symbolTable.getSymbolType(calleeName);
-            if (isFunctionType(currentKnownType)) {
-                return currentKnownType.returnType;
-            }
-            if (!isUninitializedType(currentKnownType)) {
-                // this will probably only happen if a functionName has been assigned to something else previously?
-                return currentKnownType;
-            }
-            return new LazyType(() => {
-                const futureType = functionExpression.symbolTable.getSymbolType(calleeName);
-                if (isFunctionType(futureType)) {
-                    return futureType.returnType;
-                }
-
-                return futureType;
-            });
-        }
-    }
-
-    /**
-     * Gets the type of a variable
-     * if it already exists in symbol table, use that type
-     * otherwise defer the type until first read, which will allow us to derive types from variables defined after this one (like from a loop perhaps)
-    */
-    private getAssignmentTypeFromVariableExpression(variable: VariableExpression, functionExpression: FunctionExpression): BscType {
-        let variableName = variable.name.text.toLowerCase();
-        const currentKnownType = functionExpression.symbolTable.getSymbolType(variableName);
-        if (!isUninitializedType(currentKnownType)) {
-            return currentKnownType;
-        }
-        return new LazyType(() => {
-            return functionExpression.symbolTable.getSymbolType(variableName);
-        });
-    }
 
     /**
      * References are found during the initial parse.
@@ -2761,7 +2693,7 @@ export class Parser {
                 this._references.localVars.get(func)?.push({
                     nameToken: s.name,
                     lowerName: s.name.text.toLowerCase(),
-                    type: this.getBscTypeFromAssignment(s, func)
+                    type: getBscTypeFromExpression(s.value, func)
                 });
             },
             FunctionExpression: (expression, parent) => {
@@ -2881,4 +2813,94 @@ class CancelStatementError extends Error {
     constructor() {
         super('CancelStatement');
     }
+}
+
+/**
+ * Gets the type of an expression. If it can not be processed, will return DynamicType
+ *
+ * @param expression the Expression to process
+ * @param functionExpression the wrapping function expression
+ * @return the best guess type of that expression
+ */
+export function getBscTypeFromExpression(expression: Expression, functionExpression: FunctionExpression): BscType {
+    try {
+        //function
+        if (isFunctionExpression(expression)) {
+            return expression.getFunctionType();
+            //literal
+        } else if (isLiteralExpression(expression)) {
+            return expression.type;
+            //Associative array literal
+        } else if (isAALiteralExpression(expression)) {
+            return new ObjectType();
+            //Array literal
+        } else if (isArrayLiteralExpression(expression)) {
+            return new ArrayType();
+            //function call
+        } else if (isNewExpression(expression)) {
+            return new CustomType(expression.className.getName(ParseMode.BrighterScript));
+            //Function call
+        } else if (isCallExpression(expression)) {
+            return getTypeFromCallExpression(expression, functionExpression);
+        } else if (isVariableExpression(expression)) {
+            return getTypeFromVariableExpression(expression, functionExpression);
+        }
+    } catch (e) {
+        //do nothing. Just return dynamic
+    }
+    //fallback to dynamic
+    return new DynamicType();
+}
+
+
+/**
+ * Gets the return type of a function, taking into account that the function may not have been declared yet
+ * If the callee already exists in symbol table, use that return type
+ * otherwise, make a lazy type which will not compute its type until the file is done parsing
+ *
+ * @param call the Expression to process
+ * @param functionExpression the wrapping function expression
+ * @return the best guess type of that expression
+ */
+export function getTypeFromCallExpression(call: CallExpression, functionExpression: FunctionExpression): BscType {
+    let calleeName = ((call.callee as any).name.text as string)?.toLowerCase();
+    if (calleeName) {
+        // i
+        const currentKnownType = functionExpression.symbolTable.getSymbolType(calleeName);
+        if (isFunctionType(currentKnownType)) {
+            return currentKnownType.returnType;
+        }
+        if (!isUninitializedType(currentKnownType)) {
+            // this will probably only happen if a functionName has been assigned to something else previously?
+            return currentKnownType;
+        }
+        return new LazyType(() => {
+            const futureType = functionExpression.symbolTable.getSymbolType(calleeName);
+            if (isFunctionType(futureType)) {
+                return futureType.returnType;
+            }
+
+            return futureType;
+        });
+    }
+}
+
+/**
+ * Gets the type of a variable
+ * if it already exists in symbol table, use that type
+ * otherwise defer the type until first read, which will allow us to derive types from variables defined after this one (like from a loop perhaps)
+ *
+ * @param variable the Expression to process
+ * @param functionExpression the wrapping function expression
+ * @return the best guess type of that expression
+ */
+export function getTypeFromVariableExpression(variable: VariableExpression, functionExpression: FunctionExpression): BscType {
+    let variableName = variable.name.text.toLowerCase();
+    const currentKnownType = functionExpression.symbolTable.getSymbolType(variableName);
+    if (!isUninitializedType(currentKnownType)) {
+        return currentKnownType;
+    }
+    return new LazyType(() => {
+        return functionExpression.symbolTable.getSymbolType(variableName);
+    });
 }

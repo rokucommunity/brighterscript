@@ -125,6 +125,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     readonly symbolTable: SymbolTable;
 
     constructor(
+        name: Identifier,
         readonly parameters: FunctionParameterExpression[],
         public body: Block,
         readonly functionType: Token | null,
@@ -152,6 +153,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         for (let param of parameters) {
             this.symbolTable.addSymbol(param.name.text, param.name.range, param.type);
         }
+        this.name = name;
     }
 
     public labelStatements = [] as LabelStatement[];
@@ -186,6 +188,16 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             (this.functionType ?? this.leftParen).range.start,
             (this.end ?? this.body ?? this.returnTypeToken ?? this.asToken ?? this.rightParen).range.end
         );
+    }
+
+    private _name: Identifier;
+
+    public set name(name: Identifier) {
+        this._name = this._name || name;
+    }
+
+    public get name(): Identifier {
+        return this._name;
     }
 
     transpile(state: BrsTranspileState, name?: Identifier, includeBody = true) {
@@ -262,10 +274,10 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
-    getFunctionType(name: string): FunctionType {
+    getFunctionType(): FunctionType {
         let functionType = new FunctionType(this.returnType);
         functionType.isSub = this.functionType.text === 'sub';
-        functionType.setName(name);
+        functionType.setName(this.name ? this.name.text : '');
         for (let param of this.parameters) {
             let isRequired = !param.defaultValue;
             //TODO compute optional parameters

@@ -8,12 +8,11 @@ import type { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import type { Token } from '../lexer';
-import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
-import { Parser, ParseMode } from '../parser';
+import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords, isToken } from '../lexer';
+import { Parser, ParseMode, getBscTypeFromExpression } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
 import type { FileLink, Program, SignatureInfoObj } from '../Program';
-import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
 import { standardizePath as s, util } from '../util';
@@ -21,11 +20,10 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isUninitializedType } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isUninitializedType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
-import { LazyType } from '../types/LazyType';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -461,55 +459,34 @@ export class BrsFile {
                 //TODO convert if stmts to use instanceof instead
                 for (let arg of expression.args as any) {
 
-                    //is a literal parameter value
-                    if (isLiteralExpression(arg)) {
-                        args.push({
-                            range: arg.range,
-                            type: arg.type,
-                            text: arg.token.text
-                        });
+                    let impliedType = getBscTypeFromExpression(arg, func);
+                    let argText = '';
 
-                        //is variable being passed into argument
+                    // Get the text to display for the arg
+                    if (arg.token) {
+                        argText = arg.token.text;
+                        //is a function call being passed into argument
                     } else if (arg.name) {
-                        const argName = arg.name.text;
-                        args.push({
-                            range: arg.range,
-                            type: new LazyType(() => {
-                                const futureType = func.symbolTable.getSymbolType(argName);
-                                if (isFunctionType(futureType)) {
-                                    return futureType.returnType;
-                                }
-                                return futureType;
-                            }),
-                            text: argName
-                        });
+                        if (isToken(arg.name)) {
+                            argText = arg.name.text;
+                        }
 
                     } else if (arg.value) {
-                        let text = '';
                         /* istanbul ignore next: TODO figure out why value is undefined sometimes */
                         if (arg.value.value) {
-                            text = arg.value.value.toString();
+                            argText = arg.value.value.toString();
                         }
-                        let callableArg = {
-                            range: arg.range,
-                            //TODO not sure what to do here
-                            type: new DynamicType(), // util.valueKindToBrsType(arg.value.kind),
-                            text: text
-                        };
-                        //wrap the value in quotes because that's how it appears in the code
-                        if (isStringType(callableArg.type)) {
-                            callableArg.text = '"' + callableArg.text + '"';
-                        }
-                        args.push(callableArg);
 
-                    } else {
-                        args.push({
-                            range: arg.range,
-                            type: new DynamicType(),
-                            //TODO get text from other types of args
-                            text: ''
-                        });
+                        //wrap the value in quotes because that's how it appears in the code
+                        if (isStringType(impliedType)) {
+                            argText = '"' + argText + '"';
+                        }
                     }
+                    args.push({
+                        range: arg.range,
+                        type: impliedType,
+                        text: argText
+                    });
                 }
                 let functionCall: FunctionCall = {
                     range: util.createRangeFromPositions(expression.range.start, expression.closingParen.range.end),
@@ -520,8 +497,6 @@ export class BrsFile {
                     //TODO keep track of parameters
                     args: args
                 };
-
-
 
                 this.functionCalls.push(functionCall);
             }

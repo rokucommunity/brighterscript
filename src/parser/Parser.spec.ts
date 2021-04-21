@@ -1,7 +1,7 @@
 import { expect, assert } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
 import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
-import { Parser, ParseMode } from './Parser';
+import { Parser, ParseMode, getBscTypeFromExpression } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
@@ -1124,7 +1124,7 @@ describe('parser', () => {
         });
     });
 
-    describe('getBscTypeFromAssignment', () => {
+    describe('getBscTypeFromExpression', () => {
         it('computes void type for sub with no return type', () => {
             const parser = parse(`
                 sub main()
@@ -1134,7 +1134,7 @@ describe('parser', () => {
                 end sub
             `);
             const func = (parser.ast.statements[0] as FunctionStatement).func;
-            const type = parser['getBscTypeFromAssignment'](func.body.statements[0] as AssignmentStatement, func) as FunctionType;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
             expect(type.returnType).to.be.instanceof(VoidType);
         });
 
@@ -1147,7 +1147,7 @@ describe('parser', () => {
                 end sub
             `);
             const func = (parser.ast.statements[0] as FunctionStatement).func;
-            const type = parser['getBscTypeFromAssignment'](func.body.statements[0] as AssignmentStatement, func) as FunctionType;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
             expect(type.returnType).to.be.instanceof(StringType);
         });
 
@@ -1164,7 +1164,7 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(parser.diagnostics);
             const func = (parser.ast.statements[0] as FunctionStatement).func;
-            const type = parser['getBscTypeFromAssignment'](func.body.statements[0] as AssignmentStatement, func) as FunctionType;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
             expect(type.returnType).to.be.instanceof(CustomType);
         });
     });
