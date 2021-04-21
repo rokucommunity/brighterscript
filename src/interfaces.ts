@@ -182,34 +182,34 @@ export type CompilerPluginFactory = () => CompilerPlugin;
 export interface CompilerPlugin {
     name: string;
     //program events
-    beforeProgramCreate?: (builder: ProgramBuilder) => void | boolean;
-    beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void | boolean;
-    afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void | boolean;
-    beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void | boolean;
-    afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void | boolean;
-    afterProgramCreate?: (program: Program) => void | boolean;
-    beforeProgramValidate?: (program: Program) => void | boolean;
-    afterProgramValidate?: (program: Program) => void | boolean;
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void | boolean;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void | boolean;
+    beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterProgramCreate?: (program: Program) => void;
+    beforeProgramValidate?: (program: Program) => void;
+    afterProgramValidate?: (program: Program) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
-    onGetHover?: PluginHandler<OnGetHoverEvent>;
+    onGetHover?: PluginHandler<OnGetHoverEvent, void | boolean>;
     //scope events
-    afterScopeCreate?: (scope: Scope) => void | boolean;
-    beforeScopeDispose?: (scope: Scope) => void | boolean;
-    afterScopeDispose?: (scope: Scope) => void | boolean;
+    afterScopeCreate?: (scope: Scope) => void;
+    beforeScopeDispose?: (scope: Scope) => void;
+    afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
     afterScopeValidate?: ValidateHandler;
     //file events
-    beforeFileParse?: (source: SourceObj) => void | boolean;
-    afterFileParse?: (file: BscFile) => void | boolean;
-    afterFileValidate?: (file: BscFile) => void | boolean;
-    beforeFileTranspile?: (entry: TranspileObj) => void | boolean;
-    afterFileTranspile?: (entry: TranspileObj) => void | boolean;
-    beforeFileDispose?: (file: BscFile) => void | boolean;
-    afterFileDispose?: (file: BscFile) => void | boolean;
+    beforeFileParse?: (source: SourceObj) => void;
+    afterFileParse?: (file: BscFile) => void;
+    afterFileValidate?: (file: BscFile) => void;
+    beforeFileTranspile?: (entry: TranspileObj) => void;
+    afterFileTranspile?: (entry: TranspileObj) => void;
+    beforeFileDispose?: (file: BscFile) => void;
+    afterFileDispose?: (file: BscFile) => void;
 }
-export type PluginHandler<T> = (event: T) => void | boolean;
+export type PluginHandler<T, R = void> = (event: T) => R;
 
 export interface OnGetCodeActionsEvent {
     program: Program;
