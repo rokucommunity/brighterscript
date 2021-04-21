@@ -23,8 +23,6 @@ export class HoverProcessor {
         if (hover) {
             //assign the hover to the event
             this.event.hover = hover;
-            //return false to short-circuit the event
-            return false;
         }
     }
 
@@ -65,7 +63,7 @@ export class HoverProcessor {
                         return {
                             range: token.range,
                             contents: {
-                                language: 'brightscript',
+                                language: 'brighterscript',
                                 value: typeText
                             }
                         };
@@ -76,7 +74,7 @@ export class HoverProcessor {
                         return {
                             range: token.range,
                             contents: {
-                                language: 'brightscript',
+                                language: 'brighterscript',
                                 value: `${labelStatement.name}: label`
                             }
                         };
@@ -92,7 +90,7 @@ export class HoverProcessor {
                 return {
                     range: token.range,
                     contents: {
-                        language: 'brightscript',
+                        language: 'brighterscript',
                         value: callable.type.toString()
                     }
                 };
