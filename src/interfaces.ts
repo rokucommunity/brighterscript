@@ -283,7 +283,7 @@ export interface OnScopeGetCodeActionsEvent {
 }
 export interface BeforeFileParseEvent {
     program: Program;
-    pathAbsolute: string;
+    srcPath: string;
     source: string;
 }
 export interface AfterFileParseEvent {

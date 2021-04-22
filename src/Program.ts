@@ -420,7 +420,7 @@ export class Program {
 
             const beforeFileParseEvent = {
                 program: this,
-                pathAbsolute: srcPath,
+                srcPath: srcPath,
                 source: fileContents
             } as BeforeFileParseEvent;
 

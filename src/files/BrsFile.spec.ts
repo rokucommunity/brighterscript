@@ -99,7 +99,7 @@ describe('BrsFile', () => {
                 end sub
             `);
             expect(() => {
-                program.getCompletions(file.pathAbsolute, util.createPosition(2, 34));
+                program.getCompletions(file.srcPath, util.createPosition(2, 34));
             }).not.to.throw;
         });
 

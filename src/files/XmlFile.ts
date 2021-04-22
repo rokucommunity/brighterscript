@@ -497,7 +497,7 @@ export class XmlFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new TranspileState(this.pathAbsolute, this.program.options);
+        const state = new TranspileState(this.srcPath, this.program.options);
 
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             const script = new SGScript();
