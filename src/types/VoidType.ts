@@ -1,4 +1,4 @@
-import { isVoidType, isDynamicType } from '../astUtils';
+import { isVoidType, isDynamicType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export class VoidType implements BscType {

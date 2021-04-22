@@ -6,7 +6,7 @@ import type { AssignmentStatement, ClassStatement, Statement } from './Statement
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils';
+import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils/reflection';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { VoidType } from '../types/VoidType';
 import { FunctionType } from '../types/FunctionType';

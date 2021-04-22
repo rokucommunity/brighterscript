@@ -1,6 +1,8 @@
+import { isDynamicType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export class DynamicType implements BscType {
+
     public isAssignableTo(targetType: BscType) {
         //everything can be dynamic, so as long as a type is provided, this is true
         return !!targetType;
@@ -24,6 +26,6 @@ export class DynamicType implements BscType {
     }
 
     public equals(targetType: BscType): boolean {
-        return this.toString() === targetType.toString();
+        return isDynamicType(targetType);
     }
 }

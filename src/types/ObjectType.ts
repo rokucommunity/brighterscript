@@ -1,4 +1,4 @@
-import { isDynamicType, isObjectType } from '../astUtils';
+import { isDynamicType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export class ObjectType implements BscType {

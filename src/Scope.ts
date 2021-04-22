@@ -9,7 +9,7 @@ import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
 import { ParseMode } from './parser';
-import { standardizePath as s, getCallableContainersFromContainerMapByFunctionCall, util } from './util';
+import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
@@ -788,7 +788,7 @@ export class Scope {
 
             //if we don't already have a variable with this name.
             if (!localVar) {
-                const callablesWithThisName = getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName, expCall);
+                const callablesWithThisName = util.getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName, expCall);
 
                 //use the first item from callablesByLowerName, because if there are more, that's a separate error
                 let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;

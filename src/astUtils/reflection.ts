@@ -3,24 +3,24 @@ import type { LiteralExpression, Expression, BinaryExpression, CallExpression, F
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BscFile, File } from '../interfaces';
-import { InvalidType } from '../types/InvalidType';
-import { VoidType } from '../types/VoidType';
+import type { InvalidType } from '../types/InvalidType';
+import type { VoidType } from '../types/VoidType';
 import { InternalWalkMode } from './visitors';
-import { FunctionType } from '../types/FunctionType';
-import { StringType } from '../types/StringType';
-import { BooleanType } from '../types/BooleanType';
-import { IntegerType } from '../types/IntegerType';
-import { LongIntegerType } from '../types/LongIntegerType';
-import { FloatType } from '../types/FloatType';
-import { DoubleType } from '../types/DoubleType';
-import { CustomType } from '../types/CustomType';
+import type { FunctionType } from '../types/FunctionType';
+import type { StringType } from '../types/StringType';
+import type { BooleanType } from '../types/BooleanType';
+import type { IntegerType } from '../types/IntegerType';
+import type { LongIntegerType } from '../types/LongIntegerType';
+import type { FloatType } from '../types/FloatType';
+import type { DoubleType } from '../types/DoubleType';
+import type { CustomType } from '../types/CustomType';
 import type { Scope } from '../Scope';
 import type { XmlScope } from '../XmlScope';
-import { UninitializedType } from '../types/UninitializedType';
-import { InterfaceType } from '../types/InterfaceType';
-import { ArrayType } from '../types/ArrayType';
-import { ObjectType } from '../types/ObjectType';
-import { DynamicType } from '../types/DynamicType';
+import type { UninitializedType } from '../types/UninitializedType';
+import type { InterfaceType } from '../types/InterfaceType';
+import type { ArrayType } from '../types/ArrayType';
+import type { ObjectType } from '../types/ObjectType';
+import type { DynamicType } from '../types/DynamicType';
 
 // File reflection
 
@@ -213,57 +213,58 @@ export function isAnnotationExpression(element: Statement | Expression | undefin
 }
 
 // BscType reflection
+// Note: these are Hardcoded to avoid circular dependencies
 export function isStringType(value: any): value is StringType {
-    return value?.constructor.name === StringType.name;
+    return value?.constructor.name === 'StringType';
 }
 export function isFunctionType(e: any): e is FunctionType {
-    return e?.constructor.name === FunctionType.name;
+    return e?.constructor.name === 'FunctionType';
 }
 export function isBooleanType(e: any): e is BooleanType {
-    return e?.constructor.name === BooleanType.name;
+    return e?.constructor.name === 'BooleanType';
 }
 export function isIntegerType(e: any): e is IntegerType {
-    return e?.constructor.name === IntegerType.name;
+    return e?.constructor.name === 'IntegerType';
 }
 export function isLongIntegerType(e: any): e is LongIntegerType {
-    return e?.constructor.name === LongIntegerType.name;
+    return e?.constructor.name === 'LongIntegerType';
 }
 export function isFloatType(e: any): e is FloatType {
-    return e?.constructor.name === FloatType.name;
+    return e?.constructor.name === 'FloatType';
 }
 export function isDoubleType(e: any): e is DoubleType {
-    return e?.constructor.name === DoubleType.name;
+    return e?.constructor.name === 'DoubleType';
 }
 export function isInvalidType(e: any): e is InvalidType {
-    return e?.constructor.name === InvalidType.name;
+    return e?.constructor.name === 'InvalidType';
 }
 export function isVoidType(e: any): e is VoidType {
-    return e?.constructor.name === VoidType.name;
+    return e?.constructor.name === 'VoidType';
 }
 export function isCustomType(e: any): e is CustomType {
-    return e?.constructor.name === CustomType.name;
+    return e?.constructor.name === 'CustomType';
 }
 export function isUninitializedType(e: any): e is UninitializedType {
-    return e?.constructor.name === UninitializedType.name;
+    return e?.constructor.name === 'UninitializedType';
 }
 export function isInterfaceType(e: any): e is InterfaceType {
-    return e?.constructor.name === InterfaceType.name;
+    return e?.constructor.name === 'InterfaceType';
 }
 export function isArrayType(e: any): e is ArrayType {
-    return e?.constructor.name === ArrayType.name;
+    return e?.constructor.name === 'ArrayType';
 }
 export function isObjectType(e: any): e is ObjectType {
-    return e?.constructor.name === ObjectType.name;
+    return e?.constructor.name === 'ObjectType';
 }
 export function isDynamicType(e: any): e is DynamicType {
-    return e?.constructor.name === DynamicType.name;
+    return e?.constructor.name === 'DynamicType';
 }
 
 const numberConstructorNames = [
-    IntegerType.name,
-    LongIntegerType.name,
-    FloatType.name,
-    DoubleType.name
+    'IntegerType',
+    'LongIntegerType',
+    'FloatType',
+    'DoubleType'
 ];
 export function isNumberType(e: any): e is IntegerType | LongIntegerType | FloatType | DoubleType {
     return numberConstructorNames.includes(e?.constructor.name);

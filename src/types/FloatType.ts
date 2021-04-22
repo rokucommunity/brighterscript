@@ -1,4 +1,4 @@
-import { isDynamicType, isIntegerType, isFloatType, isDoubleType, isLongIntegerType } from '..';
+import { isDynamicType, isIntegerType, isFloatType, isDoubleType, isLongIntegerType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export class FloatType implements BscType {

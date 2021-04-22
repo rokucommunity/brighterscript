@@ -20,7 +20,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isUninitializedType } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -1285,8 +1285,8 @@ export class BrsFile {
                 }
             }
 
-            let type = func.symbolTable?.getSymbolType(lowerTokenText);
-            if (!isUninitializedType(type)) { //TODO hasKEY
+            if (func.symbolTable?.hasSymbol(lowerTokenText)) {
+                let type = func.symbolTable?.getSymbolType(lowerTokenText);
                 let typeText: string;
                 //TODO figure out what type this var is
                 if (isFunctionType(type)) {

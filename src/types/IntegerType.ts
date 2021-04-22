@@ -1,4 +1,4 @@
-import { isIntegerType, isDynamicType, isFloatType, isDoubleType, isLongIntegerType } from '..';
+import { isIntegerType, isDynamicType, isFloatType, isDoubleType, isLongIntegerType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 
