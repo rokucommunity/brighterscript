@@ -523,11 +523,11 @@ describe('Scope', () => {
             }], new Logger());
             program.validate();
             expect(validateStartScope.callCount).to.equal(2);
-            expect(validateStartScope.calledWith(sourceScope)).to.be.true;
-            expect(validateStartScope.calledWith(compScope)).to.be.true;
+            expect(validateStartScope.getCalls()[0].args[0].scope).to.eql(sourceScope);
+            expect(validateStartScope.getCalls()[1].args[0].scope).to.eql(compScope);
             expect(validateEndScope.callCount).to.equal(2);
-            expect(validateEndScope.calledWith(sourceScope)).to.be.true;
-            expect(validateEndScope.calledWith(compScope)).to.be.true;
+            expect(validateEndScope.getCalls()[0].args[0].scope).to.eql(sourceScope);
+            expect(validateEndScope.getCalls()[1].args[0].scope).to.eql(compScope);
         });
 
         describe('custom types', () => {

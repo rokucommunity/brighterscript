@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, BeforeFileParseEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -29,17 +29,6 @@ const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
 
-export interface SourceObj {
-    pathAbsolute: string;
-    source: string;
-    definitions?: string;
-}
-
-export interface TranspileObj {
-    file: BscFile;
-    outputPath: string;
-}
-
 export interface SignatureInfoObj {
     index: number;
     key: string;
@@ -50,7 +39,6 @@ export interface FileLink<T> {
     item: T;
     file: BrsFile;
 }
-
 
 interface PartialStatementInfo {
     commaCount: number;
@@ -161,7 +149,10 @@ export class Program {
 
     protected addScope(scope: Scope) {
         this.scopes[scope.name] = scope;
-        this.plugins.emit('afterScopeCreate', scope);
+        this.plugins.emit('afterScopeCreate', {
+            program: this,
+            scope: scope
+        });
     }
 
     /**
@@ -360,7 +351,7 @@ export class Program {
             srcPath = s`${fileParam.src}`;
             pkgPath = s`${fileParam.dest}`;
         }
-        let file = this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], () => {
+        return this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], () => {
 
             assert.ok(srcPath, 'fileEntry.src is required');
             assert.ok(pkgPath, 'fileEntry.dest is required');
@@ -371,6 +362,12 @@ export class Program {
             }
             let fileExtension = path.extname(srcPath).toLowerCase();
             let file: BscFile | undefined;
+
+            const beforeFileParseEvent = {
+                program: this,
+                pathAbsolute: srcPath,
+                source: fileContents
+            } as BeforeFileParseEvent;
 
             if (fileExtension === '.brs' || fileExtension === '.bs') {
                 let brsFile = new BrsFile(srcPath, pkgPath, this);
@@ -385,20 +382,20 @@ export class Program {
                 //add the file to the program
                 this.files[srcPath] = brsFile;
                 this.pkgMap[brsFile.pkgPath.toLowerCase()] = brsFile;
-                let sourceObj: SourceObj = {
-                    pathAbsolute: srcPath,
-                    source: fileContents
-                };
-                this.plugins.emit('beforeFileParse', sourceObj);
+
+                this.plugins.emit('beforeFileParse', beforeFileParseEvent);
 
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
-                    brsFile.parse(sourceObj.source);
+                    brsFile.parse(beforeFileParseEvent.source);
                 });
                 file = brsFile;
 
                 brsFile.attachDependencyGraph(this.dependencyGraph);
 
-                this.plugins.emit('afterFileValidate', brsFile);
+                this.plugins.emit('afterFileParse', {
+                    program: this,
+                    file: brsFile
+                });
             } else if (
                 //is xml file
                 fileExtension === '.xml' &&
@@ -409,13 +406,10 @@ export class Program {
                 //add the file to the program
                 this.files[srcPath] = xmlFile;
                 this.pkgMap[xmlFile.pkgPath.toLowerCase()] = xmlFile;
-                let sourceObj: SourceObj = {
-                    pathAbsolute: srcPath,
-                    source: fileContents
-                };
-                this.plugins.emit('beforeFileParse', sourceObj);
+                this.plugins.emit('beforeFileParse', beforeFileParseEvent);
+
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
-                    xmlFile.parse(sourceObj.source);
+                    xmlFile.parse(beforeFileParseEvent.source);
                 });
 
                 file = xmlFile;
@@ -427,7 +421,10 @@ export class Program {
                 //register this compoent now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
 
-                this.plugins.emit('afterFileValidate', xmlFile);
+                this.plugins.emit('afterFileParse', {
+                    program: this,
+                    file: xmlFile
+                });
             } else {
                 //TODO do we actually need to implement this? Figure out how to handle img paths
                 // let genericFile = this.files[pathAbsolute] = <any>{
@@ -438,8 +435,7 @@ export class Program {
                 // file = <any>genericFile;
             }
             return file;
-        });
-        return file as T;
+        }) as T;
     }
 
     /**
@@ -509,17 +505,26 @@ export class Program {
 
         let file = this.getFile(pathAbsolute);
         if (file) {
-            this.plugins.emit('beforeFileDispose', file);
+            this.plugins.emit('beforeFileDispose', {
+                program: this,
+                file: file
+            });
 
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.pkgPath];
             if (scope) {
-                this.plugins.emit('beforeScopeDispose', scope);
+                this.plugins.emit('beforeScopeDispose', {
+                    program: this,
+                    scope: scope
+                });
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
                 this.dependencyGraph.remove(scope.dependencyGraphKey);
                 delete this.scopes[file.pkgPath];
-                this.plugins.emit('afterScopeDispose', scope);
+                this.plugins.emit('afterScopeDispose', {
+                    program: this,
+                    scope: scope
+                });
             }
             //remove the file from the program
             delete this.files[file.pathAbsolute];
@@ -536,7 +541,10 @@ export class Program {
             if (isXmlFile(file)) {
                 this.unregisterComponent(file);
             }
-            this.plugins.emit('afterFileDispose', file);
+            this.plugins.emit('afterFileDispose', {
+                program: this,
+                file: file
+            });
         }
     }
 
@@ -547,19 +555,14 @@ export class Program {
     public validate() {
         this.logger.time(LogLevel.log, ['Validating project'], () => {
             this.diagnostics = [];
-            this.plugins.emit('beforeProgramValidate', this);
-
-            this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
-                for (let scopeName in this.scopes) {
-                    let scope = this.scopes[scopeName];
-                    scope.validate();
-                }
+            this.plugins.emit('beforeProgramValidate', {
+                program: this
             });
 
-            //find any files NOT loaded into a scope
-            for (let filePath in this.files) {
-                let file = this.files[filePath];
+            //validate every file
+            for (const file of Object.values(this.files)) {
 
+                //find any files NOT loaded into a scope
                 if (!this.fileIsIncludedInAnyScope(file)) {
                     this.logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.pkgPath));
                     //the file is not loaded in any scope
@@ -569,11 +572,50 @@ export class Program {
                         range: util.createRange(0, 0, 0, Number.MAX_VALUE)
                     });
                 }
+
+                //for every unvalidated file, validate it
+                if (!file.isValidated) {
+                    this.plugins.emit('beforeFileValidate', {
+                        program: this,
+                        file: file
+                    });
+
+                    //call file.validate() IF the file has that function defined
+                    file.validate?.();
+                    file.isValidated = true;
+
+                    this.plugins.emit('afterFileValidate', {
+                        program: this,
+                        file: file
+                    });
+                }
             }
+
+            this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
+                for (let scope of Object.values(this.scopes)) {
+                    //only validate unvalidated scopes
+                    if (!scope.isValidated) {
+                        this.plugins.emit('beforeScopeValidate', {
+                            program: this,
+                            scope: scope
+                        });
+
+                        scope.validate();
+                        scope.isValidated = true;
+
+                        this.plugins.emit('afterScopeValidate', {
+                            program: this,
+                            scope: scope
+                        });
+                    }
+                }
+            });
 
             this.detectDuplicateComponentNames();
 
-            this.plugins.emit('afterProgramValidate', this);
+            this.plugins.emit('afterProgramValidate', {
+                program: this
+            });
         });
     }
 
@@ -620,11 +662,11 @@ export class Program {
     }
 
     /**
-     * Determine if the given file is included in at least one scope in this program
+     * Determine at least one scope has the file
      */
     private fileIsIncludedInAnyScope(file: BscFile) {
-        for (let scopeName in this.scopes) {
-            if (this.scopes[scopeName].hasFile(file)) {
+        for (let scope of Object.values(this.scopes)) {
+            if (scope.hasFile(file)) {
                 return true;
             }
         }
@@ -1175,14 +1217,21 @@ export class Program {
             };
         });
 
-        this.plugins.emit('beforeProgramTranspile', this, entries);
+        this.plugins.emit('beforeProgramTranspile', {
+            program: this,
+            entries: entries
+        });
 
         const promises = entries.map(async (entry) => {
             //skip transpiling typedef files
             if (isBrsFile(entry.file) && entry.file.isTypedef) {
                 return;
             }
-            this.plugins.emit('beforeFileTranspile', entry);
+            this.plugins.emit('beforeFileTranspile', {
+                program: this,
+                file: entry.file,
+                outputPath: entry.outputPath
+            });
             const { file, outputPath } = entry;
             const result = file.transpile();
 
@@ -1204,7 +1253,11 @@ export class Program {
                 await fsExtra.writeFile(typedefPath, typedef);
             }
 
-            this.plugins.emit('afterFileTranspile', entry);
+            this.plugins.emit('afterFileTranspile', {
+                program: this,
+                file: entry.file,
+                outputPath: entry.outputPath
+            });
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
@@ -1213,7 +1266,10 @@ export class Program {
         }
         await Promise.all(promises);
 
-        this.plugins.emit('afterProgramTranspile', this, entries);
+        this.plugins.emit('afterProgramTranspile', {
+            program: this,
+            entries: entries
+        });
     }
 
     /**

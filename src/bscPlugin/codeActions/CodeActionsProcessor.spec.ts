@@ -23,6 +23,7 @@ describe('CodeActionsProcessor', () => {
                 <component name="comp1">
                 </component>
             `);
+            program.validate();
             expectCodeActions(() => {
                 program.getCodeActions(
                     file.pathAbsolute,
@@ -69,6 +70,7 @@ describe('CodeActionsProcessor', () => {
                 <component name="comp1" attr2="attr3" attr3="attr3">
                 </component>
             `);
+            program.validate();
             const codeActions = program.getCodeActions(
                 file.pathAbsolute,
                 //<comp|onent name="comp1">

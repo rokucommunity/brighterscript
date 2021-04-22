@@ -179,6 +179,11 @@ export class XmlFile {
     public fileContents: string;
 
     /**
+     * Indicates whether this file needs to be validated.
+     */
+    public isValidated = false;
+
+    /**
      * Calculate the AST for this file
      * @param fileContents
      */
@@ -190,19 +195,7 @@ export class XmlFile {
             ...diagnostic,
             file: this
         }));
-
         this.getCommentFlags(this.parser.tokens as any[]);
-
-        if (!this.parser.ast.root) {
-            //skip empty XML
-            return;
-        }
-
-        //notify AST ready
-        this.program.plugins.emit('afterFileParse', this);
-
-        //initial validation
-        this.validateComponent(this.parser.ast);
     }
 
     /**
@@ -223,6 +216,11 @@ export class XmlFile {
         }
         this.commentFlags.push(...processor.commentFlags);
         this.diagnostics.push(...processor.diagnostics);
+    }
+
+    public validate() {
+        //initial validation
+        this.validateComponent(this.parser.ast);
     }
 
     private validateComponent(ast: SGAst) {
