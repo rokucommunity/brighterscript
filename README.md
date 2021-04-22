@@ -1,4 +1,4 @@
-# BrighterScript
+# BrighterScript [v1 branch]
 
 A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
@@ -6,7 +6,7 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 [![Coverage Status](https://coveralls.io/repos/github/rokucommunity/brighterscript/badge.svg?branch=master)](https://coveralls.io/github/rokucommunity/brighterscript?branch=master)
 [![NPM Version](https://badge.fury.io/js/brighterscript.svg?style=flat)](https://npmjs.org/package/brighterscript)
 
-
+This is the v1 branch. Unless you're specifically looking for v1, you probably want to view [the master branch](https://github.com/rokucommunity/brighterscript).
 ## Overview
 
 The BrighterScript language provides new features and syntax enhancements to Roku's BrightScript language. Because the language is a superset of BrightScript, the parser and associated tools (VSCode integration, cli, etc...) work with standard BrightScript (.brs) files. This means you will get benefits (as described in the following section) from using the BrighterScript compiler, whether your project contains BrighterScript (.bs) files or not. The BrighterScript language transpiles to standard BrightScript, so your code is fully compatible with all roku devices.
