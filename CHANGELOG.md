@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.37.4] - 2021-04-20
+### Fixed
+ - bug validating namespace function calls ([#390](https://github.com/rokucommunity/brighterscript/pull/390))
+
+
+
+## [0.37.3] - 2021-04-12
+### Fixed
+ - bug where having multiple components with the same name would cause issues in the program, normally requiring a language server or watcher restart. ([#353](https://github.com/rokucommunity/brighterscript/pull/353))
+ - bug in xml file ignoring `needsTranspiled` flag when set by plugins ([#384](https://github.com/rokucommunity/brighterscript/pull/384))
+
+
+
 ## [0.37.2] - 2021-04-08
 ### Fixed
  - erraneous syntax issue when concatenating a template string and a regular string. ([#383](https://github.com/rokucommunity/brighterscript/pull/383))
@@ -1076,3 +1089,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.37.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.36.0...v0.37.0
 [0.37.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.0...v0.37.1
 [0.37.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.1...v0.37.2
+[0.37.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.2...v0.37.3
+[0.37.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.3...v0.37.4
