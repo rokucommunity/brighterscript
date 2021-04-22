@@ -10,7 +10,7 @@ import { ParseMode } from '../parser/Parser';
 import { expectZeroDiagnostics, getTestTranspile } from '../testHelpers.spec';
 import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
-import { TranspileState } from '../parser/TranspileState';
+import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
 
 let sinon = sinonImport.createSandbox();
@@ -198,13 +198,13 @@ describe('BrsFile BrighterScript classes', () => {
         it('follows correct sequence for property initializers', () => {
             testTranspile(`
                 class Animal
-                    species = "Animal"
+                    species1 = "Animal"
                     sub new()
                         print "From Animal: " + m.species
                     end sub
                 end class
                 class Duck extends Animal
-                    species = "Duck"
+                    species2 = "Duck"
                     sub new()
                         super()
                         print "From Duck: " + m.species
@@ -214,7 +214,7 @@ describe('BrsFile BrighterScript classes', () => {
                 function __Animal_builder()
                     instance = {}
                     instance.new = sub()
-                        m.species = "Animal"
+                        m.species1 = "Animal"
                         print "From Animal: " + m.species
                     end sub
                     return instance
@@ -229,7 +229,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.super0_new = instance.new
                     instance.new = sub()
                         m.super0_new()
-                        m.species = "Duck"
+                        m.species2 = "Duck"
                         print "From Duck: " + m.species
                     end sub
                     return instance
@@ -245,19 +245,19 @@ describe('BrsFile BrighterScript classes', () => {
         it('handles class inheritance inferred constructor calls', () => {
             testTranspile(`
                 class Animal
-                    className = "Animal"
+                    className1 = "Animal"
                 end class
                 class Duck extends Animal
-                    className = "Duck"
+                    className2 = "Duck"
                 end class
                 class BabyDuck extends Duck
-                    className = "BabyDuck"
+                    className3 = "BabyDuck"
                 end class
             `, `
                 function __Animal_builder()
                     instance = {}
                     instance.new = sub()
-                        m.className = "Animal"
+                        m.className1 = "Animal"
                     end sub
                     return instance
                 end function
@@ -271,7 +271,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.super0_new = instance.new
                     instance.new = sub()
                         m.super0_new()
-                        m.className = "Duck"
+                        m.className2 = "Duck"
                     end sub
                     return instance
                 end function
@@ -285,7 +285,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.super1_new = instance.new
                     instance.new = sub()
                         m.super1_new()
-                        m.className = "BabyDuck"
+                        m.className3 = "BabyDuck"
                     end sub
                     return instance
                 end function
@@ -508,7 +508,7 @@ describe('BrsFile BrighterScript classes', () => {
                 sub main()
                     bob = Human()
                 end sub
-            `, undefined, 'source/main.bs');
+            `, undefined, 'source/main.bs', false);
         });
 
         it('new keyword transpiles correctly', () => {
@@ -1090,7 +1090,7 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         doesNotThrow(() => {
-            file.parser.references.classStatements[0].getParentClassIndex(new TranspileState(file));
+            file.parser.references.classStatements[0].getParentClassIndex(new BrsTranspileState(file));
         });
     });
 });

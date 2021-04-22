@@ -18,7 +18,7 @@ import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
 import { standardizePath as s, util } from '../util';
-import { TranspileState } from '../parser/TranspileState';
+import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
@@ -77,6 +77,11 @@ export class BrsFile {
      * The all-lowercase extension for this file (including the leading dot)
      */
     public extension: string;
+
+    /**
+     * Indicates whether this file needs to be validated.
+     */
+    public isValidated = false;
 
     private diagnostics = [] as BsDiagnostic[];
 
@@ -198,7 +203,7 @@ export class BrsFile {
         }
 
         //event that fires anytime a dependency changes
-        this.unsubscribeFromDependencyGraph = this.program.dependencyGraph.onchange(this.dependencyGraphKey, () => {
+        this.unsubscribeFromDependencyGraph = dependencyGraph.onchange(this.dependencyGraphKey, () => {
             this.resolveTypedef();
         });
 
@@ -269,9 +274,6 @@ export class BrsFile {
                 ...this._parser.diagnostics as BsDiagnostic[]
             );
 
-            //notify AST ready
-            this.program.plugins.emit('afterFileParse', this);
-
             //extract all callables from this file
             this.findCallables();
 
@@ -293,6 +295,8 @@ export class BrsFile {
             });
         }
     }
+
+    public validate() { }
 
     public findAndValidateImportAndImportStatements() {
         let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement>;
@@ -1638,7 +1642,7 @@ export class BrsFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new TranspileState(this);
+        const state = new BrsTranspileState(this);
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
@@ -1666,7 +1670,7 @@ export class BrsFile {
     }
 
     public getTypedef() {
-        const state = new TranspileState(this);
+        const state = new BrsTranspileState(this);
         const typedef = this.ast.getTypedef(state);
         const programNode = new SourceNode(null, null, this.srcPath, typedef);
         return programNode.toString();

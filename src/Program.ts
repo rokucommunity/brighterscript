@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, BscFile } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, BscFile, BeforeFileParseEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -52,7 +52,6 @@ export interface FileLink<T> {
     file: BrsFile;
 }
 
-
 interface PartialStatementInfo {
     commaCount: number;
     statementType: string;
@@ -86,7 +85,8 @@ export class Program {
 
     private createGlobalScope() {
         //create the 'global' scope
-        this.globalScope = new Scope('global', 'scope:global', this);
+        this.globalScope = new Scope('global', this, 'scope:global');
+        this.globalScope.attachDependencyGraph(this.dependencyGraph);
         this.scopes.global = this.globalScope;
         //hardcode the files list for global scope to only contain the global file
         this.globalScope.getAllFiles = () => [globalFile];
@@ -103,7 +103,7 @@ export class Program {
      *      File.xml -> [lib1.brs, lib2.brs]
      *      lib2.brs -> [lib3.brs] //via an import statement
      */
-    public dependencyGraph = new DependencyGraph();
+    private dependencyGraph = new DependencyGraph();
 
     private diagnosticFilterer = new DiagnosticFilterer();
 
@@ -171,20 +171,28 @@ export class Program {
 
     protected addScope(scope: Scope) {
         this.scopes[scope.name] = scope;
-        this.plugins.emit('afterScopeCreate', scope);
+        this.plugins.emit('afterScopeCreate', {
+            program: this,
+            scope: scope
+        });
     }
 
     /**
-     * A map of every component currently loaded into the program, indexed by the component name
+     * A map of every component currently loaded into the program, indexed by the component name.
+     * It is a compile-time error to have multiple components with the same name. However, we store an array of components
+     * by name so we can provide a better developer expreience. You shouldn't be directly accessing this array,
+     * but if you do, only ever use the component at index 0.
      */
-    private components = {} as Record<string, { file: XmlFile; scope: XmlScope }>;
+    private components = {} as Record<string, { file: XmlFile; scope: XmlScope }[]>;
 
     /**
      * Get the component with the specified name
      */
     public getComponent(componentName: string) {
         if (componentName) {
-            return this.components[componentName.toLowerCase()];
+            //return the first compoment in the list with this name
+            //(components are ordered in this list by pkgPath to ensure consistency)
+            return this.components[componentName.toLowerCase()]?.[0];
         } else {
             return undefined;
         }
@@ -194,18 +202,52 @@ export class Program {
      * Register (or replace) the reference to a component in the component map
      */
     private registerComponent(xmlFile: XmlFile, scope: XmlScope) {
-        //store a reference to this component by its component name
-        this.components[(xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase()] = {
+        const key = (xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+        if (!this.components[key]) {
+            this.components[key] = [];
+        }
+        this.components[key].push({
             file: xmlFile,
             scope: scope
-        };
+        });
+        this.components[key].sort(
+            (x, y) => x.file.pkgPath.toLowerCase().localeCompare(y.file.pkgPath.toLowerCase())
+        );
+        this.syncComponentDependencyGraph(this.components[key]);
     }
 
     /**
      * Remove the specified component from the components map
      */
     private unregisterComponent(xmlFile: XmlFile) {
-        delete this.components[(xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase()];
+        const key = (xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+        const arr = this.components[key] || [];
+        for (let i = 0; i < arr.length; i++) {
+            if (arr[i].file === xmlFile) {
+                arr.splice(i, 1);
+                break;
+            }
+        }
+        this.syncComponentDependencyGraph(arr);
+    }
+
+    /**
+     * re-attach the dependency graph with a new key for any component who changed
+     * their position in their own named array (only matters when there are multiple
+     * components with the same name)
+     */
+    private syncComponentDependencyGraph(components: Array<{ file: XmlFile; scope: XmlScope }>) {
+        //reattach every dependency graph
+        for (let i = 0; i < components.length; i++) {
+            const { file, scope } = components[i];
+
+            //attach (or re-attach) the dependencyGraph for every component whose position changed
+            if (file.dependencyGraphIndex !== i) {
+                file.dependencyGraphIndex = i;
+                file.attachDependencyGraph(this.dependencyGraph);
+                scope.attachDependencyGraph(this.dependencyGraph);
+            }
+        }
     }
 
     /**
@@ -363,9 +405,8 @@ export class Program {
             srcPath = s`${fileParam.src}`;
             pkgPath = util.sanitizePkgPath(fileParam.dest);
         }
-
         const lowerPkgPath = pkgPath.toLowerCase();
-        let file = this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], () => {
+        return this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], () => {
 
             assert.ok(srcPath, 'srcPath is required');
             assert.ok(pkgPath, 'pkgPath is required');
@@ -377,6 +418,12 @@ export class Program {
             let fileExtension = path.extname(srcPath).toLowerCase();
             let file: BscFile | undefined;
 
+            const beforeFileParseEvent = {
+                program: this,
+                pathAbsolute: srcPath,
+                source: fileContents
+            } as BeforeFileParseEvent;
+
             if (fileExtension === '.brs' || fileExtension === '.bs') {
                 let brsFile = new BrsFile(srcPath, pkgPath, this);
 
@@ -386,22 +433,22 @@ export class Program {
                     this.dependencyGraph.addDependency('scope:source', brsFile.dependencyGraphKey);
                 }
 
+                //add the file to the program
                 this.setFile(brsFile);
 
-                let sourceObj: SourceObj = {
-                    srcPath: srcPath,
-                    source: fileContents
-                };
-                this.plugins.emit('beforeFileParse', sourceObj);
+                this.plugins.emit('beforeFileParse', beforeFileParseEvent);
 
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
-                    brsFile.parse(sourceObj.source);
+                    brsFile.parse(beforeFileParseEvent.source);
                 });
                 file = brsFile;
 
                 brsFile.attachDependencyGraph(this.dependencyGraph);
 
-                this.plugins.emit('afterFileValidate', brsFile);
+                this.plugins.emit('afterFileParse', {
+                    program: this,
+                    file: brsFile
+                });
             } else if (
                 //is xml file
                 fileExtension === '.xml' &&
@@ -412,13 +459,11 @@ export class Program {
 
                 this.setFile(xmlFile);
 
-                let sourceObj: SourceObj = {
-                    srcPath: srcPath,
-                    source: fileContents
-                };
-                this.plugins.emit('beforeFileParse', sourceObj);
+                //add the file to the program
+                this.plugins.emit('beforeFileParse', beforeFileParseEvent);
+
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
-                    xmlFile.parse(sourceObj.source);
+                    xmlFile.parse(beforeFileParseEvent.source);
                 });
 
                 file = xmlFile;
@@ -430,12 +475,10 @@ export class Program {
                 //register this compoent now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
 
-                //attach the dependency graph, so the component can
-                //   a) be regularly notified of changes
-                //   b) immediately emit its own changes
-                xmlFile.attachDependencyGraph(this.dependencyGraph);
-
-                this.plugins.emit('afterFileValidate', xmlFile);
+                this.plugins.emit('afterFileParse', {
+                    program: this,
+                    file: xmlFile
+                });
             } else {
                 //TODO do we actually need to implement this? Figure out how to handle img paths
                 // let genericFile = this.files[srcPath] = <any>{
@@ -446,8 +489,7 @@ export class Program {
                 // file = <any>genericFile;
             }
             return file;
-        });
-        return file as T;
+        }) as T;
     }
 
     /**
@@ -456,7 +498,8 @@ export class Program {
      */
     public createSourceScope() {
         if (!this.scopes.source) {
-            const sourceScope = new Scope('source', 'scope:source', this);
+            const sourceScope = new Scope('source', this, 'scope:source');
+            sourceScope.attachDependencyGraph(this.dependencyGraph);
             this.addScope(sourceScope);
         }
     }
@@ -482,17 +525,26 @@ export class Program {
 
         let file = this.getFile(filePath, normalizePath);
         if (file) {
-            this.plugins.emit('beforeFileDispose', file);
+            this.plugins.emit('beforeFileDispose', {
+                program: this,
+                file: file
+            });
 
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.pkgPath];
             if (scope) {
-                this.plugins.emit('beforeScopeDispose', scope);
+                this.plugins.emit('beforeScopeDispose', {
+                    program: this,
+                    scope: scope
+                });
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
                 this.dependencyGraph.remove(scope.dependencyGraphKey);
                 delete this.scopes[file.pkgPath];
-                this.plugins.emit('afterScopeDispose', scope);
+                this.plugins.emit('afterScopeDispose', {
+                    program: this,
+                    scope: scope
+                });
             }
             //remove the file from the program
             this.unsetFile(file);
@@ -508,7 +560,10 @@ export class Program {
             if (isXmlFile(file)) {
                 this.unregisterComponent(file);
             }
-            this.plugins.emit('afterFileDispose', file);
+            this.plugins.emit('afterFileDispose', {
+                program: this,
+                file: file
+            });
         }
     }
 
@@ -539,18 +594,14 @@ export class Program {
     public validate() {
         this.logger.time(LogLevel.log, ['Validating project'], () => {
             this.diagnostics = [];
-            this.plugins.emit('beforeProgramValidate', this);
-
-            this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
-                for (let scopeName in this.scopes) {
-                    let scope = this.scopes[scopeName];
-                    scope.validate();
-                }
+            this.plugins.emit('beforeProgramValidate', {
+                program: this
             });
 
-            //find any files NOT loaded into a scope
-            for (let key in this.files) {
-                const file = this.files[key];
+            //validate every file
+            for (const file of Object.values(this.files)) {
+
+                //find any files NOT loaded into a scope
                 if (!this.fileIsIncludedInAnyScope(file)) {
                     this.logger.debug('Program.validate(): fileNotReferenced by any scope', () => chalk.green(file?.pkgPath));
                     //the file is not loaded in any scope
@@ -560,11 +611,50 @@ export class Program {
                         range: util.createRange(0, 0, 0, Number.MAX_VALUE)
                     });
                 }
+
+                //for every unvalidated file, validate it
+                if (!file.isValidated) {
+                    this.plugins.emit('beforeFileValidate', {
+                        program: this,
+                        file: file
+                    });
+
+                    //call file.validate() IF the file has that function defined
+                    file.validate?.();
+                    file.isValidated = true;
+
+                    this.plugins.emit('afterFileValidate', {
+                        program: this,
+                        file: file
+                    });
+                }
             }
+
+            this.logger.time(LogLevel.info, ['Validate all scopes'], () => {
+                for (let scope of Object.values(this.scopes)) {
+                    //only validate unvalidated scopes
+                    if (!scope.isValidated) {
+                        this.plugins.emit('beforeScopeValidate', {
+                            program: this,
+                            scope: scope
+                        });
+
+                        scope.validate();
+                        scope.isValidated = true;
+
+                        this.plugins.emit('afterScopeValidate', {
+                            program: this,
+                            scope: scope
+                        });
+                    }
+                }
+            });
 
             this.detectDuplicateComponentNames();
 
-            this.plugins.emit('afterProgramValidate', this);
+            this.plugins.emit('afterProgramValidate', {
+                program: this
+            });
         });
     }
 
@@ -613,11 +703,11 @@ export class Program {
     }
 
     /**
-     * Determine if the given file is included in at least one scope in this program
+     * Determine at least one scope has the file
      */
     private fileIsIncludedInAnyScope(file: BscFile) {
-        for (let scopeName in this.scopes) {
-            if (this.scopes[scopeName].hasFile(file)) {
+        for (let scope of Object.values(this.scopes)) {
+            if (scope.hasFile(file)) {
                 return true;
             }
         }
@@ -1195,14 +1285,21 @@ export class Program {
             });
         }
 
-        this.plugins.emit('beforeProgramTranspile', this, entries);
+        this.plugins.emit('beforeProgramTranspile', {
+            program: this,
+            entries: entries
+        });
 
         const promises = entries.map(async (entry) => {
             //skip transpiling typedef files
             if (isBrsFile(entry.file) && entry.file.isTypedef) {
                 return;
             }
-            this.plugins.emit('beforeFileTranspile', entry);
+            this.plugins.emit('beforeFileTranspile', {
+                program: this,
+                file: entry.file,
+                outputPath: entry.outputPath
+            });
             const { file, outputPath } = entry;
             const result = file.transpile();
 
@@ -1224,7 +1321,11 @@ export class Program {
                 await fsExtra.writeFile(typedefPath, typedef);
             }
 
-            this.plugins.emit('afterFileTranspile', entry);
+            this.plugins.emit('afterFileTranspile', {
+                program: this,
+                file: entry.file,
+                outputPath: entry.outputPath
+            });
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
@@ -1233,7 +1334,10 @@ export class Program {
         }
         await Promise.all(promises);
 
-        this.plugins.emit('afterProgramTranspile', this, entries);
+        this.plugins.emit('afterProgramTranspile', {
+            program: this,
+            entries: entries
+        });
     }
 
     /**

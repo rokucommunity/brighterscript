@@ -128,7 +128,10 @@ export class ProgramBuilder {
     protected createProgram() {
         const program = new Program(this.options, undefined, this.plugins);
 
-        this.plugins.emit('afterProgramCreate', program);
+        this.plugins.emit('afterProgramCreate', {
+            builder: this,
+            program: program
+        });
         return program;
     }
 
@@ -144,7 +147,9 @@ export class ProgramBuilder {
             this.plugins.add(plugin);
         }
 
-        this.plugins.emit('beforeProgramCreate', this);
+        this.plugins.emit('beforeProgramCreate', {
+            builder: this
+        });
     }
 
     private clearConsole() {
@@ -379,35 +384,51 @@ export class ProgramBuilder {
         });
 
         //get every file referenced by the files array
-        let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
+        let fileEntries = await rokuDeploy.getFilePaths(options.files, options.rootDir);
 
         //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
-        let filteredFileMap = [] as FileObj[];
-        for (let fileEntry of fileMap) {
+        let filteredFileEntries = [] as FileObj[];
+        for (let fileEntry of fileEntries) {
             if (this.program.hasFile(fileEntry.src) === false) {
-                filteredFileMap.push(fileEntry);
+                filteredFileEntries.push(fileEntry);
             }
         }
 
-        this.plugins.emit('beforePrepublish', this, filteredFileMap);
+        this.plugins.emit('beforePrepublish', {
+            builder: this,
+            program: this.program,
+            files: filteredFileEntries
+        });
 
         await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
             //prepublish all non-program-loaded files to staging
             await rokuDeploy.prepublishToStaging({
                 ...options,
-                files: filteredFileMap
+                files: filteredFileEntries
             });
         });
 
-        this.plugins.emit('afterPrepublish', this, filteredFileMap);
-        this.plugins.emit('beforePublish', this, fileMap);
+        this.plugins.emit('afterPrepublish', {
+            builder: this,
+            program: this.program,
+            files: filteredFileEntries
+        });
+        this.plugins.emit('beforePublish', {
+            builder: this,
+            program: this.program,
+            files: fileEntries
+        });
 
         await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
             //transpile any brighterscript files
-            await this.program.transpile(fileMap, options.stagingFolderPath);
+            await this.program.transpile(fileEntries, options.stagingFolderPath);
         });
 
-        this.plugins.emit('afterPublish', this, fileMap);
+        this.plugins.emit('afterPublish', {
+            builder: this,
+            program: this.program,
+            files: fileEntries
+        });
     }
 
     private async deployPackageIfEnabled() {

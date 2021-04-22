@@ -14,7 +14,11 @@ export class XmlScope extends Scope {
         public xmlFile: XmlFile,
         public program: Program
     ) {
-        super(xmlFile.pkgPath, xmlFile.dependencyGraphKey, program);
+        super(xmlFile.pkgPath, program);
+    }
+
+    public get dependencyGraphKey() {
+        return this.xmlFile.dependencyGraphKey;
     }
 
     /**
