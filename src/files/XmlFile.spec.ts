@@ -627,9 +627,9 @@ describe('XmlFile', () => {
         it(`honors the 'needsTranspiled' flag when set in 'afterFileParse'`, () => {
             program.plugins.add({
                 name: 'test',
-                afterFileParse: (file) => {
+                afterFileParse: (event) => {
                     //enable transpile for every file
-                    file.needsTranspiled = true;
+                    event.file.needsTranspiled = true;
                 }
             });
             const file = program.addOrReplaceFile('components/file.xml', trim`
