@@ -1,11 +1,11 @@
+import { isVoidType, isDynamicType } from '../astUtils';
 import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
 
 export class VoidType implements BscType {
     public isAssignableTo(targetType: BscType) {
         return (
-            targetType instanceof VoidType ||
-            targetType instanceof DynamicType
+            isVoidType(targetType) ||
+            isDynamicType(targetType)
         );
     }
 
@@ -20,5 +20,9 @@ export class VoidType implements BscType {
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    public equals(targetType: BscType): boolean {
+        return isVoidType(targetType);
     }
 }

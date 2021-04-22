@@ -14,4 +14,8 @@ export class CustomType extends ObjectType implements BscType {
     public toTypeString(): string {
         return 'object';
     }
+
+    public equals(targetType: BscType): boolean {
+        return this.toString() === targetType.toString();
+    }
 }

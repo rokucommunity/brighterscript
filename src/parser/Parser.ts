@@ -663,9 +663,7 @@ export class Parser {
             }, false);
 
             this.consumeStatementSeparators(true);
-
             let func = new FunctionExpression(
-                name,
                 params,
                 undefined, //body
                 functionType,
@@ -685,9 +683,10 @@ export class Parser {
                 this.currentFunctionExpression.childFunctionExpressions.push(func);
             }
 
-            // add the function to the relevant symbol table
+            // add the function to the relevant symbol tables
             if (!isAnonymous) {
                 const funcType = func.getFunctionType();
+                funcType.setName(name.text);
 
                 // add the function as declared to the current namespace's table
                 this.currentNamespace?.symbolTable.addSymbol(name.text, name.range, funcType);
@@ -840,10 +839,6 @@ export class Parser {
             );
         }
         this._references.assignmentStatements.push(result);
-        if (isFunctionExpression(result.value)) {
-            // Use the name of the variable assignment as the name of the anonymous function
-            result.value.name = name;
-        }
         const assignmentType = getBscTypeFromExpression(result.value, this.currentFunctionExpression);
 
         this.currentFunctionLocalVars?.push({

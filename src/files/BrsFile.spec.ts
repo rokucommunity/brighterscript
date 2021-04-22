@@ -1513,7 +1513,7 @@ describe('BrsFile', () => {
             let hover = file.getHover(Position.create(5, 24));
 
             expect(hover.range).to.eql(Range.create(5, 20, 5, 29));
-            expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
+            expect(hover.contents).to.equal('sub (name as string) as void');
         });
 
         it('finds function hover in file scope', () => {

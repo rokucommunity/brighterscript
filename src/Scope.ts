@@ -326,7 +326,6 @@ export class Scope {
      */
     public buildNamespaceLookup() {
         let namespaceLookup = {} as Record<string, NamespaceContainer>;
-        let parentSymbolTable = this.symbolTable;
         this.enumerateBrsFiles((file) => {
             for (let namespace of file.parser.references.namespaceStatements) {
                 //TODO should we handle non-brighterscript?
@@ -348,9 +347,8 @@ export class Scope {
                         classStatements: {},
                         functionStatements: {},
                         statements: [],
-                        symbolTable: new SymbolTable(parentSymbolTable)
+                        symbolTable: new SymbolTable(this.symbolTable)
                     };
-                    parentSymbolTable = namespaceLookup[lowerLoopName].symbolTable;
                 }
                 let ns = namespaceLookup[name.toLowerCase()];
                 ns.statements.push(...namespace.body.statements);
@@ -360,9 +358,9 @@ export class Scope {
                     } else if (isFunctionStatement(statement)) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     }
-
-
                 }
+                // Merges all the symbol tables of the namespace statements into the new symbol table created above.
+                // Set those symbol tables to have this new merged table as a parent
                 ns.symbolTable.mergeSymbolTable(namespace.symbolTable);
                 namespace.symbolTable.setParent(ns.symbolTable);
             }
@@ -414,6 +412,9 @@ export class Scope {
             }
             //clear the scope's errors list (we will populate them from this method)
             this.diagnostics = [];
+
+            // rebuild the symbol table
+            this.buildSymbolTableIfNeeded();
 
             let callables = this.getAllCallables();
 
@@ -482,11 +483,18 @@ export class Scope {
         this._symbolTable = null;
     }
 
-    /**
-     * Gets ths current symbol table for the scope, by merging the tables for all the files in this scope.
-     * This will be rebuilt if this scope is invalidated
-     */
+
     public get symbolTable() {
+        this.buildSymbolTableIfNeeded();
+        return this._symbolTable;
+    }
+
+    /**
+    * Builds the current symbol table for the scope, by merging the tables for all the files in this scope.
+    * Also links all file symbols tables to this new table
+    * This will only rebuilt if the symbol table has not been built before
+    */
+    private buildSymbolTableIfNeeded() {
         if (!this._symbolTable) {
             this._symbolTable = new SymbolTable(this.getParentScope()?.symbolTable);
             for (let file of this.getOwnFiles()) {
@@ -496,7 +504,6 @@ export class Scope {
                 }
             }
         }
-        return this._symbolTable;
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {

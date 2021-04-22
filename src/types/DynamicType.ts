@@ -22,4 +22,8 @@ export class DynamicType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public equals(targetType: BscType): boolean {
+        return this.toString() === targetType.toString();
+    }
 }

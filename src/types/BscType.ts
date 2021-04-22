@@ -3,4 +3,5 @@ export interface BscType {
     isConvertibleTo(targetType: BscType): boolean;
     toString(): string;
     toTypeString(): string;
+    equals(targetType: BscType): boolean;
 }

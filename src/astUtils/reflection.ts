@@ -17,6 +17,10 @@ import { CustomType } from '../types/CustomType';
 import type { Scope } from '../Scope';
 import type { XmlScope } from '../XmlScope';
 import { UninitializedType } from '../types/UninitializedType';
+import { InterfaceType } from '../types/InterfaceType';
+import { ArrayType } from '../types/ArrayType';
+import { ObjectType } from '../types/ObjectType';
+import { DynamicType } from '../types/DynamicType';
 
 // File reflection
 
@@ -239,8 +243,20 @@ export function isVoidType(e: any): e is VoidType {
 export function isCustomType(e: any): e is CustomType {
     return e?.constructor.name === CustomType.name;
 }
-export function isUninitializedType(e: any): e is CustomType {
+export function isUninitializedType(e: any): e is UninitializedType {
     return e?.constructor.name === UninitializedType.name;
+}
+export function isInterfaceType(e: any): e is InterfaceType {
+    return e?.constructor.name === InterfaceType.name;
+}
+export function isArrayType(e: any): e is ArrayType {
+    return e?.constructor.name === ArrayType.name;
+}
+export function isObjectType(e: any): e is ObjectType {
+    return e?.constructor.name === ObjectType.name;
+}
+export function isDynamicType(e: any): e is DynamicType {
+    return e?.constructor.name === DynamicType.name;
 }
 
 const numberConstructorNames = [

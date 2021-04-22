@@ -1,11 +1,11 @@
+import { isUninitializedType, isDynamicType } from '../astUtils';
 import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
 
 export class UninitializedType implements BscType {
     public isAssignableTo(targetType: BscType) {
         return (
-            targetType instanceof UninitializedType ||
-            targetType instanceof DynamicType
+            isUninitializedType(targetType) ||
+            isDynamicType(targetType)
         );
     }
 
@@ -20,5 +20,9 @@ export class UninitializedType implements BscType {
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    public equals(targetType: BscType): boolean {
+        return isUninitializedType(targetType);
     }
 }

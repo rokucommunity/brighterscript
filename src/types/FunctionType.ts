@@ -1,11 +1,10 @@
+import { isFunctionType, isDynamicType } from '../astUtils';
 import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
 
 export class FunctionType implements BscType {
     constructor(
         public returnType: BscType
     ) {
-
     }
 
     /**
@@ -35,9 +34,7 @@ export class FunctionType implements BscType {
     }
 
     public isAssignableTo(targetType: BscType) {
-        if (targetType instanceof DynamicType) {
-            return true;
-        } else if (targetType instanceof FunctionType) {
+        if (isFunctionType(targetType)) {
             //compare all parameters
             let len = Math.max(this.params.length, targetType.params.length);
             for (let i = 0; i < len; i++) {
@@ -55,6 +52,8 @@ export class FunctionType implements BscType {
 
             //made it here, all params and return type are equivalent
             return true;
+        } else if (isDynamicType(targetType)) {
+            return true;
         } else {
             return false;
         }
@@ -69,11 +68,15 @@ export class FunctionType implements BscType {
         for (let param of this.params) {
             paramTexts.push(`${param.name}${param.isRequired ? '' : '?'} as ${param.type.toString()}`);
         }
-        return `${this.isSub ? 'sub' : 'function'} ${this.name}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
+        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
 
     }
 
     public toTypeString(): string {
         return 'Function';
+    }
+
+    public equals(targetType: BscType): boolean {
+        return (isFunctionType(targetType)) && this.isAssignableTo(targetType);
     }
 }

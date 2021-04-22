@@ -92,7 +92,7 @@ export class SymbolTable {
             let sameImpliedType = true;
             let impliedType = symbols[0].type;
             for (const symbol of symbols) {
-                sameImpliedType = (impliedType.toString() === symbol.type.toString());
+                sameImpliedType = (impliedType.equals(symbol.type));
                 if (!sameImpliedType) {
                     break;
                 }

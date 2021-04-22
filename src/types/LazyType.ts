@@ -34,5 +34,9 @@ export class LazyType implements BscType {
     public toTypeString(): string {
         return this.type.toTypeString();
     }
+
+    public equals(targetType: BscType): boolean {
+        return this.type.equals(targetType);
+    }
 }
 
