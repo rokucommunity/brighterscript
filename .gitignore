@@ -13,3 +13,5 @@ graph.svg
 *.tgz
 benchmarks/*.json
 benchmarks/*.brs
+isolate-*
+v8*.log

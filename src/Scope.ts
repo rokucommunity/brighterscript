@@ -16,25 +16,20 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
+import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { SymbolTable } from './SymbolTable';
-
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
  */
 export class Scope {
     constructor(
         public name: string,
-        public dependencyGraphKey: string,
-        public program: Program
+        public program: Program,
+        private _dependencyGraphKey?: string
     ) {
         this.isValidated = false;
         //used for improved logging performance
         this._debugLogComponentName = `Scope '${chalk.redBright(this.name)}'`;
-
-        //anytime a dependency for this scope changes, we need to be revalidated
-        this.programHandles.push(
-            this.program.dependencyGraph.onchange(this.dependencyGraphKey, this.onDependenciesChanged.bind(this), true)
-        );
     }
 
     /**
@@ -43,9 +38,11 @@ export class Scope {
      */
     public readonly isValidated: boolean;
 
-    protected programHandles = [] as Array<() => void>;
-
     protected cache = new Cache();
+
+    public get dependencyGraphKey() {
+        return this._dependencyGraphKey;
+    }
 
     /**
      * A dictionary of namespaces, indexed by the lower case full name of each namespace.
@@ -120,8 +117,8 @@ export class Scope {
      */
     protected diagnostics = [] as BsDiagnostic[];
 
-    protected onDependenciesChanged(key: string) {
-        this.logDebug('invalidated because dependency graph said [', key, '] changed');
+    protected onDependenciesChanged(event: DependencyChangedEvent) {
+        this.logDebug('invalidated because dependency graph said [', event.sourceKey, '] changed');
         this.invalidate();
     }
 
@@ -129,9 +126,7 @@ export class Scope {
      * Clean up all event handles
      */
     public dispose() {
-        for (let disconnect of this.programHandles) {
-            disconnect();
-        }
+        this.unsubscribeFromDependencyGraph?.();
     }
 
     /**
@@ -170,6 +165,25 @@ export class Scope {
         }
     }
 
+    private dependencyGraph: DependencyGraph;
+    /**
+     * An unsubscribe function for the dependencyGraph subscription
+     */
+    private unsubscribeFromDependencyGraph: () => void;
+
+    public attachDependencyGraph(dependencyGraph: DependencyGraph) {
+        this.dependencyGraph = dependencyGraph;
+        if (this.unsubscribeFromDependencyGraph) {
+            this.unsubscribeFromDependencyGraph();
+        }
+
+        //anytime a dependency for this scope changes, we need to be revalidated
+        this.unsubscribeFromDependencyGraph = this.dependencyGraph.onchange(this.dependencyGraphKey, this.onDependenciesChanged.bind(this));
+
+        //invalidate immediately since this is a new scope
+        this.invalidate();
+    }
+
     /**
      * Get the file with the specified pkgPath
      */
@@ -199,7 +213,7 @@ export class Scope {
     public getAllFiles() {
         return this.cache.getOrAdd('getAllFiles', () => {
             let result = [] as BscFile[];
-            let dependencies = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
+            let dependencies = this.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
             for (let dependency of dependencies) {
                 //load components by their name
                 if (dependency.startsWith('component:')) {
@@ -794,34 +808,36 @@ export class Scope {
     private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: CallableContainerMap) {
         //validate all expression calls
         for (let expCall of file.functionCalls) {
-            const lowerName = expCall.name.toLowerCase();
-            //for now, skip validation on any method named "super" within `.bs` contexts.
-            //TODO revise this logic so we know if this function call resides within a class constructor function
-            if (file.extension === '.bs' && lowerName === 'super') {
-                continue;
-            }
-
-            //find a local variable with this name
-            const localVar = file.getLocalVarsAtPosition(expCall.nameRange.start).find(x => x.lowerName === lowerName);
-
-            //if we don't already have a variable with this name.
-            if (!localVar) {
-                const callablesWithThisName = util.getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName, expCall);
-
-                //use the first item from callablesByLowerName, because if there are more, that's a separate error
-                let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
-
-                //detect calls to unknown functions
-                if (!knownCallable) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.callToUnknownFunction(expCall.name, this.name),
-                        range: expCall.nameRange,
-                        file: file
-                    });
+            if (isBrsFile(file)) {
+                const lowerName = expCall.name.toLowerCase();
+                //for now, skip validation on any method named "super" within `.bs` contexts.
+                //TODO revise this logic so we know if this function call resides within a class constructor function
+                if (file.extension === '.bs' && lowerName === 'super') {
+                    continue;
                 }
-            } else {
-                //if we found a variable with the same name as the function, assume the call is "known".
-                //If the variable is a different type, some other check should add a diagnostic for that.
+
+                //find a local variable with this name
+                const localVar = file.getLocalVarsAtPosition(expCall.nameRange.start).find(x => x.lowerName === lowerName);
+
+                //if we don't already have a variable with this name.
+                if (!localVar) {
+                    const callablesWithThisName = util.getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName, expCall);
+
+                    //use the first item from callablesByLowerName, because if there are more, that's a separate error
+                    let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
+
+                    //detect calls to unknown functions
+                    if (!knownCallable) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.callToUnknownFunction(expCall.name, this.name),
+                            range: expCall.nameRange,
+                            file: file
+                        });
+                    }
+                } else {
+                    //if we found a variable with the same name as the function, assume the call is "known".
+                    //If the variable is a different type, some other check should add a diagnostic for that.
+                }
             }
         }
     }

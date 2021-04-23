@@ -93,6 +93,17 @@ describe('BrsFile', () => {
     });
 
     describe('getCompletions', () => {
+        it('does not crash for callfunc on a function call', () => {
+            const file = program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    getManager()@.
+                end sub
+            `);
+            expect(() => {
+                program.getCompletions(file.pathAbsolute, util.createPosition(2, 34));
+            }).not.to.throw;
+        });
+
         it('suggests pkg paths in strings that match that criteria', () => {
             program.addOrReplaceFile('source/main.brs', `
                 sub main()
@@ -1940,7 +1951,7 @@ describe('BrsFile', () => {
         });
 
         it('does not add leading or trailing newlines', () => {
-            testTranspile(`function log()\nend function`, undefined, 'none');
+            testTranspile(`function abc()\nend function`, undefined, 'none');
         });
 
         it('handles sourcemap edge case', async () => {
@@ -1966,7 +1977,7 @@ describe('BrsFile', () => {
         });
 
         it('computes correct locations for sourcemap', async () => {
-            let source = `function log(name)\n    firstName = name\nend function`;
+            let source = `function abc(name)\n    firstName = name\nend function`;
             let tokens = Lexer.scan(source).tokens
                 //remove newlines and EOF
                 .filter(x => x.kind !== TokenKind.Eof && x.kind !== TokenKind.Newline);
@@ -2217,6 +2228,10 @@ describe('BrsFile', () => {
         });
 
         it('replaces custom types in parameter types and return types', () => {
+            program.addOrReplaceFile('source/SomeKlass.bs', `
+                class SomeKlass
+                end class
+            `);
             testTranspile(`
                 function foo() as SomeKlass
                     return new SomeKlass()

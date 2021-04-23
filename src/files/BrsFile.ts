@@ -184,7 +184,7 @@ export class BrsFile {
         }
 
         //event that fires anytime a dependency changes
-        this.unsubscribeFromDependencyGraph = this.program.dependencyGraph.onchange(this.dependencyGraphKey, () => {
+        this.unsubscribeFromDependencyGraph = dependencyGraph.onchange(this.dependencyGraphKey, () => {
             this.resolveTypedef();
         });
 

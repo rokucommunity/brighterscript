@@ -7,7 +7,7 @@ import { Lexer } from '../../../lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { AssignmentStatement } from '../../Statement';
 import { Program } from '../../../Program';
-import { getTestTranspile } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 
 describe('TemplateStringExpression', () => {
     describe('parser template String', () => {
@@ -48,7 +48,7 @@ describe('TemplateStringExpression', () => {
 
                 let { tokens } = Lexer.scan('a = ["one", "two", `I am a complex example\n${a.isRunning(["a","b","c"])}`]');
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-                expect(diagnostics).to.be.lengthOf(0);
+                expectZeroDiagnostics(diagnostics);
                 expect(statements[0]).instanceof(AssignmentStatement);
             });
         });
@@ -239,6 +239,20 @@ describe('TemplateStringExpression', () => {
                         zombie = zombify(["Hello ", " I am ", " years old"], ["world", 12])
                     end sub
                 `);
+            });
+
+            it('can be concatenated with regular string', () => {
+                testTranspile(`
+                    sub main()
+                        thing = "this" + \`that\`
+                        otherThing = \`that\` + "this"
+                    end sub
+                `, `
+                    sub main()
+                        thing = "this" + "that"
+                        otherThing = "that" + "this"
+                    end sub
+                `, undefined, 'source/main.bs');
             });
         });
     });
