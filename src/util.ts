@@ -72,11 +72,20 @@ export class Util {
      */
     public sanitizePkgPath(pkgPath: string) {
         pkgPath = pkgPath.replace(/\\/g, '/');
-        if (!pkgPath.startsWith('pkg:/')) {
+        //if there's no protocol, assume it's supposed to start with `pkg:/`
+        if (!this.startsWithProtocol(pkgPath)) {
             pkgPath = 'pkg:/' + pkgPath;
         }
         return pkgPath;
     }
+
+    /**
+     * Determine if the given path starts with a protocol
+     */
+    public startsWithProtocol(path: string) {
+        return !!/^[a-z]+:\//.exec(path);
+    }
+
     /**
      * Given a path to a file/directory, replace all path separators with the current system's version.
      * @param filePath
@@ -377,12 +386,14 @@ export class Util {
      * @param targetPath a full pkgPath, or a path relative to the containing file
      */
     public getPkgPathFromTarget(sourcePkgPath: string, targetPath: string) {
-        //handle some edge cases
-        if (targetPath === 'pkg:' || targetPath === 'pkg:/') {
+        const [protocol] = /^[-a-z0-9_]+:\/?/i.exec(targetPath) ?? [];
+
+        //if the target path is only a file protocol (with or without the trailing slash such as `pkg:` or `pkg:/`), nothing more can be done
+        if (targetPath?.length === protocol?.length) {
             return null;
         }
         //if the target starts with 'pkg:', return as-is
-        if (targetPath.startsWith('pkg:/')) {
+        if (protocol) {
             return targetPath;
         }
 
@@ -1093,11 +1104,12 @@ export class Util {
     }
 
     /**
-     * Given a pkgPath, remove the `pkg:/` portion of the path.
+     * Remove leading simple protocols from a path (if present)
      */
-    public removePkgProtocol(pkgPath: string) {
-        if (pkgPath.startsWith('pkg:/')) {
-            return pkgPath.substring(5);
+    public removeProtocol(pkgPath: string) {
+        let match = /^[-a-z_]+:\//.exec(pkgPath);
+        if (match) {
+            return pkgPath.substring(match[0].length);
         } else {
             return pkgPath;
         }

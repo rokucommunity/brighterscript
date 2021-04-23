@@ -56,7 +56,7 @@ describe('import statements', () => {
         let files = program.getFiles().filter(x => !!x).map(x => {
             return {
                 src: x.srcPath,
-                dest: util.removePkgProtocol(x.pkgPath)
+                dest: util.removeProtocol(x.pkgPath)
             };
         });
         await program.transpile(files, stagingFolderPath);

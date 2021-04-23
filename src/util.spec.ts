@@ -600,4 +600,35 @@ describe('util', () => {
             )).to.be.true;
         });
     });
+
+    describe('removeProtocol', () => {
+        it('removes pkg:/', () => {
+            expect(
+                util.removeProtocol('pkg:/some/path')
+            ).to.eql(
+                'some/path'
+            );
+        });
+        it('removes libpkg:/', () => {
+            expect(
+                util.removeProtocol('libpkg:/some/path')
+            ).to.eql(
+                'some/path'
+            );
+        });
+        it('removes file:/', () => {
+            expect(
+                util.removeProtocol('file:/some/path')
+            ).to.eql(
+                'some/path'
+            );
+        });
+        it('does nothing when protocol is missing', () => {
+            expect(
+                util.removeProtocol('some/path')
+            ).to.eql(
+                'some/path'
+            );
+        });
+    });
 });

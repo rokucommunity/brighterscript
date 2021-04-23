@@ -1265,15 +1265,15 @@ export class Program {
                 //this file has been added in-memory, from a plugin, for example
                 filePathObj = {
                     //add an interpolated src path (since it doesn't actually exist in memory)
-                    src: `bsc:/${util.removePkgProtocol(file.pkgPath)}`,
+                    src: `bsc-in-memory:/${util.removeProtocol(file.pkgPath)}`,
                     dest: file.pkgPath
                 };
             }
 
             //prep the output path
             let outputPath = filePathObj.dest
-                //replace any leading pkg:/
-                .replace(/^pkg:\//, '')
+                //replace any leading protocol
+                .replace(/^[-a-z_]+:\//, '')
                 //change any .bs file extension to .brs
                 .replace(/\.bs$/gi, '.brs');
 
