@@ -563,7 +563,7 @@ export class Parser {
 
                 //methods (function/sub keyword OR identifier followed by opening paren)
                 if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
-                    const funcDeclaration = this.functionDeclaration(false, false);
+                    const funcDeclaration = this.functionDeclaration(false, false, true);
 
                     //remove this function from the lists because it's not a callable
                     const functionStatement = this._references.functionStatements.pop();
@@ -685,9 +685,9 @@ export class Parser {
      */
     private callExpressions = [];
 
-    private functionDeclaration(isAnonymous: true, checkIdentifier?: boolean): FunctionExpression;
-    private functionDeclaration(isAnonymous: false, checkIdentifier?: boolean): FunctionStatement;
-    private functionDeclaration(isAnonymous: boolean, checkIdentifier = true) {
+    private functionDeclaration(isAnonymous: true, checkIdentifier?: boolean, forClassMethod?: boolean): FunctionExpression;
+    private functionDeclaration(isAnonymous: false, checkIdentifier?: boolean, forClassMethod?: boolean): FunctionStatement;
+    private functionDeclaration(isAnonymous: boolean, checkIdentifier = true, forClassMethod = false) {
         let previousCallExpressions = this.callExpressions;
         this.callExpressions = [];
 
@@ -817,7 +817,7 @@ export class Parser {
             }
 
             // add the function to the relevant symbol tables
-            if (!isAnonymous) {
+            if (!isAnonymous && !forClassMethod) {
                 const funcType = func.getFunctionType();
                 funcType.setName(name.text);
 

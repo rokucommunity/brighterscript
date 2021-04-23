@@ -512,6 +512,15 @@ export class Scope {
                 }
             }
         }
+        // also link classes
+        const classMap = this.getClassMap();
+        for (const pair of classMap) {
+            const fileLink = pair[1];
+            if (fileLink.item.hasParentClass()) {
+                // set the parent of the class's symbol table to the symbol table of the class it extends
+                fileLink.item.symbolTable.setParent(classMap.get(fileLink.item.parentClassName.getName(ParseMode.BrighterScript)).item.symbolTable);
+            }
+        }
     }
 
     public unlinkSymbolTable() {
@@ -523,6 +532,13 @@ export class Scope {
                     namespace.symbolTable.setParent(null);
                 }
             }
+        }
+
+        // also unlink classes
+        const classMap = this.getClassMap();
+        for (const pair of classMap) {
+            const fileLink = pair[1];
+            fileLink.item.symbolTable.setParent(null);
         }
     }
 

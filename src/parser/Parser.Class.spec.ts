@@ -5,6 +5,7 @@ import { Parser, ParseMode } from './Parser';
 import type { FunctionStatement, AssignmentStatement, ClassFieldStatement } from './Statement';
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
+import { isFunctionType, isUninitializedType } from '../astUtils/reflection';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -407,6 +408,46 @@ describe('parser class', () => {
             `, { mode: ParseMode.BrightScript });
 
             expect(diagnostics[0]?.message).to.not.exist;
+        });
+    });
+
+
+    describe('symbol table', () => {
+
+        it('does not add methods to parser symbol table', () => {
+            let parser = Parser.parse(`
+                class Animal
+
+                    sub eat()
+                    end sub
+
+                    sub sleep()
+                    end sub
+
+                end class
+            `, { mode: ParseMode.BrighterScript });
+
+            expect(parser.symbolTable).to.exist;
+            expect(isUninitializedType(parser.symbolTable.getSymbolType('eat'))).to.be.true;
+            expect(isUninitializedType(parser.symbolTable.getSymbolType('sleep'))).to.be.true;
+        });
+
+        it('adds methods to class statement symbol table', () => {
+            let parser = Parser.parse(`
+                class Animal
+
+                    sub eat()
+                    end sub
+
+                    sub sleep()
+                    end sub
+
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            let classStatement = parser.statements[0] as ClassStatement;
+            expect(classStatement.symbolTable).to.exist;
+            expect(isFunctionType(classStatement.symbolTable.getSymbolType('eat'))).to.be.true;
+            expect(isFunctionType(classStatement.symbolTable.getSymbolType('sleep'))).to.be.true;
         });
     });
 });
