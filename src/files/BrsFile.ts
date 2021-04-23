@@ -1289,7 +1289,7 @@ export class BrsFile {
             for (const scope of this.program.getScopesForFile(this)) {
                 scope.linkSymbolTable();
                 if (func.symbolTable.hasSymbol(lowerTokenText)) {
-                    let type = func.symbolTable?.getSymbolType(lowerTokenText);
+                    const type = func.symbolTable?.getSymbolType(lowerTokenText);
                     let scopeTypeText = '';
 
                     if (isFunctionType(type)) {
@@ -1309,7 +1309,6 @@ export class BrsFile {
             if (typeText) {
                 return {
                     range: token.range,
-                    //append the variable name to the front for scope
                     contents: typeText
                 };
             }
