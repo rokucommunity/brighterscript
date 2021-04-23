@@ -83,7 +83,7 @@ export class Util {
      * Determine if the given path starts with a protocol
      */
     public startsWithProtocol(path: string) {
-        return !!/^[a-z]+:\//.exec(path);
+        return !!/^[-a-z]+:\//i.exec(path);
     }
 
     /**
