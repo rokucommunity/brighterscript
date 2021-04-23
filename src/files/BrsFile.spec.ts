@@ -2303,13 +2303,12 @@ describe('BrsFile', () => {
                 name: 'transform callback',
                 afterFileParse: onParsed
             });
-            const file = new BrsFile(`absolute_path/file${ext}`, `relative_path/file${ext}`, program);
-            expect(file.extension).to.equal(ext);
-            file.parse(`
+            file = program.addOrReplaceFile(`source/file.${ext}`, `
                 sub Sum()
-                    print "hello world"
+                print "hello world"
                 end sub
             `);
+            expect(file.extension).to.equal(ext);
             return file;
         }
 
@@ -2319,7 +2318,7 @@ describe('BrsFile', () => {
             expect(onParsed.callCount).to.equal(1);
         });
 
-        it('called for BR file', () => {
+        it('called for BS file', () => {
             const onParsed = sinon.spy();
             parseFileWithCallback('.bs', onParsed);
             expect(onParsed.callCount).to.equal(1);

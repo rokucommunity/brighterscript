@@ -5,7 +5,7 @@ import type { CompletionItem } from 'vscode-languageserver';
 import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import type { BsDiagnostic, FileReference } from '../interfaces';
+import type { AfterFileParseEvent, BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
@@ -38,14 +38,13 @@ describe('XmlFile', () => {
     describe('parse', () => {
         it('allows modifying the parsed XML model', () => {
             const expected = 'OtherName';
-            file = new XmlFile('abs', 'rel', program);
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
-                afterFileParse: () => {
-                    file.parser.ast.root.attributes[0].value.text = expected;
+                afterFileParse: (event) => {
+                    (event.file as XmlFile).parser.ast.root.attributes[0].value.text = expected;
                 }
             });
-            file.parse(trim`
+            file = program.addOrReplaceFile('components/ChildScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildScene" extends="Scene">
                     <script type="text/brightscript" uri="ChildScene1.brs" /> <script type="text/brightscript" uri="ChildScene2.brs" /> <script type="text/brightscript" uri="ChildScene3.brs" />
@@ -189,8 +188,8 @@ describe('XmlFile', () => {
         });
 
         it('Adds error when no component is declared in xml', () => {
-            file = new XmlFile('abs', 'rel', program);
-            file.parse('<script type="text/brightscript" uri="ChildScene.brs" />');
+            file = program.addOrReplaceFile('components/file.xml', '<script type="text/brightscript" uri="ChildScene.brs" />');
+            program.validate();
             expect(file.diagnostics).to.be.lengthOf(2);
             expect(file.diagnostics[0]).to.deep.include({
                 ...DiagnosticMessages.xmlUnexpectedTag('script'),
@@ -202,13 +201,13 @@ describe('XmlFile', () => {
         });
 
         it('adds error when component does not declare a name', () => {
-            file = new XmlFile('abs', 'rel', program);
-            file.parse(trim`
+            file = program.addOrReplaceFile('components/ParentScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component extends="ParentScene">
                     <script type="text/brightscript" uri="ChildScene.brs" />
                 </component>
             `);
+            program.validate();
             expect(file.diagnostics).to.be.lengthOf(1);
             expect(file.diagnostics[0]).to.deep.include(<BsDiagnostic>{
                 message: DiagnosticMessages.xmlComponentMissingNameAttribute().message,
@@ -217,12 +216,12 @@ describe('XmlFile', () => {
         });
 
         it('catches xml parse errors', () => {
-            file = new XmlFile('abs', 'rel', program);
-            file.parse(trim`
+            file = program.addOrReplaceFile('components/ParentScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component 1extends="ParentScene">
                 </component>
             `);
+            program.validate();
             expect(file.diagnostics).to.be.lengthOf(2);
             expect(file.diagnostics[0].code).to.equal(DiagnosticMessages.xmlGenericParseError('').code); //unexpected character '1'
             expect(file.diagnostics[1]).to.deep.include(<BsDiagnostic>{
@@ -588,6 +587,7 @@ describe('XmlFile', () => {
                     </component>
                 `
             );
+            program.validate();
 
             expect(file.getDiagnostics()[0]).to.include({
                 severity: DiagnosticSeverity.Warning,
@@ -627,9 +627,9 @@ describe('XmlFile', () => {
         it(`honors the 'needsTranspiled' flag when set in 'afterFileParse'`, () => {
             program.plugins.add({
                 name: 'test',
-                afterFileParse: (file) => {
+                afterFileParse: (event) => {
                     //enable transpile for every file
-                    file.needsTranspiled = true;
+                    event.file.needsTranspiled = true;
                 }
             });
             const file = program.addOrReplaceFile('components/file.xml', trim`
@@ -849,6 +849,7 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="SimpleScene.bs"/>
                 </component>
             `);
+            program.validate();
             expect(file.needsTranspiled).to.be.true;
         });
 
@@ -888,17 +889,15 @@ describe('XmlFile', () => {
             const program = new Program({
                 rootDir: rootDir
             });
-            file = new XmlFile('abs', 'rel', program);
             program.plugins.add({
                 name: 'Transform plugins',
-                afterFileParse: () => validateXml(file)
+                afterFileParse: (event: AfterFileParseEvent) => validateXml(event.file as XmlFile)
             });
-            file.parse(trim`
+            return program.addOrReplaceFile('components/Cmp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Cmp1" extends="Scene">
                 </component>
             `);
-            return file;
         }
 
         it('Calls XML file validation plugins', () => {
@@ -912,7 +911,7 @@ describe('XmlFile', () => {
     it('plugin diagnostics work for xml files', () => {
         program.plugins.add({
             name: 'Xml diagnostic test',
-            afterFileParse: (file) => {
+            afterFileParse: ({ file }) => {
                 if (file.pathAbsolute.endsWith('.xml')) {
                     file.addDiagnostics([{
                         file: file,
