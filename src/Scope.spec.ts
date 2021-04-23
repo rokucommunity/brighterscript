@@ -610,7 +610,7 @@ describe('Scope', () => {
                 end sub
                 sub getPrototypeOf()
                 end sub
-                `);
+            `);
             program.validate();
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
@@ -621,9 +621,9 @@ describe('Scope', () => {
             program.addOrReplaceFile('source/file.brs', ``);
             program.addOrReplaceFile('components/comp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="comp" extends="Scene" >
-                    <script uri="comp.brs" />
-                 </component>
+                <component name="comp" extends="Scene">
+                    <script uri="comp.brs"/>
+                </component>
             `);
             program.addOrReplaceFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
@@ -739,8 +739,8 @@ describe('Scope', () => {
             it('finds custom types from other namespaces', () => {
                 program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     namespace MyNamespace
-                        class MyClass
-                        end class
+                      class MyClass
+                      end class
                     end namespace
 
                     function foo(param as MyNamespace.MyClass) as MyNamespace.MyClass
@@ -806,7 +806,7 @@ describe('Scope', () => {
                     end namespace
 
                     function foo() as MyNamespace.UnknownType
-                end function
+                    end function
                 `);
                 program.validate();
 
@@ -820,8 +820,8 @@ describe('Scope', () => {
 
                 program.addOrReplaceFile('components/foo.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
-                    <component name="foo" extends="Scene" >
-                        <script uri="foo.bs" />
+                    <component name="foo" extends="Scene">
+                        <script uri="foo.bs"/>
                     </component>
                 `);
                 program.addOrReplaceFile(s`components/foo.bs`, `
@@ -834,8 +834,8 @@ describe('Scope', () => {
 
                 program.addOrReplaceFile('components/bar.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
-                    <component name="bar" extends="Scene" >
-                        <script uri="bar.bs" />
+                    <component name="bar" extends="Scene">
+                        <script uri="bar.bs"/>
                     </component>
                 `);
                 program.addOrReplaceFile(s`components/bar.bs`, `
@@ -854,8 +854,8 @@ describe('Scope', () => {
 
                 program.addOrReplaceFile('components/parent.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
-                    <component name="parent" extends="Scene" >
-                        <script uri="parent.bs" />
+                    <component name="parent" extends="Scene">
+                        <script uri="parent.bs"/>
                     </component>
                 `);
                 program.addOrReplaceFile(s`components/parent.bs`, `
@@ -864,8 +864,8 @@ describe('Scope', () => {
                 `);
                 program.addOrReplaceFile('components/child.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
-                    <component name="child" extends="parent" >
-                        <script uri="child.bs" />
+                    <component name="child" extends="parent">
+                        <script uri="child.bs"/>
                     </component>
                 `);
                 program.addOrReplaceFile(s`components/child.bs`, `
@@ -887,8 +887,8 @@ describe('Scope', () => {
 
             program.addOrReplaceFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="child" extends="parent" >
-                    <script uri="child.brs" />
+                <component name="child" extends="parent">
+                    <script uri="child.brs"/>
                 </component>
             `);
             program.addOrReplaceFile(s`components/child.brs`, ``);
@@ -898,8 +898,8 @@ describe('Scope', () => {
 
             program.addOrReplaceFile('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="parent" extends="Scene" >
-                    <script uri="parent.brs" />
+                <component name="parent" extends="Scene">
+                    <script uri="parent.brs"/>
                 </component>
             `);
             program.addOrReplaceFile(s`components/parent.brs`, `
@@ -920,7 +920,7 @@ describe('Scope', () => {
 
     describe('getDefinition', () => {
         it('returns empty list when there are no files', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir} /source/main.brs`, dest: 'source/main.brs' }, '');
+            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
             let scope = program.getScopeByName('source');
             expect(scope.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
         });
@@ -939,22 +939,22 @@ describe('Scope', () => {
     describe('scope symbol tables', () => {
         it('adds symbols for the complete scope', () => {
             program.addOrReplaceFile('source/file.brs', `
-            function funcInt() as integer
-            return 3
-            end function
+                function funcInt() as integer
+                    return 3
+                end function
 
                 function funcStr() as string
-            return "hello"
-            end function
+                    return "hello"
+                end function
             `);
             program.addOrReplaceFile('source/file2.brs', `
-            function funcBool() as boolean
-            return true
-            end function
+                function funcBool() as boolean
+                    return true
+                end function
 
                 function funcObject() as object
-            return {}
-            end function
+                    return {}
+                end function
             `);
             const sourceSymbols = program.getScopeByName('source').symbolTable;
 
@@ -966,13 +966,13 @@ describe('Scope', () => {
 
         it('adds updates symbol tables on invalidation', () => {
             program.addOrReplaceFile('source/file.brs', `
-            function funcInt() as integer
-            return 3
-            end function
+                function funcInt() as integer
+                    return 3
+                end function
 
                 function funcStr() as string
-            return "hello"
-            end function
+                    return "hello"
+                end function
             `);
 
             let sourceSymbols = program.getScopeByName('source').symbolTable;
@@ -982,9 +982,9 @@ describe('Scope', () => {
             program.getScopeByName('source').invalidate();
 
             program.addOrReplaceFile('source/file.brs', `
-            function funcFloat() as float
-            return 3.14
-            end function
+                function funcFloat() as float
+                    return 3.14
+                end function
             `);
             sourceSymbols = program.getScopeByName('source').symbolTable;
 
@@ -996,22 +996,21 @@ describe('Scope', () => {
 
         it('adds namespaced symbols tables to the scope', () => {
             program.addOrReplaceFile('source/file.brs', `
-            function funcInt() as integer
-            return 1 + Name.Space.nsFunc2(1)
-            end function
+                function funcInt() as integer
+                    return 1 + Name.Space.nsFunc2(1)
+                end function
             `);
             program.addOrReplaceFile('source/namespace.brs', `
-            namespace Name.Space
+                namespace Name.Space
                     function nsFunc1() as integer
-            return 1
-            end function
+                        return 1
+                    end function
 
                     function nsFunc2(num as integer) as integer
-            return num + Name.Space.nsFunc1()
-            end function
+                        return num + Name.Space.nsFunc1()
+                    end function
                 end namespace
-                    `);
-
+            `);
             const sourceScope = program.getScopeByName('source');
             const sourceSymbols = sourceScope.symbolTable;
 
@@ -1023,27 +1022,26 @@ describe('Scope', () => {
 
         it('merges namespace symbol tables in namespaceLookup', () => {
             program.addOrReplaceFile('source/ns1.brs', `
-            namespace Name.Space
+                namespace Name.Space
                     function nsFunc1() as integer
-            return 1
-            end function
+                        return 1
+                    end function
                 end namespace
 
-            namespace Name
-                 function outerNsFunc() as string
-            return "hello"
-            end function
+                namespace Name
+                    function outerNsFunc() as string
+                        return "hello"
+                    end function
                 end namespace
-                    `);
-            program.addOrReplaceFile('source/namespace.brs', `
-            namespace Name.Space
+            `);
+            program.addOrReplaceFile('source/ns2.brs', `
+                namespace Name.Space
                     function nsFunc2(num as integer) as integer
-            print Name.outerNsFunc()
-            return num + nsFunc1()
-            end function
+                        print Name.outerNsFunc()
+                        return num + nsFunc1()
+                    end function
                 end namespace
-                    `);
-
+            `);
             const sourceScope = program.getScopeByName('source');
             const mergedNsSymbolTable = sourceScope.namespaceLookup['name.space']?.symbolTable;
             expect(mergedNsSymbolTable).not.to.be.undefined;
