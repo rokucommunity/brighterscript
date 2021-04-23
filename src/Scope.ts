@@ -522,7 +522,6 @@ export class Scope {
                 }
             }
         }
-        this.clearSymbolTable()
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {
