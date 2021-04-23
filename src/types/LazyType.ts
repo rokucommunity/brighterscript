@@ -12,12 +12,8 @@ export class LazyType implements BscType {
     }
 
     public get type() {
-        if (!this._type) {
-            this._type = this.factory();
-        }
-        return this._type;
+        return this.factory();
     }
-    private _type: BscType;
 
     public isAssignableTo(targetType: BscType) {
         return this.type.isAssignableTo(targetType);

@@ -47,8 +47,6 @@ export class Scope {
 
     protected cache = new Cache();
 
-    private _symbolTable: SymbolTable;
-
     /**
      * A dictionary of namespaces, indexed by the lower case full name of each namespace.
      * If a namespace is declared as "NameA.NameB.NameC", there will be 3 entries in this dictionary,
@@ -362,7 +360,6 @@ export class Scope {
                 // Merges all the symbol tables of the namespace statements into the new symbol table created above.
                 // Set those symbol tables to have this new merged table as a parent
                 ns.symbolTable.mergeSymbolTable(namespace.symbolTable);
-                namespace.symbolTable.setParent(ns.symbolTable);
             }
 
             //associate child namespaces with their parents
@@ -413,8 +410,8 @@ export class Scope {
             //clear the scope's errors list (we will populate them from this method)
             this.diagnostics = [];
 
-            // rebuild the symbol table
-            this.buildSymbolTableIfNeeded();
+            // link the symbol table
+            this.linkSymbolTable();
 
             let callables = this.getAllCallables();
 
@@ -437,6 +434,9 @@ export class Scope {
             this._validate(callableContainerMap);
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
+
+            // unlink the symbol table so it can't be accessed from the wrong scope
+            this.unlinkSymbolTable();
 
             (this as any).isValidated = true;
         });
@@ -474,19 +474,23 @@ export class Scope {
         this.clearSymbolTable();
     }
 
-    private clearSymbolTable() {
-        if (this._symbolTable) {
-            for (const childTable of this._symbolTable.children) {
-                childTable.setParent(null);
-            }
-        }
-        this._symbolTable = null;
-    }
 
+    private _symbolTable: SymbolTable;
 
     public get symbolTable() {
-        this.buildSymbolTableIfNeeded();
+        if (!this._symbolTable) {
+            this._symbolTable = new SymbolTable(this.getParentScope()?.symbolTable);
+            for (let file of this.getOwnFiles()) {
+                if (isBrsFile(file)) {
+                    this._symbolTable.mergeSymbolTable(file.parser?.symbolTable);
+                }
+            }
+        }
         return this._symbolTable;
+    }
+
+    private clearSymbolTable() {
+        this._symbolTable = null;
     }
 
     /**
@@ -494,16 +498,31 @@ export class Scope {
     * Also links all file symbols tables to this new table
     * This will only rebuilt if the symbol table has not been built before
     */
-    private buildSymbolTableIfNeeded() {
-        if (!this._symbolTable) {
-            this._symbolTable = new SymbolTable(this.getParentScope()?.symbolTable);
-            for (let file of this.getOwnFiles()) {
-                if (isBrsFile(file)) {
-                    this._symbolTable.mergeSymbolTable(file.parser?.symbolTable);
-                    file.parser?.symbolTable.setParent(this._symbolTable);
+    public linkSymbolTable() {
+        for (const file of this.getOwnFiles()) {
+            if (isBrsFile(file)) {
+                file.parser?.symbolTable.setParent(this.symbolTable);
+
+                for (const namespace of file.parser.references.namespaceStatements) {
+                    const namespaceNameLower = namespace.nameExpression.getName(ParseMode.BrighterScript).toLowerCase();
+                    const namespaceSymbolTable = this.namespaceLookup[namespaceNameLower].symbolTable;
+                    namespace.symbolTable.setParent(namespaceSymbolTable);
                 }
             }
         }
+    }
+
+    public unlinkSymbolTable() {
+        for (let file of this.getOwnFiles()) {
+            if (isBrsFile(file)) {
+                file.parser?.symbolTable.setParent(null);
+
+                for (const namespace of file.parser.references.namespaceStatements) {
+                    namespace.symbolTable.setParent(null);
+                }
+            }
+        }
+        this.clearSymbolTable()
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {

@@ -1284,16 +1284,29 @@ export class BrsFile {
                     };
                 }
             }
+            const typeTexts: string[] = [];
 
-            if (func.symbolTable?.hasSymbol(lowerTokenText)) {
-                let type = func.symbolTable?.getSymbolType(lowerTokenText);
-                let typeText: string;
-                //TODO figure out what type this var is
-                if (isFunctionType(type)) {
-                    typeText = type.toString();
-                } else {
-                    typeText = `${token.text} as ${type.toString()}`;
+            for (const scope of this.program.getScopesForFile(this)) {
+                scope.linkSymbolTable();
+                if (func.symbolTable.hasSymbol(lowerTokenText)) {
+                    let type = func.symbolTable?.getSymbolType(lowerTokenText);
+                    let scopeTypeText = '';
+
+                    if (isFunctionType(type)) {
+                        scopeTypeText = type.toString();
+                    } else {
+                        scopeTypeText = `${token.text} as ${type.toString()}`;
+                    }
+
+                    if (!typeTexts.includes(scopeTypeText)) {
+                        typeTexts.push(scopeTypeText);
+                    }
                 }
+                scope.unlinkSymbolTable();
+            }
+
+            const typeText = typeTexts.join(' | ');
+            if (typeText) {
                 return {
                     range: token.range,
                     //append the variable name to the front for scope

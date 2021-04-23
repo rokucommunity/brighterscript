@@ -1586,6 +1586,54 @@ describe('BrsFile', () => {
             `);
             expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
         });
+
+
+        it('displays the context from multiple scopes', () => {
+
+            let commonFile = program.addOrReplaceFile('source/common.brs', `
+                sub displayPi()
+                    pi = getPi()
+                    print pi
+                end sub
+            `);
+
+            let scope1File = program.addOrReplaceFile('components/comp1/scope1.brs', `
+                function getPi() as string
+                    return "apple"
+                end function
+            `);
+            expect(scope1File.getDiagnostics()).to.be.lengthOf(0);
+            program.addOrReplaceFile('components/comp1/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Group">
+                    <script type="text/brightscript" uri="scope1.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/common.brs" />
+                </component>
+            `);
+
+            let scope2File = program.addOrReplaceFile('components/comp2/scope2.brs', `
+                function getPi() as float
+                    return 3.14
+                end function
+            `);
+            expect(scope2File.getDiagnostics()).to.be.lengthOf(0);
+            program.addOrReplaceFile('components/comp2/comp2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component2" extends="Group">
+                    <script type="text/brightscript" uri="scope2.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/common.brs" />
+                </component>
+            `);
+
+            program.validate();
+            let funcCallHover = commonFile.getHover(Position.create(2, 27));
+            expect(funcCallHover).to.exist;
+            expect(funcCallHover.contents).to.equal('function getPi() as string | function getPi() as float');
+
+            let variableHover = commonFile.getHover(Position.create(3, 27));
+            expect(variableHover).to.exist;
+            expect(variableHover.contents).to.equal('pi as uninitialized | pi as string | pi as float');
+        });
     });
 
     it('does not throw when encountering incomplete import statement', () => {
