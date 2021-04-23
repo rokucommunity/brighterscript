@@ -41,7 +41,7 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterFileParse: (event) => {
-                    (event.file as XmlFile).parser.ast.root.attributes[0].value.text = expected;
+                    (event.file as XmlFile).parser.ast.root.attributes[0].tokens.value.text = expected;
                 }
             });
             file = program.addOrReplaceFile('components/ChildScene.xml', trim`
@@ -61,10 +61,10 @@ describe('XmlFile', () => {
                     let child = file.parser.ast.component.getChildren().children[0];
                     expect(child.attributes).to.have.lengthOf(4);
                     child.setAttribute('text', undefined);
-                    expect(child.getAttribute('id').value.text).to.equal('one');
+                    expect(child.getAttribute('id').tokens.value.text).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(3);
                     child.setAttribute('text3', undefined);
-                    expect(child.getAttribute('id').value.text).to.equal('one');
+                    expect(child.getAttribute('id').tokens.value.text).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(2);
                 }
             });

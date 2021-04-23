@@ -12,16 +12,47 @@ export interface SGToken {
 
 export class SGAttribute {
     public constructor(
-        public key: SGToken,
-        public equals?: SGToken,
-        public openingQuote?: SGToken,
-        public value?: SGToken,
-        public closingQuote?: SGToken
-    ) { }
+        key: SGToken,
+        equals?: SGToken,
+        openingQuote?: SGToken,
+        value?: SGToken,
+        closingQuote?: SGToken
+    ) {
+        this.tokens.key = key;
+        this.tokens.equals = equals;
+        this.tokens.openingQuote = openingQuote;
+        this.tokens.value = value;
+        this.tokens.closingQuote = closingQuote;
+    }
+
+    public tokens = {} as {
+        key: SGToken;
+        equals?: SGToken;
+        openingQuote?: SGToken;
+        value?: SGToken;
+        closingQuote?: SGToken;
+    };
+
+    public get key() {
+        return this.tokens.key.text;
+    }
+
+    /**
+     * The value of this attribute. This does not including the opening or closing quote
+     */
+    public get value(): string | undefined {
+        return this.tokens.value?.text;
+    }
 
     public get range() {
         if (!this._range) {
-            this._range = util.createBoundingRange(this.key, this.equals, this.openingQuote, this.value, this.closingQuote);
+            this._range = util.createBoundingRange(
+                this.tokens.key,
+                this.tokens.equals,
+                this.tokens.openingQuote,
+                this.tokens.value,
+                this.tokens.closingQuote
+            );
         }
         return this._range;
     }
@@ -29,14 +60,14 @@ export class SGAttribute {
 
     public transpile(state: TranspileState) {
         const result = [
-            state.transpileToken(this.key)
+            state.transpileToken(this.tokens.key)
         ];
-        if (this.value) {
+        if (this.tokens.value) {
             result.push(
-                state.transpileToken(this.equals, '='),
-                state.transpileToken(this.openingQuote, '"'),
-                state.transpileToken(this.value),
-                state.transpileToken(this.closingQuote, '"')
+                state.transpileToken(this.tokens.equals, '='),
+                state.transpileToken(this.tokens.openingQuote, '"'),
+                state.transpileToken(this.tokens.value),
+                state.transpileToken(this.tokens.closingQuote, '"')
             );
         }
         return new SourceNode(null, null, null, result);
@@ -46,51 +77,73 @@ export class SGAttribute {
 export class SGTag {
 
     constructor(
+        startTagOpen: SGToken,
+        startTagName: SGToken,
+        attributes = [] as SGAttribute[],
+        startTagClose?: SGToken,
+        children = [] as SGTag[],
+        endTagOpen?: SGToken,
+        endTagName?: SGToken,
+        endTagClose?: SGToken
+    ) {
+        this.tokens.startTagOpen = startTagOpen;
+        this.tokens.startTagName = startTagName;
+        this.attributes = attributes;
+        this.tokens.startTagClose = startTagClose;
+        this.children = children;
+        this.tokens.endTagOpen = endTagOpen;
+        this.tokens.endTagName = endTagName;
+        this.tokens.endTagClose = endTagClose;
+    }
+
+    public tokens = {} as {
         /**
-         * The first portion of the startTag. (i.e. `<` or `<?`)
-         */
-        public startTagOpen: SGToken,
+        * The first portion of the startTag. (i.e. `<` or `<?`)
+        */
+        startTagOpen: SGToken;
         /**
          * The name of the opening tag (i.e. CoolTag in `<CoolTag>`).
          */
-        public startTagName: SGToken,
-        /**
-         * Array of attributes found on this tag
-         */
-        public attributes = [] as SGAttribute[],
+        startTagName: SGToken;
         /**
          * The last bit of the startTag (i.e. `/>` for self-closing, `?>` for xml prologue, or `>` for tag with children)
          */
-        public startTagClose?: SGToken,
-        /**
-         * The array of direct children AST elements of this AST node
-         */
-        public children = [] as SGTag[],
+        startTagClose?: SGToken;
         /**
          * The endTag opening char `<`
          */
-        public endTagOpen?: SGToken,
+        endTagOpen?: SGToken;
         /**
          * The name of the ending tag (i.e. CoolTag in `</CoolTag>`)
          */
-        public endTagName?: SGToken,
+        endTagName?: SGToken;
         /**
          * The endTag closing char `>`
          */
-        public endTagClose?: SGToken
-    ) { }
+        endTagClose?: SGToken;
+    };
+
+    /**
+     * Array of attributes found on this tag
+     */
+    public attributes = [] as SGAttribute[];
+
+    /**
+     * The array of direct children AST elements of this AST node
+     */
+    public children = [] as SGTag[];
 
     public get range() {
         if (!this._range) {
             this._range = util.createBoundingRange(
-                this.startTagOpen,
-                this.startTagName,
+                this.tokens.startTagOpen,
+                this.tokens.startTagName,
                 this.attributes?.[this.attributes?.length - 1],
-                this.startTagClose,
+                this.tokens.startTagClose,
                 this.children?.[this.children?.length - 1],
-                this.endTagOpen,
-                this.endTagName,
-                this.endTagClose
+                this.tokens.endTagOpen,
+                this.tokens.endTagName,
+                this.tokens.endTagClose
             );
         }
         return this._range;
@@ -101,7 +154,7 @@ export class SGTag {
      * Is this a self-closing tag?
      */
     get isSelfClosing() {
-        return !this.endTagName;
+        return !this.tokens.endTagName;
     }
 
     get id() {
@@ -112,13 +165,15 @@ export class SGTag {
     }
 
     /**
-     * Find all direct children by their tag name (case insensitive)
+     * Find all direct children by their tag name (case insensitive).
+     * This does not step into children's children.
+     *
      */
     public getChildrenByTagName<T extends SGTag>(tagName: string) {
         const result = [] as T[];
         const lowerTagName = tagName.toLowerCase();
         for (const el of this.children) {
-            if (el.startTagName.text.toLowerCase() === lowerTagName) {
+            if (el.tokens.startTagName.text.toLowerCase() === lowerTagName) {
                 result.push(el as T);
             }
         }
@@ -144,18 +199,18 @@ export class SGTag {
     }
 
     getAttribute(name: string): SGAttribute | undefined {
-        return this.attributes.find(att => att.key.text.toLowerCase() === name);
+        return this.attributes.find(att => att.tokens.key.text.toLowerCase() === name);
     }
 
     getAttributeValue(name: string): string | undefined {
-        return this.getAttribute(name)?.value?.text;
+        return this.getAttribute(name)?.tokens.value?.text;
     }
 
     setAttribute(name: string, value: string) {
         const attr = this.getAttribute(name);
         if (attr) {
             if (value) {
-                attr.value = { text: value };
+                attr.tokens.value = { text: value };
             } else {
                 this.attributes.splice(this.attributes.indexOf(attr), 1);
             }
@@ -168,8 +223,8 @@ export class SGTag {
 
     public transpile(state: TranspileState) {
         return new SourceNode(null, null, null, [
-            state.transpileToken(this.startTagOpen, '<'), // <
-            state.transpileToken(this.startTagName),
+            state.transpileToken(this.tokens.startTagOpen, '<'), // <
+            state.transpileToken(this.tokens.startTagName),
             this.transpileAttributes(state, this.attributes),
             this.transpileBody(state)
         ]);
@@ -179,12 +234,12 @@ export class SGTag {
         if (this.isSelfClosing) {
             return new SourceNode(null, null, null, [
                 ' ',
-                state.transpileToken(this.startTagClose, '/>'),
+                state.transpileToken(this.tokens.startTagClose, '/>'),
                 state.newline
             ]);
         } else {
             const chunks = [
-                state.transpileToken(this.startTagClose, '>'),
+                state.transpileToken(this.tokens.startTagClose, '>'),
                 state.newline
             ];
             state.blockDepth++;
@@ -197,9 +252,9 @@ export class SGTag {
             state.blockDepth--;
             chunks.push(
                 state.indentText,
-                state.transpileToken(this.endTagOpen, '</'),
-                state.transpileToken(this.endTagName ?? this.startTagName),
-                state.transpileToken(this.endTagClose, '>'),
+                state.transpileToken(this.tokens.endTagOpen, '</'),
+                state.transpileToken(this.tokens.endTagName ?? this.tokens.startTagName),
+                state.transpileToken(this.tokens.endTagClose, '>'),
                 state.newline
             );
             return new SourceNode(null, null, null, chunks);
@@ -245,7 +300,7 @@ export class SGScript extends SGTag {
                 '>',
                 state.transpileToken(this.cdata),
                 '</',
-                this.startTagName.text,
+                this.tokens.startTagName.text,
                 '>',
                 state.newline
             ]);
@@ -260,14 +315,14 @@ export class SGScript extends SGTag {
         const bsExtensionRegexp = /\.bs$/i;
 
         for (const attr of attributes) {
-            const lowerKey = attr.key.text.toLowerCase();
-            if (lowerKey === 'uri' && bsExtensionRegexp.exec(attr.value.text)) {
+            const lowerKey = attr.tokens.key.text.toLowerCase();
+            if (lowerKey === 'uri' && bsExtensionRegexp.exec(attr.tokens.value.text)) {
                 modifiedAttributes.push(
-                    util.cloneSGAttribute(attr, attr.value.text.replace(bsExtensionRegexp, '.brs'))
+                    util.cloneSGAttribute(attr, attr.tokens.value.text.replace(bsExtensionRegexp, '.brs'))
                 );
             } else if (lowerKey === 'type') {
                 foundType = true;
-                if (attr.value.text.toLowerCase().endsWith('brighterscript')) {
+                if (attr.tokens.value.text.toLowerCase().endsWith('brighterscript')) {
                     modifiedAttributes.push(
                         util.cloneSGAttribute(attr, 'text/brightscript')
                     );

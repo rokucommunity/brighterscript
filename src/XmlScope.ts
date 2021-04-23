@@ -64,7 +64,7 @@ export class XmlScope extends Scope {
             } else if (!callableContainerMap.has(name.toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlFunctionNotFound(name),
-                    range: func.getAttribute('name').value.range,
+                    range: func.getAttribute('name').tokens.value.range,
                     file: this.xmlFile
                 });
             }
@@ -82,7 +82,7 @@ export class XmlScope extends Scope {
             } else if (!SGFieldTypes.includes(type.toLowerCase())) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.xmlInvalidFieldType(type),
-                    range: field.getAttribute('type').value.range,
+                    range: field.getAttribute('type').tokens.value.range,
                     file: this.xmlFile
                 });
             }
@@ -90,10 +90,12 @@ export class XmlScope extends Scope {
     }
 
     private diagnosticMissingAttribute(tag: SGTag, name: string) {
-        const { text, range } = tag.startTagName;
         this.diagnostics.push({
-            ...DiagnosticMessages.xmlTagMissingAttribute(text, name),
-            range: range,
+            ...DiagnosticMessages.xmlTagMissingAttribute(
+                tag.tokens.startTagName.text,
+                name
+            ),
+            range: tag.tokens.startTagName.range,
             file: this.xmlFile
         });
     }

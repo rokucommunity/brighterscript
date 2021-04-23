@@ -57,20 +57,20 @@ export default class SGParser {
         }
 
         const nameAttr = component.getAttribute('name');
-        if (nameAttr?.value) {
-            this._references.name = nameAttr.value;
+        if (nameAttr?.tokens.value) {
+            this._references.name = nameAttr.tokens.value;
         }
         const extendsAttr = component.getAttribute('extends');
-        if (extendsAttr?.value) {
-            this._references.extends = extendsAttr.value;
+        if (extendsAttr?.tokens.value) {
+            this._references.extends = extendsAttr.tokens.value;
         }
 
         for (const script of component.getScripts()) {
             const uriAttr = script.getAttribute('uri');
-            if (uriAttr?.value) {
-                const uri = uriAttr.value.text;
+            if (uriAttr?.tokens.value) {
+                const uri = uriAttr.tokens.value.text;
                 this._references.scriptTagImports.push({
-                    filePathRange: uriAttr.value.range,
+                    filePathRange: uriAttr.tokens.value.range,
                     text: uri,
                     pkgPath: util.getPkgPathFromTarget(this.pkgPath, uri)
                 });
@@ -129,8 +129,8 @@ export default class SGParser {
             if (root) {
                 //error: not a component
                 this.diagnostics.push({
-                    ...DiagnosticMessages.xmlUnexpectedTag(root.startTagName.text),
-                    range: root.startTagName.range
+                    ...DiagnosticMessages.xmlUnexpectedTag(root.tokens.startTagName.text),
+                    range: root.tokens.startTagName.range
                 });
             }
             this.ast = new SGAst(prolog, root);
@@ -304,29 +304,20 @@ export default class SGParser {
         const result = [] as SGAttribute[];
         if (attributes) {
             for (let i = 0; i < attributes.length; i++) {
+
                 const children = attributes[i].children;
-                let equals: SGToken;
+                const attr = new SGAttribute(this.mapToken(children.Name[0]));
+
                 if (children.EQUALS) {
-                    equals = this.mapToken(children.EQUALS[0]);
+                    attr.tokens.equals = this.mapToken(children.EQUALS[0]);
                 }
-                let leadingQuote: SGToken;
-                let value: SGToken;
-                let trailingQuote: SGToken;
                 if (children.STRING) {
                     const valueToken = children.STRING[0];
-                    leadingQuote = this.createPartialToken(valueToken, 0, 1);
-                    value = this.createPartialToken(valueToken, 1, -2);
-                    trailingQuote = this.createPartialToken(valueToken, -1, 1);
+                    attr.tokens.openingQuote = this.createPartialToken(valueToken, 0, 1);
+                    attr.tokens.value = this.createPartialToken(valueToken, 1, -2);
+                    attr.tokens.closingQuote = this.createPartialToken(valueToken, -1, 1);
                 }
-                result.push(
-                    new SGAttribute(
-                        this.mapToken(children.Name[0]),
-                        equals,
-                        leadingQuote,
-                        value,
-                        trailingQuote
-                    )
-                );
+                result.push(attr);
             }
         }
         return result;

@@ -240,14 +240,14 @@ export class XmlFile {
         if (!component.name) {
             this.diagnostics.push({
                 ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
-                range: component.startTagName.range,
+                range: component.tokens.startTagName.range,
                 file: this
             });
         }
         if (!component.extends) {
             this.diagnostics.push({
                 ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
-                range: component.startTagName.range,
+                range: component.tokens.startTagName.range,
                 file: this
             });
         }

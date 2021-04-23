@@ -1111,14 +1111,14 @@ export class Util {
     }
 
     /**
-     * Creates a new SGAttribute object, but keeps the existing Range references (since those shouldn't ever get changed directly)
+     * Creates a new SGAttribute object, but keeps the existing Range references (since those should be immutable)
      */
     public cloneSGAttribute(attr: SGAttribute, value: string) {
         return new SGAttribute(
-            { text: attr.key.text, range: attr.range },
+            { text: attr.tokens.key.text, range: attr.range },
             { text: '=' },
             { text: '"' },
-            { text: value, range: attr.value.range },
+            { text: value, range: attr.tokens.value.range },
             { text: '"' }
         );
     }

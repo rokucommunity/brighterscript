@@ -94,7 +94,7 @@ export class CodeActionsProcessor {
         const srcPath = this.event.file.pathAbsolute;
         const { component } = (this.event.file as XmlFile).parser.ast;
         //inject new attribute after the final attribute, or after the `<component` if there are no attributes
-        const pos = (component.attributes[component.attributes.length - 1] ?? component.startTagOpen).range.end;
+        const pos = (component.attributes[component.attributes.length - 1] ?? component.tokens.startTagOpen).range.end;
         this.event.codeActions.push(
             codeActionUtil.createCodeAction({
                 title: `Extend "Group"`,
