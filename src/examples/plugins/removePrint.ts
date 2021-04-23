@@ -1,6 +1,6 @@
 import { isBrsFile } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
-import type { BscFile, CompilerPlugin } from '../../interfaces';
+import type { CompilerPlugin } from '../../interfaces';
 import { EmptyStatement } from '../../parser/Statement';
 
 export default function plugin() {
@@ -8,7 +8,7 @@ export default function plugin() {
         name: 'removePrint',
         // note: it is normally not recommended to modify the AST too much at this stage,
         // because if the plugin runs in a language-server context it could break intellisense
-        afterFileParse: (file: BscFile) => {
+        afterFileParse: ({ file }) => {
             if (!isBrsFile(file)) {
                 return;
             }
@@ -23,4 +23,3 @@ export default function plugin() {
         }
     } as CompilerPlugin;
 }
-

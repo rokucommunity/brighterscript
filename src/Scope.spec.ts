@@ -374,6 +374,23 @@ describe('Scope', () => {
             ]);
         });
 
+        it('does not error with calls to callables in same namespace', () => {
+            program.addOrReplaceFile('source/file.bs', `
+                namespace Name.Space
+                    sub a(param as string)
+                        print param
+                    end sub
+
+                    sub b()
+                        a("hello")
+                    end sub
+                end namespace
+            `);
+            //validate the scope
+            program.validate();
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
         //We don't currently support someObj.callSomething() format, so don't throw errors on those
         it('does not fail on object callables', () => {
             expect(program.getDiagnostics().length).to.equal(0);
@@ -506,11 +523,11 @@ describe('Scope', () => {
             }], new Logger());
             program.validate();
             expect(validateStartScope.callCount).to.equal(2);
-            expect(validateStartScope.calledWith(sourceScope)).to.be.true;
-            expect(validateStartScope.calledWith(compScope)).to.be.true;
+            expect(validateStartScope.getCalls()[0].args[0].scope).to.eql(sourceScope);
+            expect(validateStartScope.getCalls()[1].args[0].scope).to.eql(compScope);
             expect(validateEndScope.callCount).to.equal(2);
-            expect(validateEndScope.calledWith(sourceScope)).to.be.true;
-            expect(validateEndScope.calledWith(compScope)).to.be.true;
+            expect(validateEndScope.getCalls()[0].args[0].scope).to.eql(sourceScope);
+            expect(validateEndScope.getCalls()[1].args[0].scope).to.eql(compScope);
         });
 
         describe('custom types', () => {

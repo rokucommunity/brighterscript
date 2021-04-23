@@ -1948,13 +1948,6 @@ export class Parser {
             }
         }
 
-        //template string
-        if (this.check(TokenKind.BackTick)) {
-            return this.templateString(false);
-            //tagged template string (currently we do not support spaces between the identifier and the backtick
-        } else if (this.checkAny(TokenKind.Identifier, ...AllowedLocalIdentifiers) && this.checkNext(TokenKind.BackTick)) {
-            return this.templateString(true);
-        }
         let expr = this.boolean();
 
         if (this.check(TokenKind.Question)) {
@@ -2234,6 +2227,12 @@ export class Parser {
             //capture source literals (LINE_NUM if brightscript, or a bunch of them if brighterscript)
             case this.matchAny(TokenKind.LineNumLiteral, ...(this.options.mode === ParseMode.BrightScript ? [] : BrighterScriptSourceLiterals)):
                 return new SourceLiteralExpression(this.previous());
+            //template string
+            case this.check(TokenKind.BackTick):
+                return this.templateString(false);
+            //tagged template string (currently we do not support spaces between the identifier and the backtick)
+            case this.checkAny(TokenKind.Identifier, ...AllowedLocalIdentifiers) && this.checkNext(TokenKind.BackTick):
+                return this.templateString(true);
             case this.matchAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
                 return new VariableExpression(this.previous() as Identifier, this.currentNamespaceName);
             case this.match(TokenKind.LeftParen):

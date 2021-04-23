@@ -74,7 +74,7 @@ export class TranspileState {
      * because the entire token is passed by reference, instead of the raw string being copied to the parameter,
      * only to then be copied again for the SourceNode constructor
      */
-    private tokenToSourceNode(token: { range?: Range; text: string }) {
+    public tokenToSourceNode(token: { range?: Range; text: string }) {
         return new SourceNode(
             //convert 0-based range line to 1-based SourceNode line
             token.range.start.line + 1,
