@@ -58,7 +58,7 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterFileParse: () => {
-                    let child = file.parser.ast.component.getChildren().children[0];
+                    let child = file.parser.ast.component.children.childNodes[0];
                     expect(child.attributes).to.have.lengthOf(4);
                     child.setAttribute('text', undefined);
                     expect(child.getAttribute('id').tokens.value.text).to.equal('one');

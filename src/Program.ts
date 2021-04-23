@@ -20,7 +20,7 @@ import type { ManifestValue } from './preprocessor/Manifest';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope, isSGInterfaceFunction } from './astUtils/reflection';
 import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
@@ -732,9 +732,12 @@ export class Program {
         let funcNames = new Set<string>();
         let currentScope = scope;
         while (isXmlScope(currentScope)) {
-            for (let name of currentScope.xmlFile.ast.component.getInterface()?.getFunctions().map((f) => f.name) ?? []) {
-                if (!filterName || name === filterName) {
-                    funcNames.add(name);
+            for (let member of currentScope.xmlFile.ast.component?.interfaceMembers ?? []) {
+                if (isSGInterfaceFunction(member)) {
+                    const name = member.name;
+                    if (!filterName || name === filterName) {
+                        funcNames.add(name);
+                    }
                 }
             }
             currentScope = currentScope.getParentScope() as XmlScope;

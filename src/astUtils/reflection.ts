@@ -16,6 +16,7 @@ import { DoubleType } from '../types/DoubleType';
 import { CustomType } from '../types/CustomType';
 import type { Scope } from '../Scope';
 import type { XmlScope } from '../XmlScope';
+import type { SGInterfaceField, SGInterfaceFunction, SGNode } from '../parser/SGTypes';
 
 // File reflection
 
@@ -262,4 +263,11 @@ export function isLiteralString(e: any): e is LiteralExpression & { type: String
 }
 export function isLiteralNumber(e: any): e is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
     return isLiteralExpression(e) && isNumberType(e.type);
+}
+
+export function isSGInterfaceField(e: SGNode): e is SGInterfaceField {
+    return e?.constructor.name === 'SGInterfaceField';
+}
+export function isSGInterfaceFunction(e: SGNode): e is SGInterfaceFunction {
+    return e?.constructor.name === 'SGInterfaceFunction';
 }

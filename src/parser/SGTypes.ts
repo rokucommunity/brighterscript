@@ -81,7 +81,7 @@ export class SGTag {
         startTagName: SGToken,
         attributes = [] as SGAttribute[],
         startTagClose?: SGToken,
-        children = [] as SGTag[],
+        childNodes = [] as SGTag[],
         endTagOpen?: SGToken,
         endTagName?: SGToken,
         endTagClose?: SGToken
@@ -90,7 +90,7 @@ export class SGTag {
         this.tokens.startTagName = startTagName;
         this.attributes = attributes;
         this.tokens.startTagClose = startTagClose;
-        this.children = children;
+        this.childNodes = childNodes;
         this.tokens.endTagOpen = endTagOpen;
         this.tokens.endTagName = endTagName;
         this.tokens.endTagClose = endTagClose;
@@ -131,7 +131,7 @@ export class SGTag {
     /**
      * The array of direct children AST elements of this AST node
      */
-    public children = [] as SGTag[];
+    public childNodes = [] as SGTag[];
 
     public get range() {
         if (!this._range) {
@@ -140,7 +140,7 @@ export class SGTag {
                 this.tokens.startTagName,
                 this.attributes?.[this.attributes?.length - 1],
                 this.tokens.startTagClose,
-                this.children?.[this.children?.length - 1],
+                this.childNodes?.[this.childNodes?.length - 1],
                 this.tokens.endTagOpen,
                 this.tokens.endTagName,
                 this.tokens.endTagClose
@@ -165,26 +165,33 @@ export class SGTag {
     }
 
     /**
+     * Get the lower-case name of this tag.
+     */
+    public get tagName() {
+        return this.tokens.startTagName?.text;
+    }
+
+    /**
      * Find all direct children by their tag name (case insensitive).
      * This does not step into children's children.
      *
      */
-    public getChildrenByTagName<T extends SGTag>(tagName: string) {
+    public getChildNodesByTagName<T extends SGTag>(tagName: string) {
         const result = [] as T[];
         const lowerTagName = tagName.toLowerCase();
-        for (const el of this.children) {
+        for (const el of this.childNodes) {
             if (el.tokens.startTagName.text.toLowerCase() === lowerTagName) {
                 result.push(el as T);
             }
         }
-        return result;
+        return result as Readonly<Array<T>>;
     }
 
     /**
      * Add a child to the end of the children array
      */
     public addChild<T extends SGTag>(tag: T) {
-        this.children.push(tag);
+        this.childNodes.push(tag);
         return tag;
     }
 
@@ -192,9 +199,9 @@ export class SGTag {
      * Remove a child from the children array
      */
     public removeChild(tag: SGTag) {
-        const idx = this.children.indexOf(tag);
+        const idx = this.childNodes.indexOf(tag);
         if (idx > -1) {
-            this.children.splice(idx, 1);
+            this.childNodes.splice(idx, 1);
         }
     }
 
@@ -243,7 +250,7 @@ export class SGTag {
                 state.newline
             ];
             state.blockDepth++;
-            for (const child of this.children) {
+            for (const child of this.childNodes) {
                 chunks.push(
                     state.indentText,
                     child.transpile(state)
@@ -396,22 +403,43 @@ export class SGInterfaceFunction extends SGTag {
     }
 }
 
+export type SGInterfaceMember = SGInterfaceField | SGInterfaceFunction;
+
 export class SGInterface extends SGTag {
-    public getFields() {
-        return this.getChildrenByTagName<SGInterfaceField>('field');
-    }
-    public getFunctions() {
-        return this.getChildrenByTagName<SGInterfaceFunction>('function');
+    public get fields() {
+        return this.getChildNodesByTagName<SGInterfaceField>('field');
     }
 
-    getField(id: string) {
-        return this.getFields().find(field => field.id === id);
+    public get functions() {
+        return this.getChildNodesByTagName<SGInterfaceFunction>('function');
     }
+
+    public get members() {
+        const result = [] as Array<SGInterfaceMember>;
+        for (const node of this.childNodes) {
+            const tagName = node.tagName;
+            if (tagName === 'field' || tagName === 'function') {
+                result.push(node as SGInterfaceMember);
+            }
+        }
+        return result as Readonly<typeof result>;
+    }
+
+    /**
+     * Find a field by its ID
+     */
+    getField(id: string) {
+        return this.fields.find(field => field.id === id);
+    }
+
+    /**
+     * Set the value of a field. Creates a new field if one does not already exist with this ID
+     */
     setField(id: string, type: string, onChange?: string, alwaysNotify?: boolean, alias?: string) {
         let field = this.getField(id);
         if (!field) {
             field = createSGInterfaceField(id);
-            this.children.push(field);
+            this.childNodes.push(field);
         }
         field.type = type;
         field.onChange = onChange;
@@ -423,35 +451,71 @@ export class SGInterface extends SGTag {
         field.alias = alias;
     }
 
-    getFunction(name: string) {
-        return this.getFunctions().find(field => field.name === name);
+    removeField(id: string) {
+        for (let i = 0; i < this.childNodes.length; i++) {
+            const node = this.childNodes[i];
+            if (node.tagName === 'field' && node.id === id) {
+                this.childNodes.splice(i, 1);
+                return;
+            }
+        }
     }
+
+    getFunction(name: string) {
+        return this.functions.find(field => field.name === name);
+    }
+
+    /**
+     * Add or replace a function on the interface
+     */
     setFunction(name: string) {
         let func = this.getFunction(name);
         if (!func) {
             func = createSGInterfaceFunction(name);
-            this.children.push(func);
+            this.childNodes.push(func);
+        }
+    }
+
+    /**
+     * Remove a function from the interface
+     */
+    removeFunction(name: string) {
+        for (let i = 0; i < this.childNodes.length; i++) {
+            const node = this.childNodes[i];
+            if (node.tagName === 'function' && node.getAttributeValue('name') === name) {
+                this.childNodes.splice(i, 1);
+                return;
+            }
         }
     }
 }
 
 export class SGComponent extends SGTag {
-    /**
-     * Get the <interface> element
-     */
-    public getInterface() {
-        return this.getChildrenByTagName<SGInterface>('interface')[0];
-    }
-
-    public getScripts() {
-        return this.getChildrenByTagName<SGScript>('script');
-    }
 
     /**
-     * Finds the `<children>` element of this component. (not to be confused with the AST `children` property)
+     * Get all the <Field> and <Function> elements across all <Interface> nodes in this component
      */
-    public getChildren() {
-        return this.getChildrenByTagName<SGChildren>('children')[0];
+    public get interfaceMembers() {
+        const members = [] as Array<SGInterfaceMember>;
+        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+            members.push(
+                ...ifaceNode.members
+            );
+        }
+        return members as Readonly<typeof members>;
+    }
+
+    public get scripts() {
+        return this.getChildNodesByTagName<SGScript>('script');
+    }
+
+    /**
+     * Get the `<children>` element of this component. (not to be confused with the AST `childNodes` property).
+     * If there are multiope `<children>` elements, this function will return the last `<children>` tag because that's what Roku devices do.
+     */
+    public get children() {
+        const children = this.getChildNodesByTagName<SGChildren>('children');
+        return children[children.length - 1];
     }
 
     get name() {

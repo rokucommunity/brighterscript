@@ -65,7 +65,7 @@ export default class SGParser {
             this._references.extends = extendsAttr.tokens.value;
         }
 
-        for (const script of component.getScripts()) {
+        for (const script of component.scripts) {
             const uriAttr = script.getAttribute('uri');
             if (uriAttr?.tokens.value) {
                 const uri = uriAttr.tokens.value.text;
