@@ -625,6 +625,11 @@ export let DiagnosticMessages = {
         message: `Missing expression(s) in 'dim' statement`,
         code: 1121,
         severity: DiagnosticSeverity.Error
+    }),
+    argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
+        message: `Argument of type '${actualTypeString}' is not assignable to parameter of type '${expectedTypeString}'`,
+        code: 1122,
+        severity: DiagnosticSeverity.Error
     })
 };
 

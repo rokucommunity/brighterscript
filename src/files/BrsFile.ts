@@ -8,12 +8,11 @@ import type { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import type { Token } from '../lexer';
-import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
-import { Parser, ParseMode } from '../parser';
+import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords, isToken } from '../lexer';
+import { Parser, ParseMode, getBscTypeFromExpression } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
 import type { FileLink, Program, SignatureInfoObj } from '../Program';
-import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
 import { standardizePath as s, util } from '../util';
@@ -21,7 +20,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -460,49 +459,34 @@ export class BrsFile {
                 //TODO convert if stmts to use instanceof instead
                 for (let arg of expression.args as any) {
 
-                    //is a literal parameter value
-                    if (isLiteralExpression(arg)) {
-                        args.push({
-                            range: arg.range,
-                            type: arg.type,
-                            text: arg.token.text
-                        });
+                    let impliedType = getBscTypeFromExpression(arg, func);
+                    let argText = '';
 
-                        //is variable being passed into argument
+                    // Get the text to display for the arg
+                    if (arg.token) {
+                        argText = arg.token.text;
+                        //is a function call being passed into argument
                     } else if (arg.name) {
-                        args.push({
-                            range: arg.range,
-                            //TODO - look up the data type of the actual variable
-                            type: new DynamicType(),
-                            text: arg.name.text
-                        });
+                        if (isToken(arg.name)) {
+                            argText = arg.name.text;
+                        }
 
                     } else if (arg.value) {
-                        let text = '';
                         /* istanbul ignore next: TODO figure out why value is undefined sometimes */
                         if (arg.value.value) {
-                            text = arg.value.value.toString();
+                            argText = arg.value.value.toString();
                         }
-                        let callableArg = {
-                            range: arg.range,
-                            //TODO not sure what to do here
-                            type: new DynamicType(), // util.valueKindToBrsType(arg.value.kind),
-                            text: text
-                        };
-                        //wrap the value in quotes because that's how it appears in the code
-                        if (isStringType(callableArg.type)) {
-                            callableArg.text = '"' + callableArg.text + '"';
-                        }
-                        args.push(callableArg);
 
-                    } else {
-                        args.push({
-                            range: arg.range,
-                            type: new DynamicType(),
-                            //TODO get text from other types of args
-                            text: ''
-                        });
+                        //wrap the value in quotes because that's how it appears in the code
+                        if (isStringType(impliedType)) {
+                            argText = '"' + argText + '"';
+                        }
                     }
+                    args.push({
+                        range: arg.range,
+                        type: impliedType,
+                        text: argText
+                    });
                 }
                 let functionCall: FunctionCall = {
                     range: util.createRangeFromPositions(expression.range.start, expression.closingParen.range.end),
@@ -513,6 +497,7 @@ export class BrsFile {
                     //TODO keep track of parameters
                     args: args
                 };
+
                 this.functionCalls.push(functionCall);
             }
         }
@@ -1291,25 +1276,6 @@ export class BrsFile {
         //look through local variables first
         {
             const func = this.getFunctionExpressionAtPosition(position);
-            const localVars = this.getLocalVarsAtPosition(position, func);
-            //find any variable with this name
-            for (let localVar of localVars) {
-                //we found a variable declaration with this token text!
-                if (localVar.lowerName === lowerTokenText) {
-                    let typeText: string;
-                    //TODO figure out what type this var is
-                    if (isFunctionType(localVar.type)) {
-                        typeText = localVar.type.toString();
-                    } else {
-                        typeText = `${localVar.nameToken.text} as ${localVar.type.toString()}`;
-                    }
-                    return {
-                        range: token.range,
-                        //append the variable name to the front for scope
-                        contents: typeText
-                    };
-                }
-            }
             for (const labelStatement of func.labelStatements) {
                 if (labelStatement.tokens.identifier.text.toLocaleLowerCase() === lowerTokenText) {
                     return {
@@ -1317,6 +1283,34 @@ export class BrsFile {
                         contents: `${labelStatement.tokens.identifier.text}: label`
                     };
                 }
+            }
+            const typeTexts: string[] = [];
+
+            for (const scope of this.program.getScopesForFile(this)) {
+                scope.linkSymbolTable();
+                if (func.symbolTable.hasSymbol(lowerTokenText)) {
+                    const type = func.symbolTable?.getSymbolType(lowerTokenText);
+                    let scopeTypeText = '';
+
+                    if (isFunctionType(type)) {
+                        scopeTypeText = type.toString();
+                    } else {
+                        scopeTypeText = `${token.text} as ${type.toString()}`;
+                    }
+
+                    if (!typeTexts.includes(scopeTypeText)) {
+                        typeTexts.push(scopeTypeText);
+                    }
+                }
+                scope.unlinkSymbolTable();
+            }
+
+            const typeText = typeTexts.join(' | ');
+            if (typeText) {
+                return {
+                    range: token.range,
+                    contents: typeText
+                };
             }
         }
 

@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, FunctionCall } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -1139,6 +1139,27 @@ export class Util {
             source: 'brs'
         };
     }
+
+    /**
+     * Finds the array of callables from a container map, taking into account the function from which it was called
+     * If the callable was called in a function in a namespace, functions in that namespace are preferred
+     * @return an array with callable containers - could be empty if nothing was found
+     */
+    public getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName: CallableContainerMap, expCall: FunctionCall): CallableContainer[] {
+        let callablesWithThisName: CallableContainer[] = [];
+        const lowerName = expCall.name.toLowerCase();
+        if (expCall.functionExpression.namespaceName) {
+            // prefer namespaced function
+            const potentialNamespacedCallable = expCall.functionExpression.namespaceName.getName(ParseMode.BrightScript).toLowerCase() + '_' + lowerName;
+            callablesWithThisName = callablesByLowerName.get(potentialNamespacedCallable.toLowerCase());
+        }
+        if (!callablesWithThisName || callablesWithThisName.length === 0) {
+            // just try it as is
+            callablesWithThisName = callablesByLowerName.get(lowerName);
+        }
+        return callablesWithThisName;
+    }
+
 }
 
 /**
@@ -1156,6 +1177,7 @@ export function standardizePath(stringParts, ...expressions: any[]) {
         )
     );
 }
+
 
 export let util = new Util();
 export default util;

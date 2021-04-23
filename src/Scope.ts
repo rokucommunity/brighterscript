@@ -16,6 +16,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
+import { SymbolTable } from './SymbolTable';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -343,7 +344,8 @@ export class Scope {
                         namespaces: {},
                         classStatements: {},
                         functionStatements: {},
-                        statements: []
+                        statements: [],
+                        symbolTable: new SymbolTable(this.symbolTable)
                     };
                 }
                 let ns = namespaceLookup[name.toLowerCase()];
@@ -355,6 +357,9 @@ export class Scope {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     }
                 }
+                // Merges all the symbol tables of the namespace statements into the new symbol table created above.
+                // Set those symbol tables to have this new merged table as a parent
+                ns.symbolTable.mergeSymbolTable(namespace.symbolTable);
             }
 
             //associate child namespaces with their parents
@@ -405,6 +410,9 @@ export class Scope {
             //clear the scope's errors list (we will populate them from this method)
             this.diagnostics = [];
 
+            // link the symbol table
+            this.linkSymbolTable();
+
             let callables = this.getAllCallables();
 
             //sort the callables by filepath and then method name, so the errors will be consistent
@@ -426,6 +434,9 @@ export class Scope {
             this._validate(callableContainerMap);
 
             this.program.plugins.emit('afterScopeValidate', this, files, callableContainerMap);
+
+            // unlink the symbol table so it can't be accessed from the wrong scope
+            this.unlinkSymbolTable();
 
             (this as any).isValidated = true;
         });
@@ -449,6 +460,7 @@ export class Scope {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
+            this.diagnosticDetectInvalidFunctionCalls(file);
         });
     }
 
@@ -459,6 +471,57 @@ export class Scope {
         (this as any).isValidated = false;
         //clear out various lookups (they'll get regenerated on demand the next time they're requested)
         this.cache.clear();
+        this.clearSymbolTable();
+    }
+
+
+    private _symbolTable: SymbolTable;
+
+    public get symbolTable() {
+        if (!this._symbolTable) {
+            this._symbolTable = new SymbolTable(this.getParentScope()?.symbolTable);
+            for (let file of this.getOwnFiles()) {
+                if (isBrsFile(file)) {
+                    this._symbolTable.mergeSymbolTable(file.parser?.symbolTable);
+                }
+            }
+        }
+        return this._symbolTable;
+    }
+
+    private clearSymbolTable() {
+        this._symbolTable = null;
+    }
+
+    /**
+    * Builds the current symbol table for the scope, by merging the tables for all the files in this scope.
+    * Also links all file symbols tables to this new table
+    * This will only rebuilt if the symbol table has not been built before
+    */
+    public linkSymbolTable() {
+        for (const file of this.getOwnFiles()) {
+            if (isBrsFile(file)) {
+                file.parser?.symbolTable.setParent(this.symbolTable);
+
+                for (const namespace of file.parser.references.namespaceStatements) {
+                    const namespaceNameLower = namespace.nameExpression.getName(ParseMode.BrighterScript).toLowerCase();
+                    const namespaceSymbolTable = this.namespaceLookup[namespaceNameLower].symbolTable;
+                    namespace.symbolTable.setParent(namespaceSymbolTable);
+                }
+            }
+        }
+    }
+
+    public unlinkSymbolTable() {
+        for (let file of this.getOwnFiles()) {
+            if (isBrsFile(file)) {
+                file.parser?.symbolTable.setParent(null);
+
+                for (const namespace of file.parser.references.namespaceStatements) {
+                    namespace.symbolTable.setParent(null);
+                }
+            }
+        }
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {
@@ -566,6 +629,36 @@ export class Scope {
                         });
 
                     }
+                }
+            }
+        }
+    }
+
+
+    private diagnosticDetectInvalidFunctionCalls(file: BscFile) {
+        for (let expCall of file.functionCalls) {
+            const funcType = expCall.functionExpression.symbolTable.getSymbolType(expCall.name);
+
+            if (!isFunctionType(funcType)) {
+                // can not find function. Handled in a different validation function
+                continue;
+            }
+            if (funcType.params.length !== expCall.args.length) {
+                // Argument count mismatch. Handled in a different validation function
+                continue;
+            }
+
+            for (let index = 0; index < funcType.params.length; index++) {
+                const param = funcType.params[index];
+                const arg = expCall.args[index];
+                const argType = arg.type;
+
+                if (!argType.isAssignableTo(param.type)) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.argumentTypeMismatch(arg.type.toTypeString(), param.type.toTypeString()),
+                        range: arg.range,
+                        file: file
+                    });
                 }
             }
         }
@@ -692,6 +785,7 @@ export class Scope {
         }
     }
 
+
     /**
      * Detect calls to functions that are not defined in this scope
      * @param file
@@ -712,7 +806,7 @@ export class Scope {
 
             //if we don't already have a variable with this name.
             if (!localVar) {
-                let callablesWithThisName = callablesByLowerName.get(lowerName);
+                const callablesWithThisName = util.getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName, expCall);
 
                 //use the first item from callablesByLowerName, because if there are more, that's a separate error
                 let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
@@ -982,6 +1076,7 @@ interface NamespaceContainer {
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
     namespaces: Record<string, NamespaceContainer>;
+    symbolTable: SymbolTable;
 }
 
 interface AugmentedNewExpression extends NewExpression {

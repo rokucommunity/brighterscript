@@ -15,6 +15,7 @@ import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
+import { FunctionType } from '../types/FunctionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -259,6 +260,17 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 walk(this, 'body', visitor, options);
             }
         }
+    }
+
+    getFunctionType(): FunctionType {
+        let functionType = new FunctionType(this.returnType);
+        functionType.isSub = this.functionType.text === 'sub';
+        for (let param of this.parameters) {
+            let isRequired = !param.defaultValue;
+            //TODO compute optional parameters
+            functionType.addParameter(param.name.text, param.type, isRequired);
+        }
+        return functionType;
     }
 }
 

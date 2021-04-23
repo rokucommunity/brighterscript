@@ -8,6 +8,8 @@ import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
 import { trim } from './testHelpers.spec';
 import { Logger } from './Logger';
+import type { FunctionType } from './types/FunctionType';
+import { UninitializedType } from './types/UninitializedType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -358,6 +360,23 @@ describe('Scope', () => {
             });
         });
 
+        it('does not error with calls to callables in same namespace', () => {
+            program.addOrReplaceFile('source/file.bs', `
+                namespace Name.Space
+                    sub a(param as string)
+                        print param
+                    end sub
+
+                    sub b()
+                        a("hello")
+                    end sub
+                end namespace
+            `);
+            //validate the scope
+            program.validate();
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
         it('recognizes known callables', () => {
             program.addOrReplaceFile('source/file.brs', `
                 function DoA()
@@ -470,6 +489,116 @@ describe('Scope', () => {
                 DiagnosticMessages.mismatchArgumentCount(1, 2).message
             );
         });
+
+        it('Catches argument type mismatches on function calls', () => {
+            program.addOrReplaceFile('source/file.brs', `
+                sub a(age as integer)
+                end sub
+                sub b()
+                    a("hello")
+                end sub
+            `);
+            program.validate();
+            //should have an error
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            );
+        });
+
+        it('Catches argument type mismatches on function calls for functions defined in another file', () => {
+            program.addOrReplaceFile('source/file.brs', `
+                sub a(age as integer)
+                end sub
+            `);
+            program.addOrReplaceFile('source/file2.brs', `
+                sub b()
+                    a("hello")
+                    foo = "foo"
+                    a(foo)
+                end sub
+            `);
+            program.validate();
+            //should have an error
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            );
+        });
+
+        it('catches argument type mismatches on function calls within namespaces', () => {
+            program.addOrReplaceFile('source/file.bs', `
+                namespace Name.Space
+                    sub a(param as integer)
+                        print param
+                    end sub
+
+                    sub b()
+                        a("hello")
+                        foo = "foo"
+                        a(foo)
+                    end sub
+                end namespace
+                `);
+            program.validate();
+            //should have an error
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            );
+        });
+
+        it('catches argument type mismatches on function calls as arguments', () => {
+            program.addOrReplaceFile('source/file1.bs', `
+                    sub a(param as string)
+                        print param
+                    end sub
+
+                    function getNum() as integer
+                        return 1
+                    end function
+
+                    sub b()
+                        a(getNum())
+                    end sub
+                `);
+            program.validate();
+            //should have an error
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+            );
+        });
+
+
+        it('catches argument type mismatches on function calls within namespaces across files', () => {
+            program.addOrReplaceFile('source/file1.bs', `
+                namespace Name.Space
+                    function getNum() as integer
+                        return 1
+                    end function
+
+                    function getStr() as string
+                        return "hello"
+                    end function
+                end namespace
+                `);
+            program.addOrReplaceFile('source/file2.bs', `
+                namespace Name.Space
+                    sub needsInt(param as integer)
+                        print param
+                    end sub
+
+                    sub someFunc()
+                        needsInt(getStr())
+                        needsInt(getNum())
+                    end sub
+                end namespace
+                `);
+            program.validate();
+            //should have an error
+            expect(program.getDiagnostics().length).to.equal(1);
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            );
+        });
+
 
         it('handles JavaScript reserved names', () => {
             program.addOrReplaceFile('source/file.brs', `
@@ -610,8 +739,8 @@ describe('Scope', () => {
             it('finds custom types from other namespaces', () => {
                 program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     namespace MyNamespace
-                        class MyClass
-                        end class
+                      class MyClass
+                      end class
                     end namespace
 
                     function foo(param as MyNamespace.MyClass) as MyNamespace.MyClass
@@ -660,8 +789,8 @@ describe('Scope', () => {
                 `);
                 program.addOrReplaceFile({ src: s`${rootDir}/source/MyNameSpace.bs`, dest: s`source/MyNameSpace.bs` }, `
                     namespace MyNameSpace
-                      class MyClass
-                      end class
+                        class MyClass
+                        end class
                     end namespace
                 `);
                 program.validate();
@@ -804,6 +933,122 @@ describe('Scope', () => {
             expect(completions).to.be.length.greaterThan(0);
             //it should find documentation for completions
             expect(completions.filter(x => !!x.documentation)).to.have.length.greaterThan(0);
+        });
+    });
+
+    describe('scope symbol tables', () => {
+        it('adds symbols for the complete scope', () => {
+            program.addOrReplaceFile('source/file.brs', `
+                function funcInt() as integer
+                    return 3
+                end function
+
+                function funcStr() as string
+                    return "hello"
+                end function
+            `);
+            program.addOrReplaceFile('source/file2.brs', `
+                function funcBool() as boolean
+                    return true
+                end function
+
+                function funcObject() as object
+                    return {}
+                end function
+            `);
+            const sourceSymbols = program.getScopeByName('source').symbolTable;
+
+            expect((sourceSymbols.getSymbolType('funcInt') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('funcStr') as FunctionType).returnType.toString()).to.equal('string');
+            expect((sourceSymbols.getSymbolType('funcBool') as FunctionType).returnType.toString()).to.equal('boolean');
+            expect((sourceSymbols.getSymbolType('funcObject') as FunctionType).returnType.toString()).to.equal('object');
+        });
+
+        it('adds updates symbol tables on invalidation', () => {
+            program.addOrReplaceFile('source/file.brs', `
+                function funcInt() as integer
+                    return 3
+                end function
+
+                function funcStr() as string
+                    return "hello"
+                end function
+            `);
+
+            let sourceSymbols = program.getScopeByName('source').symbolTable;
+
+            expect((sourceSymbols.getSymbolType('funcInt') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('funcStr') as FunctionType).returnType.toString()).to.equal('string');
+            program.getScopeByName('source').invalidate();
+
+            program.addOrReplaceFile('source/file.brs', `
+                function funcFloat() as float
+                    return 3.14
+                end function
+            `);
+            sourceSymbols = program.getScopeByName('source').symbolTable;
+
+            expect(sourceSymbols.getSymbolType('funcInt')).to.be.instanceOf(UninitializedType);
+            expect(sourceSymbols.getSymbolType('funcStr')).to.be.instanceOf(UninitializedType);
+            expect((sourceSymbols.getSymbolType('funcFloat') as FunctionType).returnType.toString()).to.equal('float');
+        });
+
+
+        it('adds namespaced symbols tables to the scope', () => {
+            program.addOrReplaceFile('source/file.brs', `
+                function funcInt() as integer
+                    return 1 + Name.Space.nsFunc2(1)
+                end function
+            `);
+            program.addOrReplaceFile('source/namespace.brs', `
+                namespace Name.Space
+                    function nsFunc1() as integer
+                        return 1
+                    end function
+
+                    function nsFunc2(num as integer) as integer
+                        return num + Name.Space.nsFunc1()
+                    end function
+                end namespace
+            `);
+            const sourceScope = program.getScopeByName('source');
+            const sourceSymbols = sourceScope.symbolTable;
+
+            expect((sourceSymbols.getSymbolType('funcInt') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('Name.Space.nsFunc1') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((sourceSymbols.getSymbolType('Name.Space.nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');
+
+        });
+
+        it('merges namespace symbol tables in namespaceLookup', () => {
+            program.addOrReplaceFile('source/ns1.brs', `
+                namespace Name.Space
+                    function nsFunc1() as integer
+                        return 1
+                    end function
+                end namespace
+
+                namespace Name
+                    function outerNsFunc() as string
+                        return "hello"
+                    end function
+                end namespace
+            `);
+            program.addOrReplaceFile('source/ns2.brs', `
+                namespace Name.Space
+                    function nsFunc2(num as integer) as integer
+                        print Name.outerNsFunc()
+                        return num + nsFunc1()
+                    end function
+                end namespace
+            `);
+            const sourceScope = program.getScopeByName('source');
+            const mergedNsSymbolTable = sourceScope.namespaceLookup['name.space']?.symbolTable;
+            expect(mergedNsSymbolTable).not.to.be.undefined;
+            expect((mergedNsSymbolTable.getSymbolType('nsFunc1') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((mergedNsSymbolTable.getSymbolType('nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((mergedNsSymbolTable.getSymbolType('Name.Space.nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');
+            expect((mergedNsSymbolTable.getSymbolType('Name.outerNsFunc') as FunctionType).returnType.toString()).to.equal('string');
         });
     });
 });

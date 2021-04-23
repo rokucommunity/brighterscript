@@ -26,6 +26,18 @@ export class SymbolTable {
     }
 
     /**
+     * Checks if the symbol table contains the given symbol by name
+     * If the identifier is not in this table, it will check the parent
+     *
+     * @param name the name to lookup
+     * @returns true if this symbol is in the symbol table
+     */
+    hasSymbol(name: string): boolean {
+        const key = name.toLowerCase();
+        return !!(this.symbols.has(key) || this.parent?.hasSymbol(key));
+    }
+
+    /**
      * Gets the name/type pair for a given named variable or function name
      * If the identifier is not in this table, it will check the parent
      *
@@ -65,15 +77,15 @@ export class SymbolTable {
         if (symbols?.length > 1) {
             //Check if each time it was set, it was set to the same type
             // TODO handle union types
-            let sameType = true;
-            const firstType = symbols[0].type.toString();
+            let sameImpliedType = true;
+            let impliedType = symbols[0].type;
             for (const symbol of symbols) {
-                sameType = firstType === symbol.type.toString();
-                if (!sameType) {
+                sameImpliedType = (impliedType.equals(symbol.type));
+                if (!sameImpliedType) {
                     break;
                 }
             }
-            return sameType ? symbols[0].type : new DynamicType();
+            return sameImpliedType ? impliedType : new DynamicType();
         } else if (symbols?.length === 1) {
             return symbols[0].type;
         }

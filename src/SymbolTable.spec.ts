@@ -35,6 +35,18 @@ describe('SymbolTable', () => {
         expect(st.getSymbol('foo')[0].type.toString()).eq('integer');
     });
 
+    it('correct checks if a symbol is in the table using hasSymbol', () => {
+        const parent = new SymbolTable();
+        const child = new SymbolTable(parent);
+        parent.addSymbol('foo', null, new StringType());
+        child.addSymbol('bar', null, new IntegerType());
+        expect(parent.hasSymbol('foo')).to.be.true;
+        expect(parent.hasSymbol('bar')).to.be.false;
+        expect(child.hasSymbol('foo')).to.be.true;
+        expect(child.hasSymbol('bar')).to.be.true;
+        expect(child.hasSymbol('buz')).to.be.false;
+    });
+
     describe('getSymbolType', () => {
         it('gets the correct type if it exists', () => {
             const st = new SymbolTable();

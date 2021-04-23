@@ -1,20 +1,21 @@
 import { expect, assert } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
 import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
-import { Parser, ParseMode } from './Parser';
+import { Parser, ParseMode, getBscTypeFromExpression } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils';
+import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils/reflection';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { VoidType } from '../types/VoidType';
-import type { FunctionType } from '../types/FunctionType';
+import { FunctionType } from '../types/FunctionType';
 import { StringType } from '../types/StringType';
 import { CustomType } from '../types/CustomType';
 import { IntegerType } from '../types/IntegerType';
 import { ObjectType } from '../types/ObjectType';
 import { LazyType } from '../types/LazyType';
+import { SymbolTable } from '../SymbolTable';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -286,6 +287,46 @@ describe('parser', () => {
                     DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('namespace').message
                 );
             });
+
+            it('declares a symbol table for the namespace', () => {
+                let parser = parse(`
+                    namespace Name.Space
+                        function funcInt() as integer
+                           return 3
+                        end function
+
+                        function funcStr() as string
+                           return "hello"
+                        end function
+                    end namespace
+                `, ParseMode.BrighterScript);
+
+                expect(parser.ast.statements[0]).to.be.instanceof(NamespaceStatement);
+                const namespaceStmt = parser.ast.statements[0] as NamespaceStatement;
+                expect(namespaceStmt.symbolTable).to.be.instanceof(SymbolTable);
+                expect(namespaceStmt.symbolTable.getSymbolType('funcInt').toString()).to.equal('function funcInt() as integer');
+                expect(namespaceStmt.symbolTable.getSymbolType('funcStr')).to.be.instanceof(FunctionType);
+                const strFunctionType = namespaceStmt.symbolTable.getSymbolType('funcStr') as FunctionType;
+                expect(strFunctionType.returnType.toString()).to.equal('string');
+            });
+
+            it('adds a fully qualified name of a function in a namespace to the parsers symbol table', () => {
+                let parser = parse(`
+                    namespace Name.Space
+                        function funcInt() as integer
+                           return 3
+                        end function
+
+                        function funcStr() as string
+                           return "hello"
+                        end function
+                    end namespace
+                `, ParseMode.BrighterScript);
+
+                expect(parser.symbolTable.getSymbolType('Name.Space.funcInt')).to.be.instanceof(FunctionType);
+                expect(parser.symbolTable.getSymbolType('Name.Space.funcStr')).to.be.instanceof(FunctionType);
+            });
+
         });
 
         it('supports << operator', () => {
@@ -1083,7 +1124,7 @@ describe('parser', () => {
         });
     });
 
-    describe('getBscTypeFromAssignment', () => {
+    describe('getBscTypeFromExpression', () => {
         it('computes void type for sub with no return type', () => {
             const parser = parse(`
                 sub main()
@@ -1093,7 +1134,7 @@ describe('parser', () => {
                 end sub
             `);
             const func = (parser.ast.statements[0] as FunctionStatement).func;
-            const type = parser['getBscTypeFromAssignment'](func.body.statements[0] as AssignmentStatement, func) as FunctionType;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
             expect(type.returnType).to.be.instanceof(VoidType);
         });
 
@@ -1106,7 +1147,7 @@ describe('parser', () => {
                 end sub
             `);
             const func = (parser.ast.statements[0] as FunctionStatement).func;
-            const type = parser['getBscTypeFromAssignment'](func.body.statements[0] as AssignmentStatement, func) as FunctionType;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
             expect(type.returnType).to.be.instanceof(StringType);
         });
 
@@ -1123,7 +1164,7 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(parser.diagnostics);
             const func = (parser.ast.statements[0] as FunctionStatement).func;
-            const type = parser['getBscTypeFromAssignment'](func.body.statements[0] as AssignmentStatement, func) as FunctionType;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
             expect(type.returnType).to.be.instanceof(CustomType);
         });
     });
