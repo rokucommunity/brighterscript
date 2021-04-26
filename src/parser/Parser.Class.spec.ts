@@ -5,7 +5,7 @@ import { Parser, ParseMode } from './Parser';
 import type { FunctionStatement, AssignmentStatement, ClassFieldStatement } from './Statement';
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
-import { isFunctionType, isUninitializedType } from '../astUtils/reflection';
+import { isBooleanType, isFunctionType, isIntegerType, isStringType, isUninitializedType } from '../astUtils/reflection';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -448,6 +448,23 @@ describe('parser class', () => {
             expect(classStatement.symbolTable).to.exist;
             expect(isFunctionType(classStatement.symbolTable.getSymbolType('eat'))).to.be.true;
             expect(isFunctionType(classStatement.symbolTable.getSymbolType('sleep'))).to.be.true;
+        });
+
+        it('adds fields to class statement symbol table', () => {
+            let parser = Parser.parse(`
+                class Animal
+
+                    teethCount as integer
+                    furType as string
+                    hasWings as boolean
+
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            let classStatement = parser.statements[0] as ClassStatement;
+            expect(classStatement.symbolTable).to.exist;
+            expect(isIntegerType(classStatement.symbolTable.getSymbolType('teethCount'))).to.be.true;
+            expect(isStringType(classStatement.symbolTable.getSymbolType('furType'))).to.be.true;
+            expect(isBooleanType(classStatement.symbolTable.getSymbolType('hasWings'))).to.be.true;
         });
     });
 });
