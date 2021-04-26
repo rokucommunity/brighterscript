@@ -18,6 +18,7 @@ import type { BscType } from '../types/BscType';
 import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
+import { CustomType } from '../types/CustomType';
 
 /**
  * A BrightScript statement
@@ -1517,6 +1518,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     ) {
         super();
         this.body = this.body ?? [];
+        this.symbolTable.addSymbol('m', name?.range, new CustomType(this.getName(ParseMode.BrighterScript)));
         for (let statement of this.body) {
             if (isClassMethodStatement(statement)) {
                 this.methods.push(statement);

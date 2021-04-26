@@ -18,10 +18,11 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isCustomType, isUninitializedType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
+import type { BscType } from '../types/BscType';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -684,9 +685,70 @@ export class BrsFile {
         if (previousToken?.kind === TokenKind.Dot) {
             previousToken = this.parser.getPreviousToken(previousToken);
         }
-        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && isClassMethodStatement(functionExpression.functionStatement)) {
+        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && (isClassMethodStatement(functionExpression.functionStatement))) {
             return { item: this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, position)), file: this };
         }
+        return undefined;
+    }
+
+    /**
+     * Checks previous tokens for the start of a symbol chain (eg. m.property.subproperty.method())
+     * @param currentToken  The token to check
+     * @param functionExpression The current function context
+     * @param scope the current scope
+     * @returns the BscType and expanded text (e.g <Class.field>) for the token
+     */
+    public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): { type: BscType; expandedTokenText: string } {
+        const tokenChain: Token[] = [];
+        if (currentToken.kind === TokenKind.Identifier) {
+            tokenChain.push(currentToken);
+        }
+        let previousToken = this.getPreviousToken(currentToken);
+        while (previousToken?.kind === TokenKind.Dot) {
+            previousToken = this.getPreviousToken(previousToken);
+            if (previousToken.kind === TokenKind.Identifier) {
+                tokenChain.push(previousToken);
+            }
+            previousToken = this.getPreviousToken(previousToken);
+        }
+
+        tokenChain.reverse();
+        let currentClassRef: ClassStatement;
+        let currentSymbolTable = functionExpression.symbolTable;
+        let tokenFoundCount = 0;
+        let symbolType: BscType;
+        let tokenText = [];
+
+        for (const token of tokenChain) {
+            const tokenLowerText = token.text.toLowerCase();
+            if (tokenLowerText === 'm' && tokenFoundCount === 0) {
+                currentClassRef = this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, token.range.start));
+                currentSymbolTable = currentClassRef?.symbolTable;
+            }
+            if (!currentSymbolTable) {
+                break;
+            }
+            symbolType = currentSymbolTable.getSymbolType(tokenLowerText);
+            if (!isUninitializedType(symbolType)) {
+                tokenFoundCount++;
+            }
+            if (isCustomType(symbolType) && tokenChain.length > 1) {
+                tokenText.push(symbolType.name);
+                // TODO: get proper parent name for methods/fields defined in super classes
+                currentClassRef = scope.getClassMap()?.get(symbolType.name.toLowerCase())?.item;
+                currentSymbolTable = currentClassRef?.symbolTable;
+            } else {
+                tokenText.push(token.text);
+                break;
+            }
+            if (tokenText.length > 2) {
+                tokenText.shift(); // only care about last two symbols
+            }
+        }
+        if (tokenFoundCount === tokenChain.length) {
+            return { type: symbolType, expandedTokenText: tokenText.join('.') };
+        }
+
         return undefined;
     }
 
@@ -1169,14 +1231,14 @@ export class BrsFile {
 
             for (const scope of this.program.getScopesForFile(this)) {
                 scope.linkSymbolTable();
-                if (func.symbolTable.hasSymbol(lowerTokenText)) {
-                    const type = func.symbolTable?.getSymbolType(lowerTokenText);
+                const typeTextPair = this.getSymbolTypeFromToken(token, func, scope);
+                if (typeTextPair) {
                     let scopeTypeText = '';
 
-                    if (isFunctionType(type)) {
-                        scopeTypeText = type.toString();
+                    if (isFunctionType(typeTextPair.type)) {
+                        scopeTypeText = typeTextPair.type.toString();
                     } else {
-                        scopeTypeText = `${token.text} as ${type.toString()}`;
+                        scopeTypeText = `${typeTextPair.expandedTokenText} as ${typeTextPair.type.toString()}`;
                     }
 
                     if (!typeTexts.includes(scopeTypeText)) {

@@ -517,7 +517,7 @@ export class Scope {
         for (const pair of classMap) {
             const fileLink = pair[1];
             if (fileLink?.item.hasParentClass()) {
-                const parentClass = classMap.get(fileLink.item.parentClassName.getName(ParseMode.BrighterScript))?.item;
+                const parentClass = classMap.get(fileLink.item.parentClassName.getName(ParseMode.BrighterScript).toLowerCase())?.item;
                 // set the parent of the class's symbol table to the symbol table of the class it extends
                 fileLink.item.symbolTable.setParent(parentClass?.symbolTable);
             }

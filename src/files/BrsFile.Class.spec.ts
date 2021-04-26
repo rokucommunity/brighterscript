@@ -5,7 +5,7 @@ import type { BrsFile } from './BrsFile';
 import { expect } from 'chai';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { Diagnostic } from 'vscode-languageserver';
-import { Range, DiagnosticSeverity } from 'vscode-languageserver';
+import { Range, DiagnosticSeverity, Position } from 'vscode-languageserver';
 import { ParseMode } from '../parser/Parser';
 import { expectZeroDiagnostics, getTestTranspile } from '../testHelpers.spec';
 import { standardizePath as s } from '../util';
@@ -1176,6 +1176,120 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         doesNotThrow(() => {
             file.parser.references.classStatements[0].getParentClassIndex(new BrsTranspileState(file));
+        });
+    });
+
+    describe('getHover', () => {
+
+        const animalClassCode = `
+        class Animal
+            kind as string
+            isHungry as boolean
+
+            sub new(kind as string)
+                m.kind = kind
+                m.isHungry = true ' born hungry
+            end sub
+
+            sub eat(foodAmount as integer)
+                if foodAmount > 100
+                  m.isHungry = false
+                end if
+            end sub
+
+            sub sleep()
+              m.isHungry = false
+            end sub
+
+        end class
+
+        class Dog extends Animal
+            breed as string
+            sub new(breed as string)
+                super("Dog")
+                m.breed = breed
+            end sub
+
+            sub snooze()
+                m.sleep()
+            end sub
+        end class
+
+        class DogHouse
+            puppy as Dog
+            sub new(pup as Dog)
+                m.puppy = pup
+            end sub
+        end class
+
+        sub main()
+            snoopy = new Dog("Beagle")
+            biplane = new DogHouse(snoopy)
+            print snoopy.kind ' Dog
+            print snoopy.breed ' Beagle
+            print snoopy.isHungry ' true
+            feedAnimal(biplane.puppy)
+            print snoopy.isHungry ' false
+        end sub
+
+        sub feedAnimal(beast as Animal)
+            beast.eat(100)
+        end sub
+        `;
+
+        it('correctly parses the file', () => {
+            program.addOrReplaceFile('source/animal.bs', animalClassCode);
+            program.validate();
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
+        it('gets the correct text for m', () => {
+            let animalCode = program.addOrReplaceFile('source/animal.bs', animalClassCode);
+            program.validate();
+            let hover = animalCode.getHover(Position.create(6, 17));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('m as Animal');
+
+            hover = animalCode.getHover(Position.create(26, 17));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('m as Dog');
+        });
+
+        it('gets the correct text for m.field', () => {
+            let animalCode = program.addOrReplaceFile('source/animal.bs', animalClassCode);
+            program.validate();
+            let hover = animalCode.getHover(Position.create(6, 19));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('Animal.kind as string');
+
+            hover = animalCode.getHover(Position.create(26, 19));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('Dog.breed as string');
+        });
+
+        it('gets the correct text for m.method', () => {
+            let animalCode = program.addOrReplaceFile('source/animal.bs', animalClassCode);
+            program.validate();
+            let hover = animalCode.getHover(Position.create(30, 21));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('sub Animal.sleep() as void');
+        });
+
+        it('gets the correct text for obj.field', () => {
+            let animalCode = program.addOrReplaceFile('source/animal.brs', animalClassCode);
+            program.validate();
+            let hover = animalCode.getHover(Position.create(46, 29));
+            expect(hover).to.exist;
+            //TODO: This should probably say 'Animal.isHungry ...' because that field is defined in Animal
+            expect(hover.contents).to.equal('Dog.isHungry as boolean');
+        });
+
+        it('gets the correct text for obj.method', () => {
+            let animalCode = program.addOrReplaceFile('source/animal.bs', animalClassCode);
+            program.validate();
+            let hover = animalCode.getHover(Position.create(52, 21));
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('sub Animal.eat(foodAmount as integer) as void');
         });
     });
 });
