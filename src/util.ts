@@ -1247,7 +1247,7 @@ export class Util {
      */
     public getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName: CallableContainerMap, expCall: FunctionCall): CallableContainer[] {
         let callablesWithThisName: CallableContainer[] = [];
-        const lowerName = expCall.name.toLowerCase();
+        const lowerName = expCall.name.text.toLowerCase();
         if (expCall.functionExpression.namespaceName) {
             // prefer namespaced function
             const potentialNamespacedCallable = expCall.functionExpression.namespaceName.getName(ParseMode.BrightScript).toLowerCase() + '_' + lowerName;

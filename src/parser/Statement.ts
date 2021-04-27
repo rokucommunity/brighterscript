@@ -1518,7 +1518,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     ) {
         super();
         this.body = this.body ?? [];
-        this.symbolTable.addSymbol('m', name?.range, new CustomType(this.getName(ParseMode.BrighterScript)));
+        this.symbolTable.addSymbol('m', name?.range, this.getCustomType());
         for (let statement of this.body) {
             if (isClassMethodStatement(statement)) {
                 this.methods.push(statement);
@@ -1558,6 +1558,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
 
     public readonly range: Range;
+
+    public getCustomType(): CustomType {
+        return new CustomType(this.getName(ParseMode.BrighterScript));
+    }
 
     transpile(state: BrsTranspileState) {
         let result = [];

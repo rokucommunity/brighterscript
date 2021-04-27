@@ -17,6 +17,7 @@ import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXml
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { SymbolTable } from './SymbolTable';
+import type { CustomType } from './types/CustomType';
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
  */
@@ -30,6 +31,7 @@ export class Scope {
         //used for improved logging performance
         this._debugLogComponentName = `Scope '${chalk.redBright(this.name)}'`;
     }
+
 
     /**
      * Indicates whether this scope needs to be validated.
@@ -109,6 +111,19 @@ export class Scope {
             });
             return map;
         });
+    }
+
+    public getAncestorTypeList(className: string): CustomType[] {
+        const ancestors: CustomType[] = [];
+        const classMap = this.getClassMap();
+        let currentClass = classMap.get(className.toLowerCase())?.item;
+
+        while (currentClass?.hasParentClass()) {
+            ancestors.push(currentClass.getCustomType());
+            currentClass = classMap.get(currentClass.parentClassName.getName(ParseMode.BrighterScript).toLowerCase())?.item;
+        }
+        //TODO: this should probably be cached
+        return ancestors;
     }
 
     /**
@@ -655,29 +670,36 @@ export class Scope {
 
 
     private diagnosticDetectInvalidFunctionCalls(file: BscFile) {
-        for (let expCall of file.functionCalls) {
-            const funcType = expCall.functionExpression.symbolTable.getSymbolType(expCall.name);
+        if (isBrsFile(file)) {
+            for (let expCall of file.functionCalls) {
+                const funcType = file.getSymbolTypeFromToken(expCall.name, expCall.functionExpression, this)?.type;
 
-            if (!isFunctionType(funcType)) {
-                // can not find function. Handled in a different validation function
-                continue;
-            }
-            if (funcType.params.length !== expCall.args.length) {
-                // Argument count mismatch. Handled in a different validation function
-                continue;
-            }
+                if (!isFunctionType(funcType)) {
+                    // can not find function. Handled in a different validation function
+                    continue;
+                }
+                if (funcType.params.length !== expCall.args.length) {
+                    // Argument count mismatch. Handled in a different validation function
+                    continue;
+                }
 
-            for (let index = 0; index < funcType.params.length; index++) {
-                const param = funcType.params[index];
-                const arg = expCall.args[index];
-                const argType = arg.type;
-
-                if (!argType.isAssignableTo(param.type)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.argumentTypeMismatch(arg.type.toTypeString(), param.type.toTypeString()),
-                        range: arg.range,
-                        file: file
-                    });
+                for (let index = 0; index < funcType.params.length; index++) {
+                    const param = funcType.params[index];
+                    const arg = expCall.args[index];
+                    const argType = arg.type;
+                    let assignable = false;
+                    if (isCustomType(argType)) {
+                        assignable = argType.isAssignableTo(param.type, this.getAncestorTypeList(argType.name));
+                    } else {
+                        assignable = argType.isAssignableTo(param.type);
+                    }
+                    if (!assignable) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.argumentTypeMismatch(arg.type.toTypeString(), param.type.toTypeString()),
+                            range: arg.range,
+                            file: file
+                        });
+                    }
                 }
             }
         }
@@ -708,8 +730,8 @@ export class Scope {
      */
     private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
         //validate all function calls
-        for (let expCall of file.functionCalls) {
-            let callableContainersWithThisName = callableContainersByLowerName.get(expCall.name.toLowerCase());
+        for (let expCall of file.functionCalls.filter(functionCall => !functionCall.isDottedInvocation)) {
+            let callableContainersWithThisName = callableContainersByLowerName.get(expCall.name.text.toLowerCase());
 
             if (callableContainersWithThisName && callableContainersWithThisName.length > 0) {
                 // There are some global functions with the same name, but different return types and param counts - see "Val()"
@@ -808,9 +830,9 @@ export class Scope {
      */
     private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: CallableContainerMap) {
         //validate all expression calls
-        for (let expCall of file.functionCalls) {
+        for (let expCall of file.functionCalls.filter(functionCall => !functionCall.isDottedInvocation)) {
             if (isBrsFile(file)) {
-                const lowerName = expCall.name.toLowerCase();
+                const lowerName = expCall.name.text.toLowerCase();
                 //for now, skip validation on any method named "super" within `.bs` contexts.
                 //TODO revise this logic so we know if this function call resides within a class constructor function
                 if (file.extension === '.bs' && lowerName === 'super') {
@@ -830,7 +852,7 @@ export class Scope {
                     //detect calls to unknown functions
                     if (!knownCallable) {
                         this.diagnostics.push({
-                            ...DiagnosticMessages.callToUnknownFunction(expCall.name, this.name),
+                            ...DiagnosticMessages.callToUnknownFunction(expCall.name.text, this.name),
                             range: expCall.nameRange,
                             file: file
                         });

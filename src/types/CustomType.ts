@@ -1,4 +1,4 @@
-import { isCustomType, isDynamicType } from '../astUtils/reflection';
+import { isDynamicType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export class CustomType implements BscType {
@@ -6,7 +6,8 @@ export class CustomType implements BscType {
     constructor(public name: string) {
     }
 
-    public toString() {
+
+    public toString(): string {
         return this.name;
     }
 
@@ -14,15 +15,15 @@ export class CustomType implements BscType {
         return 'object';
     }
 
-    public isAssignableTo(targetType: BscType) {
-        //TODO for now, if the custom types have the same name, assume they're the same thing
-        if (isCustomType(targetType) && targetType.name === this.name) {
+    public isAssignableTo(targetType: BscType, ancestorTypes?: CustomType[]) {
+        if (ancestorTypes?.find(ancestorType => targetType.equals(ancestorType))) {
             return true;
-        } else if (isDynamicType(targetType)) {
-            return true;
-        } else {
-            return false;
         }
+        return (
+            this.equals(targetType) ||
+            isObjectType(targetType) ||
+            isDynamicType(targetType)
+        );
     }
 
     public isConvertibleTo(targetType: BscType) {

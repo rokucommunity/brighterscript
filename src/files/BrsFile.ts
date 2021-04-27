@@ -413,8 +413,6 @@ export class BrsFile {
             //for all function calls in this function
             for (let expression of func.callExpressions) {
                 if (
-                    //filter out dotted function invocations (i.e. object.doSomething()) (not currently supported. TODO support it)
-                    (expression.callee as any).obj ||
                     //filter out method calls on method calls for now (i.e. getSomething().getSomethingElse())
                     (expression.callee as any).callee ||
                     //filter out callees without a name (immediately-invoked function expressions)
@@ -422,7 +420,9 @@ export class BrsFile {
                 ) {
                     continue;
                 }
-                let functionName = (expression.callee as any).name.text;
+                //Flag dotted function invocations (i.e. object.doSomething())
+                const dottedInvocation = (expression.callee as any).obj;
+                let functionName = (expression.callee as any).name as Token;
 
                 //callee is the name of the function being called
                 let callee = expression.callee as VariableExpression;
@@ -469,8 +469,8 @@ export class BrsFile {
                     file: this,
                     name: functionName,
                     nameRange: util.createRange(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
-                    //TODO keep track of parameters
-                    args: args
+                    args: args,
+                    isDottedInvocation: dottedInvocation
                 };
 
                 this.functionCalls.push(functionCall);

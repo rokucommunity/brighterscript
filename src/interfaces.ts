@@ -10,6 +10,7 @@ import type { Expression, FunctionStatement, FunctionExpression } from './parser
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
+import type { Token } from './lexer/Token';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -65,9 +66,10 @@ export interface FunctionCall {
     range: Range;
     functionExpression: FunctionExpression;
     file: BscFile;
-    name: string;
+    name: Token;
     args: CallableArg[];
     nameRange: Range;
+    isDottedInvocation: boolean;
 }
 
 /**
