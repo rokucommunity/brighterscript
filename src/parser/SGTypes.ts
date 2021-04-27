@@ -88,9 +88,9 @@ export class SGTag {
     ) {
         this.tokens.startTagOpen = startTagOpen;
         this.tokens.startTagName = startTagName;
-        this.attributes = attributes;
+        this.attributes = attributes ?? [];
         this.tokens.startTagClose = startTagClose;
-        this.childNodes = childNodes;
+        this.childNodes = childNodes ?? [];
         this.tokens.endTagOpen = endTagOpen;
         this.tokens.endTagName = endTagName;
         this.tokens.endTagClose = endTagClose;
@@ -322,14 +322,14 @@ export class SGScript extends SGTag {
         const bsExtensionRegexp = /\.bs$/i;
 
         for (const attr of attributes) {
-            const lowerKey = attr.tokens.key.text.toLowerCase();
-            if (lowerKey === 'uri' && bsExtensionRegexp.exec(attr.tokens.value.text)) {
+            const lowerKey = attr.tokens.key?.text.toLowerCase();
+            if (lowerKey === 'uri' && bsExtensionRegexp.exec(attr.tokens.value?.text)) {
                 modifiedAttributes.push(
                     util.cloneSGAttribute(attr, attr.tokens.value.text.replace(bsExtensionRegexp, '.brs'))
                 );
             } else if (lowerKey === 'type') {
                 foundType = true;
-                if (attr.tokens.value.text.toLowerCase().endsWith('brighterscript')) {
+                if (attr.tokens.value?.text.toLowerCase().endsWith('brighterscript')) {
                     modifiedAttributes.push(
                         util.cloneSGAttribute(attr, 'text/brightscript')
                     );

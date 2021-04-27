@@ -61,10 +61,10 @@ describe('XmlFile', () => {
                     let child = file.parser.ast.component.children.childNodes[0];
                     expect(child.attributes).to.have.lengthOf(4);
                     child.setAttribute('text', undefined);
-                    expect(child.getAttribute('id').tokens.value.text).to.equal('one');
+                    expect(child.id).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(3);
                     child.setAttribute('text3', undefined);
-                    expect(child.getAttribute('id').tokens.value.text).to.equal('one');
+                    expect(child.id).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(2);
                 }
             });

@@ -52,12 +52,12 @@ export class XmlScope extends Scope {
     }
 
     private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
-        const component = this.xmlFile.parser.ast?.component;
-        //roku supports multiple <interface> elements, so check that there's at least one
-        if (!component || component.getChildNodesByTagName('interface').length === 0) {
+        const interfaceMembers = this.xmlFile.parser.ast?.component?.interfaceMembers ?? [];
+
+        if (interfaceMembers.length === 0) {
             return;
         }
-        for (const member of component.interfaceMembers) {
+        for (const member of interfaceMembers) {
             //validate functions
             if (isSGInterfaceFunction(member)) {
                 const name = member.name;
