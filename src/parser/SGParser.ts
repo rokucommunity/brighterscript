@@ -57,9 +57,7 @@ export default class SGParser {
         }
 
         const nameAttr = component.getAttribute('name');
-        if (nameAttr?.tokens.value) {
-            this._references.name = nameAttr.tokens.value;
-        }
+        this._references.name = nameAttr?.tokens.value;
         const extendsAttr = component.getAttribute('extends');
         if (extendsAttr?.tokens.value) {
             this._references.extends = extendsAttr.tokens.value;
