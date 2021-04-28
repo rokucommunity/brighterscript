@@ -851,13 +851,13 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expect(program.getDiagnostics()[0]).to.exist.and.to.include({
-            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('speakInPublic', 'private', 'public', 'Animal')
+            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakInPublic', 'private', 'public', 'Animal')
         });
         expect(program.getDiagnostics()[1]).to.exist.and.to.include({
-            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('speakWithFriends', 'public', 'protected', 'Animal')
+            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakWithFriends', 'public', 'protected', 'Animal')
         });
         expect(program.getDiagnostics()[2]).to.exist.and.to.include({
-            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('speakWithFamily', 'public', 'private', 'Animal')
+            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakWithFamily', 'public', 'private', 'Animal')
         });
     });
     it('allows overridden methods with matching visibility', () => {

@@ -626,8 +626,8 @@ export let DiagnosticMessages = {
         code: 1121,
         severity: DiagnosticSeverity.Error
     }),
-    mismatchedOverriddenMemberVisibility: (memberName: string, visibility: string, ancestorVisibility: string, ancestorClassName: string) => ({
-        message: `Overridden member '${memberName}', has incorrect access modifier. Got '${visibility}'; but expected '${ancestorVisibility}', as declared in '${ancestorClassName}'`,
+    mismatchedOverriddenMemberVisibility: (childClassName: string, memberName: string, childAccessModifier: string, ancestorAccessModifier: string, ancestorClassName: string) => ({
+        message: `Access modifier mismatch: '${memberName}' is ${childAccessModifier} in type '${childClassName}' but is ${ancestorAccessModifier} in base type '${ancestorClassName}'.`,
         code: 1122,
         severity: DiagnosticSeverity.Error
     })

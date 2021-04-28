@@ -233,6 +233,7 @@ export class BsClassValidator {
                         ) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.mismatchedOverriddenMemberVisibility(
+                                    classStatement.name.text,
                                     ancestorAndMember.member.name?.text,
                                     member.accessModifier?.text || 'public',
                                     ancestorAndMember.member.accessModifier?.text || 'public',
