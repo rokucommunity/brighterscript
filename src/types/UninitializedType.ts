@@ -1,11 +1,15 @@
+import { isUninitializedType, isDynamicType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
 
 export class UninitializedType implements BscType {
+
+    // eslint-disable-next-line @typescript-eslint/no-useless-constructor
+    constructor() { }
+
     public isAssignableTo(targetType: BscType) {
         return (
-            targetType instanceof UninitializedType ||
-            targetType instanceof DynamicType
+            isUninitializedType(targetType) ||
+            isDynamicType(targetType)
         );
     }
 
@@ -20,5 +24,9 @@ export class UninitializedType implements BscType {
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    public equals(targetType: BscType): boolean {
+        return isUninitializedType(targetType);
     }
 }

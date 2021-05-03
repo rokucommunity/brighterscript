@@ -86,9 +86,16 @@ import {
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isVariableExpression, isAALiteralExpression, isArrayLiteralExpression, isNewExpression, isUninitializedType, isFunctionType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
+import type { BscType } from '../types/BscType';
+import { DynamicType } from '../types/DynamicType';
+import { LazyType } from '../types/LazyType';
+import { SymbolTable } from '../SymbolTable';
+import { ObjectType } from '../types/ObjectType';
+import { CustomType } from '../types/CustomType';
+import { ArrayType } from '../types/ArrayType';
 
 export class Parser {
     /**
@@ -108,6 +115,13 @@ export class Parser {
 
     public get statements() {
         return this.ast.statements;
+    }
+
+
+    public symbolTable = new SymbolTable();
+
+    private get currentSymbolTable() {
+        return this.currentFunctionExpression?.symbolTable ?? this.symbolTable;
     }
 
     /**
@@ -170,7 +184,11 @@ export class Parser {
      * When a namespace has been started, this gets set. When it's done, this gets unset.
      * It is useful for passing the namespace into certain statements that need it
      */
-    private currentNamespaceName: NamespacedVariableNameExpression;
+    private currentNamespace: NamespaceStatement;
+
+    private get currentNamespaceName(): NamespacedVariableNameExpression {
+        return this.currentNamespace?.nameExpression;
+    }
 
     /**
      * When a FunctionExpression has been started, this gets set. When it's done, this gets unset.
@@ -528,6 +546,7 @@ export class Parser {
     private functionDeclaration(isAnonymous: boolean, checkIdentifier = true) {
         let previousCallExpressions = this.callExpressions;
         this.callExpressions = [];
+
         try {
             //track depth to help certain statements need to know if they are contained within a function body
             this.namespaceAndFunctionDepth++;
@@ -633,7 +652,6 @@ export class Parser {
             }, false);
 
             this.consumeStatementSeparators(true);
-
             let func = new FunctionExpression(
                 params,
                 undefined, //body
@@ -642,13 +660,31 @@ export class Parser {
                 leftParen,
                 rightParen,
                 asToken,
-                typeToken,
+                typeToken, //return type
                 this.currentFunctionExpression,
-                this.currentNamespaceName
+                this.currentNamespaceName,
+                this.currentNamespace?.symbolTable ?? this.symbolTable
             );
+
+
             //if there is a parent function, register this function with the parent
             if (this.currentFunctionExpression) {
                 this.currentFunctionExpression.childFunctionExpressions.push(func);
+            }
+
+            // add the function to the relevant symbol tables
+            if (!isAnonymous) {
+                const funcType = func.getFunctionType();
+                funcType.setName(name.text);
+
+                // add the function as declared to the current namespace's table
+                this.currentNamespace?.symbolTable.addSymbol(name.text, name.range, funcType);
+                let fullyQualifiedName = name.text;
+                if (this.currentNamespaceName) {
+                    // add the "namespaced" name of this function to the parent symbol table
+                    fullyQualifiedName = this.currentNamespaceName.getName(ParseMode.BrighterScript) + '.' + name.text;
+                }
+                this.currentSymbolTable.addSymbol(fullyQualifiedName, name.range, funcType);
             }
 
             this._references.functionExpressions.push(func);
@@ -701,6 +737,13 @@ export class Parser {
         }
     }
 
+    private identifier() {
+        const identifier = this.advance() as Identifier;
+        // force the name into an identifier so the AST makes some sense
+        identifier.kind = TokenKind.Identifier;
+        return identifier;
+    }
+
     private functionParameter(): FunctionParameterExpression {
         if (!this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
             this.diagnostics.push({
@@ -710,15 +753,14 @@ export class Parser {
             throw this.lastDiagnosticAsError();
         }
 
-        let name = this.advance() as Identifier;
-        // force the name into an identifier so the AST makes some sense
-        name.kind = TokenKind.Identifier;
+        const name = this.identifier();
 
         let typeToken: Token | undefined;
-        let defaultValue;
-
+        let defaultValue: Expression;
+        let equalsToken: Token;
         // parse argument default value
         if (this.match(TokenKind.Equal)) {
+            equalsToken = this.previous();
             // it seems any expression is allowed here -- including ones that operate on other arguments!
             defaultValue = this.expression();
         }
@@ -737,17 +779,29 @@ export class Parser {
                 throw this.lastDiagnosticAsError();
             }
         }
+
+        let type: BscType;
+
+        if (typeToken) {
+            type = util.tokenToBscType(typeToken);
+        } else if (defaultValue) {
+            type = getBscTypeFromExpression(defaultValue, this.currentFunctionExpression);
+        } else {
+            type = new DynamicType();
+        }
         return new FunctionParameterExpression(
             name,
-            typeToken,
+            type,
+            equalsToken,
             defaultValue,
             asToken,
+            typeToken,
             this.currentNamespaceName
         );
     }
 
     private assignment(): AssignmentStatement {
-        let name = this.advance() as Identifier;
+        let name = this.identifier();
         //add diagnostic if name is a reserved word that cannot be used as an identifier
         if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
             this.diagnostics.push({
@@ -763,16 +817,19 @@ export class Parser {
 
         let result: AssignmentStatement;
         if (operator.kind === TokenKind.Equal) {
-            result = new AssignmentStatement(operator, name, value, this.currentFunctionExpression);
+            result = new AssignmentStatement(name, operator, value, this.currentFunctionExpression);
         } else {
             result = new AssignmentStatement(
-                operator,
                 name,
+                operator,
                 new BinaryExpression(new VariableExpression(name, this.currentNamespaceName), operator, value),
                 this.currentFunctionExpression
             );
         }
         this._references.assignmentStatements.push(result);
+        const assignmentType = getBscTypeFromExpression(result.value, this.currentFunctionExpression);
+
+        this.currentSymbolTable.addSymbol(name.text, name.range, assignmentType);
         return result;
     }
 
@@ -968,7 +1025,7 @@ export class Parser {
 
     private forEachStatement(): ForEachStatement {
         let forEach = this.advance();
-        let name = this.advance();
+        let name = this.identifier();
 
         let maybeIn = this.peek();
         if (this.check(TokenKind.Identifier) && maybeIn.text.toLowerCase() === 'in') {
@@ -1002,16 +1059,18 @@ export class Parser {
         }
 
         let endFor = this.advance();
+        //TODO infer type from `target`
+        const itemType = new DynamicType();
+
+        this.currentSymbolTable.addSymbol(name.text, name.range, itemType);
 
         return new ForEachStatement(
-            {
-                forEach: forEach,
-                in: maybeIn,
-                endFor: endFor
-            },
+            forEach,
             name,
+            maybeIn,
             target,
-            body
+            body,
+            endFor
         );
     }
 
@@ -1050,16 +1109,16 @@ export class Parser {
         this.namespaceAndFunctionDepth++;
 
         let name = this.getNamespacedVariableNameExpression();
-
         //set the current namespace name
-        this.currentNamespaceName = name;
+        let result = new NamespaceStatement(keyword, name, null, null, this.currentSymbolTable);
+        this.currentNamespace = result;
 
         this.globalTerminators.push([TokenKind.EndNamespace]);
         let body = this.body();
         this.globalTerminators.pop();
 
         //unset the current namespace name
-        this.currentNamespaceName = undefined;
+        this.currentNamespace = undefined;
 
         let endKeyword: Token;
         if (this.check(TokenKind.EndNamespace)) {
@@ -1073,7 +1132,8 @@ export class Parser {
         }
 
         this.namespaceAndFunctionDepth--;
-        let result = new NamespaceStatement(keyword, name, body, endKeyword);
+        result.body = body;
+        result.endKeyword = endKeyword;
         this._references.namespaceStatements.push(result);
 
         return result;
@@ -1803,7 +1863,9 @@ export class Parser {
             throw new CancelStatementError();
         }
 
-        return new LabelStatement(tokens);
+        const stmt = new LabelStatement(tokens);
+        this.currentFunctionExpression.labelStatements.push(stmt);
+        return stmt;
     }
 
     /**
@@ -2564,6 +2626,7 @@ export class Parser {
         }
     }
 
+
     /**
      * References are found during the initial parse.
      * However, sometimes plugins can modify the AST, requiring a full walk to re-compute all references.
@@ -2572,10 +2635,8 @@ export class Parser {
     private findReferences() {
         this._references = new References();
 
+        //gather up all the top-level statements
         this.ast.walk(createVisitor({
-            AssignmentStatement: s => {
-                this._references.assignmentStatements.push(s);
-            },
             ClassStatement: s => {
                 this._references.classStatements.push(s);
             },
@@ -2584,12 +2645,23 @@ export class Parser {
             },
             FunctionStatement: s => {
                 this._references.functionStatements.push(s);
+                //add the initial set of function expressions for function statements
+                this._references.functionExpressions.push(s.func);
             },
             ImportStatement: s => {
                 this._references.importStatements.push(s);
             },
             LibraryStatement: s => {
                 this._references.libraryStatements.push(s);
+            }
+        }), {
+            walkMode: WalkMode.visitStatements
+        });
+
+        let func: FunctionExpression;
+        let visitor = createVisitor({
+            AssignmentStatement: s => {
+                this._references.assignmentStatements.push(s);
             },
             FunctionExpression: (expression, parent) => {
                 if (!isClassMethodStatement(parent)) {
@@ -2608,9 +2680,17 @@ export class Parser {
             DottedSetStatement: e => {
                 this.addPropertyHints(e.name);
             }
-        }), {
-            walkMode: WalkMode.visitAllRecursive
         });
+
+        //walk all function expressions (we'll add new ones as we move along too)
+        for (let i = 0; i < this._references.functionExpressions.length; i++) {
+            func = this._references.functionExpressions[i];
+
+            //walk this function expression
+            func.body.walk(visitor, {
+                walkMode: WalkMode.visitAll
+            });
+        }
     }
 
     public dispose() {
@@ -2670,8 +2750,104 @@ export class References {
     public propertyHints = {} as Record<string, string>;
 }
 
+export interface LocalVarEntry {
+    lowerName: string;
+    nameToken: Identifier;
+    type: BscType;
+}
+
 class CancelStatementError extends Error {
     constructor() {
         super('CancelStatement');
     }
+}
+
+/**
+ * Gets the type of an expression. If it can not be processed, will return DynamicType
+ *
+ * @param expression the Expression to process
+ * @param functionExpression the wrapping function expression
+ * @return the best guess type of that expression
+ */
+export function getBscTypeFromExpression(expression: Expression, functionExpression: FunctionExpression): BscType {
+    try {
+        //function
+        if (isFunctionExpression(expression)) {
+            return expression.getFunctionType();
+            //literal
+        } else if (isLiteralExpression(expression)) {
+            return expression.type;
+            //Associative array literal
+        } else if (isAALiteralExpression(expression)) {
+            return new ObjectType();
+            //Array literal
+        } else if (isArrayLiteralExpression(expression)) {
+            return new ArrayType();
+            //function call
+        } else if (isNewExpression(expression)) {
+            return new CustomType(expression.className.getName(ParseMode.BrighterScript));
+            //Function call
+        } else if (isCallExpression(expression)) {
+            return getTypeFromCallExpression(expression, functionExpression);
+        } else if (isVariableExpression(expression)) {
+            return getTypeFromVariableExpression(expression, functionExpression);
+        }
+    } catch (e) {
+        //do nothing. Just return dynamic
+    }
+    //fallback to dynamic
+    return new DynamicType();
+}
+
+
+/**
+ * Gets the return type of a function, taking into account that the function may not have been declared yet
+ * If the callee already exists in symbol table, use that return type
+ * otherwise, make a lazy type which will not compute its type until the file is done parsing
+ *
+ * @param call the Expression to process
+ * @param functionExpression the wrapping function expression
+ * @return the best guess type of that expression
+ */
+export function getTypeFromCallExpression(call: CallExpression, functionExpression: FunctionExpression): BscType {
+    let calleeName = ((call.callee as any).name.text as string)?.toLowerCase();
+    if (calleeName) {
+        // i
+        const currentKnownType = functionExpression.symbolTable.getSymbolType(calleeName);
+        if (isFunctionType(currentKnownType)) {
+            return currentKnownType.returnType;
+        }
+        if (!isUninitializedType(currentKnownType)) {
+            // this will probably only happen if a functionName has been assigned to something else previously?
+            return currentKnownType;
+        }
+        return new LazyType(() => {
+            const futureType = functionExpression.symbolTable.getSymbolType(calleeName);
+            if (isFunctionType(futureType)) {
+                return futureType.returnType;
+            }
+
+            return futureType;
+        });
+    }
+}
+
+/**
+ * Gets the type of a variable
+ * if it already exists in symbol table, use that type
+ * otherwise defer the type until first read, which will allow us to derive types from variables defined after this one (like from a loop perhaps)
+ *
+ * @param variable the Expression to process
+ * @param functionExpression the wrapping function expression
+ * @return the best guess type of that expression
+ */
+export function getTypeFromVariableExpression(variable: VariableExpression, functionExpression: FunctionExpression): BscType {
+    let variableName = variable.name.text.toLowerCase();
+    const currentKnownType = functionExpression.symbolTable.getSymbolType(variableName);
+    if (!isUninitializedType(currentKnownType)) {
+        return currentKnownType;
+    }
+    return new LazyType(() => {
+        return functionExpression.symbolTable.getSymbolType(variableName);
+    });
 }

@@ -1,13 +1,23 @@
 import { expect, assert } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
 import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
-import { Parser, ParseMode } from './Parser';
+import { Parser, ParseMode, getBscTypeFromExpression } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils';
-import { expectZeroDiagnostics } from '../testHelpers.spec';
+import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils/reflection';
+import { expectSymbolTableEquals, expectZeroDiagnostics } from '../testHelpers.spec';
+import { VoidType } from '../types/VoidType';
+import { FunctionType } from '../types/FunctionType';
+import { StringType } from '../types/StringType';
+import { CustomType } from '../types/CustomType';
+import { IntegerType } from '../types/IntegerType';
+import { ObjectType } from '../types/ObjectType';
+import { LazyType } from '../types/LazyType';
+import { SymbolTable } from '../SymbolTable';
+import { DynamicType } from '../types/DynamicType';
+import util from '../util';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -18,6 +28,67 @@ describe('parser', () => {
     });
 
     describe('findReferences', () => {
+        it('recomputes localVars', () => {
+            const parser = Parser.parse(`
+                sub main(herd)
+                    for each zombie in herd
+                        isAlive = false
+                    end for
+                    for i = 0 to 10 step 1
+                        j = i
+                    end for
+                    humansAreAlive = false
+                end sub
+            `);
+            expect(
+                parser.references.functionExpressions[0].symbolTable.ownSymbols.map(x => x.name).sort()
+            ).to.eql([
+                'herd',
+                'humansAreAlive',
+                'i',
+                'isAlive',
+                'j',
+                'zombie'
+            ]);
+            parser.invalidateReferences();
+            expect(
+                parser.references.functionExpressions[0].symbolTable.ownSymbols.map(x => x.name).sort()
+            ).to.eql([
+                'herd',
+                'humansAreAlive',
+                'i',
+                'isAlive',
+                'j',
+                'zombie'
+            ]);
+        });
+
+        it('assigns localVars to correct function expression bucket', () => {
+            const parser = Parser.parse(`
+                sub main()
+                    outerName = "bob"
+                    speak = sub()
+                        innerName = "innerBob"
+                    end sub
+                    age = 12
+                end sub
+            `);
+            parser.invalidateReferences();
+            expect(
+                parser.references.functionExpressions[0].symbolTable.ownSymbols.map(x => x.name)
+            ).to.eql([
+                'outerName',
+                'speak',
+                'age'
+            ]);
+
+            expect(
+                parser.references.functionExpressions[1].symbolTable.ownSymbols.map(x => x.name)
+            ).to.eql([
+                'innerName'
+            ]);
+        });
+
         it('gets called if references are missing', () => {
             const parser = Parser.parse(`
                 sub main()
@@ -220,6 +291,46 @@ describe('parser', () => {
                     DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('namespace').message
                 );
             });
+
+            it('declares a symbol table for the namespace', () => {
+                let parser = parse(`
+                    namespace Name.Space
+                        function funcInt() as integer
+                           return 3
+                        end function
+
+                        function funcStr() as string
+                           return "hello"
+                        end function
+                    end namespace
+                `, ParseMode.BrighterScript);
+
+                expect(parser.ast.statements[0]).to.be.instanceof(NamespaceStatement);
+                const namespaceStmt = parser.ast.statements[0] as NamespaceStatement;
+                expect(namespaceStmt.symbolTable).to.be.instanceof(SymbolTable);
+                expect(namespaceStmt.symbolTable.getSymbolType('funcInt').toString()).to.equal('function funcInt() as integer');
+                expect(namespaceStmt.symbolTable.getSymbolType('funcStr')).to.be.instanceof(FunctionType);
+                const strFunctionType = namespaceStmt.symbolTable.getSymbolType('funcStr') as FunctionType;
+                expect(strFunctionType.returnType.toString()).to.equal('string');
+            });
+
+            it('adds a fully qualified name of a function in a namespace to the parsers symbol table', () => {
+                let parser = parse(`
+                    namespace Name.Space
+                        function funcInt() as integer
+                           return 3
+                        end function
+
+                        function funcStr() as string
+                           return "hello"
+                        end function
+                    end namespace
+                `, ParseMode.BrighterScript);
+
+                expect(parser.symbolTable.getSymbolType('Name.Space.funcInt')).to.be.instanceof(FunctionType);
+                expect(parser.symbolTable.getSymbolType('Name.Space.funcStr')).to.be.instanceof(FunctionType);
+            });
+
         });
 
         it('supports << operator', () => {
@@ -1015,6 +1126,159 @@ describe('parser', () => {
             expect(fn.annotations).to.exist;
             expect(fn.annotations[0].getArguments()).to.deep.equal([-100]);
         });
+    });
+
+    describe('getBscTypeFromExpression', () => {
+        it('computes void type for sub with no return type', () => {
+            const parser = parse(`
+                sub main()
+                    getMessage = sub()
+                        print "hello"
+                    end sub
+                end sub
+            `);
+            const func = (parser.ast.statements[0] as FunctionStatement).func;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
+            expect(type.returnType).to.be.instanceof(VoidType);
+        });
+
+        it('computes return type for sub with explicit return type', () => {
+            const parser = parse(`
+                sub main()
+                    getMessage = sub() as string
+                        return "hello"
+                    end sub
+                end sub
+            `);
+            const func = (parser.ast.statements[0] as FunctionStatement).func;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
+            expect(type.returnType).to.be.instanceof(StringType);
+        });
+
+        it('supports sub with custom return type', () => {
+            const parser = parse(`
+                sub main()
+                    getPerson = sub() as Person
+                        return new Person()
+                    end sub
+                end sub
+
+                class Person
+                end class
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const func = (parser.ast.statements[0] as FunctionStatement).func;
+            const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
+            expect(type.returnType).to.be.instanceof(CustomType);
+        });
+    });
+
+    describe('symbolTable', () => {
+        it('stores the types', () => {
+            const parser = parse(`
+                sub main()
+                    someNum = 123
+                    someString = "hello world"
+                    someObj = {foo: "bar"}
+                    someCustom = new CustomKlass()
+                end sub
+
+                class CustomKlass
+                end class
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const mainSymbolTable = parser.references.functionExpressions[0].symbolTable;
+            expect(mainSymbolTable.getSymbolType('someNum')).to.be.instanceof(IntegerType);
+            expect(mainSymbolTable.getSymbolType('someString')).to.be.instanceof(StringType);
+            expect(mainSymbolTable.getSymbolType('someObj')).to.be.instanceof(ObjectType);
+            expect(mainSymbolTable.getSymbolType('someCustom')).to.be.instanceof(CustomType);
+        });
+
+        it('stores typed parameters in functions', () => {
+            const parser = parse(`
+                sub someFunc(param1 as string, param2 as integer)
+                temp = param2
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const someFuncSymbolTable = parser.references.functionExpressions[0].symbolTable;
+            expect(someFuncSymbolTable.getSymbolType('param1')).to.be.instanceof(StringType);
+            expect(someFuncSymbolTable.getSymbolType('param2')).to.be.instanceof(IntegerType);
+            expect(someFuncSymbolTable.getSymbolType('temp')).to.be.instanceof(IntegerType);
+        });
+
+        it('properly defers typing lazy types', () => {
+            const parser = parse(`
+                sub someFunc()
+                temp = foo()
+                end sub
+
+                function foo() as string
+                return "foo"
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const someFuncSymbolTable = parser.references.functionExpressions[0].symbolTable;
+            expect(someFuncSymbolTable.getSymbolType('temp')).to.be.instanceof(LazyType);
+            expect(someFuncSymbolTable.getSymbolType('temp').toTypeString()).to.eq('string');
+        });
+
+        it('does not know about symbols declared in parent functions', () => {
+            const parser = parse(`
+                sub main()
+                    count = 0
+                    addOne = sub()
+                        oldVal = count
+                    end sub
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            const addOneSymbolTable = parser.references.functionExpressions[0].childFunctionExpressions[0].symbolTable;
+            expect(addOneSymbolTable.getSymbolType('oldVal').toString()).to.eq('uninitialized');
+        });
+
+        it('finds params', () => {
+            const parser = parse(`
+                sub alert(p1, p2 as string, p3 = 1)
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            expectSymbolTableEquals(parser.references.functionExpressions[0].symbolTable, [
+                ['p1', new DynamicType(), util.createRange(1, 26, 1, 28)],
+                ['p2', new StringType(), util.createRange(1, 30, 1, 32)],
+                ['p3', new IntegerType(), util.createRange(1, 44, 1, 46)]
+            ]);
+        });
+
+        describe('loops', () => {
+            it('stores the loop variable in a for loop', () => {
+                const parser = parse(`
+                sub main()
+                    for i = 0 to 10 step 10
+                      print i
+                    end for
+                end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser.diagnostics);
+                const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
+                expect(currentSymbolTable.getSymbolType('i').toString()).to.eq('integer');
+            });
+
+
+            it('stores the loop variable in a for each loop', () => {
+                const parser = parse(`
+                sub doLoop(someData)
+                    for each datum in someData
+                      print datum
+                    end for
+                end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(parser.diagnostics);
+                const currentSymbolTable = parser.references.functionExpressions[0].symbolTable;
+                expect(currentSymbolTable.getSymbolType('datum').toString()).to.eq('dynamic');
+            });
+        });
+
     });
 });
 

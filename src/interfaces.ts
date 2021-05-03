@@ -2,12 +2,11 @@ import type { Range, Diagnostic, CodeAction } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { FunctionScope } from './FunctionScope';
 import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { Expression, FunctionStatement } from './parser';
+import type { Expression, FunctionStatement, FunctionExpression } from './parser';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
@@ -64,7 +63,7 @@ export interface FunctionCall {
      * The full range of this function call (from the start of the function name to its closing paren)
      */
     range: Range;
-    functionScope: FunctionScope;
+    functionExpression: FunctionExpression;
     file: File;
     name: string;
     args: CallableArg[];
