@@ -475,9 +475,6 @@ export class Scope {
         this.clearSymbolTable();
     }
 
-
-    private _symbolTable: SymbolTable;
-
     public get symbolTable() {
         if (!this._symbolTable) {
             this._symbolTable = new SymbolTable(this.getParentScope()?.symbolTable);
@@ -489,6 +486,7 @@ export class Scope {
         }
         return this._symbolTable;
     }
+    private _symbolTable: SymbolTable;
 
     private clearSymbolTable() {
         this._symbolTable = null;
