@@ -3,7 +3,12 @@ import type { BscType } from './BscType';
 
 export class FunctionType implements BscType {
     constructor(
-        public returnType: BscType
+        public returnType: BscType,
+        /**
+         * Determines if this is a sub or not
+         */
+        public isSub = false,
+        public params = [] as Array<{ name: string; type: BscType; isRequired: boolean }>
     ) {
     }
 
@@ -11,13 +16,6 @@ export class FunctionType implements BscType {
      * The name of the function for this type. Can be null
      */
     public name: string;
-
-    /**
-     * Determines if this is a sub or not
-     */
-    public isSub = false;
-
-    public params = [] as Array<{ name: string; type: BscType; isRequired: boolean }>;
 
     public setName(name: string) {
         this.name = name;

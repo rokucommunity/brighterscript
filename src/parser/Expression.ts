@@ -122,8 +122,6 @@ export class CallExpression extends Expression {
 }
 
 export class FunctionExpression extends Expression implements TypedefProvider {
-    readonly symbolTable: SymbolTable;
-
     constructor(
         readonly parameters: FunctionParameterExpression[],
         public body: Block,
@@ -153,6 +151,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             this.symbolTable.addSymbol(param.name.text, param.name.range, param.type);
         }
     }
+
+    public readonly symbolTable: SymbolTable;
 
     public labelStatements = [] as LabelStatement[];
 
@@ -277,6 +277,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 export class FunctionParameterExpression extends Expression {
     constructor(
         public name: Identifier,
+        public type: BscType,
         public equalsToken?: Token,
         public defaultValue?: Expression,
         public asToken?: Token,
@@ -284,14 +285,8 @@ export class FunctionParameterExpression extends Expression {
         readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
-        if (typeToken) {
-            this.type = util.tokenToBscType(typeToken);
-        } else {
-            this.type = new DynamicType();
-        }
     }
 
-    public type: BscType;
 
     public get range(): Range {
         return {

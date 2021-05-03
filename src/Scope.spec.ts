@@ -756,8 +756,8 @@ describe('Scope', () => {
             it('finds custom types from other namespaces', () => {
                 program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     namespace MyNamespace
-                      class MyClass
-                      end class
+                        class MyClass
+                        end class
                     end namespace
 
                     function foo(param as MyNamespace.MyClass) as MyNamespace.MyClass

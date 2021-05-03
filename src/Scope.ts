@@ -730,20 +730,20 @@ export class Scope {
     private diagnosticDetectShadowedLocalVars(file: BrsFile, callableContainerMap: CallableContainerMap) {
         const classMap = this.getClassMap();
 
-        for (let functionExpression of file.parser.references.functionExpressions) {
-            const localVars = file.parser.references.localVars.get(functionExpression);
+        for (let func of file.parser.references.functionExpressions) {
             //every var declaration in this function expression
-            for (let localVar of localVars) {
+            for (let symbol of func.symbolTable.ownSymbols) {
+                const symbolNameLower = symbol.name.toLowerCase();
                 //if the var is a function
-                if (isFunctionType(localVar.type)) {
+                if (isFunctionType(symbol.type)) {
                     //local var function with same name as stdlib function
                     if (
                         //has same name as stdlib
-                        globalCallableMap.has(localVar.lowerName)
+                        globalCallableMap.has(symbolNameLower)
                     ) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
-                            range: localVar.nameToken.range,
+                            range: symbol.range,
                             file: file
                         });
 
@@ -751,11 +751,11 @@ export class Scope {
                         //in the scope function list
                     } else if (
                         //has same name as scope function
-                        callableContainerMap.has(localVar.lowerName)
+                        callableContainerMap.has(symbolNameLower)
                     ) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
-                            range: localVar.nameToken.range,
+                            range: symbol.range,
                             file: file
                         });
                     }
@@ -763,21 +763,21 @@ export class Scope {
                     //var is not a function
                 } else if (
                     //is NOT a callable from stdlib (because non-function local vars can have same name as stdlib names)
-                    !globalCallableMap.has(localVar.lowerName)
+                    !globalCallableMap.has(symbolNameLower)
                 ) {
 
                     //is same name as a callable
-                    if (callableContainerMap.has(localVar.lowerName)) {
+                    if (callableContainerMap.has(symbolNameLower)) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                            range: localVar.nameToken.range,
+                            range: symbol.range,
                             file: file
                         });
                         //has the same name as an in-scope class
-                    } else if (classMap.has(localVar.lowerName)) {
+                    } else if (classMap.has(symbolNameLower)) {
                         this.diagnostics.push({
-                            ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(localVar.lowerName).item.getName(ParseMode.BrighterScript)),
-                            range: localVar.nameToken.range,
+                            ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(symbolNameLower).item.getName(ParseMode.BrighterScript)),
+                            range: symbol.range,
                             file: file
                         });
                     }
@@ -785,7 +785,6 @@ export class Scope {
             }
         }
     }
-
 
     /**
      * Detect calls to functions that are not defined in this scope
@@ -804,10 +803,10 @@ export class Scope {
                 }
 
                 //find a local variable with this name
-                const localVar = file.getLocalVarsAtPosition(expCall.nameRange.start).find(x => x.lowerName === lowerName);
+                const localSymbol = file.getFunctionExpressionAtPosition(expCall.nameRange.start)?.symbolTable.getSymbol(lowerName);
 
                 //if we don't already have a variable with this name.
-                if (!localVar) {
+                if (!localSymbol) {
                     const callablesWithThisName = util.getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName, expCall);
 
                     //use the first item from callablesByLowerName, because if there are more, that's a separate error

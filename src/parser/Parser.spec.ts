@@ -7,7 +7,7 @@ import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement 
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils/reflection';
-import { expectZeroDiagnostics } from '../testHelpers.spec';
+import { expectSymbolTableEquals, expectZeroDiagnostics } from '../testHelpers.spec';
 import { VoidType } from '../types/VoidType';
 import { FunctionType } from '../types/FunctionType';
 import { StringType } from '../types/StringType';
@@ -16,6 +16,8 @@ import { IntegerType } from '../types/IntegerType';
 import { ObjectType } from '../types/ObjectType';
 import { LazyType } from '../types/LazyType';
 import { SymbolTable } from '../SymbolTable';
+import { DynamicType } from '../types/DynamicType';
+import util from '../util';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -38,8 +40,9 @@ describe('parser', () => {
                     humansAreAlive = false
                 end sub
             `);
-            let vars = parser.references.localVars.get(parser.references.functionStatements[0].func);
-            expect(vars.map(x => x.nameToken.text).sort()).to.eql([
+            expect(
+                parser.references.functionExpressions[0].symbolTable.ownSymbols.map(x => x.name).sort()
+            ).to.eql([
                 'herd',
                 'humansAreAlive',
                 'i',
@@ -48,8 +51,9 @@ describe('parser', () => {
                 'zombie'
             ]);
             parser.invalidateReferences();
-            vars = parser.references.localVars.get(parser.references.functionStatements[0].func);
-            expect(vars.map(x => x.nameToken.text).sort()).to.eql([
+            expect(
+                parser.references.functionExpressions[0].symbolTable.ownSymbols.map(x => x.name).sort()
+            ).to.eql([
                 'herd',
                 'humansAreAlive',
                 'i',
@@ -71,7 +75,7 @@ describe('parser', () => {
             `);
             parser.invalidateReferences();
             expect(
-                parser.references.localVars.get(parser.references.functionExpressions[0]).map(x => x.nameToken.text)
+                parser.references.functionExpressions[0].symbolTable.ownSymbols.map(x => x.name)
             ).to.eql([
                 'outerName',
                 'speak',
@@ -79,7 +83,7 @@ describe('parser', () => {
             ]);
 
             expect(
-                parser.references.localVars.get(parser.references.functionExpressions[1]).map(x => x.nameToken.text)
+                parser.references.functionExpressions[1].symbolTable.ownSymbols.map(x => x.name)
             ).to.eql([
                 'innerName'
             ]);
@@ -1231,6 +1235,19 @@ describe('parser', () => {
             expectZeroDiagnostics(parser.diagnostics);
             const addOneSymbolTable = parser.references.functionExpressions[0].childFunctionExpressions[0].symbolTable;
             expect(addOneSymbolTable.getSymbolType('oldVal').toString()).to.eq('uninitialized');
+        });
+
+        it('finds params', () => {
+            const parser = parse(`
+                sub alert(p1, p2 as string, p3 = 1)
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(parser.diagnostics);
+            expectSymbolTableEquals(parser.references.functionExpressions[0].symbolTable, [
+                ['p1', new DynamicType(), util.createRange(1, 26, 1, 28)],
+                ['p2', new StringType(), util.createRange(1, 30, 1, 32)],
+                ['p3', new IntegerType(), util.createRange(1, 44, 1, 46)]
+            ]);
         });
 
         describe('loops', () => {

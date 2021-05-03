@@ -646,16 +646,16 @@ export class BrsFile {
             result.push(...KeywordCompletions);
 
             //include local variables
-            let localVars = this.parser.references.localVars.get(functionExpression);
-
-            for (let localVar of localVars) {
+            for (let symbol of functionExpression.symbolTable.ownSymbols) {
+                const symbolNameLower = symbol.name.toLowerCase();
                 //skip duplicate variable names
-                if (names[localVar.lowerName]) {
+                if (names[symbolNameLower]) {
                     continue;
                 }
-                names[localVar.lowerName] = true;
+                names[symbolNameLower] = true;
                 result.push({
-                    label: localVar.nameToken.text,
+                    //TODO does this work?
+                    label: symbol.name,
                     //TODO find type for local vars
                     kind: CompletionItemKind.Variable
                     // kind: isFunctionType(variable.type) ? CompletionItemKind.Function : CompletionItemKind.Variable
@@ -1173,13 +1173,12 @@ export class BrsFile {
 
         const func = this.getFunctionExpressionAtPosition(position);
         //look through local variables first
-        const localVars = this.getLocalVarsAtPosition(position, func);
         //find any variable with this name
-        for (const localVar of localVars) {
+        for (const symbol of func.symbolTable.ownSymbols) {
             //we found a variable declaration with this token text
-            if (localVar.lowerName === textToSearchFor) {
+            if (symbol.name.toLowerCase() === textToSearchFor) {
                 const uri = util.pathToUri(this.pathAbsolute);
-                results.push(Location.create(uri, localVar.nameToken.range));
+                results.push(Location.create(uri, symbol.range));
             }
         }
         if (this.tokenFollows(token, TokenKind.Goto)) {
@@ -1222,17 +1221,6 @@ export class BrsFile {
             }
         }
         return results;
-    }
-
-    /**
-     * Get local variables at the given position.
-     * Will return empty array if none are found or if position is outside function boundaries
-     */
-    public getLocalVarsAtPosition(position: Position, func?: FunctionExpression) {
-        if (!func) {
-            func = this.getFunctionExpressionAtPosition(position);
-        }
-        return this.parser.references.localVars.get(func) ?? [];
     }
 
     public getClassMemberDefinitions(textToSearchFor: string, file: BrsFile): Location[] {

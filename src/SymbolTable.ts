@@ -9,12 +9,22 @@ import { UninitializedType } from './types/UninitializedType';
  * Can be part of a hierarchy, so lookups can reference parent scopes
  */
 export class SymbolTable {
-
-    private symbols = new Map<string, BscSymbol[]>();
-
     constructor(
         private parent?: SymbolTable | undefined
     ) { }
+
+    /**
+     * The map of symbols declared directly in this SymbolTable (excludes parent SymbolTable).
+     * Indexed by lower symbol name
+     */
+    private symbolMap = new Map<string, BscSymbol[]>();
+
+    /**
+     * Get list of symbols declared directly in this SymbolTable (excludes parent SymbolTable).
+     */
+    public get ownSymbols(): BscSymbol[] {
+        return [].concat(...this.symbolMap.values());
+    }
 
     /**
      * Sets the parent table for lookups
@@ -30,11 +40,16 @@ export class SymbolTable {
      * If the identifier is not in this table, it will check the parent
      *
      * @param name the name to lookup
+     * @param searchParent should we look to our parent if we don't have the symbol?
      * @returns true if this symbol is in the symbol table
      */
-    hasSymbol(name: string): boolean {
+    hasSymbol(name: string, searchParent = true): boolean {
         const key = name.toLowerCase();
-        return !!(this.symbols.has(key) || this.parent?.hasSymbol(key));
+        let result = this.symbolMap.has(key);
+        if (!result && searchParent) {
+            result = !!this.parent?.hasSymbol(key);
+        }
+        return result;
     }
 
     /**
@@ -42,11 +57,16 @@ export class SymbolTable {
      * If the identifier is not in this table, it will check the parent
      *
      * @param  name the name to lookup
+     * @param searchParent should we look to our parent if we don't have the symbol?
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
-    getSymbol(name: string): BscSymbol[] {
+    getSymbol(name: string, searchParent = true): BscSymbol[] {
         const key = name.toLowerCase();
-        return this.symbols.get(key) ?? this.parent?.getSymbol(key);
+        let result = this.symbolMap.get(key);
+        if (!result && searchParent) {
+            result = this.parent?.getSymbol(key);
+        }
+        return result;
     }
 
     /**
@@ -56,10 +76,10 @@ export class SymbolTable {
      */
     addSymbol(name: string, range: Range, type: BscType) {
         const key = name.toLowerCase();
-        if (!this.symbols.has(key)) {
-            this.symbols.set(key, []);
+        if (!this.symbolMap.has(key)) {
+            this.symbolMap.set(key, []);
         }
-        this.symbols.get(key).push({
+        this.symbolMap.get(key).push({
             name: name,
             range: range,
             type: type
@@ -69,11 +89,12 @@ export class SymbolTable {
     /**
      * Gets the type for a symbol
      * @param name the name of the symbol to get the type for
+     * @param searchParent should we look to our parent if we don't have the symbol?
      * @returns The type, if found. If the type has ever changed, return DynamicType. If not found, returns UninitializedType
      */
-    getSymbolType(name: string): BscType {
+    getSymbolType(name: string, searchParent = true): BscType {
         const key = name.toLowerCase();
-        const symbols = this.symbols.get(key);
+        const symbols = this.symbolMap.get(key);
         if (symbols?.length > 1) {
             //Check if each time it was set, it was set to the same type
             // TODO handle union types
@@ -89,8 +110,11 @@ export class SymbolTable {
         } else if (symbols?.length === 1) {
             return symbols[0].type;
         }
-
-        return this.parent?.getSymbolType(name) ?? new UninitializedType();
+        if (searchParent) {
+            return this.parent?.getSymbolType(name) ?? new UninitializedType();
+        } else {
+            return new UninitializedType();
+        }
     }
 
     /**
@@ -99,7 +123,7 @@ export class SymbolTable {
      * @param symbolTable
      */
     mergeSymbolTable(symbolTable: SymbolTable) {
-        for (let [, value] of symbolTable.symbols) {
+        for (let [, value] of symbolTable.symbolMap) {
             for (const symbol of value) {
                 this.addSymbol(
                     symbol.name,

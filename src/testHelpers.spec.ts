@@ -1,6 +1,6 @@
 import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
-import type { Diagnostic } from 'vscode-languageserver';
+import type { Diagnostic, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from 'chai';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -9,6 +9,8 @@ import { codeActionUtil } from './CodeActionUtil';
 import { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
 import { standardizePath as s } from './util';
+import type { SymbolTable } from './SymbolTable';
+import type { BscType } from './types/BscType';
 
 /**
  * Trim leading whitespace for every line (to make test writing cleaner
@@ -148,4 +150,23 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
         expect(trimMap(sources[0])).to.equal(sources[1]);
         return transpiled;
     };
+}
+
+export function expectSymbolTableEquals(symbolTable: SymbolTable, expected: [string, BscType, Range][]) {
+    const ownSymbols = symbolTable.ownSymbols.sort((a, b) => {
+        return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    });
+    expect(ownSymbols).to.be.length(expected.length);
+    expect(
+        ownSymbols.map(x => ({
+            ...x,
+            type: x.type.toString()
+        }))
+    ).to.eql(
+        expected.map(x => ({
+            name: x[0],
+            type: x[1].toString(),
+            range: x[2]
+        }))
+    );
 }

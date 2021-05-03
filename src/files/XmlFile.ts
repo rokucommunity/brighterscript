@@ -420,11 +420,6 @@ export class XmlFile {
         return null;
     }
 
-    public getLocalVarsAtPosition(position: Position) {
-        //TODO implement
-        return [];
-    }
-
     /**
      * Walk up the ancestor chain and aggregate all of the script tag imports
      */

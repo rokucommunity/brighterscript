@@ -541,22 +541,11 @@ export class Parser {
      */
     private callExpressions = [];
 
-    /**
-     * A stack of VariableExpression arrays for the current FunctionExpression
-     */
-    private functionLocalVarLists = [] as Array<LocalVarEntry[]>;
-    private get currentFunctionLocalVars() {
-        return this.functionLocalVarLists[this.functionLocalVarLists.length - 1];
-    }
-
     private functionDeclaration(isAnonymous: true, checkIdentifier?: boolean): FunctionExpression;
     private functionDeclaration(isAnonymous: false, checkIdentifier?: boolean): FunctionStatement;
     private functionDeclaration(isAnonymous: boolean, checkIdentifier = true) {
         let previousCallExpressions = this.callExpressions;
         this.callExpressions = [];
-
-        //start a new array of function variables for this FunctionExpression
-        this.functionLocalVarLists.push([]);
 
         try {
             //track depth to help certain statements need to know if they are contained within a function body
@@ -703,9 +692,6 @@ export class Parser {
             let previousFunctionExpression = this.currentFunctionExpression;
             this.currentFunctionExpression = func;
 
-            //register new _references array for this function's local vars
-            this._references.localVars.set(func, this.currentFunctionLocalVars);
-
             //make sure to restore the currentFunctionExpression even if the body block fails to parse
             try {
                 //support ending the function with `end sub` OR `end function`
@@ -748,8 +734,6 @@ export class Parser {
             this.namespaceAndFunctionDepth--;
             //restore the previous CallExpression list
             this.callExpressions = previousCallExpressions;
-            //restore the previous function local var list
-            this.functionLocalVarLists.pop();
         }
     }
 
@@ -796,14 +780,18 @@ export class Parser {
             }
         }
 
-        this.currentFunctionLocalVars?.push({
-            lowerName: name.text.toLowerCase(),
-            nameToken: name,
-            type: util.tokenToBscType(typeToken)
-        });
+        let type: BscType;
 
+        if (typeToken) {
+            type = util.tokenToBscType(typeToken);
+        } else if (defaultValue) {
+            type = getBscTypeFromExpression(defaultValue, this.currentFunctionExpression);
+        } else {
+            type = new DynamicType();
+        }
         return new FunctionParameterExpression(
             name,
+            type,
             equalsToken,
             defaultValue,
             asToken,
@@ -841,11 +829,6 @@ export class Parser {
         this._references.assignmentStatements.push(result);
         const assignmentType = getBscTypeFromExpression(result.value, this.currentFunctionExpression);
 
-        this.currentFunctionLocalVars?.push({
-            lowerName: name.text.toLowerCase(),
-            nameToken: name,
-            type: assignmentType
-        });
         this.currentSymbolTable.addSymbol(name.text, name.range, assignmentType);
         return result;
     }
@@ -1079,11 +1062,6 @@ export class Parser {
         //TODO infer type from `target`
         const itemType = new DynamicType();
 
-        this.currentFunctionLocalVars?.push({
-            lowerName: name.text.toLowerCase(),
-            nameToken: name,
-            type: itemType
-        });
         this.currentSymbolTable.addSymbol(name.text, name.range, itemType);
 
         return new ForEachStatement(
@@ -2684,11 +2662,6 @@ export class Parser {
         let visitor = createVisitor({
             AssignmentStatement: s => {
                 this._references.assignmentStatements.push(s);
-                this._references.localVars.get(func)?.push({
-                    nameToken: s.name,
-                    lowerName: s.name.text.toLowerCase(),
-                    type: getBscTypeFromExpression(s.value, func)
-                });
             },
             FunctionExpression: (expression, parent) => {
                 if (!isClassMethodStatement(parent)) {
@@ -2706,14 +2679,6 @@ export class Parser {
             },
             DottedSetStatement: e => {
                 this.addPropertyHints(e.name);
-            },
-            ForEachStatement: s => {
-                this._references.localVars.get(func)?.push({
-                    nameToken: s.item,
-                    lowerName: s.item.text.toLowerCase(),
-                    //TODO infer type from `target`
-                    type: new DynamicType()
-                });
             }
         });
 
@@ -2721,14 +2686,6 @@ export class Parser {
         for (let i = 0; i < this._references.functionExpressions.length; i++) {
             func = this._references.functionExpressions[i];
 
-            //create the local vars array for this function expression and initialize it with its defined parameters
-            this._references.localVars.set(func, func.parameters.map(x => {
-                return {
-                    nameToken: x.name,
-                    lowerName: x.name.text.toLowerCase(),
-                    type: x.type
-                };
-            }));
             //walk this function expression
             func.body.walk(visitor, {
                 walkMode: WalkMode.visitAll
@@ -2791,10 +2748,6 @@ export class References {
     public namespaceStatements = [] as NamespaceStatement[];
     public newExpressions = [] as NewExpression[];
     public propertyHints = {} as Record<string, string>;
-    /**
-    * Array of local variables for each function expression
-    */
-    localVars = new Map<FunctionExpression, LocalVarEntry[]>();
 }
 
 export interface LocalVarEntry {

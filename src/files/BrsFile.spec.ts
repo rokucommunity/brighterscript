@@ -16,10 +16,10 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectSymbolTableEquals, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
-import { LazyType } from '../types/LazyType';
+import { VoidType } from '../types/VoidType';
 
 let sinon = sinonImport.createSandbox();
 
@@ -1222,7 +1222,7 @@ describe('BrsFile', () => {
                 isOptional: true,
                 isRestArgument: false
             });
-            expect(callable.params[0].type).instanceof(DynamicType);
+            expect(callable.params[0].type).instanceof(IntegerType);
         });
 
         it('finds parameter types', () => {
@@ -1383,20 +1383,18 @@ describe('BrsFile', () => {
                     end sub)
                 end sub
             `);
-            const outerVars = file.parser.references.localVars.get(file.parser.references.functionExpressions[0]);
-            expect(outerVars).to.be.length(1);
-            expect(outerVars[0].lowerName).to.eql('sayhi');
-            expect(outerVars[0].type).to.be.instanceof(FunctionType);
 
-            const sayHiVars = file.parser.references.localVars.get(file.parser.references.functionExpressions[1]);
-            expect(sayHiVars).to.be.length(1);
-            expect(sayHiVars[0].lowerName).to.eql('age');
-            expect(sayHiVars[0].type).to.be.instanceof(IntegerType);
+            expectSymbolTableEquals(file.parser.references.functionExpressions[0].symbolTable, [
+                ['sayHi', new FunctionType(new VoidType(), true), util.createRange(2, 20, 2, 25)]
+            ]);
 
-            const scheduleJobVars = file.parser.references.localVars.get(file.parser.references.functionExpressions[2]);
-            expect(scheduleJobVars).to.be.length(1);
-            expect(scheduleJobVars[0].lowerName).to.eql('name');
-            expect(scheduleJobVars[0].type).to.be.instanceof(StringType);
+            expectSymbolTableEquals(file.parser.references.functionExpressions[1].symbolTable, [
+                ['age', new IntegerType(), util.createRange(3, 24, 3, 27)]
+            ]);
+
+            expectSymbolTableEquals(file.parser.references.functionExpressions[2].symbolTable, [
+                ['name', new StringType(), util.createRange(7, 24, 7, 28)]
+            ]);
         });
 
         it('finds variable declarations inside of if statements', () => {
@@ -1407,9 +1405,9 @@ describe('BrsFile', () => {
                     end if
                 end sub
             `);
-            let localVars = file.getLocalVarsAtPosition(util.createPosition(3, 0));
-            expect(localVars[0].lowerName).to.eql('thelength');
-            expect(localVars[0].type).to.be.instanceof(IntegerType);
+            expectSymbolTableEquals(file.parser.references.functionExpressions[0].symbolTable, [
+                ['theLength', new IntegerType(), util.createRange(3, 24, 3, 33)]
+            ]);
         });
 
         it('finds value from global return', () => {
@@ -1423,10 +1421,9 @@ describe('BrsFile', () => {
                 end function
             `);
 
-            const localVars = file.parser.references.localVars.get(file.parser.references.functionExpressions[0]);
-            expect(localVars[0].lowerName).to.eql('myname');
-            expect(localVars[0].type).to.be.instanceof(LazyType);
-            expect((localVars[0].type as LazyType).type).to.be.instanceof(StringType);
+            expectSymbolTableEquals(file.parser.references.functionExpressions[0].symbolTable, [
+                ['myName', new StringType(), util.createRange(2, 19, 2, 25)]
+            ]);
         });
 
         it('finds variable type from other variable', () => {
@@ -1437,10 +1434,10 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            const localVars = file.parser.references.localVars.get(file.parser.references.functionExpressions[0]);
-            expect(localVars).to.be.lengthOf(2);
-            expect(localVars[1].lowerName).to.eql('namecopy');
-            expect(localVars[1].type).to.be.instanceof(StringType);
+            expectSymbolTableEquals(file.parser.references.functionExpressions[0].symbolTable, [
+                ['name', new StringType(), util.createRange(2, 19, 2, 23)],
+                ['nameCopy', new StringType(), util.createRange(3, 19, 3, 27)]
+            ]);
         });
 
         it('sets proper range for functions', () => {
@@ -1508,7 +1505,7 @@ describe('BrsFile', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(1, 25, 1, 29));
-            expect(hover.contents).to.equal('function Main(count? as dynamic) as dynamic');
+            expect(hover.contents).to.equal('function Main(count? as integer) as dynamic');
         });
 
         it('finds variable function hover in same scope', () => {
