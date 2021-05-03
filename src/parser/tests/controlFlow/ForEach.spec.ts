@@ -28,7 +28,7 @@ describe('parser foreach loops', () => {
         let forEach = statements[0] as any;
         expect(forEach).to.be.instanceof(ForEachStatement);
 
-        expect(forEach.item.text).to.eql('word');
+        expect(forEach.tokens.item.text).to.eql('word');
         expect(forEach.target).to.be.instanceof(VariableExpression);
         expect(forEach.target.name).to.deep.include(identifier('lipsum'));
     });

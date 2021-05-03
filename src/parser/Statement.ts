@@ -135,26 +135,37 @@ export class Body extends Statement implements TypedefProvider {
 
 export class AssignmentStatement extends Statement {
     constructor(
-        readonly name: Identifier,
-        readonly equals: Token,
+        nameToken: Identifier,
+        equalsToken: Token,
         readonly value: Expression,
         readonly containingFunction: FunctionExpression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.name.range.start, this.value.range.end);
+        this.tokens.name = nameToken;
+        this.tokens.equals = equalsToken;
+        this.range = util.createRangeFromPositions(this.tokens.name.range.start, this.value.range.end);
     }
+
+    public get name() {
+        return this.tokens.name.text;
+    }
+
+    public tokens = {} as {
+        name: Identifier;
+        equals: Token;
+    };
 
     public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
         //if the value is a compound assignment, just transpile the expression itself
-        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.operator?.kind)) {
+        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.tokens.operator?.kind)) {
             return this.value.transpile(state);
         } else {
             return [
-                state.transpileToken(this.name),
+                state.transpileToken(this.tokens.name),
                 ' ',
-                state.transpileToken(this.equals),
+                state.transpileToken(this.tokens.equals),
                 ' ',
                 ...this.value.transpile(state)
             ];
@@ -297,15 +308,18 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
 
 export class ExitForStatement extends Statement {
     constructor(
-        readonly tokens: {
-            exitFor: Token;
-        }
+        exitForToken: Token
     ) {
         super();
+        this.tokens.exitFor = exitForToken;
         this.range = this.tokens.exitFor.range;
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        exitFor: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         return [
@@ -321,15 +335,18 @@ export class ExitForStatement extends Statement {
 
 export class ExitWhileStatement extends Statement {
     constructor(
-        readonly tokens: {
-            exitWhile: Token;
-        }
+        exitWhileToken: Token
     ) {
         super();
+        this.tokens.exitWhile = exitWhileToken;
         this.range = this.tokens.exitWhile.range;
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        exitWhile: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         return [
@@ -344,15 +361,29 @@ export class ExitWhileStatement extends Statement {
 
 export class FunctionStatement extends Statement implements TypedefProvider {
     constructor(
-        public name: Identifier,
+        nameToken: Identifier,
         public func: FunctionExpression,
         public namespaceName: NamespacedVariableNameExpression
     ) {
         super();
-        this.range = this.func.range;
+        this.tokens.name = nameToken;
     }
 
-    public readonly range: Range;
+    public get range() {
+        return util.createBoundingRange(
+            this.func?.tokens.beginKeyword,
+            this.tokens.name,
+            this.func
+        );
+    }
+
+    public get name() {
+        return this.tokens.name?.text;
+    }
+
+    public tokens = {} as {
+        name: Identifier;
+    };
 
     /**
      * Get the name of this expression based on the parse mode
@@ -361,9 +392,9 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         if (this.namespaceName) {
             let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
             let namespaceName = this.namespaceName.getName(parseMode);
-            return namespaceName + delimiter + this.name.text;
+            return namespaceName + delimiter + this.name;
         } else {
-            return this.name.text;
+            return this.name;
         }
     }
 
@@ -371,7 +402,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
     transpile(state: BrsTranspileState) {
         //create a fake token using the full transpiled name
         let nameToken = {
-            ...this.name,
+            ...this.tokens.name,
             text: this.getName(ParseMode.BrightScript)
         };
 
@@ -389,7 +420,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         }
 
         result.push(
-            ...this.func.getTypedef(state, this.name)
+            ...this.func.getTypedef(state, this.tokens.name)
         );
         return result;
     }
@@ -403,24 +434,34 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 
 export class IfStatement extends Statement {
     constructor(
-        readonly tokens: {
-            if: Token;
-            then?: Token;
-            else?: Token;
-            endIf?: Token;
-        },
-        readonly condition: Expression,
-        readonly thenBranch: Block,
+        ifToken: Token,
+        public condition: Expression,
+        thenToken?: Token,
+        public thenBranch?: Block,
+        elseToken?: Token,
         readonly elseBranch?: IfStatement | Block,
+        endIfToken?: Token,
         readonly isInline?: boolean
     ) {
         super();
+        this.tokens.if = ifToken;
+        this.tokens.then = thenToken;
+        this.tokens.else = elseToken;
+        this.tokens.endIf = endIfToken;
         this.range = util.createRangeFromPositions(
             this.tokens.if.range.start,
             (this.tokens.endIf ?? this.elseBranch ?? this.thenBranch).range.end
         );
     }
+
     public readonly range: Range;
+
+    public tokens = {} as {
+        if: Token;
+        then?: Token;
+        else?: Token;
+        endIf?: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         let results = [];
@@ -514,19 +555,24 @@ export class IfStatement extends Statement {
 
 export class IncrementStatement extends Statement {
     constructor(
-        readonly value: Expression,
-        readonly operator: Token
+        public value: Expression,
+        operatorToken: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.value.range.start, this.operator.range.end);
+        this.tokens.operator = operatorToken;
+        this.range = util.createRangeFromPositions(this.value.range.start, this.tokens.operator.range.end);
     }
 
     public readonly range: Range;
 
+    public tokens = {} as {
+        operator: Token;
+    };
+
     transpile(state: BrsTranspileState) {
         return [
             ...this.value.transpile(state),
-            state.transpileToken(this.operator)
+            state.transpileToken(this.tokens.operator)
         ];
     }
 
@@ -557,12 +603,11 @@ export class PrintStatement extends Statement {
      *                    evaluated and printed.
      */
     constructor(
-        readonly tokens: {
-            print: Token;
-        },
+        printToken: Token,
         readonly expressions: Array<Expression | PrintSeparatorTab | PrintSeparatorSpace>
     ) {
         super();
+        this.tokens.print = printToken;
         this.range = util.createRangeFromPositions(
             this.tokens.print.range.start,
             this.expressions.length
@@ -572,6 +617,10 @@ export class PrintStatement extends Statement {
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        print: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         let result = [
@@ -609,26 +658,37 @@ export class PrintStatement extends Statement {
 
 export class DimStatement extends Statement {
     constructor(
-        public dimToken: Token,
-        public identifier?: Identifier,
-        public openingSquare?: Token,
+        dimToken: Token,
+        identifier?: Identifier,
+        openingSquare?: Token,
         public dimensions?: Expression[],
-        public closingSquare?: Token
+        closingSquare?: Token
     ) {
         super();
+        this.tokens.dim = dimToken;
+        this.tokens.identifier = identifier;
+        this.tokens.openingSquare = openingSquare;
+        this.tokens.closingSquare = closingSquare;
         this.range = util.createRangeFromPositions(
-            this.dimToken.range.start,
-            (this.closingSquare ?? this.dimensions[this.dimensions.length - 1] ?? this.openingSquare ?? this.identifier ?? this.dimToken).range.end
+            this.tokens.dim.range.start,
+            (this.tokens.closingSquare ?? this.dimensions[this.dimensions.length - 1] ?? this.tokens.openingSquare ?? this.tokens.identifier ?? this.tokens.dim).range.end
         );
     }
     public range: Range;
 
+    public tokens = {} as {
+        dim: Token;
+        identifier: Token;
+        openingSquare: Token;
+        closingSquare: Token;
+    };
+
     public transpile(state: BrsTranspileState) {
         let result = [
-            state.transpileToken(this.dimToken),
+            state.transpileToken(this.tokens.dim),
             ' ',
-            state.transpileToken(this.identifier),
-            state.transpileToken(this.openingSquare)
+            state.transpileToken(this.tokens.identifier),
+            state.transpileToken(this.tokens.openingSquare)
         ];
         for (let i = 0; i < this.dimensions.length; i++) {
             if (i > 0) {
@@ -638,7 +698,7 @@ export class DimStatement extends Statement {
                 ...this.dimensions[i].transpile(state)
             );
         }
-        result.push(state.transpileToken(this.closingSquare));
+        result.push(state.transpileToken(this.tokens.closingSquare));
         return result;
     }
 
@@ -653,16 +713,21 @@ export class DimStatement extends Statement {
 
 export class GotoStatement extends Statement {
     constructor(
-        readonly tokens: {
-            goto: Token;
-            label: Token;
-        }
+        gotoToken: Token,
+        labelToken: Token
     ) {
         super();
+        this.tokens.goto = gotoToken;
+        this.tokens.label = labelToken;
         this.range = util.createRangeFromPositions(this.tokens.goto.range.start, this.tokens.label.range.end);
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        goto: Token;
+        label: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         return [
@@ -679,16 +744,21 @@ export class GotoStatement extends Statement {
 
 export class LabelStatement extends Statement {
     constructor(
-        readonly tokens: {
-            identifier: Token;
-            colon: Token;
-        }
+        identifierTokens: Token,
+        colonTokens: Token
     ) {
         super();
+        this.tokens.identifier = identifierTokens;
+        this.tokens.colon = colonTokens;
         this.range = util.createRangeFromPositions(this.tokens.identifier.range.start, this.tokens.colon.range.end);
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        identifier: Token;
+        colon: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         return [
@@ -705,12 +775,11 @@ export class LabelStatement extends Statement {
 
 export class ReturnStatement extends Statement {
     constructor(
-        readonly tokens: {
-            return: Token;
-        },
+        returnToken: Token,
         readonly value?: Expression
     ) {
         super();
+        this.tokens.return = returnToken;
         this.range = util.createRangeFromPositions(
             this.tokens.return.range.start,
             this.value?.range.end || this.tokens.return.range.end
@@ -718,6 +787,10 @@ export class ReturnStatement extends Statement {
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        return: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         let result = [];
@@ -740,15 +813,18 @@ export class ReturnStatement extends Statement {
 
 export class EndStatement extends Statement {
     constructor(
-        readonly tokens: {
-            end: Token;
-        }
+        endToken: Token
     ) {
         super();
+        this.tokens.end = endToken;
         this.range = util.createRangeFromPositions(this.tokens.end.range.start, this.tokens.end.range.end);
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        end: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         return [
@@ -763,15 +839,18 @@ export class EndStatement extends Statement {
 
 export class StopStatement extends Statement {
     constructor(
-        readonly tokens: {
-            stop: Token;
-        }
+        stopToken: Token
     ) {
         super();
+        this.tokens.stop = stopToken;
         this.range = util.createRangeFromPositions(this.tokens.stop.range.start, this.tokens.stop.range.end);
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        stop: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         return [
@@ -786,27 +865,38 @@ export class StopStatement extends Statement {
 
 export class ForStatement extends Statement {
     constructor(
-        public forToken: Token,
+        forToken: Token,
         public counterDeclaration: AssignmentStatement,
-        public toToken: Token,
+        toToken: Token,
         public finalValue: Expression,
         public body: Block,
-        public endForToken: Token,
-        public stepToken?: Token,
+        endForToken: Token,
+        stepToken?: Token,
         public increment?: Expression
     ) {
         super();
-        const lastRange = this.endForToken?.range ?? body.range;
-        this.range = util.createRangeFromPositions(this.forToken.range.start, lastRange.end);
+        this.tokens.for = forToken;
+        this.tokens.to = toToken;
+        this.tokens.endFor = endForToken;
+        this.tokens.step = stepToken;
+        const lastRange = this.tokens.endFor?.range ?? body.range;
+        this.range = util.createRangeFromPositions(this.tokens.for.range.start, lastRange.end);
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        for: Token;
+        to: Token;
+        endFor: Token;
+        step: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         let result = [];
         //for
         result.push(
-            state.transpileToken(this.forToken),
+            state.transpileToken(this.tokens.for),
             ' '
         );
         //i=1
@@ -816,16 +906,16 @@ export class ForStatement extends Statement {
         );
         //to
         result.push(
-            state.transpileToken(this.toToken),
+            state.transpileToken(this.tokens.to),
             ' '
         );
         //final value
         result.push(this.finalValue.transpile(state));
         //step
-        if (this.stepToken) {
+        if (this.tokens.step) {
             result.push(
                 ' ',
-                state.transpileToken(this.stepToken),
+                state.transpileToken(this.tokens.step),
                 ' ',
                 this.increment.transpile(state)
             );
@@ -840,7 +930,7 @@ export class ForStatement extends Statement {
         //end for
         result.push(
             state.indent(),
-            state.transpileToken(this.endForToken)
+            state.transpileToken(this.tokens.endFor)
         );
 
         return result;
@@ -862,37 +952,48 @@ export class ForStatement extends Statement {
 
 export class ForEachStatement extends Statement {
     constructor(
-        public forEachToken: Token,
-        public item: Identifier,
-        public inToken: Token,
+        forEachToken: Token,
+        itemToken: Identifier,
+        inToken: Token,
         public target: Expression,
         public body: Block,
-        public endForToken: Token
+        endForToken: Token
     ) {
         super();
+        this.tokens.forEach = forEachToken;
+        this.tokens.item = itemToken;
+        this.tokens.in = inToken;
+        this.tokens.endFor = endForToken;
         this.range = util.createRangeFromPositions(
-            this.forEachToken.range.start,
-            (this.endForToken ?? this.body ?? this.target ?? this.inToken ?? this.item ?? this.forEachToken).range.end
+            this.tokens.forEach.range.start,
+            (this.tokens.endFor ?? this.body ?? this.target ?? this.tokens.in ?? this.tokens.item ?? this.tokens.forEach).range.end
         );
     }
 
     public readonly range: Range;
 
+    public tokens = {} as {
+        forEach: Token;
+        item: Identifier;
+        in: Token;
+        endFor: Token;
+    };
+
     transpile(state: BrsTranspileState) {
         let result = [];
         //for each
         result.push(
-            state.transpileToken(this.forEachToken),
+            state.transpileToken(this.tokens.forEach),
             ' '
         );
         //item
         result.push(
-            state.transpileToken(this.item),
+            state.transpileToken(this.tokens.item),
             ' '
         );
         //in
         result.push(
-            state.transpileToken(this.inToken),
+            state.transpileToken(this.tokens.in),
             ' '
         );
         //target
@@ -907,7 +1008,7 @@ export class ForEachStatement extends Statement {
         //end for
         result.push(
             state.indent(),
-            state.transpileToken(this.endForToken)
+            state.transpileToken(this.tokens.endFor)
         );
         return result;
     }
@@ -924,19 +1025,24 @@ export class ForEachStatement extends Statement {
 
 export class WhileStatement extends Statement {
     constructor(
-        readonly tokens: {
-            while: Token;
-            endWhile: Token;
-        },
-        readonly condition: Expression,
-        readonly body: Block
+        whileToken: Token,
+        public condition: Expression,
+        public body: Block,
+        endWhileToken: Token
     ) {
         super();
+        this.tokens.while = whileToken;
+        this.tokens.endWhile = endWhileToken;
         const lastRange = this.tokens.endWhile?.range ?? body.range;
         this.range = util.createRangeFromPositions(this.tokens.while.range.start, lastRange.end);
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        while: Token;
+        endWhile: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         let result = [];
@@ -979,18 +1085,27 @@ export class WhileStatement extends Statement {
 export class DottedSetStatement extends Statement {
     constructor(
         readonly obj: Expression,
-        readonly name: Identifier,
+        nameToken: Identifier,
         readonly value: Expression
     ) {
         super();
+        this.tokens.name = nameToken;
         this.range = util.createRangeFromPositions(this.obj.range.start, this.value.range.end);
     }
 
     public readonly range: Range;
 
+    public tokens = {} as {
+        name: Identifier;
+    };
+
+    public get name() {
+        return this.tokens.name.text;
+    }
+
     transpile(state: BrsTranspileState) {
         //if the value is a compound assignment, don't add the obj, dot, name, or operator...the expression will handle that
-        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.operator?.kind)) {
+        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.tokens.operator?.kind)) {
             return this.value.transpile(state);
         } else {
             return [
@@ -998,7 +1113,7 @@ export class DottedSetStatement extends Statement {
                 ...this.obj.transpile(state),
                 '.',
                 //name
-                state.transpileToken(this.name),
+                state.transpileToken(this.tokens.name),
                 ' = ',
                 //right-hand-side of assignment
                 ...this.value.transpile(state)
@@ -1019,29 +1134,36 @@ export class IndexedSetStatement extends Statement {
         readonly obj: Expression,
         readonly index: Expression,
         readonly value: Expression,
-        readonly openingSquare: Token,
-        readonly closingSquare: Token
+        openingSquareToken: Token,
+        closingSquareToken: Token
     ) {
         super();
+        this.tokens.openingSquare = openingSquareToken;
+        this.tokens.closingSquare = closingSquareToken;
         this.range = util.createRangeFromPositions(this.obj.range.start, this.value.range.end);
     }
 
     public readonly range: Range;
 
+    public tokens = {} as {
+        openingSquare: Token;
+        closingSquare: Token;
+    };
+
     transpile(state: BrsTranspileState) {
         //if the value is a component assignment, don't add the obj, index or operator...the expression will handle that
-        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.operator?.kind)) {
+        if (CompoundAssignmentOperators.includes((this.value as BinaryExpression)?.tokens.operator?.kind)) {
             return this.value.transpile(state);
         } else {
             return [
                 //obj
                 ...this.obj.transpile(state),
                 //   [
-                state.transpileToken(this.openingSquare),
+                state.transpileToken(this.tokens.openingSquare),
                 //    index
                 ...this.index.transpile(state),
                 //         ]
-                state.transpileToken(this.closingSquare),
+                state.transpileToken(this.tokens.closingSquare),
                 //           =
                 ' = ',
                 //             value
@@ -1061,12 +1183,12 @@ export class IndexedSetStatement extends Statement {
 
 export class LibraryStatement extends Statement implements TypedefProvider {
     constructor(
-        readonly tokens: {
-            library: Token;
-            filePath: Token | undefined;
-        }
+        libraryToken: Token,
+        filePathToken?: Token
     ) {
         super();
+        this.tokens.library = libraryToken;
+        this.tokens.filePath = filePathToken;
         this.range = util.createRangeFromPositions(
             this.tokens.library.range.start,
             this.tokens.filePath ? this.tokens.filePath.range.end : this.tokens.library.range.end
@@ -1074,6 +1196,11 @@ export class LibraryStatement extends Statement implements TypedefProvider {
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        library: Token;
+        filePath: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         let result = [];
@@ -1103,29 +1230,36 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     readonly symbolTable: SymbolTable;
 
     constructor(
-        public keyword: Token,
+        namespaceToken: Token,
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
         public nameExpression: NamespacedVariableNameExpression,
         public body: Body,
-        public endKeyword: Token,
+        endNamespaceToken: Token,
         readonly parentSymbolTable?: SymbolTable
     ) {
         super();
+        this.tokens.namespace = namespaceToken;
+        this.tokens.endNamespace = endNamespaceToken;
         this.name = this.nameExpression.getName(ParseMode.BrighterScript);
         this.symbolTable = new SymbolTable(parentSymbolTable);
     }
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tokens.namespace.range.start,
+            (this.tokens.endNamespace ?? this.body ?? this.nameExpression ?? this.tokens.namespace).range.end
+        );
+    }
+
+    public tokens = {} as {
+        namespace: Token;
+        endNamespace: Token;
+    };
 
     /**
      * The string name for this namespace
      */
     public name: string;
-
-    public get range() {
-        return util.createRangeFromPositions(
-            this.keyword.range.start,
-            (this.endKeyword ?? this.body ?? this.nameExpression ?? this.keyword).range.end
-        );
-    }
 
     public getName(parseMode: ParseMode) {
         return this.nameExpression.getName(parseMode);
@@ -1167,37 +1301,38 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
 
 export class ImportStatement extends Statement implements TypedefProvider {
     constructor(
-        readonly importToken: Token,
-        readonly filePathToken: Token
+        importToken: Token,
+        filePathToken: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            importToken.range.start,
-            (filePathToken ?? importToken).range.end
-        );
-        if (this.filePathToken) {
-            //remove quotes
-            this.filePath = this.filePathToken.text.replace(/"/g, '');
-            //adjust the range to exclude the quotes
-            this.filePathToken.range = util.createRange(
-                this.filePathToken.range.start.line,
-                this.filePathToken.range.start.character + 1,
-                this.filePathToken.range.end.line,
-                this.filePathToken.range.end.character - 1
-            );
-        }
+        this.tokens.import = importToken;
+        this.tokens.filePath = filePathToken;
     }
-    public filePath: string;
-    public range: Range;
+
+    public get range() {
+        return util.createRangeFromPositions(
+            this.tokens.import.range.start,
+            (this.tokens.filePath ?? this.tokens.import).range.end
+        );
+    }
+
+    public tokens = {} as {
+        import: Token;
+        filePath: Token;
+    };
+
+    public get filePath() {
+        return util.removeEnclosingQuotes(this.tokens.filePath.text);
+    }
 
     transpile(state: BrsTranspileState) {
         //The xml files are responsible for adding the additional script imports, but
         //add the import statement as a comment just for debugging purposes
         return [
             `'`,
-            state.transpileToken(this.importToken),
+            state.transpileToken(this.tokens.import),
             ' ',
-            state.transpileToken(this.filePathToken)
+            state.transpileToken(this.tokens.filePath)
         ];
     }
 
@@ -1206,10 +1341,10 @@ export class ImportStatement extends Statement implements TypedefProvider {
      */
     public getTypedef(state: BrsTranspileState) {
         return [
-            this.importToken.text,
+            this.tokens.import.text,
             ' ',
             //replace any `.bs` extension with `.brs`
-            this.filePathToken.text.replace(/\.bs"?$/i, '.brs"')
+            this.tokens.filePath.text.replace(/\.bs"?$/i, '.brs"')
         ];
     }
 
@@ -1221,34 +1356,54 @@ export class ImportStatement extends Statement implements TypedefProvider {
 export class ClassStatement extends Statement implements TypedefProvider {
 
     constructor(
-        readonly classKeyword: Token,
+        classToken: Token,
         /**
          * The name of the class (without namespace prefix)
          */
-        readonly name: Identifier,
+        nameToken: Identifier,
         public body: Statement[],
-        readonly end: Token,
-        readonly extendsKeyword?: Token,
+        endToken: Token,
+        extendsToken?: Token,
         readonly parentClassName?: NamespacedVariableNameExpression,
         readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
+        this.tokens.class = classToken;
+        this.tokens.name = nameToken;
+        this.tokens.endClass = endToken;
+        this.tokens.extends = extendsToken;
         this.body = this.body ?? [];
         for (let statement of this.body) {
             if (isClassMethodStatement(statement)) {
                 this.methods.push(statement);
-                this.memberMap[statement?.name?.text.toLowerCase()] = statement;
+                this.memberMap[statement?.name?.toLowerCase()] = statement;
             } else if (isClassFieldStatement(statement)) {
                 this.fields.push(statement);
-                this.memberMap[statement?.name?.text.toLowerCase()] = statement;
+                this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
             }
         }
-
-        this.range = util.createRangeFromPositions(this.classKeyword.range.start, this.end.range.end);
     }
 
+    public get range() {
+        return util.createBoundingRange(
+            this.tokens.class,
+            this.tokens.name,
+            this.tokens.extends,
+            this.parentClassName,
+            this.body[this.body.length - 1],
+            this.tokens.endClass
+        );
+    }
+
+    public tokens = {} as {
+        class: Token;
+        name: Identifier;
+        endClass: Token;
+        extends: Token;
+    };
+
     public getName(parseMode: ParseMode) {
-        const name = this.name?.text;
+        const name = this.tokens.name?.text;
         if (name) {
             if (this.namespaceName) {
                 let namespaceName = this.namespaceName.getName(parseMode);
@@ -1266,9 +1421,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
     public memberMap = {} as Record<string, ClassMemberStatement>;
     public methods = [] as ClassMethodStatement[];
     public fields = [] as ClassFieldStatement[];
-
-
-    public readonly range: Range;
 
     transpile(state: BrsTranspileState) {
         let result = [];
@@ -1294,9 +1446,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
         result.push(
             'class ',
-            this.name.text
+            this.tokens.name.text
         );
-        if (this.extendsKeyword && this.parentClassName) {
+        if (this.tokens.extends && this.parentClassName) {
             const fqName = util.getFullyQualifiedClassName(
                 this.parentClassName.getName(ParseMode.BrighterScript),
                 this.namespaceName?.getName(ParseMode.BrighterScript)
@@ -1385,7 +1537,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     private getConstructorFunction() {
         for (let key in this.memberMap) {
             let member = this.memberMap[key];
-            if (member.name?.text?.toLowerCase() === 'new') {
+            if (member.tokens.name?.text?.toLowerCase() === 'new') {
                 return member as ClassMethodStatement;
             }
         }
@@ -1468,12 +1620,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 //store overridden parent methods as super{parentIndex}_{methodName}
                 if (
                     //is override method
-                    statement.override ||
+                    statement.tokens.override ||
                     //is constructor function in child class
-                    (statement.name.text.toLowerCase() === 'new' && ancestors[0])
+                    (statement.name.toLowerCase() === 'new' && ancestors[0])
                 ) {
                     result.push(
-                        `instance.super${parentClassIndex}_${statement.name.text} = instance.${statement.name.text}`,
+                        `instance.super${parentClassIndex}_${statement.name} = instance.${statement.name}`,
                         state.newline,
                         state.indent()
                     );
@@ -1482,7 +1634,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 state.classStatement = this;
                 result.push(
                     'instance.',
-                    state.transpileToken(statement.name),
+                    state.transpileToken(statement.tokens.name),
                     ' = ',
                     ...statement.transpile(state),
                     state.newline,
@@ -1517,9 +1669,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         const constructorParams = constructorFunction ? constructorFunction.func.parameters : [];
 
         result.push(
-            state.sourceNode(this.classKeyword, 'function'),
-            state.sourceNode(this.classKeyword, ' '),
-            state.sourceNode(this.name, this.getName(ParseMode.BrightScript)),
+            state.sourceNode(this.tokens.class, 'function'),
+            state.sourceNode(this.tokens.class, ' '),
+            state.sourceNode(this.tokens.name, this.getName(ParseMode.BrightScript)),
             `(`
         );
         let i = 0;
@@ -1551,7 +1703,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 result.push(', ');
             }
             result.push(
-                state.transpileToken(param.name)
+                state.transpileToken(param.tokens.name)
             );
             i++;
         }
@@ -1580,22 +1732,29 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
 export class ClassMethodStatement extends FunctionStatement {
     constructor(
-        readonly accessModifier: Token,
-        name: Identifier,
+        accessModifierToken: Token,
+        nameToken: Identifier,
         func: FunctionExpression,
-        readonly override: Token
+        overrideToken: Token
     ) {
-        super(name, func, undefined);
-        this.range = util.createRangeFromPositions(
-            (this.accessModifier ?? this.func).range.start,
-            this.func.range.end
-        );
+        super(nameToken, func, undefined);
+        this.tokens.accessModifier = accessModifierToken;
+        this.tokens.name = nameToken;
+        this.tokens.override = overrideToken;
     }
 
-    public readonly range: Range;
+    public get range() {
+        return this.func.range;
+    }
+
+    public tokens: {
+        accessModifier: Token;
+        name: Identifier;
+        override: Token;
+    };
 
     transpile(state: BrsTranspileState) {
-        if (this.name.text.toLowerCase() === 'new') {
+        if (this.name.toLowerCase() === 'new') {
             this.ensureSuperConstructorCall(state);
             //TODO we need to undo this at the bottom of this method
             this.injectFieldInitializersForConstructor(state);
@@ -1605,16 +1764,16 @@ export class ClassMethodStatement extends FunctionStatement {
         const parentClassIndex = state.classStatement.getParentClassIndex(state);
         const visitor = createVisitor({
             VariableExpression: e => {
-                if (e.name.text.toLocaleLowerCase() === 'super') {
-                    e.name.text = `m.super${parentClassIndex}_new`;
+                if (e.name.toLocaleLowerCase() === 'super') {
+                    e.name = `m.super${parentClassIndex}_new`;
                 }
             },
             DottedGetExpression: e => {
                 const beginningVariable = util.findBeginningVariableExpression(e);
                 const lowerName = beginningVariable?.getName(ParseMode.BrighterScript).toLowerCase();
                 if (lowerName === 'super') {
-                    beginningVariable.name.text = 'm';
-                    e.name.text = `super${parentClassIndex}_${e.name.text}`;
+                    beginningVariable.name = 'm';
+                    e.tokens.name.text = `super${parentClassIndex}_${e.tokens.name.text}`;
                 }
             }
         });
@@ -1635,17 +1794,17 @@ export class ClassMethodStatement extends FunctionStatement {
                 state.indent()
             );
         }
-        if (this.accessModifier) {
+        if (this.tokens.accessModifier) {
             result.push(
-                this.accessModifier.text,
+                this.tokens.accessModifier.text,
                 ' '
             );
         }
-        if (this.override) {
+        if (this.tokens.override) {
             result.push('override ');
         }
         result.push(
-            ...this.func.getTypedef(state, this.name)
+            ...this.func.getTypedef(state, this.tokens.name)
         );
         return result;
     }
@@ -1666,7 +1825,7 @@ export class ClassMethodStatement extends FunctionStatement {
             //is a call statement
             isExpressionStatement(firstStatement) && isCallExpression(firstStatement.expression) &&
             //is a call to super
-            util.findBeginningVariableExpression(firstStatement?.expression.callee as any).name.text.toLowerCase() === 'super'
+            util.findBeginningVariableExpression(firstStatement?.expression.callee as any).name.toLowerCase() === 'super'
         ) {
             return;
         }
@@ -1680,7 +1839,7 @@ export class ClassMethodStatement extends FunctionStatement {
                             kind: TokenKind.Identifier,
                             text: 'super',
                             isReserved: false,
-                            range: state.classStatement.name.range,
+                            range: state.classStatement.tokens.name.range,
                             leadingWhitespace: ''
                         },
                         null
@@ -1689,14 +1848,14 @@ export class ClassMethodStatement extends FunctionStatement {
                         kind: TokenKind.LeftParen,
                         text: '(',
                         isReserved: false,
-                        range: state.classStatement.name.range,
+                        range: state.classStatement.tokens.name.range,
                         leadingWhitespace: ''
                     },
                     {
                         kind: TokenKind.RightParen,
                         text: ')',
                         isReserved: false,
-                        range: state.classStatement.name.range,
+                        range: state.classStatement.tokens.name.range,
                         leadingWhitespace: ''
                     },
                     [],
@@ -1715,19 +1874,19 @@ export class ClassMethodStatement extends FunctionStatement {
         let newStatements = [] as Statement[];
         //insert the field initializers in order
         for (let field of state.classStatement.fields) {
-            let thisQualifiedName = { ...field.name };
-            thisQualifiedName.text = 'm.' + field.name.text;
+            let thisQualifiedName = { ...field.tokens.name };
+            thisQualifiedName.text = 'm.' + field.tokens.name.text;
             if (field.initialValue) {
                 newStatements.push(
-                    new AssignmentStatement(thisQualifiedName, field.equal, field.initialValue, this.func)
+                    new AssignmentStatement(thisQualifiedName, field.tokens.equal, field.initialValue, this.func)
                 );
             } else {
                 //if there is no initial value, set the initial value to `invalid`
                 newStatements.push(
                     new AssignmentStatement(
                         thisQualifiedName,
-                        createToken(TokenKind.Equal, '=', field.name.range),
-                        createInvalidLiteral('invalid', field.name.range),
+                        createToken(TokenKind.Equal, '=', field.tokens.name.range),
+                        createInvalidLiteral('invalid', field.tokens.name.range),
                         this.func
                     )
                 );
@@ -1746,27 +1905,40 @@ export class ClassMethodStatement extends FunctionStatement {
 export class ClassFieldStatement extends Statement implements TypedefProvider {
 
     constructor(
-        readonly accessModifier?: Token,
-        readonly name?: Identifier,
-        readonly as?: Token,
-        readonly type?: Token,
-        readonly equal?: Token,
+        accessModifierToken?: Token,
+        nameToken?: Identifier,
+        asToken?: Token,
+        typeToken?: Token,
+        equalToken?: Token,
         readonly initialValue?: Expression
     ) {
         super();
+        this.tokens.accessModifier = accessModifierToken;
+        this.tokens.name = nameToken;
+        this.tokens.as = asToken;
+        this.tokens.type = typeToken;
+        this.tokens.equal = equalToken;
         this.range = util.createRangeFromPositions(
-            (this.accessModifier ?? this.name).range.start,
-            (this.initialValue ?? this.type ?? this.as ?? this.name).range.end
+            (this.tokens.accessModifier ?? this.tokens.name).range.start,
+            (this.initialValue ?? this.tokens.type ?? this.tokens.as ?? this.tokens.name).range.end
         );
     }
+
+    public tokens = {} as {
+        accessModifier: Token;
+        name: Identifier;
+        as: Token;
+        type: Token;
+        equal: Token;
+    };
 
     /**
      * Derive a ValueKind from the type token, or the initial value.
      * Defaults to `ValueKind.Dynamic`
      */
     getType() {
-        if (this.type) {
-            return util.tokenToBscType(this.type);
+        if (this.tokens.type) {
+            return util.tokenToBscType(this.tokens.type);
         } else if (isLiteralExpression(this.initialValue)) {
             return this.initialValue.type;
         } else {
@@ -1782,7 +1954,7 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
 
     getTypedef(state: BrsTranspileState) {
         const result = [];
-        if (this.name) {
+        if (this.tokens.name) {
             for (let annotation of this.annotations ?? []) {
                 result.push(
                     ...annotation.getTypedef(state),
@@ -1797,9 +1969,9 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
             }
 
             result.push(
-                this.accessModifier?.text ?? 'public',
+                this.tokens.accessModifier?.text ?? 'public',
                 ' ',
-                this.name?.text,
+                this.tokens.name?.text,
                 ' as ',
                 type.toTypeString()
             );
@@ -1817,36 +1989,51 @@ export type ClassMemberStatement = ClassFieldStatement | ClassMethodStatement;
 
 export class TryCatchStatement extends Statement {
     constructor(
-        public tryToken: Token,
+        tryToken: Token,
         public tryBranch?: Block,
-        public catchToken?: Token,
-        public exceptionVariable?: Identifier,
+        catchToken?: Token,
+        exceptionVariableToken?: Identifier,
         public catchBranch?: Block,
-        public endTryToken?: Token
+        endTryToken?: Token
     ) {
         super();
+        this.tokens.try = tryToken;
+        this.tokens.catch = catchToken;
+        this.tokens.exceptionVariable = exceptionVariableToken;
+        this.tokens.endTry = endTryToken;
     }
 
     public get range() {
-        return util.createRangeFromPositions(
-            this.tryToken.range.start,
-            (this.endTryToken ?? this.catchBranch ?? this.exceptionVariable ?? this.catchToken ?? this.tryBranch ?? this.tryToken).range.end
+        return util.createBoundingRange(
+            this.tokens.try,
+            this.tryBranch,
+            this.tokens.catch,
+            this.tokens.exceptionVariable,
+            this.catchBranch,
+            this.tokens.endTry
         );
     }
 
+    public tokens = {} as {
+        try: Token;
+        catch: Token;
+        exceptionVariable: Identifier;
+        endTry: Token;
+    };
+
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
-            state.transpileToken(this.tryToken),
+            state.transpileToken(this.tokens.try),
             ...this.tryBranch.transpile(state),
             state.newline,
             state.indent(),
-            state.transpileToken(this.catchToken),
+            state.transpileToken(this.tokens.catch),
             ' ',
-            state.transpileToken(this.exceptionVariable),
+            state.transpileToken(this.tokens.exceptionVariable),
             ...this.catchBranch.transpile(state),
             state.newline,
             state.indent(),
-            state.transpileToken(this.endTryToken)
+            state.transpileToken(this.tokens.endTry)
         ];
     }
 
@@ -1860,20 +2047,26 @@ export class TryCatchStatement extends Statement {
 
 export class ThrowStatement extends Statement {
     constructor(
-        public throwToken: Token,
+        throwToken: Token,
         public expression?: Expression
     ) {
         super();
+        this.tokens.throw = throwToken;
         this.range = util.createRangeFromPositions(
-            this.throwToken.range.start,
-            (this.expression ?? this.throwToken).range.end
+            this.tokens.throw.range.start,
+            (this.expression ?? this.tokens.throw).range.end
         );
     }
+
     public range: Range;
+
+    public tokens = {} as {
+        throw: Token;
+    };
 
     public transpile(state: BrsTranspileState) {
         const result = [
-            state.transpileToken(this.throwToken),
+            state.transpileToken(this.tokens.throw),
             ' '
         ];
 

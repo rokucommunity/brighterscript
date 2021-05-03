@@ -154,7 +154,7 @@ export class Parser {
         } else {
             for (const member of item.elements) {
                 if (!isCommentStatement(member)) {
-                    const name = member.keyToken.text;
+                    const name = member.tokens.key.text;
                     if (!name.startsWith('"')) {
                         this._references.propertyHints[name.toLowerCase()] = name;
                     }
@@ -425,7 +425,7 @@ export class Parser {
                     const functionStatement = this._references.functionStatements.pop();
 
                     //if we have an overrides keyword AND this method is called 'new', that's not allowed
-                    if (overrideKeyword && funcDeclaration.name.text.toLowerCase() === 'new') {
+                    if (overrideKeyword && funcDeclaration.tokens.name.text.toLowerCase() === 'new') {
                         this.diagnostics.push({
                             ...DiagnosticMessages.cannotUseOverrideKeywordOnConstructorFunction(),
                             range: overrideKeyword.range
@@ -434,7 +434,7 @@ export class Parser {
 
                     decl = new ClassMethodStatement(
                         accessModifier,
-                        funcDeclaration.name,
+                        funcDeclaration.tokens.name,
                         funcDeclaration.func,
                         overrideKeyword
                     );
@@ -643,7 +643,7 @@ export class Parser {
             params.reduce((haveFoundOptional: boolean, param: FunctionParameterExpression) => {
                 if (haveFoundOptional && !param.defaultValue) {
                     this.diagnostics.push({
-                        ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(param.name.text),
+                        ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(param.tokens.name.text),
                         range: param.range
                     });
                 }
@@ -709,14 +709,14 @@ export class Parser {
             }
 
             // consume 'end sub' or 'end function'
-            func.end = this.advance();
+            func.tokens.endKeyword = this.advance();
             let expectedEndKind = isSub ? TokenKind.EndSub : TokenKind.EndFunction;
 
             //if `function` is ended with `end sub`, or `sub` is ended with `end function`, then
             //add an error but don't hard-fail so the AST can continue more gracefully
-            if (func.end.kind !== expectedEndKind) {
+            if (func.tokens.endKeyword.kind !== expectedEndKind) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, func.end.text),
+                    ...DiagnosticMessages.mismatchedEndCallableKeyword(functionTypeText, func.tokens.endKeyword.text),
                     range: this.peek().range
                 });
             }
@@ -963,16 +963,17 @@ export class Parser {
         }
 
         return new WhileStatement(
-            { while: whileKeyword, endWhile: endWhile },
+            whileKeyword,
             condition,
-            whileBlock
+            whileBlock,
+            endWhile
         );
     }
 
     private exitWhile(): ExitWhileStatement {
         let keyword = this.advance();
 
-        return new ExitWhileStatement({ exitWhile: keyword });
+        return new ExitWhileStatement(keyword);
     }
 
     private forStatement(): ForStatement {
@@ -1077,7 +1078,7 @@ export class Parser {
     private exitFor(): ExitForStatement {
         let keyword = this.advance();
 
-        return new ExitForStatement({ exitFor: keyword });
+        return new ExitForStatement(keyword);
     }
 
     private commentStatement() {
@@ -1133,7 +1134,7 @@ export class Parser {
 
         this.namespaceAndFunctionDepth--;
         result.body = body;
-        result.endKeyword = endKeyword;
+        result.tokens.endNamespace = endKeyword;
         this._references.namespaceStatements.push(result);
 
         return result;
@@ -1177,7 +1178,7 @@ export class Parser {
                 }
                 // force it into an identifier so the AST makes some sense
                 identifier.kind = TokenKind.Identifier;
-                expr = new DottedGetExpression(expr, identifier, dot);
+                expr = new DottedGetExpression(expr, dot, identifier);
             }
         }
         return new NamespacedVariableNameExpression(expr);
@@ -1211,14 +1212,15 @@ export class Parser {
     }
 
     private libraryStatement(): LibraryStatement | undefined {
-        let libStatement = new LibraryStatement({
-            library: this.advance(),
+        let libStatement = new LibraryStatement(
+            //library
+            this.advance(),
             //grab the next token only if it's a string
-            filePath: this.tryConsume(
+            this.tryConsume(
                 DiagnosticMessages.expectedStringLiteralAfterKeyword('library'),
                 TokenKind.StringLiteral
             )
-        });
+        );
 
         this._references.libraryStatements.push(libStatement);
         return libStatement;
@@ -1245,7 +1247,7 @@ export class Parser {
         if (identifier) {
             identifier.kind = TokenKind.Identifier;
         }
-        let annotation = new AnnotationExpression(atToken, identifier);
+        let annotation = new AnnotationExpression(atToken, identifier as Identifier);
         this.pendingAnnotations.push(annotation);
 
         //optional arguments
@@ -1395,18 +1397,18 @@ export class Parser {
             });
             //gracefully handle end-try
             if (peek.kind === TokenKind.EndTry) {
-                statement.endTryToken = this.advance();
+                statement.tokens.endTry = this.advance();
             }
             return statement;
         } else {
-            statement.catchToken = this.advance();
+            statement.tokens.catch = this.advance();
         }
 
         const exceptionVarToken = this.tryConsume(DiagnosticMessages.missingExceptionVarToFollowCatch(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
         if (exceptionVarToken) {
             // force it into an identifier so the AST makes some sense
             exceptionVarToken.kind = TokenKind.Identifier;
-            statement.exceptionVariable = exceptionVarToken as Identifier;
+            statement.tokens.exceptionVariable = exceptionVarToken as Identifier;
         }
 
         //ensure statement sepatator
@@ -1420,7 +1422,7 @@ export class Parser {
                 range: this.peek().range
             });
         } else {
-            statement.endTryToken = this.advance();
+            statement.tokens.endTry = this.advance();
         }
         return statement;
     }
@@ -1622,15 +1624,13 @@ export class Parser {
         }
 
         return new IfStatement(
-            {
-                if: ifToken,
-                then: thenToken,
-                endIf: endIfToken,
-                else: elseToken
-            },
+            ifToken,
             condition,
+            thenToken,
             thenBranch,
+            elseToken,
             elseBranch,
+            endIfToken,
             isInlineIfThen
         );
     }
@@ -1781,13 +1781,13 @@ export class Parser {
                     operator.kind === TokenKind.Equal
                         ? right
                         : new BinaryExpression(left, operator, right),
-                    left.openingSquare,
-                    left.closingSquare
+                    left.tokens.openSquare,
+                    left.tokens.closeSquare
                 );
             } else if (isDottedGetExpression(left)) {
                 return new DottedSetStatement(
                     left.obj,
-                    left.name,
+                    left.tokens.name,
                     operator.kind === TokenKind.Equal
                         ? right
                         : new BinaryExpression(left, operator, right)
@@ -1828,7 +1828,7 @@ export class Parser {
             // TODO: error, expected value
         }
 
-        return new PrintStatement({ print: printKeyword }, values);
+        return new PrintStatement(printKeyword, values);
     }
 
     /**
@@ -1836,14 +1836,14 @@ export class Parser {
      * @returns an AST representation of a return statement.
      */
     private returnStatement(): ReturnStatement {
-        let tokens = { return: this.previous() };
+        const returnToken = this.previous();
 
         if (this.checkEndOfStatement()) {
-            return new ReturnStatement(tokens);
+            return new ReturnStatement(returnToken);
         }
 
-        let toReturn = this.check(TokenKind.Else) ? undefined : this.expression();
-        return new ReturnStatement(tokens, toReturn);
+        const toReturn = this.check(TokenKind.Else) ? undefined : this.expression();
+        return new ReturnStatement(returnToken, toReturn);
     }
 
     /**
@@ -1851,10 +1851,8 @@ export class Parser {
      * @returns an AST representation of an `label` statement.
      */
     private labelStatement() {
-        let tokens = {
-            identifier: this.advance(),
-            colon: this.advance()
-        };
+        const identifierToken = this.advance();
+        const colon = this.advance();
 
         //label must be alone on its line, this is probably not a label
         if (!this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
@@ -1863,7 +1861,7 @@ export class Parser {
             throw new CancelStatementError();
         }
 
-        const stmt = new LabelStatement(tokens);
+        const stmt = new LabelStatement(identifierToken, colon);
         this.currentFunctionExpression.labelStatements.push(stmt);
         return stmt;
     }
@@ -1873,15 +1871,13 @@ export class Parser {
      * @returns an AST representation of an `goto` statement.
      */
     private gotoStatement() {
-        let tokens = {
-            goto: this.advance(),
-            label: this.consume(
-                DiagnosticMessages.expectedLabelIdentifierAfterGotoKeyword(),
-                TokenKind.Identifier
-            )
-        };
+        const goto = this.advance();
+        const label = this.consume(
+            DiagnosticMessages.expectedLabelIdentifierAfterGotoKeyword(),
+            TokenKind.Identifier
+        );
 
-        return new GotoStatement(tokens);
+        return new GotoStatement(goto, label);
     }
 
     /**
@@ -1889,18 +1885,18 @@ export class Parser {
      * @returns an AST representation of an `end` statement.
      */
     private endStatement() {
-        let endTokens = { end: this.advance() };
-
-        return new EndStatement(endTokens);
+        return new EndStatement(
+            this.advance()
+        );
     }
     /**
      * Parses a `stop` statement
      * @returns an AST representation of a `stop` statement
      */
     private stopStatement() {
-        let tokens = { stop: this.advance() };
-
-        return new StopStatement(tokens);
+        return new StopStatement(
+            this.advance()
+        );
     }
 
     /**
@@ -2122,7 +2118,7 @@ export class Parser {
             TokenKind.RightSquareBracket
         );
 
-        return new IndexedGetExpression(expr, index, openingSquare, closingSquare);
+        return new IndexedGetExpression(expr, openingSquare, index, closingSquare);
     }
 
     private newExpression() {
@@ -2154,7 +2150,7 @@ export class Parser {
         let openParen = this.consume(DiagnosticMessages.expectedOpenParenToFollowCallfuncIdentifier(), TokenKind.LeftParen);
         let call = this.finishCall(openParen, callee, false);
 
-        return new CallfuncExpression(callee, operator, methodName as Identifier, openParen, call.args, call.closingParen);
+        return new CallfuncExpression(callee, operator, methodName as Identifier, openParen, call.args, call.tokens.closeParen);
     }
 
     private call(): Expression {
@@ -2184,7 +2180,7 @@ export class Parser {
                     // force it into an identifier so the AST makes some sense
                     name.kind = TokenKind.Identifier;
 
-                    expr = new DottedGetExpression(expr, name as Identifier, dot);
+                    expr = new DottedGetExpression(expr, dot, name as Identifier);
                     this.addPropertyHints(name);
                 }
             } else if (this.check(TokenKind.At)) {
@@ -2198,7 +2194,7 @@ export class Parser {
                 // force it into an identifier so the AST makes some sense
                 name.kind = TokenKind.Identifier;
 
-                expr = new XmlAttributeGetExpression(expr, name as Identifier, dot);
+                expr = new XmlAttributeGetExpression(expr, dot, name as Identifier);
                 //only allow a single `@` expression
                 break;
             } else {
@@ -2304,7 +2300,7 @@ export class Parser {
                     DiagnosticMessages.unmatchedLeftParenAfterExpression(),
                     TokenKind.RightParen
                 );
-                return new GroupingExpression({ left: left, right: right }, expr);
+                return new GroupingExpression(left, expr, right);
             case this.match(TokenKind.LeftSquareBracket):
                 let elements: Array<Expression | CommentStatement> = [];
                 let openingSquare = this.previous();
@@ -2675,10 +2671,10 @@ export class Parser {
                 this.addPropertyHints(e);
             },
             DottedGetExpression: e => {
-                this.addPropertyHints(e.name);
+                this.addPropertyHints(e.tokens.name);
             },
             DottedSetStatement: e => {
-                this.addPropertyHints(e.name);
+                this.addPropertyHints(e.tokens.name);
             }
         });
 
@@ -2842,7 +2838,7 @@ export function getTypeFromCallExpression(call: CallExpression, functionExpressi
  * @return the best guess type of that expression
  */
 export function getTypeFromVariableExpression(variable: VariableExpression, functionExpression: FunctionExpression): BscType {
-    let variableName = variable.name.text.toLowerCase();
+    let variableName = variable.name.toLowerCase();
     const currentKnownType = functionExpression.symbolTable.getSymbolType(variableName);
     if (!isUninitializedType(currentKnownType)) {
         return currentKnownType;

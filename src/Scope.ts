@@ -366,9 +366,9 @@ export class Scope {
                 ns.statements.push(...namespace.body.statements);
                 for (let statement of namespace.body.statements) {
                     if (isClassStatement(statement)) {
-                        ns.classStatements[statement.name.text.toLowerCase()] = statement;
+                        ns.classStatements[statement.tokens.name.text.toLowerCase()] = statement;
                     } else if (isFunctionStatement(statement)) {
-                        ns.functionStatements[statement.name.text.toLowerCase()] = statement;
+                        ns.functionStatements[statement.tokens.name.text.toLowerCase()] = statement;
                     }
                 }
                 // Merges all the symbol tables of the namespace statements into the new symbol table created above.
@@ -527,14 +527,14 @@ export class Scope {
         //find all function parameters
         for (let func of file.parser.references.functionExpressions) {
             for (let param of func.parameters) {
-                let lowerParamName = param.name.text.toLowerCase();
+                let lowerParamName = param.tokens.name.text.toLowerCase();
                 let namespace = this.namespaceLookup[lowerParamName];
                 //see if the param matches any starting namespace part
                 if (namespace) {
                     this.diagnostics.push({
                         file: file,
-                        ...DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace(param.name.text),
-                        range: param.name.range,
+                        ...DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace(param.tokens.name.text),
+                        range: param.tokens.name.range,
                         relatedInformation: [{
                             message: 'Namespace declared here',
                             location: Location.create(
@@ -548,14 +548,14 @@ export class Scope {
         }
 
         for (let assignment of file.parser.references.assignmentStatements) {
-            let lowerAssignmentName = assignment.name.text.toLowerCase();
+            let lowerAssignmentName = assignment.tokens.name.text.toLowerCase();
             let namespace = this.namespaceLookup[lowerAssignmentName];
             //see if the param matches any starting namespace part
             if (namespace) {
                 this.diagnostics.push({
                     file: file,
-                    ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace(assignment.name.text),
-                    range: assignment.name.range,
+                    ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace(assignment.tokens.name.text),
+                    range: assignment.tokens.name.range,
                     relatedInformation: [{
                         message: 'Namespace declared here',
                         location: Location.create(
@@ -603,27 +603,27 @@ export class Scope {
     */
     private diagnosticDetectInvalidFunctionExpressionTypes(file: BrsFile) {
         for (let func of file.parser.references.functionExpressions) {
-            if (isCustomType(func.returnType) && func.returnTypeToken) {
+            if (isCustomType(func.returnType) && func.tokens.returnType) {
                 // check if this custom type is in our class map
                 const returnTypeName = func.returnType.name;
                 const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
                 if (!this.hasClass(returnTypeName, currentNamespaceName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
-                        range: func.returnTypeToken.range,
+                        range: func.tokens.returnType.range,
                         file: file
                     });
                 }
             }
 
             for (let param of func.parameters) {
-                if (isCustomType(param.type) && param.typeToken) {
+                if (isCustomType(param.type) && param.tokens.type) {
                     const paramTypeName = param.type.name;
                     const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
                     if (!this.hasClass(paramTypeName, currentNamespaceName)) {
                         this.diagnostics.push({
-                            ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),
-                            range: param.typeToken.range,
+                            ...DiagnosticMessages.functionParameterTypeIsInvalid(param.tokens.name.text, paramTypeName),
+                            range: param.tokens.type.range,
                             file: file
                         });
 
@@ -1039,9 +1039,9 @@ export class Scope {
             filesSearched.add(file);
             for (let cs of file.parser.references.classStatements) {
                 for (let s of [...cs.methods, ...cs.fields]) {
-                    if (!results.has(s.name.text) && s.name.text.toLowerCase() !== 'new') {
-                        results.set(s.name.text, {
-                            label: s.name.text,
+                    if (!results.has(s.tokens.name.text) && s.tokens.name.text.toLowerCase() !== 'new') {
+                        results.set(s.tokens.name.text, {
+                            label: s.tokens.name.text,
                             kind: isClassMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
                         });
                     }

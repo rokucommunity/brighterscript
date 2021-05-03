@@ -307,12 +307,12 @@ export class BrsFile {
         ];
         for (let result of statements) {
             //register import statements
-            if (isImportStatement(result) && result.filePathToken) {
+            if (isImportStatement(result) && result.tokens.filePath) {
                 this.ownScriptImports.push({
-                    filePathRange: result.filePathToken.range,
+                    filePathRange: result.tokens.filePath.range,
                     pkgPath: util.getPkgPathFromTarget(this.pkgPath, result.filePath),
                     sourceFile: this,
-                    text: result.filePathToken?.text
+                    text: result.tokens.filePath?.text
                 });
             }
 
@@ -400,8 +400,8 @@ export class BrsFile {
         for (let statement of this.parser.references.functionStatements ?? []) {
 
             let functionType = new FunctionType(statement.func.returnType);
-            functionType.setName(statement.name.text);
-            functionType.isSub = statement.func.functionType.text.toLowerCase() === 'sub';
+            functionType.setName(statement.tokens.name.text);
+            functionType.isSub = statement.func.isSub;
             if (functionType.isSub) {
                 functionType.returnType = new VoidType();
             }
@@ -410,7 +410,7 @@ export class BrsFile {
             let params = [] as CallableParam[];
             for (let param of statement.func.parameters) {
                 let callableParam = {
-                    name: param.name.text,
+                    name: param.name,
                     type: param.type,
                     isOptional: !!param.defaultValue,
                     isRestArgument: false
@@ -421,9 +421,9 @@ export class BrsFile {
             }
 
             this.callables.push({
-                isSub: statement.func.functionType.text.toLowerCase() === 'sub',
-                name: statement.name.text,
-                nameRange: statement.name.range,
+                isSub: statement.func.isSub,
+                name: statement.tokens.name.text,
+                nameRange: statement.tokens.name.range,
                 file: this,
                 params: params,
                 range: statement.func.range,
@@ -493,11 +493,11 @@ export class BrsFile {
                     });
                 }
                 let functionCall: FunctionCall = {
-                    range: util.createRangeFromPositions(expression.range.start, expression.closingParen.range.end),
-                    functionExpression: this.getFunctionExpressionAtPosition(callee.range.start),
+                    range: util.createRangeFromPositions(expression.range.start, expression.tokens.closeParen.range.end),
+                    functionExpression: this.getFunctionExpressionAtPosition(expression.callee.range.start),
                     file: this,
                     name: functionName,
-                    nameRange: util.createRange(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
+                    nameRange: util.createRange(expression.callee.range.start.line, columnIndexBegin, expression.callee.range.start.line, columnIndexEnd),
                     //TODO keep track of parameters
                     args: args
                 };
@@ -697,9 +697,9 @@ export class BrsFile {
             let classes = scope.getClassHierarchy(classStatement.item.getName(ParseMode.BrighterScript).toLowerCase());
             for (let cs of classes) {
                 for (let member of [...cs?.item?.fields, ...cs?.item?.methods]) {
-                    if (!results.has(member.name.text.toLowerCase())) {
-                        results.set(member.name.text.toLowerCase(), {
-                            label: member.name.text,
+                    if (!results.has(member.tokens.name.text.toLowerCase())) {
+                        results.set(member.tokens.name.text.toLowerCase(), {
+                            label: member.tokens.name.text,
                             kind: isClassFieldStatement(member) ? CompletionItemKind.Field : CompletionItemKind.Function
                         });
                     }
@@ -735,9 +735,9 @@ export class BrsFile {
             // let viableKeys = [...classMap.keys()].filter((k) => k.startsWith(completionName));
             for (const key of [...classMap.keys()]) {
                 let cs = classMap.get(key).item;
-                if (!results.has(cs.name.text)) {
-                    results.set(cs.name.text, {
-                        label: cs.name.text,
+                if (!results.has(cs.tokens.name.text)) {
+                    results.set(cs.tokens.name.text, {
+                        label: cs.tokens.name.text,
                         kind: CompletionItemKind.Class
                     });
                 }
@@ -787,16 +787,17 @@ export class BrsFile {
                 //add function and class statement completions
                 for (let stmt of namespace.statements) {
                     if (isClassStatement(stmt)) {
-                        if (!result.has(stmt.name.text)) {
-                            result.set(stmt.name.text, {
-                                label: stmt.name.text,
+                        if (!result.has(stmt.tokens.name.text)) {
+                            result.set(stmt.tokens.name.text, {
+                                label: stmt.tokens.name.text,
                                 kind: CompletionItemKind.Class
                             });
                         }
                     } else if (isFunctionStatement(stmt) && !newToken) {
-                        if (!result.has(stmt.name.text)) {
-                            result.set(stmt.name.text, {
-                                label: stmt.name.text,
+                        const name = stmt.tokens.name.text;
+                        if (!result.has(name)) {
+                            result.set(name, {
+                                label: name,
                                 kind: CompletionItemKind.Function
                             });
                         }
@@ -823,7 +824,7 @@ export class BrsFile {
         const statementHandler = (statement: NamespaceStatement) => {
             if (!location && statement.getName(ParseMode.BrighterScript).toLowerCase() === namespaceName) {
                 const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
-                    if (!location && statement.name.text.toLowerCase() === endName) {
+                    if (!location && statement.tokens.name.text.toLowerCase() === endName) {
                         const uri = util.pathToUri(file.pathAbsolute);
                         location = Location.create(uri, statement.range);
                     }
@@ -942,7 +943,7 @@ export class BrsFile {
         }
 
         if (isVariableExpression(left)) {
-            let lowerName = left.name.text.toLowerCase();
+            let lowerName = left.tokens.name.text.toLowerCase();
             //find the first scope that contains this namespace
             let scopes = this.program.getScopesForFile(this);
             for (let scope of scopes) {
@@ -960,7 +961,7 @@ export class BrsFile {
     public calleeIsKnownNamespaceFunction(callee: Expression, namespaceName: string) {
         //if we have a variable and a namespace
         if (isVariableExpression(callee) && namespaceName) {
-            let lowerCalleeName = callee?.name?.text?.toLowerCase();
+            let lowerCalleeName = callee?.tokens.name?.text?.toLowerCase();
             if (lowerCalleeName) {
                 let scopes = this.program.getScopesForFile(this);
                 for (let scope of scopes) {
@@ -1069,7 +1070,7 @@ export class BrsFile {
             return;
         }
 
-        const name = isClassFieldStatement(statement) ? statement.name.text : statement.getName(ParseMode.BrighterScript);
+        const name = isClassFieldStatement(statement) ? statement.tokens.name.text : statement.getName(ParseMode.BrighterScript);
         return DocumentSymbol.create(name, '', symbolKind, statement.range, statement.range, children);
     }
 
@@ -1149,7 +1150,7 @@ export class BrsFile {
 
         let classToken = this.getTokenBefore(token, TokenKind.Class);
         if (classToken) {
-            let cs = this.parser.references.classStatements.find((cs) => cs.classKeyword.range === classToken.range);
+            let cs = this.parser.references.classStatements.find((cs) => cs.tokens.class.range === classToken.range);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
@@ -1232,7 +1233,7 @@ export class BrsFile {
             }
         };
         const fieldStatementHandler = (statement: ClassFieldStatement) => {
-            if (statement.name.text.toLowerCase() === textToSearchFor) {
+            if (statement.tokens.name.text.toLowerCase() === textToSearchFor) {
                 results.push(Location.create(util.pathToUri(file.pathAbsolute), statement.range));
             }
         };
@@ -1337,7 +1338,7 @@ export class BrsFile {
             if (namespace.fullName.toLowerCase() === dottedGetText.toLowerCase()) {
                 //add function and class statement completions
                 for (let stmt of namespace.statements) {
-                    if (isFunctionStatement(stmt) && stmt.name.text.toLowerCase() === callableName.toLowerCase()) {
+                    if (isFunctionStatement(stmt) && stmt.tokens.name.text.toLowerCase() === callableName.toLowerCase()) {
                         const result = (namespace.file as BrsFile)?.getSignatureHelpForStatement(stmt);
                         if (!resultsMap.has(result.key)) {
                             resultsMap.set(result.key, result);
@@ -1395,14 +1396,14 @@ export class BrsFile {
         const documentation = functionComments.join('').trim();
 
         const lines = util.splitIntoLines(this.fileContents);
-        let key = statement.name.text + documentation;
+        let key = statement.tokens.name.text + documentation;
         const params = [] as ParameterInformation[];
         for (const param of func.parameters) {
-            params.push(ParameterInformation.create(param.name.text));
-            key += param.name.text;
+            params.push(ParameterInformation.create(param.tokens.name.text));
+            key += param.tokens.name.text;
         }
 
-        const label = util.getTextForRange(lines, util.createRangeFromPositions(func.functionType.range.start, func.body.range.start)).trim();
+        const label = util.getTextForRange(lines, util.createRangeFromPositions(func.tokens.beginKeyword.range.start, func.body.range.start)).trim();
         const signature = SignatureInformation.create(label, documentation, ...params);
         const index = 1;
         return { key: key, signature: signature, index: index };
@@ -1411,8 +1412,8 @@ export class BrsFile {
     private getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): ClassMethodStatement | undefined {
         //TODO - would like to write this with getClassHieararchy; but got stuck on working out the scopes to use... :(
         let statement;
-        const statementHandler = (e) => {
-            if (!statement && e.name.text.toLowerCase() === name.toLowerCase()) {
+        const statementHandler = (e: ClassMethodStatement) => {
+            if (!statement && e.tokens.name?.text.toLowerCase() === name.toLowerCase()) {
                 statement = e;
             }
         };
@@ -1465,7 +1466,7 @@ export class BrsFile {
                 processedFiles.add(file);
                 file.ast.walk(createVisitor({
                     VariableExpression: (e) => {
-                        if (e.name.text.toLowerCase() === searchFor) {
+                        if (e.tokens.name.text.toLowerCase() === searchFor) {
                             locations.push(Location.create(util.pathToUri(file.pathAbsolute), e.range));
                         }
                     }

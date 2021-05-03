@@ -27,7 +27,7 @@ describe('parser for loops', () => {
         const statement = statements[0] as ForStatement;
         expect(diagnostics[0]?.message).not.to.exist;
         expect(statement.increment).to.be.instanceof(LiteralExpression);
-        expect((statement.increment as LiteralExpression).token.text).to.equal('2');
+        expect((statement.increment as LiteralExpression).tokens.value.text).to.equal('2');
     });
 
     it('supports omitted \'step\' clause', () => {

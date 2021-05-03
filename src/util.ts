@@ -76,6 +76,25 @@ export class Util {
     }
 
     /**
+     * Remove any leading or trailing quotemark from the given text
+     */
+    public removeEnclosingQuotes(text: string) {
+        let start = 0;
+        let end = text.length;
+        if (text.startsWith('"')) {
+            start = 1;
+        }
+        if (text.endsWith('"')) {
+            end = text.length - 1;
+        }
+        if (start > 0 || end < text.length) {
+            return text.substring(start, end);
+        } else {
+            return text;
+        }
+    }
+
+    /**
      * Given a path to a file/directory, replace all path separators with the current system's version.
      * @param filePath
      */
@@ -871,6 +890,39 @@ export class Util {
     }
 
     /**
+     * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
+     * righthand range. Returns undefined if none of the items have a range.
+     */
+    public createBoundingRange(...locatables: Array<{ range?: Range }>) {
+        let leftmost: { range?: Range };
+        let rightmost: { range?: Range };
+
+        for (let i = 0; i < locatables.length; i++) {
+            //set the leftmost non-null-range item
+            const left = locatables[i];
+            if (!leftmost && left?.range) {
+                leftmost = left;
+            }
+
+            //set the rightmost non-null-range item
+            const right = locatables[locatables.length - 1 - i];
+            if (!rightmost && right?.range) {
+                rightmost = right;
+            }
+
+            //if we have both sides, quit
+            if (leftmost && rightmost) {
+                break;
+            }
+        }
+        if (leftmost) {
+            return this.createRangeFromPositions(leftmost.range.start, rightmost.range.end);
+        } else {
+            return undefined;
+        }
+    }
+
+    /**
      * Create a `Position` object. Prefer this over `Position.create` for performance reasons
      */
     public createPosition(line: number, character: number) {
@@ -1053,7 +1105,7 @@ export class Util {
             }
             if (isVariableExpression(expression)) {
                 variableExpressions.push(expression);
-                uniqueVarNames.add(expression.name.text);
+                uniqueVarNames.add(expression.tokens.name.text);
             }
         }, {
             walkMode: WalkMode.visitExpressions

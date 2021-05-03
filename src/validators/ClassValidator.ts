@@ -93,14 +93,14 @@ export class BsClassValidator {
             if (classStatement.namespaceName && nonNamespaceClass) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.namespacedClassCannotShareNamewithNonNamespacedClass(
-                        nonNamespaceClass.name.text
+                        nonNamespaceClass.tokens.name.text
                     ),
                     file: classStatement.file,
-                    range: classStatement.name.range,
+                    range: classStatement.tokens.name.range,
                     relatedInformation: [{
                         location: Location.create(
                             URI.file(nonNamespaceClass.file.pathAbsolute).toString(),
-                            nonNamespaceClass.name.range
+                            nonNamespaceClass.tokens.name.range
                         ),
                         message: 'Original class declared here'
                     }]
@@ -125,7 +125,7 @@ export class BsClassValidator {
                 let superCall: CallExpression;
                 newMethod.func.body.walk(createVisitor({
                     VariableExpression: (expression, parent) => {
-                        const expressionNameLower = expression?.name?.text.toLowerCase();
+                        const expressionNameLower = expression?.tokens.name?.text.toLowerCase();
                         if (expressionNameLower === 'm') {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
@@ -165,14 +165,14 @@ export class BsClassValidator {
             for (let statement of classStatement.body) {
                 if (isClassMethodStatement(statement) || isClassFieldStatement(statement)) {
                     let member = statement;
-                    let lowerMemberName = member.name.text.toLowerCase();
+                    let lowerMemberName = member.tokens.name.text.toLowerCase();
 
                     //catch duplicate member names on same class
                     if (methods[lowerMemberName] || fields[lowerMemberName]) {
                         this.diagnostics.push({
-                            ...DiagnosticMessages.duplicateIdentifier(member.name.text),
+                            ...DiagnosticMessages.duplicateIdentifier(member.tokens.name.text),
                             file: classStatement.file,
-                            range: member.name.range
+                            range: member.tokens.name.range
                         });
                     }
 
@@ -211,9 +211,9 @@ export class BsClassValidator {
                             //is a method
                             isClassMethodStatement(member) &&
                             //does not have an override keyword
-                            !member.override &&
+                            !member.tokens.override &&
                             //is not the constructur function
-                            member.name.text.toLowerCase() !== 'new'
+                            member.tokens.name.text.toLowerCase() !== 'new'
                         ) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.missingOverrideKeyword(
@@ -256,7 +256,7 @@ export class BsClassValidator {
                             if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName)) {
                                 this.diagnostics.push({
                                     ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
-                                    range: statement.type.range,
+                                    range: statement.tokens.type.range,
                                     file: classStatement.file
                                 });
                             }
@@ -318,7 +318,7 @@ export class BsClassValidator {
                     this.diagnostics.push({
                         ...DiagnosticMessages.duplicateClassDeclaration(this.scope.name, name),
                         file: file,
-                        range: classStatement.name.range,
+                        range: classStatement.tokens.name.range,
                         relatedInformation: [{
                             location: Location.create(
                                 URI.file(alreadyDefinedClass.file.pathAbsolute).toString(),

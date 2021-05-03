@@ -38,20 +38,25 @@ export abstract class Expression {
 export class BinaryExpression extends Expression {
     constructor(
         public left: Expression,
-        public operator: Token,
+        operator: Token,
         public right: Expression
     ) {
         super();
+        this.tokens.operator = operator;
         this.range = util.createRangeFromPositions(this.left.range.start, this.right.range.end);
     }
 
     public readonly range: Range;
 
+    public tokens = {} as {
+        operator: Token;
+    };
+
     transpile(state: BrsTranspileState) {
         return [
             state.sourceNode(this.left, this.left.transpile(state)),
             ' ',
-            state.transpileToken(this.operator),
+            state.transpileToken(this.tokens.operator),
             ' ',
             state.sourceNode(this.right, this.right.transpile(state))
         ];
@@ -70,8 +75,8 @@ export class CallExpression extends Expression {
 
     constructor(
         readonly callee: Expression,
-        readonly openingParen: Token,
-        readonly closingParen: Token,
+        openParen: Token,
+        closeParen: Token,
         readonly args: Expression[],
         /**
          * The namespace that currently wraps this call expression. This is NOT the namespace of the callee...that will be represented in the callee expression itself.
@@ -79,10 +84,17 @@ export class CallExpression extends Expression {
         readonly namespaceName: NamespacedVariableNameExpression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.callee.range.start, this.closingParen.range.end);
+        this.tokens.openParen = openParen;
+        this.tokens.closeParen = closeParen;
+        this.range = util.createRangeFromPositions(this.callee.range.start, this.tokens.closeParen.range.end);
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        openParen: Token;
+        closeParen: Token;
+    };
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
         let result = [];
@@ -95,7 +107,7 @@ export class CallExpression extends Expression {
         }
 
         result.push(
-            state.transpileToken(this.openingParen)
+            state.transpileToken(this.tokens.openParen)
         );
         for (let i = 0; i < this.args.length; i++) {
             //add comma between args
@@ -106,7 +118,7 @@ export class CallExpression extends Expression {
             result.push(...arg.transpile(state));
         }
         result.push(
-            state.transpileToken(this.closingParen)
+            state.transpileToken(this.tokens.closeParen)
         );
         return result;
     }
@@ -122,37 +134,71 @@ export class CallExpression extends Expression {
 }
 
 export class FunctionExpression extends Expression implements TypedefProvider {
+    /**
+     * @param beginKeyword `sub` or `function`
+     * @param endKeyword `end sub` or `end function`
+     */
     constructor(
-        readonly parameters: FunctionParameterExpression[],
+        public parameters: FunctionParameterExpression[],
         public body: Block,
-        readonly functionType: Token | null,
-        public end: Token,
-        readonly leftParen: Token,
-        readonly rightParen: Token,
-        readonly asToken?: Token,
-        readonly returnTypeToken?: Token,
+        beginKeywordToken: Token,
+        endKeywordToken: Token,
+        leftParenToken: Token,
+        rightParenToken: Token,
+        asToken?: Token,
+        returnTypeToken?: Token,
         /**
          * If this function is enclosed within another function, this will reference that parent function
          */
-        readonly parentFunction?: FunctionExpression,
-        readonly namespaceName?: NamespacedVariableNameExpression,
-        readonly parentSymbolTable?: SymbolTable
+        public parentFunction?: FunctionExpression,
+        public namespaceName?: NamespacedVariableNameExpression,
+        public parentSymbolTable?: SymbolTable
     ) {
         super();
-        if (this.returnTypeToken) {
-            this.returnType = util.tokenToBscType(this.returnTypeToken);
-        } else if (this.functionType.text.toLowerCase() === 'sub') {
+        this.tokens.beginKeyword = beginKeywordToken;
+        this.tokens.endKeyword = endKeywordToken;
+        this.tokens.leftParen = leftParenToken;
+        this.tokens.rightParen = rightParenToken;
+        this.tokens.as = asToken;
+        this.tokens.returnType = returnTypeToken;
+
+        if (this.tokens.returnType) {
+            this.returnType = util.tokenToBscType(this.tokens.returnType);
+        } else if (this.isSub) {
             this.returnType = new VoidType();
         } else {
             this.returnType = new DynamicType();
         }
+
         this.symbolTable = new SymbolTable(parentSymbolTable);
         for (let param of parameters) {
-            this.symbolTable.addSymbol(param.name.text, param.name.range, param.type);
+            this.symbolTable.addSymbol(param.tokens.name.text, param.tokens.name.range, param.type);
         }
     }
 
+    public tokens = {} as {
+        /**
+         * `sub` or `function`
+         */
+        beginKeyword: Token;
+        /**
+         * `end sub` or `end function`
+         */
+        endKeyword: Token;
+        leftParen: Token;
+        rightParen: Token;
+        as: Token;
+        returnType: Token;
+    };
+
     public readonly symbolTable: SymbolTable;
+
+    /**
+     * Determines if this is a `sub`. If false, then it's a `function`
+     */
+    public get isSub() {
+        return this.tokens.beginKeyword.text.toLowerCase() === 'sub';
+    }
 
     public labelStatements = [] as LabelStatement[];
 
@@ -182,9 +228,16 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      * and ending with the last n' in 'end function' or 'b' in 'end sub'
      */
     public get range() {
-        return util.createRangeFromPositions(
-            (this.functionType ?? this.leftParen).range.start,
-            (this.end ?? this.body ?? this.returnTypeToken ?? this.asToken ?? this.rightParen).range.end
+        return util.createBoundingRange(
+            this.tokens.beginKeyword,
+            this.tokens.leftParen,
+            this.parameters?.[0],
+            this.parameters?.[this.parameters?.length - 1],
+            this.tokens.rightParen,
+            this.tokens.as,
+            this.tokens.returnType,
+            this.body,
+            this.tokens.endKeyword
         );
     }
 
@@ -192,7 +245,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let results = [];
         //'function'|'sub'
         results.push(
-            state.transpileToken(this.functionType)
+            state.transpileToken(this.tokens.beginKeyword)
         );
         //functionName?
         if (name) {
@@ -203,7 +256,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         //leftParen
         results.push(
-            state.transpileToken(this.leftParen)
+            state.transpileToken(this.tokens.leftParen)
         );
         //parameters
         for (let i = 0; i < this.parameters.length; i++) {
@@ -217,17 +270,17 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         //right paren
         results.push(
-            state.transpileToken(this.rightParen)
+            state.transpileToken(this.tokens.rightParen)
         );
         //as [Type]
-        if (this.asToken) {
+        if (this.tokens.as) {
             results.push(
                 ' ',
                 //as
-                state.transpileToken(this.asToken),
+                state.transpileToken(this.tokens.as),
                 ' ',
                 //return type
-                state.sourceNode(this.returnTypeToken, this.returnType.toTypeString())
+                state.sourceNode(this.tokens.returnType, this.returnType.toTypeString())
             );
         }
         if (includeBody) {
@@ -240,7 +293,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         //'end sub'|'end function'
         results.push(
             state.indent(),
-            state.transpileToken(this.end)
+            state.transpileToken(this.tokens.endKeyword)
         );
         return results;
     }
@@ -264,11 +317,11 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     getFunctionType(): FunctionType {
         let functionType = new FunctionType(this.returnType);
-        functionType.isSub = this.functionType.text === 'sub';
+        functionType.isSub = this.tokens.beginKeyword.text.toLowerCase() === 'sub';
         for (let param of this.parameters) {
             let isRequired = !param.defaultValue;
             //TODO compute optional parameters
-            functionType.addParameter(param.name.text, param.type, isRequired);
+            functionType.addParameter(param.tokens.name.text, param.type, isRequired);
         }
         return functionType;
     }
@@ -276,29 +329,46 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
 export class FunctionParameterExpression extends Expression {
     constructor(
-        public name: Identifier,
+        nameToken: Identifier,
         public type: BscType,
-        public equalsToken?: Token,
+        equalsToken?: Token,
         public defaultValue?: Expression,
-        public asToken?: Token,
-        public typeToken?: Token,
+        asToken?: Token,
+        typeToken?: Token,
         readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
+        this.tokens.name = nameToken;
+        this.tokens.equals = equalsToken;
+        this.tokens.as = asToken;
+        this.tokens.type = typeToken;
     }
 
-
     public get range(): Range {
-        return {
-            start: this.name.range.start,
-            end: this.typeToken ? this.typeToken.range.end : this.name.range.end
-        };
+        return util.createBoundingRange(
+            this.tokens.name,
+            this.tokens.equals,
+            this.defaultValue,
+            this.tokens.as,
+            this.tokens.type
+        );
+    }
+
+    public tokens = {} as {
+        name: Identifier;
+        equals: Token;
+        as: Token;
+        type: Token;
+    };
+
+    public get name() {
+        return this.tokens.name?.text;
     }
 
     public transpile(state: BrsTranspileState) {
         let result = [
             //name
-            state.transpileToken(this.name)
+            state.transpileToken(this.tokens.name)
         ] as any[];
         //default value
         if (this.defaultValue) {
@@ -306,11 +376,11 @@ export class FunctionParameterExpression extends Expression {
             result.push(this.defaultValue.transpile(state));
         }
         //type declaration
-        if (this.asToken) {
+        if (this.tokens.as) {
             result.push(' ');
-            result.push(state.transpileToken(this.asToken));
+            result.push(state.transpileToken(this.tokens.as));
             result.push(' ');
-            result.push(state.sourceNode(this.typeToken, this.type.toTypeString()));
+            result.push(state.sourceNode(this.tokens.type, this.type.toTypeString()));
         }
 
         return result;
@@ -343,15 +413,15 @@ export class NamespacedVariableNameExpression extends Expression {
     public getNameParts() {
         let parts = [] as string[];
         if (isVariableExpression(this.expression)) {
-            parts.push(this.expression.name.text);
+            parts.push(this.expression.tokens.name.text);
         } else {
             let expr = this.expression;
 
-            parts.push(expr.name.text);
+            parts.push(expr.tokens.name.text);
 
             while (isVariableExpression(expr) === false) {
                 expr = expr.obj as DottedGetExpression;
-                parts.unshift(expr.name.text);
+                parts.unshift(expr.tokens.name.text);
             }
         }
         return parts;
@@ -375,14 +445,21 @@ export class NamespacedVariableNameExpression extends Expression {
 export class DottedGetExpression extends Expression {
     constructor(
         readonly obj: Expression,
-        readonly name: Identifier,
-        readonly dot: Token
+        dotToken: Token,
+        nameToken: Identifier
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.obj.range.start, this.name.range.end);
+        this.tokens.dot = dotToken;
+        this.tokens.name = nameToken;
+        this.range = util.createRangeFromPositions(this.obj.range.start, this.tokens.name.range.end);
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        name: Identifier;
+        dot: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         //if the callee starts with a namespace name, transpile the name
@@ -392,7 +469,7 @@ export class DottedGetExpression extends Expression {
             return [
                 ...this.obj.transpile(state),
                 '.',
-                state.transpileToken(this.name)
+                state.transpileToken(this.tokens.name)
             ];
         }
     }
@@ -406,21 +483,28 @@ export class DottedGetExpression extends Expression {
 
 export class XmlAttributeGetExpression extends Expression {
     constructor(
-        readonly obj: Expression,
-        readonly name: Identifier,
-        readonly at: Token
+        public obj: Expression,
+        atToken: Token,
+        nameToken: Identifier
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.obj.range.start, this.name.range.end);
+        this.tokens.at = atToken;
+        this.tokens.name = nameToken;
+        this.range = util.createRangeFromPositions(this.obj.range.start, this.tokens.name.range.end);
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        at: Token;
+        name: Identifier;
+    };
 
     transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
             '@',
-            state.transpileToken(this.name)
+            state.transpileToken(this.tokens.name)
         ];
     }
 
@@ -433,23 +517,30 @@ export class XmlAttributeGetExpression extends Expression {
 
 export class IndexedGetExpression extends Expression {
     constructor(
-        readonly obj: Expression,
-        readonly index: Expression,
-        readonly openingSquare: Token,
-        readonly closingSquare: Token
+        public obj: Expression,
+        openSquareToken: Token,
+        public index: Expression,
+        closeSquareToken: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.obj.range.start, this.closingSquare.range.end);
+        this.tokens.openSquare = openSquareToken;
+        this.tokens.closeSquare = closeSquareToken;
+        this.range = util.createRangeFromPositions(this.obj.range.start, this.tokens.closeSquare.range.end);
     }
 
     public readonly range: Range;
 
+    public tokens = {} as {
+        openSquare: Token;
+        closeSquare: Token;
+    };
+
     transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
-            state.transpileToken(this.openingSquare),
+            state.transpileToken(this.tokens.openSquare),
             ...this.index.transpile(state),
-            state.transpileToken(this.closingSquare)
+            state.transpileToken(this.tokens.closeSquare)
         ];
     }
 
@@ -463,23 +554,28 @@ export class IndexedGetExpression extends Expression {
 
 export class GroupingExpression extends Expression {
     constructor(
-        readonly tokens: {
-            left: Token;
-            right: Token;
-        },
-        public expression: Expression
+        openParenToken: Token,
+        public expression: Expression,
+        closeParenToken: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.left.range.start, this.tokens.right.range.end);
+        this.tokens.openParen = openParenToken;
+        this.tokens.closeParen = closeParenToken;
+        this.range = util.createRangeFromPositions(this.tokens.openParen.range.start, this.tokens.closeParen.range.end);
     }
 
     public readonly range: Range;
 
+    public tokens = {} as {
+        openParen: Token;
+        closeParen: Token;
+    };
+
     transpile(state: BrsTranspileState) {
         return [
-            state.transpileToken(this.tokens.left),
+            state.transpileToken(this.tokens.openParen),
             ...this.expression.transpile(state),
-            state.transpileToken(this.tokens.right)
+            state.transpileToken(this.tokens.closeParen)
         ];
     }
 
@@ -492,15 +588,20 @@ export class GroupingExpression extends Expression {
 
 export class LiteralExpression extends Expression {
     constructor(
-        public token: Token
+        valueToken: Token
     ) {
         super();
-        this.type = util.tokenToBscType(token);
+        this.tokens.value = valueToken;
+        this.type = util.tokenToBscType(this.tokens.value);
     }
 
     public get range() {
-        return this.token.range;
+        return this.tokens.value.range;
     }
+
+    public tokens = {} as {
+        value: Token;
+    };
 
     /**
      * The (data) type of this expression
@@ -509,18 +610,18 @@ export class LiteralExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         let text: string;
-        if (this.token.kind === TokenKind.TemplateStringQuasi) {
+        if (this.tokens.value.kind === TokenKind.TemplateStringQuasi) {
             //wrap quasis with quotes (and escape inner quotemarks)
-            text = `"${this.token.text.replace(/"/g, '""')}"`;
+            text = `"${this.tokens.value.text.replace(/"/g, '""')}"`;
 
         } else if (isStringType(this.type)) {
-            text = this.token.text;
+            text = this.tokens.value.text;
             //add trailing quotemark if it's missing. We will have already generated a diagnostic for this.
             if (text.endsWith('"') === false) {
                 text += '"';
             }
         } else {
-            text = this.token.text;
+            text = this.tokens.value.text;
         }
 
         return [
@@ -539,16 +640,22 @@ export class LiteralExpression extends Expression {
  */
 export class EscapedCharCodeLiteralExpression extends Expression {
     constructor(
-        readonly token: Token & { charCode: number }
+        valueToken: Token & { charCode: number }
     ) {
         super();
-        this.range = token.range;
+        this.tokens.value = valueToken;
+        this.range = valueToken.range;
     }
+
     readonly range: Range;
+
+    public tokens = {} as {
+        value: Token & { charCode: number };
+    };
 
     transpile(state: BrsTranspileState) {
         return [
-            state.sourceNode(this, `chr(${this.token.charCode})`)
+            state.sourceNode(this, `chr(${this.tokens.value.charCode})`)
         ];
     }
 
@@ -559,21 +666,28 @@ export class EscapedCharCodeLiteralExpression extends Expression {
 
 export class ArrayLiteralExpression extends Expression {
     constructor(
-        readonly elements: Array<Expression | CommentStatement>,
-        readonly open: Token,
-        readonly close: Token,
-        readonly hasSpread = false
+        public elements: Array<Expression | CommentStatement>,
+        openSquareBracketToken: Token,
+        closeSquareBracketToken: Token,
+        public hasSpread = false
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
+        this.tokens.openSquareBracket = openSquareBracketToken;
+        this.tokens.closeSquareBracket = closeSquareBracketToken;
+        this.range = util.createRangeFromPositions(this.tokens.openSquareBracket.range.start, this.tokens.closeSquareBracket.range.end);
     }
 
     public readonly range: Range;
 
+    public tokens = {} as {
+        openSquareBracket: Token;
+        closeSquareBracket: Token;
+    };
+
     transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
-            state.transpileToken(this.open)
+            state.transpileToken(this.tokens.openSquareBracket)
         );
         let hasChildren = this.elements.length > 0;
         state.blockDepth++;
@@ -583,8 +697,8 @@ export class ArrayLiteralExpression extends Expression {
             let element = this.elements[i];
 
             if (isCommentStatement(element)) {
-                //if the comment is on the same line as opening square or previous statement, don't add newline
-                if (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element)) {
+                //if the comment is on the same line as open square or previous statement, don't add newline
+                if (util.linesTouch(this.tokens.openSquareBracket, element) || util.linesTouch(previousElement, element)) {
                     result.push(' ');
                 } else {
                     result.push(
@@ -621,7 +735,7 @@ export class ArrayLiteralExpression extends Expression {
         }
 
         result.push(
-            state.transpileToken(this.close)
+            state.transpileToken(this.tokens.closeSquareBracket)
         );
         return result;
     }
@@ -637,16 +751,23 @@ export class ArrayLiteralExpression extends Expression {
 
 export class AAMemberExpression extends Expression {
     constructor(
-        public keyToken: Token,
-        public colonToken: Token,
+        keyToken: Token,
+        colonToken: Token,
         /** The expression evaluated to determine the member's initial value. */
         public value: Expression
     ) {
         super();
+        this.tokens.key = keyToken;
+        this.tokens.colon = colonToken;
         this.range = util.createRangeFromPositions(keyToken.range.start, this.value.range.end);
     }
 
     public range: Range;
+
+    public tokens = {} as {
+        key: Token;
+        colon: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         //TODO move the logic from AALiteralExpression loop into this function
@@ -656,30 +777,36 @@ export class AAMemberExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         walk(this, 'value', visitor, options);
     }
-
 }
 
 export class AALiteralExpression extends Expression {
     constructor(
         readonly elements: Array<AAMemberExpression | CommentStatement>,
-        readonly open: Token,
-        readonly close: Token
+        openSquareBracketToken: Token,
+        closeSquareBracketToken: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.open.range.start, this.close.range.end);
+        this.tokens.openSquareBracket = openSquareBracketToken;
+        this.tokens.closeSquareBracket = closeSquareBracketToken;
+        this.range = util.createRangeFromPositions(this.tokens.openSquareBracket.range.start, this.tokens.closeSquareBracket.range.end);
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        openSquareBracket: Token;
+        closeSquareBracket: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         let result = [];
         //open curly
         result.push(
-            state.transpileToken(this.open)
+            state.transpileToken(this.tokens.openSquareBracket)
         );
         let hasChildren = this.elements.length > 0;
-        //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
-        if (hasChildren && (isCommentStatement(this.elements[0]) === false || !util.linesTouch(this.elements[0], this.open))) {
+        //add newline if the object has children and the first child isn't a comment starting on the same line as open curly
+        if (hasChildren && (isCommentStatement(this.elements[0]) === false || !util.linesTouch(this.elements[0], this.tokens.openSquareBracket))) {
             result.push('\n');
         }
         state.blockDepth++;
@@ -690,7 +817,7 @@ export class AALiteralExpression extends Expression {
 
             //don't indent if comment is same-line
             if (isCommentStatement(element as any) &&
-                (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element))
+                (util.linesTouch(this.tokens.openSquareBracket, element) || util.linesTouch(previousElement, element))
             ) {
                 result.push(' ');
 
@@ -705,11 +832,11 @@ export class AALiteralExpression extends Expression {
             } else {
                 //key
                 result.push(
-                    state.transpileToken(element.keyToken)
+                    state.transpileToken(element.tokens.key)
                 );
                 //colon
                 result.push(
-                    state.transpileToken(element.colonToken),
+                    state.transpileToken(element.tokens.colon),
                     ' '
                 );
 
@@ -741,13 +868,13 @@ export class AALiteralExpression extends Expression {
         }
         state.blockDepth--;
 
-        //only indent the closing curly if we have children
+        //only indent the close curly if we have children
         if (hasChildren) {
             result.push(state.indent());
         }
         //close curly
         result.push(
-            state.transpileToken(this.close)
+            state.transpileToken(this.tokens.closeSquareBracket)
         );
         return result;
     }
@@ -767,18 +894,23 @@ export class AALiteralExpression extends Expression {
 
 export class UnaryExpression extends Expression {
     constructor(
-        public operator: Token,
+        operatorToken: Token,
         public right: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.operator.range.start, this.right.range.end);
+        this.tokens.operator = operatorToken;
+        this.range = util.createRangeFromPositions(this.tokens.operator.range.start, this.right.range.end);
     }
 
     public readonly range: Range;
 
+    public tokens = {} as {
+        operator: Token;
+    };
+
     transpile(state: BrsTranspileState) {
         return [
-            state.transpileToken(this.operator),
+            state.transpileToken(this.tokens.operator),
             ' ',
             ...this.right.transpile(state)
         ];
@@ -793,18 +925,31 @@ export class UnaryExpression extends Expression {
 
 export class VariableExpression extends Expression {
     constructor(
-        public name: Identifier,
+        nameToken: Identifier,
         public namespaceName: NamespacedVariableNameExpression
     ) {
         super();
-        this.range = this.name.range;
+        this.tokens.name = nameToken;
+        this.range = this.tokens.name.range;
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        name: Identifier;
+    };
+
+    public get name() {
+        return this.tokens.name.text;
+    }
+    public set name(value: string) {
+        this.tokens.name.text = value;
+    }
+
     public isCalled: boolean;
 
     public getName(parseMode: ParseMode) {
-        return parseMode === ParseMode.BrightScript ? this.name.text : this.name.text;
+        return parseMode === ParseMode.BrightScript ? this.tokens.name.text : this.tokens.name.text;
     }
 
     transpile(state: BrsTranspileState) {
@@ -822,7 +967,7 @@ export class VariableExpression extends Expression {
             //transpile  normally
         } else {
             result.push(
-                state.transpileToken(this.name)
+                state.transpileToken(this.tokens.name)
             );
         }
         return result;
@@ -835,16 +980,21 @@ export class VariableExpression extends Expression {
 
 export class SourceLiteralExpression extends Expression {
     constructor(
-        readonly token: Token
+        valueToken: Token
     ) {
         super();
-        this.range = token.range;
+        this.tokens.value = valueToken;
+        this.range = this.tokens.value.range;
     }
 
     public readonly range: Range;
 
+    public tokens = {} as {
+        value: Token;
+    };
+
     private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
-        let functionExpression = state.file.getFunctionExpressionAtPosition(this.token.range.start);
+        let functionExpression = state.file.getFunctionExpressionAtPosition(this.tokens.value.range.start);
         let nameParts = [];
         while (functionExpression.parentFunction) {
             let index = functionExpression.parentFunction.childFunctionExpressions.indexOf(functionExpression);
@@ -860,12 +1010,12 @@ export class SourceLiteralExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         let text: string;
-        switch (this.token.kind) {
+        switch (this.tokens.value.kind) {
             case TokenKind.SourceFilePathLiteral:
                 text = `"${fileUrl(state.srcPath)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
-                text = `${this.token.range.start.line + 1}`;
+                text = `${this.tokens.value.range.start.line + 1}`;
                 break;
             case TokenKind.FunctionNameLiteral:
                 text = `"${this.getFunctionName(state, ParseMode.BrightScript)}"`;
@@ -874,7 +1024,7 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
                 break;
             case TokenKind.SourceLocationLiteral:
-                text = `"${fileUrl(state.srcPath)}:${this.token.range.start.line + 1}"`;
+                text = `"${fileUrl(state.srcPath)}:${this.tokens.value.range.start.line + 1}"`;
                 break;
             case TokenKind.PkgPathLiteral:
                 let pkgPath1 = `pkg:/${state.file.pkgPath}`
@@ -893,7 +1043,7 @@ export class SourceLiteralExpression extends Expression {
             case TokenKind.LineNumLiteral:
             default:
                 //use the original text (because it looks like a variable)
-                text = this.token.text;
+                text = this.tokens.value.text;
                 break;
 
         }
@@ -914,12 +1064,17 @@ export class SourceLiteralExpression extends Expression {
  */
 export class NewExpression extends Expression {
     constructor(
-        readonly newKeyword: Token,
-        readonly call: CallExpression
+        newToken: Token,
+        public call: CallExpression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.newKeyword.range.start, this.call.range.end);
+        this.tokens.new = newToken;
+        this.range = util.createRangeFromPositions(this.tokens.new.range.start, this.call.range.end);
     }
+
+    public tokens = {} as {
+        new: Token;
+    };
 
     /**
      * The name of the class to initialize (with optional namespace prefixed)
@@ -956,29 +1111,40 @@ export class NewExpression extends Expression {
 export class CallfuncExpression extends Expression {
     constructor(
         readonly callee: Expression,
-        readonly operator: Token,
-        readonly methodName: Identifier,
-        readonly openingParen: Token,
+        operatorToken: Token,
+        methodNameToken: Identifier,
+        openParenToken: Token,
         readonly args: Expression[],
-        readonly closingParen: Token
+        closeParenToken: Token
     ) {
         super();
+        this.tokens.operator = operatorToken;
+        this.tokens.methodName = methodNameToken;
+        this.tokens.openParen = openParenToken;
+        this.tokens.closeParen = closeParenToken;
         this.range = util.createRangeFromPositions(
             callee.range.start,
-            (closingParen ?? args[args.length - 1] ?? openingParen ?? methodName ?? operator).range.end
+            (this.tokens.closeParen ?? args[args.length - 1] ?? this.tokens.openParen ?? this.tokens.methodName ?? this.tokens.operator).range.end
         );
     }
 
     public readonly range: Range;
 
+    public tokens = {} as {
+        operator: Token;
+        methodName: Identifier;
+        openParen: Token;
+        closeParen: Token;
+    };
+
     public transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
             ...this.callee.transpile(state),
-            state.sourceNode(this.operator, '.callfunc'),
-            state.transpileToken(this.openingParen),
+            state.sourceNode(this.tokens.operator, '.callfunc'),
+            state.transpileToken(this.tokens.openParen),
             //the name of the function
-            state.sourceNode(this.methodName, ['"', this.methodName.text, '"']),
+            state.sourceNode(this.tokens.methodName, ['"', this.tokens.methodName.text, '"']),
             ', '
         );
         //transpile args
@@ -996,7 +1162,7 @@ export class CallfuncExpression extends Expression {
             }
         }
         result.push(
-            state.transpileToken(this.closingParen)
+            state.transpileToken(this.tokens.closeParen)
         );
         return result;
     }
@@ -1025,6 +1191,7 @@ export class TemplateStringQuasiExpression extends Expression {
             this.expressions[this.expressions.length - 1].range.end
         );
     }
+
     readonly range: Range;
 
     transpile(state: BrsTranspileState, skipEmptyStrings = true) {
@@ -1033,7 +1200,7 @@ export class TemplateStringQuasiExpression extends Expression {
         for (let expression of this.expressions) {
             //skip empty strings
             //TODO what does an empty string literal expression look like?
-            if (expression.token.text === '' && skipEmptyStrings === true) {
+            if (expression.tokens.value.text === '' && skipEmptyStrings === true) {
                 continue;
             }
             result.push(
@@ -1056,12 +1223,14 @@ export class TemplateStringQuasiExpression extends Expression {
 
 export class TemplateStringExpression extends Expression {
     constructor(
-        readonly openingBacktick: Token,
-        readonly quasis: TemplateStringQuasiExpression[],
-        readonly expressions: Expression[],
-        readonly closingBacktick: Token
+        openBacktickToken: Token,
+        public quasis: TemplateStringQuasiExpression[],
+        public expressions: Expression[],
+        closeBacktickToken: Token
     ) {
         super();
+        this.tokens.openBacktick = openBacktickToken;
+        this.tokens.closeBacktick = closeBacktickToken;
         this.range = util.createRangeFromPositions(
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end
@@ -1069,6 +1238,11 @@ export class TemplateStringExpression extends Expression {
     }
 
     public readonly range: Range;
+
+    public tokens = {} as {
+        openBacktick: Token;
+        closeBacktick: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         if (this.quasis.length === 1 && this.expressions.length === 0) {
@@ -1138,13 +1312,16 @@ export class TemplateStringExpression extends Expression {
 
 export class TaggedTemplateStringExpression extends Expression {
     constructor(
-        readonly tagName: Identifier,
-        readonly openingBacktick: Token,
-        readonly quasis: TemplateStringQuasiExpression[],
-        readonly expressions: Expression[],
-        readonly closingBacktick: Token
+        tagNameToken: Identifier,
+        openBacktickToken: Token,
+        public quasis: TemplateStringQuasiExpression[],
+        public expressions: Expression[],
+        closeBacktickToken: Token
     ) {
         super();
+        this.tokens.tagName = tagNameToken;
+        this.tokens.openBacktick = openBacktickToken;
+        this.tokens.closeBacktick = closeBacktickToken;
         this.range = util.createRangeFromPositions(
             quasis[0].range.start,
             quasis[quasis.length - 1].range.end
@@ -1153,10 +1330,16 @@ export class TaggedTemplateStringExpression extends Expression {
 
     public readonly range: Range;
 
+    public tokens = {} as {
+        tagName: Identifier;
+        openBacktick: Token;
+        closeBacktick: Token;
+    };
+
     transpile(state: BrsTranspileState) {
         let result = [];
         result.push(
-            state.transpileToken(this.tagName),
+            state.transpileToken(this.tokens.tagName),
             '(['
         );
 
@@ -1190,7 +1373,7 @@ export class TaggedTemplateStringExpression extends Expression {
             );
         }
         result.push(
-            state.sourceNode(this.closingBacktick, '])')
+            state.sourceNode(this.tokens.closeBacktick, '])')
         );
         return result;
     }
@@ -1212,19 +1395,29 @@ export class TaggedTemplateStringExpression extends Expression {
 
 export class AnnotationExpression extends Expression {
     constructor(
-        readonly atToken: Token,
-        readonly nameToken: Token
+        atToken: Token,
+        nameToken: Identifier
     ) {
         super();
-        this.name = nameToken.text;
+        this.tokens.at = atToken;
+        this.tokens.name = nameToken;
         this.range = util.createRangeFromPositions(
             atToken.range.start,
             nameToken.range.end
         );
     }
 
-    public name: string;
     public range: Range;
+
+    public tokens = {} as {
+        at: Token;
+        name: Identifier;
+    };
+
+    public get name() {
+        return this.tokens.name.text;
+    }
+
     public call: CallExpression;
 
     /**
@@ -1256,13 +1449,15 @@ export class AnnotationExpression extends Expression {
 
 export class TernaryExpression extends Expression {
     constructor(
-        readonly test: Expression,
-        readonly questionMarkToken: Token,
-        readonly consequent?: Expression,
-        readonly colonToken?: Token,
-        readonly alternate?: Expression
+        public test: Expression,
+        questionMarkToken: Token,
+        public consequent?: Expression,
+        colonToken?: Token,
+        public alternate?: Expression
     ) {
         super();
+        this.tokens.questionMark = questionMarkToken;
+        this.tokens.colon = colonToken;
         this.range = util.createRangeFromPositions(
             test.range.start,
             (alternate ?? colonToken ?? consequent ?? questionMarkToken ?? test).range.end
@@ -1270,6 +1465,11 @@ export class TernaryExpression extends Expression {
     }
 
     public range: Range;
+
+    public tokens = {} as {
+        questionMark: Token;
+        colon: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         let result = [];
@@ -1286,7 +1486,7 @@ export class TernaryExpression extends Expression {
         if (mutatingExpressions.length > 0) {
             result.push(
                 state.sourceNode(
-                    this.questionMarkToken,
+                    this.tokens.questionMark,
                     //write all the scope variables as parameters.
                     //TODO handle when there are more than 31 parameters
                     `(function(__bsCondition, ${allUniqueVarNames.join(', ')})`
@@ -1297,23 +1497,23 @@ export class TernaryExpression extends Expression {
                 state.sourceNode(this.test, `if __bsCondition then`),
                 state.newline,
                 state.indent(1),
-                state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
-                ...this.consequent?.transpile(state) ?? [state.sourceNode(this.questionMarkToken, 'invalid')],
+                state.sourceNode(this.consequent ?? this.tokens.questionMark, 'return '),
+                ...this.consequent?.transpile(state) ?? [state.sourceNode(this.tokens.questionMark, 'invalid')],
                 state.newline,
                 state.indent(-1),
-                state.sourceNode(this.consequent ?? this.questionMarkToken, 'else'),
+                state.sourceNode(this.consequent ?? this.tokens.questionMark, 'else'),
                 state.newline,
                 state.indent(1),
-                state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
-                ...this.alternate?.transpile(state) ?? [state.sourceNode(this.consequent ?? this.questionMarkToken, 'invalid')],
+                state.sourceNode(this.consequent ?? this.tokens.questionMark, 'return '),
+                ...this.alternate?.transpile(state) ?? [state.sourceNode(this.consequent ?? this.tokens.questionMark, 'invalid')],
                 state.newline,
                 state.indent(-1),
-                state.sourceNode(this.questionMarkToken, 'end if'),
+                state.sourceNode(this.tokens.questionMark, 'end if'),
                 state.newline,
                 state.indent(-1),
-                state.sourceNode(this.questionMarkToken, 'end function)('),
+                state.sourceNode(this.tokens.questionMark, 'end function)('),
                 ...this.test.transpile(state),
-                state.sourceNode(this.questionMarkToken, `, ${allUniqueVarNames.join(', ')})`)
+                state.sourceNode(this.tokens.questionMark, `, ${allUniqueVarNames.join(', ')})`)
             );
             state.blockDepth--;
         } else {
@@ -1342,16 +1542,22 @@ export class TernaryExpression extends Expression {
 export class NullCoalescingExpression extends Expression {
     constructor(
         public consequent: Expression,
-        public questionQuestionToken: Token,
+        questionQuestionToken: Token,
         public alternate: Expression
     ) {
         super();
+        this.tokens.questionQuestion = questionQuestionToken;
         this.range = util.createRangeFromPositions(
             consequent.range.start,
             (alternate ?? questionQuestionToken ?? consequent).range.end
         );
     }
+
     public readonly range: Range;
+
+    public tokens = {} as {
+        questionQuestion: Token;
+    };
 
     transpile(state: BrsTranspileState) {
         let result = [];
@@ -1429,18 +1635,18 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
         return null;
     }
     if (isUnaryExpression(expr) && isLiteralNumber(expr.right)) {
-        return numberExpressionToValue(expr.right, expr.operator.text);
+        return numberExpressionToValue(expr.right, expr.tokens.operator.text);
     }
     if (isLiteralString(expr)) {
         //remove leading and trailing quotes
-        return expr.token.text.replace(/^"/, '').replace(/"$/, '');
+        return expr.tokens.value.text.replace(/^"/, '').replace(/"$/, '');
     }
     if (isLiteralNumber(expr)) {
         return numberExpressionToValue(expr);
     }
 
     if (isLiteralBoolean(expr)) {
-        return expr.token.text.toLowerCase() === 'true';
+        return expr.tokens.value.text.toLowerCase() === 'true';
     }
     if (isArrayLiteralExpression(expr)) {
         return expr.elements
@@ -1450,7 +1656,7 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     if (isAALiteralExpression(expr)) {
         return expr.elements.reduce((acc, e) => {
             if (!isCommentStatement(e)) {
-                acc[e.keyToken.text] = expressionToValue(e.value, strict);
+                acc[e.tokens.key.text] = expressionToValue(e.value, strict);
             }
             return acc;
         }, {});
@@ -1460,8 +1666,8 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
 
 function numberExpressionToValue(expr: LiteralExpression, operator = '') {
     if (isIntegerType(expr.type) || isLongIntegerType(expr.type)) {
-        return parseInt(operator + expr.token.text);
+        return parseInt(operator + expr.tokens.value.text);
     } else {
-        return parseFloat(operator + expr.token.text);
+        return parseFloat(operator + expr.tokens.value.text);
     }
 }

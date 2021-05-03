@@ -257,7 +257,7 @@ describe('parser', () => {
         expect(statements[0].func.body.statements[0].value.elements[0].text).to.equal('rem: 1');
         expect(statements[0].func.body.statements[1].value.elements[1].text).to.equal('rem: 2');
         expect(statements[0].func.body.statements[2].value.elements[0].text).to.equal('rem: 3: name: "bob"');
-        expect(statements[0].func.body.statements[3].name.text).to.equal('rem');
+        expect(statements[0].func.body.statements[3].tokens.name.text).to.equal('rem');
     });
 
     it('handles quoted AA keys', () => {
@@ -275,7 +275,7 @@ describe('parser', () => {
         let { statements, diagnostics } = Parser.parse(tokens);
         let element = ((statements as any)[0].func.body.statements[0].value.elements[0] as AAMemberExpression);
         expect(diagnostics[0]?.message).not.to.exist;
-        expect(element.keyToken.text).to.equal('"has-second-layer"');
+        expect(element.tokens.key.text).to.equal('"has-second-layer"');
     });
 
     it('extracts property names for completion', () => {

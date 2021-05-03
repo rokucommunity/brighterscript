@@ -1,6 +1,6 @@
 import { expect, assert } from 'chai';
 import { Lexer, ReservedWords } from '../lexer';
-import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
+import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode, getBscTypeFromExpression } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
@@ -97,7 +97,7 @@ describe('parser', () => {
                 sub UnusedFunction()
                 end sub
             `);
-            expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
+            expect(parser.references.functionStatements.map(x => x.tokens.name.text)).to.eql([
                 'main',
                 'UnusedFunction'
             ]);
@@ -107,7 +107,7 @@ describe('parser', () => {
             parser.invalidateReferences();
             expect(parser['_references']).not.to.exist;
             //calling `references` automatically regenerates the references
-            expect(parser.references.functionStatements.map(x => x.name.text)).to.eql([
+            expect(parser.references.functionStatements.map(x => x.tokens.name.text)).to.eql([
                 'main'
             ]);
         });
@@ -369,15 +369,15 @@ describe('parser', () => {
             let statements = (parser.statements[0] as FunctionStatement).func.body.statements as AssignmentStatement[];
             let first = statements[0].value as XmlAttributeGetExpression;
             expect(first).to.be.instanceof(XmlAttributeGetExpression);
-            expect(first.name.text).to.equal('firstName');
-            expect(first.at.text).to.equal('@');
-            expect((first.obj as any).name.text).to.equal('personXml');
+            expect(first.tokens.name.text).to.equal('firstName');
+            expect(first.tokens.at.text).to.equal('@');
+            expect((first.obj as VariableExpression).tokens.name.text).to.equal('personXml');
 
             let second = statements[1].value as XmlAttributeGetExpression;
             expect(second).to.be.instanceof(XmlAttributeGetExpression);
-            expect(second.name.text).to.equal('age');
-            expect(second.at.text).to.equal('@');
-            expect((second.obj as any).name.text).to.equal('firstChild');
+            expect(second.tokens.name.text).to.equal('age');
+            expect(second.tokens.at.text).to.equal('@');
+            expect((second.obj as VariableExpression).tokens.name.text).to.equal('firstChild');
         });
 
         it('does not allow chaining of @ symbols', () => {
@@ -845,14 +845,14 @@ describe('parser', () => {
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations[0].tokens.name.text).to.equal('meta1');
             expect(fn.annotations[0].name).to.equal('meta1');
 
             expect(statements[1]).to.be.instanceof(FunctionStatement);
             fn = statements[1] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[0].nameToken.text).to.equal('meta2');
+            expect(fn.annotations[0].tokens.name.text).to.equal('meta2');
         });
 
         it('attaches annotations inside a function body', () => {
@@ -898,7 +898,7 @@ describe('parser', () => {
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
             expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations[0].tokens.name.text).to.equal('meta1');
             expect(fn.annotations[0].call).to.be.instanceof(CallExpression);
         });
 

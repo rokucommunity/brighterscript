@@ -212,9 +212,7 @@ describe('astUtils visitors', () => {
                 PrintStatement: printHandler,
                 Block: blockHandler
             });
-            const printStatement = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
+            const printStatement = new PrintStatement(createToken(TokenKind.Print), []);
             const blockStatement = new Block([], Range.create(0, 0, 0, 0));
             visitor(printStatement, undefined);
             visitor(blockStatement, undefined);
@@ -227,15 +225,11 @@ describe('astUtils visitors', () => {
 
     describe('Statement editor', () => {
         it('allows replacing statements', () => {
-            const printStatement1 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
-            const printStatement2 = new PrintStatement({
-                print: createToken(TokenKind.Print)
-            }, []);
+            const printStatement1 = new PrintStatement(createToken(TokenKind.Print), []);
+            const printStatement2 = new PrintStatement(createToken(TokenKind.Print), []);
             const block = new Block([
                 printStatement1,
-                new ReturnStatement({ return: createToken(TokenKind.Return) })
+                new ReturnStatement(createToken(TokenKind.Return))
             ], Range.create(0, 0, 0, 0));
             const visitor = createVisitor({
                 PrintStatement: () => printStatement2

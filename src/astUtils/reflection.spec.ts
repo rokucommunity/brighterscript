@@ -32,23 +32,23 @@ describe('reflection', () => {
         const block = new Block([], range);
         const expression = new ExpressionStatement(expr);
         const comment = new CommentStatement([token]);
-        const exitFor = new ExitForStatement({ exitFor: token });
-        const exitWhile = new ExitWhileStatement({ exitWhile: token });
+        const exitFor = new ExitForStatement(token);
+        const exitWhile = new ExitWhileStatement(token);
         const funs = new FunctionStatement(ident, new FunctionExpression([], block, token, token, token, token), undefined);
-        const ifs = new IfStatement({ if: token }, expr, block);
+        const ifs = new IfStatement(token, expr, token, block);
         const increment = new IncrementStatement(expr, token);
-        const print = new PrintStatement({ print: token }, []);
-        const gotos = new GotoStatement({ goto: token, label: token });
-        const labels = new LabelStatement({ identifier: ident, colon: token });
-        const returns = new ReturnStatement({ return: token });
-        const ends = new EndStatement({ end: token });
-        const stop = new StopStatement({ stop: token });
+        const print = new PrintStatement(token, []);
+        const gotos = new GotoStatement(token, token);
+        const labels = new LabelStatement(ident, token);
+        const returns = new ReturnStatement(token);
+        const ends = new EndStatement(token);
+        const stop = new StopStatement(token);
         const fors = new ForStatement(token, assignment, token, expr, block, token, token, expr);
         const foreach = new ForEachStatement(token, ident, token, expr, block, token);
-        const whiles = new WhileStatement({ while: token, endWhile: token }, expr, block);
+        const whiles = new WhileStatement(token, expr, block, token);
         const dottedSet = new DottedSetStatement(expr, ident, expr);
         const indexedSet = new IndexedSetStatement(expr, expr, expr, token, token);
-        const library = new LibraryStatement({ library: token, filePath: token });
+        const library = new LibraryStatement(token, token);
         const namespace = new NamespaceStatement(token, new NamespacedVariableNameExpression(createIdentifier('a', range)), body, token);
         const cls = new ClassStatement(token, ident, [], token);
         const imports = new ImportStatement(token, token);
@@ -183,10 +183,10 @@ describe('reflection', () => {
         const binary = new BinaryExpression(expr, token, expr);
         const call = new CallExpression(expr, token, token, [], undefined);
         const fun = new FunctionExpression([], block, token, token, token, token);
-        const dottedGet = new DottedGetExpression(expr, ident, token);
-        const xmlAttrGet = new XmlAttributeGetExpression(expr, ident, token);
-        const indexedGet = new IndexedGetExpression(expr, expr, token, token);
-        const grouping = new GroupingExpression({ left: token, right: token }, expr);
+        const dottedGet = new DottedGetExpression(expr, token, ident);
+        const xmlAttrGet = new XmlAttributeGetExpression(expr, token, ident);
+        const indexedGet = new IndexedGetExpression(expr, token, expr, token);
+        const grouping = new GroupingExpression(token, expr, token);
         const literal = createStringLiteral('test');
         const escapedCarCode = new EscapedCharCodeLiteralExpression(charCode);
         const arrayLit = new ArrayLiteralExpression([], token, token);
@@ -199,11 +199,11 @@ describe('reflection', () => {
         const tplQuasi = new TemplateStringQuasiExpression([expr]);
         const tplString = new TemplateStringExpression(token, [tplQuasi], [], token);
         const taggedTpl = new TaggedTemplateStringExpression(ident, token, [tplQuasi], [], token);
-        const annotation = new AnnotationExpression(token, token);
+        const annotation = new AnnotationExpression(token, ident);
 
         it('isExpression', () => {
             expect(isExpression(binary)).to.be.true;
-            expect(isExpression(binary.operator as any)).to.be.false;
+            expect(isExpression(binary.tokens.operator as any)).to.be.false;
         });
         it('isBinaryExpression', () => {
             expect(isBinaryExpression(binary)).to.be.true;

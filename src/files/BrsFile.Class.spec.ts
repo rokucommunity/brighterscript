@@ -91,7 +91,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expect(program.getDiagnostics()[0]?.message).not.to.exist;
-        let duckClass = file.parser.references.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
+        let duckClass = file.parser.references.classStatements.find(x => x.tokens.name.text.toLowerCase() === 'duck');
         expect(duckClass).to.exist;
         expect(duckClass.memberMap['move']).to.exist;
     });

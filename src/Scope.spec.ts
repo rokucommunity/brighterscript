@@ -584,7 +584,7 @@ describe('Scope', () => {
         });
 
 
-        it('catches argument type mismatches on function calls within namespaces across files', () => {
+        it.only('catches argument type mismatches on function calls within namespaces across files', () => {
             program.addOrReplaceFile('source/file1.bs', `
                 namespace Name.Space
                     function getNum() as integer

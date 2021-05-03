@@ -36,7 +36,7 @@ export function createIdentifier(ident: string, range?: Range, namespaceName?: N
 export function createDottedIdentifier(path: string[], range?: Range, namespaceName?: NamespacedVariableNameExpression): DottedGetExpression {
     const ident = path.pop();
     const obj = path.length > 1 ? createDottedIdentifier(path, range, namespaceName) : createIdentifier(path[0], range, namespaceName);
-    return new DottedGetExpression(obj, createToken(TokenKind.Identifier, ident, range), createToken(TokenKind.Dot, '.', range));
+    return new DottedGetExpression(obj, createToken(TokenKind.Dot, '.', range), createToken(TokenKind.Identifier, ident, range));
 }
 
 /**
