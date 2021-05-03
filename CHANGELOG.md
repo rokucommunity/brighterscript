@@ -5,9 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [unreleased]
+
+## [1.0.0-alpha.1]
+[1.0.0-alpha.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.4...v1.0.0-alpha.1
+### Add
+ - Type checking for function arguments ([#401](https://github.com/rokucommunity/brighterscript/pull/401))
 ### Changed
  - Refactor plugin events to emit an event object ([#397](https://github.com/rokucommunity/brighterscript/pull/397))
+ - Remove `FunctionScope` ([#401](https://github.com/rokucommunity/brighterscript/pull/401))
+ - Add `SymbolTable` and `LazyType` objects to improve type tracking ([#401](https://github.com/rokucommunity/brighterscript/pull/401))
+
 
 
 ## [0.37.4] - 2021-04-20
