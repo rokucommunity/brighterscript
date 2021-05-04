@@ -830,6 +830,59 @@ describe('BrsFile BrighterScript classes', () => {
         });
     });
 
+    it('detects overridden methods with different visibility', () => {
+        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            class Animal
+                sub speakInPublic()
+                end sub
+                protected sub speakWithFriends()
+                end sub
+                private sub speakWithFamily()
+                end sub
+            end class
+            class Duck extends Animal
+                private override sub speakInPublic()
+                end sub
+                public override sub speakWithFriends()
+                end sub
+                override sub speakWithFamily()
+                end sub
+            end class
+        `);
+        program.validate();
+        expect(program.getDiagnostics()[0]).to.exist.and.to.include({
+            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakInPublic', 'private', 'public', 'Animal')
+        });
+        expect(program.getDiagnostics()[1]).to.exist.and.to.include({
+            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakWithFriends', 'public', 'protected', 'Animal')
+        });
+        expect(program.getDiagnostics()[2]).to.exist.and.to.include({
+            ...DiagnosticMessages.mismatchedOverriddenMemberVisibility('Duck', 'speakWithFamily', 'public', 'private', 'Animal')
+        });
+    });
+    it('allows overridden methods with matching visibility', () => {
+        program.addOrReplaceFile({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
+            class Animal
+                sub speakInPublic()
+                end sub
+                protected sub speakWithFriends()
+                end sub
+                private sub speakWithFamily()
+                end sub
+            end class
+            class Duck extends Animal
+                override sub speakInPublic()
+                end sub
+                protected override sub speakWithFriends()
+                end sub
+                private override sub speakWithFamily()
+                end sub
+            end class
+        `);
+        program.validate();
+        expect(program.getDiagnostics()).to.be.empty;
+    });
+
     it('detects extending unknown parent class', () => {
         program.addOrReplaceFile('source/main.brs', `
             class Duck extends Animal
