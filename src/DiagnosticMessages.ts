@@ -626,9 +626,14 @@ export let DiagnosticMessages = {
         code: 1121,
         severity: DiagnosticSeverity.Error
     }),
+    mismatchedOverriddenMemberVisibility: (childClassName: string, memberName: string, childAccessModifier: string, ancestorAccessModifier: string, ancestorClassName: string) => ({
+        message: `Access modifier mismatch: '${memberName}' is ${childAccessModifier} in type '${childClassName}' but is ${ancestorAccessModifier} in base type '${ancestorClassName}'.`,
+        code: 1122,
+        severity: DiagnosticSeverity.Error
+    }),
     cannotFindType: (typeName: string) => ({
         message: `Cannot find type with name '${typeName}'`,
-        code: 1122,
+        code: 1123,
         severity: DiagnosticSeverity.Error
     })
 };

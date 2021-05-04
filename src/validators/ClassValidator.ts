@@ -10,6 +10,7 @@ import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCust
 import type { BscFile, BsDiagnostic } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils';
 import type { BrsFile } from '../files/BrsFile';
+import { TokenKind } from '../lexer';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -225,6 +226,25 @@ export class BsClassValidator {
                         ) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.missingOverrideKeyword(
+                                    ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
+                                ),
+                                file: classStatement.file,
+                                range: member.range
+                            });
+                        }
+
+                        //child member has different visiblity
+                        if (
+                            //is a method
+                            isClassMethodStatement(member) &&
+                            (member.accessModifier?.kind ?? TokenKind.Public) !== (ancestorAndMember.member.accessModifier?.kind ?? TokenKind.Public)
+                        ) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.mismatchedOverriddenMemberVisibility(
+                                    classStatement.name.text,
+                                    ancestorAndMember.member.name?.text,
+                                    member.accessModifier?.text || 'public',
+                                    ancestorAndMember.member.accessModifier?.text || 'public',
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
                                 file: classStatement.file,
