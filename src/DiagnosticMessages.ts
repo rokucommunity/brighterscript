@@ -625,6 +625,11 @@ export let DiagnosticMessages = {
         message: `Missing expression(s) in 'dim' statement`,
         code: 1121,
         severity: DiagnosticSeverity.Error
+    }),
+    mismatchedOverriddenMemberVisibility: (childClassName: string, memberName: string, childAccessModifier: string, ancestorAccessModifier: string, ancestorClassName: string) => ({
+        message: `Access modifier mismatch: '${memberName}' is ${childAccessModifier} in type '${childClassName}' but is ${ancestorAccessModifier} in base type '${ancestorClassName}'.`,
+        code: 1122,
+        severity: DiagnosticSeverity.Error
     })
 };
 
