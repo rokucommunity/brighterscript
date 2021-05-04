@@ -2,7 +2,7 @@ import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import type { ClassMethodStatement, ClassStatement } from '../parser/Statement';
+import type { ClassFieldStatement, ClassMethodStatement, ClassStatement } from '../parser/Statement';
 import { CancellationTokenSource, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
@@ -180,14 +180,14 @@ export class BsClassValidator {
                     let memberType = isClassFieldStatement(member) ? 'field' : 'method';
                     let ancestorAndMember = this.getAncestorMember(classStatement, lowerMemberName);
                     if (ancestorAndMember) {
-                        let ancestorMemberType = isClassFieldStatement(ancestorAndMember.member) ? 'field' : 'method';
+                        let ancestorMemberKind = isClassFieldStatement(ancestorAndMember.member) ? 'field' : 'method';
 
-                        //mismatched member type (field/method in child, opposite in parent)
-                        if (memberType !== ancestorMemberType) {
+                        //mismatched member type (field/method in child, opposite in ancestor)
+                        if (memberType !== ancestorMemberKind) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.classChildMemberDifferentMemberTypeThanAncestor(
                                     memberType,
-                                    ancestorMemberType,
+                                    ancestorMemberKind,
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
                                 file: classStatement.file,
@@ -197,14 +197,22 @@ export class BsClassValidator {
 
                         //child field has same name as parent
                         if (isClassFieldStatement(member)) {
-                            this.diagnostics.push({
-                                ...DiagnosticMessages.memberAlreadyExistsInParentClass(
-                                    memberType,
-                                    ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
-                                ),
-                                file: classStatement.file,
-                                range: member.range
-                            });
+                            const ancestorFieldType = (ancestorAndMember.member as ClassFieldStatement).getType();
+                            const childFieldType = member.getType();
+                            if (!childFieldType.isAssignableTo(ancestorFieldType)) {
+                                //flag incompatible child field type to ancestor field type
+                                this.diagnostics.push({
+                                    ...DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty(
+                                        classStatement.getName(ParseMode.BrighterScript),
+                                        ancestorAndMember.classStatement.getName(ParseMode.BrighterScript),
+                                        member.name.text,
+                                        childFieldType.toString(),
+                                        ancestorFieldType.toString()
+                                    ),
+                                    file: classStatement.file,
+                                    range: member.range
+                                });
+                            }
                         }
 
                         //child method missing the override keyword
@@ -275,7 +283,7 @@ export class BsClassValidator {
                             //check if this custom type is in our class map
                             if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName)) {
                                 this.diagnostics.push({
-                                    ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
+                                    ...DiagnosticMessages.cannotFindType(fieldTypeName),
                                     range: statement.type.range,
                                     file: classStatement.file
                                 });

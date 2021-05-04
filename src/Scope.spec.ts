@@ -599,8 +599,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expect(program.getDiagnostics().map(x => x.message)).to.eql([
-                    DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message,
-                    DiagnosticMessages.expectedValidTypeToFollowAsKeyword().message
+                    DiagnosticMessages.cannotFindType('unknownType').message,
+                    DiagnosticMessages.cannotFindType('unknownType').message
                 ]);
             });
 
