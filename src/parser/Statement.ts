@@ -1762,7 +1762,7 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
 
     /**
      * Derive a ValueKind from the type token, or the initial value.
-     * Defaults to `ValueKind.Dynamic`
+     * Defaults to `DynamicType`
      */
     getType() {
         if (this.type) {

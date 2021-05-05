@@ -510,7 +510,7 @@ export class Parser {
             fieldType = this.typeToken();
 
             //no field type specified
-            if (!util.tokenToBscType(fieldType) && !this.check(TokenKind.Identifier)) {
+            if (!util.tokenToBscType(fieldType)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedValidTypeToFollowAsKeyword(),
                     range: this.peek().range
