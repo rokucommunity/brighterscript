@@ -17,7 +17,7 @@ import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-
+import { SymbolTable } from './SymbolTable';
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
  */
@@ -358,7 +358,8 @@ export class Scope {
                         namespaces: {},
                         classStatements: {},
                         functionStatements: {},
-                        statements: []
+                        statements: [],
+                        symbolTable: new SymbolTable(this.symbolTable)
                     };
                 }
                 let ns = namespaceLookup[name.toLowerCase()];
@@ -370,6 +371,9 @@ export class Scope {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     }
                 }
+                // Merges all the symbol tables of the namespace statements into the new symbol table created above.
+                // Set those symbol tables to have this new merged table as a parent
+                ns.symbolTable.mergeSymbolTable(namespace.symbolTable);
             }
 
             //associate child namespaces with their parents
@@ -414,6 +418,9 @@ export class Scope {
             //clear the scope's errors list (we will populate them from this method)
             this.diagnostics = [];
 
+            // link the symbol table
+            this.linkSymbolTable();
+
             let callables = this.getAllCallables();
 
             //sort the callables by filepath and then method name, so the errors will be consistent
@@ -430,6 +437,9 @@ export class Scope {
             let callableContainerMap = util.getCallableContainersByLowerName(callables);
 
             this._validate(callableContainerMap);
+
+            // unlink the symbol table so it can't be accessed from the wrong scope
+            this.unlinkSymbolTable();
         });
     }
 
@@ -451,6 +461,7 @@ export class Scope {
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
+            this.diagnosticDetectInvalidFunctionCalls(file);
         });
     }
 
@@ -461,6 +472,55 @@ export class Scope {
         (this as any).isValidated = false;
         //clear out various lookups (they'll get regenerated on demand the next time they're requested)
         this.cache.clear();
+        this.clearSymbolTable();
+    }
+
+    public get symbolTable() {
+        if (!this._symbolTable) {
+            this._symbolTable = new SymbolTable(this.getParentScope()?.symbolTable);
+            for (let file of this.getOwnFiles()) {
+                if (isBrsFile(file)) {
+                    this._symbolTable.mergeSymbolTable(file.parser?.symbolTable);
+                }
+            }
+        }
+        return this._symbolTable;
+    }
+    private _symbolTable: SymbolTable;
+
+    private clearSymbolTable() {
+        this._symbolTable = null;
+    }
+
+    /**
+    * Builds the current symbol table for the scope, by merging the tables for all the files in this scope.
+    * Also links all file symbols tables to this new table
+    * This will only rebuilt if the symbol table has not been built before
+    */
+    public linkSymbolTable() {
+        for (const file of this.getOwnFiles()) {
+            if (isBrsFile(file)) {
+                file.parser?.symbolTable.setParent(this.symbolTable);
+
+                for (const namespace of file.parser.references.namespaceStatements) {
+                    const namespaceNameLower = namespace.nameExpression.getName(ParseMode.BrighterScript).toLowerCase();
+                    const namespaceSymbolTable = this.namespaceLookup[namespaceNameLower].symbolTable;
+                    namespace.symbolTable.setParent(namespaceSymbolTable);
+                }
+            }
+        }
+    }
+
+    public unlinkSymbolTable() {
+        for (let file of this.getOwnFiles()) {
+            if (isBrsFile(file)) {
+                file.parser?.symbolTable.setParent(null);
+
+                for (const namespace of file.parser.references.namespaceStatements) {
+                    namespace.symbolTable.setParent(null);
+                }
+            }
+        }
     }
 
     private detectVariableNamespaceCollisions(file: BrsFile) {
@@ -573,6 +633,36 @@ export class Scope {
         }
     }
 
+
+    private diagnosticDetectInvalidFunctionCalls(file: BscFile) {
+        for (let expCall of file.functionCalls) {
+            const funcType = expCall.functionExpression.symbolTable.getSymbolType(expCall.name);
+
+            if (!isFunctionType(funcType)) {
+                // can not find function. Handled in a different validation function
+                continue;
+            }
+            if (funcType.params.length !== expCall.args.length) {
+                // Argument count mismatch. Handled in a different validation function
+                continue;
+            }
+
+            for (let index = 0; index < funcType.params.length; index++) {
+                const param = funcType.params[index];
+                const arg = expCall.args[index];
+                const argType = arg.type;
+
+                if (!argType.isAssignableTo(param.type)) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.argumentTypeMismatch(arg.type.toTypeString(), param.type.toTypeString()),
+                        range: arg.range,
+                        file: file
+                    });
+                }
+            }
+        }
+    }
+
     public getNewExpressions() {
         let result = [] as AugmentedNewExpression[];
         this.enumerateBrsFiles((file) => {
@@ -631,29 +721,27 @@ export class Scope {
     }
 
     /**
-     * Detect local variables (function scope) that have the same name as scope calls
+     * Detect local variables (vars declared within a function expression) that have the same name as scope calls
      * @param file
      * @param callableContainerMap
      */
-    private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: CallableContainerMap) {
+    private diagnosticDetectShadowedLocalVars(file: BrsFile, callableContainerMap: CallableContainerMap) {
         const classMap = this.getClassMap();
-        //loop through every function scope
-        for (let scope of file.functionScopes) {
-            //every var declaration in this function scope
-            for (let varDeclaration of scope.variableDeclarations) {
-                const varName = varDeclaration.name;
-                const lowerVarName = varName.toLowerCase();
 
+        for (let func of file.parser.references.functionExpressions) {
+            //every var declaration in this function expression
+            for (let symbol of func.symbolTable.ownSymbols) {
+                const symbolNameLower = symbol.name.toLowerCase();
                 //if the var is a function
-                if (isFunctionType(varDeclaration.type)) {
+                if (isFunctionType(symbol.type)) {
                     //local var function with same name as stdlib function
                     if (
                         //has same name as stdlib
-                        globalCallableMap.has(lowerVarName)
+                        globalCallableMap.has(symbolNameLower)
                     ) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
-                            range: varDeclaration.nameRange,
+                            range: symbol.range,
                             file: file
                         });
 
@@ -661,11 +749,11 @@ export class Scope {
                         //in the scope function list
                     } else if (
                         //has same name as scope function
-                        callableContainerMap.has(lowerVarName)
+                        callableContainerMap.has(symbolNameLower)
                     ) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
-                            range: varDeclaration.nameRange,
+                            range: symbol.range,
                             file: file
                         });
                     }
@@ -673,21 +761,21 @@ export class Scope {
                     //var is not a function
                 } else if (
                     //is NOT a callable from stdlib (because non-function local vars can have same name as stdlib names)
-                    !globalCallableMap.has(lowerVarName)
+                    !globalCallableMap.has(symbolNameLower)
                 ) {
 
                     //is same name as a callable
-                    if (callableContainerMap.has(lowerVarName)) {
+                    if (callableContainerMap.has(symbolNameLower)) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                            range: varDeclaration.nameRange,
+                            range: symbol.range,
                             file: file
                         });
                         //has the same name as an in-scope class
-                    } else if (classMap.has(lowerVarName)) {
+                    } else if (classMap.has(symbolNameLower)) {
                         this.diagnostics.push({
-                            ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(lowerVarName)?.item.getName(ParseMode.BrighterScript)),
-                            range: varDeclaration.nameRange,
+                            ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(symbolNameLower).item.getName(ParseMode.BrighterScript)),
+                            range: symbol.range,
                             file: file
                         });
                     }
@@ -704,44 +792,36 @@ export class Scope {
     private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: CallableContainerMap) {
         //validate all expression calls
         for (let expCall of file.functionCalls) {
-            const lowerName = expCall.name.toLowerCase();
-            //for now, skip validation on any method named "super" within `.bs` contexts.
-            //TODO revise this logic so we know if this function call resides within a class constructor function
-            if (file.extension === '.bs' && lowerName === 'super') {
-                continue;
-            }
-
-            //get the local scope for this expression
-            let scope = file.getFunctionScopeAtPosition(expCall.nameRange.start);
-
-            //if we don't already have a variable with this name.
-            if (!scope?.getVariableByName(lowerName)) {
-                let callablesWithThisName: CallableContainer[];
-
-                if (expCall.functionScope.func.namespaceName) {
-                    // prefer namespaced function
-                    const potentialNamespacedCallable = expCall.functionScope.func.namespaceName.getName(ParseMode.BrightScript).toLowerCase() + '_' + lowerName;
-                    callablesWithThisName = callablesByLowerName.get(potentialNamespacedCallable.toLowerCase());
-                }
-                if (!callablesWithThisName) {
-                    // just try it as is
-                    callablesWithThisName = callablesByLowerName.get(lowerName);
+            if (isBrsFile(file)) {
+                const lowerName = expCall.name.toLowerCase();
+                //for now, skip validation on any method named "super" within `.bs` contexts.
+                //TODO revise this logic so we know if this function call resides within a class constructor function
+                if (file.extension === '.bs' && lowerName === 'super') {
+                    continue;
                 }
 
-                //use the first item from callablesByLowerName, because if there are more, that's a separate error
-                let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
+                //find a local variable with this name
+                const localSymbol = file.getFunctionExpressionAtPosition(expCall.nameRange.start)?.symbolTable.getSymbol(lowerName);
 
-                //detect calls to unknown functions
-                if (!knownCallable) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.callToUnknownFunction(expCall.name, this.name),
-                        range: expCall.nameRange,
-                        file: file
-                    });
+                //if we don't already have a variable with this name.
+                if (!localSymbol) {
+                    const callablesWithThisName = util.getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName, expCall);
+
+                    //use the first item from callablesByLowerName, because if there are more, that's a separate error
+                    let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
+
+                    //detect calls to unknown functions
+                    if (!knownCallable) {
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.callToUnknownFunction(expCall.name, this.name),
+                            range: expCall.nameRange,
+                            file: file
+                        });
+                    }
+                } else {
+                    //if we found a variable with the same name as the function, assume the call is "known".
+                    //If the variable is a different type, some other check should add a diagnostic for that.
                 }
-            } else {
-                //if we found a variable with the same name as the function, assume the call is "known".
-                //If the variable is a different type, some other check should add a diagnostic for that.
             }
         }
     }
@@ -996,6 +1076,7 @@ interface NamespaceContainer {
     classStatements: Record<string, ClassStatement>;
     functionStatements: Record<string, FunctionStatement>;
     namespaces: Record<string, NamespaceContainer>;
+    symbolTable: SymbolTable;
 }
 
 interface AugmentedNewExpression extends NewExpression {

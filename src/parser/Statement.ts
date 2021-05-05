@@ -14,6 +14,7 @@ import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isComm
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { createInvalidLiteral, createToken, interpolatedRange } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
+import { SymbolTable } from '../SymbolTable';
 
 /**
  * A BrightScript statement
@@ -134,8 +135,8 @@ export class Body extends Statement implements TypedefProvider {
 
 export class AssignmentStatement extends Statement {
     constructor(
-        readonly equals: Token,
         readonly name: Identifier,
+        readonly equals: Token,
         readonly value: Expression,
         readonly containingFunction: FunctionExpression
     ) {
@@ -861,18 +862,18 @@ export class ForStatement extends Statement {
 
 export class ForEachStatement extends Statement {
     constructor(
-        readonly tokens: {
-            forEach: Token;
-            in: Token;
-            endFor: Token;
-        },
-        readonly item: Token,
-        readonly target: Expression,
-        readonly body: Block
+        public forEachToken: Token,
+        public item: Identifier,
+        public inToken: Token,
+        public target: Expression,
+        public body: Block,
+        public endForToken: Token
     ) {
         super();
-        const lastRange = this.tokens.endFor?.range ?? body.range;
-        this.range = util.createRangeFromPositions(this.tokens.forEach.range.start, lastRange.end);
+        this.range = util.createRangeFromPositions(
+            this.forEachToken.range.start,
+            (this.endForToken ?? this.body ?? this.target ?? this.inToken ?? this.item ?? this.forEachToken).range.end
+        );
     }
 
     public readonly range: Range;
@@ -881,7 +882,7 @@ export class ForEachStatement extends Statement {
         let result = [];
         //for each
         result.push(
-            state.transpileToken(this.tokens.forEach),
+            state.transpileToken(this.forEachToken),
             ' '
         );
         //item
@@ -891,7 +892,7 @@ export class ForEachStatement extends Statement {
         );
         //in
         result.push(
-            state.transpileToken(this.tokens.in),
+            state.transpileToken(this.inToken),
             ' '
         );
         //target
@@ -906,7 +907,7 @@ export class ForEachStatement extends Statement {
         //end for
         result.push(
             state.indent(),
-            state.transpileToken(this.tokens.endFor)
+            state.transpileToken(this.endForToken)
         );
         return result;
     }
@@ -1099,15 +1100,19 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 }
 
 export class NamespaceStatement extends Statement implements TypedefProvider {
+    readonly symbolTable: SymbolTable;
+
     constructor(
         public keyword: Token,
         //this should technically only be a VariableExpression or DottedGetExpression, but that can be enforced elsewhere
         public nameExpression: NamespacedVariableNameExpression,
         public body: Body,
-        public endKeyword: Token
+        public endKeyword: Token,
+        readonly parentSymbolTable?: SymbolTable
     ) {
         super();
         this.name = this.nameExpression.getName(ParseMode.BrighterScript);
+        this.symbolTable = new SymbolTable(parentSymbolTable);
     }
 
     /**
@@ -1714,14 +1719,14 @@ export class ClassMethodStatement extends FunctionStatement {
             thisQualifiedName.text = 'm.' + field.name.text;
             if (field.initialValue) {
                 newStatements.push(
-                    new AssignmentStatement(field.equal, thisQualifiedName, field.initialValue, this.func)
+                    new AssignmentStatement(thisQualifiedName, field.equal, field.initialValue, this.func)
                 );
             } else {
                 //if there is no initial value, set the initial value to `invalid`
                 newStatements.push(
                     new AssignmentStatement(
-                        createToken(TokenKind.Equal, '=', field.name.range),
                         thisQualifiedName,
+                        createToken(TokenKind.Equal, '=', field.name.range),
                         createInvalidLiteral('invalid', field.name.range),
                         this.func
                     )
@@ -1757,7 +1762,7 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
 
     /**
      * Derive a ValueKind from the type token, or the initial value.
-     * Defaults to `ValueKind.Dynamic`
+     * Defaults to `DynamicType`
      */
     getType() {
         if (this.type) {

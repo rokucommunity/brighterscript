@@ -894,7 +894,7 @@ export class Program {
 
         const results = new Map<string, SignatureInfoObj>();
 
-        let functionScope = file.getFunctionScopeAtPosition(position);
+        let functionExpression = file.getFunctionExpressionAtPosition(position);
         let identifierInfo = this.getPartialStatementInfo(file, position);
         if (identifierInfo.statementType === '') {
             // just general function calls
@@ -911,8 +911,8 @@ export class Program {
         } else if (identifierInfo.statementType === '.') {
             //if m class reference.. then
             //only get statements from the class I am in..
-            if (functionScope) {
-                let myClass = file.getClassFromMReference(position, file.getTokenAt(position), functionScope);
+            if (functionExpression) {
+                let myClass = file.getClassFromMReference(position, file.getTokenAt(position), functionExpression);
                 if (myClass) {
                     for (let scope of this.getScopesForFile(myClass.file)) {
                         let classes = scope.getClassHierarchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());

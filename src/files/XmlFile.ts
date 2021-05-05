@@ -3,7 +3,6 @@ import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
-import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall, CommentFlag } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
@@ -15,6 +14,7 @@ import type { SGAst, SGToken } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
+import type { FunctionExpression } from '../parser/Expression';
 import { createSGScript } from '../astUtils/creators';
 
 export class XmlFile {
@@ -142,8 +142,6 @@ export class XmlFile {
 
     //TODO implement the xml CDATA parsing, which would populate this list
     public functionCalls = [] as FunctionCall[];
-
-    public functionScopes = [] as FunctionScope[];
 
     /**
      * The name of the component that this component extends.
@@ -413,12 +411,12 @@ export class XmlFile {
         return null;
     }
 
-    public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
+    public getReferences(position: Position): Promise<Location[]> {
         //TODO implement
         return null;
     }
 
-    public getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]): FunctionScope { //eslint-disable-line
+    public getFunctionExpressionAtPosition(position: Position, functionExpressions?: FunctionExpression[]): FunctionExpression {
         //TODO implement
         return null;
     }
