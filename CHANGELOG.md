@@ -6,8 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.2]
+[1.0.0-alpha.2]:   https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.1...v1.0.0-alpha.2
+### Add
+ - all changes from [v0.38.0](#0380---2021-05-04)
+### Changed
+ - Rename pathAbsolute to srcPath ([#399](https://github.com/rokucommunity/brighterscript/pull/399))
+ - Convert pkgPath to actual pkgPath (i.e. `pkg:/source/main.brs` where previously it would have been `source/main.brs` or `source\main.brs`) ([#399](https://github.com/rokucommunity/brighterscript/pull/399))
+ - Simplify Program removeFile and addReplaceFile ([#399](https://github.com/rokucommunity/brighterscript/pull/399))
+ - Add `normalizePath` parameter to file-related functions in `Program` and `Scope` ([#399](https://github.com/rokucommunity/brighterscript/pull/399))
+
+
+
 ## [0.38.0] - 2021-05-04
-### Adds
+### Add
  - warning for mismatched class method accessibility ([#402](https://github.com/rokucommunity/brighterscript/pull/402))
  - allow class field overrides in child classes as long as they are the same type ([#394](https://github.com/rokucommunity/brighterscript/pull/394))
 
@@ -21,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Refactor plugin events to emit an event object ([#397](https://github.com/rokucommunity/brighterscript/pull/397))
  - Remove `FunctionScope` ([#401](https://github.com/rokucommunity/brighterscript/pull/401))
  - Add `SymbolTable` and `LazyType` objects to improve type tracking ([#401](https://github.com/rokucommunity/brighterscript/pull/401))
+
+
+
+## [0.37.4] - 2021-04-20
+### Fixed
+ - bug validating namespace function calls ([#390](https://github.com/rokucommunity/brighterscript/pull/390))
+
+
 
 ## [0.37.4] - 2021-04-20
 ### Fixed
