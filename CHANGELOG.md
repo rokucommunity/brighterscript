@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.38.0] - 2021-05-04
+### Adds
+ - warning for mismatched class method accessibility ([#402](https://github.com/rokucommunity/brighterscript/pull/402))
+ - allow class field overrides in child classes as long as they are the same type ([#394](https://github.com/rokucommunity/brighterscript/pull/394))
+
+
+
 ## [0.37.4] - 2021-04-20
 ### Fixed
  - bug validating namespace function calls ([#390](https://github.com/rokucommunity/brighterscript/pull/390))
@@ -1091,3 +1098,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.37.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.1...v0.37.2
 [0.37.3]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.2...v0.37.3
 [0.37.4]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.3...v0.37.4
+[0.38.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.37.4...v0.38.0
