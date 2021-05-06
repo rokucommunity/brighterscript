@@ -1,5 +1,4 @@
 import type { CompletionItem, Position, Range } from 'vscode-languageserver';
-import * as path from 'path';
 import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
@@ -186,12 +185,16 @@ export class Scope {
 
     /**
      * Get the file with the specified pkgPath
+     * @param filePath can be a srcPath, a pkgPath, or a destPath (same as pkgPath but without `pkg:/`)
+     * @param normalizePath should this function repair and standardize the path? Passing false should have a performance boost if you can guarantee your path is already sanitized
      */
-    public getFile(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
+    public getFile(srcPath: string, normalizePath = true) {
+        if (normalizePath) {
+            srcPath = s`${srcPath}`;
+        }
         let files = this.getAllFiles();
         for (let file of files) {
-            if (file.pathAbsolute === pathAbsolute) {
+            if (file.srcPath === srcPath) {
                 return file;
             }
         }
@@ -222,7 +225,7 @@ export class Scope {
                         result.push(comp.file);
                     }
                 } else {
-                    let file = this.program.getFileByPkgPath(dependency);
+                    let file = this.program.getFile(dependency, false);
                     if (file) {
                         result.push(file);
                     }
@@ -427,7 +430,7 @@ export class Scope {
             callables = callables.sort((a, b) => {
                 return (
                     //sort by path
-                    a.callable.file.pathAbsolute.localeCompare(b.callable.file.pathAbsolute) ||
+                    a.callable.file.srcPath.localeCompare(b.callable.file.srcPath) ||
                     //then sort by method name
                     a.callable.name.localeCompare(b.callable.name)
                 );
@@ -538,7 +541,7 @@ export class Scope {
                         relatedInformation: [{
                             message: 'Namespace declared here',
                             location: Location.create(
-                                URI.file(namespace.file.pathAbsolute).toString(),
+                                URI.file(namespace.file.srcPath).toString(),
                                 namespace.nameRange
                             )
                         }]
@@ -559,7 +562,7 @@ export class Scope {
                     relatedInformation: [{
                         message: 'Namespace declared here',
                         location: Location.create(
-                            URI.file(namespace.file.pathAbsolute).toString(),
+                            URI.file(namespace.file.srcPath).toString(),
                             namespace.nameRange
                         )
                     }]
@@ -924,7 +927,7 @@ export class Scope {
             //if we can't find the file
             if (!referencedFile) {
                 //skip the default bslib file, it will exist at transpile time but should not show up in the program during validation cycle
-                if (scriptImport.pkgPath === `source${path.sep}bslib.brs`) {
+                if (scriptImport.pkgPath === `pkg:/source/bslib.brs`) {
                     continue;
                 }
                 let dInfo: DiagnosticInfo;

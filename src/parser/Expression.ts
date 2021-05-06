@@ -877,18 +877,10 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${fileUrl(state.srcPath)}:${this.token.range.start.line + 1}"`;
                 break;
             case TokenKind.PkgPathLiteral:
-                let pkgPath1 = `pkg:/${state.file.pkgPath}`
-                    .replace(/\\/g, '/')
-                    .replace(/\.bs$/i, '.brs');
-
-                text = `"${pkgPath1}"`;
+                text = `"${state.file.pkgPath.replace(/\.bs$/i, '.brs')}"`;
                 break;
             case TokenKind.PkgLocationLiteral:
-                let pkgPath2 = `pkg:/${state.file.pkgPath}`
-                    .replace(/\\/g, '/')
-                    .replace(/\.bs$/i, '.brs');
-
-                text = `"${pkgPath2}:" + str(LINE_NUM)`;
+                text = `"${state.file.pkgPath.replace(/\.bs$/i, '.brs')}:" + str(LINE_NUM)`;
                 break;
             case TokenKind.LineNumLiteral:
             default:
