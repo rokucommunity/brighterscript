@@ -6,15 +6,13 @@ import chalk from 'chalk';
 import * as path from 'path';
 import type { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
-import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import type { Token } from '../lexer';
-import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords } from '../lexer';
-import { Parser, ParseMode } from '../parser';
+import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords, isToken } from '../lexer';
+import { Parser, ParseMode, getBscTypeFromExpression } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
-import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, AssignmentStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
 import type { FileLink, Program, SignatureInfoObj } from '../Program';
-import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
 import { standardizePath as s, util } from '../util';
@@ -22,8 +20,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement } from '../astUtils/reflection';
-import type { BscType } from '../types/BscType';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -98,15 +95,6 @@ export class BrsFile {
     public callables = [] as Callable[];
 
     public functionCalls = [] as FunctionCall[];
-
-    private _functionScopes: FunctionScope[];
-
-    public get functionScopes(): FunctionScope[] {
-        if (!this._functionScopes) {
-            this.createFunctionScopes();
-        }
-        return this._functionScopes;
-    }
 
     /**
      * files referenced by import statements
@@ -410,146 +398,6 @@ export class BrsFile {
         this.diagnostics.push(...processor.diagnostics);
     }
 
-    public scopesByFunc = new Map<FunctionExpression, FunctionScope>();
-
-    /**
-     * Create a scope for every function in this file
-     */
-    private createFunctionScopes() {
-        //find every function
-        let functions = this.parser.references.functionExpressions;
-
-        //create a functionScope for every function
-        this._functionScopes = [];
-
-        for (let func of functions) {
-            let scope = new FunctionScope(func);
-
-            //find parent function, and add this scope to it if found
-            {
-                let parentScope = this.scopesByFunc.get(func.parentFunction);
-
-                //add this child scope to its parent
-                if (parentScope) {
-                    parentScope.childrenScopes.push(scope);
-                }
-                //store the parent scope for this scope
-                scope.parentScope = parentScope;
-            }
-
-            //add every parameter
-            for (let param of func.parameters) {
-                scope.variableDeclarations.push({
-                    nameRange: param.name.range,
-                    lineIndex: param.name.range.start.line,
-                    name: param.name.text,
-                    type: param.type
-                });
-            }
-
-            //add all of ForEachStatement loop varibales
-            func.body?.walk(createVisitor({
-                ForEachStatement: (stmt) => {
-                    scope.variableDeclarations.push({
-                        nameRange: stmt.item.range,
-                        lineIndex: stmt.item.range.start.line,
-                        name: stmt.item.text,
-                        type: new DynamicType()
-                    });
-                },
-                LabelStatement: (stmt) => {
-                    const { identifier } = stmt.tokens;
-                    scope.labelStatements.push({
-                        nameRange: identifier.range,
-                        lineIndex: identifier.range.start.line,
-                        name: identifier.text
-                    });
-                }
-            }), {
-                walkMode: WalkMode.visitStatements
-            });
-
-            this.scopesByFunc.set(func, scope);
-
-            //find every statement in the scope
-            this._functionScopes.push(scope);
-        }
-
-        //find every variable assignment in the whole file
-        let assignmentStatements = this.parser.references.assignmentStatements;
-
-        for (let statement of assignmentStatements) {
-
-            //find this statement's function scope
-            let scope = this.scopesByFunc.get(statement.containingFunction);
-
-            //skip variable declarations that are outside of any scope
-            if (scope) {
-                scope.variableDeclarations.push({
-                    nameRange: statement.name.range,
-                    lineIndex: statement.name.range.start.line,
-                    name: statement.name.text,
-                    type: this.getBscTypeFromAssignment(statement, scope)
-                });
-            }
-        }
-    }
-
-    private getBscTypeFromAssignment(assignment: AssignmentStatement, scope: FunctionScope): BscType {
-        try {
-            //function
-            if (isFunctionExpression(assignment.value)) {
-                let functionType = new FunctionType(assignment.value.returnType);
-                functionType.isSub = assignment.value.functionType.text === 'sub';
-                if (functionType.isSub) {
-                    functionType.returnType = new VoidType();
-                }
-
-                functionType.setName(assignment.name.text);
-                for (let param of assignment.value.parameters) {
-                    let isRequired = !param.defaultValue;
-                    //TODO compute optional parameters
-                    functionType.addParameter(param.name.text, param.type, isRequired);
-                }
-                return functionType;
-
-                //literal
-            } else if (isLiteralExpression(assignment.value)) {
-                return assignment.value.type;
-
-                //function call
-            } else if (isCallExpression(assignment.value)) {
-                let calleeName = (assignment.value.callee as any)?.name?.text;
-                if (calleeName) {
-                    let func = this.getCallableByName(calleeName);
-                    if (func) {
-                        return func.type.returnType;
-                    }
-                }
-            } else if (isVariableExpression(assignment.value)) {
-                let variableName = assignment.value?.name?.text;
-                let variable = scope.getVariableByName(variableName);
-                return variable.type;
-            }
-        } catch (e) {
-            //do nothing. Just return dynamic
-        }
-        //fallback to dynamic
-        return new DynamicType();
-    }
-
-    private getCallableByName(name: string) {
-        name = name ? name.toLowerCase() : undefined;
-        if (!name) {
-            return;
-        }
-        for (let func of this.callables) {
-            if (func.name.toLowerCase() === name) {
-                return func;
-            }
-        }
-    }
-
     private findCallables() {
         for (let statement of this.parser.references.functionStatements ?? []) {
 
@@ -617,81 +465,65 @@ export class BrsFile {
                 //TODO convert if stmts to use instanceof instead
                 for (let arg of expression.args as any) {
 
-                    //is a literal parameter value
-                    if (isLiteralExpression(arg)) {
-                        args.push({
-                            range: arg.range,
-                            type: arg.type,
-                            text: arg.token.text
-                        });
+                    let impliedType = getBscTypeFromExpression(arg, func);
+                    let argText = '';
 
-                        //is variable being passed into argument
+                    // Get the text to display for the arg
+                    if (arg.token) {
+                        argText = arg.token.text;
+                        //is a function call being passed into argument
                     } else if (arg.name) {
-                        args.push({
-                            range: arg.range,
-                            //TODO - look up the data type of the actual variable
-                            type: new DynamicType(),
-                            text: arg.name.text
-                        });
+                        if (isToken(arg.name)) {
+                            argText = arg.name.text;
+                        }
 
                     } else if (arg.value) {
-                        let text = '';
                         /* istanbul ignore next: TODO figure out why value is undefined sometimes */
                         if (arg.value.value) {
-                            text = arg.value.value.toString();
+                            argText = arg.value.value.toString();
                         }
-                        let callableArg = {
-                            range: arg.range,
-                            //TODO not sure what to do here
-                            type: new DynamicType(), // util.valueKindToBrsType(arg.value.kind),
-                            text: text
-                        };
-                        //wrap the value in quotes because that's how it appears in the code
-                        if (isStringType(callableArg.type)) {
-                            callableArg.text = '"' + callableArg.text + '"';
-                        }
-                        args.push(callableArg);
 
-                    } else {
-                        args.push({
-                            range: arg.range,
-                            type: new DynamicType(),
-                            //TODO get text from other types of args
-                            text: ''
-                        });
+                        //wrap the value in quotes because that's how it appears in the code
+                        if (isStringType(impliedType)) {
+                            argText = '"' + argText + '"';
+                        }
                     }
+                    args.push({
+                        range: arg.range,
+                        type: impliedType,
+                        text: argText
+                    });
                 }
                 let functionCall: FunctionCall = {
                     range: util.createRangeFromPositions(expression.range.start, expression.closingParen.range.end),
-                    functionScope: this.getFunctionScopeAtPosition(callee.range.start),
+                    functionExpression: this.getFunctionExpressionAtPosition(callee.range.start),
                     file: this,
                     name: functionName,
                     nameRange: util.createRange(callee.range.start.line, columnIndexBegin, callee.range.start.line, columnIndexEnd),
                     //TODO keep track of parameters
                     args: args
                 };
+
                 this.functionCalls.push(functionCall);
             }
         }
     }
 
     /**
-     * Find the function scope at the given position.
-     * @param position
-     * @param functionScopes
+     * Find the function expression at the given position.
      */
-    public getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]): FunctionScope {
-        if (!functionScopes) {
-            functionScopes = this.functionScopes;
+    public getFunctionExpressionAtPosition(position: Position, functionExpressions?: FunctionExpression[]): FunctionExpression {
+        if (!functionExpressions) {
+            functionExpressions = this.parser.references.functionExpressions;
         }
-        for (let scope of functionScopes) {
-            if (util.rangeContains(scope.range, position)) {
+        for (let functionExpression of functionExpressions) {
+            if (util.rangeContains(functionExpression.range, position)) {
                 //see if any of that scope's children match the position also, and give them priority
-                let childScope = this.getFunctionScopeAtPosition(position, scope.childrenScopes);
-                if (childScope) {
-                    return childScope;
+                let childFunc = this.getFunctionExpressionAtPosition(position, functionExpression.childFunctionExpressions);
+                if (childFunc) {
+                    return childFunc;
                 } else {
-                    return scope;
+                    return functionExpression;
                 }
             }
         }
@@ -752,8 +584,8 @@ export class BrsFile {
             return namespaceCompletions;
         }
         //determine if cursor is inside a function
-        let functionScope = this.getFunctionScopeAtPosition(position);
-        if (!functionScope) {
+        let functionExpression = this.getFunctionExpressionAtPosition(position);
+        if (!functionExpression) {
             //we aren't in any function scope, so return the keyword completions and namespaces
             if (this.getTokenBefore(currentToken, TokenKind.New)) {
                 // there's a new keyword, so only class types are viable here
@@ -773,7 +605,7 @@ export class BrsFile {
         }
 
         if (this.tokenFollows(currentToken, TokenKind.Goto)) {
-            return this.getLabelCompletion(functionScope);
+            return this.getLabelCompletion(functionExpression);
         }
 
         if (this.isPositionNextToTokenKind(position, TokenKind.Dot)) {
@@ -782,13 +614,13 @@ export class BrsFile {
                 return namespaceCompletions;
             }
 
-            const selfClassMemberCompletions = this.getClassMemberCompletions(position, currentToken, functionScope, scope);
+            const selfClassMemberCompletions = this.getClassMemberCompletions(position, currentToken, functionExpression, scope);
 
             if (selfClassMemberCompletions.size > 0) {
                 return [...selfClassMemberCompletions.values()].filter((i) => i.label !== 'new');
             }
 
-            if (!this.getClassFromMReference(position, currentToken, functionScope)) {
+            if (!this.getClassFromMReference(position, currentToken, functionExpression)) {
                 //and anything from any class in scope to a non m class
                 let classMemberCompletions = scope.getAllClassMemberCompletions();
                 result.push(...classMemberCompletions.values());
@@ -816,16 +648,19 @@ export class BrsFile {
             result.push(...KeywordCompletions);
 
             //include local variables
-            let variables = functionScope.variableDeclarations;
-            for (let variable of variables) {
+            for (let symbol of functionExpression.symbolTable.ownSymbols) {
+                const symbolNameLower = symbol.name.toLowerCase();
                 //skip duplicate variable names
-                if (names[variable.name.toLowerCase()]) {
+                if (names[symbolNameLower]) {
                     continue;
                 }
-                names[variable.name.toLowerCase()] = true;
+                names[symbolNameLower] = true;
                 result.push({
-                    label: variable.name,
-                    kind: isFunctionType(variable.type) ? CompletionItemKind.Function : CompletionItemKind.Variable
+                    //TODO does this work?
+                    label: symbol.name,
+                    //TODO find type for local vars
+                    kind: CompletionItemKind.Variable
+                    // kind: isFunctionType(variable.type) ? CompletionItemKind.Function : CompletionItemKind.Variable
                 });
             }
 
@@ -849,16 +684,16 @@ export class BrsFile {
         return result;
     }
 
-    private getLabelCompletion(functionScope: FunctionScope) {
-        return functionScope.labelStatements.map(label => ({
-            label: label.name,
+    private getLabelCompletion(func: FunctionExpression) {
+        return func.labelStatements.map(label => ({
+            label: label.tokens.identifier.text,
             kind: CompletionItemKind.Reference
         }));
     }
 
-    private getClassMemberCompletions(position: Position, currentToken: Token, functionScope: FunctionScope, scope: Scope) {
+    private getClassMemberCompletions(position: Position, currentToken: Token, functionExpression: FunctionExpression, scope: Scope) {
 
-        let classStatement = this.getClassFromMReference(position, currentToken, functionScope);
+        let classStatement = this.getClassFromMReference(position, currentToken, functionExpression);
         let results = new Map<string, CompletionItem>();
         if (classStatement) {
             let classes = scope.getClassHierarchy(classStatement.item.getName(ParseMode.BrighterScript).toLowerCase());
@@ -876,12 +711,12 @@ export class BrsFile {
         return results;
     }
 
-    public getClassFromMReference(position: Position, currentToken: Token, functionScope: FunctionScope): FileLink<ClassStatement> | undefined {
+    public getClassFromMReference(position: Position, currentToken: Token, functionExpression: FunctionExpression): FileLink<ClassStatement> | undefined {
         let previousToken = this.getPreviousToken(currentToken);
         if (previousToken?.kind === TokenKind.Dot) {
             previousToken = this.getPreviousToken(previousToken);
         }
-        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && isClassMethodStatement(functionScope.func.functionStatement)) {
+        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && isClassMethodStatement(functionExpression.functionStatement)) {
             return { item: this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, position)), file: this };
         }
         return undefined;
@@ -1338,23 +1173,21 @@ export class BrsFile {
             textToSearchFor = textToSearchFor.substring(startIndex, endIndex);
         }
 
-        //look through local variables first, get the function scope for this position (if it exists)
-        const functionScope = this.getFunctionScopeAtPosition(position);
-        if (functionScope) {
-            //find any variable or label with this name
-            for (const varDeclaration of functionScope.variableDeclarations) {
-                //we found a variable declaration with this token text!
-                if (varDeclaration.name.toLowerCase() === textToSearchFor) {
-                    const uri = util.pathToUri(this.srcPath);
-                    results.push(Location.create(uri, varDeclaration.nameRange));
-                }
+        const func = this.getFunctionExpressionAtPosition(position);
+        //look through local variables first
+        //find any variable with this name
+        for (const symbol of func.symbolTable.ownSymbols) {
+            //we found a variable declaration with this token text
+            if (symbol.name.toLowerCase() === textToSearchFor) {
+                const uri = util.pathToUri(this.srcPath);
+                results.push(Location.create(uri, symbol.range));
             }
-            if (this.tokenFollows(token, TokenKind.Goto)) {
-                for (const label of functionScope.labelStatements) {
-                    if (label.name.toLocaleLowerCase() === textToSearchFor) {
-                        const uri = util.pathToUri(this.srcPath);
-                        results.push(Location.create(uri, label.nameRange));
-                    }
+        }
+        if (this.tokenFollows(token, TokenKind.Goto)) {
+            for (const label of func.labelStatements) {
+                if (label.tokens.identifier.text.toLocaleLowerCase() === textToSearchFor) {
+                    const uri = util.pathToUri(this.srcPath);
+                    results.push(Location.create(uri, label.tokens.identifier.range));
                 }
             }
         }
@@ -1436,34 +1269,42 @@ export class BrsFile {
 
         //look through local variables first
         {
-            //get the function scope for this position (if exists)
-            let functionScope = this.getFunctionScopeAtPosition(position);
-            if (functionScope) {
-                //find any variable with this name
-                for (const varDeclaration of functionScope.variableDeclarations) {
-                    //we found a variable declaration with this token text!
-                    if (varDeclaration.name.toLowerCase() === lowerTokenText) {
-                        let typeText: string;
-                        if (isFunctionType(varDeclaration.type)) {
-                            typeText = varDeclaration.type.toString();
-                        } else {
-                            typeText = `${varDeclaration.name} as ${varDeclaration.type.toString()}`;
-                        }
-                        return {
-                            range: token.range,
-                            //append the variable name to the front for scope
-                            contents: typeText
-                        };
+            const func = this.getFunctionExpressionAtPosition(position);
+            for (const labelStatement of func.labelStatements) {
+                if (labelStatement.tokens.identifier.text.toLocaleLowerCase() === lowerTokenText) {
+                    return {
+                        range: token.range,
+                        contents: `${labelStatement.tokens.identifier.text}: label`
+                    };
+                }
+            }
+            const typeTexts: string[] = [];
+
+            for (const scope of this.program.getScopesForFile(this)) {
+                scope.linkSymbolTable();
+                if (func.symbolTable.hasSymbol(lowerTokenText)) {
+                    const type = func.symbolTable?.getSymbolType(lowerTokenText);
+                    let scopeTypeText = '';
+
+                    if (isFunctionType(type)) {
+                        scopeTypeText = type.toString();
+                    } else {
+                        scopeTypeText = `${token.text} as ${type.toString()}`;
+                    }
+
+                    if (!typeTexts.includes(scopeTypeText)) {
+                        typeTexts.push(scopeTypeText);
                     }
                 }
-                for (const labelStatement of functionScope.labelStatements) {
-                    if (labelStatement.name.toLocaleLowerCase() === lowerTokenText) {
-                        return {
-                            range: token.range,
-                            contents: `${labelStatement.name}: label`
-                        };
-                    }
-                }
+                scope.unlinkSymbolTable();
+            }
+
+            const typeText = typeTexts.join(' | ');
+            if (typeText) {
+                return {
+                    range: token.range,
+                    contents: typeText
+                };
             }
         }
 

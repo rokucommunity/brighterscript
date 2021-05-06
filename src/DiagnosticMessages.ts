@@ -511,8 +511,8 @@ export let DiagnosticMessages = {
         code: 1097,
         severity: DiagnosticSeverity.Error
     }),
-    memberAlreadyExistsInParentClass: (memberType: string, parentClassName: string) => ({
-        message: `A ${memberType} with this name already exists in inherited class '${parentClassName}'`,
+    childFieldTypeNotAssignableToBaseProperty: (childTypeName: string, baseTypeName: string, fieldName: string, childFieldType: string, parentFieldType: string) => ({
+        message: `Field '${fieldName}' in class '${childTypeName}' is not assignable to the same field in base class '${baseTypeName}'. Type '${childFieldType}' is not assignable to type '${parentFieldType}'.`,
         code: 1098,
         severity: DiagnosticSeverity.Error
     }),
@@ -624,6 +624,21 @@ export let DiagnosticMessages = {
     missingExpressionsInDimStatement: () => ({
         message: `Missing expression(s) in 'dim' statement`,
         code: 1121,
+        severity: DiagnosticSeverity.Error
+    }),
+    mismatchedOverriddenMemberVisibility: (childClassName: string, memberName: string, childAccessModifier: string, ancestorAccessModifier: string, ancestorClassName: string) => ({
+        message: `Access modifier mismatch: '${memberName}' is ${childAccessModifier} in type '${childClassName}' but is ${ancestorAccessModifier} in base type '${ancestorClassName}'.`,
+        code: 1122,
+        severity: DiagnosticSeverity.Error
+    }),
+    cannotFindType: (typeName: string) => ({
+        message: `Cannot find type with name '${typeName}'`,
+        code: 1123,
+        severity: DiagnosticSeverity.Error
+    }),
+    argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
+        message: `Argument of type '${actualTypeString}' is not assignable to parameter of type '${expectedTypeString}'`,
+        code: 1124,
         severity: DiagnosticSeverity.Error
     })
 };

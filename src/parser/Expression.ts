@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer';
 import { TokenKind } from '../lexer';
-import type { Block, CommentStatement, FunctionStatement } from './Statement';
+import type { Block, CommentStatement, FunctionStatement, LabelStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -14,6 +14,8 @@ import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
+import { SymbolTable } from '../SymbolTable';
+import { FunctionType } from '../types/FunctionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -133,7 +135,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
          * If this function is enclosed within another function, this will reference that parent function
          */
         readonly parentFunction?: FunctionExpression,
-        readonly namespaceName?: NamespacedVariableNameExpression
+        readonly namespaceName?: NamespacedVariableNameExpression,
+        readonly parentSymbolTable?: SymbolTable
     ) {
         super();
         if (this.returnTypeToken) {
@@ -143,7 +146,15 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         } else {
             this.returnType = new DynamicType();
         }
+        this.symbolTable = new SymbolTable(parentSymbolTable);
+        for (let param of parameters) {
+            this.symbolTable.addSymbol(param.name.text, param.name.range, param.type);
+        }
     }
+
+    public readonly symbolTable: SymbolTable;
+
+    public labelStatements = [] as LabelStatement[];
 
     /**
      * The type this function returns
@@ -250,25 +261,32 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             }
         }
     }
+
+    getFunctionType(): FunctionType {
+        let functionType = new FunctionType(this.returnType);
+        functionType.isSub = this.functionType.text === 'sub';
+        for (let param of this.parameters) {
+            let isRequired = !param.defaultValue;
+            //TODO compute optional parameters
+            functionType.addParameter(param.name.text, param.type, isRequired);
+        }
+        return functionType;
+    }
 }
 
 export class FunctionParameterExpression extends Expression {
     constructor(
         public name: Identifier,
-        public typeToken?: Token,
+        public type: BscType,
+        public equalsToken?: Token,
         public defaultValue?: Expression,
         public asToken?: Token,
+        public typeToken?: Token,
         readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
-        if (typeToken) {
-            this.type = util.tokenToBscType(typeToken);
-        } else {
-            this.type = new DynamicType();
-        }
     }
 
-    public type: BscType;
 
     public get range(): Range {
         return {
@@ -775,8 +793,8 @@ export class UnaryExpression extends Expression {
 
 export class VariableExpression extends Expression {
     constructor(
-        readonly name: Identifier,
-        readonly namespaceName: NamespacedVariableNameExpression
+        public name: Identifier,
+        public namespaceName: NamespacedVariableNameExpression
     ) {
         super();
         this.range = this.name.range;
@@ -826,16 +844,16 @@ export class SourceLiteralExpression extends Expression {
     public readonly range: Range;
 
     private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
-        let func = state.file.getFunctionScopeAtPosition(this.token.range.start).func;
+        let functionExpression = state.file.getFunctionExpressionAtPosition(this.token.range.start);
         let nameParts = [];
-        while (func.parentFunction) {
-            let index = func.parentFunction.childFunctionExpressions.indexOf(func);
+        while (functionExpression.parentFunction) {
+            let index = functionExpression.parentFunction.childFunctionExpressions.indexOf(functionExpression);
             nameParts.unshift(`anon${index}`);
-            func = func.parentFunction;
+            functionExpression = functionExpression.parentFunction;
         }
         //get the index of this function in its parent
         nameParts.unshift(
-            func.functionStatement.getName(parseMode)
+            functionExpression.functionStatement.getName(parseMode)
         );
         return nameParts.join('$');
     }

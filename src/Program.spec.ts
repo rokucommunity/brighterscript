@@ -1589,9 +1589,9 @@ describe('Program', () => {
                 end sub
             `);
             let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(2, 10));
-            let labels = completions.map(x => pick(x, 'label'));
+            let labels = completions.map(x => x.label);
 
-            expect(labels).to.deep.include({ label: 'count' });
+            expect(labels).to.include('count');
         });
     });
 

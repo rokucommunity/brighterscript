@@ -1,11 +1,11 @@
+import { isBooleanType, isDynamicType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
 
 export class BooleanType implements BscType {
     public isAssignableTo(targetType: BscType) {
         return (
-            targetType instanceof BooleanType ||
-            targetType instanceof DynamicType
+            isBooleanType(targetType) ||
+            isDynamicType(targetType)
         );
     }
 
@@ -19,5 +19,9 @@ export class BooleanType implements BscType {
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    public equals(targetType: BscType): boolean {
+        return isBooleanType(targetType);
     }
 }

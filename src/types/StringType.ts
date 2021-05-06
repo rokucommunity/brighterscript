@@ -1,11 +1,11 @@
+import { isDynamicType, isStringType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
 
 export class StringType implements BscType {
     public isAssignableTo(targetType: BscType) {
         return (
-            targetType instanceof StringType ||
-            targetType instanceof DynamicType
+            isStringType(targetType) ||
+            isDynamicType(targetType)
         );
     }
 
@@ -19,5 +19,9 @@ export class StringType implements BscType {
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    public equals(targetType: BscType): boolean {
+        return isStringType(targetType);
     }
 }
