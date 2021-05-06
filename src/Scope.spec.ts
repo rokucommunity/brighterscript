@@ -27,7 +27,7 @@ describe('Scope', () => {
     });
 
     it('does not mark namespace functions as collisions with stdlib', () => {
-        program.addOrReplaceFile({
+        program.setFile({
             src: `${rootDir}/source/main.bs`,
             dest: `source/main.bs`
         }, `
@@ -42,7 +42,7 @@ describe('Scope', () => {
     });
 
     it('flags parameter with same name as namespace', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             namespace NameA.NameB
             end namespace
             sub main(nameA)
@@ -57,7 +57,7 @@ describe('Scope', () => {
     });
 
     it('flags assignments with same name as namespace', () => {
-        program.addOrReplaceFile('source/main.bs', `
+        program.setFile('source/main.bs', `
             namespace NameA.NameB
             end namespace
             sub main()
@@ -95,7 +95,7 @@ describe('Scope', () => {
         it('detects callables from all loaded files', () => {
             const sourceScope = program.getScopeByName('source');
 
-            program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                 sub Main()
 
                 end sub
@@ -103,7 +103,7 @@ describe('Scope', () => {
                 sub ActionA()
                 end sub
             `);
-            program.addOrReplaceFile({ src: s`${rootDir}/source/lib.brs`, dest: s`source/lib.brs` }, `
+            program.setFile({ src: s`${rootDir}/source/lib.brs`, dest: s`source/lib.brs` }, `
                 sub ActionB()
                 end sub
             `);
@@ -120,11 +120,11 @@ describe('Scope', () => {
         });
 
         it('picks up new callables', () => {
-            program.addOrReplaceFile('source/file.brs', '');
+            program.setFile('source/file.brs', '');
             //we have global callables, so get that initial number
             let originalLength = program.getScopeByName('source').getAllCallables().length;
 
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
             function DoA()
                 print "A"
             end function
@@ -140,7 +140,7 @@ describe('Scope', () => {
     describe('removeFile', () => {
         it('removes callables from list', () => {
             //add the file
-            let file = program.addOrReplaceFile(`source/file.brs`, `
+            let file = program.setFile(`source/file.brs`, `
                 function DoA()
                     print "A"
                 end function
@@ -155,18 +155,18 @@ describe('Scope', () => {
 
     describe('validate', () => {
         it('marks the scope as validated after validation has occurred', () => {
-            program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+            program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                sub main()
                end sub
             `);
-            let lib = program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
+            let lib = program.setFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
                sub libFunc()
                end sub
             `);
             expect(program.getScopesForFile(lib)[0].isValidated).to.be.false;
             program.validate();
             expect(program.getScopesForFile(lib)[0].isValidated).to.be.true;
-            lib = program.addOrReplaceFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
+            lib = program.setFile({ src: s`${rootDir}/source/lib.bs`, dest: s`source/lib.bs` }, `
                 sub libFunc()
                 end sub
             `);
@@ -177,7 +177,7 @@ describe('Scope', () => {
         });
 
         it('does not mark same-named-functions in different namespaces as an error', () => {
-            program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+            program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                 namespace NameA
                     sub alert()
                     end sub
@@ -192,7 +192,7 @@ describe('Scope', () => {
             expect(program.getDiagnostics()).to.be.lengthOf(0);
         });
         it('resolves local-variable function calls', () => {
-            program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                 sub DoSomething()
                     sayMyName = function(name as string)
                     end function
@@ -207,7 +207,7 @@ describe('Scope', () => {
 
         describe('function shadowing', () => {
             it('warns when local var function has same name as stdlib function', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         str = function(p)
                             return "override"
@@ -229,7 +229,7 @@ describe('Scope', () => {
             });
 
             it('warns when local var has same name as built-in function', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         str = 12345
                         print str ' prints "12345" (i.e. our local variable is allowed to shadow the built-in function name)
@@ -241,7 +241,7 @@ describe('Scope', () => {
             });
 
             it('warns when local var has same name as built-in function', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         str = 6789
                         print str(12345) ' prints "12345" (i.e. our local variable did not override the callable global function)
@@ -253,7 +253,7 @@ describe('Scope', () => {
             });
 
             it('detects local function with same name as scope function', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         getHello = function()
                             return "override"
@@ -279,7 +279,7 @@ describe('Scope', () => {
             });
 
             it('detects local function with same name as scope function', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         getHello = "override"
                         print getHello ' prints <Function: gethello> (i.e. local variable override does NOT work for same-scope-defined methods)
@@ -302,7 +302,7 @@ describe('Scope', () => {
             });
 
             it('flags scope function with same name (but different case) as built-in function', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         print str(12345) ' prints 12345 (i.e. our str() function below is ignored)
                     end sub
@@ -325,7 +325,7 @@ describe('Scope', () => {
         });
 
         it('detects duplicate callables', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 function DoA()
                     print "A"
                 end function
@@ -347,7 +347,7 @@ describe('Scope', () => {
         });
 
         it('detects calls to unknown callables', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 function DoA()
                     DoB()
                 end function
@@ -361,7 +361,7 @@ describe('Scope', () => {
         });
 
         it('does not error with calls to callables in same namespace', () => {
-            program.addOrReplaceFile('source/file.bs', `
+            program.setFile('source/file.bs', `
                 namespace Name.Space
                     sub a(param as string)
                         print param
@@ -378,7 +378,7 @@ describe('Scope', () => {
         });
 
         it('recognizes known callables', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 function DoA()
                     DoB()
                 end function
@@ -394,7 +394,7 @@ describe('Scope', () => {
         });
 
         it('does not error with calls to callables in same namespace', () => {
-            program.addOrReplaceFile('source/file.bs', `
+            program.setFile('source/file.bs', `
                 namespace Name.Space
                     sub a(param as string)
                         print param
@@ -413,7 +413,7 @@ describe('Scope', () => {
         //We don't currently support someObj.callSomething() format, so don't throw errors on those
         it('does not fail on object callables', () => {
             expect(program.getDiagnostics().length).to.equal(0);
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                function DoB()
                     m.doSomething()
                 end function
@@ -425,7 +425,7 @@ describe('Scope', () => {
         });
 
         it('detects calling functions with too many parameters', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a()
                 end sub
                 sub b()
@@ -439,7 +439,7 @@ describe('Scope', () => {
         });
 
         it('detects calling functions with too many parameters', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a(name)
                 end sub
                 sub b()
@@ -453,7 +453,7 @@ describe('Scope', () => {
         });
 
         it('allows skipping optional parameter', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a(name="Bob")
                 end sub
                 sub b()
@@ -466,7 +466,7 @@ describe('Scope', () => {
         });
 
         it('shows expected parameter range in error message', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a(age, name="Bob")
                 end sub
                 sub b()
@@ -481,7 +481,7 @@ describe('Scope', () => {
         });
 
         it('handles expressions as arguments to a function', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a(age, name="Bob")
                 end sub
                 sub b()
@@ -493,7 +493,7 @@ describe('Scope', () => {
         });
 
         it('Catches extra arguments for expressions as arguments to a function', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a(age)
                 end sub
                 sub b()
@@ -508,7 +508,7 @@ describe('Scope', () => {
         });
 
         it('Catches argument type mismatches on function calls', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a(age as integer)
                 end sub
                 sub b()
@@ -523,11 +523,11 @@ describe('Scope', () => {
         });
 
         it('Catches argument type mismatches on function calls for functions defined in another file', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub a(age as integer)
                 end sub
             `);
-            program.addOrReplaceFile('source/file2.brs', `
+            program.setFile('source/file2.brs', `
                 sub b()
                     a("hello")
                     foo = "foo"
@@ -542,7 +542,7 @@ describe('Scope', () => {
         });
 
         it('catches argument type mismatches on function calls within namespaces', () => {
-            program.addOrReplaceFile('source/file.bs', `
+            program.setFile('source/file.bs', `
                 namespace Name.Space
                     sub a(param as integer)
                         print param
@@ -563,7 +563,7 @@ describe('Scope', () => {
         });
 
         it('catches argument type mismatches on function calls as arguments', () => {
-            program.addOrReplaceFile('source/file1.bs', `
+            program.setFile('source/file1.bs', `
                     sub a(param as string)
                         print param
                     end sub
@@ -585,7 +585,7 @@ describe('Scope', () => {
 
 
         it('catches argument type mismatches on function calls within namespaces across files', () => {
-            program.addOrReplaceFile('source/file1.bs', `
+            program.setFile('source/file1.bs', `
                 namespace Name.Space
                     function getNum() as integer
                         return 1
@@ -596,7 +596,7 @@ describe('Scope', () => {
                     end function
                 end namespace
                 `);
-            program.addOrReplaceFile('source/file2.bs', `
+            program.setFile('source/file2.bs', `
                 namespace Name.Space
                     sub needsInt(param as integer)
                         print param
@@ -618,7 +618,7 @@ describe('Scope', () => {
 
 
         it('handles JavaScript reserved names', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 sub constructor()
                 end sub
                 sub toString()
@@ -635,14 +635,14 @@ describe('Scope', () => {
         it('Emits validation events', () => {
             const validateStartScope = sinon.spy();
             const validateEndScope = sinon.spy();
-            program.addOrReplaceFile('source/file.brs', ``);
-            program.addOrReplaceFile('components/comp.xml', trim`
+            program.setFile('source/file.brs', ``);
+            program.setFile('components/comp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="comp" extends="Scene">
                     <script uri="comp.brs"/>
                 </component>
             `);
-            program.addOrReplaceFile(s`components/comp.brs`, ``);
+            program.setFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
             const compScope = program.getScopeByName('pkg:/components/comp.xml');
             program.plugins = new PluginInterface([{
@@ -661,7 +661,7 @@ describe('Scope', () => {
 
         describe('custom types', () => {
             it('detects an unknown function return type', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     function a()
                         return invalid
                     end function
@@ -692,7 +692,7 @@ describe('Scope', () => {
             });
 
             it('detects an unknown function parameter type', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     sub a(num as integer)
                     end sub
 
@@ -715,7 +715,7 @@ describe('Scope', () => {
             });
 
             it('detects an unknown field parameter type', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     class myClass
                         foo as unknownType 'error
                     end class
@@ -734,7 +734,7 @@ describe('Scope', () => {
             });
 
             it('finds custom types inside namespaces', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -754,7 +754,7 @@ describe('Scope', () => {
             });
 
             it('finds custom types from other namespaces', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -769,7 +769,7 @@ describe('Scope', () => {
             });
 
             it('detects missing custom types from current namespaces', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -786,11 +786,11 @@ describe('Scope', () => {
             });
 
             it('finds custom types from other other files', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     function foo(param as MyClass) as MyClass
                     end function
                 `);
-                program.addOrReplaceFile({ src: s`${rootDir}/source/MyClass.bs`, dest: s`source/MyClass.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/MyClass.bs`, dest: s`source/MyClass.bs` }, `
                     class MyClass
                     end class
                 `);
@@ -800,11 +800,11 @@ describe('Scope', () => {
             });
 
             it('finds custom types from other other files', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     function foo(param as MyNameSpace.MyClass) as MyNameSpace.MyClass
                     end function
                 `);
-                program.addOrReplaceFile({ src: s`${rootDir}/source/MyNameSpace.bs`, dest: s`source/MyNameSpace.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/MyNameSpace.bs`, dest: s`source/MyNameSpace.bs` }, `
                     namespace MyNameSpace
                         class MyClass
                         end class
@@ -816,7 +816,7 @@ describe('Scope', () => {
             });
 
             it('detects missing custom types from another namespaces', () => {
-                program.addOrReplaceFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
+                program.setFile({ src: s`${rootDir}/source/main.bs`, dest: s`source/main.bs` }, `
                     namespace MyNamespace
                         class MyClass
                         end class
@@ -835,13 +835,13 @@ describe('Scope', () => {
             it('scopes types to correct scope', () => {
                 program = new Program({ rootDir: rootDir });
 
-                program.addOrReplaceFile('components/foo.xml', trim`
+                program.setFile('components/foo.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="foo" extends="Scene">
                         <script uri="foo.bs"/>
                     </component>
                 `);
-                program.addOrReplaceFile(s`components/foo.bs`, `
+                program.setFile(s`components/foo.bs`, `
                     class MyClass
                     end class
                 `);
@@ -849,13 +849,13 @@ describe('Scope', () => {
 
                 expect(program.getDiagnostics()[0]?.message).not.to.exist;
 
-                program.addOrReplaceFile('components/bar.xml', trim`
+                program.setFile('components/bar.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="bar" extends="Scene">
                         <script uri="bar.bs"/>
                     </component>
                 `);
-                program.addOrReplaceFile(s`components/bar.bs`, `
+                program.setFile(s`components/bar.bs`, `
                     function getFoo() as MyClass
                     end function
                 `);
@@ -869,23 +869,23 @@ describe('Scope', () => {
             it('can reference types from parent component', () => {
                 program = new Program({ rootDir: rootDir });
 
-                program.addOrReplaceFile('components/parent.xml', trim`
+                program.setFile('components/parent.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="parent" extends="Scene">
                         <script uri="parent.bs"/>
                     </component>
                 `);
-                program.addOrReplaceFile(s`components/parent.bs`, `
+                program.setFile(s`components/parent.bs`, `
                     class MyClass
                     end class
                 `);
-                program.addOrReplaceFile('components/child.xml', trim`
+                program.setFile('components/child.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="child" extends="parent">
                         <script uri="child.bs"/>
                     </component>
                 `);
-                program.addOrReplaceFile(s`components/child.bs`, `
+                program.setFile(s`components/child.bs`, `
                     function getFoo() as MyClass
                     end function
                 `);
@@ -901,24 +901,24 @@ describe('Scope', () => {
         it('inherits callables from parent', () => {
             program = new Program({ rootDir: rootDir });
 
-            program.addOrReplaceFile('components/child.xml', trim`
+            program.setFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="child" extends="parent">
                     <script uri="child.brs"/>
                 </component>
             `);
-            program.addOrReplaceFile(s`components/child.brs`, ``);
+            program.setFile(s`components/child.brs`, ``);
             program.validate();
             let childScope = program.getComponentScope('child');
             expect(childScope.getAllCallables().map(x => x.callable.name)).not.to.include('parentSub');
 
-            program.addOrReplaceFile('components/parent.xml', trim`
+            program.setFile('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="parent" extends="Scene">
                     <script uri="parent.brs"/>
                 </component>
             `);
-            program.addOrReplaceFile(s`components/parent.brs`, `
+            program.setFile(s`components/parent.brs`, `
                 sub parentSub()
                 end sub
             `);
@@ -936,7 +936,7 @@ describe('Scope', () => {
 
     describe('getDefinition', () => {
         it('returns empty list when there are no files', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
+            let file = program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, '');
             let scope = program.getScopeByName('source');
             expect(scope.getDefinition(file, Position.create(0, 0))).to.be.lengthOf(0);
         });
@@ -954,7 +954,7 @@ describe('Scope', () => {
 
     describe('scope symbol tables', () => {
         it('adds symbols for the complete scope', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 function funcInt() as integer
                     return 3
                 end function
@@ -963,7 +963,7 @@ describe('Scope', () => {
                     return "hello"
                 end function
             `);
-            program.addOrReplaceFile('source/file2.brs', `
+            program.setFile('source/file2.brs', `
                 function funcBool() as boolean
                     return true
                 end function
@@ -981,7 +981,7 @@ describe('Scope', () => {
         });
 
         it('adds updates symbol tables on invalidation', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 function funcInt() as integer
                     return 3
                 end function
@@ -997,7 +997,7 @@ describe('Scope', () => {
             expect((sourceSymbols.getSymbolType('funcStr') as FunctionType).returnType.toString()).to.equal('string');
             program.getScopeByName('source').invalidate();
 
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 function funcFloat() as float
                     return 3.14
                 end function
@@ -1011,12 +1011,12 @@ describe('Scope', () => {
 
 
         it('adds namespaced symbols tables to the scope', () => {
-            program.addOrReplaceFile('source/file.brs', `
+            program.setFile('source/file.brs', `
                 function funcInt() as integer
                     return 1 + Name.Space.nsFunc2(1)
                 end function
             `);
-            program.addOrReplaceFile('source/namespace.brs', `
+            program.setFile('source/namespace.brs', `
                 namespace Name.Space
                     function nsFunc1() as integer
                         return 1
@@ -1037,7 +1037,7 @@ describe('Scope', () => {
         });
 
         it('merges namespace symbol tables in namespaceLookup', () => {
-            program.addOrReplaceFile('source/ns1.brs', `
+            program.setFile('source/ns1.brs', `
                 namespace Name.Space
                     function nsFunc1() as integer
                         return 1
@@ -1050,7 +1050,7 @@ describe('Scope', () => {
                     end function
                 end namespace
             `);
-            program.addOrReplaceFile('source/ns2.brs', `
+            program.setFile('source/ns2.brs', `
                 namespace Name.Space
                     function nsFunc2(num as integer) as integer
                         print Name.outerNsFunc()

@@ -75,7 +75,7 @@ describe('TemplateStringExpression', () => {
         });
 
         it('uses the proper prefix when aliased package is installed', () => {
-            program.addOrReplaceFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
+            program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
             testTranspile(
                 'a = `${one},${two}`',
                 `a = rokucommunity_bslib_toString(one) + "," + rokucommunity_bslib_toString(two)`
