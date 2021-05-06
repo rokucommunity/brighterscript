@@ -588,8 +588,8 @@ export class BrsFile {
             if (selfClassMemberCompletions.size > 0) {
                 return [...selfClassMemberCompletions.values()].filter((i) => i.label !== 'new');
             }
-
-            if (!this.getClassFromMReference(position, currentToken, functionExpression)) {
+            const foundClassLink = this.getClassFromToken(position, currentToken, functionExpression, scope);
+            if (!foundClassLink) {
                 //and anything from any class in scope to a non m class
                 let classMemberCompletions = scope.getAllClassMemberCompletions();
                 result.push(...classMemberCompletions.values());
@@ -662,7 +662,7 @@ export class BrsFile {
 
     private getClassMemberCompletions(position: Position, currentToken: Token, functionExpression: FunctionExpression, scope: Scope) {
 
-        let classStatement = this.getClassFromMReference(position, currentToken, functionExpression);
+        let classStatement = this.getClassFromToken(position, currentToken, functionExpression, scope);
         let results = new Map<string, CompletionItem>();
         if (classStatement) {
             let classes = scope.getClassHierarchy(classStatement.item.getName(ParseMode.BrighterScript).toLowerCase());
@@ -680,41 +680,55 @@ export class BrsFile {
         return results;
     }
 
-    public getClassFromMReference(position: Position, currentToken: Token, functionExpression: FunctionExpression): FileLink<ClassStatement> | undefined {
-        let previousToken = this.parser.getPreviousToken(currentToken);
-        if (previousToken?.kind === TokenKind.Dot) {
-            previousToken = this.parser.getPreviousToken(previousToken);
-        }
-        if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && (isClassMethodStatement(functionExpression.functionStatement))) {
-            return { item: this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, position)), file: this };
+
+    public getClassFromToken(position: Position, currentToken: Token, functionExpression: FunctionExpression, scope: Scope): FileLink<ClassStatement> | undefined {
+        const currentClass = this.getSymbolTypeFromToken(currentToken, functionExpression, scope)?.currentClass;
+
+        if (currentClass) {
+            return { item: currentClass, file: this };
         }
         return undefined;
     }
 
+
     /**
-     * Checks previous tokens for the start of a symbol chain (eg. m.property.subproperty.method())
-     * @param currentToken  The token to check
-     * @param functionExpression The current function context
-     * @param scope the current scope
-     * @returns the BscType and expanded text (e.g <Class.field>) for the token
+     * Builds up a chain of tokens, starting with the first in the chain, and ending with currentToken
+     * e.g. m.prop.method().field (with 'field' as currentToken) -> ["m", "prop", "method", "field"], with each element as a token
+     * @param currentToken the token that is the end of the chain
+     * @returns array of tokens
      */
-    public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): { type: BscType; expandedTokenText: string } {
+    private getTokenChain(currentToken: Token): Token[] {
         const tokenChain: Token[] = [];
-        if (currentToken.kind === TokenKind.Identifier) {
+        if (currentToken?.kind === TokenKind.Dot) {
+            currentToken = this.parser.getPreviousToken(currentToken);
+        }
+        if (currentToken?.kind === TokenKind.Identifier) {
             tokenChain.push(currentToken);
         }
-        let previousToken = this.getPreviousToken(currentToken);
+        let previousToken = this.parser.getPreviousToken(currentToken);
         while (previousToken?.kind === TokenKind.Dot) {
-            previousToken = this.getPreviousToken(previousToken);
-            if (previousToken.kind === TokenKind.Identifier) {
+            previousToken = this.parser.getPreviousToken(previousToken);
+            if (previousToken?.kind === TokenKind.Identifier) {
                 tokenChain.push(previousToken);
             }
-            previousToken = this.getPreviousToken(previousToken);
+            previousToken = this.parser.getPreviousToken(previousToken);
         }
-
         tokenChain.reverse();
+        return tokenChain;
+    }
+
+
+    /**
+     * Checks previous tokens for the start of a symbol chain (eg. m.property.subProperty.method())
+     * @param currentToken  The token to check
+     * @param functionExpression The current function context
+     * @param scope use this scope for finding class maps
+     * @returns the BscType, expanded text (e.g <Class.field>) and classStatement (if available) for the token
+     */
+    public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): { type: BscType; expandedTokenText: string; currentClass?: ClassStatement } {
+        const tokenChain = this.getTokenChain(currentToken);
         let currentClassRef: ClassStatement;
-        let currentSymbolTable = functionExpression.symbolTable;
+        let currentSymbolTable = functionExpression?.symbolTable;
         let tokenFoundCount = 0;
         let symbolType: BscType;
         let tokenText = [];
@@ -722,22 +736,42 @@ export class BrsFile {
         for (const token of tokenChain) {
             const tokenLowerText = token.text.toLowerCase();
             if (tokenLowerText === 'm' && tokenFoundCount === 0) {
+                // find the current class for tokenChains starting with "m" - e.g. m.someMethod()
+                // use the position in the file to determine the current class
                 currentClassRef = this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, token.range.start));
                 currentSymbolTable = currentClassRef?.symbolTable;
             }
             if (!currentSymbolTable) {
+                // uh oh... no symbol table to continue to check
                 break;
             }
             symbolType = currentSymbolTable.getSymbolType(tokenLowerText);
             if (!isUninitializedType(symbolType)) {
+                // found this symbol, and it's valid. increase found counter
                 tokenFoundCount++;
             }
-            if (isCustomType(symbolType) && tokenChain.length > 1) {
-                tokenText.push(symbolType.name);
-                // TODO: get proper parent name for methods/fields defined in super classes
-                currentClassRef = scope.getClassMap()?.get(symbolType.name.toLowerCase())?.item;
-                currentSymbolTable = currentClassRef?.symbolTable;
+            if (isFunctionType(symbolType) && tokenFoundCount < tokenChain.length) {
+                // this is a function, and it is in the start or middle of the chain
+                // the next symbol to check will the the return value of this function
+                symbolType = symbolType.returnType;
+            }
+            if (isCustomType(symbolType)) {
+                // we're currently looking at a customType, that has it's own symbol table
+                if (tokenLowerText === 'm' && tokenChain.length === 1) {
+                    // put "m" as the text for chains that are only "m"
+                    tokenText.push(tokenLowerText);
+                } else {
+                    // else use the name of the custom type
+                    // TODO: get proper parent name for methods/fields defined in super classes
+                    tokenText.push(symbolType.name);
+
+                    // this is a CustomType and it is not "m", so we need to look up the class from the classMap
+                    currentClassRef = scope?.getClassMap().get(symbolType.name.toLowerCase())?.item;
+                    currentSymbolTable = currentClassRef?.symbolTable;
+                }
             } else {
+                // This is not a customType, so there is no class
+                currentClassRef = undefined;
                 tokenText.push(token.text);
                 break;
             }
@@ -746,9 +780,9 @@ export class BrsFile {
             }
         }
         if (tokenFoundCount === tokenChain.length) {
-            return { type: symbolType, expandedTokenText: tokenText.join('.') };
+            // did we complete the chain? if so, we have a valid token at the end
+            return { type: symbolType, expandedTokenText: tokenText.join('.'), currentClass: currentClassRef };
         }
-
         return undefined;
     }
 

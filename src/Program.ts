@@ -987,9 +987,10 @@ export class Program {
             //if m class reference.. then
             //only get statements from the class I am in..
             if (functionExpression) {
-                let myClass = file.getClassFromMReference(position, file.parser.getTokenAt(position), functionExpression);
-                if (myClass) {
-                    for (let scope of this.getScopesForFile(myClass.file)) {
+                for (let scope of this.getScopesForFile(file)) {
+                    scope.linkSymbolTable();
+                    let myClass = file.getClassFromToken(position, file.getTokenAt(position), functionExpression, scope);
+                    if (myClass) {
                         let classes = scope.getClassHierarchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
                         //and anything from any class in scope to a non m class
                         for (let statement of [...classes].filter((i) => isClassMethodStatement(i.item))) {
@@ -1001,7 +1002,9 @@ export class Program {
                             }
                         }
                     }
+                    scope.unlinkSymbolTable();
                 }
+
             }
 
             if (identifierInfo.dotPart) {

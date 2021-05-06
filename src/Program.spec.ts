@@ -911,7 +911,7 @@ describe('Program', () => {
             expect(completions.map(x => x.label)).to.include('NameA_NameB_NameC_DoSomething');
         });
 
-        it('inlcudes global completions for file with no scope', () => {
+        it('includes global completions for file with no scope', () => {
             program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'main.brs' }, `
                 function Main()
                     age = 1
@@ -1182,7 +1182,7 @@ describe('Program', () => {
         ).to.eql(['MyClassA', 'MyClassB', 'MyClassC']);
     });
 
-    it('gets completions when using callfunc inovation', () => {
+    it('gets completions when using callfunc invocation', () => {
         program.setFile('source/main.bs', `
             function main()
                 myNode@.sayHello(arg1)
@@ -1816,7 +1816,7 @@ describe('Program', () => {
             sinon.stub(file.parser, 'getPreviousToken').returns(undefined);
             //should not crash
             expect(
-                file['getClassFromMReference'](util.createPosition(2, 3), createToken(TokenKind.Dot, '.'), null)
+                file['getClassFromToken'](util.createPosition(2, 3), createToken(TokenKind.Dot, '.'), null, null)
             ).to.be.undefined;
         });
 
