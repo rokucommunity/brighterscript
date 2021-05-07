@@ -1,6 +1,8 @@
 import type { Range } from './astUtils';
+import { isLazyType } from './astUtils/reflection';
 import type { BscType } from './types/BscType';
 import { DynamicType } from './types/DynamicType';
+import type { LazyTypeContext } from './types/LazyType';
 import { UninitializedType } from './types/UninitializedType';
 
 
@@ -90,9 +92,10 @@ export class SymbolTable {
      * Gets the type for a symbol
      * @param name the name of the symbol to get the type for
      * @param searchParent should we look to our parent if we don't have the symbol?
+     * @param context the context for where this type was referenced - used ONLY for lazy types
      * @returns The type, if found. If the type has ever changed, return DynamicType. If not found, returns UninitializedType
      */
-    getSymbolType(name: string, searchParent = true): BscType {
+    getSymbolType(name: string, searchParent = true, context?: LazyTypeContext): BscType {
         const key = name.toLowerCase();
         const symbols = this.symbolMap.get(key);
         if (symbols?.length > 1) {
@@ -108,10 +111,13 @@ export class SymbolTable {
             }
             return sameImpliedType ? impliedType : new DynamicType();
         } else if (symbols?.length === 1) {
+            if (isLazyType(symbols[0].type)) {
+                return symbols[0].type.getTypeFromContext(context);
+            }
             return symbols[0].type;
         }
         if (searchParent) {
-            return this.parent?.getSymbolType(name) ?? new UninitializedType();
+            return this.parent?.getSymbolType(name, true, context) ?? new UninitializedType();
         } else {
             return new UninitializedType();
         }

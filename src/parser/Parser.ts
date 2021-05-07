@@ -90,16 +90,16 @@ import {
 } from './Expression';
 import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isVariableExpression, isAALiteralExpression, isArrayLiteralExpression, isNewExpression, isUninitializedType, isFunctionType } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isVariableExpression, isAALiteralExpression, isArrayLiteralExpression, isNewExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { BscType } from '../types/BscType';
 import { DynamicType } from '../types/DynamicType';
-import { LazyType } from '../types/LazyType';
 import { SymbolTable } from '../SymbolTable';
 import { ObjectType } from '../types/ObjectType';
 import { CustomType } from '../types/CustomType';
 import { ArrayType } from '../types/ArrayType';
+import { getTypeFromCallExpression, getTypeFromDottedGetExpression, getTypeFromVariableExpression } from '../types/helpers';
 
 export class Parser {
     /**
@@ -634,6 +634,9 @@ export class Parser {
             parentClassName,
             this.currentNamespaceName
         );
+        if (className) {
+            this.currentSymbolTable.addSymbol(className.text, className.range, result.getConstructorFunctionType());
+        }
 
         this._references.classStatements.push(result);
         this.exitAnnotationBlock(parentAnnotations);
@@ -3050,7 +3053,6 @@ class CancelStatementError extends Error {
  */
 export function getBscTypeFromExpression(expression: Expression, functionExpression: FunctionExpression): BscType {
     try {
-        //function
         if (isFunctionExpression(expression)) {
             return expression.getFunctionType();
             //literal
@@ -3070,63 +3072,12 @@ export function getBscTypeFromExpression(expression: Expression, functionExpress
             return getTypeFromCallExpression(expression, functionExpression);
         } else if (isVariableExpression(expression)) {
             return getTypeFromVariableExpression(expression, functionExpression);
+        } else if (isDottedGetExpression(expression)) {
+            return getTypeFromDottedGetExpression(expression, functionExpression);
         }
     } catch (e) {
         //do nothing. Just return dynamic
     }
     //fallback to dynamic
     return new DynamicType();
-}
-
-
-/**
- * Gets the return type of a function, taking into account that the function may not have been declared yet
- * If the callee already exists in symbol table, use that return type
- * otherwise, make a lazy type which will not compute its type until the file is done parsing
- *
- * @param call the Expression to process
- * @param functionExpression the wrapping function expression
- * @return the best guess type of that expression
- */
-export function getTypeFromCallExpression(call: CallExpression, functionExpression: FunctionExpression): BscType {
-    let calleeName = ((call.callee as any).name.text as string)?.toLowerCase();
-    if (calleeName) {
-        // i
-        const currentKnownType = functionExpression.symbolTable.getSymbolType(calleeName);
-        if (isFunctionType(currentKnownType)) {
-            return currentKnownType.returnType;
-        }
-        if (!isUninitializedType(currentKnownType)) {
-            // this will probably only happen if a functionName has been assigned to something else previously?
-            return currentKnownType;
-        }
-        return new LazyType(() => {
-            const futureType = functionExpression.symbolTable.getSymbolType(calleeName);
-            if (isFunctionType(futureType)) {
-                return futureType.returnType;
-            }
-
-            return futureType;
-        });
-    }
-}
-
-/**
- * Gets the type of a variable
- * if it already exists in symbol table, use that type
- * otherwise defer the type until first read, which will allow us to derive types from variables defined after this one (like from a loop perhaps)
- *
- * @param variable the Expression to process
- * @param functionExpression the wrapping function expression
- * @return the best guess type of that expression
- */
-export function getTypeFromVariableExpression(variable: VariableExpression, functionExpression: FunctionExpression): BscType {
-    let variableName = variable.name.text.toLowerCase();
-    const currentKnownType = functionExpression.symbolTable.getSymbolType(variableName);
-    if (!isUninitializedType(currentKnownType)) {
-        return currentKnownType;
-    }
-    return new LazyType(() => {
-        return functionExpression.symbolTable.getSymbolType(variableName);
-    });
 }

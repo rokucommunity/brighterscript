@@ -28,7 +28,8 @@ describe('parser class', () => {
             TokenKind.Public,
             TokenKind.Protected,
             TokenKind.Private,
-            TokenKind.Override
+            TokenKind.Override,
+            TokenKind.New
         ].includes(keyword)) {
             continue;
         }

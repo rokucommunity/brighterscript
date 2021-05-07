@@ -12,6 +12,10 @@ import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser';
 import type { FunctionType } from './types/FunctionType';
 import { UninitializedType } from './types/UninitializedType';
+import type { BrsFile } from './files/BrsFile';
+import { isFloatType } from './astUtils/reflection';
+import type { SymbolTable } from './SymbolTable';
+import type { Scope } from './Scope';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -199,7 +203,7 @@ describe('Scope', () => {
                     sayMyName = function(name as string)
                     end function
 
-                    sayMyName()
+                    sayMyName("hello")
                 end sub`
             );
             program.validate();
@@ -618,6 +622,85 @@ describe('Scope', () => {
             );
         });
 
+        it('correctly validates correct parameters that are class members', () => {
+            program.addOrReplaceFile('source/main.bs', `
+            class PiHolder
+                pi = 3.14
+            end class
+
+            sub takesFloat(fl as float)
+            end sub
+
+            sub someFunc()
+                holder = new PiHolder()
+                takesFloat(holder.pi)
+            end sub`);
+            program.validate();
+            //should have no error
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
+        it('correctly validates wrong parameters that are class members', () => {
+            program.addOrReplaceFile('source/main.bs', `
+            class PiHolder
+                pi = 3.14
+                name = "hello"
+            end class
+
+            sub takesFloat(fl as float)
+            end sub
+
+            sub someFunc()
+                holder = new PiHolder()
+                takesFloat(holder.name)
+            end sub`);
+            program.validate();
+            //should have error: holder.name is string
+            expect(program.getDiagnostics().length).to.equal(1);
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.argumentTypeMismatch('string', 'float').message
+            );
+        });
+
+        it('allows conversions for arguments', () => {
+            program.addOrReplaceFile('source/main.bs', `
+            sub takesFloat(fl as float)
+            end sub
+
+            sub someFunc()
+                takesFloat(1)
+            end sub`);
+            program.validate();
+            //should have no error
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
+        it('allows subclasses as arguments', () => {
+            program.addOrReplaceFile('source/main.bs', `
+
+            class Animal
+            end class
+
+            class Dog extends Animal
+            end class
+
+            class Retriever extends Dog
+            end class
+
+            class Lab extends Retriever
+            end class
+
+            sub takesAnimal(thing as Animal)
+            end sub
+
+            sub someFunc()
+                fido = new Lab()
+                takesAnimal(fido)
+            end sub`);
+            program.validate();
+            //should have no error
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
 
         it('handles JavaScript reserved names', () => {
             program.setFile('source/file.brs', `
@@ -1068,6 +1151,58 @@ describe('Scope', () => {
             expect((mergedNsSymbolTable.getSymbolType('Name.Space.nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');
             expect((mergedNsSymbolTable.getSymbolType('Name.outerNsFunc') as FunctionType).returnType.toString()).to.equal('string');
         });
+
+        describe('lazytypes and scope', () => {
+            const lazyTypeCode = `
+                class KlassA
+                    pi = 3.14
+
+                    function getPi() as float
+                        return m.pi
+                    end function
+                end class
+
+                class KlassB
+                    function getNewA() as KlassA
+                       return new KlassA()
+                    end function
+                end class
+
+                sub main()
+                    a = new KlassA()
+                    myPi = a.pi
+                    myPiFromFunc = a.getPi()
+                end sub
+            `;
+            let mainFile: BrsFile;
+            let sourceScope: Scope;
+            let mainSymbolTable: SymbolTable;
+
+            beforeEach(() => {
+                program.addOrReplaceFile('source/main.bs', lazyTypeCode);
+                sourceScope = program.getScopeByName('source');
+                mainFile = (sourceScope.getAllFiles()[0] as BrsFile);
+                expect(mainFile).not.to.be.undefined;
+                const mainFunc = mainFile.parser.references.functionStatementLookup.get('main').func;
+                mainSymbolTable = mainFunc.symbolTable;
+            });
+
+            it('uses file context for lazyType field lookups', () => {
+                const piSymbol = mainSymbolTable.getSymbolType('myPi', true, { file: mainFile, scope: sourceScope });
+                expect(isFloatType(piSymbol)).to.be.true;
+            });
+
+            it('uses class members for lazyType method lookups', () => {
+                const piSymbol = mainSymbolTable.getSymbolType('myPiFromFunc', true, { file: mainFile, scope: sourceScope });
+                expect(isFloatType(piSymbol)).to.be.true;
+            });
+
+            it('uses class members for lazyType lookups on lookups', () => {
+                const piSymbol = mainSymbolTable.getSymbolType('myPiFromFunc', true, { file: mainFile, scope: sourceScope });
+                expect(isFloatType(piSymbol)).to.be.true;
+            });
+        });
+
     });
     describe('buildNamespaceLookup', () => {
         it('does not crash when class statement is missing `name` prop', () => {

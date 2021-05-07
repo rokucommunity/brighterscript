@@ -22,6 +22,7 @@ import type { ArrayType } from '../types/ArrayType';
 import type { ObjectType } from '../types/ObjectType';
 import type { DynamicType } from '../types/DynamicType';
 import type { SGInterfaceField, SGInterfaceFunction, SGNode } from '../parser/SGTypes';
+import type { LazyType } from '../types/LazyType';
 
 // File reflection
 
@@ -268,6 +269,9 @@ export function isObjectType(e: any): e is ObjectType {
 }
 export function isDynamicType(e: any): e is DynamicType {
     return e?.constructor.name === 'DynamicType';
+}
+export function isLazyType(e: any): e is LazyType {
+    return e?.constructor.name === 'LazyType';
 }
 
 const numberConstructorNames = [

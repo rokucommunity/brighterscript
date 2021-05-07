@@ -989,7 +989,7 @@ export class Program {
             if (functionExpression) {
                 for (let scope of this.getScopesForFile(file)) {
                     scope.linkSymbolTable();
-                    let myClass = file.getClassFromToken(position, file.getTokenAt(position), functionExpression, scope);
+                    let myClass = file.getClassFromToken(file.getTokenAt(position), functionExpression, scope);
                     if (myClass) {
                         let classes = scope.getClassHierarchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
                         //and anything from any class in scope to a non m class

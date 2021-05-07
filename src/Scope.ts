@@ -13,11 +13,12 @@ import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isLazyType } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { SymbolTable } from './SymbolTable';
 import type { CustomType } from './types/CustomType';
+
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
  */
@@ -116,11 +117,12 @@ export class Scope {
     public getAncestorTypeList(className: string): CustomType[] {
         const ancestors: CustomType[] = [];
         const classMap = this.getClassMap();
-        let currentClass = classMap.get(className.toLowerCase())?.item;
+        let currentClass = classMap.get(className?.toLowerCase())?.item;
+        ancestors.push(currentClass?.getCustomType());
 
         while (currentClass?.hasParentClass()) {
-            ancestors.push(currentClass.getCustomType());
             currentClass = classMap.get(currentClass.parentClassName.getName(ParseMode.BrighterScript).toLowerCase())?.item;
+            ancestors.push(currentClass?.getCustomType());
         }
         //TODO: this should probably be cached
         return ancestors;
@@ -474,7 +476,7 @@ export class Scope {
         //do many per-file checks
         this.enumerateBrsFiles((file) => {
             this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
-            this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
+            // this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
             this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
@@ -668,7 +670,9 @@ export class Scope {
         }
     }
 
-
+    /**
+    * Find functions with either the wrong type of parameters, or the wrong number of parameters
+    */
     private diagnosticDetectInvalidFunctionCalls(file: BscFile) {
         if (isBrsFile(file)) {
             for (let expCall of file.functionCalls) {
@@ -678,25 +682,50 @@ export class Scope {
                     // can not find function. Handled in a different validation function
                     continue;
                 }
-                if (funcType.params.length !== expCall.args.length) {
-                    // Argument count mismatch. Handled in a different validation function
-                    continue;
+                // Check for Argument count mismatch.
+
+                //get min/max parameter count for callable
+                // There are some global functions with the same name, but different return types and param counts - see "Val()"
+                let paramCount = util.getMinMaxParamCount(funcType.params);
+                let expCallArgCount = expCall.args.length;
+                if (expCall.args.length > paramCount.max || expCall.args.length < paramCount.min) {
+                    let minMaxParamsText = paramCount.min === paramCount.max ? paramCount.max : `${paramCount.min}-${paramCount.max}`;
+
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
+                        range: expCall.nameRange,
+                        //TODO detect end of expression call
+                        file: file
+                    });
                 }
+
 
                 for (let index = 0; index < funcType.params.length; index++) {
                     const param = funcType.params[index];
                     const arg = expCall.args[index];
-                    const argType = arg.type;
+                    if (!arg) {
+                        // not enough args
+                        break;
+                    }
+                    let argType = arg.type;
                     let assignable = false;
+                    if (isLazyType(argType)) {
+                        // If this is a lazy type, you have to take into account the possibility that it might be a custom type
+                        argType = argType.getTypeFromContext({ file: file, scope: this });
+                    }
                     if (isCustomType(argType)) {
                         assignable = argType.isAssignableTo(param.type, this.getAncestorTypeList(argType.name));
                     } else {
                         assignable = argType.isAssignableTo(param.type);
                     }
                     if (!assignable) {
+                        // TODO: perhaps this should be a strict mode setting?
+                        assignable = argType.isConvertibleTo(param.type);
+                    }
+                    if (!assignable) {
                         this.diagnostics.push({
-                            ...DiagnosticMessages.argumentTypeMismatch(arg.type.toTypeString(), param.type.toTypeString()),
-                            range: arg.range,
+                            ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), param.type.toString()),
+                            range: arg?.range,
                             file: file
                         });
                     }
@@ -721,42 +750,6 @@ export class Scope {
         let validator = new BsClassValidator();
         validator.validate(this);
         this.diagnostics.push(...validator.diagnostics);
-    }
-
-    /**
-     * Detect calls to functions with the incorrect number of parameters
-     * @param file
-     * @param callableContainersByLowerName
-     */
-    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
-        //validate all function calls
-        for (let expCall of file.functionCalls.filter(functionCall => !functionCall.isDottedInvocation)) {
-            let callableContainersWithThisName = callableContainersByLowerName.get(expCall.name.text.toLowerCase());
-
-            if (callableContainersWithThisName && callableContainersWithThisName.length > 0) {
-                // There are some global functions with the same name, but different return types and param counts - see "Val()"
-                let paramCount = { min: CallExpression.MaximumArguments, max: 0 };
-                for (const callableContainer of callableContainersWithThisName) {
-                    let specificParamCount = util.getMinMaxParamCount(callableContainer.callable.params);
-                    if (specificParamCount.max > paramCount.max) {
-                        paramCount.max = specificParamCount.max;
-                    }
-                    if (specificParamCount.min < paramCount.min) {
-                        paramCount.min = specificParamCount.min;
-                    }
-                }
-                let expCallArgCount = expCall.args.length;
-                if (expCall.args.length > paramCount.max || expCall.args.length < paramCount.min) {
-                    let minMaxParamsText = paramCount.min === paramCount.max ? paramCount.max : `${paramCount.min}-${paramCount.max}`;
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
-                        range: expCall.nameRange,
-                        //TODO detect end of expression call
-                        file: file
-                    });
-                }
-            }
-        }
     }
 
     /**

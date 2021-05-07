@@ -6,7 +6,7 @@ import type { AssignmentStatement, ClassStatement, Statement } from './Statement
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement } from '../astUtils/reflection';
+import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isLazyType } from '../astUtils/reflection';
 import { expectSymbolTableEquals, expectZeroDiagnostics } from '../testHelpers.spec';
 import { VoidType } from '../types/VoidType';
 import { FunctionType } from '../types/FunctionType';
@@ -14,7 +14,6 @@ import { StringType } from '../types/StringType';
 import { CustomType } from '../types/CustomType';
 import { IntegerType } from '../types/IntegerType';
 import { ObjectType } from '../types/ObjectType';
-import { LazyType } from '../types/LazyType';
 import { SymbolTable } from '../SymbolTable';
 import { DynamicType } from '../types/DynamicType';
 import util from '../util';
@@ -1197,7 +1196,7 @@ describe('parser', () => {
         it('stores typed parameters in functions', () => {
             const parser = parse(`
                 sub someFunc(param1 as string, param2 as integer)
-                temp = param2
+                    temp = param2
                 end sub
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(parser.diagnostics);
@@ -1210,16 +1209,16 @@ describe('parser', () => {
         it('properly defers typing lazy types', () => {
             const parser = parse(`
                 sub someFunc()
-                temp = foo()
+                    temp = foo()
                 end sub
 
                 function foo() as string
-                return "foo"
+                    return "foo"
                 end function
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(parser.diagnostics);
             const someFuncSymbolTable = parser.references.functionExpressions[0].symbolTable;
-            expect(someFuncSymbolTable.getSymbolType('temp')).to.be.instanceof(LazyType);
+            expect(isLazyType(someFuncSymbolTable.getSymbol('temp')[0].type)).to.be.true;
             expect(someFuncSymbolTable.getSymbolType('temp').toTypeString()).to.eq('string');
         });
 

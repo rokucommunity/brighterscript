@@ -1318,15 +1318,15 @@ describe('BrsFile', () => {
             `);
             expect(file.functionCalls.length).to.equal(1);
             expect(file.functionCalls[0].args[0]).deep.include({
-                type: new DynamicType(),
+                type: new IntegerType(),
                 text: 'count'
             });
             expect(file.functionCalls[0].args[1]).deep.include({
-                type: new DynamicType(),
+                type: new StringType(),
                 text: 'name'
             });
             expect(file.functionCalls[0].args[2]).deep.include({
-                type: new DynamicType(),
+                type: new BooleanType(),
                 text: 'isAlive'
             });
         });
@@ -1645,7 +1645,7 @@ describe('BrsFile', () => {
             program.validate();
             let funcCallHover = commonFile.getHover(Position.create(2, 27));
             expect(funcCallHover).to.exist;
-            expect(funcCallHover.contents).to.equal('function getPi() as string | function getPi() as float');
+            expect(funcCallHover.contents).to.equal('getPi as uninitialized | function getPi() as string | function getPi() as float');
 
             let variableHover = commonFile.getHover(Position.create(3, 27));
             expect(variableHover).to.exist;

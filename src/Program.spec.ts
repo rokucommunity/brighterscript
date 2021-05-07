@@ -1490,7 +1490,7 @@ describe('Program', () => {
             //declare file with two different syntax errors
             program.setFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
                 sub A()
-                    'call with wrong param count
+                    'call with wrong param count AND wrong parameter type
                     B(1,2,3)
 
                     'call unknown function
@@ -1502,14 +1502,15 @@ describe('Program', () => {
             `);
 
             program.validate();
-            expect(program.getDiagnostics()).to.be.lengthOf(2);
+            expect(program.getDiagnostics()).to.be.lengthOf(3);
 
             program.options.diagnosticFilters = [
                 DiagnosticMessages.mismatchArgumentCount(0, 0).code
             ];
 
-            expect(program.getDiagnostics()).to.be.lengthOf(1);
+            expect(program.getDiagnostics()).to.be.lengthOf(2);
             expect(program.getDiagnostics()[0].code).to.equal(DiagnosticMessages.callToUnknownFunction('', '').code);
+            expect(program.getDiagnostics()[1].code).to.equal(DiagnosticMessages.argumentTypeMismatch('string', 'integer').code);
         });
     });
 
@@ -1816,7 +1817,7 @@ describe('Program', () => {
             sinon.stub(file.parser, 'getPreviousToken').returns(undefined);
             //should not crash
             expect(
-                file['getClassFromToken'](util.createPosition(2, 3), createToken(TokenKind.Dot, '.'), null, null)
+                file['getClassFromToken'](createToken(TokenKind.Dot, '.'), null, null)
             ).to.be.undefined;
         });
 

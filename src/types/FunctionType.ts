@@ -10,7 +10,8 @@ export class FunctionType implements BscType {
          * Determines if this is a sub or not
          */
         public isSub = false,
-        public params: CallableParam[] = []
+        public params: CallableParam[] = [],
+        public isNew = false
     ) {
     }
 
@@ -71,6 +72,9 @@ export class FunctionType implements BscType {
         let paramTexts = [];
         for (let param of this.params) {
             paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
+        }
+        if (this.isNew) {
+            return `new ${this.name ?? ''}(${paramTexts.join(', ')})`;
         }
         return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
 

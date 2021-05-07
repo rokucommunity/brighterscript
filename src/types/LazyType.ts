@@ -1,4 +1,8 @@
+import { isCustomType } from '../astUtils';
+import type { BrsFile } from '../files/BrsFile';
+import type { Scope } from '../Scope';
 import type { BscType } from './BscType';
+import type { CustomType } from './CustomType';
 
 /**
  * A type whose actual type is not computed until requested.
@@ -6,7 +10,7 @@ import type { BscType } from './BscType';
  */
 export class LazyType implements BscType {
     constructor(
-        private factory: () => BscType
+        private factory: (context?: LazyTypeContext) => BscType
     ) {
 
     }
@@ -14,9 +18,16 @@ export class LazyType implements BscType {
     public get type() {
         return this.factory();
     }
+    public getTypeFromContext(context?: LazyTypeContext) {
+        return this.factory(context);
+    }
 
-    public isAssignableTo(targetType: BscType) {
-        return this.type.isAssignableTo(targetType);
+    public isAssignableTo(targetType: BscType, context?: LazyTypeContext, potentialAncestorTypes?: CustomType[]) {
+        const foundType = this.getTypeFromContext(context);
+        if (isCustomType(foundType)) {
+            return foundType.isAssignableTo(targetType, potentialAncestorTypes);
+        }
+        return foundType.isAssignableTo(targetType);
     }
 
     public isConvertibleTo(targetType: BscType) {
@@ -36,3 +47,8 @@ export class LazyType implements BscType {
     }
 }
 
+
+export interface LazyTypeContext {
+    file?: BrsFile;
+    scope?: Scope;
+}
