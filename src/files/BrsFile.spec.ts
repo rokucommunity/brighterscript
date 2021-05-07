@@ -1926,7 +1926,7 @@ describe('BrsFile', () => {
         });
 
         it('does not add leading or trailing newlines', () => {
-            testTranspile(`function log()\nend function`, undefined, 'none');
+            testTranspile(`function abc()\nend function`, undefined, 'none');
         });
 
         it('handles sourcemap edge case', async () => {
@@ -1952,7 +1952,7 @@ describe('BrsFile', () => {
         });
 
         it('computes correct locations for sourcemap', async () => {
-            let source = `function log(name)\n    firstName = name\nend function`;
+            let source = `function abc(name)\n    firstName = name\nend function`;
             let tokens = Lexer.scan(source).tokens
                 //remove newlines and EOF
                 .filter(x => x.kind !== TokenKind.Eof && x.kind !== TokenKind.Newline);
@@ -2203,6 +2203,10 @@ describe('BrsFile', () => {
         });
 
         it('replaces custom types in parameter types and return types', () => {
+            program.addOrReplaceFile('source/SomeKlass.bs', `
+                class SomeKlass
+                end class
+            `);
             testTranspile(`
                 function foo() as SomeKlass
                     return new SomeKlass()

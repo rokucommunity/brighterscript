@@ -731,7 +731,7 @@ describe('XmlFile', () => {
 
         it('keeps all content of the XML', () => {
             program.addOrReplaceFile(`components/SimpleScene.bs`, `
-                sub init()
+                sub b()
                 end sub
             `);
 
@@ -743,10 +743,10 @@ describe('XmlFile', () => {
                     xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
                 >
                     <interface>
-                        <field id="a" />
+                        <field id="a" type="string" />
                         <function name="b" />
                     </interface>
-                    <script type="text/brightscript" uri="SimpleScene.brs"/>
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
                     <children>
                         <aa id="aa">
                             <bb id="bb" />
@@ -757,7 +757,7 @@ describe('XmlFile', () => {
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
                     <interface>
-                        <field id="a" />
+                        <field id="a" type="string" />
                         <function name="b" />
                     </interface>
                     <script type="text/brightscript" uri="SimpleScene.brs" />
@@ -792,7 +792,8 @@ describe('XmlFile', () => {
             `, 'none', 'components/SimpleScene.xml');
         });
 
-        it('does not fail on msissing script type', () => {
+        it('does not fail on missing script type', () => {
+            program.addOrReplaceFile('components/SimpleScene.brs', '');
             testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
@@ -1013,7 +1014,7 @@ describe('XmlFile', () => {
             `);
             program.addOrReplaceFile('components/Component1.bs', `
                 import "pkg:/source/logger.brs"
-                sub logInfo()
+                sub init()
                 end sub
             `);
             testTranspile(trim`
