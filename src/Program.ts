@@ -822,7 +822,7 @@ export class Program {
         }
         let result = [] as CompletionItem[];
 
-        if (isBrsFile(file) && file.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
+        if (isBrsFile(file) && file.parser.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
             // is next to a @. callfunc invocation - must be an interface method
             for (const scope of this.getScopes().filter((s) => isXmlScope(s))) {
                 let fileLinks = this.getStatementsForXmlFile(scope as XmlScope);
@@ -967,7 +967,7 @@ export class Program {
             //if m class reference.. then
             //only get statements from the class I am in..
             if (functionExpression) {
-                let myClass = file.getClassFromMReference(position, file.getTokenAt(position), functionExpression);
+                let myClass = file.getClassFromMReference(position, file.parser.getTokenAt(position), functionExpression);
                 if (myClass) {
                     for (let scope of this.getScopesForFile(myClass.file)) {
                         let classes = scope.getClassHierarchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
@@ -1046,12 +1046,12 @@ export class Program {
         if (!itemCounts.isArgStartFound) {
             //try to get sig help based on the name
             index = position.character;
-            let currentToken = file.getTokenAt(position);
+            let currentToken = file.parser.getTokenAt(position);
             if (currentToken && currentToken.kind !== TokenKind.Comment) {
                 name = file.getPartialVariableName(currentToken, [TokenKind.New]);
                 if (!name) {
                     //try the previous token, incase we're on a bracket
-                    currentToken = file.getPreviousToken(currentToken);
+                    currentToken = file.parser.getPreviousToken(currentToken);
                     name = file.getPartialVariableName(currentToken, [TokenKind.New]);
                 }
                 if (name?.indexOf('.')) {
