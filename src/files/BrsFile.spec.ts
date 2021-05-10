@@ -2,7 +2,7 @@ import { assert, expect } from 'chai';
 import * as sinonImport from 'sinon';
 import * as path from 'path';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
-import type { Callable, CommentFlag, BsDiagnostic, VariableDeclaration } from '../interfaces';
+import type { Callable, CommentFlag, BsDiagnostic } from '../interfaces';
 import { Program } from '../Program';
 import { BooleanType } from '../types/BooleanType';
 import { DynamicType } from '../types/DynamicType';
@@ -16,9 +16,10 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectSymbolTableEquals, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
+import { VoidType } from '../types/VoidType';
 
 let sinon = sinonImport.createSandbox();
 
@@ -99,7 +100,7 @@ describe('BrsFile', () => {
                 end sub
             `);
             expect(() => {
-                program.getCompletions(file.pathAbsolute, util.createPosition(2, 34));
+                program.getCompletions(file.srcPath, util.createPosition(2, 34));
             }).not.to.throw;
         });
 
@@ -274,7 +275,6 @@ describe('BrsFile', () => {
             expect(results.length).to.equal(1);
             expect(results[0]?.label).to.equal('something');
         });
-
     });
 
     describe('comment flags', () => {
@@ -708,7 +708,7 @@ describe('BrsFile', () => {
             expect(file.getDiagnostics()).to.be.lengthOf(0);
         });
 
-        it('does not lose function scopes when mismatched end sub', () => {
+        it('does not lose function statements when mismatched end sub', () => {
             file.parse(`
                 sub main()
                     sayHi()
@@ -718,7 +718,7 @@ describe('BrsFile', () => {
                     print "hello world"
                 end sub
             `);
-            expect(file.functionScopes).to.be.lengthOf(2);
+            expect(file.parser.references.functionStatements).to.be.lengthOf(2);
         });
 
         it('does not lose sub scope when mismatched end function', () => {
@@ -731,7 +731,7 @@ describe('BrsFile', () => {
                     print "hello world"
                 end sub
             `);
-            expect(file.functionScopes).to.be.lengthOf(2);
+            expect(file.parser.references.functionStatements).to.be.lengthOf(2);
         });
 
         it('does not error with boolean in RHS of set statement', () => {
@@ -1221,7 +1221,7 @@ describe('BrsFile', () => {
                 isOptional: true,
                 isRestArgument: false
             });
-            expect(callable.params[0].type).instanceof(DynamicType);
+            expect(callable.params[0].type).instanceof(IntegerType);
         });
 
         it('finds parameter types', () => {
@@ -1345,14 +1345,14 @@ describe('BrsFile', () => {
         });
     });
 
-    describe('createFunctionScopes', () => {
+    describe('function local variable handling', () => {
         it('creates range properly', () => {
             file.parse(`
                 sub Main()
                     name = 'bob"
                 end sub
             `);
-            expect(file.functionScopes[0].range).to.eql(Range.create(1, 16, 3, 23));
+            expect(file.parser.references.functionStatements[0].range).to.eql(Range.create(1, 16, 3, 23));
         });
 
         it('creates scopes for parent and child functions', () => {
@@ -1367,26 +1367,10 @@ describe('BrsFile', () => {
                     end sub)
                 end sub
             `);
-            expect(file.functionScopes).to.length(3);
+            expect(file.parser.references.functionExpressions).to.be.length(3);
         });
 
-        it('outer function does not capture inner statements', () => {
-            file.parse(`
-                sub Main()
-                    name = "john"
-                    sayHi = sub()
-                        age = 12
-                    end sub
-                end sub
-            `);
-            let outerScope = file.getFunctionScopeAtPosition(Position.create(2, 25));
-            expect(outerScope.variableDeclarations).to.be.lengthOf(2);
-
-            let innerScope = file.getFunctionScopeAtPosition(Position.create(4, 10));
-            expect(innerScope.variableDeclarations).to.be.lengthOf(1);
-        });
-
-        it('finds variables declared in function scopes', () => {
+        it('finds variables declared in function expressions', () => {
             file.parse(`
                 sub Main()
                     sayHi = sub()
@@ -1398,26 +1382,18 @@ describe('BrsFile', () => {
                     end sub)
                 end sub
             `);
-            expect(file.functionScopes[0].variableDeclarations).to.be.length(1);
-            expect(file.functionScopes[0].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
-                lineIndex: 2,
-                name: 'sayHi'
-            });
-            expect(file.functionScopes[0].variableDeclarations[0].type).instanceof(FunctionType);
 
-            expect(file.functionScopes[1].variableDeclarations).to.be.length(1);
-            expect(file.functionScopes[1].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
-                lineIndex: 3,
-                name: 'age'
-            });
-            expect(file.functionScopes[1].variableDeclarations[0].type).instanceof(IntegerType);
+            expectSymbolTableEquals(file.parser.references.functionExpressions[0].symbolTable, [
+                ['sayHi', new FunctionType(new VoidType(), true), util.createRange(2, 20, 2, 25)]
+            ]);
 
-            expect(file.functionScopes[2].variableDeclarations).to.be.length(1);
-            expect(file.functionScopes[2].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
-                lineIndex: 7,
-                name: 'name'
-            });
-            expect(file.functionScopes[2].variableDeclarations[0].type).instanceof(StringType);
+            expectSymbolTableEquals(file.parser.references.functionExpressions[1].symbolTable, [
+                ['age', new IntegerType(), util.createRange(3, 24, 3, 27)]
+            ]);
+
+            expectSymbolTableEquals(file.parser.references.functionExpressions[2].symbolTable, [
+                ['name', new StringType(), util.createRange(7, 24, 7, 28)]
+            ]);
         });
 
         it('finds variable declarations inside of if statements', () => {
@@ -1428,9 +1404,9 @@ describe('BrsFile', () => {
                     end if
                 end sub
             `);
-            let scope = file.getFunctionScopeAtPosition(Position.create(3, 0));
-            expect(scope.variableDeclarations[0]).to.exist;
-            expect(scope.variableDeclarations[0].name).to.equal('theLength');
+            expectSymbolTableEquals(file.parser.references.functionExpressions[0].symbolTable, [
+                ['theLength', new IntegerType(), util.createRange(3, 24, 3, 33)]
+            ]);
         });
 
         it('finds value from global return', () => {
@@ -1444,12 +1420,9 @@ describe('BrsFile', () => {
                 end function
             `);
 
-            expect(file.functionScopes[0].variableDeclarations).to.be.length(1);
-            expect(file.functionScopes[0].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
-                lineIndex: 2,
-                name: 'myName'
-            });
-            expect(file.functionScopes[0].variableDeclarations[0].type).instanceof(StringType);
+            expectSymbolTableEquals(file.parser.references.functionExpressions[0].symbolTable, [
+                ['myName', new StringType(), util.createRange(2, 19, 2, 25)]
+            ]);
         });
 
         it('finds variable type from other variable', () => {
@@ -1460,12 +1433,10 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            expect(file.functionScopes[0].variableDeclarations).to.be.length(2);
-            expect(file.functionScopes[0].variableDeclarations[1]).to.deep.include(<VariableDeclaration>{
-                lineIndex: 3,
-                name: 'nameCopy'
-            });
-            expect(file.functionScopes[0].variableDeclarations[1].type).instanceof(StringType);
+            expectSymbolTableEquals(file.parser.references.functionExpressions[0].symbolTable, [
+                ['name', new StringType(), util.createRange(2, 19, 2, 23)],
+                ['nameCopy', new StringType(), util.createRange(3, 19, 3, 27)]
+            ]);
         });
 
         it('sets proper range for functions', () => {
@@ -1477,9 +1448,11 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            expect(file.functionScopes).to.be.length(2);
-            expect(file.functionScopes[0].range).to.eql(Range.create(1, 16, 5, 23));
-            expect(file.functionScopes[1].range).to.eql(Range.create(2, 30, 4, 32));
+            expect(file.parser.references.functionExpressions).to.be.length(2);
+            expect(file.parser.references.functionExpressions.map(x => x.range)).to.eql([
+                util.createRange(1, 16, 5, 23),
+                util.createRange(2, 30, 4, 32)
+            ]);
         });
     });
 
@@ -1531,7 +1504,7 @@ describe('BrsFile', () => {
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(Range.create(1, 25, 1, 29));
-            expect(hover.contents).to.equal('function Main(count? as dynamic) as dynamic');
+            expect(hover.contents).to.equal('function Main(count? as integer) as dynamic');
         });
 
         it('finds variable function hover in same scope', () => {
@@ -1547,7 +1520,7 @@ describe('BrsFile', () => {
             let hover = file.getHover(Position.create(5, 24));
 
             expect(hover.range).to.eql(Range.create(5, 20, 5, 29));
-            expect(hover.contents).to.equal('sub sayMyName(name as string) as void');
+            expect(hover.contents).to.equal('sub (name as string) as void');
         });
 
         it('finds function hover in file scope', () => {
@@ -1619,6 +1592,54 @@ describe('BrsFile', () => {
                 end sub
             `);
             expect(mainFile.getDiagnostics()).to.be.lengthOf(0);
+        });
+
+
+        it('displays the context from multiple scopes', () => {
+
+            let commonFile = program.addOrReplaceFile('source/common.brs', `
+                sub displayPi()
+                    pi = getPi()
+                    print pi
+                end sub
+            `);
+
+            let scope1File = program.addOrReplaceFile('components/comp1/scope1.brs', `
+                function getPi() as string
+                    return "apple"
+                end function
+            `);
+            expect(scope1File.getDiagnostics()).to.be.lengthOf(0);
+            program.addOrReplaceFile('components/comp1/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Group">
+                    <script type="text/brightscript" uri="scope1.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/common.brs" />
+                </component>
+            `);
+
+            let scope2File = program.addOrReplaceFile('components/comp2/scope2.brs', `
+                function getPi() as float
+                    return 3.14
+                end function
+            `);
+            expect(scope2File.getDiagnostics()).to.be.lengthOf(0);
+            program.addOrReplaceFile('components/comp2/comp2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component2" extends="Group">
+                    <script type="text/brightscript" uri="scope2.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/common.brs" />
+                </component>
+            `);
+
+            program.validate();
+            let funcCallHover = commonFile.getHover(Position.create(2, 27));
+            expect(funcCallHover).to.exist;
+            expect(funcCallHover.contents).to.equal('function getPi() as string | function getPi() as float');
+
+            let variableHover = commonFile.getHover(Position.create(3, 27));
+            expect(variableHover).to.exist;
+            expect(variableHover.contents).to.equal('pi as uninitialized | pi as string | pi as float');
         });
     });
 
@@ -2303,18 +2324,18 @@ describe('BrsFile', () => {
     describe('typedefKey', () => {
         it('works for .brs files', () => {
             expect(
-                s((program.addOrReplaceFile<BrsFile>('source/main.brs', '')).typedefKey)
+                s((program.addOrReplaceFile<BrsFile>('source/main.brs', '')).typedefSrcPath)
             ).to.equal(
                 s`${rootDir.toLowerCase()}/source/main.d.bs`
             );
         });
         it('returns undefined for files that should not have a typedef', () => {
-            expect((program.addOrReplaceFile<BrsFile>('source/main.bs', '')).typedefKey).to.be.undefined;
+            expect((program.addOrReplaceFile<BrsFile>('source/main.bs', '')).typedefSrcPath).to.be.undefined;
 
-            expect((program.addOrReplaceFile<BrsFile>('source/main.d.bs', '')).typedefKey).to.be.undefined;
+            expect((program.addOrReplaceFile<BrsFile>('source/main.d.bs', '')).typedefSrcPath).to.be.undefined;
 
             const xmlFile = program.addOrReplaceFile<BrsFile>('components/comp.xml', '');
-            expect(xmlFile.typedefKey).to.be.undefined;
+            expect(xmlFile.typedefSrcPath).to.be.undefined;
         });
     });
 
@@ -2376,11 +2397,11 @@ describe('BrsFile', () => {
 
     describe('typedef', () => {
         it('sets typedef path properly', () => {
-            expect((program.addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefKey).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
-            expect((program.addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefKey).to.equal(undefined);
-            expect((program.addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefKey).to.equal(undefined);
+            expect((program.addOrReplaceFile<BrsFile>('source/main1.brs', '')).typedefSrcPath).to.equal(s`${rootDir}/source/main1.d.bs`.toLowerCase());
+            expect((program.addOrReplaceFile<BrsFile>('source/main2.d.bs', '')).typedefSrcPath).to.equal(undefined);
+            expect((program.addOrReplaceFile<BrsFile>('source/main3.bs', '')).typedefSrcPath).to.equal(undefined);
             //works for dest with `.brs` extension
-            expect((program.addOrReplaceFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefKey).to.equal(undefined);
+            expect((program.addOrReplaceFile<BrsFile>({ src: 'source/main4.bs', dest: 'source/main4.brs' }, '')).typedefSrcPath).to.equal(undefined);
         });
 
         it('does not link when missing from program', () => {
@@ -2403,7 +2424,7 @@ describe('BrsFile', () => {
         it('removes typedef link when typedef is removed', () => {
             const typedef = program.addOrReplaceFile<BrsFile>('source/main.d.bs', ``);
             const file = program.addOrReplaceFile<BrsFile>('source/main.brs', ``);
-            program.removeFile(typedef.pathAbsolute);
+            program.removeFile(typedef.srcPath);
             expect(file.typedefFile).to.be.undefined;
         });
     });

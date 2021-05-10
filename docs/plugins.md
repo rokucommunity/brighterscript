@@ -149,11 +149,11 @@ interface FileObj {
 }
 
 interface SourceObj {
-    pathAbsolute: string;
+    srcPath: string;
     source: string;
 }
 
-interface TranspileObj {
+export interface TranspileObj {
     file: (BscFile);
     outputPath: string;
 }

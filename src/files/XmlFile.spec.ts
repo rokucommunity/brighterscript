@@ -1,5 +1,4 @@
 import { assert, expect } from 'chai';
-import * as path from 'path';
 import * as sinonImport from 'sinon';
 import type { CompletionItem } from 'vscode-languageserver';
 import { CompletionItemKind, Position, Range, DiagnosticSeverity } from 'vscode-languageserver';
@@ -7,10 +6,10 @@ import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { AfterFileParseEvent, BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
-import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
 import { expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import type { BrsFile } from './BrsFile';
 
 describe('XmlFile', () => {
     const tempDir = s`${process.cwd()}/.tmp`;
@@ -91,7 +90,7 @@ describe('XmlFile', () => {
                 </component>
             `);
             expect(file.scriptTagImports.map(x => x.pkgPath)[0]).to.equal(
-                s`components/ChildScene.bs`
+                'pkg:/components/ChildScene.bs'
             );
         });
         it('does not include commented-out script imports', () => {
@@ -107,7 +106,7 @@ describe('XmlFile', () => {
             expect(
                 file.scriptTagImports?.[0]?.pkgPath
             ).to.eql(
-                s`components/ChildScene.brs`
+                'pkg:/components/ChildScene.brs'
             );
         });
 
@@ -242,7 +241,7 @@ describe('XmlFile', () => {
             expect(file.scriptTagImports[0]).to.deep.include(<FileReference>{
                 sourceFile: file,
                 text: 'pkg:/components/cmp1.brs',
-                pkgPath: `components${path.sep}cmp1.brs`,
+                pkgPath: `pkg:/components/cmp1.brs`,
                 filePathRange: Range.create(2, 42, 2, 66)
             });
         });
@@ -271,7 +270,7 @@ describe('XmlFile', () => {
             expect(file.scriptTagImports.length).to.equal(1);
             expect(file.scriptTagImports[0]).to.deep.include(<FileReference>{
                 text: 'cmp1.brs',
-                pkgPath: `components${path.sep}cmp1.brs`
+                pkgPath: `pkg:/components/cmp1.brs`
             });
         });
 
@@ -374,12 +373,15 @@ describe('XmlFile', () => {
 
     describe('getCompletions', () => {
         it('formats completion paths with proper slashes', () => {
-            let scriptPath = s`C:/app/components/component1/component1.brs`;
-            program.files[scriptPath] = new BrsFile(scriptPath, s`components/component1/component1.brs`, program);
+            program.addOrReplaceFile('pkg:/components/component1/component1.brs', '');
 
-            let xmlFile = new XmlFile(s`${rootDir}/components/component1/component1.xml`, s`components/component1/component1.xml`, <any>program);
+            const xmlFile = program.addOrReplaceFile<XmlFile>('components/component1/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Group">
+                </component
+            `);
             xmlFile.parser.references.scriptTagImports.push({
-                pkgPath: s`components/component1/component1.brs`,
+                pkgPath: 'pkg:/components/component1/component1.brs',
                 text: 'component1.brs',
                 filePathRange: Range.create(1, 1, 1, 1)
             });
@@ -411,7 +413,7 @@ describe('XmlFile', () => {
                 </component>
             `);
 
-            expect(program.getCompletions(xmlFile.pathAbsolute, Position.create(1, 1))).to.be.empty;
+            expect(program.getCompletions(xmlFile.srcPath, Position.create(1, 1))).to.be.empty;
         });
     });
 
@@ -424,8 +426,8 @@ describe('XmlFile', () => {
                 </component>
             `);
             expect(file.getOwnDependencies().sort()).to.eql([
-                s`source/lib.brs`,
-                s`source/lib.d.bs`
+                'pkg:/source/lib.brs',
+                'pkg:/source/lib.d.bs'
             ]);
         });
     });
@@ -627,9 +629,9 @@ describe('XmlFile', () => {
         it(`honors the 'needsTranspiled' flag when set in 'afterFileParse'`, () => {
             program.plugins.add({
                 name: 'test',
-                afterFileParse: (file: any) => {
+                afterFileParse: (event: any) => {
                     //enable transpile for every file
-                    file.needsTranspiled = true;
+                    event.file.needsTranspiled = true;
                 }
             });
             const file = program.addOrReplaceFile<BrsFile>('components/file.xml', trim`
@@ -809,9 +811,7 @@ describe('XmlFile', () => {
         });
 
         it('returns the XML unmodified if needsTranspiled is false', () => {
-            let file = program.addOrReplaceFile(
-                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
-                trim`
+            let file = program.addOrReplaceFile('components/SimpleScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <!-- should stay as-is -->
                 <component name="SimpleScene" extends="Scene" >
@@ -830,9 +830,7 @@ describe('XmlFile', () => {
         });
 
         it('needsTranspiled is false by default', () => {
-            let file = program.addOrReplaceFile<BrsFile>(
-                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
-                trim`
+            let file = program.addOrReplaceFile<XmlFile>('components/SimpleScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene" >
                 </component>
@@ -841,9 +839,7 @@ describe('XmlFile', () => {
         });
 
         it('needsTranspiled is true if an import is brighterscript', () => {
-            let file = program.addOrReplaceFile<BrsFile>(
-                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
-                trim`
+            let file = program.addOrReplaceFile<XmlFile>('components/SimpleScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene" >
                     <script type="text/brightscript" uri="SimpleScene.bs"/>
@@ -855,9 +851,7 @@ describe('XmlFile', () => {
 
         it('simple source mapping includes sourcemap reference', () => {
             program.options.sourceMap = true;
-            let file = program.addOrReplaceFile(
-                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
-                trim`
+            let file = program.addOrReplaceFile('components/SimpleScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
                 </component>
@@ -870,9 +864,7 @@ describe('XmlFile', () => {
 
         it('AST-based source mapping includes sourcemap reference', () => {
             program.options.sourceMap = true;
-            let file = program.addOrReplaceFile<BrsFile>(
-                { src: s`${rootDir}/components/SimpleScene.xml`, dest: 'components/SimpleScene.xml' },
-                trim`
+            let file = program.addOrReplaceFile<XmlFile>('components/SimpleScene.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="SimpleScene" extends="Scene">
                 </component>
@@ -911,10 +903,10 @@ describe('XmlFile', () => {
     it('plugin diagnostics work for xml files', () => {
         program.plugins.add({
             name: 'Xml diagnostic test',
-            afterFileParse: ({ file: any }) => {
-                if (file.pathAbsolute.endsWith('.xml')) {
-                    file.addDiagnostics([{
-                        file: file,
+            afterFileParse: (event: { file }) => {
+                if (event.file.srcPath.endsWith('.xml')) {
+                    event.file.addDiagnostics([{
+                        file: event.file,
                         message: 'Test diagnostic',
                         range: Range.create(0, 0, 0, 0),
                         code: 9999
@@ -1090,7 +1082,7 @@ describe('XmlFile', () => {
             expect(functionNames).not.to.include('logBrs');
 
             //remove the typdef file
-            program.removeFile(typedef.pathAbsolute);
+            program.removeFile(typedef.srcPath);
 
             program.validate();
             functionNames = scope.getOwnCallables().map(x => x.callable.name);

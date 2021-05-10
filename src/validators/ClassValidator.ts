@@ -8,7 +8,7 @@ import { URI } from 'vscode-uri';
 import util from '../util';
 import { isCallExpression, isClassFieldStatement, isClassMethodStatement, isCustomType } from '../astUtils/reflection';
 import type { BscFile, BsDiagnostic } from '../interfaces';
-import { createVisitor, WalkMode } from '../astUtils';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer';
 
@@ -100,7 +100,7 @@ export class BsClassValidator {
                     range: classStatement.name.range,
                     relatedInformation: [{
                         location: Location.create(
-                            URI.file(nonNamespaceClass.file.pathAbsolute).toString(),
+                            URI.file(nonNamespaceClass.file.srcPath).toString(),
                             nonNamespaceClass.name.range
                         ),
                         message: 'Original class declared here'
@@ -349,7 +349,7 @@ export class BsClassValidator {
                         range: classStatement.name.range,
                         relatedInformation: [{
                             location: Location.create(
-                                URI.file(alreadyDefinedClass.file.pathAbsolute).toString(),
+                                URI.file(alreadyDefinedClass.file.srcPath).toString(),
                                 this.classes[lowerName].range
                             ),
                             message: ''

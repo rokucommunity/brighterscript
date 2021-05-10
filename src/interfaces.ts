@@ -2,12 +2,11 @@ import type { Range, Diagnostic, CodeAction, CompletionItem, Position, Hover, Lo
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { FunctionScope } from './FunctionScope';
 import type { FunctionType } from './types/FunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { Expression, FunctionStatement } from './parser';
+import type { Expression, FunctionStatement, FunctionExpression } from './parser';
 import type { TranspileState } from './parser/TranspileState';
 import type { CodeWithSourceMap, SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
@@ -29,11 +28,18 @@ export interface BscFile {
      * The pkgPath to the file (without the `pkg:` prefix)
      */
     pkgPath: string;
-    pathAbsolute: string;
+    /**
+     * The absolute path to the source file
+     */
+    srcPath: string;
     /**
      * The key used to identify this file in the dependency graph
      */
     dependencyGraphKey: string;
+    /**
+     * The full file contents as a string (if applicable)
+     */
+    fileContents?: string;
     /**
      * Dispose of any resources the file may have created.
      */
@@ -111,7 +117,7 @@ export interface FunctionCall {
      * The full range of this function call (from the start of the function name to its closing paren)
      */
     range: Range;
-    functionScope: FunctionScope;
+    functionExpression: FunctionExpression;
     file: BscFile;
     name: string;
     args: CallableArg[];
@@ -338,7 +344,7 @@ export interface OnScopeGetCodeActionsEvent {
 }
 export interface BeforeFileParseEvent {
     program: Program;
-    pathAbsolute: string;
+    srcPath: string;
     source: string;
 }
 export interface AfterFileParseEvent {
@@ -393,7 +399,10 @@ export interface TypedefProvider {
 
 export type TranspileResult = Array<(string | SourceNode)>;
 
-export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined> | void;
+/**
+ * @param srcPath The absolute path to the source file on disk
+ */
+export type FileResolver = (srcPath: string) => string | undefined | Thenable<string | undefined> | void;
 
 export interface ExpressionInfo {
     expressions: Expression[];

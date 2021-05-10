@@ -28,4 +28,8 @@ export class CustomType implements BscType {
     public isConvertibleTo(targetType: BscType) {
         return this.isAssignableTo(targetType);
     }
+
+    public equals(targetType: BscType): boolean {
+        return this.toString() === targetType.toString();
+    }
 }

@@ -168,7 +168,7 @@ let mathFunctions = [{
         name: 'x',
         type: new FloatType()
     }]
-}] as Callable[];
+}] as unknown as Callable[];
 
 let runtimeFunctions = [{
     name: 'CreateObject',
@@ -267,7 +267,7 @@ let runtimeFunctions = [{
     type: new FunctionType(new IntegerType()),
     file: globalFile,
     params: []
-}] as Callable[];
+}] as unknown as Callable[];
 
 let globalUtilityFunctions = [
     {
@@ -510,7 +510,7 @@ One way to accomplish that is to use the Replace method on the string value retu
             type: new StringType()
         }]
     }
-] as Callable[];
+] as unknown as Callable[];
 
 let globalStringFunctions = [
     {
@@ -700,7 +700,7 @@ By using Chr, you can create strings containing characters which cannot be conta
             type: new StringType()
         }]
     }
-] as Callable[];
+] as unknown as Callable[];
 
 
 let programStatementFunctions = [
@@ -730,7 +730,7 @@ let programStatementFunctions = [
         file: globalFile,
         params: []
     }
-] as Callable[];
+] as unknown as Callable[];
 
 export let globalCallables = [...mathFunctions, ...runtimeFunctions, ...globalUtilityFunctions, ...globalStringFunctions, ...programStatementFunctions];
 for (let callable of globalCallables) {
@@ -749,6 +749,7 @@ for (let callable of globalCallables) {
         return this.name;
     };
 
+    callable.isSub = false;
 }
 globalFile.callables = globalCallables;
 

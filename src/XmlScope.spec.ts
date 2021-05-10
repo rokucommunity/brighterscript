@@ -70,7 +70,7 @@ describe('XmlScope', () => {
             let childScope = program.getScopesForFile(childXmlFile);
             let definition = childScope[0].getDefinition(childXmlFile, Position.create(1, 48));
             expect(definition).to.be.lengthOf(1);
-            expect(definition[0].uri).to.equal(util.pathToUri(parentXmlFile.pathAbsolute));
+            expect(definition[0].uri).to.equal(util.pathToUri(parentXmlFile.srcPath));
         });
     });
 

@@ -635,6 +635,11 @@ export let DiagnosticMessages = {
         message: `Cannot find type with name '${typeName}'`,
         code: 1123,
         severity: DiagnosticSeverity.Error
+    }),
+    argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string) => ({
+        message: `Argument of type '${actualTypeString}' is not assignable to parameter of type '${expectedTypeString}'`,
+        code: 1124,
+        severity: DiagnosticSeverity.Error
     })
 };
 

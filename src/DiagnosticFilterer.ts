@@ -59,10 +59,10 @@ export class DiagnosticFilterer {
 
         for (let diagnostic of diagnostics) {
             //skip diagnostics that have issues
-            if (!diagnostic?.file?.pathAbsolute) {
+            if (!diagnostic?.file?.srcPath) {
                 continue;
             }
-            const lowerSrcPath = diagnostic.file.pathAbsolute.toLowerCase();
+            const lowerSrcPath = diagnostic.file.srcPath.toLowerCase();
             //make a new array for this file if one does not yet exist
             if (!this.byFile[lowerSrcPath]) {
                 this.byFile[lowerSrcPath] = [];
