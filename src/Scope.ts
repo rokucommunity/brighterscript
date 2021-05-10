@@ -84,9 +84,20 @@ export class Scope {
     }
 
     /**
+   * Gets the parent class of the given class
+   * @param klass - The class to get the parent of, if possible
+   */
+    public getParentClass(klass: ClassStatement): ClassStatement {
+        if (klass?.hasParentClass()) {
+            const lowerParentClassName = klass.parentClassName?.getName(ParseMode.BrighterScript).toLowerCase();
+            return this.getClassMap().get(lowerParentClassName).item;
+        }
+    }
+
+    /**
     * Tests if a class exists with the specified name
     * @param className - the all-lower-case namespace-included class name
-    * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
+    * @param namespaceName - the current namespace name
     */
     public hasClass(className: string, namespaceName?: string): boolean {
         return !!this.getClass(className, namespaceName);
@@ -169,7 +180,7 @@ export class Scope {
      */
     public getParentScope() {
         let scope: Scope;
-        //use the global scope if we didn't find a sope and this is not the global scope
+        //use the global scope if we didn't find a scope and this is not the global scope
         if (this.program.globalScope !== this) {
             scope = this.program.globalScope;
         }
@@ -676,7 +687,8 @@ export class Scope {
     private diagnosticDetectInvalidFunctionCalls(file: BscFile) {
         if (isBrsFile(file)) {
             for (let expCall of file.functionCalls) {
-                const funcType = file.getSymbolTypeFromToken(expCall.name, expCall.functionExpression, this)?.type;
+                const symbolTypeInfo = file.getSymbolTypeFromToken(expCall.name, expCall.functionExpression, this);
+                const funcType = symbolTypeInfo.type;
 
                 if (!isFunctionType(funcType)) {
                     // can not find function. Handled in a different validation function
@@ -690,7 +702,6 @@ export class Scope {
                 let expCallArgCount = expCall.args.length;
                 if (expCall.args.length > paramCount.max || expCall.args.length < paramCount.min) {
                     let minMaxParamsText = paramCount.min === paramCount.max ? paramCount.max : `${paramCount.min}-${paramCount.max}`;
-
                     this.diagnostics.push({
                         ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
                         range: expCall.nameRange,
@@ -698,37 +709,45 @@ export class Scope {
                         file: file
                     });
                 }
-
-
-                for (let index = 0; index < funcType.params.length; index++) {
-                    const param = funcType.params[index];
-                    const arg = expCall.args[index];
-                    if (!arg) {
-                        // not enough args
-                        break;
+                // Check for Argument type mismatch.
+                if (isFunctionType(funcType)) {
+                    for (let index = 0; index < funcType.params.length; index++) {
+                        const param = funcType.params[index];
+                        const arg = expCall.args[index];
+                        if (!arg) {
+                            // not enough args
+                            break;
+                        }
+                        let argType = arg.type;
+                        let assignable = false;
+                        if (isLazyType(argType)) {
+                            // If this is a lazy type, you have to take into account the possibility that it might be a custom type
+                            argType = argType.getTypeFromContext({ file: file, scope: this });
+                        }
+                        if (isCustomType(argType)) {
+                            assignable = argType.isAssignableTo(param.type, this.getAncestorTypeList(argType.name));
+                        } else if (argType) {
+                            assignable = argType.isAssignableTo(param.type);
+                        }
+                        if (!assignable) {
+                            // TODO: perhaps this should be a strict mode setting?
+                            assignable = argType.isConvertibleTo(param.type);
+                        }
+                        if (!assignable) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), param.type.toString()),
+                                range: arg?.range,
+                                file: file
+                            });
+                        }
                     }
-                    let argType = arg.type;
-                    let assignable = false;
-                    if (isLazyType(argType)) {
-                        // If this is a lazy type, you have to take into account the possibility that it might be a custom type
-                        argType = argType.getTypeFromContext({ file: file, scope: this });
-                    }
-                    if (isCustomType(argType)) {
-                        assignable = argType.isAssignableTo(param.type, this.getAncestorTypeList(argType.name));
-                    } else {
-                        assignable = argType.isAssignableTo(param.type);
-                    }
-                    if (!assignable) {
-                        // TODO: perhaps this should be a strict mode setting?
-                        assignable = argType.isConvertibleTo(param.type);
-                    }
-                    if (!assignable) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), param.type.toString()),
-                            range: arg?.range,
-                            file: file
-                        });
-                    }
+                } else {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.callToUnknownFunction(symbolTypeInfo.expandedTokenText, this.name),
+                        range: expCall.nameRange,
+                        //TODO detect end of expression call
+                        file: file
+                    });
                 }
             }
         }

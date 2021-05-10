@@ -117,9 +117,9 @@ export class SymbolTable {
             return symbols[0].type;
         }
         if (searchParent) {
-            return this.parent?.getSymbolType(name, true, context) ?? new UninitializedType();
+            return this.parent?.getSymbolType(name, true, context) ?? undefined;
         } else {
-            return new UninitializedType();
+            return undefined;
         }
     }
 

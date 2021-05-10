@@ -376,10 +376,13 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('properly handles child class constructor override and super calls', () => {
+        it.only('properly handles child class constructor override and super calls', () => {
             testTranspile(`
                 class Animal
                     sub new(name as string)
+                    end sub
+
+                    sub DoSomething()
                     end sub
                 end class
 
@@ -393,6 +396,8 @@ describe('BrsFile BrighterScript classes', () => {
                 function __Animal_builder()
                     instance = {}
                     instance.new = sub(name as string)
+                    end sub
+                    instance.DoSomething = sub()
                     end sub
                     return instance
                 end function

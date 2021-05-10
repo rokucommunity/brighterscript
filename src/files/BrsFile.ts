@@ -18,13 +18,14 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isCustomType, isUninitializedType } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isCustomType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { BscType } from '../types/BscType';
 import type { CustomType } from '../types/CustomType';
 import { UninitializedType } from '../types/UninitializedType';
+import { InvalidType } from '../types/InvalidType';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -752,52 +753,67 @@ export class BrsFile {
      */
     public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): { type: BscType; expandedTokenText: string; currentClass?: ClassStatement; useExpandedTextOnly?: boolean } {
         const tokenChain = this.getTokenChain(currentToken);
-        let currentClassRef = this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, currentToken.range.start));
+        let containingClass = this.parser.references.getContainingClass(currentToken);
         let currentSymbolTable = functionExpression?.symbolTable;
         let tokenFoundCount = 0;
         let symbolType: BscType;
         let tokenText = [];
+        let currentClassRef: ClassStatement;
 
-        //test to see if this is a class, method or field identifier
-        if (currentClassRef && tokenChain.length === 1) {
+        if (containingClass && tokenChain.length === 1) {
+            // Special cases for a single token inside a class
             let expandedText = '';
             let useExpandedTextOnly = false;
-            if (currentClassRef.name === currentToken) {
-                symbolType = currentClassRef.getCustomType();
-                expandedText = `class ${currentClassRef.getName(ParseMode.BrighterScript)}`;
+            if (containingClass.name === currentToken) {
+                symbolType = containingClass.getCustomType();
+                expandedText = `class ${containingClass.getName(ParseMode.BrighterScript)}`;
                 useExpandedTextOnly = true;
+                currentClassRef = containingClass;
             } else if (currentToken.text.toLowerCase() === 'm') {
-                symbolType = currentClassRef.getCustomType();
+                symbolType = containingClass.getCustomType();
                 expandedText = currentToken.text;
+                currentClassRef = containingClass;
             } else if (currentToken.text.toLowerCase() === 'super') {
-                symbolType = currentClassRef?.symbolTable.getSymbolType(currentToken.text.toLowerCase(), true);
+                symbolType = containingClass.symbolTable.getSymbolType(currentToken.text.toLowerCase(), true);
                 if (isFunctionType(symbolType)) {
-                    currentClassRef = scope?.getClassMap().get((symbolType.returnType as any).name?.toLowerCase())?.item;
+                    currentClassRef = scope?.getClass(((symbolType.returnType as any).name?.toLowerCase()));
                 }
             } else {
-                symbolType = currentClassRef?.symbolTable.getSymbolType(currentToken.text.toLowerCase(), true, { file: this, scope: scope });
-                expandedText = [currentClassRef.getName(ParseMode.BrighterScript), currentToken.text].join('.');
+                currentClassRef = containingClass;
+                symbolType = containingClass?.symbolTable.getSymbolType(currentToken.text.toLowerCase(), true, { file: this, scope: scope });
+                expandedText = [containingClass.getName(ParseMode.BrighterScript), currentToken.text].join('.');
             }
-            if (!isUninitializedType(symbolType)) {
+            if (symbolType) {
                 return { type: symbolType, expandedTokenText: expandedText, currentClass: currentClassRef, useExpandedTextOnly: useExpandedTextOnly };
             }
         }
-        currentClassRef = undefined;
+
         for (const token of tokenChain) {
             const tokenLowerText = token.text.toLowerCase();
 
-            if (tokenLowerText === 'm' && tokenFoundCount === 0) {
-                // find the current class for tokenChains starting with "m" - e.g. m.someMethod()
-                // use the position in the file to determine the current class
-                currentClassRef = this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, token.range.start));
-                currentSymbolTable = currentClassRef?.symbolTable;
+            if (containingClass && tokenFoundCount === 0) {
+                /// Special cases for first item in chain inside a class
+                if (tokenLowerText === 'm') {
+                    // find the current class for tokenChains starting with "m" - e.g. m.someMethod()
+                    // use the position in the file to determine the current class
+                    currentClassRef = containingClass;
+                    currentSymbolTable = currentClassRef.symbolTable;
+                } else if (tokenLowerText === 'super') {
+                    currentClassRef = scope?.getParentClass(containingClass);
+                    currentSymbolTable = currentClassRef?.symbolTable;
+                    if (currentClassRef && currentSymbolTable) {
+                        tokenText.push(currentClassRef.getName(ParseMode.BrighterScript));
+                        tokenFoundCount++;
+                        continue;
+                    }
+                }
             }
             if (!currentSymbolTable) {
                 // uh oh... no symbol table to continue to check
                 break;
             }
             symbolType = currentSymbolTable.getSymbolType(tokenLowerText, true, { file: this, scope: scope });
-            if (!isUninitializedType(symbolType)) {
+            if (symbolType) {
                 // found this symbol, and it's valid. increase found counter
                 tokenFoundCount++;
             }
@@ -837,7 +853,15 @@ export class BrsFile {
             // did we complete the chain? if so, we have a valid token at the end
             return { type: symbolType, expandedTokenText: tokenText.join('.'), currentClass: currentClassRef };
         }
-        return { type: new UninitializedType(), expandedTokenText: tokenText.join('.') };
+        let backUpReturnType: BscType;
+        if (tokenChain.length === 1) {
+            // variable that has no assignment
+            backUpReturnType = new UninitializedType();
+        } else if (tokenFoundCount === tokenChain.length - 1) {
+            // member field that is not known
+            backUpReturnType = new InvalidType();
+        }
+        return { type: backUpReturnType, expandedTokenText: tokenText.join('.') };
     }
 
     private getGlobalClassStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {
