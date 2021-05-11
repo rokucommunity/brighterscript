@@ -302,6 +302,8 @@ export class Util {
         config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
         config.cwd = config.cwd ?? process.cwd();
         config.emitDefinitions = config.emitDefinitions === true ? true : false;
+        config.transpileOptions = config.transpileOptions ?? {};
+        config.transpileOptions.removeParameterTypes = config.transpileOptions.removeParameterTypes === true;
         if (typeof config.logLevel === 'string') {
             config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
         }

@@ -1633,6 +1633,27 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        describe('options.transpileOptions.removeParameterTypes', () => {
+            it('omits function parameter types when true', () => {
+                program.options.transpileOptions.removeParameterTypes = true;
+                testTranspile(`
+                    function speak(message as string, options = {} as object, channel = invalid)
+                    end function
+                `, `
+                    function speak(message, options = {}, channel = invalid)
+                    end function
+                `);
+            });
+
+            it('does not omit function parameter types when false', () => {
+                program.options.transpileOptions.removeParameterTypes = false;
+                testTranspile(`
+                    function speak(message as string, options = {} as object, channel = invalid)
+                    end function
+                `);
+            });
+        });
+
         describe('throwStatement', () => {
             it('transpiles properly', () => {
                 testTranspile(`

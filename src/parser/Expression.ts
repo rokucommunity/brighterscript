@@ -288,7 +288,7 @@ export class FunctionParameterExpression extends Expression {
             result.push(this.defaultValue.transpile(state));
         }
         //type declaration
-        if (this.asToken) {
+        if (this.asToken && !state.options.transpileOptions.removeParameterTypes) {
             result.push(' ');
             result.push(state.transpileToken(this.asToken));
             result.push(' ');
