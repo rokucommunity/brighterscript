@@ -1813,7 +1813,7 @@ describe('Program', () => {
     describe('getSignatureHelp', () => {
         it('does not crash when second previousToken is undefined', () => {
             const file = program.setFile<BrsFile>('source/main.brs', ` `);
-            sinon.stub(file, 'getPreviousToken').returns(undefined);
+            sinon.stub(file.parser, 'getPreviousToken').returns(undefined);
             //should not crash
             expect(
                 file['getClassFromMReference'](util.createPosition(2, 3), createToken(TokenKind.Dot, '.'), null)
