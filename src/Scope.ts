@@ -543,11 +543,11 @@ export class Scope {
         // also link classes
         const classMap = this.getClassMap();
         for (const pair of classMap) {
-            const fileLink = pair[1];
-            if (fileLink?.item.hasParentClass()) {
-                const parentClass = classMap.get(fileLink.item.parentClassName.getName(ParseMode.BrighterScript).toLowerCase())?.item;
+            const classStmt = pair[1]?.item;
+            if (classStmt?.hasParentClass()) {
+                const parentClass = this.getParentClass(classStmt);
                 // set the parent of the class's symbol table to the symbol table of the class it extends
-                fileLink.item.symbolTable.setParent(parentClass?.symbolTable);
+                classStmt.symbolTable.setParent(parentClass?.symbolTable);
             }
         }
     }
