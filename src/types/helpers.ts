@@ -1,4 +1,4 @@
-import { isBrsFile, isCallExpression, isFunctionType, isUninitializedType } from '../astUtils/reflection';
+import { isBrsFile, isCallExpression, isFunctionType } from '../astUtils/reflection';
 import type { CallExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../parser/Expression';
 import type { BscType } from './BscType';
 import { LazyType } from './LazyType';
@@ -22,7 +22,7 @@ export function getTypeFromCallExpression(call: CallExpression, functionExpressi
         if (isFunctionType(currentKnownType)) {
             return currentKnownType.returnType;
         }
-        if (!isUninitializedType(currentKnownType)) {
+        if (currentKnownType) {
             // this will probably only happen if a functionName has been assigned to something else previously?
             return currentKnownType;
         }
@@ -68,7 +68,7 @@ export function getTypeFromCallExpression(call: CallExpression, functionExpressi
 export function getTypeFromVariableExpression(variable: VariableExpression, functionExpression: FunctionExpression): BscType {
     let variableName = variable.name.text.toLowerCase();
     const currentKnownType = functionExpression.symbolTable.getSymbolType(variableName);
-    if (!isUninitializedType(currentKnownType)) {
+    if (currentKnownType) {
         return currentKnownType;
     }
     return new LazyType((context?: LazyTypeContext) => {

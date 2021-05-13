@@ -485,7 +485,7 @@ export class LanguageServer {
             cwd: cwd,
             project: configFilePath,
             watch: false,
-            createPackage: false,
+            lse,
             deploy: false,
             copyToStaging: false,
             diagnosticFilters: [

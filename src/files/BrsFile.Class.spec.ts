@@ -17,7 +17,7 @@ import { isFunctionType } from '../astUtils/reflection';
 
 let sinon = sinonImport.createSandbox();
 
-describe('BrsFile BrighterScript classes', () => {
+describe.only('BrsFile BrighterScript classes', () => {
     let tmpPath = s`${process.cwd()}/.tmp`;
     let rootDir = s`${tmpPath}/rootDir`;
 
@@ -376,7 +376,7 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it.only('properly handles child class constructor override and super calls', () => {
+        it('properly handles child class constructor override and super calls', () => {
             testTranspile(`
                 class Animal
                     sub new(name as string)
@@ -1420,7 +1420,7 @@ describe('BrsFile BrighterScript classes', () => {
         end sub
         `;
 
-        it('correctly parses the file', () => {
+        it.only('correctly parses the file', () => {
             program.addOrReplaceFile('source/klassTest.bs', testClassCode);
             program.validate();
             expect(program.getDiagnostics().length).to.equal(0);

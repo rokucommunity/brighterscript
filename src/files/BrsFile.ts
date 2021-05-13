@@ -1,16 +1,16 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import { CompletionItem, Hover, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Hover, Position } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
-import type { Scope } from '../Scope';
+import type { NamespaceContainer, Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords, isToken } from '../lexer';
 import { Parser, ParseMode, getBscTypeFromExpression } from '../parser';
-import { FunctionExpression, VariableExpression, Expression, NamespacedVariableNameExpression } from '../parser/Expression';
+import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
 import type { FileLink, Program, SignatureInfoObj } from '../Program';
 import { standardizePath as s, util } from '../util';
@@ -26,8 +26,6 @@ import type { BscType } from '../types/BscType';
 import type { CustomType } from '../types/CustomType';
 import { UninitializedType } from '../types/UninitializedType';
 import { InvalidType } from '../types/InvalidType';
-import { identifier } from '../parser/tests/Parser.spec';
-import { createIdentifier, createToken } from '../astUtils';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -702,9 +700,10 @@ export class BrsFile {
     }
 
 
-    private greedyMergeNamespaceTokens(tokenChain: Token[], scope: Scope): Token[] {
+    private findNamespaceFromTokenChain(tokenChain: Token[], scope: Scope): NamespacedTokenChain {
         let namespaceTokens: Token[] = [];
         let startsWithNamespace = '';
+        let namespaceContainer: NamespaceContainer;
         while (tokenChain[0]) {
             if (scope.isKnownNamespace(`${startsWithNamespace}${startsWithNamespace.length > 0 ? '.' : ''}${tokenChain[0].text}`)) {
                 namespaceTokens.push(tokenChain[0]);
@@ -715,15 +714,12 @@ export class BrsFile {
             }
         }
         if (namespaceTokens.length > 0) {
-            const wholeNamespaceIdentifer = createToken(TokenKind.Identifier, startsWithNamespace, {
-                start: namespaceTokens[0].range.start, end: namespaceTokens[namespaceTokens.length - 1].range.end
-            });
-            tokenChain.unshift(wholeNamespaceIdentifer);
+            namespaceContainer = scope.namespaceLookup[startsWithNamespace.toLowerCase()];
         }
-        return tokenChain;
+        return { namespaceContainer: namespaceContainer, tokenChain: tokenChain };
     }
 
-    private checkForSpecialCaseSymbol(currentToken: Token, scope: Scope) {
+    private checkForSpecialClassSymbol(currentToken: Token, scope: Scope): TokenSymbolLookup {
         let containingClass = this.parser.references.getContainingClass(currentToken);
         let symbolType: BscType;
         let currentClassRef: ClassStatement;
@@ -734,7 +730,7 @@ export class BrsFile {
             let useExpandedTextOnly = false;
             if (containingClass.name === currentToken) {
                 symbolType = containingClass.getCustomType();
-                expandedText = `class $ { containingClass.getName(ParseMode.BrighterScript) }`;
+                expandedText = `class ${containingClass.getName(ParseMode.BrighterScript)}`;
                 useExpandedTextOnly = true;
                 currentClassRef = containingClass;
             } else if (currentToken.text.toLowerCase() === 'm') {
@@ -764,10 +760,18 @@ export class BrsFile {
      * @param scope use this scope for finding class maps
      * @returns the BscType, expanded text (e.g <Class.field>) and classStatement (if available) for the token
      */
-    public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): { type: BscType; expandedTokenText: string; currentClass?: ClassStatement; useExpandedTextOnly?: boolean } {
-        const tokenChain = this.greedyMergeNamespaceTokens(this.parser.getTokenChain(currentToken), scope);
-
-        const specialCase = tokenChain.length === 0 ? this.checkForSpecialCaseSymbol(tokenChain[0], scope) : null;
+    public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): TokenSymbolLookup {
+        const nameSpacedTokenChain = this.findNamespaceFromTokenChain(this.parser.getTokenChain(currentToken), scope);
+        const tokenChain = nameSpacedTokenChain.tokenChain;
+        if (nameSpacedTokenChain.namespaceContainer && tokenChain.length === 0) {
+            //currentToken was part of a namespace
+            return {
+                type: null,
+                expandedTokenText: `namespace ${nameSpacedTokenChain.namespaceContainer.fullName}`,
+                useExpandedTextOnly: true
+            };
+        }
+        const specialCase = tokenChain.length === 1 ? this.checkForSpecialClassSymbol(tokenChain[0], scope) : null;
         if (specialCase) {
             return specialCase;
         }
@@ -846,7 +850,7 @@ export class BrsFile {
         }
         let backUpReturnType: BscType;
         if (tokenChain.length === 1) {
-            // variable that has no assignment
+            // variable that has not been assigned
             backUpReturnType = new UninitializedType();
         } else if (tokenFoundCount === tokenChain.length - 1) {
             // member field that is not known
@@ -1594,3 +1598,16 @@ export const KeywordCompletions = Object.keys(Keywords)
             kind: CompletionItemKind.Keyword
         } as CompletionItem;
     });
+
+
+interface NamespacedTokenChain {
+    namespaceContainer?: NamespaceContainer;
+    tokenChain: Token[];
+}
+
+interface TokenSymbolLookup {
+    type: BscType;
+    expandedTokenText: string;
+    currentClass?: ClassStatement;
+    useExpandedTextOnly?: boolean;
+}

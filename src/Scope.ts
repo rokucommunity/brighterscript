@@ -13,11 +13,12 @@ import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isLazyType } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isLazyType, isUninitializedType, isInvalidType } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { SymbolTable } from './SymbolTable';
 import type { CustomType } from './types/CustomType';
+import { UninitializedType } from './types/UninitializedType';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -90,7 +91,7 @@ export class Scope {
     public getParentClass(klass: ClassStatement): ClassStatement {
         if (klass?.hasParentClass()) {
             const lowerParentClassName = klass.parentClassName?.getName(ParseMode.BrighterScript).toLowerCase();
-            return this.getClassMap().get(lowerParentClassName).item;
+            return this.getClassMap().get(lowerParentClassName)?.item;
         }
     }
 
@@ -688,29 +689,28 @@ export class Scope {
         if (isBrsFile(file)) {
             for (let expCall of file.functionCalls) {
                 const symbolTypeInfo = file.getSymbolTypeFromToken(expCall.name, expCall.functionExpression, this);
-                const funcType = symbolTypeInfo.type;
-
-                if (!isFunctionType(funcType)) {
-                    // can not find function. Handled in a different validation function
-                    continue;
+                let funcType = symbolTypeInfo.type;
+                if (isUninitializedType(funcType)) {
+                    // Could not find call in scope. Perhaps a global function?
+                    const callable = globalCallableMap.get(expCall.name.text.toLowerCase());
+                    funcType = callable?.type;
                 }
-                // Check for Argument count mismatch.
-
-                //get min/max parameter count for callable
-                // There are some global functions with the same name, but different return types and param counts - see "Val()"
-                let paramCount = util.getMinMaxParamCount(funcType.params);
-                let expCallArgCount = expCall.args.length;
-                if (expCall.args.length > paramCount.max || expCall.args.length < paramCount.min) {
-                    let minMaxParamsText = paramCount.min === paramCount.max ? paramCount.max : `${paramCount.min}-${paramCount.max}`;
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
-                        range: expCall.nameRange,
-                        //TODO detect end of expression call
-                        file: file
-                    });
-                }
-                // Check for Argument type mismatch.
                 if (isFunctionType(funcType)) {
+                    // Check for Argument count mismatch.
+                    //get min/max parameter count for callable
+                    let paramCount = util.getMinMaxParamCount(funcType.params);
+                    let expCallArgCount = expCall.args.length;
+                    if (expCall.args.length > paramCount.max || expCall.args.length < paramCount.min) {
+                        let minMaxParamsText = paramCount.min === paramCount.max ? paramCount.max : `${paramCount.min}-${paramCount.max}`;
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
+                            range: expCall.nameRange,
+                            //TODO detect end of expression call
+                            file: file
+                        });
+                    }
+
+                    // Check for Argument type mismatch.
                     for (let index = 0; index < funcType.params.length; index++) {
                         const param = funcType.params[index];
                         const arg = expCall.args[index];
@@ -718,7 +718,7 @@ export class Scope {
                             // not enough args
                             break;
                         }
-                        let argType = arg.type;
+                        let argType = arg.type ?? new UninitializedType();
                         let assignable = false;
                         if (isLazyType(argType)) {
                             // If this is a lazy type, you have to take into account the possibility that it might be a custom type
@@ -726,12 +726,12 @@ export class Scope {
                         }
                         if (isCustomType(argType)) {
                             assignable = argType.isAssignableTo(param.type, this.getAncestorTypeList(argType.name));
-                        } else if (argType) {
-                            assignable = argType.isAssignableTo(param.type);
+                        } else {
+                            assignable = argType?.isAssignableTo(param.type);
                         }
                         if (!assignable) {
                             // TODO: perhaps this should be a strict mode setting?
-                            assignable = argType.isConvertibleTo(param.type);
+                            assignable = argType?.isConvertibleTo(param.type);
                         }
                         if (!assignable) {
                             this.diagnostics.push({
@@ -741,7 +741,8 @@ export class Scope {
                             });
                         }
                     }
-                } else {
+                } else if (!isInvalidType(symbolTypeInfo.type)) {
+                    // TODO: standard functions like integer.ToStr() are not detectable yet.
                     this.diagnostics.push({
                         ...DiagnosticMessages.callToUnknownFunction(symbolTypeInfo.expandedTokenText, this.name),
                         range: expCall.nameRange,
@@ -1118,7 +1119,7 @@ export class Scope {
     }
 }
 
-interface NamespaceContainer {
+export interface NamespaceContainer {
     file: BscFile;
     fullName: string;
     nameRange: Range;
