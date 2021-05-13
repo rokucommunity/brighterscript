@@ -7,7 +7,7 @@ import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableC
 import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
-import { ParseMode, CallExpression } from './parser';
+import { ParseMode } from './parser';
 import { standardizePath as s, util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';

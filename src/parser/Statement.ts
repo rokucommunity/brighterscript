@@ -1522,8 +1522,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         this.range = util.createRangeFromPositions(this.classKeyword.range.start, this.end.range.end);
 
-
-
         this.symbolTable.addSymbol('m', name?.range, this.getCustomType());
         if (parentClassName) {
             this.symbolTable.addSymbol('super', parentClassName?.range, new LazyType(() => {

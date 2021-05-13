@@ -1,6 +1,6 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Hover, Position } from 'vscode-languageserver';
+import { CompletionItem, Hover, Position, Range } from 'vscode-languageserver';
 import { CompletionItemKind, SymbolKind, Location, SignatureInformation, ParameterInformation, DocumentSymbol, SymbolInformation, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
@@ -10,7 +10,7 @@ import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, Fi
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords, isToken } from '../lexer';
 import { Parser, ParseMode, getBscTypeFromExpression } from '../parser';
-import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
+import { FunctionExpression, VariableExpression, Expression, NamespacedVariableNameExpression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
 import type { FileLink, Program, SignatureInfoObj } from '../Program';
 import { standardizePath as s, util } from '../util';
@@ -26,6 +26,8 @@ import type { BscType } from '../types/BscType';
 import type { CustomType } from '../types/CustomType';
 import { UninitializedType } from '../types/UninitializedType';
 import { InvalidType } from '../types/InvalidType';
+import { identifier } from '../parser/tests/Parser.spec';
+import { createIdentifier, createToken } from '../astUtils';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -700,73 +702,39 @@ export class BrsFile {
     }
 
 
-    private getPreviousIdentifierInChain(currentToken: Token, allowCurrent = false): Token {
-        if (!allowCurrent) {
-            currentToken = this.parser.getPreviousToken(currentToken);
-        }
-        if (currentToken?.kind === TokenKind.Dot) {
-            currentToken = this.parser.getPreviousToken(currentToken);
-        }
-        if (currentToken?.kind === TokenKind.RightParen) {
-            while (currentToken?.kind !== TokenKind.LeftParen) {
-                currentToken = this.parser.getPreviousToken(currentToken);
-            }
-            if (currentToken?.kind === TokenKind.LeftParen) {
-                currentToken = this.parser.getPreviousToken(currentToken);
+    private greedyMergeNamespaceTokens(tokenChain: Token[], scope: Scope): Token[] {
+        let namespaceTokens: Token[] = [];
+        let startsWithNamespace = '';
+        while (tokenChain[0]) {
+            if (scope.isKnownNamespace(`${startsWithNamespace}${startsWithNamespace.length > 0 ? '.' : ''}${tokenChain[0].text}`)) {
+                namespaceTokens.push(tokenChain[0]);
+                startsWithNamespace = namespaceTokens.map(token => token.text).join('.');
+                tokenChain.shift();
+            } else {
+                break;
             }
         }
-        if (currentToken?.kind === TokenKind.Identifier) {
-            return currentToken;
+        if (namespaceTokens.length > 0) {
+            const wholeNamespaceIdentifer = createToken(TokenKind.Identifier, startsWithNamespace, {
+                start: namespaceTokens[0].range.start, end: namespaceTokens[namespaceTokens.length - 1].range.end
+            });
+            tokenChain.unshift(wholeNamespaceIdentifer);
         }
-        return undefined;
-    }
-
-    /**
-     * Builds up a chain of tokens, starting with the first in the chain, and ending with currentToken
-     * e.g. m.prop.method().field (with 'field' as currentToken) -> ["m", "prop", "method", "field"], with each element as a token
-     * @param currentToken the token that is the end of the chain
-     * @returns array of tokens
-     */
-    private getTokenChain(currentToken: Token): Token[] {
-        const tokenChain: Token[] = [];
-
-        currentToken = this.getPreviousIdentifierInChain(currentToken, true);
-        if (currentToken?.kind === TokenKind.Identifier) {
-            tokenChain.push(currentToken);
-        }
-        currentToken = this.getPreviousIdentifierInChain(currentToken);
-        while (currentToken?.kind === TokenKind.Identifier) {
-            tokenChain.push(currentToken);
-            currentToken = this.getPreviousIdentifierInChain(currentToken);
-        }
-        tokenChain.reverse();
         return tokenChain;
     }
 
-
-    /**
-     * Checks previous tokens for the start of a symbol chain (eg. m.property.subProperty.method())
-     * @param currentToken  The token to check
-     * @param functionExpression The current function context
-     * @param scope use this scope for finding class maps
-     * @returns the BscType, expanded text (e.g <Class.field>) and classStatement (if available) for the token
-     */
-    public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): { type: BscType; expandedTokenText: string; currentClass?: ClassStatement; useExpandedTextOnly?: boolean } {
-        const tokenChain = this.getTokenChain(currentToken);
+    private checkForSpecialCaseSymbol(currentToken: Token, scope: Scope) {
         let containingClass = this.parser.references.getContainingClass(currentToken);
-        let currentSymbolTable = functionExpression?.symbolTable;
-        let tokenFoundCount = 0;
         let symbolType: BscType;
-        let tokenText = [];
         let currentClassRef: ClassStatement;
 
-        if (containingClass && tokenChain.length === 1) {
+        if (containingClass) {
             // Special cases for a single token inside a class
             let expandedText = '';
             let useExpandedTextOnly = false;
             if (containingClass.name === currentToken) {
                 symbolType = containingClass.getCustomType();
-                expandedText = `class ${containingClass.getName(ParseMode.BrighterScript)}`;
+                expandedText = `class $ { containingClass.getName(ParseMode.BrighterScript) }`;
                 useExpandedTextOnly = true;
                 currentClassRef = containingClass;
             } else if (currentToken.text.toLowerCase() === 'm') {
@@ -787,6 +755,29 @@ export class BrsFile {
                 return { type: symbolType, expandedTokenText: expandedText, currentClass: currentClassRef, useExpandedTextOnly: useExpandedTextOnly };
             }
         }
+    }
+
+    /**
+     * Checks previous tokens for the start of a symbol chain (eg. m.property.subProperty.method())
+     * @param currentToken  The token to check
+     * @param functionExpression The current function context
+     * @param scope use this scope for finding class maps
+     * @returns the BscType, expanded text (e.g <Class.field>) and classStatement (if available) for the token
+     */
+    public getSymbolTypeFromToken(currentToken: Token, functionExpression: FunctionExpression, scope: Scope): { type: BscType; expandedTokenText: string; currentClass?: ClassStatement; useExpandedTextOnly?: boolean } {
+        const tokenChain = this.greedyMergeNamespaceTokens(this.parser.getTokenChain(currentToken), scope);
+
+        const specialCase = tokenChain.length === 0 ? this.checkForSpecialCaseSymbol(tokenChain[0], scope) : null;
+        if (specialCase) {
+            return specialCase;
+        }
+
+        let containingClass = this.parser.references.getContainingClass(currentToken);
+        let currentSymbolTable = functionExpression?.symbolTable;
+        let tokenFoundCount = 0;
+        let symbolType: BscType;
+        let tokenText = [];
+        let currentClassRef: ClassStatement;
 
         for (const token of tokenChain) {
             const tokenLowerText = token.text.toLowerCase();
@@ -1477,8 +1468,8 @@ export class BrsFile {
     }
 
     private getClassMethod(classStatement: ClassStatement, name: string, walkParents = true): ClassMethodStatement | undefined {
-        //TODO - would like to write this with getClassHieararchy; but got stuck on working out the scopes to use... :(
-        //TODO - this is solved with symbolTable ...
+        //TODO - would like to write this with getClassHierarchy; but got stuck on working out the scopes to use... :(
+        //TODO - this could be solved with symbolTable?
         let statement;
         const statementHandler = (e) => {
             if (!statement && e.name.text.toLowerCase() === name.toLowerCase()) {

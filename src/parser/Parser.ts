@@ -2896,6 +2896,62 @@ export class Parser {
     }
 
     /**
+     * Finds the previous identifier in a chain (e.g. 'm.obj.func(someFunc()).value'), skipping over any arguments of function calls
+     * If this function was called with the token at 'value' above, the previous identifier in the chain is 'func'
+     * @param currentToken token to start from
+     * @param allowCurrent can the current token be the token that's the identifier?
+     * @returns the previous identifer
+     */
+    public getPreviousIdentifierInChain(currentToken: Token, allowCurrent = false): Token {
+        if (!allowCurrent) {
+            currentToken = this.getPreviousToken(currentToken);
+        }
+        if (currentToken?.kind === TokenKind.Dot) {
+            currentToken = this.getPreviousToken(currentToken);
+        }
+        let functionParenCount = 0;
+        if (currentToken?.kind === TokenKind.RightParen) {
+            functionParenCount++;
+        }
+        while (currentToken && functionParenCount > 0) {
+            currentToken = this.getPreviousToken(currentToken);
+            if (currentToken?.kind === TokenKind.RightParen) {
+                functionParenCount++;
+            }
+            if (currentToken?.kind === TokenKind.LeftParen) {
+                functionParenCount--;
+                currentToken = this.getPreviousToken(currentToken);
+            }
+        }
+        if (currentToken?.kind === TokenKind.Identifier) {
+            return currentToken;
+        }
+        return undefined;
+    }
+
+    /**
+     * Builds up a chain of tokens, starting with the first in the chain, and ending with currentToken
+     * e.g. m.prop.method().field (with 'field' as currentToken) -> ["m", "prop", "method", "field"], with each element as a token
+     * @param currentToken the token that is the end of the chain
+     * @returns array of tokens
+     */
+    public getTokenChain(currentToken: Token): Token[] {
+        const tokenChain: Token[] = [];
+
+        currentToken = this.getPreviousIdentifierInChain(currentToken, true);
+        if (currentToken?.kind === TokenKind.Identifier) {
+            tokenChain.push(currentToken);
+        }
+        currentToken = this.getPreviousIdentifierInChain(currentToken);
+        while (currentToken?.kind === TokenKind.Identifier) {
+            tokenChain.push(currentToken);
+            currentToken = this.getPreviousIdentifierInChain(currentToken);
+        }
+        tokenChain.reverse();
+        return tokenChain;
+    }
+
+    /**
      * References are found during the initial parse.
      * However, sometimes plugins can modify the AST, requiring a full walk to re-compute all references.
      * This does that walk.

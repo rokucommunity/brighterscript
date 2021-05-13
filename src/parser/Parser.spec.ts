@@ -4,7 +4,7 @@ import { DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, Ann
 import { Parser, ParseMode, getBscTypeFromExpression } from './Parser';
 import type { AssignmentStatement, ClassStatement, Statement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
-import { Range } from 'vscode-languageserver';
+import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isLazyType } from '../astUtils/reflection';
 import { expectSymbolTableEquals, expectZeroDiagnostics } from '../testHelpers.spec';
@@ -1278,6 +1278,56 @@ describe('parser', () => {
             });
         });
 
+    });
+
+    describe('tokenChain', () => {
+        it('can find a chain of tokens', () => {
+            const parser = parse(`
+            sub someFunc()
+                print m.field.childField
+            end sub
+            `, ParseMode.BrighterScript);
+            const childFieldToken = parser.getTokenAt(Position.create(2, 38));
+            const tokenChain = parser.getTokenChain(childFieldToken);
+            expect(tokenChain.length).to.equal(3);
+            expect(tokenChain.map(token => token.text)).to.eql(['m', 'field', 'childField']);
+        });
+
+        it('can find a chain of tokens with function call with no args in the middle', () => {
+            const parser = parse(`
+            sub someFunc()
+                print var.field.funcCall().childField
+            end sub
+            `, ParseMode.BrighterScript);
+            const childFieldToken = parser.getTokenAt(Position.create(2, 49));
+            const tokenChain = parser.getTokenChain(childFieldToken);
+            expect(tokenChain.length).to.equal(4);
+            expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'funcCall', 'childField']);
+        });
+
+        it('can find a chain of tokens with function call with multiple args in the middle', () => {
+            const parser = parse(`
+            sub someFunc()
+                print var.field.funcCall(1, "string", {key: value}).childField
+            end sub
+            `, ParseMode.BrighterScript);
+            const childFieldToken = parser.getTokenAt(Position.create(2, 75));
+            const tokenChain = parser.getTokenChain(childFieldToken);
+            expect(tokenChain.length).to.equal(4);
+            expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'funcCall', 'childField']);
+        });
+
+        it('can find a chain of tokens with function call with function call inside', () => {
+            const parser = parse(`
+            sub someFunc()
+                print var.field.funcCall(a(), b(), otherFunc2(c(), {d: func3(e)})).childField
+            end sub
+            `, ParseMode.BrighterScript);
+            const childFieldToken = parser.getTokenAt(Position.create(2, 90));
+            const tokenChain = parser.getTokenChain(childFieldToken);
+            expect(tokenChain.length).to.equal(4);
+            expect(tokenChain.map(token => token.text)).to.eql(['var', 'field', 'funcCall', 'childField']);
+        });
     });
 });
 
