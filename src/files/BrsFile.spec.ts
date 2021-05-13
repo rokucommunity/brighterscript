@@ -16,7 +16,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectZeroDiagnostics, trim, trimMap } from '../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { ParseMode } from '../parser/Parser';
 import { Logger } from '../Logger';
 
@@ -92,6 +92,17 @@ describe('BrsFile', () => {
     });
 
     describe('getCompletions', () => {
+        it('does not crash for callfunc on a function call', () => {
+            const file = program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    getManager()@.
+                end sub
+            `);
+            expect(() => {
+                program.getCompletions(file.pathAbsolute, util.createPosition(2, 34));
+            }).not.to.throw;
+        });
+
         it('suggests pkg paths in strings that match that criteria', () => {
             program.addOrReplaceFile('source/main.brs', `
                 sub main()
@@ -1915,7 +1926,7 @@ describe('BrsFile', () => {
         });
 
         it('does not add leading or trailing newlines', () => {
-            testTranspile(`function log()\nend function`, undefined, 'none');
+            testTranspile(`function abc()\nend function`, undefined, 'none');
         });
 
         it('handles sourcemap edge case', async () => {
@@ -1941,7 +1952,7 @@ describe('BrsFile', () => {
         });
 
         it('computes correct locations for sourcemap', async () => {
-            let source = `function log(name)\n    firstName = name\nend function`;
+            let source = `function abc(name)\n    firstName = name\nend function`;
             let tokens = Lexer.scan(source).tokens
                 //remove newlines and EOF
                 .filter(x => x.kind !== TokenKind.Eof && x.kind !== TokenKind.Newline);
@@ -2149,7 +2160,7 @@ describe('BrsFile', () => {
                         returnValue = 12 'comment
                         return returnValue 'comment
                     end function 'comment
-                    print "a" ; "b" ; 3 'comment
+                    print "a"; "b"; 3 'comment
                     a(1, 2, 3) 'comment
                     person.functionCall(1, 2, 3) 'comment
                     if true then 'comment
@@ -2192,6 +2203,10 @@ describe('BrsFile', () => {
         });
 
         it('replaces custom types in parameter types and return types', () => {
+            program.addOrReplaceFile('source/SomeKlass.bs', `
+                class SomeKlass
+                end class
+            `);
             testTranspile(`
                 function foo() as SomeKlass
                     return new SomeKlass()
@@ -2754,53 +2769,3 @@ describe('BrsFile', () => {
         });
     });
 });
-
-export function getTestTranspile(scopeGetter: () => [Program, string]) {
-    return (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) => {
-        let [program, rootDir] = scopeGetter();
-        expected = expected ? expected : source;
-        let file = program.addOrReplaceFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
-        program.validate();
-        let diagnostics = file.getDiagnostics();
-        if (diagnostics.length > 0 && failOnDiagnostic !== false) {
-            throw new Error(
-                diagnostics[0].range.start.line +
-                ':' +
-                diagnostics[0].range.start.character +
-                ' ' +
-                diagnostics[0]?.message
-            );
-        }
-        let transpiled = file.transpile();
-
-        let sources = [transpiled.code, expected];
-        for (let i = 0; i < sources.length; i++) {
-            if (formatType === 'trim') {
-                let lines = sources[i].split('\n');
-                //throw out leading newlines
-                while (lines[0].length === 0) {
-                    lines.splice(0, 1);
-                }
-                let trimStartIndex = null;
-                for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                    //if we don't have a starting trim count, compute it
-                    if (!trimStartIndex) {
-                        trimStartIndex = lines[lineIndex].length - lines[lineIndex].trim().length;
-                    }
-                    //only trim the expected file (since that's what we passed in from the test)
-                    if (lines[lineIndex].length > 0 && i === 1) {
-                        lines[lineIndex] = lines[lineIndex].substring(trimStartIndex);
-                    }
-                }
-                //trim trailing newlines
-                while (lines[lines.length - 1]?.length === 0) {
-                    lines.splice(lines.length - 1);
-                }
-                sources[i] = lines.join('\n');
-
-            }
-        }
-        expect(trimMap(sources[0])).to.equal(sources[1]);
-        return transpiled;
-    };
-}

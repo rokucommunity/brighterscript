@@ -17,8 +17,7 @@ import {
     LiteralExpression
 } from '../../Expression';
 import { Program } from '../../../Program';
-import { getTestTranspile } from '../../../files/BrsFile.spec';
-import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 
 describe('ternary expressions', () => {
     it('throws exception when used in brightscript scope', () => {

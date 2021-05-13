@@ -13,9 +13,9 @@ import { Cache } from '../Cache';
 import type { DependencyGraph } from '../DependencyGraph';
 import type { SGAst, SGToken } from '../parser/SGTypes';
 import { SGScript } from '../parser/SGTypes';
-import { SGTranspileState } from '../parser/SGTranspileState';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
+import { TranspileState } from '../parser/TranspileState';
 
 export class XmlFile {
     constructor(
@@ -75,7 +75,7 @@ export class XmlFile {
      */
     public getAllDependencies() {
         return this.cache.getOrAdd(`allScriptImports`, () => {
-            const value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
+            const value = this.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
             return value;
         });
     }
@@ -90,7 +90,7 @@ export class XmlFile {
      */
     public getOwnDependencies() {
         return this.cache.getOrAdd(`ownScriptImports`, () => {
-            const value = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
+            const value = this.dependencyGraph.getAllDependencies(this.dependencyGraphKey, [this.parentComponentDependencyGraphKey]);
             return value;
         });
     }
@@ -254,7 +254,7 @@ export class XmlFile {
         }
 
         //needsTranspiled should be true if an import is brighterscript
-        this.needsTranspiled = component.scripts.some(
+        this.needsTranspiled = this.needsTranspiled || component.scripts.some(
             script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
         );
 
@@ -272,17 +272,20 @@ export class XmlFile {
         }
     }
 
+    private dependencyGraph: DependencyGraph;
+
     /**
      * Attach the file to the dependency graph so it can monitor changes.
      * Also notify the dependency graph of our current dependencies so other dependents can be notified.
      */
     public attachDependencyGraph(dependencyGraph: DependencyGraph) {
+        this.dependencyGraph = dependencyGraph;
         if (this.unsubscribeFromDependencyGraph) {
             this.unsubscribeFromDependencyGraph();
         }
 
         //anytime a dependency changes, clean up some cached values
-        this.unsubscribeFromDependencyGraph = this.program.dependencyGraph.onchange(this.dependencyGraphKey, () => {
+        this.unsubscribeFromDependencyGraph = dependencyGraph.onchange(this.dependencyGraphKey, () => {
             this.logDebug('clear cache because dependency graph changed');
             this.cache.clear();
         });
@@ -312,8 +315,17 @@ export class XmlFile {
         if (this.parentComponentName) {
             dependencies.push(this.parentComponentDependencyGraphKey);
         }
-        this.program.dependencyGraph.addOrReplace(this.dependencyGraphKey, dependencies);
+        this.dependencyGraph.addOrReplace(this.dependencyGraphKey, dependencies);
     }
+
+    /**
+     * A slight hack. Gives the Program a way to support multiple components with the same name
+     * without causing major issues. A value of 0 will be ignored as part of the dependency graph key.
+     * Howver, a nonzero value will be used as part of the dependency graph key so this component doesn't
+     * collide with the primary component. For example, if there are three components with the same name, you will
+     * have the following dependency graph keys: ["component:CustomGrid", "component:CustomGrid[1]", "component:CustomGrid[2]"]
+     */
+    public dependencyGraphIndex = -1;
 
     /**
      * The key used in the dependency graph for this file.
@@ -321,11 +333,18 @@ export class XmlFile {
      * If we don't have a component name, use the pkgPath so at least we can self-validate
      */
     public get dependencyGraphKey() {
+        let key: string;
         if (this.componentName) {
-            return `component:${this.componentName.text}`.toLowerCase();
+            key = `component:${this.componentName.text}`.toLowerCase();
         } else {
-            return this.pkgPath.toLowerCase();
+            key = this.pkgPath.toLowerCase();
         }
+        //if our index is not zero, then we are not the primary component with that name, and need to
+        //append our index to the dependency graph key as to prevent collisions in the program.
+        if (this.dependencyGraphIndex !== 0) {
+            key += '[' + this.dependencyGraphIndex + ']';
+        }
+        return key;
     }
 
     /**
@@ -477,7 +496,7 @@ export class XmlFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new SGTranspileState(this);
+        const state = new TranspileState(this.pathAbsolute, this.program.options);
 
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             const script = new SGScript();
@@ -489,31 +508,31 @@ export class XmlFile {
 
         if (this.needsTranspiled || extraImportScripts.length > 0) {
             //temporarily add the missing imports as script tags
-            const originalScripts = this.ast.component.scripts;
+            const originalScripts = this.ast.component?.scripts ?? [];
             this.ast.component.scripts = [
                 ...originalScripts,
                 ...extraImportScripts
             ];
 
-            transpileResult = new SourceNode(null, null, state.source, this.parser.ast.transpile(state));
+            transpileResult = new SourceNode(null, null, state.srcPath, this.parser.ast.transpile(state));
 
             //restore the original scripts array
             this.ast.component.scripts = originalScripts;
 
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
-            transpileResult = util.simpleMap(state.source, this.fileContents);
+            transpileResult = util.simpleMap(state.srcPath, this.fileContents);
         } else {
             //simple SourceNode wrapping the entire file to simplify the logic below
-            transpileResult = new SourceNode(null, null, state.source, this.fileContents);
+            transpileResult = new SourceNode(null, null, state.srcPath, this.fileContents);
         }
 
         //add the source map comment if configured to emit sourcemaps
         if (this.program.options.sourceMap) {
-            return new SourceNode(null, null, state.source, [
+            return new SourceNode(null, null, state.srcPath, [
                 transpileResult,
                 //add the sourcemap reference comment
-                `<!--//# sourceMappingURL=./${path.basename(state.source)}.map -->`
+                `<!--//# sourceMappingURL=./${path.basename(state.srcPath)}.map -->`
             ]).toStringWithSourceMap();
         } else {
             return {
