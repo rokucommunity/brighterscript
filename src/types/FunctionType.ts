@@ -1,5 +1,7 @@
 import { isFunctionType, isDynamicType } from '../astUtils/reflection';
+import type { CallableParam } from '../interfaces';
 import type { BscType } from './BscType';
+import { DynamicType } from './DynamicType';
 
 export class FunctionType implements BscType {
     constructor(
@@ -8,7 +10,7 @@ export class FunctionType implements BscType {
          * Determines if this is a sub or not
          */
         public isSub = false,
-        public params = [] as Array<{ name: string; type: BscType; isRequired: boolean }>
+        public params: CallableParam[] = []
     ) {
     }
 
@@ -21,13 +23,17 @@ export class FunctionType implements BscType {
         this.name = name;
         return this;
     }
-
-    public addParameter(name: string, type: BscType, isRequired: boolean) {
-        this.params.push({
-            name: name,
-            type: type,
-            isRequired: isRequired === false ? false : true
-        });
+    public addParameter(paramOrName: CallableParam | string, type?: BscType, isOptional?: boolean) {
+        if (typeof paramOrName === 'string') {
+            this.params.push({
+                name: paramOrName,
+                type: type ?? new DynamicType(),
+                isOptional: !!isOptional,
+                isRestArgument: false
+            });
+        } else {
+            this.params.push(paramOrName);
+        }
         return this;
     }
 
@@ -64,7 +70,7 @@ export class FunctionType implements BscType {
     public toString() {
         let paramTexts = [];
         for (let param of this.params) {
-            paramTexts.push(`${param.name}${param.isRequired ? '' : '?'} as ${param.type.toString()}`);
+            paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
         }
         return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
 
