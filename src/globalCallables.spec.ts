@@ -51,6 +51,16 @@ describe('globalCallables', () => {
             program.validate();
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
+
+        it('dows not allows 3 parameters', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print val("1001", 10, "extra")
+                end sub
+            `);
+            program.validate();
+            expect(program.getDiagnostics()[0]?.message).to.exist;
+        });
     });
 
     describe('StrI', () => {
@@ -72,6 +82,16 @@ describe('globalCallables', () => {
             `);
             program.validate();
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+
+        it('dows not allows 3 parameters', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print StrI(2, 10, "extra")
+                end sub
+            `);
+            program.validate();
+            expect(program.getDiagnostics()[0]?.message).to.exist;
         });
     });
 
