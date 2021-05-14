@@ -97,7 +97,7 @@ describe('globalCallables', () => {
 
     describe('parseJson', () => {
         it('allows single parameter', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print ParseJson("{}")
                 end sub
@@ -107,7 +107,7 @@ describe('globalCallables', () => {
         });
 
         it('allows 2 parameters', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                 print ParseJson("{}", "i")
                 end sub
