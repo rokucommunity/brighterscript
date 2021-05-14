@@ -705,7 +705,11 @@ export class BrsFile {
         let startsWithNamespace = '';
         let namespaceContainer: NamespaceContainer;
         while (tokenChain[0]) {
-            if (scope.isKnownNamespace(`${startsWithNamespace}${startsWithNamespace.length > 0 ? '.' : ''}${tokenChain[0].text}`)) {
+            const namespaceNameToCheck = `${startsWithNamespace}${startsWithNamespace.length > 0 ? '.' : ''}${tokenChain[0].text}`.toLowerCase();
+            const foundNamespace = scope.namespaceLookup[namespaceNameToCheck];
+
+            if (foundNamespace) {
+                namespaceContainer = foundNamespace;
                 namespaceTokens.push(tokenChain[0]);
                 startsWithNamespace = namespaceTokens.map(token => token.text).join('.');
                 tokenChain.shift();
@@ -777,7 +781,7 @@ export class BrsFile {
         }
 
         let containingClass = this.parser.references.getContainingClass(currentToken);
-        let currentSymbolTable = functionExpression?.symbolTable;
+        let currentSymbolTable = nameSpacedTokenChain.namespaceContainer?.symbolTable ?? functionExpression?.symbolTable;
         let tokenFoundCount = 0;
         let symbolType: BscType;
         let tokenText = [];

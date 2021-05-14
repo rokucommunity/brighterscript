@@ -3,7 +3,6 @@ import { isLazyType } from './astUtils/reflection';
 import type { BscType } from './types/BscType';
 import { DynamicType } from './types/DynamicType';
 import type { LazyTypeContext } from './types/LazyType';
-import { UninitializedType } from './types/UninitializedType';
 
 
 /**

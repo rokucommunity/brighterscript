@@ -11,7 +11,6 @@ import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser';
 import type { FunctionType } from './types/FunctionType';
-import { UninitializedType } from './types/UninitializedType';
 import type { BrsFile } from './files/BrsFile';
 import { isFloatType } from './astUtils/reflection';
 import type { SymbolTable } from './SymbolTable';
@@ -1089,8 +1088,8 @@ describe('Scope', () => {
             `);
             sourceSymbols = program.getScopeByName('source').symbolTable;
 
-            expect(sourceSymbols.getSymbolType('funcInt')).to.be.instanceOf(UninitializedType);
-            expect(sourceSymbols.getSymbolType('funcStr')).to.be.instanceOf(UninitializedType);
+            expect(sourceSymbols.getSymbolType('funcInt')).to.be.undefined;
+            expect(sourceSymbols.getSymbolType('funcStr')).to.be.undefined;
             expect((sourceSymbols.getSymbolType('funcFloat') as FunctionType).returnType.toString()).to.equal('float');
         });
 

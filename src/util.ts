@@ -1222,7 +1222,7 @@ export class Util {
      * @param params The list of callable parameters to check
      * @returns the minimum and maximum number of allowed params
      */
-    public getMinMaxParamCount(params: CallableParam[]): { min: number; max: number } {
+    public getMinMaxParamCount(params: CallableParam[]): MinMax {
         //get min/max parameter count for callable
         let minParams = 0;
         let maxParams = 0;
@@ -1241,11 +1241,36 @@ export class Util {
     }
 
     /**
-     * Finds the array of callables from a container map, taking into account the function from which it was called
+     * Gets the minimum and maximum number of allowed params for ALL functions with the name of the function call
+     * @param callablesByLowerName The map of callable containers
+     * @param expCall function call expression to use for the name
+     * @returns the minimum and maximum number of allowed params
+     */
+    public getMinMaxParamCountByFunctionCall(callablesByLowerName: CallableContainerMap, expCall: FunctionCall): MinMax {
+        const callablesWithThisName = this.getCallableContainersByName(callablesByLowerName, expCall);
+        if (callablesWithThisName?.length > 0) {
+            const paramCount = { min: MAX_PARAM_COUNT, max: 0 };
+            for (const callableContainer of callablesWithThisName) {
+                let specificParamCount = util.getMinMaxParamCount(callableContainer.callable.params);
+                if (specificParamCount.max > paramCount.max) {
+                    paramCount.max = specificParamCount.max;
+                }
+                if (specificParamCount.min < paramCount.min) {
+                    paramCount.min = specificParamCount.min;
+                }
+            }
+            return paramCount;
+        }
+    }
+
+    /**
+     * Finds the array of callables from a container map, based on the name of the function call
      * If the callable was called in a function in a namespace, functions in that namespace are preferred
+     * @param callablesByLowerName The map of callable containers
+     * @param expCall function call expression to use for the name
      * @return an array with callable containers - could be empty if nothing was found
      */
-    public getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName: CallableContainerMap, expCall: FunctionCall): CallableContainer[] {
+    public getCallableContainersByName(callablesByLowerName: CallableContainerMap, expCall: FunctionCall): CallableContainer[] {
         let callablesWithThisName: CallableContainer[] = [];
         const lowerName = expCall.name.text.toLowerCase();
         if (expCall.functionExpression.namespaceName) {
@@ -1323,6 +1348,25 @@ export class Util {
         }
         return result;
     }
+
+    /**
+    * Finds a callable from a container map based on the name AND number of arguments
+    * If the callable was called in a function in a namespace, functions in that namespace are preferred
+    * The first callable that matches the name AND will accept the number of arguments given is returned
+    * @return a callable containers that matches the call
+    */
+    public getCallableContainerByFunctionCall(callablesByLowerName: CallableContainerMap, expCall: FunctionCall): CallableContainer {
+        const callablesWithThisName = this.getCallableContainersByName(callablesByLowerName, expCall);
+        if (callablesWithThisName?.length > 0) {
+            for (const callableContainer of callablesWithThisName) {
+                const paramCount = util.getMinMaxParamCount(callableContainer.callable.params);
+                if (paramCount.min <= expCall.args.length && paramCount.max >= expCall.args.length) {
+                    return callableContainer;
+                }
+            }
+        }
+    }
+
 }
 
 /**
@@ -1340,3 +1384,11 @@ export function standardizePath(stringParts, ...expressions: any[]) {
 
 export let util = new Util();
 export default util;
+
+
+export interface MinMax {
+    min: number;
+    max: number;
+}
+
+export const MAX_PARAM_COUNT = 32;

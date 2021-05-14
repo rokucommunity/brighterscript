@@ -3,22 +3,25 @@ import { CompletionItemKind, Location } from 'vscode-languageserver';
 import chalk from 'chalk';
 import type { DiagnosticInfo } from './DiagnosticMessages';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FunctionCall } from './interfaces';
 import type { FileLink, Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, Statement, NewExpression, FunctionStatement, ClassStatement } from './parser';
 import { ParseMode } from './parser';
 import { standardizePath as s, util } from './util';
+import type { MinMax } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isLazyType, isUninitializedType, isInvalidType } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isLazyType, isUninitializedType, isInvalidType, isDynamicType } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { SymbolTable } from './SymbolTable';
 import type { CustomType } from './types/CustomType';
 import { UninitializedType } from './types/UninitializedType';
+import { ObjectType } from './types/ObjectType';
+
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -487,13 +490,13 @@ export class Scope {
 
         //do many per-file checks
         this.enumerateBrsFiles((file) => {
-            this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
+            // this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
             // this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
             this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
             this.diagnosticDetectInvalidFunctionExpressionTypes(file);
-            this.diagnosticDetectInvalidFunctionCalls(file);
+            this.diagnosticDetectInvalidFunctionCalls(file, callableContainerMap);
         });
     }
 
@@ -510,6 +513,8 @@ export class Scope {
     public get symbolTable() {
         if (!this._symbolTable) {
             this._symbolTable = new SymbolTable(this.getParentScope()?.symbolTable);
+            this._symbolTable.addSymbol('m', null, new ObjectType());
+
             for (let file of this.getOwnFiles()) {
                 if (isBrsFile(file)) {
                     this._symbolTable.mergeSymbolTable(file.parser?.symbolTable);
@@ -685,29 +690,32 @@ export class Scope {
     /**
     * Find functions with either the wrong type of parameters, or the wrong number of parameters
     */
-    private diagnosticDetectInvalidFunctionCalls(file: BscFile) {
+    private diagnosticDetectInvalidFunctionCalls(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
         if (isBrsFile(file)) {
             for (let expCall of file.functionCalls) {
                 const symbolTypeInfo = file.getSymbolTypeFromToken(expCall.name, expCall.functionExpression, this);
                 let funcType = symbolTypeInfo.type;
                 if (isUninitializedType(funcType)) {
-                    // Could not find call in scope. Perhaps a global function?
-                    const callable = globalCallableMap.get(expCall.name.text.toLowerCase());
-                    funcType = callable?.type;
+                    const callableContainer = util.getCallableContainerByFunctionCall(callableContainersByLowerName, expCall);
+
+                    if (callableContainer) {
+                        // We found a global callable with correct number of params - use that
+                        funcType = callableContainer.callable?.type;
+                    } else {
+                        const allowedParamCount = util.getMinMaxParamCountByFunctionCall(callableContainersByLowerName, expCall);
+                        if (allowedParamCount) {
+                            // We found a global callable, but it needs a different number of args
+                            this.addMismatchParamCountDiagnostic(allowedParamCount, expCall, file);
+                            continue;
+                        }
+                    }
                 }
                 if (isFunctionType(funcType)) {
                     // Check for Argument count mismatch.
                     //get min/max parameter count for callable
                     let paramCount = util.getMinMaxParamCount(funcType.params);
-                    let expCallArgCount = expCall.args.length;
                     if (expCall.args.length > paramCount.max || expCall.args.length < paramCount.min) {
-                        let minMaxParamsText = paramCount.min === paramCount.max ? paramCount.max : `${paramCount.min}-${paramCount.max}`;
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
-                            range: expCall.nameRange,
-                            //TODO detect end of expression call
-                            file: file
-                        });
+                        this.addMismatchParamCountDiagnostic(paramCount, expCall, file);
                     }
 
                     // Check for Argument type mismatch.
@@ -741,8 +749,11 @@ export class Scope {
                             });
                         }
                     }
-                } else if (!isInvalidType(symbolTypeInfo.type)) {
-                    // TODO: standard functions like integer.ToStr() are not detectable yet.
+                } else if (isInvalidType(symbolTypeInfo.type)) {
+                    // TODO: standard member functions like integer.ToStr() are not detectable yet.
+                } else if (isDynamicType(symbolTypeInfo.type)) {
+                    // maybe this is a function? who knows
+                } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.callToUnknownFunction(symbolTypeInfo.expandedTokenText, this.name),
                         range: expCall.nameRange,
@@ -752,6 +763,16 @@ export class Scope {
                 }
             }
         }
+    }
+
+    private addMismatchParamCountDiagnostic(paramCount: MinMax, expCall: FunctionCall, file: BscFile) {
+        const minMaxParamsText = paramCount.min === paramCount.max ? paramCount.max : `${paramCount.min}-${paramCount.max}`;
+        const expCallArgCount = expCall.args.length;
+        this.diagnostics.push({
+            ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
+            range: expCall.nameRange,
+            file: file
+        });
     }
 
     public getNewExpressions() {
@@ -854,26 +875,26 @@ export class Scope {
 
                 //find a local variable with this name
                 const localSymbol = file.getFunctionExpressionAtPosition(expCall.nameRange.start)?.symbolTable.getSymbol(lowerName);
+                /*
+                              //if we don't already have a variable with this name.
+                              if (!localSymbol) {
+                               const callablesWithThisName = util.getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName, expCall);
 
-                //if we don't already have a variable with this name.
-                if (!localSymbol) {
-                    const callablesWithThisName = util.getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName, expCall);
+                                  //use the first item from callablesByLowerName, because if there are more, that's a separate error
+                                  let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
 
-                    //use the first item from callablesByLowerName, because if there are more, that's a separate error
-                    let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
-
-                    //detect calls to unknown functions
-                    if (!knownCallable) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.callToUnknownFunction(expCall.name.text, this.name),
-                            range: expCall.nameRange,
-                            file: file
-                        });
-                    }
-                } else {
-                    //if we found a variable with the same name as the function, assume the call is "known".
-                    //If the variable is a different type, some other check should add a diagnostic for that.
-                }
+                                  //detect calls to unknown functions
+                                  if (!knownCallable) {
+                                      this.diagnostics.push({
+                                          ...DiagnosticMessages.callToUnknownFunction(expCall.name.text, this.name),
+                                          range: expCall.nameRange,
+                                          file: file
+                                      });
+                                  }
+                              } else {
+                                  //if we found a variable with the same name as the function, assume the call is "known".
+                                  //If the variable is a different type, some other check should add a diagnostic for that.
+                              }*/
             }
         }
     }

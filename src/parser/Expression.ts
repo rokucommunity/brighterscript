@@ -3,7 +3,7 @@ import type { Token, Identifier } from '../lexer';
 import { TokenKind } from '../lexer';
 import type { Block, CommentStatement, FunctionStatement, LabelStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
-import util from '../util';
+import util, { MAX_PARAM_COUNT } from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
@@ -66,7 +66,7 @@ export class BinaryExpression extends Expression {
 }
 
 export class CallExpression extends Expression {
-    static MaximumArguments = 32;
+    static MaximumArguments = MAX_PARAM_COUNT;
 
     constructor(
         readonly callee: Expression,
