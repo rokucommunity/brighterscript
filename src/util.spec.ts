@@ -5,6 +5,8 @@ import { Position, Range } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
+import type { CallableParam } from './interfaces';
+import { IntegerType } from './types/IntegerType';
 const sinon = createSandbox();
 let tempDir = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tempDir}/rootDir`;
@@ -38,7 +40,7 @@ describe('util', () => {
 
     describe('getRokuPkgPath', () => {
         it('replaces more than one windows slash in a path', () => {
-            expect(util.getRokuPkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
+            expect(util.sanitizePkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
         });
     });
 
@@ -350,24 +352,19 @@ describe('util', () => {
     });
 
     describe('getPkgPathFromTarget', () => {
-        it('works with both types of separators', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', '../lib.brs')).to.equal('lib.brs');
-            expect(util.getPkgPathFromTarget('components\\component1.xml', '../lib.brs')).to.equal('lib.brs');
-        });
-
         it('resolves single dot directory', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', './lib.brs')).to.equal(s`components/lib.brs`);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', './lib.brs')).to.equal(`pkg:/components/lib.brs`);
         });
 
         it('resolves absolute pkg paths as relative paths', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/source/lib.brs')).to.equal(s`source/lib.brs`);
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/lib.brs')).to.equal(`lib.brs`);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg:/source/lib.brs')).to.equal(`pkg:/source/lib.brs`);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg:/lib.brs')).to.equal(`pkg:/lib.brs`);
         });
 
         it('resolves gracefully for invalid values', () => {
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/')).to.equal(null);
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:')).to.equal(null);
-            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg')).to.equal(s`components/pkg`);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg:/')).to.equal(null);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg:')).to.equal(null);
+            expect(util.getPkgPathFromTarget('pkg:/components/component1.xml', 'pkg')).to.equal(`pkg:/components/pkg`);
         });
     });
 
@@ -603,6 +600,61 @@ describe('util', () => {
                 util.createRange(0, 1, 0, 3),
                 util.createRange(0, 1, 2, 0)
             )).to.be.true;
+        });
+    });
+
+    describe('removeProtocol', () => {
+        it('removes pkg:/', () => {
+            expect(
+                util.removeProtocol('pkg:/some/path')
+            ).to.eql(
+                'some/path'
+            );
+        });
+        it('removes libpkg:/', () => {
+            expect(
+                util.removeProtocol('libpkg:/some/path')
+            ).to.eql(
+                'some/path'
+            );
+        });
+        it('removes file:/', () => {
+            expect(
+                util.removeProtocol('file:/some/path')
+            ).to.eql(
+                'some/path'
+            );
+        });
+        it('does nothing when protocol is missing', () => {
+            expect(
+                util.removeProtocol('some/path')
+            ).to.eql(
+                'some/path'
+            );
+        });
+    });
+
+    describe('getMinMaxParamCount', () => {
+
+        it('finds correct number of params with no args', () => {
+            const params: CallableParam[] = [];
+            const count = util.getMinMaxParamCount(params);
+            expect(count.min).to.equal(0);
+            expect(count.max).to.equal(0);
+        });
+
+        it('finds correct number of params', () => {
+            const params: CallableParam[] = [{ name: 'a', type: new IntegerType() }, { name: 'b', type: new IntegerType() }];
+            const count = util.getMinMaxParamCount(params);
+            expect(count.min).to.equal(2);
+            expect(count.max).to.equal(2);
+        });
+
+        it('finds correct number of params with optional params', () => {
+            const params: CallableParam[] = [{ name: 'a', type: new IntegerType() }, { name: 'b', type: new IntegerType() }, { name: 'c', type: new IntegerType(), isOptional: true }, { name: 'd', type: new IntegerType(), isOptional: true }];
+            const count = util.getMinMaxParamCount(params);
+            expect(count.min).to.equal(2);
+            expect(count.max).to.equal(4);
         });
     });
 });

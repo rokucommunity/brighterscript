@@ -152,7 +152,7 @@ export class XmlScope extends Scope {
             ] as BscFile[];
             let scriptPkgPaths = this.xmlFile.getOwnDependencies();
             for (let scriptPkgPath of scriptPkgPaths) {
-                let file = this.program.getFileByPkgPath(scriptPkgPath);
+                let file = this.program.getFile(scriptPkgPath);
                 if (file) {
                     result.push(file);
                 }
@@ -175,7 +175,7 @@ export class XmlScope extends Scope {
         ) {
             results.push({
                 range: util.createRange(0, 0, 0, 0),
-                uri: util.pathToUri(file.parentComponent.pathAbsolute)
+                uri: util.pathToUri(file.parentComponent.srcPath)
             });
         }
         return results;

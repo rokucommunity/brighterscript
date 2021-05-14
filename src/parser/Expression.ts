@@ -266,9 +266,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let functionType = new FunctionType(this.returnType);
         functionType.isSub = this.functionType.text === 'sub';
         for (let param of this.parameters) {
-            let isRequired = !param.defaultValue;
-            //TODO compute optional parameters
-            functionType.addParameter(param.name.text, param.type, isRequired);
+            functionType.addParameter(param.name.text, param.type, param.isOptional);
         }
         return functionType;
     }
@@ -321,6 +319,10 @@ export class FunctionParameterExpression extends Expression {
         if (this.defaultValue && options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'defaultValue', visitor, options);
         }
+    }
+
+    get isOptional(): boolean {
+        return !!this.defaultValue;
     }
 }
 
@@ -862,7 +864,8 @@ export class SourceLiteralExpression extends Expression {
         let text: string;
         switch (this.token.kind) {
             case TokenKind.SourceFilePathLiteral:
-                text = `"${fileUrl(state.srcPath)}"`;
+                const pathUrl = fileUrl(state.srcPath);
+                text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
                 text = `${this.token.range.start.line + 1}`;
@@ -874,21 +877,14 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
                 break;
             case TokenKind.SourceLocationLiteral:
-                text = `"${fileUrl(state.srcPath)}:${this.token.range.start.line + 1}"`;
+                const locationUrl = fileUrl(state.srcPath);
+                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.token.range.start.line + 1}"`;
                 break;
             case TokenKind.PkgPathLiteral:
-                let pkgPath1 = `pkg:/${state.file.pkgPath}`
-                    .replace(/\\/g, '/')
-                    .replace(/\.bs$/i, '.brs');
-
-                text = `"${pkgPath1}"`;
+                text = `"${state.file.pkgPath.replace(/\.bs$/i, '.brs')}"`;
                 break;
             case TokenKind.PkgLocationLiteral:
-                let pkgPath2 = `pkg:/${state.file.pkgPath}`
-                    .replace(/\\/g, '/')
-                    .replace(/\.bs$/i, '.brs');
-
-                text = `"${pkgPath2}:" + str(LINE_NUM)`;
+                text = `"${state.file.pkgPath.replace(/\.bs$/i, '.brs')}:" + str(LINE_NUM)`;
                 break;
             case TokenKind.LineNumLiteral:
             default:

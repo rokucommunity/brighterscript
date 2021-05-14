@@ -64,7 +64,7 @@ export interface FunctionCall {
      */
     range: Range;
     functionExpression: FunctionExpression;
-    file: File;
+    file: BscFile;
     name: string;
     args: CallableArg[];
     nameRange: Range;
@@ -114,15 +114,6 @@ export interface FileReference {
      * If the range is null, then this import is derived so skip any location-based logic
      */
     filePathRange?: Range;
-}
-
-export interface File {
-    /**
-     * The absolute path to the file, relative to the pkg
-     */
-    pkgPath: string;
-    pathAbsolute: string;
-    getDiagnostics(): BsDiagnostic[];
 }
 
 export interface VariableDeclaration {
@@ -291,7 +282,7 @@ export interface OnScopeGetCodeActionsEvent {
 }
 export interface BeforeFileParseEvent {
     program: Program;
-    pathAbsolute: string;
+    srcPath: string;
     source: string;
 }
 export interface AfterFileParseEvent {
@@ -346,7 +337,10 @@ export interface TypedefProvider {
 
 export type TranspileResult = Array<(string | SourceNode)>;
 
-export type FileResolver = (pathAbsolute: string) => string | undefined | Thenable<string | undefined> | void;
+/**
+ * @param srcPath The absolute path to the source file on disk
+ */
+export type FileResolver = (srcPath: string) => string | undefined | Thenable<string | undefined> | void;
 
 export interface ExpressionInfo {
     expressions: Expression[];

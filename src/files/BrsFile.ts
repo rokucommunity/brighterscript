@@ -6,15 +6,13 @@ import chalk from 'chalk';
 import * as path from 'path';
 import type { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
-import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
+import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords, isToken } from '../lexer';
 import { Parser, ParseMode, getBscTypeFromExpression } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
 import type { FileLink, Program, SignatureInfoObj } from '../Program';
-import { FunctionType } from '../types/FunctionType';
-import { VoidType } from '../types/VoidType';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
@@ -30,18 +28,20 @@ import { CommentFlagProcessor } from '../CommentFlagProcessor';
  */
 export class BrsFile {
     constructor(
-        public pathAbsolute: string,
         /**
-         * The full pkg path to this file
+         * The absolute path to the source file on disk (e.g. '/usr/you/projects/RokuApp/source/main.brs' or 'c:/projects/RokuApp/source/main.brs').
+         */
+        public srcPath: string,
+        /**
+         * The full pkg path (i.e. `pkg:/path/to/file.brs`)
          */
         public pkgPath: string,
         public program: Program
     ) {
-        this.pathAbsolute = s`${this.pathAbsolute}`;
-        this.pkgPath = s`${this.pkgPath}`;
+        this.srcPath = s`${this.srcPath}`;
         this.dependencyGraphKey = this.pkgPath.toLowerCase();
 
-        this.extension = util.getExtension(this.pathAbsolute);
+        this.extension = util.getExtension(this.srcPath);
 
         //all BrighterScript files need to be transpiled
         if (this.extension?.endsWith('.bs')) {
@@ -50,7 +50,7 @@ export class BrsFile {
         }
         this.isTypedef = this.extension === '.d.bs';
         if (!this.isTypedef) {
-            this.typedefKey = util.getTypedefPath(this.pathAbsolute);
+            this.typedefSrcPath = util.getTypedefPath(this.srcPath);
         }
 
         //global file doesn't have a program, so only resolve typedef info if we have a program
@@ -115,18 +115,6 @@ export class BrsFile {
 
     private workspaceSymbols: SymbolInformation[];
 
-    /**
-     * Get the token at the specified position
-     * @param position
-     */
-    public getTokenAt(position: Position) {
-        for (let token of this.parser.tokens) {
-            if (util.rangeContains(token.range, position)) {
-                return token;
-            }
-        }
-    }
-
     public get parser() {
         if (!this._parser) {
             //remove the typedef file (if it exists)
@@ -151,10 +139,10 @@ export class BrsFile {
     public isTypedef: boolean;
 
     /**
-     * The key to find the typedef file in the program's files map.
+     * The srcPath to the potential typedef file for this file.
      * A falsey value means this file is ineligable for a typedef
      */
-    public typedefKey?: string;
+    public typedefSrcPath?: string;
 
     /**
      * If the file was given type definitions during parse
@@ -175,7 +163,7 @@ export class BrsFile {
      * Find and set the typedef variables (if a matching typedef file exists)
      */
     private resolveTypedef() {
-        this.typedefFile = this.program.getFileByPathAbsolute<BrsFile>(this.typedefKey);
+        this.typedefFile = this.program.getFile<BrsFile>(this.typedefSrcPath);
         this.hasTypedef = !!this.typedefFile;
     }
 
@@ -219,7 +207,7 @@ export class BrsFile {
             }
 
             //tokenize the input file
-            let lexer = this.program.logger.time(LogLevel.debug, ['lexer.lex', chalk.green(this.pathAbsolute)], () => {
+            let lexer = this.program.logger.time(LogLevel.debug, ['lexer.lex', chalk.green(this.srcPath)], () => {
                 return Lexer.scan(fileContents, {
                     includeWhitespace: false
                 });
@@ -233,7 +221,7 @@ export class BrsFile {
             //TODO preprocessor should go away in favor of the AST handling this internally (because it affects transpile)
             //currently the preprocessor throws exceptions on syntax errors...so we need to catch it
             try {
-                this.program.logger.time(LogLevel.debug, ['preprocessor.process', chalk.green(this.pathAbsolute)], () => {
+                this.program.logger.time(LogLevel.debug, ['preprocessor.process', chalk.green(this.srcPath)], () => {
                     preprocessor.process(lexer.tokens, this.program.getManifest());
                 });
             } catch (error) {
@@ -246,7 +234,7 @@ export class BrsFile {
             //if the preprocessor generated tokens, use them.
             let tokens = preprocessor.processedTokens.length > 0 ? preprocessor.processedTokens : lexer.tokens;
 
-            this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.pathAbsolute)], () => {
+            this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.srcPath)], () => {
                 this._parser = Parser.parse(tokens, {
                     mode: this.parseMode,
                     logger: this.program.logger
@@ -399,33 +387,15 @@ export class BrsFile {
     private findCallables() {
         for (let statement of this.parser.references.functionStatements ?? []) {
 
-            let functionType = new FunctionType(statement.func.returnType);
+            let functionType = statement.func.getFunctionType();
             functionType.setName(statement.name.text);
-            functionType.isSub = statement.func.functionType.text.toLowerCase() === 'sub';
-            if (functionType.isSub) {
-                functionType.returnType = new VoidType();
-            }
-
-            //extract the parameters
-            let params = [] as CallableParam[];
-            for (let param of statement.func.parameters) {
-                let callableParam = {
-                    name: param.name.text,
-                    type: param.type,
-                    isOptional: !!param.defaultValue,
-                    isRestArgument: false
-                };
-                params.push(callableParam);
-                let isRequired = !param.defaultValue;
-                functionType.addParameter(callableParam.name, callableParam.type, isRequired);
-            }
 
             this.callables.push({
                 isSub: statement.func.functionType.text.toLowerCase() === 'sub',
                 name: statement.name.text,
                 nameRange: statement.name.range,
                 file: this,
-                params: params,
+                params: functionType.params,
                 range: statement.func.range,
                 type: functionType,
                 getName: statement.getName.bind(statement),
@@ -543,7 +513,7 @@ export class BrsFile {
         }
 
         //if cursor is within a comment, disable completions
-        let currentToken = this.getTokenAt(position);
+        let currentToken = this.parser.getTokenAt(position);
         const tokenKind = currentToken?.kind;
         if (tokenKind === TokenKind.Comment) {
             return [];
@@ -551,9 +521,9 @@ export class BrsFile {
             const match = /^("?)(pkg|libpkg):/.exec(currentToken.text);
             if (match) {
                 const [, openingQuote, fileProtocol] = match;
-                //include every absolute file path from this scope
+                //include every pkgPath from this scope
                 for (const file of scope.getAllFiles()) {
-                    const pkgPath = `${fileProtocol}:/${file.pkgPath.replace(/\\/g, '/')}`;
+                    const pkgPath = `${fileProtocol}:/${file.pkgPath.replace('pkg:/', '')}`;
                     result.push({
                         label: pkgPath,
                         textEdit: TextEdit.replace(
@@ -585,7 +555,7 @@ export class BrsFile {
         let functionExpression = this.getFunctionExpressionAtPosition(position);
         if (!functionExpression) {
             //we aren't in any function scope, so return the keyword completions and namespaces
-            if (this.getTokenBefore(currentToken, TokenKind.New)) {
+            if (this.parser.getTokenBefore(currentToken, TokenKind.New)) {
                 // there's a new keyword, so only class types are viable here
                 return [...this.getGlobalClassStatementCompletions(currentToken, this.parseMode)];
             } else {
@@ -594,7 +564,7 @@ export class BrsFile {
         }
 
         const classNameCompletions = this.getGlobalClassStatementCompletions(currentToken, this.parseMode);
-        const newToken = this.getTokenBefore(currentToken, TokenKind.New);
+        const newToken = this.parser.getTokenBefore(currentToken, TokenKind.New);
         if (newToken) {
             //we are after a new keyword; so we can only be namespaces or classes at this point
             result.push(...classNameCompletions);
@@ -602,11 +572,11 @@ export class BrsFile {
             return result;
         }
 
-        if (this.tokenFollows(currentToken, TokenKind.Goto)) {
+        if (this.parser.tokenFollows(currentToken, TokenKind.Goto)) {
             return this.getLabelCompletion(functionExpression);
         }
 
-        if (this.isPositionNextToTokenKind(position, TokenKind.Dot)) {
+        if (this.parser.isPositionNextToTokenKind(position, TokenKind.Dot)) {
             if (namespaceCompletions.length > 0) {
                 //if we matched a namespace, after a dot, it can't be anything else but something from our namespace completions
                 return namespaceCompletions;
@@ -710,9 +680,9 @@ export class BrsFile {
     }
 
     public getClassFromMReference(position: Position, currentToken: Token, functionExpression: FunctionExpression): FileLink<ClassStatement> | undefined {
-        let previousToken = this.getPreviousToken(currentToken);
+        let previousToken = this.parser.getPreviousToken(currentToken);
         if (previousToken?.kind === TokenKind.Dot) {
-            previousToken = this.getPreviousToken(previousToken);
+            previousToken = this.parser.getPreviousToken(previousToken);
         }
         if (previousToken?.kind === TokenKind.Identifier && previousToken?.text.toLowerCase() === 'm' && isClassMethodStatement(functionExpression.functionStatement)) {
             return { item: this.parser.references.classStatements.find((cs) => util.rangeContains(cs.range, position)), file: this };
@@ -759,7 +729,7 @@ export class BrsFile {
         //remove any trailing identifer and then any trailing dot, to give us the
         //name of its immediate parent namespace
         let closestParentNamespaceName = completionName.replace(/\.([a-z0-9_]*)?$/gi, '');
-        let newToken = this.getTokenBefore(currentToken, TokenKind.New);
+        let newToken = this.parser.getTokenBefore(currentToken, TokenKind.New);
 
         let namespaceLookup = scope.namespaceLookup;
         let result = new Map<string, CompletionItem>();
@@ -824,7 +794,7 @@ export class BrsFile {
             if (!location && statement.getName(ParseMode.BrighterScript).toLowerCase() === namespaceName) {
                 const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
                     if (!location && statement.name.text.toLowerCase() === endName) {
-                        const uri = util.pathToUri(file.pathAbsolute);
+                        const uri = util.pathToUri(file.srcPath);
                         location = Location.create(uri, statement.range);
                     }
                 };
@@ -873,64 +843,6 @@ export class BrsFile {
         }
     }
 
-    public isPositionNextToTokenKind(position: Position, tokenKind: TokenKind) {
-        const closestToken = this.getClosestToken(position);
-        const previousToken = this.getPreviousToken(closestToken);
-        const previousTokenKind = previousToken?.kind;
-        //next to matched token
-        if (!closestToken || closestToken.kind === TokenKind.Eof) {
-            return false;
-        } else if (closestToken.kind === tokenKind) {
-            return true;
-        } else if (closestToken.kind === TokenKind.Newline || previousTokenKind === TokenKind.Newline) {
-            return false;
-            //next to an identifier, which is next to token kind
-        } else if (closestToken.kind === TokenKind.Identifier && previousTokenKind === tokenKind) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    private getTokenBefore(currentToken: Token, tokenKind: TokenKind): Token {
-        const index = this.parser.tokens.indexOf(currentToken);
-        for (let i = index - 1; i >= 0; i--) {
-            currentToken = this.parser.tokens[i];
-            if (currentToken.kind === TokenKind.Newline) {
-                break;
-            } else if (currentToken.kind === tokenKind) {
-                return currentToken;
-            }
-        }
-        return undefined;
-    }
-
-    private tokenFollows(currentToken: Token, tokenKind: TokenKind): boolean {
-        const index = this.parser.tokens.indexOf(currentToken);
-        if (index > 0) {
-            return this.parser.tokens[index - 1].kind === tokenKind;
-        }
-        return false;
-    }
-
-    public getTokensUntil(currentToken: Token, tokenKind: TokenKind, direction: -1 | 1 = -1) {
-        let tokens = [];
-        for (let i = this.parser.tokens.indexOf(currentToken); direction === -1 ? i >= 0 : i === this.parser.tokens.length; i += direction) {
-            currentToken = this.parser.tokens[i];
-            if (currentToken.kind === TokenKind.Newline || currentToken.kind === tokenKind) {
-                break;
-            }
-            tokens.push(currentToken);
-        }
-        return tokens;
-    }
-
-    public getPreviousToken(token: Token) {
-        const parser = this.parser;
-        let idx = parser.tokens.indexOf(token);
-        return parser.tokens[idx - 1];
-    }
-
     /**
      * Find the first scope that has a namespace with this name.
      * Returns false if no namespace was found with that name
@@ -972,29 +884,6 @@ export class BrsFile {
             }
         }
         return false;
-    }
-
-    /**
-     * Get the token closest to the position. if no token is found, the previous token is returned
-     * @param position
-     * @param tokens
-     */
-    public getClosestToken(position: Position) {
-        let tokens = this.parser.tokens;
-        for (let i = 0; i < tokens.length; i++) {
-            let token = tokens[i];
-            if (util.rangeContains(token.range, position)) {
-                return token;
-            }
-            //if the position less than this token range, then this position touches no token,
-            if (util.positionIsGreaterThanRange(position, token.range) === false) {
-                let t = tokens[i - 1];
-                //return the token or the first token
-                return t ? t : tokens[0];
-            }
-        }
-        //return the last token
-        return tokens[tokens.length - 1];
     }
 
     /**
@@ -1105,7 +994,7 @@ export class BrsFile {
         }
 
         const name = statement.getName(ParseMode.BrighterScript);
-        const uri = util.pathToUri(this.pathAbsolute);
+        const uri = util.pathToUri(this.srcPath);
         const symbol = SymbolInformation.create(name, symbolKind, statement.range, uri, containerStatement?.getName(ParseMode.BrighterScript));
         symbols.push(symbol);
         return symbols;
@@ -1119,7 +1008,7 @@ export class BrsFile {
         let results: Location[] = [];
 
         //get the token at the position
-        const token = this.getTokenAt(position);
+        const token = this.parser.getTokenAt(position);
 
         // While certain other tokens are allowed as local variables (AllowedLocalIdentifiers: https://github.com/rokucommunity/brighterscript/blob/master/src/lexer/TokenKind.ts#L418), these are converted by the parser to TokenKind.Identifier by the time we retrieve the token using getTokenAt
         let definitionTokenTypes = [
@@ -1134,27 +1023,27 @@ export class BrsFile {
 
         let textToSearchFor = token.text.toLowerCase();
 
-        const previousToken = this.getTokenAt({ line: token.range.start.line, character: token.range.start.character });
+        const previousToken = this.parser.getTokenAt({ line: token.range.start.line, character: token.range.start.character });
 
         if (previousToken?.kind === TokenKind.Callfunc) {
             for (const scope of this.program.getScopes()) {
                 //to only get functions defined in interface methods
                 const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                 if (callable) {
-                    results.push(Location.create(util.pathToUri((callable.callable.file as BrsFile).pathAbsolute), callable.callable.functionStatement.range));
+                    results.push(Location.create(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.range));
                 }
             }
             return results;
         }
 
-        let classToken = this.getTokenBefore(token, TokenKind.Class);
+        let classToken = this.parser.getTokenBefore(token, TokenKind.Class);
         if (classToken) {
             let cs = this.parser.references.classStatements.find((cs) => cs.classKeyword.range === classToken.range);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = this.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
                 if (extendedClass) {
-                    results.push(Location.create(util.pathToUri(extendedClass.file.pathAbsolute), extendedClass.item.range));
+                    results.push(Location.create(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.range));
                 }
             }
             return results;
@@ -1177,14 +1066,14 @@ export class BrsFile {
         for (const symbol of func.symbolTable.ownSymbols) {
             //we found a variable declaration with this token text
             if (symbol.name.toLowerCase() === textToSearchFor) {
-                const uri = util.pathToUri(this.pathAbsolute);
+                const uri = util.pathToUri(this.srcPath);
                 results.push(Location.create(uri, symbol.range));
             }
         }
-        if (this.tokenFollows(token, TokenKind.Goto)) {
+        if (this.parser.tokenFollows(token, TokenKind.Goto)) {
             for (const label of func.labelStatements) {
                 if (label.tokens.identifier.text.toLocaleLowerCase() === textToSearchFor) {
-                    const uri = util.pathToUri(this.pathAbsolute);
+                    const uri = util.pathToUri(this.srcPath);
                     results.push(Location.create(uri, label.tokens.identifier.range));
                 }
             }
@@ -1208,7 +1097,7 @@ export class BrsFile {
                 }
                 const statementHandler = (statement: FunctionStatement) => {
                     if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
-                        const uri = util.pathToUri(file.pathAbsolute);
+                        const uri = util.pathToUri(file.srcPath);
                         results.push(Location.create(uri, statement.range));
                     }
                 };
@@ -1228,12 +1117,12 @@ export class BrsFile {
         //get class fields and members
         const statementHandler = (statement: ClassMethodStatement) => {
             if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
-                results.push(Location.create(util.pathToUri(file.pathAbsolute), statement.range));
+                results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
             }
         };
         const fieldStatementHandler = (statement: ClassFieldStatement) => {
             if (statement.name.text.toLowerCase() === textToSearchFor) {
-                results.push(Location.create(util.pathToUri(file.pathAbsolute), statement.range));
+                results.push(Location.create(util.pathToUri(file.srcPath), statement.range));
             }
         };
         file.parser.ast.walk(createVisitor({
@@ -1248,7 +1137,7 @@ export class BrsFile {
 
     public getHover(position: Position): Hover {
         //get the token at the position
-        let token = this.getTokenAt(position);
+        let token = this.parser.getTokenAt(position);
 
         let hoverTokenTypes = [
             TokenKind.Identifier,
@@ -1359,10 +1248,10 @@ export class BrsFile {
         const funcStartPosition = func.range.start;
 
         // Get function comments in reverse order
-        let currentToken = this.getTokenAt(funcStartPosition);
+        let currentToken = this.parser.getTokenAt(funcStartPosition);
         let functionComments = [] as string[];
         while (currentToken) {
-            currentToken = this.getPreviousToken(currentToken);
+            currentToken = this.parser.getPreviousToken(currentToken);
 
             if (!currentToken) {
                 break;
@@ -1448,7 +1337,7 @@ export class BrsFile {
 
     public getReferences(position: Position) {
 
-        const callSiteToken = this.getTokenAt(position);
+        const callSiteToken = this.parser.getTokenAt(position);
 
         let locations = [] as Location[];
 
@@ -1466,7 +1355,7 @@ export class BrsFile {
                 file.ast.walk(createVisitor({
                     VariableExpression: (e) => {
                         if (e.name.text.toLowerCase() === searchFor) {
-                            locations.push(Location.create(util.pathToUri(file.pathAbsolute), e.range));
+                            locations.push(Location.create(util.pathToUri(file.srcPath), e.range));
                         }
                     }
                 }), {
@@ -1511,7 +1400,7 @@ export class BrsFile {
     public getTypedef() {
         const state = new BrsTranspileState(this);
         const typedef = this.ast.getTypedef(state);
-        const programNode = new SourceNode(null, null, this.pathAbsolute, typedef);
+        const programNode = new SourceNode(null, null, this.srcPath, typedef);
         return programNode.toString();
     }
 

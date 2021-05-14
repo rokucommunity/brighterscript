@@ -6,7 +6,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
-import { trim } from './testHelpers.spec';
+import { expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
 import type { FunctionType } from './types/FunctionType';
 import { UninitializedType } from './types/UninitializedType';
@@ -110,7 +110,7 @@ describe('Scope', () => {
 
             program.validate();
 
-            expect(sourceScope.getOwnFiles().map(x => x.pathAbsolute).sort()).eql([
+            expect(sourceScope.getOwnFiles().map(x => x.srcPath).sort()).eql([
                 s`${rootDir}/source/lib.brs`,
                 s`${rootDir}/source/main.brs`
             ]);
@@ -148,7 +148,7 @@ describe('Scope', () => {
             let initCallableCount = program.getScopeByName('source').getAllCallables().length;
 
             //remove the file
-            program.removeFile(file.pathAbsolute);
+            program.removeFile(file.srcPath);
             expect(program.getScopeByName('source').getAllCallables().length).to.equal(initCallableCount - 1);
         });
     });
@@ -644,7 +644,7 @@ describe('Scope', () => {
             `);
             program.addOrReplaceFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
-            const compScope = program.getScopeByName('components/comp.xml');
+            const compScope = program.getScopeByName('pkg:/components/comp.xml');
             program.plugins = new PluginInterface([{
                 name: 'Emits validation events',
                 beforeScopeValidate: validateStartScope,
@@ -892,8 +892,7 @@ describe('Scope', () => {
 
                 program.validate();
 
-                expect(program.getDiagnostics()[0]?.message).not.to.exist;
-
+                expectZeroDiagnostics(program);
             });
         });
     });

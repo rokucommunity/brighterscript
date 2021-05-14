@@ -26,7 +26,7 @@ describe('CodeActionsProcessor', () => {
             program.validate();
             expectCodeActions(() => {
                 program.getCodeActions(
-                    file.pathAbsolute,
+                    file.srcPath,
                     //<comp|onent name="comp1">
                     util.createRange(1, 5, 1, 5)
                 );
@@ -72,7 +72,7 @@ describe('CodeActionsProcessor', () => {
             `);
             program.validate();
             const codeActions = program.getCodeActions(
-                file.pathAbsolute,
+                file.srcPath,
                 //<comp|onent name="comp1">
                 util.createRange(1, 5, 1, 5)
             );
@@ -120,7 +120,7 @@ describe('CodeActionsProcessor', () => {
 
             //we should only get each file import suggestion exactly once
             const codeActions = program.getCodeActions(
-                componentCommonFile.pathAbsolute,
+                componentCommonFile.srcPath,
                 // doSome|thing()
                 util.createRange(2, 22, 2, 22)
             );
@@ -155,7 +155,7 @@ describe('CodeActionsProcessor', () => {
 
             //there should be no code actions since this is a brs file
             const codeActions = program.getCodeActions(
-                file.pathAbsolute,
+                file.srcPath,
                 // DoSometh|ing()
                 util.createRange(2, 28, 2, 28)
             );
@@ -185,7 +185,7 @@ describe('CodeActionsProcessor', () => {
 
             expect(
                 program.getCodeActions(
-                    file.pathAbsolute,
+                    file.srcPath,
                     // new Per|son()
                     util.createRange(2, 34, 2, 34)
                 ).map(x => x.title).sort()
@@ -219,7 +219,7 @@ describe('CodeActionsProcessor', () => {
 
             expect(
                 program.getCodeActions(
-                    file.pathAbsolute,
+                    file.srcPath,
                     // new Anim|als.Cat()
                     util.createRange(2, 36, 2, 36)
                 ).map(x => x.title).sort()

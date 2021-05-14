@@ -149,7 +149,7 @@ interface FileObj {
 }
 
 interface SourceObj {
-    pathAbsolute: string;
+    srcPath: string;
     source: string;
 }
 

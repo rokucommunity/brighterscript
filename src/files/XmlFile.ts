@@ -3,7 +3,7 @@ import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Hover, Location, Position, Range } from 'vscode-languageserver';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
-import type { Callable, BsDiagnostic, File, FileReference, FunctionCall, CommentFlag } from '../interfaces';
+import type { Callable, BsDiagnostic, FileReference, FunctionCall, CommentFlag, BscFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
 import SGParser from '../parser/SGParser';
@@ -19,14 +19,17 @@ import { createSGScript } from '../astUtils/creators';
 
 export class XmlFile {
     constructor(
-        public pathAbsolute: string,
         /**
-         * The absolute path to the file, relative to the pkg
+         * The absolute path to the source file on disk (e.g. '/usr/you/projects/RokuApp/source/main.brs' or 'c:/projects/RokuApp/source/main.brs').
+         */
+        public srcPath: string,
+        /**
+         * The full pkg path (i.e. `pkg:/path/to/file.brs`)
          */
         public pkgPath: string,
         public program: Program
     ) {
-        this.extension = path.extname(pathAbsolute).toLowerCase();
+        this.extension = path.extname(srcPath).toLowerCase();
 
         this.possibleCodebehindPkgPaths = [
             this.pkgPath.replace('.xml', '.bs'),
@@ -111,7 +114,7 @@ export class XmlFile {
                 .filter(x => util.getExtension(x) !== '.d.bs');
 
             let result = [] as string[];
-            let filesInProgram = this.program.getFilesByPkgPaths(allDependencies);
+            let filesInProgram = allDependencies.map(x => this.program.getFile(x)).filter(file => file !== undefined);
             for (let file of filesInProgram) {
                 result.push(file.pkgPath);
             }
@@ -360,7 +363,7 @@ export class XmlFile {
      * Determines if this xml file has a reference to the specified file (or if it's itself)
      * @param file
      */
-    public doesReferenceFile(file: File) {
+    public doesReferenceFile(file: BscFile) {
         return this.cache.getOrAdd(`doesReferenceFile: ${file.pkgPath}`, () => {
             if (file === this) {
                 return true;
@@ -493,12 +496,12 @@ export class XmlFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new TranspileState(this.pathAbsolute, this.program.options);
+        const state = new TranspileState(this.srcPath, this.program.options);
 
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             return createSGScript({
                 type: 'text/brightscript',
-                uri: util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'))
+                uri: util.sanitizePkgPath(uri.replace(/\.bs$/, '.brs'))
             });
         });
 

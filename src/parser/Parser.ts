@@ -84,7 +84,7 @@ import {
     TernaryExpression,
     NullCoalescingExpression
 } from './Expression';
-import type { Diagnostic, Range } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range } from 'vscode-languageserver';
 import { Logger } from '../Logger';
 import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isClassMethodStatement, isCommentStatement, isDottedGetExpression, isFunctionExpression, isIfStatement, isIndexedGetExpression, isLiteralExpression, isVariableExpression, isAALiteralExpression, isArrayLiteralExpression, isNewExpression, isUninitializedType, isFunctionType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
@@ -2626,6 +2626,97 @@ export class Parser {
         }
     }
 
+    /**
+     * Get the token at the specified position
+     * @param position
+     */
+    public getTokenAt(position: Position) {
+        for (let token of this.tokens) {
+            if (util.rangeContains(token.range, position)) {
+                return token;
+            }
+        }
+    }
+
+    /**
+     * Get the token closest to the position. if no token is found, the previous token is returned
+     * @param position
+     * @param tokens
+     */
+    public getClosestToken(position: Position) {
+        let tokens = this.tokens;
+        for (let i = 0; i < tokens.length; i++) {
+            let token = tokens[i];
+            if (util.rangeContains(token.range, position)) {
+                return token;
+            }
+            //if the position less than this token range, then this position touches no token,
+            if (util.positionIsGreaterThanRange(position, token.range) === false) {
+                let t = tokens[i - 1];
+                //return the token or the first token
+                return t ? t : tokens[0];
+            }
+        }
+        //return the last token
+        return tokens[tokens.length - 1];
+    }
+
+    public isPositionNextToTokenKind(position: Position, tokenKind: TokenKind) {
+        const closestToken = this.getClosestToken(position);
+        const previousToken = this.getPreviousToken(closestToken);
+        const previousTokenKind = previousToken?.kind;
+        //next to matched token
+        if (!closestToken || closestToken.kind === TokenKind.Eof) {
+            return false;
+        } else if (closestToken.kind === tokenKind) {
+            return true;
+        } else if (closestToken.kind === TokenKind.Newline || previousTokenKind === TokenKind.Newline) {
+            return false;
+            //next to an identifier, which is next to token kind
+        } else if (closestToken.kind === TokenKind.Identifier && previousTokenKind === tokenKind) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public getTokenBefore(currentToken: Token, tokenKind: TokenKind): Token {
+        const index = this.tokens.indexOf(currentToken);
+        for (let i = index - 1; i >= 0; i--) {
+            currentToken = this.tokens[i];
+            if (currentToken.kind === TokenKind.Newline) {
+                break;
+            } else if (currentToken.kind === tokenKind) {
+                return currentToken;
+            }
+        }
+        return undefined;
+    }
+
+    public tokenFollows(currentToken: Token, tokenKind: TokenKind): boolean {
+        const index = this.tokens.indexOf(currentToken);
+        if (index > 0) {
+            return this.tokens[index - 1].kind === tokenKind;
+        }
+        return false;
+    }
+
+    public getTokensUntil(currentToken: Token, tokenKind: TokenKind, direction: -1 | 1 = -1) {
+        let tokens = [];
+        for (let i = this.tokens.indexOf(currentToken); direction === -1 ? i >= 0 : i === this.tokens.length; i += direction) {
+            currentToken = this.tokens[i];
+            if (currentToken.kind === TokenKind.Newline || currentToken.kind === tokenKind) {
+                break;
+            }
+            tokens.push(currentToken);
+        }
+        return tokens;
+    }
+
+    public getPreviousToken(token: Token) {
+        let idx = this.tokens.indexOf(token);
+        return this.tokens[idx - 1];
+    }
 
     /**
      * References are found during the initial parse.
