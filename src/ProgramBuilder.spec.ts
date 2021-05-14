@@ -55,7 +55,7 @@ describe('ProgramBuilder', () => {
                 dest: 'file4.xml'
             }]));
 
-            let stub = sinon.stub(builder.program, 'addOrReplaceFile');
+            let stub = sinon.stub(builder.program, 'setFile');
             sinon.stub(builder, 'getFileContents').returns(Promise.resolve(''));
             await builder['loadAllFilesAST']();
             expect(stub.getCalls()).to.be.lengthOf(3);
@@ -70,7 +70,7 @@ describe('ProgramBuilder', () => {
             fsExtra.outputFileSync(s`${rootDir}/source/main.d.bs`, '');
             fsExtra.outputFileSync(s`${rootDir}/source/lib.d.bs`, '');
             fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
-            const stub = sinon.stub(builder.program, 'addOrReplaceFile');
+            const stub = sinon.stub(builder.program, 'setFile');
             await builder['loadAllFilesAST']();
             const srcPaths = stub.getCalls().map(x => x.args[0].src);
             //the d files should be first
