@@ -466,13 +466,19 @@ The characters '?', '*' and '[' lose their special meaning if preceded by a sing
         shortDescription:
             `This function will parse a string formatted according to RFC4627 and return an equivalent BrightScript object (consisting of booleans, integer and floating point numbers, strings, roArray, and roAssociativeArray objects).  If the string is not syntactically correct, Invalid will be returned.  A few other things to note:
 
-Any roAssociativeArray objects in the returned objects will be case sensitive.
+Any roAssociativeArray objects in the returned objects will be case sensitive. As of Roku OS 9.4, to return a case-insensitive structure, set the flags parameter to "i".
+If the "i" option is used, and the jsonString includes multiple keys that match case-insensitively, duplicates are overwritten and only the last matching values are preserved.
 An error will be returned if arrays/associative arrays are nested more than 256 levels deep.`,
         type: new FunctionType(new ObjectType()),
         file: globalFile,
         params: [{
             name: 'jsonString',
             type: new StringType()
+        },
+        {
+            name: 'flags',
+            type: new StringType(),
+            isOptional: true
         }]
     }, {
         name: 'FormatJson',
