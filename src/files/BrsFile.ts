@@ -388,6 +388,7 @@ export class BrsFile {
         for (let statement of this.parser.references.functionStatements ?? []) {
 
             let functionType = statement.func.getFunctionType();
+            functionType.setName(statement.name.text);
 
             this.callables.push({
                 isSub: statement.func.functionType.text.toLowerCase() === 'sub',
