@@ -165,7 +165,7 @@
                                 "items": {
                                     "anyOf": [
                                         {
-                                            "type": "number",
+                                            "type": ["number", "string"],
                                             "description": "A code of diagnostics that should be filtered out from the files matched in 'src'"
                                         }
                                     ]
