@@ -16,6 +16,7 @@ import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
 import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
+import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 
 /**
  * A class to keep track of all declarations within a given scope (like source scope, component scope)
@@ -23,17 +24,12 @@ import type { BrsFile } from './files/BrsFile';
 export class Scope {
     constructor(
         public name: string,
-        public dependencyGraphKey: string,
-        public program: Program
+        public program: Program,
+        private _dependencyGraphKey?: string
     ) {
         this.isValidated = false;
         //used for improved logging performance
         this._debugLogComponentName = `Scope '${chalk.redBright(this.name)}'`;
-
-        //anytime a dependency for this scope changes, we need to be revalidated
-        this.programHandles.push(
-            this.program.dependencyGraph.onchange(this.dependencyGraphKey, this.onDependenciesChanged.bind(this), true)
-        );
     }
 
     /**
@@ -42,9 +38,11 @@ export class Scope {
      */
     public readonly isValidated: boolean;
 
-    protected programHandles = [] as Array<() => void>;
-
     protected cache = new Cache();
+
+    public get dependencyGraphKey() {
+        return this._dependencyGraphKey;
+    }
 
     /**
      * A dictionary of namespaces, indexed by the lower case full name of each namespace.
@@ -119,8 +117,8 @@ export class Scope {
      */
     protected diagnostics = [] as BsDiagnostic[];
 
-    protected onDependenciesChanged(key: string) {
-        this.logDebug('invalidated because dependency graph said [', key, '] changed');
+    protected onDependenciesChanged(event: DependencyChangedEvent) {
+        this.logDebug('invalidated because dependency graph said [', event.sourceKey, '] changed');
         this.invalidate();
     }
 
@@ -128,9 +126,7 @@ export class Scope {
      * Clean up all event handles
      */
     public dispose() {
-        for (let disconnect of this.programHandles) {
-            disconnect();
-        }
+        this.unsubscribeFromDependencyGraph?.();
     }
 
     /**
@@ -169,6 +165,25 @@ export class Scope {
         }
     }
 
+    private dependencyGraph: DependencyGraph;
+    /**
+     * An unsubscribe function for the dependencyGraph subscription
+     */
+    private unsubscribeFromDependencyGraph: () => void;
+
+    public attachDependencyGraph(dependencyGraph: DependencyGraph) {
+        this.dependencyGraph = dependencyGraph;
+        if (this.unsubscribeFromDependencyGraph) {
+            this.unsubscribeFromDependencyGraph();
+        }
+
+        //anytime a dependency for this scope changes, we need to be revalidated
+        this.unsubscribeFromDependencyGraph = this.dependencyGraph.onchange(this.dependencyGraphKey, this.onDependenciesChanged.bind(this));
+
+        //invalidate immediately since this is a new scope
+        this.invalidate();
+    }
+
     /**
      * Get the file with the specified pkgPath
      */
@@ -198,7 +213,7 @@ export class Scope {
     public getAllFiles() {
         return this.cache.getOrAdd('getAllFiles', () => {
             let result = [] as BscFile[];
-            let dependencies = this.program.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
+            let dependencies = this.dependencyGraph.getAllDependencies(this.dependencyGraphKey);
             for (let dependency of dependencies) {
                 //load components by their name
                 if (dependency.startsWith('component:')) {
@@ -714,7 +729,17 @@ export class Scope {
 
             //if we don't already have a variable with this name.
             if (!scope?.getVariableByName(lowerName)) {
-                let callablesWithThisName = callablesByLowerName.get(lowerName);
+                let callablesWithThisName: CallableContainer[];
+
+                if (expCall.functionScope.func.namespaceName) {
+                    // prefer namespaced function
+                    const potentialNamespacedCallable = expCall.functionScope.func.namespaceName.getName(ParseMode.BrightScript).toLowerCase() + '_' + lowerName;
+                    callablesWithThisName = callablesByLowerName.get(potentialNamespacedCallable.toLowerCase());
+                }
+                if (!callablesWithThisName) {
+                    // just try it as is
+                    callablesWithThisName = callablesByLowerName.get(lowerName);
+                }
 
                 //use the first item from callablesByLowerName, because if there are more, that's a separate error
                 let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
