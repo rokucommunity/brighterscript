@@ -53,7 +53,7 @@ describe('globalCallables', () => {
         });
 
         it('does not allows 3 parameters', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print val("1001", 10, "extra")
                 end sub
@@ -85,7 +85,7 @@ describe('globalCallables', () => {
         });
 
         it('does not allows 3 parameters', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print StrI(2, 10, "extra")
                 end sub
