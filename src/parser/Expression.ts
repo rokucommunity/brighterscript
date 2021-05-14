@@ -266,9 +266,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let functionType = new FunctionType(this.returnType);
         functionType.isSub = this.functionType.text === 'sub';
         for (let param of this.parameters) {
-            let isRequired = !param.defaultValue;
-            //TODO compute optional parameters
-            functionType.addParameter(param.name.text, param.type, isRequired);
+            functionType.addParameter(param.name.text, param.type, param.isOptional);
         }
         return functionType;
     }
@@ -321,6 +319,10 @@ export class FunctionParameterExpression extends Expression {
         if (this.defaultValue && options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'defaultValue', visitor, options);
         }
+    }
+
+    get isOptional(): boolean {
+        return !!this.defaultValue;
     }
 }
 

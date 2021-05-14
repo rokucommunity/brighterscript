@@ -6,15 +6,13 @@ import chalk from 'chalk';
 import * as path from 'path';
 import type { Scope } from '../Scope';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
-import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
+import type { Callable, CallableArg, CommentFlag, FunctionCall, BsDiagnostic, FileReference } from '../interfaces';
 import type { Token } from '../lexer';
 import { Lexer, TokenKind, AllowedLocalIdentifiers, Keywords, isToken } from '../lexer';
 import { Parser, ParseMode, getBscTypeFromExpression } from '../parser';
 import type { FunctionExpression, VariableExpression, Expression } from '../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, ClassMethodStatement, LibraryStatement, ImportStatement, Statement, ClassFieldStatement } from '../parser/Statement';
 import type { FileLink, Program, SignatureInfoObj } from '../Program';
-import { FunctionType } from '../types/FunctionType';
-import { VoidType } from '../types/VoidType';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
@@ -389,33 +387,15 @@ export class BrsFile {
     private findCallables() {
         for (let statement of this.parser.references.functionStatements ?? []) {
 
-            let functionType = new FunctionType(statement.func.returnType);
+            let functionType = statement.func.getFunctionType();
             functionType.setName(statement.name.text);
-            functionType.isSub = statement.func.functionType.text.toLowerCase() === 'sub';
-            if (functionType.isSub) {
-                functionType.returnType = new VoidType();
-            }
-
-            //extract the parameters
-            let params = [] as CallableParam[];
-            for (let param of statement.func.parameters) {
-                let callableParam = {
-                    name: param.name.text,
-                    type: param.type,
-                    isOptional: !!param.defaultValue,
-                    isRestArgument: false
-                };
-                params.push(callableParam);
-                let isRequired = !param.defaultValue;
-                functionType.addParameter(callableParam.name, callableParam.type, isRequired);
-            }
 
             this.callables.push({
                 isSub: statement.func.functionType.text.toLowerCase() === 'sub',
                 name: statement.name.text,
                 nameRange: statement.name.range,
                 file: this,
-                params: params,
+                params: functionType.params,
                 range: statement.func.range,
                 type: functionType,
                 getName: statement.getName.bind(statement),

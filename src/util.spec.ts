@@ -5,6 +5,8 @@ import { Position, Range } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
+import type { CallableParam } from './interfaces';
+import { IntegerType } from './types/IntegerType';
 const sinon = createSandbox();
 let tempDir = s`${process.cwd()}/.tmp`;
 let rootDir = s`${tempDir}/rootDir`;
@@ -629,6 +631,30 @@ describe('util', () => {
             ).to.eql(
                 'some/path'
             );
+        });
+    });
+
+    describe('getMinMaxParamCount', () => {
+
+        it('finds correct number of params with no args', () => {
+            const params: CallableParam[] = [];
+            const count = util.getMinMaxParamCount(params);
+            expect(count.min).to.equal(0);
+            expect(count.max).to.equal(0);
+        });
+
+        it('finds correct number of params', () => {
+            const params: CallableParam[] = [{ name: 'a', type: new IntegerType() }, { name: 'b', type: new IntegerType() }];
+            const count = util.getMinMaxParamCount(params);
+            expect(count.min).to.equal(2);
+            expect(count.max).to.equal(2);
+        });
+
+        it('finds correct number of params with optional params', () => {
+            const params: CallableParam[] = [{ name: 'a', type: new IntegerType() }, { name: 'b', type: new IntegerType() }, { name: 'c', type: new IntegerType(), isOptional: true }, { name: 'd', type: new IntegerType(), isOptional: true }];
+            const count = util.getMinMaxParamCount(params);
+            expect(count.min).to.equal(2);
+            expect(count.max).to.equal(4);
         });
     });
 });
