@@ -389,33 +389,14 @@ export class BrsFile {
     private findCallables() {
         for (let statement of this.parser.references.functionStatements ?? []) {
 
-            let functionType = new FunctionType(statement.func.returnType);
-            functionType.setName(statement.name.text);
-            functionType.isSub = statement.func.functionType.text.toLowerCase() === 'sub';
-            if (functionType.isSub) {
-                functionType.returnType = new VoidType();
-            }
-
-            //extract the parameters
-            let params = [] as CallableParam[];
-            for (let param of statement.func.parameters) {
-                let callableParam = {
-                    name: param.name.text,
-                    type: param.type,
-                    isOptional: !!param.defaultValue,
-                    isRestArgument: false
-                };
-                params.push(callableParam);
-                let isRequired = !param.defaultValue;
-                functionType.addParameter(callableParam.name, callableParam.type, isRequired);
-            }
+            let functionType = statement.func.getFunctionType();
 
             this.callables.push({
                 isSub: statement.func.functionType.text.toLowerCase() === 'sub',
                 name: statement.name.text,
                 nameRange: statement.name.range,
                 file: this,
-                params: params,
+                params: functionType.params,
                 range: statement.func.range,
                 type: functionType,
                 getName: statement.getName.bind(statement),

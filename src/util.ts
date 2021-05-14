@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, FunctionCall } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, FunctionCall, CallableParam } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -1165,6 +1165,30 @@ export class Util {
             code: diagnostic.code,
             source: 'brs'
         };
+    }
+
+
+    /**
+     * Gets the minimum and maximum number of allowed params
+     * @param params The list of callable parameters to check
+     * @returns the minimum and maximum number of allowed params
+     */
+    public getMinMaxParamCount(params: CallableParam[]): { min: number; max: number } {
+        //get min/max parameter count for callable
+        let minParams = 0;
+        let maxParams = 0;
+        let continueCheckingForRequired = true;
+        for (let param of params) {
+            maxParams++;
+            //optional parameters must come last, so we can assume that minParams won't increase once we hit
+            //the first isOptional
+            if (continueCheckingForRequired && !param.isOptional) {
+                minParams++;
+            } else {
+                continueCheckingForRequired = false;
+            }
+        }
+        return { min: minParams, max: maxParams };
     }
 
     /**
