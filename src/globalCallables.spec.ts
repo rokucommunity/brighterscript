@@ -52,7 +52,7 @@ describe('globalCallables', () => {
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
 
-        it('dows not allows 3 parameters', () => {
+        it('does not allows 3 parameters', () => {
             program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     print val("1001", 10, "extra")
@@ -84,7 +84,7 @@ describe('globalCallables', () => {
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
 
-        it('dows not allows 3 parameters', () => {
+        it('does not allows 3 parameters', () => {
             program.addOrReplaceFile('source/main.brs', `
                 sub main()
                     print StrI(2, 10, "extra")
