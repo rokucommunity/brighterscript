@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.3]
+[1.0.0-alpha.3]:   https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.2...v1.0.0-alpha.3
+### Added
+ - all changes from [v0.38.1](#0380---2021-05-14)
+### Changed
+ - rename `Program.addOrReplaceFile` to `Program.setFile` ([#405](https://github.com/rokucommunity/brighterscript/pull/405))
+ - Unified global callables and function type param definitions ([#417](https://github.com/rokucommunity/brighterscript/pull/417))
+ - Fix issue with global `Val` function where there were two global functions with same name and different params and return types ([#417](https://github.com/rokucommunity/brighterscript/pull/417))
+ - move token-specific functions into `Parser.ts` ([#407](https://github.com/rokucommunity/brighterscript/pull/407))
+
+
+
 ## [0.38.1] - 2021-05-14
 [0.38.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.0...v0.38.1
 ### Changed
@@ -20,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0-alpha.2]
 [1.0.0-alpha.2]:   https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.1...v1.0.0-alpha.2
-### Add
+### Added
  - all changes from [v0.38.0](#0380---2021-05-04)
 ### Changed
  - Rename pathAbsolute to srcPath ([#399](https://github.com/rokucommunity/brighterscript/pull/399))
