@@ -6,9 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.3]
+[1.0.0-alpha.3]:   https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.2...v1.0.0-alpha.3
+### Added
+ - all changes from [v0.38.1](#0380---2021-05-14)
+### Changed
+ - rename `Program.addOrReplaceFile` to `Program.setFile` ([#405](https://github.com/rokucommunity/brighterscript/pull/405))
+ - Unified global callables and function type param definitions ([#417](https://github.com/rokucommunity/brighterscript/pull/417))
+ - Fix issue with global `Val` function where there were two global functions with same name and different params and return types ([#417](https://github.com/rokucommunity/brighterscript/pull/417))
+ - move token-specific functions into `Parser.ts` ([#407](https://github.com/rokucommunity/brighterscript/pull/407))
+
+
+
+## [0.38.1] - 2021-05-14
+[0.38.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.0...v0.38.1
+### Changed
+ - SOURCE_FILE_PATH and SOURCE_LOCATION source literals are now string concatenations in order to avoid triggering Roku's static analysis rule against `file:/` protocol strings ([#415](https://github.com/rokucommunity/brighterscript/pull/415))
+### Fixed
+ - ParseJson function signature to include second parameter ([#418](https://github.com/rokucommunity/brighterscript/pull/418))
+ - bsconfig.schema.json support for string diagnostic codes ([#416](https://github.com/rokucommunity/brighterscript/pull/416))
+ - upgrade chokidar to add `--watch` cli support for M1 mac computers  ([#386](https://github.com/rokucommunity/brighterscript/pull/386))
+ - several dependency vulnerability fixes ([#413](https://github.com/rokucommunity/brighterscript/pull/413), [#410](https://github.com/rokucommunity/brighterscript/pull/410), [#411](https://github.com/rokucommunity/brighterscript/pull/411))
+
+
+
 ## [1.0.0-alpha.2]
 [1.0.0-alpha.2]:   https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.1...v1.0.0-alpha.2
-### Add
+### Added
  - all changes from [v0.38.0](#0380---2021-05-04)
 ### Changed
  - Rename pathAbsolute to srcPath ([#399](https://github.com/rokucommunity/brighterscript/pull/399))
@@ -19,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.38.0] - 2021-05-04
-### Add
+### Added
  - warning for mismatched class method accessibility ([#402](https://github.com/rokucommunity/brighterscript/pull/402))
  - allow class field overrides in child classes as long as they are the same type ([#394](https://github.com/rokucommunity/brighterscript/pull/394))
 

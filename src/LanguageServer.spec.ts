@@ -113,12 +113,12 @@ describe('LanguageServer', () => {
             ${additionalXmlContents}
             <script type="text/brightscript" uri="${name}.brs" />
         </component>`;
-        program.addOrReplaceFile(filePath, contents);
+        program.setFile(filePath, contents);
     }
 
     function addScriptFile(name: string, contents: string, extension = 'brs') {
         const pkgPath = `pkg:/components/${name}.${extension}`;
-        const file = program.addOrReplaceFile<XmlFile>(pkgPath, contents);
+        const file = program.setFile<XmlFile>(pkgPath, contents);
         const document = TextDocument.create(util.pathToUri(file.srcPath), 'brightscript', 1, contents);
         svr.documents._documents[document.uri] = document;
         return document;
@@ -281,7 +281,7 @@ describe('LanguageServer', () => {
                     getFileContents: sinon.stub().callsFake(() => Promise.resolve('')) as any,
                     rootDir: rootDir,
                     program: {
-                        addOrReplaceFile: <any>addOrReplaceFileStub
+                        setFile: <any>addOrReplaceFileStub
                     }
                 }
             } as Workspace;

@@ -204,7 +204,7 @@ export class ProgramBuilder {
                         util.driveLetterToLower(this.rootDir)
                     )
                 };
-                this.program.addOrReplaceFile(
+                this.program.setFile(
                     fileObj,
                     await this.getFileContents(fileObj.src, false)
                 );
@@ -470,7 +470,7 @@ export class ProgramBuilder {
             await Promise.all(
                 typedefFiles.map(async (fileObj) => {
                     try {
-                        this.program.addOrReplaceFile(
+                        this.program.setFile(
                             fileObj,
                             await this.getFileContents(fileObj.src)
                         );
@@ -490,7 +490,7 @@ export class ProgramBuilder {
 
                         //only process certain file types
                         if (acceptableExtensions.includes(fileExtension)) {
-                            this.program.addOrReplaceFile(
+                            this.program.setFile(
                                 fileObj,
                                 await this.getFileContents(fileObj.src)
                             );

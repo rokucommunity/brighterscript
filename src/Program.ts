@@ -345,7 +345,7 @@ export class Program {
     /**
      * Update internal maps with this file reference
      */
-    private setFile(file: BscFile) {
+    private assignFile(file: BscFile) {
         this.files[file.srcPath.toLowerCase()] = file;
         this.pkgMap[file.pkgPath.toLowerCase()] = file;
     }
@@ -353,7 +353,7 @@ export class Program {
     /**
      * Remove this file from internal maps
      */
-    private unsetFile(file: BscFile) {
+    private unassignFile(file: BscFile) {
         delete this.files[file.srcPath.toLowerCase()];
         delete this.pkgMap[file.pkgPath.toLowerCase()];
     }
@@ -364,14 +364,14 @@ export class Program {
      * @param srcDestOrPkgPath the absolute path, or the pkg path (i.e. `pkg:/path/to/file.brs`) or the destPath (i.e. `path/to/file.brs` relative to `pkg:/`)
      * @param fileContents the file contents
      */
-    public addOrReplaceFile<T extends BscFile>(srcDestOrPkgPath: string, fileContents: string): T;
+    public setFile<T extends BscFile>(srcDestOrPkgPath: string, fileContents: string): T;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * @param fileEntry an object that specifies src and dest for the file.
      * @param fileContents the file contents. If not provided, the file will be loaded from disk
      */
-    public addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
-    public addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
+    public setFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
+    public setFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
         assert.ok(fileParam, 'fileParam is required');
         let srcPath: string;
         let pkgPath: string;
@@ -434,7 +434,7 @@ export class Program {
                 }
 
                 //add the file to the program
-                this.setFile(brsFile);
+                this.assignFile(brsFile);
 
                 this.plugins.emit('beforeFileParse', beforeFileParseEvent);
 
@@ -457,7 +457,7 @@ export class Program {
             ) {
                 let xmlFile = new XmlFile(srcPath, pkgPath, this);
 
-                this.setFile(xmlFile);
+                this.assignFile(xmlFile);
 
                 //add the file to the program
                 this.plugins.emit('beforeFileParse', beforeFileParseEvent);
@@ -547,7 +547,7 @@ export class Program {
                 });
             }
             //remove the file from the program
-            this.unsetFile(file);
+            this.unassignFile(file);
 
             this.dependencyGraph.remove(file.dependencyGraphKey);
 

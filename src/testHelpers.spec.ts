@@ -113,7 +113,7 @@ export function getTestTranspile(scopeGetter: () => [Program, string]) {
     return (source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) => {
         let [program, rootDir] = scopeGetter();
         expected = expected ? expected : source;
-        let file = program.addOrReplaceFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
+        let file = program.setFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
         program.validate();
         if (failOnDiagnostic !== false) {
             expectZeroDiagnostics(program);
