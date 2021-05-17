@@ -106,7 +106,7 @@ export function createSGInterfaceField(id: string, attributes: { type?: string; 
 
 export function createSGComponent(name: string, parentName?: string) {
     const attributes = [
-        createSGAttribute('name', name),
+        createSGAttribute('name', name)
     ];
     if (parentName) {
         attributes.push(
