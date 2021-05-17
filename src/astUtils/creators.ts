@@ -3,7 +3,7 @@ import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Expression, NamespacedVariableNameExpression } from '../parser/Expression';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression } from '../parser/Expression';
-import { SGAttribute, SGInterfaceField, SGInterfaceFunction, SGScript } from '../parser/SGTypes';
+import { SGAttribute, SGComponent, SGInterface, SGInterfaceField, SGInterfaceFunction, SGScript } from '../parser/SGTypes';
 
 /**
  * A range that points to nowhere. Used to give non-null ranges to programmatically-added source code.
@@ -104,16 +104,50 @@ export function createSGInterfaceField(id: string, attributes: { type?: string; 
     );
 }
 
+export function createSGComponent(name: string, parentName?: string) {
+    const attributes = [
+        createSGAttribute('name', name),
+    ];
+    if (parentName) {
+        attributes.push(
+            createSGAttribute('extends', parentName)
+        );
+    }
+    return new SGComponent(
+        { text: '<' },
+        { text: 'component' },
+        attributes,
+        { text: '>' },
+        [],
+        { text: '</' },
+        { text: 'component' },
+        { text: '>' }
+    );
+}
+
 export function createSGInterfaceFunction(functionName: string) {
     return new SGInterfaceFunction(
         { text: '<' },
         { text: 'function' },
-        [createSGAttribute('id', functionName)],
+        [createSGAttribute('name', functionName)],
         { text: '/>' }
     );
 }
 
-export function createSGScript(attributes: { type: string; uri: string }) {
+export function createSGInterface() {
+    return new SGInterface(
+        { text: '<' },
+        { text: 'interface' },
+        [],
+        { text: '>' },
+        [],
+        { text: '</' },
+        { text: 'interface' },
+        { text: '>' }
+    );
+}
+
+export function createSGScript(attributes: { type?: string; uri?: string }) {
     const attrs = [] as SGAttribute[];
     for (let key in attributes) {
         attrs.push(

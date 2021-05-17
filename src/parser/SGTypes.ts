@@ -1,5 +1,6 @@
 import { SourceNode } from 'source-map';
 import type { Range } from 'vscode-languageserver';
+import { createSGInterface } from '../astUtils';
 import { createSGAttribute, createSGInterfaceField, createSGInterfaceFunction } from '../astUtils/creators';
 import type { FileReference } from '../interfaces';
 import util from '../util';
@@ -42,6 +43,19 @@ export class SGAttribute {
      */
     public get value(): string | undefined {
         return this.tokens.value?.text;
+    }
+    public set value(val) {
+        if (val === null || val === undefined) {
+            val = '';
+        }
+        if (!this.tokens.equals) {
+            this.tokens.equals = { text: '=' };
+        }
+        if (this.tokens.value) {
+            this.tokens.value.text = val;
+        } else {
+            this.tokens.value = { text: val };
+        }
     }
 
     public get range() {
@@ -88,9 +102,9 @@ export class SGTag {
     ) {
         this.tokens.startTagOpen = startTagOpen;
         this.tokens.startTagName = startTagName;
-        this.attributes = attributes ?? [];
+        this.attributes = attributes;
         this.tokens.startTagClose = startTagClose;
-        this.childNodes = childNodes ?? [];
+        this.childNodes = childNodes;
         this.tokens.endTagOpen = endTagOpen;
         this.tokens.endTagName = endTagName;
         this.tokens.endTagClose = endTagClose;
@@ -161,7 +175,7 @@ export class SGTag {
         return this.getAttributeValue('id');
     }
     set id(value: string) {
-        this.setAttribute('id', value);
+        this.setAttributeValue('id', value);
     }
 
     /**
@@ -196,36 +210,72 @@ export class SGTag {
     }
 
     /**
-     * Remove a child from the children array
+     * Remove a child from the children array.
+     * @returns true if node was found and removed, false if the node wasn't there and thus nothing was done
      */
     public removeChild(tag: SGTag) {
         const idx = this.childNodes.indexOf(tag);
         if (idx > -1) {
             this.childNodes.splice(idx, 1);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Does this node have the specified attribute?
+     */
+    public hasAttribute(name: string) {
+        return !!this.getAttribute(name);
+    }
+
+    /**
+     * Get an SGAttribute by its name
+     */
+    public getAttribute(name: string): SGAttribute | undefined {
+        const nameLower = name.toLowerCase();
+        for (const attr of this.attributes) {
+            if (attr.tokens.key?.text.toLowerCase() === nameLower) {
+                return attr;
+            }
         }
     }
 
-    getAttribute(name: string): SGAttribute | undefined {
-        return this.attributes.find(att => att.tokens.key.text.toLowerCase() === name);
-    }
-
-    getAttributeValue(name: string): string | undefined {
+    /**
+     * Get an attribute value by its name
+     */
+    public getAttributeValue(name: string): string | undefined {
         return this.getAttribute(name)?.tokens.value?.text;
     }
 
-    setAttribute(name: string, value: string) {
-        const attr = this.getAttribute(name);
-        if (attr) {
-            if (value) {
-                attr.tokens.value = { text: value };
-            } else {
-                this.attributes.splice(this.attributes.indexOf(attr), 1);
-            }
-        } else if (value) {
+    /**
+     * Set an attribute value by its name. If no attribute exists with this name, it is created
+     */
+    public setAttributeValue(name: string, value: string) {
+        let attr = this.getAttribute(name);
+        //create an attribute with this name if we don't have one yet
+        if (!attr) {
+            attr = createSGAttribute(name, value);
             this.attributes.push(
-                createSGAttribute(name, value)
+                attr
             );
         }
+        attr.value = value;
+    }
+
+    /**
+     * Remove an attribute by its name
+     * @returns true if an attribute was found and removed. False if no attribute was found
+     */
+    public removeAttribute(name: string) {
+        const nameLower = name.toLowerCase();
+        for (let i = 0; i < this.attributes.length; i++) {
+            if (this.attributes[i].key?.toLowerCase() === nameLower) {
+                this.attributes.splice(i, 1);
+                return true;
+            }
+        }
+        return false;
     }
 
     public transpile(state: TranspileState) {
@@ -291,14 +341,14 @@ export class SGScript extends SGTag {
         return this.getAttributeValue('type');
     }
     set type(value: string) {
-        this.setAttribute('type', value);
+        this.setAttributeValue('type', value);
     }
 
     get uri() {
         return this.getAttributeValue('uri');
     }
     set uri(value: string) {
-        this.setAttribute('uri', value);
+        this.setAttributeValue('uri', value);
     }
 
     protected transpileBody(state: TranspileState) {
@@ -355,35 +405,35 @@ export class SGInterfaceField extends SGTag {
         return this.getAttributeValue('type');
     }
     set type(value: string) {
-        this.setAttribute('type', value);
+        this.setAttributeValue('type', value);
     }
 
     get alias() {
         return this.getAttributeValue('alias');
     }
     set alias(value: string) {
-        this.setAttribute('alias', value);
+        this.setAttributeValue('alias', value);
     }
 
     get value() {
         return this.getAttributeValue('value');
     }
     set value(value: string) {
-        this.setAttribute('value', value);
+        this.setAttributeValue('value', value);
     }
 
     get onChange() {
         return this.getAttributeValue('onChange');
     }
     set onChange(value: string) {
-        this.setAttribute('onChange', value);
+        this.setAttributeValue('onChange', value);
     }
 
     get alwaysNotify() {
         return this.getAttributeValue('alwaysNotify');
     }
     set alwaysNotify(value: string) {
-        this.setAttribute('alwaysNotify', value);
+        this.setAttributeValue('alwaysNotify', value);
     }
 }
 
@@ -399,7 +449,7 @@ export class SGInterfaceFunction extends SGTag {
         return this.getAttributeValue('name');
     }
     set name(value: string) {
-        this.setAttribute('name', value);
+        this.setAttributeValue('name', value);
     }
 }
 
@@ -417,7 +467,7 @@ export class SGInterface extends SGTag {
     public get members() {
         const result = [] as Array<SGInterfaceMember>;
         for (const node of this.childNodes) {
-            const tagName = node.tagName;
+            const tagName = node.tagName?.toLowerCase();
             if (tagName === 'field' || tagName === 'function') {
                 result.push(node as SGInterfaceMember);
             }
@@ -426,20 +476,47 @@ export class SGInterface extends SGTag {
     }
 
     /**
+     * Check if there's an SGField with the specified name
+     */
+    public hasField(id: string) {
+        for (const node of this.childNodes) {
+            const tagName = node.tagName?.toLowerCase();
+            if (tagName === 'field' && (node as SGInterfaceField).id === id) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if there's an SGFunction with the specified name
+     */
+    public hasFunction(name: string) {
+        for (const node of this.childNodes) {
+            const tagName = node.tagName?.toLowerCase();
+            if (tagName === 'function' && (node as SGInterfaceFunction).name === name) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Find a field by its ID
      */
-    getField(id: string) {
+    public getField(id: string) {
         return this.fields.find(field => field.id === id);
     }
 
     /**
      * Set the value of a field. Creates a new field if one does not already exist with this ID
      */
-    setField(id: string, type: string, onChange?: string, alwaysNotify?: boolean, alias?: string) {
+    public setField(id: string, type: string, onChange?: string, alwaysNotify?: boolean, alias?: string) {
         let field = this.getField(id);
         if (!field) {
-            field = createSGInterfaceField(id);
-            this.childNodes.push(field);
+            field = this.addChild(
+                createSGInterfaceField(id)
+            );
         }
         field.type = type;
         field.onChange = onChange;
@@ -449,44 +526,59 @@ export class SGInterface extends SGTag {
             field.alwaysNotify = alwaysNotify ? 'true' : 'false';
         }
         field.alias = alias;
+        return field;
     }
 
-    removeField(id: string) {
+    /**
+     * Remove a field from the interface
+     * @returns true if a field was found and removed. Returns false if no field was found with that name
+     */
+    public removeField(id: string) {
         for (let i = 0; i < this.childNodes.length; i++) {
             const node = this.childNodes[i];
-            if (node.tagName === 'field' && node.id === id) {
+            const tagName = node.tagName?.toLowerCase();
+            if (tagName === 'field' && node.id === id) {
                 this.childNodes.splice(i, 1);
-                return;
+                return true;
             }
         }
+        return false;
     }
 
-    getFunction(name: string) {
+    /**
+     * Get the interface function with the specified name
+     */
+    public getFunction(name: string) {
         return this.functions.find(field => field.name === name);
     }
 
     /**
      * Add or replace a function on the interface
      */
-    setFunction(name: string) {
+    public setFunction(name: string) {
         let func = this.getFunction(name);
         if (!func) {
-            func = createSGInterfaceFunction(name);
-            this.childNodes.push(func);
+            func = this.addChild(
+                createSGInterfaceFunction(name)
+            );
         }
+        return func;
     }
 
     /**
      * Remove a function from the interface
+     * @returns true if a function was found and removed. Returns false if no function was found with that name
      */
-    removeFunction(name: string) {
+    public removeFunction(name: string) {
         for (let i = 0; i < this.childNodes.length; i++) {
             const node = this.childNodes[i];
-            if (node.tagName === 'function' && node.getAttributeValue('name') === name) {
+            const tagName = node.tagName?.toLowerCase();
+            if (tagName === 'function' && node.getAttributeValue('name') === name) {
                 this.childNodes.splice(i, 1);
-                return;
+                return true;
             }
         }
+        return false;
     }
 }
 
@@ -522,14 +614,120 @@ export class SGComponent extends SGTag {
         return this.getAttributeValue('name');
     }
     set name(value: string) {
-        this.setAttribute('name', value);
+        this.setAttributeValue('name', value);
     }
 
     get extends() {
         return this.getAttributeValue('extends');
     }
     set extends(value: string) {
-        this.setAttribute('extends', value);
+        this.setAttributeValue('extends', value);
+    }
+
+    /**
+     * Does the specified field exist in the component interface?
+     */
+    public hasInterfaceField(id: string) {
+        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+            if (ifaceNode.hasField(id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Does the specified function exist in the component interface?
+     */
+    public hasInterfaceFunction(name: string) {
+        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+            if (ifaceNode.hasFunction(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get an interface field with the specified name
+     */
+    public getInterfaceField(name: string): SGInterfaceField | undefined {
+        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+            const field = ifaceNode.getField(name);
+            if (field) {
+                return field;
+            }
+        }
+    }
+
+    /**
+     * Return the first SGInterface node found, or insert a new one then return it
+     */
+    private ensureInterfaceNode(): SGInterface {
+        for (const el of this.childNodes) {
+            if (el.tokens.startTagName.text.toLowerCase() === 'interface') {
+                return el as SGInterface;
+            }
+        }
+        return this.addChild(
+            createSGInterface()
+        );
+    }
+
+    /**
+     * Create or update a <field> interface element.
+     * This will create a new `<interface>` element if there are none on the component already
+     */
+    public setInterfaceField(id: string, type: string, onChange?: string, alwaysNotify?: boolean, alias?: string) {
+        let ifaceNode = this.ensureInterfaceNode();
+        return ifaceNode.setField(id, type, onChange, alwaysNotify, alias);
+    }
+
+    /**
+     * Create or update a <function> interface element.
+     * This will create a new `<interface>` element if there are none on the component already
+     */
+    public setInterfaceFunction(name: string) {
+        let ifaceNode = this.ensureInterfaceNode();
+        return ifaceNode.setFunction(name);
+    }
+
+    /**
+     * Remove an interface field.
+     * @returns true if a field was found and removed. Returns false if no field was found with that name
+     */
+    public removeInterfaceField(id: string) {
+        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+            if (ifaceNode.removeField(id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+    * Get an interface field with the specified name
+    */
+    public getInterfaceFunction(name: string): SGInterfaceFunction | undefined {
+        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+            const func = ifaceNode.getFunction(name);
+            if (func) {
+                return func;
+            }
+        }
+    }
+
+    /**
+     * Remove an interface function.
+     * @returns true if a function was found and removed. Returns false if no function was found with that name
+     */
+    public removeInterfaceFunction(name: string) {
+        for (const ifaceNode of this.getChildNodesByTagName<SGInterface>('interface')) {
+            if (ifaceNode.removeFunction(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
 
