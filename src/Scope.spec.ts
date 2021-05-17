@@ -8,8 +8,8 @@ import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
 import { trim } from './testHelpers.spec';
 import { Logger } from './Logger';
-import { BrsFile } from './files/BrsFile';
-import { FunctionStatement, NamespaceStatement } from './parser';
+import type { BrsFile } from './files/BrsFile';
+import type { FunctionStatement, NamespaceStatement } from './parser';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
