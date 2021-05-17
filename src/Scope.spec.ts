@@ -8,6 +8,8 @@ import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
 import { trim } from './testHelpers.spec';
 import { Logger } from './Logger';
+import type { BrsFile } from './files/BrsFile';
+import type { FunctionStatement, NamespaceStatement } from './parser';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -821,6 +823,29 @@ describe('Scope', () => {
             expect(completions).to.be.length.greaterThan(0);
             //it should find documentation for completions
             expect(completions.filter(x => !!x.documentation)).to.have.length.greaterThan(0);
+        });
+    });
+
+    describe('buildNamespaceLookup', () => {
+        it('does not crash when class statement is missing `name` prop', () => {
+            program.addOrReplaceFile<BrsFile>('source/main.bs', `
+                namespace NameA
+                    class
+                    end class
+                end namespace
+            `);
+            program['scopes']['source'].buildNamespaceLookup();
+        });
+
+        it('does not crash when function statement is missing `name` prop', () => {
+            const file = program.addOrReplaceFile<BrsFile>('source/main.bs', `
+                namespace NameA
+                    function doSomething()
+                    end function
+                end namespace
+            `);
+            delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as FunctionStatement).name;
+            program['scopes']['source'].buildNamespaceLookup();
         });
     });
 });

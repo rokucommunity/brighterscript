@@ -75,5 +75,27 @@ describe('globalCallables', () => {
         });
     });
 
+    describe('parseJson', () => {
+        it('allows single parameter', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                    print ParseJson("{}")
+                end sub
+            `);
+            program.validate();
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+
+        it('allows 2 parameters', () => {
+            program.addOrReplaceFile('source/main.brs', `
+                sub main()
+                print ParseJson("{}", "i")
+                end sub
+            `);
+            program.validate();
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+    });
+
 
 });
