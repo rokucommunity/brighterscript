@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.38.2]
+[0.38.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.1...v0.38.2
+### Fixed
+ - language server crash when namespaced function or class didn't have a name ([#419](https://github.com/rokucommunity/brighterscript/pull/419))
+
+
+
 ## [0.38.1] - 2021-05-14
 [0.38.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.0...v0.38.1
 ### Changed
