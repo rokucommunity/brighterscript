@@ -8,6 +8,8 @@ import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
 import { expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { Logger } from './Logger';
+import type { BrsFile } from './files/BrsFile';
+import type { FunctionStatement, NamespaceStatement } from './parser';
 import type { FunctionType } from './types/FunctionType';
 import { UninitializedType } from './types/UninitializedType';
 
@@ -1065,6 +1067,28 @@ describe('Scope', () => {
             expect((mergedNsSymbolTable.getSymbolType('nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');
             expect((mergedNsSymbolTable.getSymbolType('Name.Space.nsFunc2') as FunctionType).returnType.toString()).to.equal('integer');
             expect((mergedNsSymbolTable.getSymbolType('Name.outerNsFunc') as FunctionType).returnType.toString()).to.equal('string');
+        });
+    });
+    describe('buildNamespaceLookup', () => {
+        it('does not crash when class statement is missing `name` prop', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                namespace NameA
+                    class
+                    end class
+                end namespace
+            `);
+            program['scopes']['source'].buildNamespaceLookup();
+        });
+
+        it('does not crash when function statement is missing `name` prop', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                namespace NameA
+                    function doSomething()
+                    end function
+                end namespace
+            `);
+            delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as FunctionStatement).name;
+            program['scopes']['source'].buildNamespaceLookup();
         });
     });
 });
