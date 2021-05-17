@@ -58,10 +58,10 @@ describe('XmlFile', () => {
                 afterFileParse: () => {
                     let child = file.parser.ast.component.children.childNodes[0];
                     expect(child.attributes).to.have.lengthOf(4);
-                    child.setAttribute('text', undefined);
+                    child.setAttributeValue('text', undefined);
                     expect(child.id).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(3);
-                    child.setAttribute('text3', undefined);
+                    child.setAttributeValue('text3', undefined);
                     expect(child.id).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(2);
                 }
