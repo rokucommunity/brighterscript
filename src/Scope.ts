@@ -364,9 +364,9 @@ export class Scope {
                 let ns = namespaceLookup[name.toLowerCase()];
                 ns.statements.push(...namespace.body.statements);
                 for (let statement of namespace.body.statements) {
-                    if (isClassStatement(statement)) {
+                    if (isClassStatement(statement) && statement.name) {
                         ns.classStatements[statement.name.text.toLowerCase()] = statement;
-                    } else if (isFunctionStatement(statement)) {
+                    } else if (isFunctionStatement(statement) && statement.name) {
                         ns.functionStatements[statement.name.text.toLowerCase()] = statement;
                     }
                 }
