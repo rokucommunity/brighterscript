@@ -3,18 +3,20 @@ import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { expectZeroDiagnostics, trim } from '../testHelpers.spec';
 import SGParser from './SGParser';
-import { standardizePath as s } from '../util';
+import { standardizePath as s, util } from '../util';
 import { createSandbox } from 'sinon';
 import { Program } from '../Program';
 import type { XmlFile } from '../files/XmlFile';
+const sinon = createSandbox();
 
-let sinon = createSandbox();
 describe('SGParser', () => {
 
     let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
+    let parser: SGParser;
 
     beforeEach(() => {
+        parser = new SGParser();
         program = new Program({ rootDir: rootDir, sourceMap: false });
     });
     afterEach(() => {
@@ -45,8 +47,8 @@ describe('SGParser', () => {
                         font="font:MediumBoldSystemFont"
                         />
                 </children>
-            </component>`
-        );
+            </component>
+        `);
         const { ast } = file.parser;
         expect(ast.prolog).to.exist;
         expect(ast.component).to.exist;
@@ -67,10 +69,10 @@ describe('SGParser', () => {
                             print "hello"
                         end function
                     ]]></script>
-                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 <children>
                     <Label id="loadingIndicator" text="Loading..." font="font:MediumBoldSystemFont" />
                 </children>
+                <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
             </component>
         `);
     });
@@ -155,6 +157,17 @@ describe('SGParser', () => {
         expect(parser.diagnostics[1]).to.deep.include({
             ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
             range: Range.create(0, 0, 1, 12)
+        });
+    });
+
+    describe('location tracking', () => {
+        it('tracks prolog', () => {
+            parser.parse('comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene">
+                </component>
+            `);
+            expect(parser.ast.prolog.range).to.eql(util.createRange(0, 0, 0, 39));
         });
     });
 });

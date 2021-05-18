@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, FunctionCall, CallableParam } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, FunctionCall, CallableParam, TranspileResult } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -29,7 +29,7 @@ import { TokenKind } from './lexer';
 import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
-import type { SGAttribute } from './parser/SGTypes';
+import { SGAttribute } from './parser/SGTypes';
 
 export class Util {
     public clearConsole() {
@@ -134,7 +134,7 @@ export class Util {
                 colIndex++;
             }
         }
-        return util.createRange(lineIndex, colIndex, lineIndex, colIndex + length);
+        return this.createRange(lineIndex, colIndex, lineIndex, colIndex + length);
     }
 
     /**
@@ -880,6 +880,39 @@ export class Util {
     }
 
     /**
+     * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
+     * righthand range. Returns undefined if none of the items have a range.
+     */
+    public createBoundingRange(...locatables: Array<{ range?: Range }>) {
+        let leftmost: { range?: Range };
+        let rightmost: { range?: Range };
+
+        for (let i = 0; i < locatables.length; i++) {
+            //set the leftmost non-null-range item
+            const left = locatables[i];
+            if (!leftmost && left?.range) {
+                leftmost = left;
+            }
+
+            //set the rightmost non-null-range item
+            const right = locatables[locatables.length - 1 - i];
+            if (!rightmost && right?.range) {
+                rightmost = right;
+            }
+
+            //if we have both sides, quit
+            if (leftmost && rightmost) {
+                break;
+            }
+        }
+        if (leftmost) {
+            return this.createRangeFromPositions(leftmost.range.start, rightmost.range.end);
+        } else {
+            return undefined;
+        }
+    }
+
+    /**
      * Create a `Position` object. Prefer this over `Position.create` for performance reasons
      */
     public createPosition(line: number, character: number) {
@@ -1090,20 +1123,37 @@ export class Util {
     }
 
     /**
-     * Creates a new SGAttribute object, but keeps the existing Range references (since those shouldn't ever get changed directly)
+     * Creates a new SGAttribute object, but keeps the existing Range references (since those should be immutable)
      */
     public cloneSGAttribute(attr: SGAttribute, value: string) {
-        return {
-            key: {
-                text: attr.key.text,
-                range: attr.range
-            },
-            value: {
-                text: value,
-                range: attr.value.range
-            },
-            range: attr.range
-        } as SGAttribute;
+        return new SGAttribute(
+            { text: attr.tokens.key.text, range: attr.range },
+            { text: '=' },
+            { text: '"' },
+            { text: value, range: attr.tokens.value.range },
+            { text: '"' }
+        );
+    }
+
+    /**
+     * Shorthand for creating a new source node
+     */
+    public sourceNode(source: string, locatable: { range: Range }, code: string | SourceNode | TranspileResult): SourceNode | undefined {
+        if (code !== undefined) {
+            const node = new SourceNode(
+                null,
+                null,
+                source,
+                code
+            );
+            if (locatable.range) {
+                //convert 0-based Range line to 1-based SourceNode line
+                node.line = locatable.range.start.line + 1;
+                //SourceNode columns are 0-based so no conversion necessary
+                node.column = locatable.range.start.character;
+            }
+            return node;
+        }
     }
 
     /**

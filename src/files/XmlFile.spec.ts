@@ -39,7 +39,7 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterFileParse: (event) => {
-                    (event.file as XmlFile).parser.ast.root.attributes[0].value.text = expected;
+                    (event.file as XmlFile).parser.ast.root.attributes[0].tokens.value.text = expected;
                 }
             });
             file = program.setFile('components/ChildScene.xml', trim`
@@ -56,13 +56,13 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterFileParse: () => {
-                    let child = file.parser.ast.component.children.children[0];
+                    let child = file.parser.ast.component.children.childNodes[0];
                     expect(child.attributes).to.have.lengthOf(4);
-                    child.setAttribute('text', undefined);
-                    expect(child.getAttribute('id').value.text).to.equal('one');
+                    child.setAttributeValue('text', undefined);
+                    expect(child.id).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(3);
-                    child.setAttribute('text3', undefined);
-                    expect(child.getAttribute('id').value.text).to.equal('one');
+                    child.setAttributeValue('text3', undefined);
+                    expect(child.id).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(2);
                 }
             });
@@ -762,12 +762,12 @@ describe('XmlFile', () => {
                         <function name="b" />
                     </interface>
                     <script type="text/brightscript" uri="SimpleScene.brs" />
-                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                     <children>
                         <aa id="aa">
                             <bb id="bb" />
                         </aa>
                     </children>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 </component>
             `, 'none', 'components/SimpleScene.xml');
         });
