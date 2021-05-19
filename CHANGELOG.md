@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.5] - 2021-05-17
+[1.0.0-alpha.5]:   https://github.com/rokucommunity/brighterscript/compare/v1.0.0-alpha.4...v1.0.0-alpha.5
+### Added
+ - all changes from [v0.39.0](#0390---2021-05-18)
+### Changed
+ - Add location tracking (range property) to all SceneGraph/XML nodes. ([#400](https://github.com/rokucommunity/brighterscript/pull/400))
+ - Refactored SGComponent scripts, children, and interface properties into getter functions which are driven by the underlying XML AST. This means as you modify the AST, those getter functions will automatically reflect the changes. ([#400](https://github.com/rokucommunity/brighterscript/pull/400))
+ - Refactored SGInterface properties fields and functions to getter functions which are driven by the underlying XML AST. ([#400](https://github.com/rokucommunity/brighterscript/pull/400))
+ - Moved SGParser module functions onto the SGParser class itself to match the OO patterns in the rest of the project. ([#400](https://github.com/rokucommunity/brighterscript/pull/400))
+
+
+
 ## [0.39.0] - 2021-05-18
 [0.39.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.2...v0.39.0
 ### Added
