@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction } from 'vscode-languageserver';
+import type { Range, Diagnostic, CodeAction, SemanticTokenTypes, SemanticTokenModifiers } from 'vscode-languageserver';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -182,6 +182,7 @@ export interface CompilerPlugin {
     beforeProgramTranspile?: PluginHandler<BeforeProgramTranspileEvent>;
     afterProgramTranspile?: PluginHandler<AfterProgramTranspileEvent>;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: PluginHandler<AfterScopeCreateEvent>;
     beforeScopeDispose?: PluginHandler<BeforeScopeDisposeEvent>;
@@ -329,6 +330,22 @@ export interface OnFileGetCodeActionsEvent {
 export interface TranspileEntry {
     file: BscFile;
     outputPath: string;
+}
+
+export interface OnGetSemanticTokensEvent {
+    program: Program;
+    file: BscFile;
+    scopes: Scope[];
+    semanticTokens: SemanticToken[];
+}
+
+export interface SemanticToken {
+    range: Range;
+    tokenType: SemanticTokenTypes;
+    /**
+     * An optional array of modifiers for this token
+     */
+    tokenModifiers?: SemanticTokenModifiers[];
 }
 
 export interface TypedefProvider {

@@ -60,6 +60,7 @@ describe('LanguageServer', () => {
         onWillSaveTextDocument: () => null,
         onWillSaveTextDocumentWaitUntil: () => null,
         onDidSaveTextDocument: () => null,
+        onRequest: () => null,
         workspace: {
             getWorkspaceFolders: () => workspaceFolders,
             getConfiguration: () => {

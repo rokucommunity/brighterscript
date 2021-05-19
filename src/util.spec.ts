@@ -657,4 +657,62 @@ describe('util', () => {
             expect(count.max).to.equal(4);
         });
     });
+
+    it('sortByRange', () => {
+        const front = {
+            range: util.createRange(1, 1, 1, 2)
+        };
+        const middle = {
+            range: util.createRange(1, 3, 1, 4)
+        };
+        const back = {
+            range: util.createRange(1, 5, 1, 6)
+        };
+        expect(
+            util.sortByRange([middle, front, back])
+        ).to.eql([
+            front, middle, back
+        ]);
+    });
+
+    describe('splitWithLocation', () => {
+        it('works with no split items', () => {
+            expect(
+                util.splitGetRange('.', 'hello', util.createRange(2, 10, 2, 15))
+            ).to.eql([{
+                text: 'hello',
+                range: util.createRange(2, 10, 2, 15)
+            }]);
+        });
+
+        it('handles empty chunks', () => {
+            expect(
+                util.splitGetRange('l', 'hello', util.createRange(2, 10, 2, 15))
+            ).to.eql([{
+                text: 'he',
+                range: util.createRange(2, 10, 2, 12)
+            }, {
+                text: 'o',
+                range: util.createRange(2, 14, 2, 15)
+            }]);
+        });
+
+        it('handles multiple non-empty chunks', () => {
+            expect(
+                util.splitGetRange('.', 'abc.d.efgh.i', util.createRange(2, 10, 2, 2))
+            ).to.eql([{
+                text: 'abc',
+                range: util.createRange(2, 10, 2, 13)
+            }, {
+                text: 'd',
+                range: util.createRange(2, 14, 2, 15)
+            }, {
+                text: 'efgh',
+                range: util.createRange(2, 16, 2, 20)
+            }, {
+                text: 'i',
+                range: util.createRange(2, 21, 2, 22)
+            }]);
+        });
+    });
 });

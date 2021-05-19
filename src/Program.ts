@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, BscFile, BeforeFileParseEvent } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, BscFile, SemanticToken, BeforeFileParseEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -942,6 +942,23 @@ export class Program {
             });
         }
         return codeActions;
+    }
+
+    /**
+     * Get semantic tokens for the specified file
+     */
+    public getSemanticTokens(srcPath: string) {
+        const file = this.getFile(srcPath);
+        if (file) {
+            const result = [] as SemanticToken[];
+            this.plugins.emit('onGetSemanticTokens', {
+                program: this,
+                file: file,
+                scopes: this.getScopesForFile(file),
+                semanticTokens: result
+            });
+            return result;
+        }
     }
 
     public getSignatureHelp(filepath: string, position: Position): SignatureInfoObj[] {

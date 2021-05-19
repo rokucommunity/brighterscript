@@ -83,7 +83,7 @@ export class Scope {
     /**
     * Tests if a class exists with the specified name
     * @param className - the all-lower-case namespace-included class name
-    * @param namespaceName - teh current namespace name
+    * @param containingNamespace - The namespace used to resolve relative class names. (i.e. the namespace around the current statement trying to find a class)
     */
     public hasClass(className: string, namespaceName?: string): boolean {
         return !!this.getClass(className, namespaceName);

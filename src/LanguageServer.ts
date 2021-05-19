@@ -18,9 +18,13 @@ import type {
     ReferenceParams,
     SignatureHelp,
     SignatureHelpParams,
-    CodeActionParams
-} from 'vscode-languageserver';
+    CodeActionParams,
+    SemanticTokensOptions,
+    SemanticTokens,
+    SemanticTokensParams
+} from 'vscode-languageserver/node';
 import {
+    SemanticTokensRequest,
     createConnection,
     DidChangeConfigurationNotification,
     FileChangeType,
@@ -28,7 +32,7 @@ import {
     TextDocuments,
     TextDocumentSyncKind,
     CodeActionKind
-} from 'vscode-languageserver';
+} from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { BsConfig } from './BsConfig';
@@ -41,10 +45,10 @@ import { Throttler } from './Throttler';
 import { KeyedThrottler } from './KeyedThrottler';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { isBrsFile } from './astUtils/reflection';
+import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 
 export class LanguageServer {
-    //cast undefined as any to get around strictNullChecks...it's ok in this case
-    private connection: Connection = <any>undefined;
+    private connection = undefined as Connection;
 
     public workspaces = [] as Workspace[];
 
@@ -146,6 +150,9 @@ export class LanguageServer {
 
         this.connection.onCodeAction(this.onCodeAction.bind(this));
 
+        //TODO switch to a more specific connection function call once they actually add it
+        this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
+
         /*
         this.connection.onDidOpenTextDocument((params) => {
              // A text document got opened in VSCode.
@@ -199,6 +206,10 @@ export class LanguageServer {
                 },
                 documentSymbolProvider: true,
                 workspaceSymbolProvider: true,
+                semanticTokensProvider: {
+                    legend: semanticTokensLegend,
+                    full: true
+                } as SemanticTokensOptions,
                 referencesProvider: true,
                 codeActionProvider: {
                     codeActionKinds: [CodeActionKind.Refactor]
@@ -318,7 +329,7 @@ export class LanguageServer {
      * Event handler for when the program wants to load file contents.
      * anytime the program wants to load a file, check with our in-memory document cache first
      */
-    private documentFileResolver(srcPath) {
+    private documentFileResolver(srcPath: string) {
         let pathUri = URI.file(srcPath).toString();
         let document = this.documents.get(pathUri);
         if (document) {
@@ -769,14 +780,14 @@ export class LanguageServer {
                     });
                     return files.map(x => {
                         return {
-                            type: FileChangeType.Created as FileChangeType,
+                            type: FileChangeType.Created,
                             srcPath: s`${x}`
                         };
                     });
                 });
 
             //add the new file changes to the changes array.
-            changes.push(...newFileChanges);
+            changes.push(...newFileChanges as any);
 
             //give every workspace the chance to handle file changes
             await Promise.all(
@@ -1065,6 +1076,23 @@ export class LanguageServer {
             c => c
         );
         return results.filter((r) => r);
+    }
+
+    @AddStackToErrorMessage
+    private async onFullSemanticTokens(params: SemanticTokensParams) {
+        await this.waitAllProgramFirstRuns();
+        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        for (const workspace of this.workspaces) {
+            //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
+            if (workspace.builder.program.hasFile(srcPath)) {
+                let semanticTokens = workspace.builder.program.getSemanticTokens(srcPath);
+                return {
+                    data: encodeSemanticTokens(semanticTokens)
+                } as SemanticTokens;
+            }
+        }
     }
 
     private diagnosticCollection = new DiagnosticCollection();
