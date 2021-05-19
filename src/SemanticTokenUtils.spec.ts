@@ -1,6 +1,7 @@
+/* eslint-disable no-bitwise */
 import { expect } from 'chai';
-import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
+import { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver-protocol';
+import { encodeSemanticTokens, getModifierBitFlags, semanticTokensLegend } from './SemanticTokenUtils';
 import util from './util';
 
 describe('SemanticTokenUtils', () => {
@@ -31,6 +32,30 @@ describe('SemanticTokenUtils', () => {
                     0, 10, 2, semanticTokensLegend.tokenTypes.indexOf(SemanticTokenTypes.namespace), 0
                 ]
             );
+        });
+    });
+
+    //these tests depend on the semanticTokensLegend.tokenModifiers being in a specific order. If those change order, then this test needs changed as well
+    describe('getModifierBitFlags', () => {
+        it('works for single modifier', () => {
+            expect(getModifierBitFlags([SemanticTokenModifiers.declaration])).to.eql(1 << 0);
+            expect(getModifierBitFlags([SemanticTokenModifiers.definition])).to.eql(1 << 1);
+            expect(getModifierBitFlags([SemanticTokenModifiers.readonly])).to.eql(1 << 2);
+            expect(getModifierBitFlags([SemanticTokenModifiers.static])).to.eql(1 << 3);
+            expect(getModifierBitFlags([SemanticTokenModifiers.deprecated])).to.eql(1 << 4);
+            expect(getModifierBitFlags([SemanticTokenModifiers.abstract])).to.eql(1 << 5);
+            expect(getModifierBitFlags([SemanticTokenModifiers.async])).to.eql(1 << 6);
+            expect(getModifierBitFlags([SemanticTokenModifiers.modification])).to.eql(1 << 7);
+            expect(getModifierBitFlags([SemanticTokenModifiers.documentation])).to.eql(1 << 8);
+            expect(getModifierBitFlags([SemanticTokenModifiers.defaultLibrary])).to.eql(1 << 9);
+        });
+
+        it('properly combines multiple modifiers', () => {
+            expect(getModifierBitFlags([
+                SemanticTokenModifiers.declaration, //idx=0
+                SemanticTokenModifiers.static, //idx=3
+                SemanticTokenModifiers.documentation //idx=8
+            ])).to.eql(0b100001001);
         });
     });
 });

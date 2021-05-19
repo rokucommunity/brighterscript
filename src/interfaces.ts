@@ -230,7 +230,10 @@ export interface OnGetSemanticTokensEvent {
 export interface SemanticToken {
     range: Range;
     tokenType: SemanticTokenTypes;
-    tokenModifier?: SemanticTokenModifiers;
+    /**
+     * An optional array of modifiers for this token
+     */
+    tokenModifiers?: SemanticTokenModifiers[];
 }
 
 export interface TypedefProvider {
