@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.39.0] - 2021-05-18
+[0.39.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.2...v0.39.0
+### Added
+ - semantic token support for plugins
+ - basic semantic tokens for `new` statements and namespace usage
+
+
+
 ## [0.38.2] - 2021-05-17
 [0.38.2]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.1...v0.38.2
 ### Fixed
