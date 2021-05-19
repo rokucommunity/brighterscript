@@ -14,7 +14,7 @@ import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isLazyType, isUninitializedType, isInvalidType, isDynamicType } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isLazyType, isInvalidType, isDynamicType } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { SymbolTable } from './SymbolTable';
@@ -490,8 +490,6 @@ export class Scope {
 
         //do many per-file checks
         this.enumerateBrsFiles((file) => {
-            // this.diagnosticDetectCallsToUnknownFunctions(file, callableContainerMap);
-            // this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
             this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
@@ -743,7 +741,7 @@ export class Scope {
                         }
                         if (!assignable) {
                             this.diagnostics.push({
-                                ...DiagnosticMessages.argumentTypeMismatch(argType.toString(), param.type.toString()),
+                                ...DiagnosticMessages.argumentTypeMismatch(argType?.toString(), param.type.toString()),
                                 range: arg?.range,
                                 file: file
                             });
@@ -853,48 +851,6 @@ export class Scope {
                         });
                     }
                 }
-            }
-        }
-    }
-
-    /**
-     * Detect calls to functions that are not defined in this scope
-     * @param file
-     * @param callablesByLowerName
-     */
-    private diagnosticDetectCallsToUnknownFunctions(file: BscFile, callablesByLowerName: CallableContainerMap) {
-        //validate all expression calls
-        for (let expCall of file.functionCalls.filter(functionCall => !functionCall.isDottedInvocation)) {
-            if (isBrsFile(file)) {
-                const lowerName = expCall.name.text.toLowerCase();
-                //for now, skip validation on any method named "super" within `.bs` contexts.
-                //TODO revise this logic so we know if this function call resides within a class constructor function
-                if (file.extension === '.bs' && lowerName === 'super') {
-                    continue;
-                }
-
-                //find a local variable with this name
-                const localSymbol = file.getFunctionExpressionAtPosition(expCall.nameRange.start)?.symbolTable.getSymbol(lowerName);
-                /*
-                              //if we don't already have a variable with this name.
-                              if (!localSymbol) {
-                               const callablesWithThisName = util.getCallableContainersFromContainerMapByFunctionCall(callablesByLowerName, expCall);
-
-                                  //use the first item from callablesByLowerName, because if there are more, that's a separate error
-                                  let knownCallable = callablesWithThisName ? callablesWithThisName[0] : undefined;
-
-                                  //detect calls to unknown functions
-                                  if (!knownCallable) {
-                                      this.diagnostics.push({
-                                          ...DiagnosticMessages.callToUnknownFunction(expCall.name.text, this.name),
-                                          range: expCall.nameRange,
-                                          file: file
-                                      });
-                                  }
-                              } else {
-                                  //if we found a variable with the same name as the function, assume the call is "known".
-                                  //If the variable is a different type, some other check should add a diagnostic for that.
-                              }*/
             }
         }
     }

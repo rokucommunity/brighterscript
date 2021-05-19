@@ -26,7 +26,6 @@ import type { BscType } from '../types/BscType';
 import type { CustomType } from '../types/CustomType';
 import { UninitializedType } from '../types/UninitializedType';
 import { InvalidType } from '../types/InvalidType';
-import { token } from '../parser/tests/Parser.spec';
 import { globalCallableMap } from '../globalCallables';
 import { DynamicType } from '../types/DynamicType';
 
@@ -455,11 +454,13 @@ export class BrsFile {
                     } else if (arg.value) {
                         /* istanbul ignore next: TODO figure out why value is undefined sometimes */
                         if (arg.value.value) {
-                            argText = arg.value.value.toString();
+                            if (arg.value.value.toString) {
+                                argText = arg.value.value.toString();
+                            }
                         }
 
                         //wrap the value in quotes because that's how it appears in the code
-                        if (isStringType(impliedType)) {
+                        if (argText && isStringType(impliedType)) {
                             argText = '"' + argText + '"';
                         }
                     }
@@ -1368,14 +1369,14 @@ export class BrsFile {
                     let scopeTypeText = '';
 
                     if (isFunctionType(typeTextPair.type)) {
-                        scopeTypeText = typeTextPair.type.toString();
+                        scopeTypeText = typeTextPair.type?.toString();
                     } else if (typeTextPair.useExpandedTextOnly) {
                         scopeTypeText = typeTextPair.expandedTokenText;
                     } else {
-                        scopeTypeText = `${typeTextPair.expandedTokenText} as ${typeTextPair.type.toString()}`;
+                        scopeTypeText = `${typeTextPair.expandedTokenText} as ${typeTextPair.type?.toString()}`;
                     }
 
-                    if (!typeTexts.includes(scopeTypeText)) {
+                    if (scopeTypeText && !typeTexts.includes(scopeTypeText)) {
                         typeTexts.push(scopeTypeText);
                     }
                 }

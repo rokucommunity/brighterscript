@@ -5,7 +5,7 @@ import { Parser, ParseMode } from './Parser';
 import type { FunctionStatement, AssignmentStatement, ClassFieldStatement } from './Statement';
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
-import { isBooleanType, isFunctionType, isIntegerType, isStringType, isUninitializedType } from '../astUtils/reflection';
+import { isBooleanType, isFunctionType, isIntegerType, isStringType } from '../astUtils/reflection';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {
