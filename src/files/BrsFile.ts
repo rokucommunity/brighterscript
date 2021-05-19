@@ -18,7 +18,7 @@ import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { LogLevel } from '../Logger';
 import { serializeError } from 'serialize-error';
-import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isCustomType } from '../astUtils/reflection';
+import { isClassMethodStatement, isClassStatement, isCommentStatement, isDottedGetExpression, isFunctionStatement, isFunctionType, isLibraryStatement, isNamespaceStatement, isStringType, isVariableExpression, isXmlFile, isImportStatement, isClassFieldStatement, isCustomType, isDynamicType } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -26,6 +26,9 @@ import type { BscType } from '../types/BscType';
 import type { CustomType } from '../types/CustomType';
 import { UninitializedType } from '../types/UninitializedType';
 import { InvalidType } from '../types/InvalidType';
+import { token } from '../parser/tests/Parser.spec';
+import { globalCallableMap } from '../globalCallables';
+import { DynamicType } from '../types/DynamicType';
 
 /**
  * Holds all details about this file within the scope of the whole program
@@ -812,6 +815,10 @@ export class BrsFile {
                 break;
             }
             symbolType = currentSymbolTable.getSymbolType(tokenLowerText, true, { file: this, scope: scope });
+            if (tokenFoundCount === 0 && !symbolType) {
+                //check for global callable
+                symbolType = globalCallableMap.get(tokenLowerText)?.type;
+            }
             if (symbolType) {
                 // found this symbol, and it's valid. increase found counter
                 tokenFoundCount++;
@@ -848,19 +855,30 @@ export class BrsFile {
                 tokenText.shift(); // only care about last two symbols
             }
         }
+        let expandedTokenText = tokenText.join('.');
+        let backUpReturnType: BscType;
         if (tokenFoundCount === tokenChain.length) {
             // did we complete the chain? if so, we have a valid token at the end
-            return { type: symbolType, expandedTokenText: tokenText.join('.'), currentClass: currentClassRef };
+            return { type: symbolType, expandedTokenText: expandedTokenText, currentClass: currentClassRef };
         }
-        let backUpReturnType: BscType;
-        if (tokenChain.length === 1) {
+        if (isDynamicType(symbolType)) {
+            // last type in chain is dynamic... so currentToken could be anything.
+            backUpReturnType = symbolType;
+            expandedTokenText = currentToken.text;
+        } else if (tokenChain.length === 1) {
             // variable that has not been assigned
+            expandedTokenText = currentToken.text;
             backUpReturnType = new UninitializedType();
         } else if (tokenFoundCount === tokenChain.length - 1) {
             // member field that is not known
-            backUpReturnType = new InvalidType();
+            if (currentClassRef) {
+                backUpReturnType = new InvalidType();
+            } else {
+                // TODO: once we have stricter object/node member type checking, we could say this is invalid, but until then, call t dynamic
+                backUpReturnType = new DynamicType();
+            }
         }
-        return { type: backUpReturnType, expandedTokenText: tokenText.join('.') };
+        return { type: backUpReturnType, expandedTokenText: expandedTokenText };
     }
 
     private getGlobalClassStatementCompletions(currentToken: Token, parseMode: ParseMode): CompletionItem[] {

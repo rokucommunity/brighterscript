@@ -406,7 +406,7 @@ export class Program {
             pkgPath = util.sanitizePkgPath(fileParam.dest);
         }
         const lowerPkgPath = pkgPath.toLowerCase();
-        return this.logger.time(LogLevel.debug, ['Program.addOrReplaceFile()', chalk.green(srcPath)], () => {
+        return this.logger.time(LogLevel.debug, ['program.setFile()', chalk.green(srcPath)], () => {
 
             assert.ok(srcPath, 'srcPath is required');
             assert.ok(pkgPath, 'pkgPath is required');

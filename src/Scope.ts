@@ -695,9 +695,9 @@ export class Scope {
             for (let expCall of file.functionCalls) {
                 const symbolTypeInfo = file.getSymbolTypeFromToken(expCall.name, expCall.functionExpression, this);
                 let funcType = symbolTypeInfo.type;
-                if (isUninitializedType(funcType)) {
+                if (!isFunctionType(funcType)) {
+                    // We don't know if this is a function. Try seeing if it is a global
                     const callableContainer = util.getCallableContainerByFunctionCall(callableContainersByLowerName, expCall);
-
                     if (callableContainer) {
                         // We found a global callable with correct number of params - use that
                         funcType = callableContainer.callable?.type;

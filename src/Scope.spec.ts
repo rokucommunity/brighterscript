@@ -11,7 +11,6 @@ import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
 import type { FunctionStatement, NamespaceStatement } from './parser';
 import type { FunctionType } from './types/FunctionType';
-import type { BrsFile } from './files/BrsFile';
 import { isFloatType } from './astUtils/reflection';
 import type { SymbolTable } from './SymbolTable';
 import type { Scope } from './Scope';
@@ -233,7 +232,7 @@ describe('Scope', () => {
                 });
             });
 
-            it('warns when local var has same name as built-in function', () => {
+            it('warns when local var has same name as built-in function (shadow)', () => {
                 program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         str = 12345
@@ -245,7 +244,7 @@ describe('Scope', () => {
                 expect(diagnostics[0]?.message).not.to.exist;
             });
 
-            it('warns when local var has same name as built-in function', () => {
+            it('warns when local var has same name as built-in function (does not override)', () => {
                 program.setFile({ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }, `
                     sub main()
                         str = 6789
@@ -622,7 +621,7 @@ describe('Scope', () => {
         });
 
         it('correctly validates correct parameters that are class members', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
             class PiHolder
                 pi = 3.14
             end class
@@ -640,7 +639,7 @@ describe('Scope', () => {
         });
 
         it('correctly validates wrong parameters that are class members', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
             class PiHolder
                 pi = 3.14
                 name = "hello"
@@ -662,7 +661,7 @@ describe('Scope', () => {
         });
 
         it('allows conversions for arguments', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
             sub takesFloat(fl as float)
             end sub
 
@@ -675,7 +674,7 @@ describe('Scope', () => {
         });
 
         it('allows subclasses as arguments', () => {
-            program.addOrReplaceFile('source/main.bs', `
+            program.setFile('source/main.bs', `
 
             class Animal
             end class
@@ -1178,7 +1177,7 @@ describe('Scope', () => {
             let mainSymbolTable: SymbolTable;
 
             beforeEach(() => {
-                program.addOrReplaceFile('source/main.bs', lazyTypeCode);
+                program.setFile('source/main.bs', lazyTypeCode);
                 sourceScope = program.getScopeByName('source');
                 mainFile = (sourceScope.getAllFiles()[0] as BrsFile);
                 expect(mainFile).not.to.be.undefined;

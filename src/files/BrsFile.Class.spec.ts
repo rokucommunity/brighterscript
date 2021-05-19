@@ -1245,13 +1245,13 @@ describe('BrsFile BrighterScript classes', () => {
         `;
 
         it('correctly parses the file', () => {
-            program.addOrReplaceFile('source/animal.bs', animalClassCode);
+            program.setFile('source/animal.bs', animalClassCode);
             program.validate();
             expect(program.getDiagnostics().length).to.equal(0);
         });
 
         it('gets the correct text for m', () => {
-            let animalCode = program.addOrReplaceFile('source/animal.bs', animalClassCode);
+            let animalCode = program.setFile('source/animal.bs', animalClassCode);
             program.validate();
             let hover = animalCode.getHover(Position.create(6, 17));
             expect(hover).to.exist;
@@ -1263,7 +1263,7 @@ describe('BrsFile BrighterScript classes', () => {
         });
 
         it('gets the correct text for m.field', () => {
-            let animalCode = program.addOrReplaceFile('source/animal.bs', animalClassCode);
+            let animalCode = program.setFile('source/animal.bs', animalClassCode);
             program.validate();
             let hover = animalCode.getHover(Position.create(6, 19));
             expect(hover).to.exist;
@@ -1275,7 +1275,7 @@ describe('BrsFile BrighterScript classes', () => {
         });
 
         it('gets the correct text for m.method', () => {
-            let animalCode = program.addOrReplaceFile('source/animal.bs', animalClassCode);
+            let animalCode = program.setFile('source/animal.bs', animalClassCode);
             program.validate();
             let hover = animalCode.getHover(Position.create(30, 21));
             expect(hover).to.exist;
@@ -1283,7 +1283,7 @@ describe('BrsFile BrighterScript classes', () => {
         });
 
         it('gets the correct text for obj.field', () => {
-            let animalCode = program.addOrReplaceFile('source/animal.brs', animalClassCode);
+            let animalCode = program.setFile('source/animal.brs', animalClassCode);
             program.validate();
             let hover = animalCode.getHover(Position.create(46, 29));
             expect(hover).to.exist;
@@ -1292,7 +1292,7 @@ describe('BrsFile BrighterScript classes', () => {
         });
 
         it('gets the correct text for obj.method', () => {
-            let animalCode = program.addOrReplaceFile('source/animal.bs', animalClassCode);
+            let animalCode = program.setFile('source/animal.bs', animalClassCode);
             program.validate();
             let hover = animalCode.getHover(Position.create(52, 21));
             expect(hover).to.exist;
@@ -1331,13 +1331,13 @@ describe('BrsFile BrighterScript classes', () => {
             end class`;
 
         it('correctly parses the file', () => {
-            program.addOrReplaceFile('source/fooBar.bs', testCode);
+            program.setFile('source/fooBar.bs', testCode);
             program.validate();
             expect(program.getDiagnostics().length).to.equal(0);
         });
 
         it('gets the correct text for new Class()', () => {
-            let file = program.addOrReplaceFile('source/fooBar.bs', testCode);
+            let file = program.setFile('source/fooBar.bs', testCode);
             program.validate();
             let hover = file.getHover(Position.create(8, 34)); // new Foo("hello")
             expect(hover).to.exist;
@@ -1345,7 +1345,7 @@ describe('BrsFile BrighterScript classes', () => {
         });
 
         it('gets the correct text for created object', () => {
-            let file = program.addOrReplaceFile('source/fooBar.bs', testCode);
+            let file = program.setFile('source/fooBar.bs', testCode);
             program.validate();
             let hover = file.getHover(Position.create(8, 23)); // myFoo
             expect(hover).to.exist;
@@ -1353,7 +1353,7 @@ describe('BrsFile BrighterScript classes', () => {
         });
 
         it('gets the correct text for class declaration', () => {
-            let file = program.addOrReplaceFile('source/fooBar.bs', testCode);
+            let file = program.setFile('source/fooBar.bs', testCode);
             program.validate();
             let hover = file.getHover(Position.create(6, 21)); // class Bar
             expect(hover).to.exist;
@@ -1361,7 +1361,7 @@ describe('BrsFile BrighterScript classes', () => {
         });
 
         it('gets the correct text for class method declaration', () => {
-            let file = program.addOrReplaceFile('source/fooBar.bs', testCode);
+            let file = program.setFile('source/fooBar.bs', testCode);
             program.validate();
             let hover = file.getHover(Position.create(11, 29)); // getInt
             expect(hover).to.exist;
@@ -1369,7 +1369,7 @@ describe('BrsFile BrighterScript classes', () => {
         });
 
         it('gets the correct text for class field declaration', () => {
-            let file = program.addOrReplaceFile('source/fooBar.bs', testCode);
+            let file = program.setFile('source/fooBar.bs', testCode);
             program.validate();
             let hover = file.getHover(Position.create(17, 20)); // myInt
             expect(hover).to.exist;
@@ -1377,7 +1377,7 @@ describe('BrsFile BrighterScript classes', () => {
         });
 
         it('gets the correct text for super() call', () => {
-            let file = program.addOrReplaceFile('source/fooBar.bs', testCode);
+            let file = program.setFile('source/fooBar.bs', testCode);
             program.validate();
             let hover = file.getHover(Position.create(25, 23)); // super() in Bee.new
             expect(hover).to.exist;
@@ -1421,7 +1421,7 @@ describe('BrsFile BrighterScript classes', () => {
         `;
 
         it('correctly parses the file', () => {
-            program.addOrReplaceFile('source/klassTest.bs', testClassCode);
+            program.setFile('source/klassTest.bs', testClassCode);
             program.validate();
             expect(program.getDiagnostics().length).to.equal(0);
         });
@@ -1430,7 +1430,7 @@ describe('BrsFile BrighterScript classes', () => {
             let klassCode: BrsFile;
             let mainScope: Scope;
             beforeEach(() => {
-                klassCode = program.addOrReplaceFile<BrsFile>('source/klassTest.bs', testClassCode);
+                klassCode = program.setFile<BrsFile>('source/klassTest.bs', testClassCode);
                 const scopes = program.getScopesForFile(klassCode);
                 expect(scopes.length).to.eql(1);
                 mainScope = scopes[0];

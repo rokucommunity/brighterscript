@@ -429,8 +429,8 @@ describe('parser class', () => {
             `, { mode: ParseMode.BrighterScript });
 
             expect(parser.symbolTable).to.exist;
-            expect(isUninitializedType(parser.symbolTable.getSymbolType('eat'))).to.be.true;
-            expect(isUninitializedType(parser.symbolTable.getSymbolType('sleep'))).to.be.true;
+            expect(parser.symbolTable.getSymbolType('eat')).to.be.undefined;
+            expect(parser.symbolTable.getSymbolType('sleep')).to.be.undefined;
         });
 
         it('adds methods to class statement symbol table', () => {

@@ -1233,7 +1233,7 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(parser.diagnostics);
             const addOneSymbolTable = parser.references.functionExpressions[0].childFunctionExpressions[0].symbolTable;
-            expect(addOneSymbolTable.getSymbolType('oldVal').toString()).to.eq('uninitialized');
+            expect(addOneSymbolTable.getSymbolType('oldVal')).to.be.undefined;
         });
 
         it('finds params', () => {

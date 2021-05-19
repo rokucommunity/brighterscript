@@ -77,9 +77,9 @@ describe('SymbolTable', () => {
             expect(st.getSymbolType('foo').toString()).eq('string');
         });
 
-        it('returns uninitialized if not found', () => {
+        it('returns undefined if not found', () => {
             const st = new SymbolTable();
-            expect(st.getSymbolType('foo').toString()).eq('uninitialized');
+            expect(st.getSymbolType('foo')).to.be.undefined;
         });
     });
 

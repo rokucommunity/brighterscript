@@ -1509,8 +1509,8 @@ describe('Program', () => {
             ];
 
             expect(program.getDiagnostics()).to.be.lengthOf(2);
-            expect(program.getDiagnostics()[0].code).to.equal(DiagnosticMessages.callToUnknownFunction('', '').code);
-            expect(program.getDiagnostics()[1].code).to.equal(DiagnosticMessages.argumentTypeMismatch('string', 'integer').code);
+            expect(program.getDiagnostics()[0].code).to.equal(DiagnosticMessages.argumentTypeMismatch('string', 'integer').code);
+            expect(program.getDiagnostics()[1].code).to.equal(DiagnosticMessages.callToUnknownFunction('', '').code);
         });
     });
 
@@ -1999,6 +1999,7 @@ describe('Program', () => {
         it('does not get signature help for callfunc method, referenced by dot', () => {
             program.setFile('source/main.bs', `
                 function main()
+                    myNode = CreateObject("roSGScreen").CreateScene("Component1")
                     myNode.sayHello(arg1)
                 end function
             `);
@@ -2016,7 +2017,7 @@ describe('Program', () => {
                 </component>`);
             program.validate();
 
-            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 36)));
+            let signatureHelp = (program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(4, 36)));
             expect(program.getDiagnostics()).to.be.empty;
             //note - callfunc completions and signatures are not yet correctly identifying methods that are exposed in an interace - waiting on the new xml branch for that
             expect(signatureHelp).to.be.empty;
