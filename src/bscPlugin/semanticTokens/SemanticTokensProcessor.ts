@@ -1,5 +1,5 @@
 import type { Range } from 'vscode-languageserver-protocol';
-import { SemanticTokenTypes, SemanticTokenModifiers } from 'vscode-languageserver-protocol';
+import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import { isBrsFile, isCustomType } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnGetSemanticTokensEvent } from '../../interfaces';
