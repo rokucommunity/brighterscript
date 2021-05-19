@@ -24,7 +24,7 @@ import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
-import type { Token } from './lexer';
+import type { Locatable, Token } from './lexer';
 import { TokenKind } from './lexer';
 import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
 import { CustomType } from './types/CustomType';
@@ -1135,6 +1135,70 @@ export class Util {
             code: diagnostic.code,
             source: 'brs'
         };
+    }
+
+    /**
+     * Sort an array of objects that have a Range
+     */
+    public sortByRange(locatables: Locatable[]) {
+        //sort the tokens by range
+        return locatables.sort((a, b) => {
+            //start line
+            if (a.range.start.line < b.range.start.line) {
+                return -1;
+            }
+            if (a.range.start.line > b.range.start.line) {
+                return 1;
+            }
+            //start char
+            if (a.range.start.character < b.range.start.character) {
+                return -1;
+            }
+            if (a.range.start.character > b.range.start.character) {
+                return 1;
+            }
+            //end line
+            if (a.range.end.line < b.range.end.line) {
+                return -1;
+            }
+            if (a.range.end.line > b.range.end.line) {
+                return 1;
+            }
+            //end char
+            if (a.range.end.character < b.range.end.character) {
+                return -1;
+            } else if (a.range.end.character > b.range.end.character) {
+                return 1;
+            }
+            return 0;
+        });
+    }
+
+    /**
+     * Split the given text and return ranges for each chunk.
+     * Only works for single-line strings
+     */
+    public splitGetRange(separator: string, text: string, range: Range) {
+        const chunks = text.split(separator);
+        const result = [] as Array<{ text: string; range: Range }>;
+        let offset = 0;
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            //only keep nonzero chunks
+            if (chunk.length > 0) {
+                result.push({
+                    text: chunk,
+                    range: this.createRange(
+                        range.start.line,
+                        range.start.character + offset,
+                        range.end.line,
+                        range.start.character + offset + chunk.length
+                    )
+                });
+            }
+            offset += chunk.length + separator.length;
+        }
+        return result;
     }
 }
 
