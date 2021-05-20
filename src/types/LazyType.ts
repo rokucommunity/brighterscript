@@ -1,7 +1,5 @@
 import { isCustomType } from '../astUtils';
-import type { BrsFile } from '../files/BrsFile';
-import type { Scope } from '../Scope';
-import type { BscType } from './BscType';
+import type { BscType, TypeContext } from './BscType';
 import type { CustomType } from './CustomType';
 
 /**
@@ -10,45 +8,38 @@ import type { CustomType } from './CustomType';
  */
 export class LazyType implements BscType {
     constructor(
-        private factory: (context?: LazyTypeContext) => BscType
+        private factory: (context?: TypeContext) => BscType
     ) {
-
     }
 
     public get type() {
         return this.factory();
     }
-    public getTypeFromContext(context?: LazyTypeContext) {
+    public getTypeFromContext(context?: TypeContext) {
         return this.factory(context);
     }
 
-    public isAssignableTo(targetType: BscType, context?: LazyTypeContext, potentialAncestorTypes?: CustomType[]) {
+    public isAssignableTo(targetType: BscType, context?: TypeContext, potentialAncestorTypes?: CustomType[]) {
         const foundType = this.getTypeFromContext(context);
         if (isCustomType(foundType)) {
-            return foundType.isAssignableTo(targetType, potentialAncestorTypes);
+            return foundType.isAssignableTo(targetType, context, potentialAncestorTypes);
         }
-        return foundType.isAssignableTo(targetType);
+        return foundType?.isAssignableTo(targetType, context);
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.type.isConvertibleTo(targetType);
+    public isConvertibleTo(targetType: BscType, context?: TypeContext) {
+        return this.getTypeFromContext(context)?.isConvertibleTo(targetType, context);
     }
 
-    public toString() {
-        return this.type.toString();
+    public toString(context?: TypeContext) {
+        return this.getTypeFromContext(context)?.toString(context);
     }
 
-    public toTypeString(): string {
-        return this.type.toTypeString();
+    public toTypeString(context?: TypeContext): string {
+        return this.getTypeFromContext(context)?.toTypeString(context);
     }
 
-    public equals(targetType: BscType): boolean {
-        return this.type?.equals(targetType);
+    public equals(targetType: BscType, context?: TypeContext): boolean {
+        return this.getTypeFromContext(context)?.equals(targetType, context);
     }
-}
-
-
-export interface LazyTypeContext {
-    file?: BrsFile;
-    scope?: Scope;
 }

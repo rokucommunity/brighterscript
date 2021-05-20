@@ -1528,7 +1528,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 return context?.scope?.getParentClass(this)?.getConstructorFunctionType();
             }));
         }
-
         for (let statement of this.body) {
             if (isClassMethodStatement(statement)) {
                 this.methods.push(statement);
@@ -2083,7 +2082,8 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
         readonly as?: Token,
         readonly type?: Token,
         readonly equal?: Token,
-        readonly initialValue?: Expression
+        readonly initialValue?: Expression,
+        readonly namespaceName?: NamespacedVariableNameExpression
     ) {
         super();
         this.range = util.createRangeFromPositions(
@@ -2098,7 +2098,7 @@ export class ClassFieldStatement extends Statement implements TypedefProvider {
      */
     getType() {
         if (this.type) {
-            return util.tokenToBscType(this.type);
+            return util.tokenToBscType(this.type, true, this.namespaceName);
         } else if (isLiteralExpression(this.initialValue)) {
             return this.initialValue.type;
         } else {

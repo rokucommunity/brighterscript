@@ -700,6 +700,52 @@ describe('Scope', () => {
             expect(program.getDiagnostics().length).to.equal(0);
         });
 
+        it('allows subclasses from namespaces as arguments', () => {
+            program.setFile('source/main.bs', `
+
+            class Outside
+            end class
+
+            class ChildOutExtendsInside extends NS.Inside
+            end class
+
+            namespace NS
+                class Inside
+                end class
+
+                class ChildInExtendsOutside extends Outside
+                end class
+
+                class ChildInExtendsInside extends Inside
+                end class
+
+                sub takesInside(klass as Inside)
+                end sub
+            end namespace
+
+            sub takesOutside(klass as Outside)
+            end sub
+
+            sub takesInside(klass as NS.Inside)
+            end sub
+
+            sub someFunc()
+                takesOutside(new Outside())
+                takesOutside(new NS.ChildInExtendsOutside())
+
+                takesInside(new NS.Inside())
+                takesInside(new NS.ChildInExtendsInside())
+                takesInside(new ChildOutExtendsInside())
+
+                NS.takesInside(new NS.Inside())
+                NS.takesInside(new NS.ChildInExtendsInside())
+                NS.takesInside(new ChildOutExtendsInside())
+            end sub`);
+            program.validate();
+            //should have no error
+            expect(program.getDiagnostics().length).to.equal(0);
+        });
+
         it('handles JavaScript reserved names', () => {
             program.setFile('source/file.brs', `
                 sub constructor()

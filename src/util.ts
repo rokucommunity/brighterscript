@@ -22,7 +22,7 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
+import type { DottedGetExpression, Expression, NamespacedVariableNameExpression, VariableExpression } from './parser/Expression';
 import { Logger, LogLevel } from './Logger';
 import type { Locatable, Token } from './lexer';
 import { TokenKind } from './lexer';
@@ -30,6 +30,7 @@ import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } f
 import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
 import { SGAttribute } from './parser/SGTypes';
+import { LazyType } from './types/LazyType';
 
 export class Util {
     public clearConsole() {
@@ -938,7 +939,7 @@ export class Util {
     /**
      * Convert a token into a BscType
      */
-    public tokenToBscType(token: Token, allowCustomType = true) {
+    public tokenToBscType(token: Token, allowCustomType = true, currentNamespaceName?: NamespacedVariableNameExpression) {
         if (!token) {
             return new DynamicType();
         }
@@ -1001,7 +1002,10 @@ export class Util {
                         return new VoidType();
                 }
                 if (allowCustomType) {
-                    return new CustomType(token.text);
+                    return new LazyType((context) => {
+                        return context?.scope?.getClass(token.text, currentNamespaceName?.getName())?.getCustomType();
+                    });
+
                 }
         }
     }

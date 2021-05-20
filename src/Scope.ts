@@ -21,6 +21,7 @@ import { SymbolTable } from './SymbolTable';
 import type { CustomType } from './types/CustomType';
 import { UninitializedType } from './types/UninitializedType';
 import { ObjectType } from './types/ObjectType';
+import { getTypeFromContext } from './types/BscType';
 
 
 /**
@@ -141,7 +142,7 @@ export class Scope {
         ancestors.push(currentClass?.getCustomType());
 
         while (currentClass?.hasParentClass()) {
-            currentClass = classMap.get(currentClass.parentClassName.getName(ParseMode.BrighterScript).toLowerCase())?.item;
+            currentClass = this.getParentClass(currentClass);
             ancestors.push(currentClass?.getCustomType());
         }
         //TODO: this should probably be cached
@@ -490,11 +491,11 @@ export class Scope {
         //detect missing and incorrect-case script imports
         this.diagnosticValidateScriptImportPaths();
 
-        //enforce a series of checks on the bodies of class methods
-        this.validateClasses();
 
         //do many per-file checks
         this.enumerateBrsFiles((file) => {
+            //enforce a series of checks on the bodies of class methods
+            this.validateClasses(file);
             this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
             this.diagnosticDetectFunctionCollisions(file);
             this.detectVariableNamespaceCollisions(file);
@@ -660,9 +661,10 @@ export class Scope {
     */
     private diagnosticDetectInvalidFunctionExpressionTypes(file: BrsFile) {
         for (let func of file.parser.references.functionExpressions) {
-            if (isCustomType(func.returnType) && func.returnTypeToken) {
+            const returnType = getTypeFromContext(func.returnType, { file: file, scope: this });
+            if (!returnType && func.returnTypeToken) {
                 // check if this custom type is in our class map
-                const returnTypeName = func.returnType.name;
+                const returnTypeName = func.returnTypeToken.text;
                 const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
                 if (!this.hasClass(returnTypeName, currentNamespaceName)) {
                     this.diagnostics.push({
@@ -674,8 +676,9 @@ export class Scope {
             }
 
             for (let param of func.parameters) {
-                if (isCustomType(param.type) && param.typeToken) {
-                    const paramTypeName = param.type.name;
+                const paramType = getTypeFromContext(param.type, { file: file, scope: this });
+                if (!paramType && param.typeToken) {
+                    const paramTypeName = param.typeToken.text;
                     const currentNamespaceName = func.namespaceName?.getName(ParseMode.BrighterScript);
                     if (!this.hasClass(paramTypeName, currentNamespaceName)) {
                         this.diagnostics.push({
@@ -731,22 +734,20 @@ export class Scope {
                         }
                         let argType = arg.type ?? new UninitializedType();
                         let assignable = false;
-                        if (isLazyType(argType)) {
-                            // If this is a lazy type, you have to take into account the possibility that it might be a custom type
-                            argType = argType.getTypeFromContext({ file: file, scope: this });
-                        }
+                        const typeContext = { file: file, scope: this };
+                        argType = getTypeFromContext(argType, typeContext);
                         if (isCustomType(argType)) {
-                            assignable = argType.isAssignableTo(param.type, this.getAncestorTypeList(argType.name));
+                            assignable = argType.isAssignableTo(param.type, typeContext, this.getAncestorTypeList(argType.name));
                         } else {
-                            assignable = argType?.isAssignableTo(param.type);
+                            assignable = argType?.isAssignableTo(param.type, typeContext);
                         }
                         if (!assignable) {
                             // TODO: perhaps this should be a strict mode setting?
-                            assignable = argType?.isConvertibleTo(param.type);
+                            assignable = argType?.isConvertibleTo(param.type, typeContext);
                         }
                         if (!assignable) {
                             this.diagnostics.push({
-                                ...DiagnosticMessages.argumentTypeMismatch(argType?.toString(), param.type.toString()),
+                                ...DiagnosticMessages.argumentTypeMismatch(argType?.toString(typeContext), param.type.toString(typeContext)),
                                 range: arg?.range,
                                 file: file
                             });
@@ -790,9 +791,9 @@ export class Scope {
         return result;
     }
 
-    private validateClasses() {
+    private validateClasses(file: BrsFile) {
         let validator = new BsClassValidator();
-        validator.validate(this);
+        validator.validate(this, file);
         this.diagnostics.push(...validator.diagnostics);
     }
 

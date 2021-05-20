@@ -1,8 +1,7 @@
 import type { Range } from './astUtils';
-import { isLazyType } from './astUtils/reflection';
-import type { BscType } from './types/BscType';
+import { getTypeFromContext } from './types/BscType';
 import { DynamicType } from './types/DynamicType';
-import type { LazyTypeContext } from './types/LazyType';
+import type { BscType, TypeContext } from './types/BscType';
 
 
 /**
@@ -94,33 +93,24 @@ export class SymbolTable {
      * @param context the context for where this type was referenced - used ONLY for lazy types
      * @returns The type, if found. If the type has ever changed, return DynamicType. If not found, returns UninitializedType
      */
-    getSymbolType(name: string, searchParent = true, context?: LazyTypeContext): BscType {
+    getSymbolType(name: string, searchParent = true, context?: TypeContext): BscType {
         const key = name.toLowerCase();
         const symbols = this.symbolMap.get(key);
         if (symbols?.length > 1) {
             //Check if each time it was set, it was set to the same type
             // TODO handle union types
             let sameImpliedType = true;
-            let impliedType = symbols[0].type;
-            if (isLazyType(impliedType)) {
-                impliedType = impliedType.getTypeFromContext(context);
-            }
+            const impliedType = getTypeFromContext(symbols[0].type, context);
             for (const symbol of symbols) {
-                let existingType = symbol.type;
-                if (isLazyType(existingType)) {
-                    existingType = existingType.getTypeFromContext(context);
-                }
-                sameImpliedType = (impliedType?.equals(existingType));
+                const existingType = getTypeFromContext(symbol.type, context);
+                sameImpliedType = (impliedType?.equals(existingType, context));
                 if (!sameImpliedType) {
                     break;
                 }
             }
             return sameImpliedType ? impliedType : new DynamicType();
         } else if (symbols?.length === 1) {
-            if (isLazyType(symbols[0].type)) {
-                return symbols[0].type.getTypeFromContext(context);
-            }
-            return symbols[0].type;
+            return getTypeFromContext(symbols[0].type, context);
         }
         if (searchParent) {
             return this.parent?.getSymbolType(name, true, context) ?? undefined;

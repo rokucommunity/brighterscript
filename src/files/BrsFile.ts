@@ -23,6 +23,7 @@ import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { BscType } from '../types/BscType';
+import { getTypeFromContext } from '../types/BscType';
 import type { CustomType } from '../types/CustomType';
 import { UninitializedType } from '../types/UninitializedType';
 import { InvalidType } from '../types/InvalidType';
@@ -732,6 +733,7 @@ export class BrsFile {
         let symbolType: BscType;
         let currentClassRef: ClassStatement;
         const currentTokenLower = currentToken.text.toLowerCase();
+        const typeContext = { file: this, scope: scope };
         if (containingClass) {
             // Special cases for a single token inside a class
             let expandedText = '';
@@ -746,9 +748,9 @@ export class BrsFile {
                 expandedText = currentToken.text;
                 currentClassRef = containingClass;
             } else if (currentTokenLower === 'super') {
-                symbolType = containingClass.symbolTable.getSymbolType(currentTokenLower, true, { file: this, scope: scope });
+                symbolType = getTypeFromContext(containingClass.symbolTable.getSymbolType(currentTokenLower, true, typeContext), typeContext);
                 if (isFunctionType(symbolType)) {
-                    currentClassRef = scope?.getClass(((symbolType.returnType as any).name?.toLowerCase()));
+                    currentClassRef = scope.getParentClass(containingClass);
                 }
             } else if (func?.functionStatement?.name === currentToken) {
                 // check if this is a method declaration
@@ -795,6 +797,7 @@ export class BrsFile {
         let tokenFoundCount = 0;
         let symbolType: BscType;
         let tokenText = [];
+        const typeContext = { file: this, scope: scope };
         let currentClassRef: ClassStatement;
 
         for (const token of tokenChain) {
@@ -821,7 +824,7 @@ export class BrsFile {
                 // uh oh... no symbol table to continue to check
                 break;
             }
-            symbolType = currentSymbolTable.getSymbolType(tokenLowerText, true, { file: this, scope: scope });
+            symbolType = currentSymbolTable.getSymbolType(tokenLowerText, true, typeContext);
             if (tokenFoundCount === 0 && !symbolType) {
                 //check for global callable
                 symbolType = globalCallableMap.get(tokenLowerText)?.type;
@@ -834,7 +837,7 @@ export class BrsFile {
             if (isFunctionType(symbolType)) {
                 // this is a function, and it is in the start or middle of the chain
                 // the next symbol to check will be the return value of this function
-                funcReturnType = symbolType.returnType;
+                funcReturnType = getTypeFromContext(symbolType.returnType, typeContext);
 
             }
             if (isCustomType(symbolType) || isCustomType(funcReturnType)) {
@@ -1573,7 +1576,7 @@ export class BrsFile {
     /**
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
-    public transpile(): CodeWithSourceMap {
+    public transpile(scope?: Scope): CodeWithSourceMap {
         const state = new BrsTranspileState(this);
         let transpileResult: SourceNode | undefined;
 

@@ -1,8 +1,7 @@
 import { isBrsFile, isCallExpression, isFunctionType } from '../astUtils/reflection';
 import type { CallExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../parser/Expression';
-import type { BscType } from './BscType';
+import type { BscType, TypeContext } from './BscType';
 import { LazyType } from './LazyType';
-import type { LazyTypeContext } from './LazyType';
 import type { Token } from '../lexer/Token';
 import { UninitializedType } from './UninitializedType';
 
@@ -26,7 +25,7 @@ export function getTypeFromCallExpression(call: CallExpression, functionExpressi
             // this will probably only happen if a functionName has been assigned to something else previously?
             return currentKnownType;
         }
-        return new LazyType((context?: LazyTypeContext) => {
+        return new LazyType((context?: TypeContext) => {
             // Give best guess if there is no file context
             let futureType = functionExpression.symbolTable.getSymbolType(calleeName.text);
             if (isBrsFile(context?.file)) {
@@ -71,14 +70,14 @@ export function getTypeFromVariableExpression(variable: VariableExpression, func
     if (currentKnownType) {
         return currentKnownType;
     }
-    return new LazyType((context?: LazyTypeContext) => {
+    return new LazyType((context?: TypeContext) => {
         return functionExpression.symbolTable.getSymbolType(variableName, true, context);
     });
 }
 
 
 function resolveLazyType(currentToken: Token, functionExpression: FunctionExpression) {
-    return new LazyType((context?: LazyTypeContext) => {
+    return new LazyType((context?: TypeContext) => {
         let futureType = new UninitializedType();
         if (isBrsFile(context?.file)) {
             const file = context.file;

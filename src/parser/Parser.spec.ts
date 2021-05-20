@@ -17,6 +17,7 @@ import { ObjectType } from '../types/ObjectType';
 import { SymbolTable } from '../SymbolTable';
 import { DynamicType } from '../types/DynamicType';
 import util from '../util';
+import { LazyType } from '../types/LazyType';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -1168,7 +1169,8 @@ describe('parser', () => {
             expectZeroDiagnostics(parser.diagnostics);
             const func = (parser.ast.statements[0] as FunctionStatement).func;
             const type = getBscTypeFromExpression((func.body.statements[0] as AssignmentStatement).value, func) as FunctionType;
-            expect(type.returnType).to.be.instanceof(CustomType);
+            // Return type is LazyType, because "Person" is not fully known yet
+            expect(type.returnType).to.be.instanceof(LazyType);
         });
     });
 

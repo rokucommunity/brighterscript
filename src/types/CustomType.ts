@@ -1,5 +1,5 @@
 import { isDynamicType, isObjectType } from '../astUtils/reflection';
-import type { BscType } from './BscType';
+import type { BscType, TypeContext } from './BscType';
 
 export class CustomType implements BscType {
 
@@ -15,22 +15,22 @@ export class CustomType implements BscType {
         return 'object';
     }
 
-    public isAssignableTo(targetType: BscType, ancestorTypes?: CustomType[]) {
-        if (ancestorTypes?.find(ancestorType => targetType.equals(ancestorType))) {
+    public isAssignableTo(targetType: BscType, context?: TypeContext, ancestorTypes?: CustomType[]) {
+        if (ancestorTypes?.find(ancestorType => targetType.equals(ancestorType, context))) {
             return true;
         }
         return (
-            this.equals(targetType) ||
+            this.equals(targetType, context) ||
             isObjectType(targetType) ||
             isDynamicType(targetType)
         );
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+    public isConvertibleTo(targetType: BscType, context?: TypeContext) {
+        return this.isAssignableTo(targetType, context);
     }
 
-    public equals(targetType: BscType): boolean {
-        return this.toString() === targetType?.toString();
+    public equals(targetType: BscType, context?: TypeContext): boolean {
+        return this.toString() === targetType?.toString(context);
     }
 }

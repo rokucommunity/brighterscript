@@ -140,7 +140,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     ) {
         super();
         if (this.returnTypeToken) {
-            this.returnType = util.tokenToBscType(this.returnTypeToken);
+            this.returnType = util.tokenToBscType(this.returnTypeToken, true, namespaceName);
         } else if (this.functionType.text.toLowerCase() === 'sub') {
             this.returnType = new VoidType();
         } else {
@@ -227,7 +227,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 state.transpileToken(this.asToken),
                 ' ',
                 //return type
-                state.sourceNode(this.returnTypeToken, this.returnType.toTypeString())
+                state.sourceNode(this.returnTypeToken, this.returnType.toTypeString(state.typeContext))
             );
         }
         if (includeBody) {
@@ -308,7 +308,7 @@ export class FunctionParameterExpression extends Expression {
             result.push(' ');
             result.push(state.transpileToken(this.asToken));
             result.push(' ');
-            result.push(state.sourceNode(this.typeToken, this.type.toTypeString()));
+            result.push(state.sourceNode(this.typeToken, this.type.toTypeString(state.typeContext)));
         }
 
         return result;
