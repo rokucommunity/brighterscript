@@ -1524,8 +1524,8 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         this.symbolTable.addSymbol('m', name?.range, this.getCustomType());
         if (parentClassName) {
-            this.symbolTable.addSymbol('super', parentClassName?.range, new LazyType(() => {
-                return this.getConstructorFunction()?.func?.symbolTable.getSymbolType(parentClassName.getName(ParseMode.BrighterScript));
+            this.symbolTable.addSymbol('super', parentClassName?.range, new LazyType((context) => {
+                return context?.scope?.getParentClass(this)?.getConstructorFunctionType();
             }));
         }
 
@@ -1659,6 +1659,28 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     public hasParentClass() {
         return !!this.parentClassName;
+    }
+
+    /**
+     * Gets an array of possible parent class names, taking into account the namespace this class was created under
+     * @returns array of possible parent class names
+     */
+    public getPossibleFullParentNames(): string[] {
+        if (!this.hasParentClass()) {
+            return [];
+        }
+        if (this.parentClassName?.getNameParts().length > 1) {
+            // The specified parent class already has a dot, so it must already reference a namespace
+            return [this.parentClassName.getName()];
+        }
+        const names = [];
+
+        if (this.namespaceName) {
+            // We're under a namespace, so the full parent name MIGHT be with this namespace too
+            names.push(this.namespaceName.getName() + '.' + this.parentClassName.getName());
+        }
+        names.push(this.parentClassName.getName());
+        return names;
     }
 
     /**

@@ -727,11 +727,11 @@ export class BrsFile {
         return { namespaceContainer: namespaceContainer, tokenChain: tokenChain };
     }
 
-    private checkForSpecialClassSymbol(currentToken: Token, scope: Scope): TokenSymbolLookup {
+    private checkForSpecialClassSymbol(currentToken: Token, scope: Scope, func?: FunctionExpression): TokenSymbolLookup {
         let containingClass = this.parser.references.getContainingClass(currentToken);
         let symbolType: BscType;
         let currentClassRef: ClassStatement;
-
+        const currentTokenLower = currentToken.text.toLowerCase();
         if (containingClass) {
             // Special cases for a single token inside a class
             let expandedText = '';
@@ -741,18 +741,24 @@ export class BrsFile {
                 expandedText = `class ${containingClass.getName(ParseMode.BrighterScript)}`;
                 useExpandedTextOnly = true;
                 currentClassRef = containingClass;
-            } else if (currentToken.text.toLowerCase() === 'm') {
+            } else if (currentTokenLower === 'm') {
                 symbolType = containingClass.getCustomType();
                 expandedText = currentToken.text;
                 currentClassRef = containingClass;
-            } else if (currentToken.text.toLowerCase() === 'super') {
-                symbolType = containingClass.symbolTable.getSymbolType(currentToken.text.toLowerCase(), true);
+            } else if (currentTokenLower === 'super') {
+                symbolType = containingClass.symbolTable.getSymbolType(currentTokenLower, true, { file: this, scope: scope });
                 if (isFunctionType(symbolType)) {
                     currentClassRef = scope?.getClass(((symbolType.returnType as any).name?.toLowerCase()));
                 }
-            } else {
+            } else if (func?.functionStatement?.name === currentToken) {
+                // check if this is a method declaration
                 currentClassRef = containingClass;
-                symbolType = containingClass?.symbolTable.getSymbolType(currentToken.text.toLowerCase(), true, { file: this, scope: scope });
+                symbolType = containingClass?.symbolTable.getSymbolType(currentTokenLower, true, { file: this, scope: scope });
+                expandedText = [containingClass.getName(ParseMode.BrighterScript), currentToken.text].join('.');
+            } else if (!func) {
+                // check if this is a field  declaration
+                currentClassRef = containingClass;
+                symbolType = containingClass?.symbolTable.getSymbolType(currentTokenLower, true, { file: this, scope: scope });
                 expandedText = [containingClass.getName(ParseMode.BrighterScript), currentToken.text].join('.');
             }
             if (symbolType) {
@@ -779,7 +785,7 @@ export class BrsFile {
                 useExpandedTextOnly: true
             };
         }
-        const specialCase = tokenChain.length === 1 ? this.checkForSpecialClassSymbol(tokenChain[0], scope) : null;
+        const specialCase = tokenChain.length === 1 ? this.checkForSpecialClassSymbol(tokenChain[0], scope, functionExpression) : null;
         if (specialCase) {
             return specialCase;
         }

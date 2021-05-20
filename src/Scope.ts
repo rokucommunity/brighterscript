@@ -93,8 +93,13 @@ export class Scope {
    */
     public getParentClass(klass: ClassStatement): ClassStatement {
         if (klass?.hasParentClass()) {
-            const lowerParentClassName = klass.parentClassName?.getName(ParseMode.BrighterScript).toLowerCase();
-            return this.getClassMap().get(lowerParentClassName)?.item;
+            const lowerParentClassNames = klass.getPossibleFullParentNames().map(name => name.toLowerCase());
+            for (const lowerParentClassName of lowerParentClassNames) {
+                const foundParent = this.getClassMap().get(lowerParentClassName);
+                if (foundParent) {
+                    return foundParent.item;
+                }
+            }
         }
     }
 

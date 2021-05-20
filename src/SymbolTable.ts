@@ -102,8 +102,15 @@ export class SymbolTable {
             // TODO handle union types
             let sameImpliedType = true;
             let impliedType = symbols[0].type;
+            if (isLazyType(impliedType)) {
+                impliedType = impliedType.getTypeFromContext(context);
+            }
             for (const symbol of symbols) {
-                sameImpliedType = (impliedType.equals(symbol.type));
+                let existingType = symbol.type;
+                if (isLazyType(existingType)) {
+                    existingType = existingType.getTypeFromContext(context);
+                }
+                sameImpliedType = (impliedType?.equals(existingType));
                 if (!sameImpliedType) {
                     break;
                 }

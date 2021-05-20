@@ -1328,6 +1328,11 @@ describe('BrsFile BrighterScript classes', () => {
                 sub new(i as integer)
                     super(i)
                 end sub
+
+                sub varSameNameAsMember()
+                   myInt = 4567
+                   print myInt ' should not print m.myInt
+                end sub
             end class`;
 
         it('correctly parses the file', () => {
@@ -1382,6 +1387,14 @@ describe('BrsFile BrighterScript classes', () => {
             let hover = file.getHover(Position.create(25, 23)); // super() in Bee.new
             expect(hover).to.exist;
             expect(hover.contents).to.equal('new Buz(i as integer)');
+        });
+
+        it('gets the correct text for variable with same name as a member', () => {
+            let file = program.setFile('source/fooBar.bs', testCode);
+            program.validate();
+            let hover = file.getHover(Position.create(29, 23)); // myInt in Bee.varSameNameAsMember
+            expect(hover).to.exist;
+            expect(hover.contents).to.equal('myInt as integer');
         });
     });
 

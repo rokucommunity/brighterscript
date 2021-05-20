@@ -43,7 +43,7 @@ export class LazyType implements BscType {
     }
 
     public equals(targetType: BscType): boolean {
-        return this.type.equals(targetType);
+        return this.type?.equals(targetType);
     }
 }
 

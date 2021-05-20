@@ -359,7 +359,7 @@ export class NamespacedVariableNameExpression extends Expression {
         return parts;
     }
 
-    getName(parseMode: ParseMode) {
+    getName(parseMode: ParseMode = ParseMode.BrighterScript) {
         if (parseMode === ParseMode.BrighterScript) {
             return this.getNameParts().join('.');
         } else {
