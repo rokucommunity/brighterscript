@@ -1093,6 +1093,21 @@ export class BrsFile {
     }
 
     /**
+     * Get the token after the given token.
+     * If `requiredTokenKind` is specified, then the next token's type is checked, and if no match, undefined is returned.
+     */
+    public getNextToken(token: Token, requiredTokenKind?: TokenKind) {
+        const parser = this.parser;
+        let idx = parser.tokens.indexOf(token);
+        const result = parser.tokens[idx + 1];
+        if (!requiredTokenKind) {
+            return result;
+        } else if (result?.kind === requiredTokenKind) {
+            return result;
+        }
+    }
+
+    /**
      * Find the first scope that has a namespace with this name.
      * Returns false if no namespace was found with that name
      */
