@@ -27,7 +27,6 @@ import { Logger, LogLevel } from './Logger';
 import type { Locatable, Token } from './lexer';
 import { TokenKind } from './lexer';
 import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
-import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
 import { SGAttribute } from './parser/SGTypes';
 import { LazyType } from './types/LazyType';

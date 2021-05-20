@@ -14,7 +14,7 @@ import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import { LogLevel } from './Logger';
-import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isLazyType, isInvalidType, isDynamicType } from './astUtils/reflection';
+import { isBrsFile, isClassStatement, isFunctionStatement, isFunctionType, isXmlFile, isCustomType, isClassMethodStatement, isInvalidType, isDynamicType } from './astUtils/reflection';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
 import { SymbolTable } from './SymbolTable';
@@ -135,12 +135,12 @@ export class Scope {
         });
     }
 
-    public getAncestorTypeList(className: string): CustomType[] {
+    public getAncestorTypeList(className: string, namespaceName?: string): CustomType[] {
         const ancestors: CustomType[] = [];
-        const classMap = this.getClassMap();
-        let currentClass = classMap.get(className?.toLowerCase())?.item;
-        ancestors.push(currentClass?.getCustomType());
-
+        let currentClass = this.getClassFileLink(className, namespaceName)?.item;
+        if (currentClass) {
+            ancestors.push(currentClass?.getCustomType());
+        }
         while (currentClass?.hasParentClass()) {
             currentClass = this.getParentClass(currentClass);
             ancestors.push(currentClass?.getCustomType());
@@ -735,19 +735,25 @@ export class Scope {
                         let argType = arg.type ?? new UninitializedType();
                         let assignable = false;
                         const typeContext = { file: file, scope: this };
+                        const paramType = getTypeFromContext(param.type, typeContext);
+                        if (!paramType) {
+                            // other error - can not determine what type this parameter should be
+                            continue;
+                        }
                         argType = getTypeFromContext(argType, typeContext);
                         if (isCustomType(argType)) {
-                            assignable = argType.isAssignableTo(param.type, typeContext, this.getAncestorTypeList(argType.name));
+                            const lowerNamespaceName = expCall.functionExpression.namespaceName?.getName().toLowerCase();
+                            assignable = argType.isAssignableTo(paramType, typeContext, this.getAncestorTypeList(argType.name, lowerNamespaceName));
                         } else {
-                            assignable = argType?.isAssignableTo(param.type, typeContext);
+                            assignable = argType?.isAssignableTo(paramType, typeContext);
                         }
                         if (!assignable) {
                             // TODO: perhaps this should be a strict mode setting?
-                            assignable = argType?.isConvertibleTo(param.type, typeContext);
+                            assignable = argType?.isConvertibleTo(paramType, typeContext);
                         }
                         if (!assignable) {
                             this.diagnostics.push({
-                                ...DiagnosticMessages.argumentTypeMismatch(argType?.toString(typeContext), param.type.toString(typeContext)),
+                                ...DiagnosticMessages.argumentTypeMismatch(argType?.toString(typeContext), paramType.toString(typeContext)),
                                 range: arg?.range,
                                 file: file
                             });

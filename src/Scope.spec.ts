@@ -717,10 +717,30 @@ describe('Scope', () => {
                 end class
 
                 class ChildInExtendsInside extends Inside
+                    sub methodTakesInside(i as Inside)
+                    end sub
                 end class
 
                 sub takesInside(klass as Inside)
                 end sub
+
+                sub testFuncInNamespace()
+                    takesOutside(new Outside())
+                    takesOutside(new NS.ChildInExtendsOutside())
+
+                    ' These call NS.takesInside
+                    takesInside(new NS.Inside())
+                    takesInside(new Inside())
+                    takesInside(new NS.ChildInExtendsInside())
+                    takesInside(new ChildInExtendsInside())
+                    takesInside(new ChildOutExtendsInside())
+
+                    child = new ChildInExtendsInside()
+                    child.methodTakesInside(new Inside())
+                    child.methodTakesInside(new ChildInExtendsInside())
+                    child.methodTakesInside(new ChildOutExtendsInside())
+                end sub
+
             end namespace
 
             sub takesOutside(klass as Outside)
@@ -729,7 +749,7 @@ describe('Scope', () => {
             sub takesInside(klass as NS.Inside)
             end sub
 
-            sub someFunc()
+            sub testFunc()
                 takesOutside(new Outside())
                 takesOutside(new NS.ChildInExtendsOutside())
 
@@ -740,6 +760,11 @@ describe('Scope', () => {
                 NS.takesInside(new NS.Inside())
                 NS.takesInside(new NS.ChildInExtendsInside())
                 NS.takesInside(new ChildOutExtendsInside())
+
+                child = new NS.ChildInExtendsInside()
+                child.methodTakesInside(new NS.Inside())
+                child.methodTakesInside(new NS.ChildInExtendsInside())
+                child.methodTakesInside(new ChildOutExtendsInside())
             end sub`);
             program.validate();
             //should have no error

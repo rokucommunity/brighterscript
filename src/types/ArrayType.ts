@@ -1,4 +1,4 @@
-import { isArrayType, isDynamicType } from '../astUtils/reflection';
+import { isArrayType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 
 export class ArrayType implements BscType {
@@ -26,7 +26,8 @@ export class ArrayType implements BscType {
                 }
             }
             return true;
-        } else if (isDynamicType(targetType)) {
+        } else if (isDynamicType(targetType) ||
+            isObjectType(targetType)) {
             return true;
         }
         return false;
