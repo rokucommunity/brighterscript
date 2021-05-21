@@ -14,8 +14,10 @@ print SOURCE_FILE_PATH
 transpiles to:
 
 ```BrightScript
-print "file:///c:/projects/roku/brighterscript/scripts/rootDir/source/main.bs"
+print "file" + ":///c:/projects/roku/brighterscript/scripts/rootDir/source/main.bs"
 ```
+
+_note: the literal is concatenated to keep the roku static analysis tool happy_
 
 ## SOURCE_LINE_NUM
 The 1-based line number of the source file.
@@ -153,9 +155,12 @@ transpiles to:
 
 ```BrightScript
 function main()
-    print "file:///c:/projects/roku/brighterscript/scripts/rootDir/source/main.bs:2"
+    print "file" + ":///c:/projects/roku/brighterscript/scripts/rootDir/source/main.bs:2"
 end function
 ```
+
+_note: the literal is concatenated to keep the roku static analysis tool happy_
+
 
 ## PKG_PATH
 The pkg path of the file.

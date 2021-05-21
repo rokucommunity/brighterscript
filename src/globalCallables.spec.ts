@@ -21,7 +21,7 @@ describe('globalCallables', () => {
 
     describe('Roku_ads', () => {
         it('exists', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     adIface = Roku_Ads()
                 end sub
@@ -33,7 +33,7 @@ describe('globalCallables', () => {
 
     describe('val', () => {
         it('allows single parameter', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print val("1001")
                 end sub
@@ -43,7 +43,7 @@ describe('globalCallables', () => {
         });
 
         it('allows both parameters', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print val("1001", 10)
                 end sub
@@ -51,11 +51,21 @@ describe('globalCallables', () => {
             program.validate();
             expect(program.getDiagnostics()[0]?.message).not.to.exist;
         });
+
+        it('does not allows 3 parameters', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    print val("1001", 10, "extra")
+                end sub
+            `);
+            program.validate();
+            expect(program.getDiagnostics()[0]?.message).to.exist;
+        });
     });
 
     describe('StrI', () => {
         it('allows single parameter', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print StrI(2)
                 end sub
@@ -65,9 +75,41 @@ describe('globalCallables', () => {
         });
 
         it('allows both parameters', () => {
-            program.addOrReplaceFile('source/main.brs', `
+            program.setFile('source/main.brs', `
                 sub main()
                     print StrI(2, 10)
+                end sub
+            `);
+            program.validate();
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+
+        it('does not allows 3 parameters', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    print StrI(2, 10, "extra")
+                end sub
+            `);
+            program.validate();
+            expect(program.getDiagnostics()[0]?.message).to.exist;
+        });
+    });
+
+    describe('parseJson', () => {
+        it('allows single parameter', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    print ParseJson("{}")
+                end sub
+            `);
+            program.validate();
+            expect(program.getDiagnostics()[0]?.message).not.to.exist;
+        });
+
+        it('allows 2 parameters', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                print ParseJson("{}", "i")
                 end sub
             `);
             program.validate();

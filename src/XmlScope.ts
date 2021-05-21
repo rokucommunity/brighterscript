@@ -5,7 +5,7 @@ import type { XmlFile } from './files/XmlFile';
 import type { BscFile, CallableContainerMap, FileReference } from './interfaces';
 import type { Program } from './Program';
 import util from './util';
-import { isXmlFile } from './astUtils/reflection';
+import { isSGInterfaceFunction, isXmlFile } from './astUtils/reflection';
 import { SGFieldTypes } from './parser/SGTypes';
 import type { SGTag } from './parser/SGTypes';
 
@@ -52,48 +52,52 @@ export class XmlScope extends Scope {
     }
 
     private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
-        if (!this.xmlFile.parser.ast?.component?.api) {
+        const interfaceMembers = this.xmlFile.parser.ast?.component?.interfaceMembers ?? [];
+
+        if (interfaceMembers.length === 0) {
             return;
         }
-        const { api } = this.xmlFile.parser.ast.component;
-        //validate functions
-        for (const fun of api.functions) {
-            const name = fun.name;
-            if (!name) {
-                this.diagnosticMissingAttribute(fun, 'name');
-            } else if (!callableContainerMap.has(name.toLowerCase())) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.xmlFunctionNotFound(name),
-                    range: fun.getAttribute('name').value.range,
-                    file: this.xmlFile
-                });
-            }
-        }
-        //validate fields
-        for (const field of api.fields) {
-            const { id, type } = field;
-            if (!id) {
-                this.diagnosticMissingAttribute(field, 'id');
-            }
-            if (!type) {
-                if (!field.alias) {
-                    this.diagnosticMissingAttribute(field, 'type');
+        for (const member of interfaceMembers) {
+            //validate functions
+            if (isSGInterfaceFunction(member)) {
+                const name = member.name;
+                if (!name) {
+                    this.diagnosticMissingAttribute(member, 'name');
+                } else if (!callableContainerMap.has(name.toLowerCase())) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.xmlFunctionNotFound(name),
+                        range: member.getAttribute('name').tokens.value.range,
+                        file: this.xmlFile
+                    });
                 }
-            } else if (!SGFieldTypes.includes(type.toLowerCase())) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.xmlInvalidFieldType(type),
-                    range: field.getAttribute('type').value.range,
-                    file: this.xmlFile
-                });
+                //validate fields
+            } else {
+                if (!member.id) {
+                    this.diagnosticMissingAttribute(member, 'id');
+                }
+                const type = member.type;
+                if (!type) {
+                    if (!member.alias) {
+                        this.diagnosticMissingAttribute(member, 'type');
+                    }
+                } else if (!SGFieldTypes.includes(type.toLowerCase())) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.xmlInvalidFieldType(type),
+                        range: member.getAttribute('type').tokens.value.range,
+                        file: this.xmlFile
+                    });
+                }
             }
         }
     }
 
     private diagnosticMissingAttribute(tag: SGTag, name: string) {
-        const { text, range } = tag.tag;
         this.diagnostics.push({
-            ...DiagnosticMessages.xmlTagMissingAttribute(text, name),
-            range: range,
+            ...DiagnosticMessages.xmlTagMissingAttribute(
+                tag.tokens.startTagName.text,
+                name
+            ),
+            range: tag.tokens.startTagName.range,
             file: this.xmlFile
         });
     }

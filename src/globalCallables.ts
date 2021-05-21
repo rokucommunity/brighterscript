@@ -466,13 +466,19 @@ The characters '?', '*' and '[' lose their special meaning if preceded by a sing
         shortDescription:
             `This function will parse a string formatted according to RFC4627 and return an equivalent BrightScript object (consisting of booleans, integer and floating point numbers, strings, roArray, and roAssociativeArray objects).  If the string is not syntactically correct, Invalid will be returned.  A few other things to note:
 
-Any roAssociativeArray objects in the returned objects will be case sensitive.
+Any roAssociativeArray objects in the returned objects will be case sensitive. As of Roku OS 9.4, to return a case-insensitive structure, set the flags parameter to "i".
+If the "i" option is used, and the jsonString includes multiple keys that match case-insensitively, duplicates are overwritten and only the last matching values are preserved.
 An error will be returned if arrays/associative arrays are nested more than 256 levels deep.`,
         type: new FunctionType(new ObjectType()),
         file: globalFile,
         params: [{
             name: 'jsonString',
             type: new StringType()
+        },
+        {
+            name: 'flags',
+            type: new StringType(),
+            isOptional: true
         }]
     }, {
         name: 'FormatJson',
@@ -632,7 +638,7 @@ By using Chr, you can create strings containing characters which cannot be conta
         }]
     }, {
         name: 'StrI',
-        shortDescription: 'Converts a value to a string. Str(A), for example, returns a string equal to the decimal representation of the numeric value of A.\nNote: for non-negative numbers, a leading blank is inserted before the value string as a sign placeholder.. If the radix parameter is provided, then converts the integer value into a string representation using the given radix.\nIf radix is not 2 .. 36 then an empty string is returned.\nNote that the returned string does not include a base prefix and uses lowercase letters to represent those digits in bases greater than 10.',
+        shortDescription: 'Converts a value to a string. Str(A), for example, returns a string equal to the decimal representation of the numeric value of A.\nNote: for non-negative numbers, a leading blank is inserted before the value string as a sign placeholder. If the radix parameter is provided, then converts the integer value into a string representation using the given radix.\nIf radix is not 2 .. 36 then an empty string is returned.\nNote that the returned string does not include a base prefix and uses lowercase letters to represent those digits in bases greater than 10.',
         type: new FunctionType(new StringType()),
         file: globalFile,
         params: [{
@@ -640,7 +646,8 @@ By using Chr, you can create strings containing characters which cannot be conta
             type: new IntegerType()
         }, {
             name: 'radix',
-            type: new IntegerType()
+            type: new IntegerType(),
+            isOptional: true
         }]
     }, {
         name: 'string',
@@ -668,7 +675,16 @@ By using Chr, you can create strings containing characters which cannot be conta
         }]
     }, {
         name: 'Val',
-        shortDescription: 'Performs the inverse of the STR function: returns the number represented by the characters in a string argument.\nFor example, if A$="12" and B$="34" then VAL(A$+ "."+B$) returns the number 12.34. If radix is provided as the second parameter, it returns the integer value from parsing the string with the specified radix.\nRadix should be 2 .. 36 or the special value 0 (which automatically identified hexadecimal or octal numbers based on 0x or 0 prefixes respectively).\nLeading whitespace is ignored then as much of the rest of the string will be parsed as valid.',
+        shortDescription: 'Performs the inverse of the STR function: returns the number represented by the characters in a string argument.\nFor example, if A$="12" and B$="34" then VAL(A$+ "."+B$) returns the number 12.34.',
+        type: new FunctionType(new FloatType()),
+        file: globalFile,
+        params: [{
+            name: 'str',
+            type: new StringType()
+        }]
+    }, {
+        name: 'Val',
+        shortDescription: 'Returns the integer value from parsing the string with the specified radix.\nRadix should be 2 .. 36 or the special value 0 (which automatically identified hexadecimal or octal numbers based on 0x or 0 prefixes respectively).\nLeading whitespace is ignored then as much of the rest of the string will be parsed as valid.',
         type: new FunctionType(new IntegerType()),
         file: globalFile,
         params: [{
@@ -739,7 +755,7 @@ for (let callable of globalCallables) {
 
     //add each parameter to the type
     for (let param of callable.params) {
-        callable.type.addParameter(param.name, param.type, param.isOptional);
+        callable.type.addParameter(param);
     }
 
     //set name in type

@@ -8,7 +8,7 @@ import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, FileReference, FileObj, BscFile, BeforeFileParseEvent } from './interfaces';
+import type { BsDiagnostic, FileReference, FileObj, BscFile, SemanticToken, BeforeFileParseEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -20,7 +20,7 @@ import type { ManifestValue } from './preprocessor/Manifest';
 import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isClassMethodStatement, isXmlScope, isSGInterfaceFunction } from './astUtils/reflection';
 import type { FunctionStatement, Statement } from './parser/Statement';
 import { ParseMode } from './parser';
 import { TokenKind } from './lexer';
@@ -345,7 +345,7 @@ export class Program {
     /**
      * Update internal maps with this file reference
      */
-    private setFile(file: BscFile) {
+    private assignFile(file: BscFile) {
         this.files[file.srcPath.toLowerCase()] = file;
         this.pkgMap[file.pkgPath.toLowerCase()] = file;
     }
@@ -353,7 +353,7 @@ export class Program {
     /**
      * Remove this file from internal maps
      */
-    private unsetFile(file: BscFile) {
+    private unassignFile(file: BscFile) {
         delete this.files[file.srcPath.toLowerCase()];
         delete this.pkgMap[file.pkgPath.toLowerCase()];
     }
@@ -364,14 +364,14 @@ export class Program {
      * @param srcDestOrPkgPath the absolute path, or the pkg path (i.e. `pkg:/path/to/file.brs`) or the destPath (i.e. `path/to/file.brs` relative to `pkg:/`)
      * @param fileContents the file contents
      */
-    public addOrReplaceFile<T extends BscFile>(srcDestOrPkgPath: string, fileContents: string): T;
+    public setFile<T extends BscFile>(srcDestOrPkgPath: string, fileContents: string): T;
     /**
      * Load a file into the program. If that file already exists, it is replaced.
      * @param fileEntry an object that specifies src and dest for the file.
      * @param fileContents the file contents. If not provided, the file will be loaded from disk
      */
-    public addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
-    public addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
+    public setFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
+    public setFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
         assert.ok(fileParam, 'fileParam is required');
         let srcPath: string;
         let pkgPath: string;
@@ -434,7 +434,7 @@ export class Program {
                 }
 
                 //add the file to the program
-                this.setFile(brsFile);
+                this.assignFile(brsFile);
 
                 this.plugins.emit('beforeFileParse', beforeFileParseEvent);
 
@@ -457,7 +457,7 @@ export class Program {
             ) {
                 let xmlFile = new XmlFile(srcPath, pkgPath, this);
 
-                this.setFile(xmlFile);
+                this.assignFile(xmlFile);
 
                 //add the file to the program
                 this.plugins.emit('beforeFileParse', beforeFileParseEvent);
@@ -547,7 +547,7 @@ export class Program {
                 });
             }
             //remove the file from the program
-            this.unsetFile(file);
+            this.unassignFile(file);
 
             this.dependencyGraph.remove(file.dependencyGraphKey);
 
@@ -783,9 +783,12 @@ export class Program {
         let funcNames = new Set<string>();
         let currentScope = scope;
         while (isXmlScope(currentScope)) {
-            for (let name of currentScope.xmlFile.ast.component.api?.functions.map((f) => f.name) ?? []) {
-                if (!filterName || name === filterName) {
-                    funcNames.add(name);
+            for (let member of currentScope.xmlFile.ast.component?.interfaceMembers ?? []) {
+                if (isSGInterfaceFunction(member)) {
+                    const name = member.name;
+                    if (!filterName || name === filterName) {
+                        funcNames.add(name);
+                    }
                 }
             }
             currentScope = currentScope.getParentScope() as XmlScope;
@@ -822,7 +825,7 @@ export class Program {
         }
         let result = [] as CompletionItem[];
 
-        if (isBrsFile(file) && file.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
+        if (isBrsFile(file) && file.parser.isPositionNextToTokenKind(position, TokenKind.Callfunc)) {
             // is next to a @. callfunc invocation - must be an interface method
             for (const scope of this.getScopes().filter((s) => isXmlScope(s))) {
                 let fileLinks = this.getStatementsForXmlFile(scope as XmlScope);
@@ -941,6 +944,23 @@ export class Program {
         return codeActions;
     }
 
+    /**
+     * Get semantic tokens for the specified file
+     */
+    public getSemanticTokens(srcPath: string) {
+        const file = this.getFile(srcPath);
+        if (file) {
+            const result = [] as SemanticToken[];
+            this.plugins.emit('onGetSemanticTokens', {
+                program: this,
+                file: file,
+                scopes: this.getScopesForFile(file),
+                semanticTokens: result
+            });
+            return result;
+        }
+    }
+
     public getSignatureHelp(filepath: string, position: Position): SignatureInfoObj[] {
         let file = this.getFile(filepath);
         if (!file || !isBrsFile(file)) {
@@ -967,7 +987,7 @@ export class Program {
             //if m class reference.. then
             //only get statements from the class I am in..
             if (functionExpression) {
-                let myClass = file.getClassFromMReference(position, file.getTokenAt(position), functionExpression);
+                let myClass = file.getClassFromMReference(position, file.parser.getTokenAt(position), functionExpression);
                 if (myClass) {
                     for (let scope of this.getScopesForFile(myClass.file)) {
                         let classes = scope.getClassHierarchy(myClass.item.getName(ParseMode.BrighterScript).toLowerCase());
@@ -1046,12 +1066,12 @@ export class Program {
         if (!itemCounts.isArgStartFound) {
             //try to get sig help based on the name
             index = position.character;
-            let currentToken = file.getTokenAt(position);
+            let currentToken = file.parser.getTokenAt(position);
             if (currentToken && currentToken.kind !== TokenKind.Comment) {
                 name = file.getPartialVariableName(currentToken, [TokenKind.New]);
                 if (!name) {
                     //try the previous token, incase we're on a bracket
-                    currentToken = file.getPreviousToken(currentToken);
+                    currentToken = file.parser.getPreviousToken(currentToken);
                     name = file.getPartialVariableName(currentToken, [TokenKind.New]);
                 }
                 if (name?.indexOf('.')) {
