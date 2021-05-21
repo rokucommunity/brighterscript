@@ -1,5 +1,5 @@
-import type { CodeActionKind, Diagnostic, Position, Range, WorkspaceEdit } from 'vscode-languageserver';
-import { CodeAction, TextEdit } from 'vscode-languageserver';
+import type { Diagnostic, Position, Range, WorkspaceEdit } from 'vscode-languageserver';
+import { CodeActionKind, CodeAction, TextEdit } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 
 export class CodeActionUtil {
@@ -42,6 +42,8 @@ export class CodeActionUtil {
         }));
     }
 }
+
+export { CodeActionKind };
 
 export interface CodeActionShorthand {
     title: string;
