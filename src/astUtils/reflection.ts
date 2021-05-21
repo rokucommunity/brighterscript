@@ -17,6 +17,8 @@ import { CustomType } from '../types/CustomType';
 import type { Scope } from '../Scope';
 import type { XmlScope } from '../XmlScope';
 import { DynamicType } from '../types/DynamicType';
+import type { InterfaceType } from '../types/InterfaceType';
+import type { ObjectType } from '../types/ObjectType';
 
 // File reflection
 
@@ -241,6 +243,12 @@ export function isCustomType(e: any): e is CustomType {
 }
 export function isDynamicType(e: any): e is DynamicType {
     return e?.constructor.name === DynamicType.name;
+}
+export function isInterfaceType(e: any): e is InterfaceType {
+    return e?.constructor.name === 'InterfaceType';
+}
+export function isObjectType(e: any): e is ObjectType {
+    return e?.constructor.name === 'ObjectType';
 }
 
 const numberConstructorNames = [
