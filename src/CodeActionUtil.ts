@@ -20,10 +20,26 @@ export class CodeActionUtil {
                     TextEdit.insert(change.position, change.newText)
                 );
             } else if (change.type === 'replace') {
-                TextEdit.replace(change.range, change.newText);
+                edit.changes[uri].push(
+                    TextEdit.replace(change.range, change.newText)
+                );
             }
         }
-        return CodeAction.create(obj.title, edit);
+        const action = CodeAction.create(obj.title, edit, obj.kind);
+        action.isPreferred = obj.isPreferred;
+        action.diagnostics = this.serializableDiagnostics(obj.diagnostics);
+        return action;
+    }
+
+    public serializableDiagnostics(diagnostics: Diagnostic[]) {
+        return diagnostics?.map(({ range, severity, code, source, message, relatedInformation }) => ({
+            range: range,
+            severity: severity,
+            source: source,
+            code: code,
+            message: message,
+            relatedInformation: relatedInformation
+        }));
     }
 }
 
