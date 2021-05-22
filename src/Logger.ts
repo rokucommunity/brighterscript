@@ -124,7 +124,7 @@ export class Logger {
             let logLevelString = LogLevel[logLevel];
 
             //write the initial log
-            this[logLevelString](...messages);
+            this[logLevelString](...messages ?? []);
             this.indent += '  ';
 
             stopwatch.start();
@@ -135,7 +135,7 @@ export class Logger {
             //return a function to call when the timer is complete
             let done = () => {
                 this.indent = this.indent.substring(2);
-                this[logLevelString](...messages, `finished. (${chalk.blue(stopwatch.getDurationText())})`);
+                this[logLevelString](...messages ?? [], `finished. (${chalk.blue(stopwatch.getDurationText())})`);
             };
 
             //if this is a promise, wait for it to resolve and then return the original result
@@ -154,11 +154,12 @@ export class Logger {
     }
 }
 
-function noop() {
+export function noop() {
 
 }
 
 export enum LogLevel {
+    off = 0,
     error = 1,
     warn = 2,
     log = 3,
