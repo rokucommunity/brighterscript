@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.39.1] - 2021-05-24
+[0.39.1]:   https://github.com/rokucommunity/brighterscript/compare/v0.39.0...v0.39.1
+### Changed
+ - re-export `CodeActionKind` so plugins don't need to import from vscode-brightscript-language directly.
+### Fixed
+ - code action for "replace" tasks bug
+ - include missing information in the CodeAction construction
+
+
+
 ## [0.39.0] - 2021-05-18
 [0.39.0]:   https://github.com/rokucommunity/brighterscript/compare/v0.38.2...v0.39.0
 ### Added
