@@ -1637,6 +1637,7 @@ export class Parser {
             return undefined;
         }
         statements.push(statement);
+        const startingRange = statement.range;
 
         //look for colon statement separator
         let foundColon = false;
@@ -1662,7 +1663,7 @@ export class Parser {
                 });
             }
         }
-        return new Block(statements, this.peek().range);
+        return new Block(statements, startingRange);
     }
 
     private expressionStatement(expr: Expression): ExpressionStatement | IncrementStatement {
