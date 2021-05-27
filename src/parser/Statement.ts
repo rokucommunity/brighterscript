@@ -19,7 +19,7 @@ import type { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
 import { CustomType } from '../types/CustomType';
-import { LazyType } from '../types/LazyType';
+import type { Scope } from '../Scope';
 
 /**
  * A BrightScript statement
@@ -1522,12 +1522,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         this.range = util.createRangeFromPositions(this.classKeyword.range.start, this.end.range.end);
 
-        this.symbolTable.addSymbol('m', name?.range, this.getCustomType());
-        if (parentClassName) {
-            this.symbolTable.addSymbol('super', parentClassName?.range, new LazyType((context) => {
-                return context?.scope?.getParentClass(this)?.getConstructorFunctionType();
-            }));
-        }
         for (let statement of this.body) {
             if (isClassMethodStatement(statement)) {
                 this.methods.push(statement);
@@ -1577,6 +1571,23 @@ export class ClassStatement extends Statement implements TypedefProvider {
         constructorFuncType.setName(this.getName(ParseMode.BrighterScript));
         constructorFuncType.isNew = true;
         return constructorFuncType;
+    }
+
+    public buildSymbolTable(scope: Scope) {
+        this.symbolTable.clear();
+        this.symbolTable.addSymbol('m', this.name?.range, this.getCustomType());
+        if (this.parentClassName) {
+            this.symbolTable.addSymbol('super', this.parentClassName?.range, scope?.getParentClass(this)?.getConstructorFunctionType());
+        }
+
+        for (const statement of this.methods) {
+            const funcType = statement?.func.getFunctionType();
+            funcType.setName(this.getName(ParseMode.BrighterScript) + '.' + statement?.name?.text);
+            this.symbolTable.addSymbol(statement?.name?.text, statement?.range, funcType);
+        }
+        for (const statement of this.fields) {
+            this.symbolTable.addSymbol(statement?.name?.text, statement?.range, statement.getType());
+        }
     }
 
     transpile(state: BrsTranspileState) {

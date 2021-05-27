@@ -135,6 +135,11 @@ export class SymbolTable {
             }
         }
     }
+
+
+    clear() {
+        this.symbolMap.clear();
+    }
 }
 
 

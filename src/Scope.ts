@@ -554,6 +554,7 @@ export class Scope {
         const classMap = this.getClassMap();
         for (const pair of classMap) {
             const classStmt = pair[1]?.item;
+            classStmt.buildSymbolTable(this);
             if (classStmt?.hasParentClass()) {
                 const parentClass = this.getParentClass(classStmt);
                 // set the parent of the class's symbol table to the symbol table of the class it extends
